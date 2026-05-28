@@ -21,16 +21,16 @@ sidebar:
 On bare metal, providing S3-compatible object storage requires deploying a distributed storage system directly on top of physical drives. Historically, MinIO was the standard for this pattern due to its strict Amazon S3 API compatibility, high performance, and bare-metal-native design.
 
 :::caution
-**Industry Shift:** As of February 13, 2026, the MinIO open-source community edition repository was fully archived and made read-only. MinIO had ceased publishing pre-compiled binaries and Docker images to public registries in October 2025. Furthermore, it is licensed under AGPLv3, meaning organizations offering it as a SaaS must either release their combined source code under AGPLv3 or purchase a commercial license for its closed-source successor, AIStor.
+**Industry Shift:** As of February 13, 2026, the MinIO open-source community edition repository was fully archived and made read-only. MinIO had [ceased publishing pre-compiled binaries and Docker images to public registries](https://github.com/minio/minio) in October 2025. Furthermore, it is licensed under AGPLv3, meaning organizations offering it as a SaaS must either release their combined source code under AGPLv3 or purchase a commercial license for its closed-source successor, AIStor.
 :::
 
 ### The Open-Source Landscape
 
 For modern, production-grade open-source deployments, platform teams typically evaluate CNCF-backed alternatives:
-*   **Ceph (via Rook):** Rook (a CNCF Graduated project, currently v1.19 supporting K8s v1.30–v1.35) orchestrates Ceph. The latest Ceph release (v20.2.1 Tentacle, April 2026) offers robust S3 compatibility via RADOS Gateway (RGW) and features zero-downtime background bucket resharding. It also adds support for the S3 `GetObjectAttributes` API, exact AWS S3 timestamp truncation, and first-class IAM API policy support. A single Ceph cluster can simultaneously serve object (RGW), block (RBD), and file (CephFS) storage.
-*   **SeaweedFS:** Licensed under Apache 2.0 (currently v4.18), SeaweedFS is a highly efficient distributed system that achieves O(1) disk seeks for blob retrieval by storing file-to-volume-offset mappings entirely in memory.
-*   **RustFS:** An open-source, S3-compatible object storage system written in Rust and licensed under Apache 2.0. It aims to provide a high-performance alternative to MinIO without the AGPLv3 restrictions. While the project's documentation claims it is 2.3x faster than MinIO for 4 KB object payloads, these figures originate from self-reported benchmarks and have not been independently verified.
-*   **Kubernetes COSI (Container Object Storage Interface):** Note that while COSI aims to standardize object storage provisioning in Kubernetes, it remains in pre-alpha status (v1alpha2) as of April 2026. Therefore, direct provisioning via operators and CSI drivers like DirectPV remains the current standard.
+*   **Ceph (via Rook):** [Rook (a CNCF Graduated project](https://github.com/rook/rook/tree/v1.19.5/Documentation), [currently v1.19 supporting K8s v1.30–v1.35](https://raw.githubusercontent.com/rook/rook/v1.19.5/Documentation/Getting-Started/quickstart.md)) orchestrates Ceph. The [latest Ceph release (v20.2.1 Tentacle, April 2026)](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/tentacle.rst) offers robust S3 compatibility via RADOS Gateway (RGW) and features zero-downtime background bucket resharding. It also adds support for the S3 `GetObjectAttributes` API, exact AWS S3 timestamp truncation, and first-class IAM API policy support. A single Ceph cluster can simultaneously [serve object (RGW), block (RBD), and file (CephFS) storage](https://github.com/ceph/ceph).
+*   **SeaweedFS:** [Licensed under Apache 2.0](https://github.com/seaweedfs/seaweedfs) (currently v4.18), SeaweedFS is a highly efficient distributed system that achieves O(1) disk seeks for blob retrieval by storing file-to-volume-offset mappings entirely in memory.
+*   **RustFS:** An open-source, [S3-compatible object storage system written in Rust and licensed under Apache 2.0](https://github.com/rustfs/rustfs). It aims to provide a high-performance alternative to MinIO without the AGPLv3 restrictions. While the project's documentation claims it is 2.3x faster than MinIO for 4 KB object payloads, these figures originate from self-reported benchmarks and have not been independently verified.
+*   **Kubernetes COSI (Container Object Storage Interface):** Note that while COSI aims to standardize object storage provisioning in Kubernetes, it remains in [pre-alpha status (v1alpha2)](https://github.com/kubernetes-sigs/container-object-storage-interface) as of April 2026. Therefore, direct provisioning via operators and CSI drivers like DirectPV remains the current standard.
 
 Despite these industry shifts, MinIO's architectural primitives (Server Pools, direct-attached drives, and strict Erasure Coding) remain the clearest educational model for understanding distributed object storage mechanics. The following sections use MinIO as the reference architecture.
 
@@ -38,10 +38,10 @@ Unlike managed cloud object storage, running distributed storage on bare metal s
 
 ### Server Pools and Topology
 
-Distributed object storage scales horizontally through **Server Pools**. A Server Pool is an independent set of nodes and drives that act as a single logical storage entity. When an object is written, the system calculates a hash to determine which Server Pool receives the data, and then distributes the object across the drives in that specific pool.
+Distributed object storage scales horizontally through **Server Pools**. A Server Pool is an independent set of nodes and drives that act as a single logical storage entity. When an object is written, the [system calculates a hash to determine which Server Pool receives the data](https://raw.githubusercontent.com/minio/minio/master/docs/distributed/README.md), and then distributes the object across the drives in that specific pool.
 
 :::caution
-**Production Gotcha:** You cannot arbitrarily add single nodes or drives to an existing distributed deployment. You expand capacity by provisioning a completely new Server Pool. The new Server Pool must meet the minimum requirements (typically 4 nodes) and ideally matches the drive geometry of the existing pools to maintain predictable performance.
+**Production Gotcha:** You [cannot arbitrarily add single nodes or drives to an existing distributed deployment](https://github.com/minio/minio/discussions/19280). You expand capacity by provisioning a completely new Server Pool. The new Server Pool must meet the minimum requirements (typically 4 nodes) and ideally matches the drive geometry of the existing pools to maintain predictable performance.
 :::
 
 ```mermaid
@@ -70,7 +70,7 @@ graph TD
 
 Performance in object storage is bottlenecked by the underlying storage subsystem. Bare-metal systems expect **JBOD (Just a Bunch of Disks)** without hardware RAID. Hardware RAID introduces controller bottlenecks and conflicts with software-level erasure coding.
 
-For Kubernetes deployments, use **DirectPV** (a CSI driver built for local drives) or local PersistentVolumes. DirectPV discovers, formats, and mounts local drives directly to Pods, bypassing the network overhead of generic distributed block storage (like Portworx).
+For Kubernetes deployments, use **DirectPV** (a CSI driver built for local drives) or local PersistentVolumes. [DirectPV discovers, formats, and mounts local drives directly to Pods](https://github.com/minio/directpv), bypassing the network overhead of generic distributed block storage (like Portworx).
 
 > **Pause and predict**: If you format the physical NVMe drives with `ext4` instead of `XFS` for a distributed object storage workload, what hidden bottleneck are you likely to hit as millions of small objects are ingested?
 
@@ -78,9 +78,9 @@ For Kubernetes deployments, use **DirectPV** (a CSI driver built for local drive
 
 ### Erasure Coding (EC) Parity and Quorum
 
-Data is protected against drive and node failures using Erasure Coding. It divides objects into Data (D) blocks and Parity (P) blocks within an erasure set. For example, MinIO erasure coding sets contain a minimum of 2 drives and a maximum of 16 drives per set. The configuration is expressed as `EC:N`, where `N` is the number of parity blocks per erasure set.
+Data is protected against drive and node failures using Erasure Coding. It divides objects into Data (D) blocks and Parity (P) blocks within an erasure set. For example, [MinIO erasure coding sets contain a minimum of 2 drives and a maximum of 16 drives per set](https://raw.githubusercontent.com/minio/minio/master/docs/erasure/README.md). The configuration is expressed as `EC:N`, where `N` is the number of parity blocks per erasure set.
 
-*   **Standard Parity (EC:4):** In a 16-drive set, an object is split into 12 Data blocks and 4 Parity blocks. You can lose any 4 drives and still read and write data. Storage efficiency is 75% (12/16).
+*   **Standard Parity (EC:4):** In a 16-drive set, an [object is split into 12 Data blocks and 4 Parity blocks](https://raw.githubusercontent.com/minio/minio/master/docs/erasure/storage-class/README.md). You can lose any 4 drives and still read and write data. Storage efficiency is 75% (12/16).
 *   **High Parity (EC:8):** In a 16-drive set, an object is split into 8 Data and 8 Parity blocks. You can lose any 8 drives and still read the data (though you need $N/2 + 1$ drives to write). Storage efficiency is 50%.
 
 ```mermaid
@@ -105,9 +105,9 @@ Modern operators provision isolated instances called **Tenants**. Each Tenant op
 
 ### Identity and STS (Security Token Service)
 
-Applications must authenticate using temporary, scoped credentials via STS, specifically using `AssumeRoleWithWebIdentity`. This integrates directly with Kubernetes ServiceAccounts.
+Applications must authenticate using temporary, scoped credentials via STS, specifically using [`AssumeRoleWithWebIdentity`](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html). This integrates directly with Kubernetes ServiceAccounts.
 
-1.  The K8s Pod mounts a projected ServiceAccount token.
+1.  The K8s Pod mounts a [projected ServiceAccount token](https://kubernetes.io/docs/concepts/storage/projected-volumes).
 2.  The application uses this JWT to call the STS endpoint.
 3.  The storage system validates the JWT against the Kubernetes API OIDC discovery endpoint.
 4.  The system returns temporary S3 credentials bound to an IAM policy that maps to that specific ServiceAccount.
@@ -120,15 +120,15 @@ When designing applications against bare-metal object storage, understand the ha
 
 ### Versioning and Object Lock
 
-**Versioning** maintains historical copies of an object when it is overwritten or deleted. This protects against accidental application logic errors. 
+**Versioning** [maintains historical copies of an object when it is overwritten or deleted](https://docs.aws.amazon.com/us_en/AmazonS3/latest/userguide/versioning-workflows.html). This protects against accidental application logic errors. 
 
-**Object Lock (WORM - Write Once Read Many)** prevents any modification or deletion of an object for a specified duration, or indefinitely until a Legal Hold is removed. Object Lock requires Versioning to be enabled on the bucket.
+**Object Lock (WORM - Write Once Read Many)** [prevents any modification or deletion of an object for a specified duration](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html), or indefinitely until a Legal Hold is removed. Object Lock requires Versioning to be enabled on the bucket.
 
 ### Lifecycle Management (ILM)
 
 Bare-metal NVMe storage is expensive. ILM policies automate data lifecycle:
 *   **Expiration:** Delete objects (or specific non-current versions) after $X$ days.
-*   **Transition:** Move colder objects to a slower, cheaper storage tier (e.g., transitioning objects from an NVMe-backed Tenant to an HDD-backed Tenant, or out to public cloud S3).
+*   **Transition:** [Move colder objects to a slower, cheaper storage tier](https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html) (e.g., transitioning objects from an NVMe-backed Tenant to an HDD-backed Tenant, or out to public cloud S3).
 
 Without strict Expiration policies, an application continuously overwriting a versioned object will silently fill the physical disks, causing a hard outage requiring manual drive expansion.
 
@@ -151,7 +151,7 @@ For multi-datacenter bare-metal deployments, site-to-site Active-Active replicat
 In this lab, you will deploy the MinIO Operator, provision a single-node multi-drive Tenant (simulating a distributed setup on a local cluster), configure the S3 CLI, enable versioning, and apply a strict quota.
 
 :::note
-**Lab Environment Constraint:** Because MinIO ceased publishing public Docker images for its community edition in October 2025, this lab relies on historically cached images or local builds pulled by the Helm chart. In a modern production environment, you would either build the archived community source code internally, purchase AIStor, or deploy a CNCF alternative like Rook/Ceph.
+**Lab Environment Constraint:** Because [MinIO ceased publishing public Docker images for its community edition in October 2025](https://github.com/minio/minio), this lab relies on historically cached images or local builds pulled by the Helm chart. In a modern production environment, you would either build the archived community source code internally, purchase AIStor, or deploy a CNCF alternative like Rook/Ceph.
 :::
 
 ### Prerequisites
@@ -318,11 +318,11 @@ Important production data
 
 ### 2. Symmetrical Topology Expansion Failures
 **Context:** A bare-metal cluster runs out of storage. An engineer adds two new large NVMe drives to one of the nodes and restarts the service, expecting the capacity to increase. The cluster state becomes inconsistent or ignores the drives.
-**The Fix:** Distributed object topologies are strictly deterministic based on their initialization commands. You cannot change the geometry of an existing Server Pool. To add capacity, you must provision a *new* Server Pool (e.g., 4 new nodes) and update the Tenant configuration to append the new pool. The cluster will automatically route new objects to the pool with the most free space.
+**The Fix:** Distributed object topologies are strictly deterministic based on their initialization commands. You cannot change the geometry of an existing Server Pool. To add capacity, you must provision a *new* Server Pool (e.g., 4 new nodes) and update the Tenant configuration to append the new pool. The cluster will automatically [route new objects to the pool with the most free space](https://raw.githubusercontent.com/minio/minio/master/docs/distributed/README.md).
 
 ### 3. Layer 7 Load Balancer Signature Corruption
 **Context:** S3 clients suddenly receive `SignatureDoesNotMatch` HTTP 403 errors after moving the deployment behind an ingress controller or enterprise load balancer.
-**The Fix:** S3 client SDKs calculate a cryptographic hash of the HTTP request headers. If an intermediate proxy modifies, drops, or normalizes these headers (e.g., stripping `X-Amz-*` headers, or altering the `Host` header without passing `X-Forwarded-Host`), the signature calculated by the server will not match the client's signature. Configure the ingress proxy for strict Layer 4 (TCP) pass-through, or ensure all required AWS headers are preserved intact.
+**The Fix:** [S3 client SDKs calculate a cryptographic hash of the HTTP request headers](https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html). If an intermediate proxy modifies, drops, or normalizes these headers (e.g., stripping `X-Amz-*` headers, or altering the `Host` header without passing `X-Forwarded-Host`), the signature calculated by the server will not match the client's signature. Configure the ingress proxy for strict Layer 4 (TCP) pass-through, or ensure all required AWS headers are preserved intact.
 
 ### 4. Versioning Disk Exhaustion
 **Context:** An application rapidly updates a small 1MB JSON configuration file in an S3 bucket 10,000 times a day. Two months later, the physical hard drives are completely full, bringing the storage cluster down.
@@ -379,3 +379,25 @@ Important production data
 *   [Rook v1.19 Documentation](https://rook.io/docs/rook/latest/)
 *   [DirectPV Storage CSI Driver Architecture](https://min.io/directpv)
 *   [STS AssumeRoleWithWebIdentity specification](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html)
+
+## Sources
+
+- [github.com: minio](https://github.com/minio/minio) — The MinIO README states that the community edition is source-code only and that pre-compiled binary releases are no longer provided.
+- [raw.githubusercontent.com: quickstart.md](https://raw.githubusercontent.com/rook/rook/v1.19.5/Documentation/Getting-Started/quickstart.md) — The Rook v1.19 quickstart explicitly lists Kubernetes versions v1.30 through v1.35 as supported.
+- [github.com: Documentation](https://github.com/rook/rook/tree/v1.19.5/Documentation) — The Rook documentation README describes Rook as a Ceph storage orchestrator and states that it is hosted by CNCF as a graduated project.
+- [raw.githubusercontent.com: tentacle.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/tentacle.rst) — The Ceph Tentacle release notes list v20.2.1 with an April 6, 2026 release date and enumerate the RGW changes named in the module.
+- [github.com: ceph](https://github.com/ceph/ceph) — The Ceph upstream repository describes Ceph as a distributed object, block, and file storage platform.
+- [github.com: seaweedfs](https://github.com/seaweedfs/seaweedfs) — The upstream README states the Apache-2.0 license, O(1) disk access, and in-memory metadata mapping design.
+- [github.com: rustfs](https://github.com/rustfs/rustfs) — The RustFS upstream README and repository tagline directly state the license, S3 compatibility, Rust implementation, and 2.3x benchmark claim.
+- [github.com: container object storage interface](https://github.com/kubernetes-sigs/container-object-storage-interface) — The COSI upstream README explicitly says the main branch contains pre-alpha code and APIs for COSI v1alpha2.
+- [raw.githubusercontent.com: README.md](https://raw.githubusercontent.com/minio/minio/master/docs/distributed/README.md) — The distributed MinIO guide documents pools, deterministic hashing, and placement of new objects in proportion to free space.
+- [github.com: 19280](https://github.com/minio/minio/discussions/19280) — The upstream GitHub discussion directly addresses adding more disks to an existing pool and points users to server-pool expansion instead.
+- [github.com: directpv](https://github.com/minio/directpv) — The DirectPV README directly describes DirectPV as a CSI driver for direct-attached storage and lists the drive-management functions and network-PV tradeoffs.
+- [raw.githubusercontent.com: README.md](https://raw.githubusercontent.com/minio/minio/master/docs/erasure/README.md) — The MinIO erasure-code guide states the 2-to-16-drive erasure-set range and describes variable data and parity blocks.
+- [raw.githubusercontent.com: README.md](https://raw.githubusercontent.com/minio/minio/master/docs/erasure/storage-class/README.md) — The MinIO storage-class guide table gives the 16-drive data/parity combinations and storage-usage ratios from which the efficiencies follow.
+- [kubernetes.io: projected volumes](https://kubernetes.io/docs/concepts/storage/projected-volumes) — The Kubernetes projected-volumes documentation describes service account token projection into Pods.
+- [docs.aws.amazon.com: API AssumeRoleWithWebIdentity.html](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html) — The AWS STS API reference directly documents the operation and the temporary credentials it returns.
+- [docs.aws.amazon.com: versioning workflows.html](https://docs.aws.amazon.com/us_en/AmazonS3/latest/userguide/versioning-workflows.html) — The Amazon S3 versioning documentation directly explains retained previous versions for overwrite and delete workflows.
+- [docs.aws.amazon.com: object lock.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html) — The S3 Object Lock documentation directly describes retention periods, legal holds, object versions, WORM behavior, and compliance-mode protection.
+- [docs.aws.amazon.com: intro lifecycle rules.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html) — The S3 lifecycle documentation covers expiration, transition, and noncurrent-version lifecycle actions.
+- [docs.aws.amazon.com: sig v4 authenticating requests.html](https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html) — The AWS Signature Version 4 documentation explains request signing and the signed request components that must match during verification.
