@@ -475,619 +475,6 @@ The anti-pattern is to make uncertainty invisible. Infinite waits hide stuck wor
 
 ---
 
-## Part 6: Lab Walkthrough
-
-**Task**: Use a local kind cluster to simulate a silent downstream service, observe timeout-driven retries creating a thundering herd, then fix the behavior with backoff, jitter, and a circuit breaker.
-
-This lab creates two Kubernetes services:
-
-1. `frontend`: receives user requests and calls the backend.
-2. `backend`: records every attempt and can run in `normal`, `slow`, or `silent` mode.
-
-The lab is deterministic by design. The backend timeout is shorter than the slow/silent delay, the naive caller always makes four attempts per user request, and the protected caller fails locally once the circuit opens. The jitter function is deterministic in the lab so your output is stable; production jitter should use a real random or well-distributed source.
-
-### 6.1 Create the kind Cluster
-
-```bash
-kind delete cluster --name kd-partial-failure --quiet || true
-kind create cluster --name kd-partial-failure --image kindest/node:v1.35.0
-kubectl cluster-info --context kind-kd-partial-failure
-kubectl config use-context kind-kd-partial-failure
-```
-
-### 6.2 Deploy the Lab Services
-
-```bash
-cat <<'YAML' | kubectl apply -f -
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: partial-failure
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: partial-failure-lab-code
-  namespace: partial-failure
-data:
-  backend.py: |
-    import json
-    import os
-    import threading
-    import time
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-    from urllib.parse import parse_qs, urlparse
-
-    MODE = os.environ.get("MODE", "normal")
-    LOCK = threading.Lock()
-    TOTAL_REQUESTS = 0
-    IN_FLIGHT = 0
-    MAX_IN_FLIGHT = 0
-    SEEN_KEYS = set()
-
-    def delay_for_mode():
-        if MODE == "normal":
-            return 0.03
-        if MODE == "slow":
-            return 0.45
-        if MODE == "silent":
-            return 5.00
-        return 0.03
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):
-            return
-
-        def _send(self, status, body, content_type="application/json"):
-            raw = body.encode()
-            self.send_response(status)
-            self.send_header("content-type", content_type)
-            self.send_header("content-length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def do_GET(self):
-            global TOTAL_REQUESTS, IN_FLIGHT, MAX_IN_FLIGHT, SEEN_KEYS
-            parsed = urlparse(self.path)
-
-            if parsed.path == "/reset":
-                with LOCK:
-                    TOTAL_REQUESTS = 0
-                    IN_FLIGHT = 0
-                    MAX_IN_FLIGHT = 0
-                    SEEN_KEYS = set()
-                self._send(200, '{"reset": true}')
-                return
-
-            if parsed.path == "/metrics":
-                with LOCK:
-                    total = TOTAL_REQUESTS
-                    seen = len(SEEN_KEYS)
-                    duplicates = TOTAL_REQUESTS - len(SEEN_KEYS)
-                    inflight = IN_FLIGHT
-                    max_inflight = MAX_IN_FLIGHT
-                body = (
-                    f"mode {MODE}\n"
-                    f"total_requests {total}\n"
-                    f"unique_idempotency_keys {seen}\n"
-                    f"duplicate_requests {duplicates}\n"
-                    f"inflight {inflight}\n"
-                    f"max_inflight {max_inflight}\n"
-                )
-                self._send(200, body, "text/plain")
-                return
-
-            if parsed.path != "/work":
-                self._send(404, '{"error": "not found"}')
-                return
-
-            key = parse_qs(parsed.query).get("key", ["missing-key"])[0]
-            with LOCK:
-                TOTAL_REQUESTS += 1
-                IN_FLIGHT += 1
-                MAX_IN_FLIGHT = max(MAX_IN_FLIGHT, IN_FLIGHT)
-                first_seen = key not in SEEN_KEYS
-                SEEN_KEYS.add(key)
-
-            try:
-                time.sleep(delay_for_mode())
-                body = {
-                    "mode": MODE,
-                    "key": key,
-                    "first_seen": first_seen,
-                    "logical_side_effect": "created" if first_seen else "deduped",
-                }
-                self._send(200, json.dumps(body))
-            finally:
-                with LOCK:
-                    IN_FLIGHT -= 1
-
-    ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
-  frontend.py: |
-    import json
-    import os
-    import socket
-    import threading
-    import time
-    import urllib.error
-    import urllib.request
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-    from urllib.parse import parse_qs, urlparse
-
-    BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8080")
-    CLIENT_TIMEOUT = float(os.environ.get("CLIENT_TIMEOUT", "0.20"))
-    NAIVE_ATTEMPTS = int(os.environ.get("NAIVE_ATTEMPTS", "4"))
-    PROTECTED_PROBES = int(os.environ.get("PROTECTED_PROBES", "3"))
-    CIRCUIT_OPEN_SECONDS = float(os.environ.get("CIRCUIT_OPEN_SECONDS", "3.0"))
-
-    LOCK = threading.Lock()
-    CIRCUIT_OPEN_UNTIL = 0.0
-    PROBES_IN_FLIGHT = 0
-
-    def stable_jitter_ms(request_id, attempt):
-        seed = sum(bytearray(f"{request_id}:{attempt}", "utf-8"))
-        return 25 + (seed % 50)
-
-    def call_backend(request_id):
-        url = f"{BACKEND_URL}/work?key={request_id}"
-        with urllib.request.urlopen(url, timeout=CLIENT_TIMEOUT) as response:
-            return response.read().decode()
-
-    def timeout_reason(exc):
-        if isinstance(exc, socket.timeout):
-            return "timeout"
-        if isinstance(exc, TimeoutError):
-            return "timeout"
-        return exc.__class__.__name__
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):
-            return
-
-        def _send_json(self, status, obj):
-            raw = json.dumps(obj, sort_keys=True).encode()
-            self.send_response(status)
-            self.send_header("content-type", "application/json")
-            self.send_header("content-length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def do_GET(self):
-            global CIRCUIT_OPEN_UNTIL, PROBES_IN_FLIGHT
-            parsed = urlparse(self.path)
-            params = parse_qs(parsed.query)
-            request_id = params.get("request_id", [f"req-{time.time_ns()}"])[0]
-
-            if parsed.path == "/reset":
-                with LOCK:
-                    CIRCUIT_OPEN_UNTIL = 0.0
-                    PROBES_IN_FLIGHT = 0
-                self._send_json(200, {"reset": True})
-                return
-
-            if parsed.path == "/state":
-                with LOCK:
-                    remaining = max(0.0, CIRCUIT_OPEN_UNTIL - time.monotonic())
-                    probes = PROBES_IN_FLIGHT
-                self._send_json(200, {"circuit_open_for_seconds": round(remaining, 3), "probes_in_flight": probes})
-                return
-
-            if parsed.path == "/naive":
-                errors = []
-                for attempt in range(1, NAIVE_ATTEMPTS + 1):
-                    try:
-                        body = call_backend(request_id)
-                        self._send_json(200, {"policy": "naive", "attempts": attempt, "backend": json.loads(body)})
-                        return
-                    except Exception as exc:
-                        errors.append(timeout_reason(exc))
-                self._send_json(504, {"policy": "naive", "attempts": NAIVE_ATTEMPTS, "result": "failed", "errors": errors})
-                return
-
-            if parsed.path == "/protected":
-                now = time.monotonic()
-                with LOCK:
-                    if now < CIRCUIT_OPEN_UNTIL:
-                        self._send_json(503, {"policy": "protected", "attempts": 0, "result": "circuit_open"})
-                        return
-                    if PROBES_IN_FLIGHT >= PROTECTED_PROBES:
-                        CIRCUIT_OPEN_UNTIL = now + CIRCUIT_OPEN_SECONDS
-                        self._send_json(503, {"policy": "protected", "attempts": 0, "result": "probe_limit_opened_circuit"})
-                        return
-                    PROBES_IN_FLIGHT += 1
-
-                try:
-                    try:
-                        body = call_backend(request_id)
-                        with LOCK:
-                            CIRCUIT_OPEN_UNTIL = 0.0
-                        self._send_json(200, {"policy": "protected", "attempts": 1, "backend": json.loads(body)})
-                        return
-                    except Exception as exc:
-                        jitter_ms = stable_jitter_ms(request_id, 1)
-                        time.sleep(jitter_ms / 1000)
-                        with LOCK:
-                            CIRCUIT_OPEN_UNTIL = time.monotonic() + CIRCUIT_OPEN_SECONDS
-                        self._send_json(
-                            503,
-                            {
-                                "policy": "protected",
-                                "attempts": 1,
-                                "result": "opened_circuit_after_timeout",
-                                "backoff_jitter_ms": jitter_ms,
-                                "error": timeout_reason(exc),
-                            },
-                        )
-                        return
-                finally:
-                    with LOCK:
-                        PROBES_IN_FLIGHT -= 1
-
-            self._send_json(404, {"error": "not found"})
-
-    ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
-  loadgen.py: |
-    import collections
-    import json
-    import os
-    import sys
-    import urllib.error
-    import urllib.request
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    target = sys.argv[1]
-    total = int(os.environ.get("TOTAL", "20"))
-    concurrency = int(os.environ.get("CONCURRENCY", "20"))
-
-    def one(i):
-        request_id = f"lab-request-{i:02d}"
-        url = f"{target}?request_id={request_id}"
-        try:
-            with urllib.request.urlopen(url, timeout=10) as response:
-                body = response.read().decode()
-                return response.status, json.loads(body)
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode()
-            return exc.code, json.loads(body)
-
-    statuses = collections.Counter()
-    results = collections.Counter()
-    attempts = 0
-
-    with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = [pool.submit(one, i) for i in range(total)]
-        for future in as_completed(futures):
-            status, body = future.result()
-            statuses[str(status)] += 1
-            results[body.get("result", "success")] += 1
-            attempts += int(body.get("attempts", 0))
-
-    print(f"target={target}")
-    print(f"user_requests={total}")
-    print(f"concurrency={concurrency}")
-    print(f"frontend_reported_backend_attempts={attempts}")
-    print(f"status_counts={dict(sorted(statuses.items()))}")
-    print(f"result_counts={dict(sorted(results.items()))}")
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-  namespace: partial-failure
-spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-        - name: backend
-          image: python:3.12-alpine
-          command: ["python", "/scripts/backend.py"]
-          env:
-            - name: MODE
-              value: "normal"
-          ports:
-            - containerPort: 8080
-          volumeMounts:
-            - name: code
-              mountPath: /scripts
-      volumes:
-        - name: code
-          configMap:
-            name: partial-failure-lab-code
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend
-  namespace: partial-failure
-spec:
-  selector:
-    app: backend
-  ports:
-    - port: 8080
-      targetPort: 8080
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend
-  namespace: partial-failure
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: frontend
-  template:
-    metadata:
-      labels:
-        app: frontend
-    spec:
-      containers:
-        - name: frontend
-          image: python:3.12-alpine
-          command: ["python", "/scripts/frontend.py"]
-          env:
-            - name: BACKEND_URL
-              value: "http://backend:8080"
-            - name: CLIENT_TIMEOUT
-              value: "0.20"
-          ports:
-            - containerPort: 8080
-          volumeMounts:
-            - name: code
-              mountPath: /scripts
-      volumes:
-        - name: code
-          configMap:
-            name: partial-failure-lab-code
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend
-  namespace: partial-failure
-spec:
-  selector:
-    app: frontend
-  ports:
-    - port: 8080
-      targetPort: 8080
-YAML
-
-kubectl -n partial-failure rollout status deployment/backend --timeout=120s
-kubectl -n partial-failure rollout status deployment/frontend --timeout=120s
-```
-
-### 6.3 Baseline: Normal Backend
-
-First prove that the system works when the backend is healthy.
-
-```bash
-kubectl -n partial-failure exec -i deploy/backend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/reset").read().decode())
-PY
-
-kubectl -n partial-failure exec -i deploy/frontend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/naive?request_id=baseline").read().decode())
-PY
-
-kubectl -n partial-failure exec -i deploy/backend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/metrics").read().decode())
-PY
-```
-
-You should see one successful frontend response and backend metrics similar to:
-
-```text
-mode normal
-total_requests 1
-unique_idempotency_keys 1
-duplicate_requests 0
-```
-
-### 6.4 Make the Backend Silent
-
-Now make the backend slower than the frontend timeout. From the caller's perspective, `slow` and `silent` are both "no answer before my deadline."
-
-```bash
-kubectl -n partial-failure set env deployment/backend MODE=silent
-kubectl -n partial-failure rollout status deployment/backend --timeout=120s
-
-kubectl -n partial-failure exec -i deploy/frontend -- python - <<'PY'
-import urllib.error
-import urllib.request
-
-try:
-    print(urllib.request.urlopen("http://127.0.0.1:8080/naive?request_id=silent-demo", timeout=10).read().decode())
-except urllib.error.HTTPError as exc:
-    print(exc.code)
-    print(exc.read().decode())
-PY
-```
-
-The frontend should return a `504` after four attempts. The key observation is not the exact JSON. The key observation is that the caller still does not know whether the backend did nothing or did the work and failed to reply before the timeout.
-
-### 6.5 Naive Retries Create a Thundering Herd
-
-Switch from `silent` to `slow`. The backend will take 450 ms per request, while the frontend times out after 200 ms. Then send 20 concurrent user requests through the naive retry policy.
-
-```bash
-kubectl -n partial-failure set env deployment/backend MODE=slow
-kubectl -n partial-failure rollout status deployment/backend --timeout=120s
-
-kubectl -n partial-failure exec -i deploy/backend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/reset").read().decode())
-PY
-
-kubectl -n partial-failure delete job naive-load --ignore-not-found
-cat <<'YAML' | kubectl apply -f -
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: naive-load
-  namespace: partial-failure
-spec:
-  backoffLimit: 0
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: load
-          image: python:3.12-alpine
-          command: ["python", "/scripts/loadgen.py", "http://frontend:8080/naive"]
-          env:
-            - name: TOTAL
-              value: "20"
-            - name: CONCURRENCY
-              value: "20"
-          volumeMounts:
-            - name: code
-              mountPath: /scripts
-      volumes:
-        - name: code
-          configMap:
-            name: partial-failure-lab-code
-YAML
-
-kubectl -n partial-failure wait --for=condition=complete job/naive-load --timeout=120s
-kubectl -n partial-failure logs job/naive-load
-kubectl -n partial-failure exec -i deploy/backend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/metrics").read().decode())
-PY
-```
-
-Expected shape:
-
-```text
-user_requests=20
-frontend_reported_backend_attempts=80
-status_counts={'504': 20}
-
-mode slow
-total_requests 80
-unique_idempotency_keys 20
-duplicate_requests 60
-max_inflight 20 or higher
-```
-
-The frontend did not serve a single successful user request, but it still forced the backend to process 80 attempts. The stable idempotency keys kept those attempts to 20 logical operations. Without idempotency, this same pattern could create 80 side effects.
-
-### 6.6 Add Backoff, Jitter, and a Circuit Breaker
-
-Reset the backend counters and run the same 20 concurrent user requests through the protected policy. The protected policy allows only a few probes into the dependency, applies a short jittered delay after a timeout, and opens the circuit so later calls fail locally instead of adding backend work.
-
-```bash
-kubectl -n partial-failure exec -i deploy/backend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/reset").read().decode())
-PY
-
-kubectl -n partial-failure exec -i deploy/frontend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/reset").read().decode())
-PY
-
-kubectl -n partial-failure delete job protected-load --ignore-not-found
-cat <<'YAML' | kubectl apply -f -
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: protected-load
-  namespace: partial-failure
-spec:
-  backoffLimit: 0
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: load
-          image: python:3.12-alpine
-          command: ["python", "/scripts/loadgen.py", "http://frontend:8080/protected"]
-          env:
-            - name: TOTAL
-              value: "20"
-            - name: CONCURRENCY
-              value: "20"
-          volumeMounts:
-            - name: code
-              mountPath: /scripts
-      volumes:
-        - name: code
-          configMap:
-            name: partial-failure-lab-code
-YAML
-
-kubectl -n partial-failure wait --for=condition=complete job/protected-load --timeout=120s
-kubectl -n partial-failure logs job/protected-load
-kubectl -n partial-failure exec -i deploy/backend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/metrics").read().decode())
-PY
-```
-
-Expected shape:
-
-```text
-user_requests=20
-frontend_reported_backend_attempts=3
-status_counts={'503': 20}
-result_counts={'circuit_open': ..., 'opened_circuit_after_timeout': ..., 'probe_limit_opened_circuit': ...}
-
-mode slow
-total_requests 3
-unique_idempotency_keys 3
-duplicate_requests 0
-```
-
-The user-visible result is still failure because the backend is unhealthy. The system result is dramatically better: the backend saw only a few probe attempts instead of 80 retry attempts. The circuit breaker converted a retry storm into local, bounded failure.
-
-### 6.7 Recover the Backend
-
-Return the backend to normal mode, wait for the circuit cool-down, and confirm successful traffic resumes.
-
-```bash
-kubectl -n partial-failure set env deployment/backend MODE=normal
-kubectl -n partial-failure rollout status deployment/backend --timeout=120s
-sleep 4
-
-kubectl -n partial-failure exec -i deploy/frontend -- python - <<'PY'
-import urllib.request
-print(urllib.request.urlopen("http://127.0.0.1:8080/protected?request_id=recovery").read().decode())
-PY
-```
-
-You should see a `protected` success response with one backend attempt. A real production circuit breaker would use half-open probes and rolling metrics rather than this small teaching implementation, but the habit is the same: fail locally while the dependency is unhealthy, then probe recovery carefully.
-
-### 6.8 Clean Up
-
-```bash
-kind delete cluster --name kd-partial-failure
-```
-
-**Success Criteria**:
-
-- [ ] Created a kind cluster and deployed the `frontend` and `backend` services.
-- [ ] Demonstrated that a silent backend produces client timeouts without proving whether work happened.
-- [ ] Observed naive retries turning 20 user requests into 80 backend attempts.
-- [ ] Observed stable idempotency keys collapsing 80 attempts into 20 logical operations.
-- [ ] Observed the protected policy limiting backend attempts with backoff, jitter, and a circuit breaker.
-- [ ] Restored the backend and confirmed protected traffic can recover.
-
----
-
 ## Did You Know?
 
 - Amazon engineers treat timeouts, retries, backoff, and jitter as a connected design problem, not four independent settings. The AWS Builders Library article on [timeouts and jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) explicitly warns that retries can amplify load when failures are caused by overload.
@@ -1166,14 +553,80 @@ kind delete cluster --name kd-partial-failure
 
 ## Hands-On Exercise
 
-Use the lab walkthrough in Part 6 as the graded exercise for this module. The important result is not that every request succeeds; it is that you can explain why the naive policy creates backend amplification and why the protected policy intentionally fails locally to preserve the dependency. When you run the lab, capture the `naive-load` summary, the backend metrics after naive retries, the `protected-load` summary, and the backend metrics after circuit breaking. Those four outputs prove that you observed both the failure mode and the mitigation.
+**Task**: Connect timeout, retry, and circuit-breaker concepts to Kubernetes control-plane behavior and to pen-and-paper load math.
+
+**Task 1: Observe Lease Renewal as a Timeout Boundary (10 minutes)**
+
+Kubernetes controllers use lease objects with renewal deadlines. When renewals stop, another candidate can take leadership. This is a concrete example of a caller-side timeout boundary: the holder must prove liveness before the lease expires.
+
+```bash
+# List control-plane leader leases
+kubectl get leases -n kube-system
+
+# Inspect controller-manager lease timing
+kubectl get lease kube-controller-manager -n kube-system -o yaml
+
+# Note leaseDurationSeconds, renewTime, and holderIdentity
+# Re-run after ~30 seconds and compare renewTime
+kubectl get lease kube-controller-manager -n kube-system -o jsonpath='{.spec.holderIdentity}{"\n"}{.spec.leaseDurationSeconds}{"\n"}{.status.renewTime}{"\n"}'
+```
+
+<details>
+<summary>Solution & Explanation</summary>
+A healthy leader updates `renewTime` regularly within `leaseDurationSeconds`. If the holder pauses (GC, overload, partition), renewal stops and the lease eventually expires even though the process may still be running locally. That is the same ambiguity pattern as a remote HTTP timeout: local silence does not prove the peer failed globally, but the coordination layer must act on missed renewals to avoid split leadership.
+</details>
+
+**Task 2: Read Probe Timeouts on a Workload (10 minutes)**
+
+Readiness and liveness probes are another form of timeout policy. They decide when Kubernetes stops sending traffic or restarts a container based on local observations, not on global certainty about application health.
+
+```bash
+# Pick any running pod in your cluster
+kubectl get pods -A | head -5
+
+# Replace with a pod name from your cluster
+kubectl get pod -n kube-system -o yaml | rg -n "livenessProbe|readinessProbe|timeoutSeconds|periodSeconds|failureThreshold" -A2
+```
+
+<details>
+<summary>Solution & Explanation</summary>
+Probe `timeoutSeconds` is a suspicion threshold, not proof that the application logic failed. A pod can be mid-request, blocked on a dependency, or slow during startup while the kubelet already marks it unready. Operators should align probe timeouts with startup time, dependency latency, and user-facing deadlines instead of copying generic defaults.
+</details>
+
+**Task 3: Calculate a Retry Multiplier (15 minutes)**
+
+Use the worked example from Part 3.5. Assume 10,000 user requests per minute, each making one inventory call. Ten percent of first attempts time out, and the frontend retries each timeout three more times.
+
+On paper, compute:
+
+1. Successful first attempts
+2. Original slow attempts that timed out
+3. Retry attempts
+4. Total backend attempts
+5. Retry multiplier (`backend_attempts / user_requests`)
+
+Then change the timeout rate to 50% and recompute. Write one sentence explaining why the backend can see a traffic spike when user demand is flat.
+
+<details>
+<summary>Solution & Explanation</summary>
+At 10% timeouts with three retries: 9,000 successful first attempts + 1,000 original slow attempts + 3,000 retries = 13,000 backend attempts. Multiplier = 1.3x. At 50% timeouts: 5,000 + 5,000 + 15,000 = 25,000 attempts. Multiplier = 2.5x. The spike happens because retries are synthetic load created by the recovery policy, not by more users.
+</details>
+
+**Task 4: Design an Idempotent Payment API (15 minutes)**
+
+Sketch a side-effecting `POST /payments` API that clients may retry after timeouts. Specify: who creates the idempotency key, how long dedupe state is retained, what happens when the same key arrives with a different payload, and what the client should do after a timeout before encouraging the user to click Pay again.
+
+<details>
+<summary>Solution & Explanation</summary>
+The client should generate a stable idempotency key before the first attempt and send it on every retry. The server stores key, payload fingerprint, state, and result for a retention window that covers realistic reconnect and support workflows. Same key + different payload returns a conflict error. After timeout, checkout should query payment status or reconciliation by key instead of issuing a fresh non-idempotent charge.
+</details>
 
 **Success Criteria**:
 
-- [ ] Naive retries turned 20 user requests into 80 backend attempts while the backend was slow.
-- [ ] Backend metrics showed stable idempotency keys deduplicating repeated attempts into fewer logical operations.
-- [ ] The protected path opened the circuit and kept backend attempts far below the naive count.
-- [ ] You restored the backend to normal mode and confirmed the protected path recovered after the cool-down.
+- [ ] Inspected a Kubernetes lease and explained renewal as a timeout boundary
+- [ ] Located probe timeout settings and explained what they do and do not prove
+- [ ] Computed retry multipliers for 10% and 50% timeout rates
+- [ ] Designed idempotency behavior for a retryable payment API
 
 ---
 
@@ -1206,7 +659,6 @@ Before moving on, ensure you understand:
 - Leslie Lamport, [Time, Clocks, and the Ordering of Events in a Distributed System](https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system/) - the foundational paper behind logical time and partial ordering in distributed systems.
 - Leslie Lamport, [Time, Clocks, and the Ordering of Events in a Distributed System PDF](https://lamport.org/pubs/time-clocks.pdf) - the paper text in Lamport's publication archive.
 - Kubernetes documentation, [API Concepts](https://kubernetes.io/docs/reference/using-api/api-concepts/) - resource identity, watches, and API behavior relevant to retrying controller operations.
-- kind documentation, [Quick Start](https://kind.sigs.k8s.io/docs/user/quick-start/) - local Kubernetes clusters for deterministic lab practice.
 
 ---
 
