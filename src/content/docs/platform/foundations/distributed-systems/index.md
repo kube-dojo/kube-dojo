@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Distributed Systems"
 ---
-> **Foundation Track** | 3 Modules | ~1.5 hours total
+> **Foundation Track** | 4 Modules | ~2.5 hours total
 
 The fundamentals of building systems that run across multiple machines. Understanding why distributed systems are hard, and the patterns that make them work.
 
@@ -32,6 +32,7 @@ Understanding these challenges helps you design systems that work despite them.
 | 5.1 | [Module 5.1: What Makes Systems Distributed](module-5.1-what-makes-systems-distributed/) | 25-30 min | Fundamental challenges, CAP theorem, Kubernetes as distributed system |
 | 5.2 | [Module 5.2: Consensus and Coordination](module-5.2-consensus-and-coordination/) | 35-40 min | Paxos, Raft, leader election, distributed locks, etcd |
 | 5.3 | [Module 5.3: Eventual Consistency](module-5.3-eventual-consistency/) | 30-35 min | Consistency models, replication, conflict resolution, CRDTs |
+| 5.4 | [Module 5.4: Partial Failure and Timeouts](module-5.4-partial-failure-and-timeouts/) | 60-75 min | Timeouts, idempotent retries, retry storms, jitter, circuit breakers |
 
 ---
 
@@ -71,6 +72,16 @@ START HERE
 └──────────────────┬──────────────────┘
                    │
                    ▼
+┌─────────────────────────────────────┐
+│  Module 5.4                         │
+│  Partial Failure and Timeouts       │
+│  └── Timeout uncertainty            │
+│  └── Idempotent retries             │
+│  └── Retry storms and jitter        │
+│  └── Circuit breakers               │
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
            FOUNDATIONS COMPLETE
                    │
     ┌──────────────┼──────────────┐
@@ -96,6 +107,10 @@ Discipline    Engineering   Discipline
 | Eventual Consistency | 5.3 | Convergence without immediate agreement |
 | Version Vectors | 5.3 | Tracking causality without clocks |
 | CRDTs | 5.3 | Conflict-free data structures |
+| Timeout | 5.4 | A local deadline, not proof of remote failure |
+| Idempotency | 5.4 | Making repeated attempts produce one logical effect |
+| Retry Storm | 5.4 | Retries amplifying load during partial failure |
+| Circuit Breaker | 5.4 | Failing locally to protect an unhealthy dependency |
 
 ---
 
