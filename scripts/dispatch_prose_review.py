@@ -370,7 +370,7 @@ def fire(reviewer: str, *, prompt: str, slug: str) -> tuple[bool, str]:
     from agent_runtime.errors import RateLimitedError, AgentTimeoutError
 
     if reviewer == "claude":
-        model = "claude-opus-4-7"
+        model = "claude-opus-4-8"
         timeout = 1500
     elif reviewer == "codex":
         # gpt-5.5 + model_reasoning_effort=high pinned in ~/.codex/config.toml

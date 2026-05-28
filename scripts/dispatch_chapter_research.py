@@ -38,7 +38,7 @@ REPO = Path("/Users/krisztiankoos/projects/kubedojo")
 
 AGENT_DEFAULTS: dict[str, dict[str, object]] = {
     "claude": {
-        "model": "claude-opus-4-7",
+        "model": "claude-opus-4-8",
         "owner_label": "Claude",
         # Keep claude-opus pegged at 60 min; mirrors prior behavior.
         "hard_timeout": 3600,
