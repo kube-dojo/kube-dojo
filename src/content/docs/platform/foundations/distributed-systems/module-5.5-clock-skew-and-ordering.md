@@ -358,27 +358,23 @@ A stronger design separates those meanings. Store independent fields with indepe
 
 ## Hands-On Exercise
 
-**Task**: Reinforce clock skew, last-writer-wins hazards, and ordering choices through observation and design — without deploying custom services or verifier Jobs.
+**Task**: Reinforce clock skew, last-writer-wins hazards, and ordering choices through observation and design.
 
-**Prerequisites**: Any existing Kubernetes cluster (kind, minikube, or a test cluster) with `kubectl` configured. Commands below use the `default` namespace; adjust if your environment restricts it.
+**Prerequisites**: Any existing Kubernetes cluster (kind, minikube, or a test cluster) with `kubectl` configured.
 
 **Task 1: Wall-clock timestamps as evidence, not truth**
 
-Create a short burst of API activity, then list cluster Events sorted by wall-clock time. Notice that `lastTimestamp` is a label each apiserver or component recorded locally — not proof of global order.
+Using only read-only `kubectl`, list cluster Events sorted by wall-clock time. Notice that `lastTimestamp` is a label each apiserver or component recorded locally — not proof of global order.
 
 ```bash
-kubectl create configmap clock-skew-observe --from-literal=phase=1
-kubectl patch configmap clock-skew-observe -p '{"data":{"phase":"2"}}'
-kubectl delete configmap clock-skew-observe
-
 kubectl get events -A --sort-by=.lastTimestamp | tail -20
 ```
 
-In your notes, answer: (a) Do the Events appear in strict causal order of your three commands? (b) Could two Events from different nodes share the same second but reflect different real-time instants?
+Pick two Events that appear close together in the sorted list (same second or adjacent lines). In your notes, answer: (a) Does sorted order prove which underlying cluster change happened first in causal history? (b) Could two Events from different nodes share the same `lastTimestamp` second while reflecting different real-time instants under clock skew?
 
 <details>
 <summary>Solution & Explanation</summary>
-Sorted Events show **when each component chose to record** an observation, not a single shared "now." Your ConfigMap create, patch, and delete may interleave with unrelated Events (scheduling, image pulls, other namespaces). Two Events can share an identical `lastTimestamp` second while originating from hosts whose wall clocks differ by hundreds of milliseconds — or more under skew. Treat wall-clock fields as **audit evidence**: useful for humans correlating logs, unsafe as the sole arbiter of which distributed write happened first.
+Sorted Events show **when each component chose to record** an observation, not a single shared "now." The list mixes unrelated activity (scheduling, image pulls, other namespaces) with no guarantee that wall-clock order matches causal order. Two Events can share an identical `lastTimestamp` second while originating from hosts whose wall clocks differ by hundreds of milliseconds — or more under skew. Treat wall-clock fields as **audit evidence**: useful for humans correlating logs, unsafe as the sole arbiter of which distributed write happened first.
 </details>
 
 **Task 2: Last-writer-wins under clock skew (pen-and-paper)**
@@ -399,7 +395,7 @@ LWW keeps **Region A's** `theme=light` because `12:05:00Z` > `12:03:30Z` even th
 
 **Task 3: Pick an ordering strategy (pen-and-paper)**
 
-For each requirement, choose **one primary** mechanism: wall-clock LWW, Lamport timestamps, version vectors, or quorum/consensus (e.g. etcd/Raft). Briefly justify the trade-off.
+For each requirement, choose **one primary** mechanism: wall-clock LWW, Lamport timestamps, version vectors, resourceVersion / compare-and-swap (optimistic concurrency), or quorum/consensus (e.g. etcd/Raft). Briefly justify the trade-off.
 
 1. **Collaborative document title** — concurrent offline edits must surface as conflicts, not silent merges.
 2. **Global payment ledger** — no two clients may observe different committed balances for the same account.
@@ -410,7 +406,7 @@ For each requirement, choose **one primary** mechanism: wall-clock LWW, Lamport 
 <summary>Solution & Explanation</summary>
 1. **Version vectors** (or explicit conflict branches) — detect concurrent edits so the product can merge or ask the user; LWW would hide concurrency.
 2. **Quorum/consensus** — financial invariants need one agreed history; latency cost is acceptable.
-3. **Lamport timestamps** (or idempotent keys + monotonic sequence per series) — preserve causal direction without requiring physical clock agreement across regions.
+3. **Stable idempotency key per batch (or per sample) plus a per-series monotonic or logical sequence number** — retries must carry the same idempotency key so the receiver drops duplicates; the sequence orders related samples without requiring physical clock agreement. Lamport or hybrid logical clocks can annotate causal order but do **not** deduplicate by themselves.
 4. **Resource-version / compare-and-swap** — the API already exposes version-based optimistic concurrency instead of wall-clock overwrite; this matches the control-plane pattern in Part 4 of this module.
 </details>
 
