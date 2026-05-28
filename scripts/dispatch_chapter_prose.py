@@ -455,7 +455,7 @@ def fire_phase(*, agent: str, prompt: str, worktree: Path, task_id: str,
         timeout = 3600
         mode = "danger"
     elif agent == "claude":
-        model = "claude-opus-4-7"
+        model = "claude-opus-4-8"
         timeout = 3600
         mode = "workspace-write"
     else:

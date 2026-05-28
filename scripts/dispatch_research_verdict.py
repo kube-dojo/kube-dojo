@@ -5,7 +5,7 @@ For each PR:
    the PR branch (`git show <branch>:<path>`).
 2. Fire the cross-family **anchor verifier** (route on PR branch prefix):
    - `claude/394-chNN-research` -> Codex (gpt-5.5, reasoning=high)
-   - `codex/394-chNN-research`  -> Claude (claude-opus-4-7)
+   - `codex/394-chNN-research`  -> Claude (claude-opus-4-8)
    Both have shell access and can curl/pdftotext/grep page anchors.
 3. Fire Gemini structural gap-audit on both (lane-disciplined per
    feedback_gemini_hallucinates_anchors.md — NO URL citations from
@@ -325,7 +325,7 @@ def fire(agent: str, *, prompt: str, slug: str) -> tuple[bool, str]:
         model = "gpt-5.5"
         timeout = 1500
     elif agent == "claude":
-        model = "claude-opus-4-7"
+        model = "claude-opus-4-8"
         timeout = 1500
     elif agent == "gemini":
         model = "gemini-3-flash-preview"
