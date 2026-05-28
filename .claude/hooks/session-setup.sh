@@ -79,12 +79,13 @@ if [ -f "$MEMORY_FILE" ]; then
   fi
 fi
 
-# Build output
-if [ ${#ISSUES[@]} -eq 0 ] && [ ${#INFO[@]} -eq 0 ]; then
-  exit 0
-fi
+# Build output. The FIRST ACTION reminder is always emitted (interactive sessions
+# only — headless already exited at line 6). Belt-and-suspenders for CLAUDE.md
+# "FIRST ACTION, every session — no exceptions" — the rule still drives, this
+# just keeps it in working memory on follow-on turns.
+CONTEXT="FIRST ACTION (per CLAUDE.md): if you have not yet invoked the curriculum-orchestrator skill this session, do it now via the Skill tool BEFORE responding to the user.
 
-CONTEXT="SESSION SETUP CHECK:"
+SESSION SETUP CHECK:"
 
 if [ ${#ISSUES[@]} -gt 0 ]; then
   CONTEXT="$CONTEXT
