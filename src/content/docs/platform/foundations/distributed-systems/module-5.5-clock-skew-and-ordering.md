@@ -358,9 +358,7 @@ A stronger design separates those meanings. Store independent fields with indepe
 
 ## Hands-On Exercise
 
-**Task**: Reinforce clock skew, last-writer-wins hazards, and ordering choices through observation and design.
-
-**Prerequisites**: Any existing Kubernetes cluster (kind, minikube, or a test cluster) with `kubectl` configured.
+**Task**: Reinforce clock skew, last-writer-wins hazards, and ordering choices through observation and design. **Prerequisites**: any existing Kubernetes cluster (kind, minikube, or a test cluster) with `kubectl` configured for Task 1; Tasks 2 through 4 are pen-and-paper and need no cluster at all.
 
 **Task 1: Wall-clock timestamps as evidence, not truth**
 
