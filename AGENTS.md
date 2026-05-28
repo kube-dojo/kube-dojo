@@ -196,7 +196,7 @@ The same tiering applies to **cross-agent dispatches from outside an interactive
 | `edit`     | `claude-sonnet-4-6`          | `gpt-5.3-codex-spark`  |
 | `draft`    | `claude-sonnet-4-6`          | `gpt-5.3-codex-spark`  |
 | `review`   | `claude-sonnet-4-6`          | `gpt-5.5`              |
-| `architect`| `claude-opus-4-7`            | `gpt-5.5`              |
+| `architect`| `claude-opus-4-8`            | `gpt-5.5`              |
 
 Cross-family review and architecture work stay on the top tier; routine search/edit/draft routes to mini/spark to preserve the main-tier counter for judgment work.
 
