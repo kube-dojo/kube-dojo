@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 67 — Opus 4.8 migration shipped + gap-fill scope correction</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 820px; margin: 2em auto; padding: 0 1em; line-height: 1.5; }
+  h1, h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.15em; margin-top: 1.5em; }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #f4f4f4; padding: 0.8em; border-radius: 4px; overflow-x: auto; font-size: 0.85em; }
+  table { border-collapse: collapse; margin: 0.5em 0; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.9em; }
+  th { background: #f4f4f4; }
+  .meta { color: #666; font-size: 0.9em; }
+  .tag { display: inline-block; background: #e8f0fe; color: #1a73e8; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; }
+  .warn { background: #fce8e6; color: #c5221f; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; }
+</style>
+</head>
+<body>
+
+<h1>Session 67 — Opus 4.8 migration shipped + gap-fill scope correction</h1>
+<p class="meta">Date: 2026-05-28 · Predecessor: <a href="2026-05-28-session-66-session-setup-hook-first-action-reminder.html">session 66</a> · Model: claude-opus-4-8[1m] (first session on 4.8)</p>
+
+<h2>One-line</h2>
+<p>First session on Opus 4.8. Executed the 4.8 migration punch list (PR #1636, merged). Started the gap-fill queue (G3 distributed-systems) but the author over-built runnable labs into theory lessons — user corrected: <strong>gap-fill is teaching content only; labs are a separate project, done after theory</strong>. Surfaced and re-filed the user's long-buried gap: <strong>prompt/context/harness engineering is scattered across four trees and should be ONE section</strong> (#1639).</p>
+
+<h2>What landed / changed</h2>
+<table>
+  <tr><th>Item</th><th>Where</th><th>State</th></tr>
+  <tr><td>PR <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1636">#1636</a> — Opus 4.8 migration (16 files, 3 commits)</td><td>commits <code>121d8a62</code>, <code>988de166</code>, <code>9f125a84</code> on main</td><td>MERGED (rebase)</td></tr>
+  <tr><td>Issue <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1639">#1639</a> — consolidate prompt/context/harness into ONE section</td><td>GitHub</td><td>OPEN (new epic)</td></tr>
+  <tr><td>PR <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1638">#1638</a> — distributed-systems 5.4 partial failure (refs #1624)</td><td>branch <code>gap-fill/g3-partial-failure</code></td><td><span class="warn">OPEN — needs lab-strip</span></td></tr>
+  <tr><td>PR <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1637">#1637</a> — distributed-systems 5.5 clock skew (refs #1624)</td><td>branch <code>gap-fill/g3-clock-skew</code></td><td><span class="warn">OPEN — needs lab-strip</span></td></tr>
+  <tr><td>Memory <code>feedback_gap_fill_is_teaching_content_not_labs</code></td><td>memory/</td><td>Saved</td></tr>
+  <tr><td>Memory <code>feedback_plain_language_no_jargon</code></td><td>memory/</td><td>Saved</td></tr>
+  <tr><td>Fixed MEMORY.md index line for <code>inline-claude-post-agentic-pool</code> (pools were described backwards)</td><td>MEMORY.md:54</td><td>Corrected</td></tr>
+</table>
+
+<h2>Opus 4.8 migration (PR #1636) — what it did</h2>
+<ul>
+  <li><strong>Model sweep</strong> <code>claude-opus-4-7</code> → <code>4-8</code> across all <em>active</em> routing: <code>dispatch_smart.py</code> (architect lane), <code>AGENTS.md</code>, the bridge default <code>AB_CLAUDE_MODEL</code> (registry / adapters / _config), <code>quality/queue.py</code> TERTIARY, <code>v1_pipeline.py</code> second-reviewer, and the 4 AI-history book dispatch scripts. Calibration anchors + historical attribution left at 4-7 by design. Only remaining 4-7 in active code is the back-compat alias set in <code>queue.py:117</code> (now carries both).</li>
+  <li><strong><code>effortLevel: xhigh</code></strong> added to <code>.claude/settings.json</code> (persisted; was per-session). Confirmed correct vs v2.1.154 release notes.</li>
+  <li><strong>Skill briefs tuned for 4.8 behavior</strong>: curriculum-orchestrator gets explicit same-turn fan-out + literal-complete fix briefs ("fix ALL occurrences"); cross-family-reviewer gets coverage-over-filtering ("report everything, then rank").</li>
+  <li><strong>Verified no-ops</strong>: no Anthropic SDK (<code>/claude-api migrate</code> N/A), no thinking config (4.8 auto-manages per effort), no progress-scaffolding, max_tokens is API-only.</li>
+</ul>
+<p><strong>Process win:</strong> my first grep was truncated (<code>head -60</code>, buried under historical <code>status.yaml</code>), so the first commit missed the bridge/queue/v1 defaults. The <strong>composer-2.5 R1 caught it</strong> before merge — search-vigilance lesson + the review floor doing its job. The new "report everything" reviewer language surfaced 11 ranked findings.</p>
+
+<h2>THE correction — gap-fill is teaching content, not labs</h2>
+<p>I briefed codex to build full runnable kind labs into G3 lessons 5.4/5.5 (because ticket #1624 is literally titled "practice labs"). User corrected: <em>"just focus on teaching content. i told you i want to do the labs when the theory is completed... it is in another project and it can be distracting to jump between different projects."</em></p>
+<ul>
+  <li>Sibling modules confirm: 5.1 is pure theory; 5.2/5.3 have only a <em>light</em> Hands-On Exercise. Codex's 5.4 (10.5k words, multi-stage kind lab) far overshot the section's pattern.</li>
+  <li><strong>Pending fix (next session):</strong> trim 5.4/5.5 to teaching content (theory + light hands-on like 5.2/5.3) via a cursor edit — this also erases every lab finding the reviewers raised (fake-Lamport in 5.5, non-deterministic "80" output in 5.4). Then re-check + merge (5.4 first, rebase 5.5's index line).</li>
+  <li><strong>Re-scope the rest:</strong> gap tickets <code>#1626</code>/<code>#1627</code>/<code>#1628</code> all say "practice labs" — strip to teaching-content-only BEFORE dispatching; move lab ideas to the labs project (#386). Memory: <code>feedback_gap_fill_is_teaching_content_not_labs</code>.</li>
+</ul>
+
+<h2>THE buried gap — prompt/context/harness engineering (now #1639)</h2>
+<p>User: <em>"we still have a big problem that we dont properly cover prompt, context and harness engineering or it is scattered here and there. i made a ticket about it but it was burried."</em></p>
+<p>Investigation: the coverage <strong>exists but is scattered across four trees</strong>. <code>ai/ai-engineering-foundations/</code> is already a cohesive prompt→context→harness→symphony spine (12 modules), but more of the same subject lives in <code>ai/ai-native-work/</code>, <code>ai-ml-engineering/ai-native-development/</code> (which has its OWN duplicate <code>module-1.6-prompt-engineering-fundamentals</code>), and <code>ai-ml-engineering/frameworks-agents/</code>. The original gap ticket <strong>#1173 was closed 2026-05-12</strong> when the foundations track was built (#1530) — closing the per-module tickets made it <em>look</em> done; the fragmentation remained. That is the burial.</p>
+<p><strong>Goal locked with user: ONE section.</strong> Make <code>ai-engineering-foundations</code> the canonical home; dedupe the two "prompt fundamentals" modules; fold or cross-link the strays (the "using AI coding tools" and "building agentic apps" material can stay distinct neighbors but must link to the foundations, not re-teach them). Teaching content only. Filed as epic <strong>#1639</strong>.</p>
+
+<h2>Strategy discussion (no code)</h2>
+<ul>
+  <li><strong>/workflows</strong> (new in 2.1.154): Claude-subagents-only, can't drive external CLIs, same billing pool, 16 concurrent / 1000 max. Not a fit for our codex/cursor dispatch pipeline (those need external agents for cost + cross-family). Genuine niche = large-N Claude-native read-only audits. <strong>Decision: not adopting now</strong>; revisit post-06-15. Don't enable <code>/effort ultracode</code> casually (auto-spawns workflows = silent token multiplier). Note: we run bypassPermissions, so a workflow launches with no approval gate.</li>
+  <li><strong>Claude Desktop delegation</strong>: user asked why the learn-ukrainian Codex-UI bridge (<code>_ui_codex.py</code>, via <code>codex exec resume</code> into the shared on-disk thread) can't target Claude. It can — Claude CLI has <code>-p --resume --session-id</code> + persisted sessions; #2285 already listed "Claude Code Desktop" as the next bridge target. Blocker is billing, not feasibility: <code>claude -p</code> moves to the separate metered Agent SDK pool after June 15. <strong>User dropped it</strong> ("might unsubscribe after the change").</li>
+</ul>
+
+<h2>User feedback locked this session</h2>
+<ol>
+  <li><strong>Talk plainly, no unexplained jargon</strong> — decode internal shorthand (Lane A, T0, R1, cross-family, dispatch) instead of parroting it. Memory: <code>feedback_plain_language_no_jargon</code>.</li>
+  <li><strong>Focus on gaps, not fixing existing modules</strong> — repeated directive; the auto-briefing keeps ranking "fix critical modules" as the top action, which kept pulling me off the gaps. See "next session" for the fix.</li>
+  <li><strong>Gap-fill = teaching content, labs separate</strong> (above).</li>
+</ol>
+
+<h2>Next session — priorities</h2>
+<ol>
+  <li><strong>#1639 — consolidate prompt/context/harness into ONE section</strong> (user's top concern). Start with an audit + consolidation plan (which modules merge, which cross-link, dedupe the two prompt-fundamentals). Teaching content only.</li>
+  <li><strong>Finish G3</strong> — trim 5.4/5.5 (PRs #1638/#1637) to teaching content via cursor; re-check; merge 5.4 then rebase 5.5.</li>
+  <li><strong>Re-scope G5 #1627 / G6 #1628 / G4 #1626</strong> to teaching-content-only before dispatching.</li>
+  <li><strong>Fix the briefing's priority logic</strong> (<code>scripts/local_api.py</code>) so it surfaces gap-fill ahead of critical-rubric drain, per the standing "gaps first" directive — this is the root cause of my repeated drift toward fixing.</li>
+  <li>Carried tech-debt (not content): #1350 agy migration (deadline 2026-06-18), #1629 hook-drift propagation to <code>agents_extensions/</code> source, MEMORY.md trim (now ~209 lines), v1_pipeline.py pre-existing ruff debt.</li>
+</ol>
+
+</body>
+</html>
