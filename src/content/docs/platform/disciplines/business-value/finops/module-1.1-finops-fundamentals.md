@@ -40,7 +40,7 @@ Now? Any developer with an AWS credential can spin up a $50,000/month machine le
 > **Stop and think**: If an engineering team provisions a cluster that costs twice as much but enables releasing features twice as fast, is that an optimization or a waste? FinOps provides the framework to answer this.
 
 Without FinOps:
-- Cloud bills grow 20-35% faster than revenue
+- Cloud bills can grow faster than the business value they support
 - Teams hoard resources "just in case"
 - Nobody knows the true cost of a feature
 - Finance discovers overruns weeks after they happen
@@ -55,11 +55,11 @@ With FinOps:
 
 ## Did You Know?
 
-- **Gartner estimates that through 2025, 60% of infrastructure and operations leaders will encounter public cloud cost overruns** that negatively impact their budgets. Most organizations waste 25-35% of their cloud spend on idle or over-provisioned resources.
+- **Cloud cost overruns and waste are common operational risks.** Idle and over-provisioned resources are common culprits when teams lack visibility and ownership.
 
-- **The FinOps Foundation ([part of The Linux Foundation](https://www.linuxfoundation.org/press/press-release/the-linux-foundation-brings-together-it-and-finance-teams-to-advance-cloud-financial-management-and-education)) has over 12,000 members** from companies like Google, Microsoft, Spotify, and Nike. FinOps is now a recognized discipline with its own certification (FinOps Certified Practitioner), framework, and community — not just "someone looking at the bill."
+- **The FinOps Foundation ([part of The Linux Foundation](https://www.linuxfoundation.org/press/press-release/the-linux-foundation-brings-together-it-and-finance-teams-to-advance-cloud-financial-management-and-education)) has a large practitioner community** across many organizations. FinOps is now a recognized discipline with its own certification (FinOps Certified Practitioner), framework, and community — not just "someone looking at the bill."
 
-- **Netflix famously spends over $1 billion annually on AWS**, but their cost per streaming hour has dropped consistently year over year. That's FinOps in action — not reducing spend, but maximizing *value per dollar spent*.
+- **Large streaming platforms may spend heavily on cloud infrastructure**, so their FinOps focus often shifts toward unit-cost efficiency such as cost per streaming hour. That's FinOps in action — not reducing spend, but maximizing *value per dollar spent*.
 
 ---
 
@@ -349,7 +349,7 @@ graph LR
 
 ### A Tagging Strategy That Works
 
-**Mandatory tags** ([enforce via policy](https://docs.aws.amazon.com/organizations/latest/userguide/enforce-required-tag-keys-iac.html) — block resource creation without them):
+**Mandatory tags** ([enforce via policy](https://docs.aws.amazon.com/organizations/latest/userguide/enforce-required-tag-keys-iac.html) — block resource creation in IaC deployments without them):
 
 | Tag Key | Example Values | Purpose |
 |---------|---------------|---------|
@@ -695,7 +695,7 @@ You've completed this exercise when you:
 
 ## Summary
 
-FinOps transforms cloud spending from an unpredictable cost center into a managed business driver. By following the Inform-Optimize-Operate lifecycle, implementing robust tagging, choosing the right pricing models, and tracking unit economics, teams can reduce cloud waste by 25-40% while maintaining — or even improving — the speed and agility that cloud provides.
+FinOps transforms cloud spending from an unpredictable cost center into a managed business driver. By following the Inform-Optimize-Operate lifecycle, implementing robust tagging, choosing the right pricing models, and tracking unit economics, teams can reduce cloud waste while maintaining — or even improving — the speed and agility that cloud provides.
 
 The key insight is that FinOps is not about spending *less*. It's about spending *better*. A company that doubles its cloud bill while tripling its revenue has better FinOps than one that cuts spending 20% and stalls growth.
 
@@ -711,7 +711,6 @@ Continue to [Module 1.2: Kubernetes Cost Allocation & Visibility](../module-1.2-
 
 ## Sources
 
-- [docs.aws.amazon.com: select the correct resource type size and number.html](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/select-the-correct-resource-type-size-and-number.html) — General lesson point for an illustrative rewrite.
 - [linuxfoundation.org: the linux foundation brings together it and finance teams to advance cloud financial management and education](https://www.linuxfoundation.org/press/press-release/the-linux-foundation-brings-together-it-and-finance-teams-to-advance-cloud-financial-management-and-education) — The Linux Foundation press release directly states that it would host the FinOps Foundation.
 - [docs.aws.amazon.com: select the best pricing model.html](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/select-the-best-pricing-model.html) — AWS Well-Architected directly describes On-Demand as the default pay-as-you-go model with no long-term commitment.
 - [docs.aws.amazon.com: ec2 reserved instances.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-reserved-instances.html) — The EC2 Reserved Instances documentation directly states the one-year and three-year commitments and discounted billing model.
@@ -719,6 +718,4 @@ Continue to [Module 1.2: Kubernetes Cost Allocation & Visibility](../module-1.2-
 - [docs.aws.amazon.com: spot best practices.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-best-practices.html) — AWS Spot best practices directly state the discount ceiling, two-minute interruption notice, and workload suitability guidance.
 - [docs.aws.amazon.com: orgs manage policies tag policies.html](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_tag-policies.html) — AWS Organizations tag policy documentation directly defines tags as key-value labels and describes their use for categorization.
 - [docs.aws.amazon.com: enforce required tag keys iac.html](https://docs.aws.amazon.com/organizations/latest/userguide/enforce-required-tag-keys-iac.html) — The AWS Organizations required-tag-key documentation directly describes required tag enforcement for CloudFormation, Terraform, and Pulumi IaC deployments.
-- [learn.microsoft.com: quantify business value](https://learn.microsoft.com/en-us/cloud-computing/finops/framework/quantify/quantify-business-value) — General lesson point for an illustrative rewrite.
 - [docs.aws.amazon.com: what is cur.html](https://docs.aws.amazon.com/cur/latest/userguide/what-is-cur.html) — AWS CUR documentation directly states that CUR contains comprehensive AWS cost and usage data and can break costs down by product, resource, and tags.
-- [Google Cloud Architecture Framework: Cost Optimization](https://cloud.google.com/architecture/framework/cost-optimization) — Provides a multi-cloud-friendly cost optimization frame that reinforces business value, resource usage, and continuous optimization.
