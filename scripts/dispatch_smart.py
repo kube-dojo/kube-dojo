@@ -4,7 +4,7 @@ Single CLI for dispatching work to a headless agent that picks an
 appropriate model based on the task class — instead of always burning
 the top-tier model from the orchestrator session.
 
-Why: the orchestrator runs on claude-opus-4-7. Routine search/edit work
+Why: the orchestrator runs on claude-opus-4-8. Routine search/edit work
 shouldn't burn opus (or gpt-5.5) when a smaller model would do fine.
 This wrapper lets the orchestrator say "do this kind of work, pick the
 right model" without manually choosing model + mode + worktree every
@@ -53,7 +53,7 @@ Task classes — model mapping per agent:
     edit        claude-sonnet-4-6            gpt-5.3-codex-spark
     draft       claude-sonnet-4-6            gpt-5.5
     review      claude-sonnet-4-6            gpt-5.5
-    architect   claude-opus-4-7              gpt-5.5
+    architect   claude-opus-4-8              gpt-5.5
 
 Each dispatch is recorded to ``logs/smart_dispatch.jsonl`` for usage
 auditing. The FULL response body is also persisted to
@@ -211,7 +211,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
     "architect": TaskClassConfig(
         models={
             "agy": "tui-controlled",
-            "claude": "claude-opus-4-7",
+            "claude": "claude-opus-4-8",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",

@@ -49,6 +49,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 ### Parallel fan-out
 - ≥2 independent issues = ≥2 concurrent dispatches in the SAME message ([[feedback_orchestrate_dont_idle]]).
+- **Opus 4.8 defaults to fewer subagents** — it will not fan out unless told to. Spawn multiple subagents (or batch independent tool calls) in the SAME turn when fanning out across items or reading multiple files; do not silently collapse to sequential. Make the parallelism explicit in your own plan, not just in dispatch briefs.
 - HARD CAP: 3 parallel rewrites, never 5 ([[feedback_parallel_rewrite_cap_three]]). Each rewrite cascades into reviewer + possible fix-pass + possible re-review.
 - Mix agents for 3+ parallel reviews to avoid single-OAuth burst limit ([[feedback_parallel_review_oauth_burst]]).
 
@@ -56,6 +57,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 1. Verify the agent's auth is alive (codex 403 = `codex login` needed; gemini OAuth rotation; agy panel quota).
 2. WARN the user before 3+ parallel or 5+ sequential to any single agent in 10 min ([[feedback_warn_before_gemini_quota_burn]]).
 3. Pick the lowest-tier model that can do the job ([[feedback_codex_model_routing]], [[feedback_dispatch_smart_for_sweeps]]).
+4. **Make fix briefs literal-complete.** Opus-4.8-class authors follow instructions literally and do not generalize from one listed item to its siblings. Every fix brief MUST say: *"Find and fix ALL occurrences of this pattern in the file, not just the listed line(s) — issue listings are sampled, not exhaustive. Apply the change to every instance, not just the first one."* ([[feedback_class_a_fix_includes_sibling_grep]]).
 
 ### After firing a dispatch
 1. Use `run_in_background: true` and read `logs/dispatch_responses/<task-id>.txt` when the wrapper notification fires. **Do NOT spawn a `until grep ... do sleep` watcher** ([[feedback_no_separate_dispatch_watcher]]).

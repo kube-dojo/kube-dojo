@@ -38,6 +38,8 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 9. **Grep for sibling failures** — same anti-pattern likely elsewhere.
 10. **Output the verdict** in the format below.
 
+> **Coverage over filtering — report everything.** Report every issue you find, including ones you are uncertain about or consider low-severity. Do NOT filter for importance or confidence at this stage — the P1/P2/Nits ranking below plus the R2 verification cycle handle that. For each finding, state your confidence and estimated severity. (Opus-4.8-class reviewers follow "only report high-severity" / "don't nitpick" / "be conservative" instructions *literally* and silently drop lower-severity findings — a measured recall regression, not a capability one. This skill therefore instructs the opposite: surface, then rank.)
+
 ## Output format
 
 ```markdown
