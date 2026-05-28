@@ -477,6 +477,7 @@ export default defineConfig({
                         { label: '1.6: Building a Data Lakehouse', link: '/platform/disciplines/data-ai/data-engineering/module-1.6-lakehouse/' },
                         { label: '1.7: Event Streaming Fundamentals', link: '/platform/disciplines/data-ai/data-engineering/module-1.7-event-streaming-fundamentals/' },
                         { label: '1.8: CloudEvents & Event-Driven Architecture', link: '/platform/disciplines/data-ai/data-engineering/module-1.8-cloudevents-event-driven-arch/' },
+                        { label: '1.9: NATS JetStream on Kubernetes', link: '/platform/disciplines/data-ai/data-engineering/module-1.9-nats-jetstream/' },
                       ],
                     },
                     { label: 'MLOps', autogenerate: { directory: 'platform/disciplines/data-ai/mlops' }, collapsed: true },

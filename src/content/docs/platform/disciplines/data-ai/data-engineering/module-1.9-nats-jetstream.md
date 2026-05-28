@@ -4,7 +4,7 @@ description: "Run production NATS JetStream on Kubernetes via the NACK operator 
 slug: platform/disciplines/data-ai/data-engineering/module-1.9-nats-jetstream
 revision_pending: false
 sidebar:
-  order: 19
+  order: 10
 ---
 > **Complexity**: `[COMPLEX]`
 >
@@ -318,7 +318,7 @@ kubectl -n nats exec deployment/nats-box -- \
   nats stream backup ORDERS /tmp/orders-backup --no-progress
 
 kubectl -n nats exec deployment/nats-box -- \
-  nats stream restore /tmp/orders-backup --no-progress
+  nats stream restore ORDERS /tmp/orders-backup --no-progress
 ```
 
 Leaf nodes solve a different problem: locality. A factory, retail store, vehicle, or small regional cluster may need local NATS service even when the WAN is slow or intermittent. A leaf node connects a local NATS server to a remote NATS system, routes messages according to subject interest and permissions, and can keep local traffic local. Leaf nodes are useful when clients should talk to a nearby server but selected subjects still need to reach the central platform.
