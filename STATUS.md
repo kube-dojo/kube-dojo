@@ -23,6 +23,43 @@
 
 Older predecessors: see [`docs/session-state/`](./docs/session-state/) (58 dated handoff files, sessions 13-62).
 
+## Opus 4.8 migration
+
+> Punch list for first session on `claude-opus-4-8`. Source: <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#prompting-claude-opus-4-8> (fetched 2026-05-28 session 66).
+
+**Run first:**
+
+- [ ] `/claude-api migrate` — Anthropic-provided model-string sweep + prompt-tuning suggestions. Touches anywhere `claude-opus-4-7` is hardcoded (`scripts/dispatch_smart.py`, `agents_extensions/`, calibration configs, `start-claude.sh`).
+- [ ] Fetch [migration guide](https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-47) for API parameter changes: sampling params, effort default, 1M context default (200k on MS Foundry), mid-conversation system messages, refusal stop details.
+
+**Settings audit:**
+
+- [ ] `.claude/settings.json` `effortLevel` — raise to `xhigh` if not already. Anthropic: "Effort is likely to be more important for this model than for any prior Opus." `xhigh` is best for coding/agentic; `high` is minimum for intelligence-sensitive. At `max`/`xhigh`, set max output tokens to 64k.
+- [ ] Dispatch invocations — audit `start-claude.sh`, `scripts/dispatch_smart.py`, anywhere `claude -p` is invoked, for explicit `thinking: {type: "adaptive"}`. 4.8 has thinking OFF by default (regression from 4.7 behavior).
+
+**Brief-writing — the load-bearing change:**
+
+- [ ] **More literal instruction following.** 4.8 "does not silently generalize an instruction from one item to another, and it does not infer requests you didn't make." Briefs that say "fix the issue on line 601" will fix ONLY line 601. The `feedback_class_a_fix_includes_sibling_grep` rule stops being defensive and becomes required. Standard brief language to add: "Find and fix ALL occurrences of this pattern in the file, not just the listed line(s). Apply this to every <thing>, not just the first one."
+- [ ] **Parallel fan-out needs explicit reinforcement.** 4.8 "tends to spawn fewer subagents by default" — conflicts with `feedback_orchestrate_dont_idle`. Update `agents_extensions/claude/skills/curriculum-orchestrator/SKILL.md` "Parallel fan-out" section with: "Spawn multiple subagents in the same turn when fanning out across items or reading multiple files."
+- [ ] **Strip progress-update scaffolding.** 4.8 provides regular high-quality updates organically. Grep briefs/skills for "after every N tool calls, summarize" / "report progress every X minutes" patterns and remove.
+- [ ] **Review-class briefs need coverage-over-filtering language.** 4.8 takes "only report high-severity" / "be conservative" / "don't nitpick" instructions literally and silently drops lower-severity findings — measured recall regression that is NOT a capability regression. Affects `scripts/dispatch_smart.py` review brief template + `agents_extensions/shared/skills/cross-family-reviewer/SKILL.md`. Recommended snippet:
+  > "Report every issue you find, including ones you are uncertain about or consider low-severity. Do not filter for importance or confidence at this stage — a separate verification step will do that. For each finding, include your confidence level and an estimated severity."
+
+**HTML artifacts:**
+
+- [ ] **House style alert.** 4.8 defaults to cream/off-white (`#F4F1EA`) background, serif display (Georgia/Fraunces/Playfair), terracotta/amber accent. KubeDojo HTML handoffs/audits/reports will pick this up unless palette is explicit. Generic "don't use cream" tends to shift to another fixed palette, not produce variety — specify concrete colors. The session 66 handoff used a neutral palette (`#f4f4f4` for code) that should be safe; the risk is auto-generated reports.
+
+**Observation only (collect evidence over 2-3 sessions before any rewrites):**
+
+- [ ] **Self-review quality claim.** Anthropic: "around four times less likely than Opus 4.7 to allow flaws in code it has written to pass unremarked." Tag moments where 4.8 catches/misses something on its own work. Baseline counter-example: session 66 where I had drift-direction wrong on first pass.
+- [ ] **Long-horizon claim + `/goal` integration.** Lane A FinOps 1.2-1.6 (5-module mechanical drain) is a textbook `/goal` Template-1 fit. First evidence point.
+- [ ] **Token usage on interactive coding.** 4.8 uses more tokens in interactive vs autonomous (reasons more after user turns). Watch cost; counter with `xhigh` + auto-mode + well-specified single-turn briefs per Anthropic recommendation.
+
+**Defer until evidence collected:**
+
+- Wholesale rewrites of `curriculum-orchestrator` skill prompt.
+- Memory updates claiming "4.8 is X% better at Y" — those are marketing claims until observed in real KubeDojo work.
+
 ## Active policies
 
 - **Gap-fill phase 1-5 of #1299 is NOT blocked by critical-count <50 (locked 2026-05-28, session 62 user correction)**: only step 6 (codex writes new modules into a track) is gated. Reviewer dispatches + synthesis + per-track issue filing can run any time and SHOULD run when standing gap inventories age past ~2 weeks. Conflating the two cost a session of misdirected fix-pass work. Source: user "you keep on fixing modules against my order to cover the gaps fir and you should ask gap analysis from cursor as well" (2026-05-28 wake-up).
