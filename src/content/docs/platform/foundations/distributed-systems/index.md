@@ -33,6 +33,7 @@ Understanding these challenges helps you design systems that work despite them.
 | 5.2 | [Module 5.2: Consensus and Coordination](module-5.2-consensus-and-coordination/) | 35-40 min | Paxos, Raft, leader election, distributed locks, etcd |
 | 5.3 | [Module 5.3: Eventual Consistency](module-5.3-eventual-consistency/) | 30-35 min | Consistency models, replication, conflict resolution, CRDTs |
 | 5.4 | [Module 5.4: Partial Failure and Timeouts](module-5.4-partial-failure-and-timeouts/) | 60-75 min | Timeouts, idempotent retries, retry storms, jitter, circuit breakers |
+| 5.5 | [Module 5.5: Clock Skew and Ordering](module-5.5-clock-skew-and-ordering/) | 45-55 min | Wall clocks, monotonic clocks, logical time, LWW hazards |
 
 ---
 
@@ -82,6 +83,16 @@ START HERE
 └──────────────────┬──────────────────┘
                    │
                    ▼
+┌─────────────────────────────────────┐
+│  Module 5.5                         │
+│  Clock Skew and Ordering            │
+│  └── Wall vs monotonic clocks        │
+│  └── Lamport and vector clocks       │
+│  └── Last-writer-wins hazards        │
+│  └── Ordering fixes                  │
+└──────────────────┬──────────────────┘
+                   │
+                   ▼
            FOUNDATIONS COMPLETE
                    │
     ┌──────────────┼──────────────┐
@@ -111,6 +122,12 @@ Discipline    Engineering   Discipline
 | Idempotency | 5.4 | Making repeated attempts produce one logical effect |
 | Retry Storm | 5.4 | Retries amplifying load during partial failure |
 | Circuit Breaker | 5.4 | Failing locally to protect an unhealthy dependency |
+| Wall Clock | 5.5 | Calendar time for human-facing labels |
+| Monotonic Clock | 5.5 | Local elapsed time that does not step backward |
+| Clock Skew | 5.5 | Different machines disagreeing about the current time |
+| Happens-Before | 5.5 | Causal ordering based on process order and messages |
+| Lamport Timestamp | 5.5 | Logical counter that preserves causal direction |
+| Last Writer Wins | 5.5 | Conflict rule that can lose writes under skew |
 
 ---
 
@@ -173,7 +190,7 @@ This is the final track in the Foundations series. You've now covered:
 2. **Reliability Engineering**: Design for failure, measure with SLOs
 3. **Observability Theory**: Understand through metrics, logs, traces
 4. **Security Principles**: Defense in depth, least privilege
-5. **Distributed Systems**: Consensus, consistency, coordination
+5. **Distributed Systems**: Consensus, consistency, coordination, ordering
 
 These foundations prepare you for the practical Disciplines and Toolkits tracks.
 
