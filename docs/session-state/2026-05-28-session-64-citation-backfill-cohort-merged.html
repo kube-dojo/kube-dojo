@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 64 — citation backfill cohort merged after OpenAI outage healed</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.closed { background: #e2e3e5; color: #383d41 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+.user-quote { background: #fffae0; border-left: 3px solid #d4ac0d; padding: 4px 12px; margin: 6px 0 10px 0 }
+</style></head><body>
+
+<h1>Session 64 — citation backfill cohort merged after OpenAI outage healed</h1>
+<p class="meta">2026-05-28 (morning continuation, ~08:00-11:35). User woke up ~08:00, confirmed ChatGPT reported overnight outage that fixed by morning. The codex bridge hangs from session 63 were external, not a code bug. Retried the three flaky citation_backfill research calls (FinOps 1.1, 4.4 object-storage, 8.3 cloud-repatriation) — all succeeded. Then ran inject → R1 → fix-pass → merge for all three. 3 PRs merged; critical-rubric count 112 → 109; two issues closed (#1605, #1621). One follow-up filed (#1634) for the seed `cannot_be_salvaged` residuals R1 keeps flagging.</p>
+
+<h2>What the user said (load-bearing)</h2>
+
+<div class="user-quote">"chatgpt reported outages but it was fixed overnight. try redoing the flaky things ?"</div>
+
+<p>That confirmed the diagnosis from session 63's blocker investigation: codex bridge hangs were OpenAI-side, not a script/dispatch_smart problem. Retrying the failures was the right call and they all came back clean.</p>
+
+<div class="user-quote">"go with 2, serial is too slow"</div>
+
+<p>From session 63, still operative. Held to ≤2 concurrent codex slots throughout — never violated.</p>
+
+<div class="user-quote">"3 citation seeds are ready. Next step? → Inject + PR all 3 now"</div>
+
+<p>User selected the full inject + R1 + merge path for all 3 seeds, not just the FinOps batch.</p>
+
+<h2>PRs landed</h2>
+
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1631</td><td><span class="pill merged">MERGED</span></td><td>chore(content): backfill citations on FinOps module 1.1</td><td>codex research (29 claims) → codex inject (8 inline + 17 prose_rewrite skipped) → cursor R1 NEEDS_CHANGES (P1 uncited Gartner/Netflix + 4 P2) → cursor fix-pass (softened/removed per seed suggestions) → CI green → merged</td></tr>
+<tr><td>#1632</td><td><span class="pill merged">MERGED</span></td><td>chore(content): backfill citations on on-premises module 4.4 (object storage)</td><td>codex research (39 claims) → codex inject → cursor R1 NEEDS_CHANGES (P1 MinIO citation overreach + 3 P2) → cursor fix-pass (narrowed MinIO anchors, corrected Apr-25 archive date, fixed Rook markup + soften "zero-downtime", cite SeaweedFS v4.29) → CI green → merged</td></tr>
+<tr><td>#1633</td><td><span class="pill merged">MERGED</span></td><td>chore(content): backfill citations on on-premises module 8.3 (cloud repatriation)</td><td>codex research (51 claims — most of any) → codex inject → cursor R1 APPROVE_WITH_NITS (no blockers) → merged direct</td></tr>
+</table>
+
+<h2>Issues closed / filed</h2>
+
+<table>
+<tr><th>Issue</th><th>State</th><th>Note</th></tr>
+<tr><td>#1605</td><td><span class="pill closed">CLOSED</span></td><td>"codex citation_backfill hangs on 8.3-cloud-repatriation" — retry succeeded in ~11 min with 51 claims. Was overnight OpenAI outage.</td></tr>
+<tr><td>#1621</td><td><span class="pill closed">CLOSED</span></td><td>"codex research fails with agent_response_invalid on module-4.4" — retry succeeded with 39 claims, 0 schema issues. Was overnight OpenAI outage.</td></tr>
+<tr><td>#1634</td><td><span class="pill inflight">OPEN</span></td><td>"Track seed 'cannot_be_salvaged' residuals across citation backfill PRs" — follow-up flagged across all 3 R1s (uncited adjacent claims survive because seed marks them unsalvageable + inject step has `rewrites_disabled_pending_redesign`). Three approaches proposed; pipeline-level fix vs per-module batch vs accept-and-document.</td></tr>
+</table>
+
+<h2>Headline data (verified 2026-05-28 11:35 via /api/quality/scores)</h2>
+
+<ul>
+<li><strong>804 scored modules</strong> (G1 NATS shipped session 63; the 3 backfill PRs modified existing modules, did not add new).</li>
+<li><strong>Average rubric score 4.52</strong> (+0.01 vs session-63 close).</li>
+<li><strong>109 critical (&lt;2.0)</strong> — down from 112 yesterday. Cohort drained: FinOps 1.1 (was 1.5), on-prem 4.4 (was 1.5), on-prem 8.3 (was 1.5).</li>
+<li>Critical distribution still dominated by Platform tracks: Disciplines, Toolkits, Foundations.</li>
+<li>FinOps 1.2-1.6 (5 modules) and on-prem 4.5 still on the critical list; same backfill pattern applies.</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Wall</th><th>Outcome</th></tr>
+<tr><td>ab ask-codex probe</td><td>codex</td><td>health-check</td><td>~5s</td><td>OK — bridge alive (1-char "2+2" response)</td></tr>
+<tr><td>citation_backfill research FinOps 1.1</td><td>codex gpt-5.5</td><td>research</td><td>~7 min</td><td>ok: true, 29 claims kept, 24 KB seed</td></tr>
+<tr><td>citation_backfill research 4.4</td><td>codex gpt-5.5</td><td>research</td><td>~8 min</td><td>ok: true, 39 claims kept, 32 KB seed</td></tr>
+<tr><td>citation_backfill research 8.3</td><td>codex gpt-5.5</td><td>research</td><td>~11 min</td><td>ok: true, 51 claims kept, 44 KB seed</td></tr>
+<tr><td>citation_backfill inject FinOps 1.1</td><td>codex gpt-5.5</td><td>inject</td><td>~3 min</td><td>ok: true, 8 inline + 17 prose_rewrite skipped</td></tr>
+<tr><td>citation_backfill inject 4.4</td><td>codex gpt-5.5</td><td>inject</td><td>~4 min</td><td>ok: true, inline applied, 0 diff issues</td></tr>
+<tr><td>citation_backfill inject 8.3</td><td>codex gpt-5.5</td><td>inject (worktree-local script)</td><td>~4 min</td><td>ok: true, +56/-16 line diff</td></tr>
+<tr><td>PR #1631 R1</td><td>cursor composer-2.5</td><td>review</td><td>173s</td><td>NEEDS_CHANGES — 1 P1 + 4 P2 (Gartner/Netflix uncited; LF/12k overreach; "block resource creation" stronger than IaC doc; orphan Sources rows; uncited 20-35%/25-40% ranges)</td></tr>
+<tr><td>PR #1632 R1</td><td>cursor composer-2.5</td><td>review</td><td>136s</td><td>NEEDS_CHANGES — 1 P1 (MinIO citation overreach lines 24+154) + 3 P2 (markup break, date conflict Feb-13 vs Apr-25, "zero-downtime" overreach, SeaweedFS v4.18 pin uncited)</td></tr>
+<tr><td>PR #1633 R1</td><td>cursor composer-2.5</td><td>review</td><td>112s</td><td>APPROVE_WITH_NITS — 5 P2 nits all "fine if a follow-up tracks seed cannot_be_salvaged residuals" → #1634 filed</td></tr>
+<tr><td>PR #1632 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>137s</td><td>Applied all 4 fixes per R1 line refs; CI re-ran green</td></tr>
+<tr><td>PR #1631 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>58s (re-fire from absolute paths after cwd issue)</td><td>Applied all 6 fixes; followed seed suggested_rewrite phrasing</td></tr>
+</table>
+
+<h2>Operational findings worth a memory or follow-up</h2>
+
+<h3>1. citation_backfill writes to the PRIMARY repo dir, not the worktree</h3>
+<p><code>scripts/citation_backfill.py:38</code> sets <code>REPO_ROOT = Path(__file__).resolve().parents[1]</code>. When you run <code>cd .worktrees/X && python primary/scripts/citation_backfill.py inject ...</code>, the script's <code>__file__</code> is still in primary, so it resolves <code>REPO_ROOT</code> to primary and writes to primary's working tree. The <code>cd</code> doesn't matter. To make inject land in a worktree, run the worktree's own script copy: <code>cd .worktrees/X && /primary/.venv/bin/python ./scripts/citation_backfill.py inject ...</code> (the worktree's <code>scripts/</code> is git-copied; <code>.venv</code> is shared via the script's <code>_primary_checkout_root</code> resolver). I unwound this manually for #1631 + #1632 (copy modified file + seed to worktree, reset primary, commit in worktree). Worth a memory if more inject work coming.</p>
+
+<h3>2. Learner-check hook is strict on heading shape</h3>
+<p>Hook regex at <code>.claude/hooks/_lib_pr_check.py:82</code>: <code>line.lower().lstrip("#").strip().startswith("learner check")</code>. <code>lstrip("#")</code> only strips leading <code>#</code>s; <code>## ## Learner check</code> becomes <code> ## Learner check</code> after lstrip, then <code>.strip()</code> gives <code>## Learner check</code> which doesn't startswith "learner check". So my <code>## ## Learner check</code> heading in 3 PR bodies failed the check. Fix: use literal <code>## Learner check</code> (single H2). Also: blockquote must be VERBATIM from a touched module — if codex's inject wrapped a phrase in a markdown link, the quote with embedded link syntax is what the module now contains; the bare prose version no longer matches.</p>
+
+<h3>3. The seed `cannot_be_salvaged` disposition leaves uncited claims in prose</h3>
+<p>When the research step marks a claim <code>cannot_be_salvaged</code> (no source found), inject leaves it untouched. R1 then flags it as a defect ("X stat is uncited"). On 3-of-3 PRs this morning, the R1 reviewer caught this category. Filed as #1634 with 3 proposed approaches: (a) re-enable seed <code>soften_to_illustration</code> rewrites in inject (currently <code>rewrites_disabled_pending_redesign</code>), (b) per-module follow-up PRs, (c) accept-and-document. Worth a Decision Card next session.</p>
+
+<h2>What's next</h2>
+
+<h3>Standing decisions to talk through (user request)</h3>
+<p>User asked to discuss standing decisions before continuing gap-fill work. Top candidates:</p>
+<ul>
+<li>Decision Card C symmetric routing (composer-2.5 reviews codex; codex reviews composer-2.5) — held up in practice this morning, 3-of-3 R1s caught real defects.</li>
+<li>D1-D5 from 2026-05-17 gap-fill decisions — all still stand per the session-63 synthesis.</li>
+<li>"No fan-out, 2 concurrent" — held throughout; productive cap.</li>
+<li>The new #1634 question: how to handle <code>cannot_be_salvaged</code> residuals systematically.</li>
+</ul>
+
+<h3>Gaps + tech debts to talk through</h3>
+<ul>
+<li>5 remaining gap-fill issues (G2 engineering craft, G3 distributed-systems labs, G4 LLM golden path, G5 workload identity, G6 OTEL Collector).</li>
+<li>Lane A burndown — FinOps 1.2-1.6 next (5 modules); same pipeline works.</li>
+<li>Tech debt: citation_backfill REPO_ROOT pinning (finding #1), inject step's `rewrites_disabled_pending_redesign` (finding #3), Learner-check hook strictness (finding #2).</li>
+<li>Codex T0 post-write hang on G1 (session 63 finding) — still unexplained; needs reproduction on next T0 dispatch.</li>
+<li>block-branch-create hook missed primary-dir checkout (session 63 finding) — still unexplained.</li>
+</ul>
+
+<h3>Date-bound</h3>
+<ul>
+<li>2026-05-30 23:53 — codex weekly cap reset (we used ≈45-50% this morning between research + inject + fix-pass; plenty of headroom).</li>
+<li>2026-06-08 — claude-i wrapper pilot.</li>
+<li>2026-06-15 — agentic-credit-pool flip.</li>
+<li>2026-06-18 — gemini-cli adapter retirement (agy cutover, #1350).</li>
+<li>2026-07-13 — weekly-double bump expires.</li>
+</ul>
+
+<h2>Files touched this session</h2>
+
+<ul>
+<li><code>src/content/docs/platform/disciplines/business-value/finops/module-1.1-finops-fundamentals.md</code> — citations added, uncited stats softened</li>
+<li><code>src/content/docs/on-premises/storage/module-4.4-object-storage-bare-metal.md</code> — citations added, MinIO claims narrowed</li>
+<li><code>src/content/docs/on-premises/resilience/module-8.3-cloud-repatriation.md</code> — citations added</li>
+<li><code>docs/citation-seeds/platform-disciplines-business-value-finops-module-1.1-finops-fundamentals.json</code> — NEW (research seed record)</li>
+<li><code>docs/citation-seeds/on-premises-storage-module-4.4-object-storage-bare-metal.json</code> — NEW</li>
+<li><code>docs/citation-seeds/on-premises-resilience-module-8.3-cloud-repatriation.json</code> — NEW</li>
+<li><code>docs/session-state/2026-05-28-session-64-citation-backfill-cohort-merged.html</code> — this handoff</li>
+<li><code>STATUS.md</code> — index updated</li>
+</ul>
+
+<h2>Worktrees / branches state</h2>
+
+<p>All citation-cohort worktrees cleaned. Primary repo on <code>main</code>. <code>git worktree list</code> shows only the primary.</p>
+
+</body></html>
