@@ -87,7 +87,7 @@ CONTENT_AWARE_FACT_LEDGER_OVERLAP_CHARS = 4_000
 MAX_RETRIES = 4
 REVIEW_REJECTED_ERROR_RE = re.compile(r"^Review rejected (\d+) times$")
 SECOND_REVIEWER_SAMPLE_RATE = 0.15
-SECOND_REVIEWER_MODEL = "claude-opus-4-7"
+SECOND_REVIEWER_MODEL = "claude-opus-4-8"
 REVIEW_SAMPLES_SCHEMA_COMMENT = (
     "# schema: "
     '{"module_key":"str","codex_review":"object","opus_review":"object",'

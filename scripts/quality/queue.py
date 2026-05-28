@@ -43,7 +43,7 @@ from .state import (
 
 PRIMARY_BEGINNER = "gemini-3.1-pro-preview"
 PRIMARY_ADVANCED = "gemini-3.1-pro-preview"
-TERTIARY = "claude-opus-4-7"
+TERTIARY = "claude-opus-4-8"
 
 # Map writer-model identifiers (returned by route_writer / stored in the
 # queue doc) onto the (agent, model) tuple that ``dispatchers.dispatch``
@@ -114,7 +114,7 @@ def _beginner_writer() -> str:
     fallback.
     """
     fallback = os.environ.get("KUBEDOJO_BEGINNER_FALLBACK", "").lower().strip()
-    if fallback in {"claude", "claude-opus", "claude-opus-4-7"}:
+    if fallback in {"claude", "claude-opus", "claude-opus-4-7", "claude-opus-4-8"}:
         return TERTIARY
     return PRIMARY_BEGINNER
 
