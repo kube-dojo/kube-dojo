@@ -14,6 +14,8 @@ Checks:
   10. Empty directories
   11. Sidebar config references valid directories
   12. No orphaned modules (every module dir has index.md)
+  13. Title matches filename numbering
+  14. Static absolute internal link targets
 """
 
 import re
@@ -25,6 +27,7 @@ from typing import Optional
 REPO_ROOT = Path(__file__).parent.parent
 DOCS_DIR = REPO_ROOT / "src" / "content" / "docs"
 CONFIG_FILE = REPO_ROOT / "astro.config.mjs"
+ABSOLUTE_INTERNAL_LINK_RE = re.compile(r'\]\((/[A-Za-z0-9\-_/\.]+/?)\)')
 
 
 @dataclass
@@ -93,6 +96,47 @@ def get_all_slugs() -> set:
         slugs.add(slug.rstrip("/") + "/")
 
     return slugs
+
+
+def _normalize_site_path(path: str) -> str:
+    """Normalize a site path to /leading/and/trailing/slash/ form."""
+    clean = path.strip().strip('"').strip("'").replace("\\", "/")
+    clean = clean.strip("/")
+    return f"/{clean}/" if clean else "/"
+
+
+def _path_derived_slug(md: Path) -> str:
+    """Return the docs-relative slug Astro derives from a markdown path."""
+    slug = str(md.relative_to(DOCS_DIR).with_suffix("")).replace("\\", "/")
+    if slug == "index":
+        slug = ""
+    elif slug.endswith("/index"):
+        slug = slug.removesuffix("/index")
+    return slug
+
+
+def _static_absolute_link_targets() -> set[str]:
+    """Build valid absolute targets from content slugs and redirect sources."""
+    targets: set[str] = set()
+
+    for md in _iter_markdown_files():
+        fm = _read_frontmatter(md.read_text(errors="replace")) or ""
+        slug_match = re.search(r'^slug:\s*(.+)$', fm, re.MULTILINE)
+        slug = slug_match.group(1) if slug_match else _path_derived_slug(md)
+        targets.add(_normalize_site_path(slug))
+
+    if CONFIG_FILE.exists():
+        config = CONFIG_FILE.read_text(errors="replace")
+        for redirect_source in re.findall(r"'(/[^']+)'\s*:", config):
+            targets.add(_normalize_site_path(redirect_source))
+
+    return targets
+
+
+def _is_file_like_site_path(path: str) -> bool:
+    """Return True when the final URL segment looks like a file name."""
+    last_segment = path.rstrip("/").rsplit("/", 1)[-1]
+    return "." in last_segment
 
 
 # ── Check 1: Frontmatter ─────────────────────────────────────────────────────
@@ -465,6 +509,37 @@ def check_title_numbering():
         print(f"    {mismatches} title-filename mismatches")
 
 
+# ── Check 14: Static absolute internal link targets ──────────────────────────
+
+def check_static_absolute_internal_links():
+    """Verify absolute internal markdown links resolve to slugs or redirects."""
+    print("\n14. Static absolute internal link targets...")
+    targets = _static_absolute_link_targets()
+    broken = 0
+    checked = 0
+
+    for md in sorted(_iter_markdown_files()):
+        rel = f"src/content/docs/{md.relative_to(DOCS_DIR)}"
+        for line_no, line in enumerate(md.read_text(errors="replace").splitlines(), start=1):
+            for link_path in ABSOLUTE_INTERNAL_LINK_RE.findall(line):
+                if (
+                    link_path.startswith(("http://", "https://", "mailto:", "#"))
+                    or _is_file_like_site_path(link_path)
+                ):
+                    continue
+
+                checked += 1
+                target = _normalize_site_path(link_path)
+                if target not in targets:
+                    error(f"{rel}:{line_no} -> {target}")
+                    broken += 1
+
+    if broken == 0:
+        print(f"    {checked} absolute internal links resolve")
+    else:
+        print(f"    {broken}/{checked} absolute internal links are unresolved")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -489,6 +564,7 @@ def main():
     check_sidebar_dirs()
     check_dirs_have_index()
     check_title_numbering()
+    check_static_absolute_internal_links()
 
     print("\n" + "=" * 60)
     e_count = len(_results.errors)
