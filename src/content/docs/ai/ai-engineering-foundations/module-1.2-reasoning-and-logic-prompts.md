@@ -18,7 +18,7 @@ By the end of this module, you will be able to:
 
 - **Design** reasoning-eliciting prompts for math, diagnosis, planning, classification, and decision tasks without turning every request into a long chain-of-thought ritual.
 - **Distinguish** reasoning prompts from reasoning models by deciding when prompt scaffolding helps an ordinary model and when a model with native thinking budget should be left to use its own internal trace.
-- **Compare** zero-shot CoT, few-shot CoT, self-consistency, least-to-most prompting, plan-and-execute, verifier prompts, and Tree-of-Thoughts as different cost and control points.
+- **Compare** zero-shot CoT, few-shot CoT, self-consistency, least-to-most prompting, plan-and-execute, verifier prompts, ReAct, and Tree-of-Thoughts as different cost and control points.
 - **Evaluate** reasoning effort controls across Claude, OpenAI, and Gemini APIs by naming what they budget, what they do not guarantee, and when the extra latency is justified.
 - **Build** a small experiment that prompts one task with three reasoning strategies, compares outputs against a rubric, and records which strategy should enter a reusable prompt library.
 
@@ -616,6 +616,128 @@ Reasoning quality is not the only metric.
 
 Cost, latency, user patience, and review burden are part of the prompt design.
 
+
+## ReAct: Interleaving Reasoning and Action
+
+Chain-of-thought, decomposition, and Tree-of-Thoughts all improve how a model reasons from the information already inside the prompt or candidate branch. ReAct, short for reasoning and acting, changes the loop. The model alternates between a reasoning step, a tool action, and an observation, then uses the observation to decide what to do next. That makes ReAct useful when correctness depends on facts, calculations, repository state, logs, search results, or other information the model should not invent from memory.
+
+The important shift is that the reasoning trace is no longer just explanatory text. It becomes a controller for tool use. A ReAct harness usually enforces a small grammar such as `Thought`, `Action`, `Observation`, and `Final Answer`; the model proposes the next action, the application executes only allowed tools, and the observation is appended to the next model turn. This is why ReAct belongs between reasoning prompts and agent frameworks: it is still a prompt pattern, but it only becomes dependable when a harness parses actions, records observations, limits iterations, and rejects unknown tools.
+
+```text
+Question: How tall is the Eiffel Tower in feet?
+Thought: I need the trusted height in meters before converting units.
+Action: lookup("eiffel tower height meters")
+Observation: 330
+Thought: I need the meters-to-feet conversion factor.
+Action: lookup("meters to feet")
+Observation: 3.28084
+Thought: Now I can calculate 330 * 3.28084.
+Action: calculate("330 * 3.28084")
+Observation: 1082.6772
+Thought: I have the source value, conversion factor, and calculation.
+Final Answer: The Eiffel Tower is about 1,083 feet tall.
+```
+
+Use ReAct when the model must leave the prompt to gather or transform information. Do not use it as a more dramatic form of chain-of-thought for tasks that are already fully specified. A license-date extraction prompt probably does not need ReAct. A support assistant that must inspect current deployment events, check read-only constraints, and calculate an error-budget impact may need it because each observation can change the next safe action.
+
+The following mini-harness is deliberately deterministic so you can run it without an API key. In a real application, `scripted_reasoner` would be replaced by a model call, but the parser, allow-listed tools, observation log, and max-step guard are the pieces you still need to test.
+
+```python
+from __future__ import annotations
+
+import ast
+import operator
+import re
+from collections.abc import Callable
+
+
+ACTION_RE = re.compile(r'^Action:\s*(\w+)\("([^"]*)"\)', re.MULTILINE)
+FINAL_RE = re.compile(r'^Final Answer:\s*(.+)$', re.MULTILINE)
+OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.USub: operator.neg,
+}
+
+
+def safe_eval(expression: str) -> float:
+    """Evaluate a tiny arithmetic expression without exposing Python eval."""
+    tree = ast.parse(expression, mode='eval')
+
+    def walk(node: ast.AST) -> float:
+        if isinstance(node, ast.Expression):
+            return walk(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, ast.UnaryOp) and type(node.op) in OPERATORS:
+            return OPERATORS[type(node.op)](walk(node.operand))
+        if isinstance(node, ast.BinOp) and type(node.op) in OPERATORS:
+            return OPERATORS[type(node.op)](walk(node.left), walk(node.right))
+        raise ValueError(f'Unsupported expression: {expression}')
+
+    return walk(tree)
+
+
+def lookup(query: str) -> str:
+    facts = {
+        'eiffel tower height meters': '330',
+        'meters to feet': '3.28084',
+    }
+    return facts.get(query.lower(), 'unknown')
+
+
+def calculate(expression: str) -> str:
+    return f'{safe_eval(expression):.4f}'
+
+
+def scripted_reasoner(transcript: str) -> str:
+    """Stand in for an LLM so this example stays runnable and repeatable."""
+    if 'Observation:' not in transcript:
+        return 'Thought: I need the trusted height in meters.\nAction: lookup("eiffel tower height meters")'
+    if '330' in transcript and '3.28084' not in transcript:
+        return 'Thought: I need the unit conversion factor.\nAction: lookup("meters to feet")'
+    if '3.28084' in transcript and '1082.6772' not in transcript:
+        return 'Thought: I can now calculate meters to feet.\nAction: calculate("330 * 3.28084")'
+    return 'Thought: I have the facts and calculation.\nFinal Answer: The Eiffel Tower is about 1,083 feet tall.'
+
+
+def run_react(question: str, max_steps: int = 5) -> str:
+    tools: dict[str, Callable[[str], str]] = {
+        'lookup': lookup,
+        'calculate': calculate,
+    }
+    transcript = f'Question: {question}\n'
+
+    for _ in range(max_steps):
+        response = scripted_reasoner(transcript)
+        transcript += response + '\n'
+
+        if FINAL_RE.search(response):
+            return transcript
+
+        match = ACTION_RE.search(response)
+        if not match:
+            raise RuntimeError(f'Could not parse action from: {response}')
+
+        tool_name, argument = match.groups()
+        if tool_name not in tools:
+            raise RuntimeError(f'Tool is not allow-listed: {tool_name}')
+
+        transcript += f'Observation: {tools[tool_name](argument)}\n'
+
+    raise RuntimeError('ReAct loop stopped before a final answer')
+
+
+if __name__ == '__main__':
+    print(run_react('How tall is the Eiffel Tower in feet?'))
+```
+
+The harness shows the minimum safety shape. The model does not execute arbitrary code; it emits an action string that the application parses. The application owns the tool registry, the tool arguments, the observation log, and the stopping rule. If those boundaries are weak, ReAct can fail in ordinary ways: looping forever, calling a tool that should not be available, accepting stale observations, or treating an observation as proof when it is only another uncertain input.
+
+A practical ReAct prompt should therefore name the available tools, require one action per turn, require `Final Answer` when no further tool is needed, and tell the model to stop when observations are insufficient. The harness should then enforce those rules instead of trusting the prompt to enforce itself. Once you add durable state, branching, human interrupts, or multiple workers, the same reasoning-and-action loop becomes the conceptual bridge to LangGraph-style agent orchestration.
+
 ## Reasoning Effort APIs
 
 Vendor reasoning controls are easy to misunderstand.
@@ -953,6 +1075,7 @@ The workflow is slower, but the extra pass may be justified for support prompts 
 - [Self-Consistency Improves Chain of Thought Reasoning in Language Models](https://arxiv.org/abs/2203.11171) - Wang et al.; verified source for multiple sampled reasoning paths and answer selection.
 - [Least-to-Most Prompting Enables Complex Reasoning in Large Language Models](https://arxiv.org/abs/2205.10625) - Zhou et al.; verified source for decomposition into simpler subproblems.
 - [Tree of Thoughts: Deliberate Problem Solving with Large Language Models](https://arxiv.org/abs/2305.10601) - Yao et al.; verified source for search over intermediate thoughts.
+- [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629) - Yao et al.; verified source for interleaving reasoning traces with tool actions and observations.
 - [Chain-of-Thought Prompting Elicits Reasoning in Large Language Models](https://arxiv.org/abs/2201.11903) - Wei et al.; verified background source for few-shot CoT examples.
 - [Plan-and-Solve Prompting: Improving Zero-Shot Chain-of-Thought Reasoning by Large Language Models](https://arxiv.org/abs/2305.04091) - Wang et al.; verified background source for planning before solving.
 - [Let's Verify Step by Step](https://arxiv.org/abs/2305.20050) - Lightman et al.; verified background source for process and outcome verification concerns.
