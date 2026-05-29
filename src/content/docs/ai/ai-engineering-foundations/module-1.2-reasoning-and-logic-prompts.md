@@ -855,26 +855,31 @@ Delete the scaffolds that no longer earn their keep.
 
 ### Decision Checklist
 
-Ask six questions before adding reasoning machinery.
+Ask seven questions before adding reasoning machinery.
 The answer decides the pattern.
 
 ```text
 1. Is the answer directly present in trusted context?
    Use extraction with citation.
 
-2. Does the task require several dependent steps?
+2. Does correctness depend on external facts, calculations, or system
+   state the model should not invent from memory?
+   Use ReAct: interleave reasoning with allow-listed tool actions and
+   observations, under a harness with iteration limits.
+
+3. Does the task require several dependent steps?
    Use decomposition or plan-and-execute.
 
-3. Does the task have one objective final answer but fragile paths?
+4. Does the task have one objective final answer but fragile paths?
    Use self-consistency or a verifier.
 
-4. Does the model family already support native reasoning effort?
+5. Does the model family already support native reasoning effort?
    Try effort controls before writing a rigid visible scratchpad.
 
-5. Is the wrong answer expensive enough to justify branch search?
+6. Is the wrong answer expensive enough to justify branch search?
    Use Tree-of-Thoughts with branch scoring and stop rules.
 
-6. Can the result be checked by criteria, tests, or evidence?
+7. Can the result be checked by criteria, tests, or evidence?
    Add a verifier pass before adding more generation.
 ```
 
