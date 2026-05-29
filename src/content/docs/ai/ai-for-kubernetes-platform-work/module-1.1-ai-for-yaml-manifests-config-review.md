@@ -33,6 +33,8 @@ That scenario is not a warning against using AI for platform work. It is a warni
 
 This module teaches a review-first workflow for AI-assisted Kubernetes YAML review. You will still use AI, but you will constrain the task, ask for uncertainty, classify every claim, verify operational assertions, and keep a written trail of why a change was accepted or deferred. The goal is not to make AI write Kubernetes YAML faster. The goal is to make your team inspect, question, and explain Kubernetes YAML with more discipline than a quick human skim or an unconstrained prompt would provide.
 
+> **Go deeper:** For prompt contracts, delimiters, and review-oriented prompting patterns beyond platform YAML, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/).
+
 ## The Review Mindset: AI Is a Reviewer, Not the Owner
 
 The safest starting point is a simple mental model: the human owns the manifest, and the AI helps inspect it. That means the assistant is not allowed to invent missing context, silently assume policy defaults, or turn a vague request into a production recommendation. A reviewer can raise concerns, ask questions, and explain tradeoffs, but the owner must verify and decide. This model sounds strict, yet it is the same expectation you already have for human code review on infrastructure changes.

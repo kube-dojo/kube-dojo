@@ -29,6 +29,8 @@ The operational problem is not that AI tools are weak; it is that teams often ch
 
 In this module, you will build a practical decision model for choosing the smallest safe tool that gives useful leverage without giving up control. The word "smallest" matters because every escalation adds cost, latency, permissions, and new ways to be wrong. The word "safe" matters because the right tool is not the one with the most impressive demo; it is the one whose output can be checked with the time, evidence, and access you actually have.
 
+> **Go deeper:** This module stays at operator-level tool choice; for systematic prompt design see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/) and for how applications package evidence and constraints see [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/).
+
 ## Start With The Task, Not The Tool
 
 Many people begin with the question, "Which AI tool should I use?" That question feels practical, but it is already one step too late because it makes the tool the center of the decision. A better starting point is to name the kind of work you are doing: explanation, summarization, source discovery, drafting, rewriting, code inspection, code generation, or multi-step execution. Once the task type is visible, the tool choice becomes a consequence of the work instead of a guess based on whatever interface is open.

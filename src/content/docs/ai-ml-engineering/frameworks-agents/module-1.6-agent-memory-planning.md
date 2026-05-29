@@ -38,6 +38,8 @@ A senior engineer should treat an agent as a distributed system, not as a clever
 
 This module teaches agent memory and planning from first principles, then connects those ideas to production-grade constraints. You will start with the simplest memory problem, add retrieval and summarization, compare planning algorithms, examine multi-agent topologies, and finish with a fully traced worked example. The goal is not to memorize pattern names. The goal is to make defensible design decisions when an agent must complete a complex task safely, cheaply, and observably.
 
+> **Go deeper:** For retrieval, tool, and memory boundary design as one engineering layer, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/).
+
 ---
 
 ## Part 1: What Changes When a Model Becomes an Agent

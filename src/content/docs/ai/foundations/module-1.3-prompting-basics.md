@@ -22,6 +22,8 @@ Prompting is disciplined task framing. A prompt works like a ticket written for 
 
 This module teaches the first practical layer: writing prompts that produce reviewable work instead of lucky prose. You will practice turning vague requests into prompt contracts, choosing when to use examples, asking for structured output, and deciding when a second prompt is better than one enormous prompt. The next module focuses on verification, so this one stops at the handoff point: the answer should be clear enough that a human or tool can check it.
 
+> **Go deeper:** For the full prompt-engineering spine (contracts, reasoning prompts, libraries, and safety), see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/) in [AI Engineering Foundations](/ai/ai-engineering-foundations/).
+
 ## A Prompt Is a Small Contract
 
 A prompt is not a spell, and treating it like one creates bad habits quickly. The useful mental model is a small contract: it names the work, provides the evidence, states the boundaries, and describes the deliverable. The model still generates probable text rather than guaranteed truth, but a contract narrows the problem enough that the answer can be judged. Without that narrowing, the model fills empty space with default assumptions from common examples it has seen before.
