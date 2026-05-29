@@ -549,7 +549,7 @@ class LLMAgentState(TypedDict):
 
 def create_llm_node(system_prompt: str):
     """Factory function to create LLM nodes with different personas."""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-exp")
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
     def node(state: LLMAgentState) -> dict:
         # Build message history
@@ -815,22 +815,24 @@ for state in history:
 ```
 
 ```python
+# pip install langgraph-checkpoint-sqlite
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-# Persistent storage
-checkpointer = SqliteSaver.from_conn_string("workflows.db")
-app = graph.compile(checkpointer=checkpointer)
-
-# Workflows survive restarts!
+# from_conn_string is a context manager: the underlying connection is only
+# valid inside the `with` block, so compile and run the graph in that scope.
+with SqliteSaver.from_conn_string("workflows.db") as checkpointer:
+    app = graph.compile(checkpointer=checkpointer)
+    # ... invoke the app here; checkpoints survive process restarts.
 ```
 
 ```python
+# pip install langgraph-checkpoint-postgres
 from langgraph.checkpoint.postgres import PostgresSaver
 
-checkpointer = PostgresSaver.from_conn_string(
-    "postgresql://user:pass@host:5432/db"
-)
-app = graph.compile(checkpointer=checkpointer)
+# Also a context manager; call setup() once to create the checkpoint tables.
+with PostgresSaver.from_conn_string("postgresql://user:pass@host:5432/db") as checkpointer:
+    checkpointer.setup()  # first run only
+    app = graph.compile(checkpointer=checkpointer)
 ```
 
 ### Streaming Operations
@@ -951,12 +953,6 @@ Total: ~$180K/year
 | Crash Recovery | Manual replay (lost time + tokens) | Automatic resume |
 | Human Review | Custom tooling | Native interrupts |
 | Debugging | Log analysis | State replay |
-
-| Company | Before LangGraph | After LangGraph | Reduction |
-|---------|------------------|-----------------|-----------|
-| Example team | thousands of lines | a few hundred lines | substantial |
-| Example team | thousands of lines | a few hundred lines | substantial |
-| Example team | thousands of lines | a few hundred lines | substantial |
 
 | Feature | Airflow/Prefect | LangGraph |
 |---------|-----------------|-----------|
