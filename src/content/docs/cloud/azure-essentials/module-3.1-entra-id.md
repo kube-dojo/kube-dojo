@@ -10,8 +10,6 @@ sidebar:
 
 After completing this module, you will be able to:
 
-Use the outcomes below as practical checkpoints while you move through the theory and lab, so you can test your understanding incrementally.
-
 - **Configure Entra ID application registrations, service principals, and Managed Identities for Azure workloads**
 - **Design Azure RBAC role assignments across Management Groups, Subscriptions, and Resource Groups with least privilege**
 - **Implement Conditional Access policies and Privileged Identity Management (PIM) for just-in-time access**

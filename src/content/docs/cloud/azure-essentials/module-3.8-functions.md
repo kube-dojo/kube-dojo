@@ -5,7 +5,7 @@ sidebar:
   order: 9
 ---
 
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.4 (Blob Storage), Module 3.1 (Entra ID). After completing this module, you will be able to:
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.4 (Blob Storage), Module 3.1 (Entra ID).
 
 ## What You'll Be Able to Do
 

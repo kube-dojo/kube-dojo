@@ -488,7 +488,7 @@ Overlapping CIDR blocks prevent straightforward peering or hub-based routing, so
 
 ### Prevention: IP Address Management (IPAM)
 
-The preventative cure is instituting [centralized IP Address Management (IPAM). By defining authoritative IP pools, you force teams to request allocations programmatically](https://docs.aws.amazon.com/vpc/latest/ipam/allocate-cidrs-ipam.html), entirely eliminating human error. In mature organizations, that authority model also supports delegation because teams can self-serve within policy boundaries instead of negotiating CIDR space through informal channels.
+The preventative cure is instituting [centralized IP Address Management (IPAM)](https://docs.aws.amazon.com/vpc/latest/ipam/allocate-cidrs-ipam.html). By defining authoritative IP pools, you force teams to request allocations programmatically, sharply reducing the manual mistakes that cause overlapping CIDRs. In mature organizations, that authority model also supports delegation because teams can self-serve within policy boundaries instead of negotiating CIDR space through informal channels.
 At a design level, this is one of the rare controls that improves reliability and culture at the same time. Engineers stop thinking of CIDR as an arbitrary local preference and start treating it as shared infrastructure as code. Over time, the quality of all architecture decisions improves because conflicts are discovered at creation time instead of during an integration deadline crunch.
 
 ```bash
