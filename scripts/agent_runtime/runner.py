@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.base import AgentAdapter
+from .delegate_config import merge_delegate_claude_tool_config
 from .env_sanitize import build_agent_env
 from .errors import (
     AgentTimeoutError,
@@ -372,6 +373,11 @@ def invoke(
         raise RateLimitedError(agent_name, effective_model, reason)
 
     # ---------- 6. Build invocation plan ----------
+    effective_tool_config = merge_delegate_claude_tool_config(
+        agent_name,
+        entrypoint,
+        tool_config,
+    )
     plan = adapter.build_invocation(
         prompt=prompt,
         mode=mode,
@@ -379,7 +385,7 @@ def invoke(
         model=effective_model,
         task_id=task_id,
         session_id=session_id,
-        tool_config=tool_config,
+        tool_config=effective_tool_config,
     )
 
     # Build a sanitized child environment. We do NOT mutate os.environ itself:
