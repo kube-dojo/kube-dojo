@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Session 72 — De-frag review engine + main de-contamination</title>
+<style>body{font:15px/1.55 -apple-system,system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:1.8rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+code{background:#f4f4f4;padding:.1em .3em;border-radius:3px;font-size:.9em}
+table{border-collapse:collapse;margin:.6rem 0}td,th{border:1px solid #ccc;padding:.3rem .6rem;text-align:left;font-size:.9em}
+.ok{color:#0a7d28;font-weight:600}.bad{color:#b00}.box{background:#f8f8f8;border-left:3px solid #888;padding:.5rem .9rem;margin:.6rem 0}
+.crit{border-left-color:#b00;background:#fff5f5}</style></head><body>
+<h1>Session 72 — De-frag re-queue engine + main de-contamination</h1>
+<p><b>Date:</b> 2026-05-30 · <b>Predecessor:</b> session 71 · <b>Model:</b> claude-opus-4-8[1m] · <b>Mode:</b> user-driven, then validated-autonomous batch.</p>
+
+<p><b>One-line:</b> Cleaned session-71's main contamination, then merged 46 cross-family-reviewed de-frag modules (PR #1662 + #1663). The reviews caught real defects the density/build/health gates all missed — proving de-frag is fabrication-prone for <em>every</em> agent. Hardened the brief, validated it with a clean 6-module redo wave (PR #1664, under review).</p>
+
+<h2>NEXT SESSION — FIRST ACTIONS</h2>
+<ol>
+<li><b>Process the wave-1 reviews</b> (running at handoff): <code>logs/dispatch_responses/rev-w1-codexfiles.txt</code> (cursor reviews the 3 codex files) + <code>rev-w1-cursorfiles.txt</code> (codex reviews the 3 cursor files). Remediate any NEEDS_CHANGES (revert-to-origin for content defects; inline fix for links), then merge <b>PR #1664</b> (wave 1, 6 modules). Verify CI: build, <b>Incident dedup gate</b>, gemini CI review, site-health all green.</li>
+<li><b>Continue the batch to ~30</b> (user chose "one batch ~30, reassess"). Wave 1 = 6 done. Remaining: <b>7 re-queue</b> (ckad-0.2 idx6, aks-7.1 idx19, aws-1.10 idx26, aws-1.7 idx34, azure-3.7 idx44, gcp-2.2 idx58, advops-8.5-disaster-recovery) + <b>~17 fresh</b> from <code>next_index=60</code>. After ~30, <b>STOP and report to user</b> before continuing the remaining ~217.</li>
+<li><b>8.5-disaster-recovery needs a CUSTOM redo brief</b>: its GitLab-2017 incident is a PRE-EXISTING duplicate that fails the CI Incident dedup gate. Tell the author to REPLACE or REMOVE the GitLab-2017 story (it lives canonically elsewhere). A plain de-frag will re-fail the gate.</li>
+</ol>
+
+<h2>The engine (state at handoff)</h2>
+<table>
+<tr><th>Artifact</th><th>Path / value</th></tr>
+<tr><td>Worklist (307, curriculum order)</td><td><code>logs/remediation/worklist.json</code></td></tr>
+<tr><td>Tracker (next_index, requeue[], wave1, lanes)</td><td><code>logs/remediation/remediation-state.json</code> — next_index=60, requeue=13</td></tr>
+<tr><td><b>HARDENED brief</b> (@@MOD@@ placeholder)</td><td><code>logs/remediation/rewrite-brief.tmpl</code> — forbids expansion/fabrication/reorder, mandates <code>../</code> links, traceability self-check</td></tr>
+<tr><td>Lanes (off main)</td><td><code>.worktrees/lane-{a,b,c}</code> = codex, <code>{d,e,f}</code> = cursor, branches <code>remediate2/lane-*</code></td></tr>
+</table>
+<p><b>Dispatch pattern</b> (flat — no shell functions; <code>&amp;</code>-backgrounding gets KILLED, use the Bash tool's <code>run_in_background:true</code>):</p>
+<div class="box"><code>P=/Users/krisztiankoos/projects/kubedojo/.venv/bin/python<br>
+M="src/content/docs/.../module-X.md"<br>
+sed -e "s|@@MOD@@|$M|g" -e "s|\.venv/bin/python|$P|g" logs/remediation/rewrite-brief.tmpl \<br>
+&nbsp;| $P scripts/dispatch_smart.py edit - --agent &lt;codex|cursor&gt; [--model composer-2.5] --mode danger --worktree .worktrees/lane-&lt;X&gt; --timeout 3600 --task-id rw2-&lt;X&gt;-&lt;slug&gt;</code></div>
+<p>codex edit exits <b>1 with "origin stale ... remote=missing"</b> — that's the <em>advisory</em> stale-branch check, NOT failure. Ground truth = <code>git -C .worktrees/lane-X log</code>. Verify each: density gates + READ for fabrication + single-file scope + <code>../</code> links.</p>
+
+<h2>LOAD-BEARING LESSON (memory: feedback_defrag_is_fabrication_prone)</h2>
+<div class="box crit"><b>De-frag/density tasks make EVERY agent fabricate — codex AND cursor, not just gemini/agy.</b> The words-per-paragraph gate structurally pressures models to ADD content; the easiest content to invent is a confident anecdote/stat/claim. Density-gate-pass is NOT a sufficient merge signal. <b>Cross-family review per batch is MANDATORY.</b> Defects the gates missed but reviews caught this session: codex scrambled <code>ai-building-1.2</code> structure (content at line 617); cursor fabricated a "mid-2024 fintech outage" in <code>eks-5.1</code>, two factual errors (<code>1.9</code>, <code>5.3</code>), and 4 bare <code>module-x/</code> links (health check has a blind spot for missing <code>../</code>).</div>
+
+<h2>What merged to main this session</h2>
+<table>
+<tr><th>PR</th><th>Content</th></tr>
+<tr><td>#1662</td><td>codex batch — 24 de-frag modules (dropped ai-building-1.2; fixed 3.8/3.1 outcomes + 8.2 IPAM link/claim per composer-2.5 R1)</td></tr>
+<tr><td>#1663</td><td>cursor batch — 22 de-frag modules (dropped 5.1/1.9/5.3 fabrication+factual, 8.5 dup; fixed 4 links per codex R1)</td></tr>
+</table>
+<p>Main contamination cleaned: 3 agy commits (filler bloat + raw.githubusercontent links) reset off local main; backup at branch <code>backup/session71-local-main</code>. Cherry-pick (not merge) was required — lanes were on a stale merge-base, so a direct lane→main PR would reverse-revert origin's 7 newer commits.</p>
+
+<h2>Wave 1 (PR #1664 — under review at handoff)</h2>
+<p>6 re-queue redos with the hardened brief, cross-assigned (codex redid cursor's failures + vice-versa). <span class="ok">Validated clean</span>: no fabrication, density 6/6, build+health 0 errors, ai-building-1.2 structure fixed (line 9 not 617), 1.9 "free at scale" gone.</p>
+
+<h2>Pre-existing follow-ups (NOT de-frag regressions — separate fixes)</h2>
+<ul>
+<li><b>5.3 "Pod Identity takes precedence"</b> — pre-existing on origin; codex reviewer believes it's backwards per AWS pod-id-how-it-works. Verify against AWS docs, fix if wrong.</li>
+<li><b>backstage-1.2 raw.githubusercontent citation links</b> — pre-existing; should point to rendered backstage.io docs. Low priority.</li>
+<li>Stale worktrees to clean at the very END (NOT remediate2/lane-*): <code>audit-link-fixes, ctx21-t0, g5-workload-identity, g6-otel-collector, ptl-fix, session-68-handoff, todo-ptl</code>.</li>
+<li>Session-71 carryover: seed #1504 with sweep worklist; module-3.3 1-word-under-floor top-up; sidebar-walk.</li>
+</ul>
+
+<h2>Roster (de-frag engine)</h2>
+<p>ONLY <b>codex</b> (lanes a/b/c) + <b>cursor</b>/composer-2.5 (lanes d/e/f). gemini/agy/deepseek DROPPED (user-confirmed: gemini games density with filler; agy = harness contamination). Reviews: codex↔cursor cross-family per Decision Card C.</p>
+</body></html>
