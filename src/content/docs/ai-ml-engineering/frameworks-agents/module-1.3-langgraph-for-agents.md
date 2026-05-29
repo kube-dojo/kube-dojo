@@ -81,7 +81,7 @@ graph LR
 | State management | Pass through | Persistent state |
 | Error recovery | Start over | Retry specific nodes |
 | Human-in-the-loop | Awkward | Native support |
-| Multi-agent | Sequential only | True parallelism |
+| Multi-agent | Sequential only | Fan-out parallelism for independent branches (supervisor routing is otherwise sequential) |
 
 The table should not be read as "graphs are always better." A graph has its own overhead: you must name state fields, define merge behavior, test routes, and understand how checkpoints interact with deployed graph changes. That overhead is worthwhile when the workflow is long-running, auditable, or expensive to repeat. It is not worthwhile when a ten-line Python function expresses the whole policy more clearly.
 
