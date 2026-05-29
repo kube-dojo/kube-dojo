@@ -27,7 +27,7 @@ At the end of a release week, a support lead watches a new assistant answer a po
 
 That is the moment when "use RAG" stops being a slogan and becomes an engineering problem. The team needs reliable ingestion, careful chunking, traceable metadata, an index that matches the question style, a query path that can filter and rerank evidence, and storage that survives deployment restarts. Without those pieces, retrieval becomes a decorative prelude to hallucination rather than a control mechanism for factual answers.
 
-LlamaIndex exists for that exact layer of the stack. It is not merely a wrapper around an LLM call, and it is not only a vector database client. It is a data framework for LLM applications: a set of abstractions for turning messy source material into queryable context, then feeding that context into a model in a controlled way. If LangChain and LangGraph often answer "what should happen next in this workflow?", LlamaIndex more often answers "what context should the model see, and why this context rather than another chunk?"
+LlamaIndex exists for that exact layer of the stack. It is not merely a wrapper around an LLM call, and it is not only a vector database client. It is a data framework for LLM applications: a set of abstractions for turning messy source material into queryable context, then feeding that context into a model in a controlled way. LangGraph, and much of LangChain's agent layer, answers "what happens next in this workflow?"; LlamaIndex answers "what evidence should the model see, and why this context?"
 
 This module teaches LlamaIndex as an architectural tool, not as a five-line demo. You will learn the vocabulary that makes LlamaIndex systems debuggable: Documents, Nodes, node parsers, indexes, retrievers, node postprocessors, response synthesizers, query engines, chat engines, storage contexts, and evaluation loops. The goal is not to memorize every class. The goal is to know where evidence enters the system, how it changes shape, and where a bad answer can be traced back to a bad data decision.
 
@@ -103,6 +103,8 @@ The ingestion flow below is deliberately plain. It is the part of the system man
 
 Here is a complete, runnable Python example that builds Documents manually, parses them into Nodes, and then creates a vector index using mock models. The mock LLM and mock embedding model are useful for learning because the code exercises current LlamaIndex APIs without requiring an API key or network call. In a production application, you would replace those mocks with provider integrations such as OpenAI, Ollama, Hugging Face, or another supported backend.
 
+> **Setup:** Run `pip install llama-index-core` before trying the Python examples. The `MockLLM` and `MockEmbedding` classes used here need no provider API keys.
+
 ```python
 from llama_index.core import Document, MockEmbedding, Settings, VectorStoreIndex
 from llama_index.core.llms import MockLLM
@@ -162,11 +164,15 @@ data_dir.mkdir(exist_ok=True)
     encoding="utf-8",
 )
 
-documents = SimpleDirectoryReader(input_dir=str(data_dir)).load_data()
+documents = SimpleDirectoryReader(
+    input_files=[str(data_dir / "refunds.txt"), str(data_dir / "security.txt")]
+).load_data()
 
 for document in documents:
     print(document.metadata.get("file_name"), len(document.text))
 ```
+
+One practical gotcha: `SimpleDirectoryReader` defaults to `exclude_hidden=True`, and that check applies to every path segment rather than only the file name, so a dot-directory anywhere in the absolute path, such as a `.worktrees` checkout, can hide every file; pass explicit `input_files`, or `exclude_hidden=False`, when that can happen.
 
 The worked design decision is chunk size. Suppose a policy page contains short, self-contained paragraphs. A sentence-aware splitter with moderate overlap is likely safer than a fixed character splitter because it avoids cutting a rule in half. Suppose a developer guide contains long code blocks, headings, and tables. A markdown-aware or code-aware parser may preserve structure better than sentence splitting. Suppose a support ticket export contains one ticket per row. A row-level Document with metadata for ticket id, date, product, and severity may be more useful than a giant concatenated export.
 
@@ -295,6 +301,17 @@ response = query_engine.query("What approval is needed for annual renewal refund
 print(response)
 ```
 
+To compare the application-facing interfaces, run this immediately after the previous example while `index` and the mock `Settings` are still defined. The query engine treats each call as a single-shot question, while the chat engine keeps conversational memory so the second turn can depend on the first turn's topic.
+
+```python
+query_engine = index.as_query_engine()
+chat_engine = index.as_chat_engine(chat_mode="context")
+
+print(query_engine.query("Who approves annual renewal refunds?"))
+print(chat_engine.chat("We are discussing annual renewal refunds."))
+print(chat_engine.chat("Who approves them?"))
+```
+
 Node postprocessors are not decorative. They are the last controlled step before evidence enters the model context. A similarity cutoff can remove weak matches. A reranker can reorder candidates with a stronger but more expensive model. A metadata replacement postprocessor can retrieve small sentence nodes but pass a wider sentence window to the LLM. A privacy postprocessor can redact sensitive entities before synthesis. These steps are where retrieval quality and context budget meet.
 
 Response synthesis is also a design choice. A compact response mode may combine evidence efficiently. A refine-style response can process chunks sequentially and revise the answer as it sees more context. A tree-style response can summarize intermediate groups before producing a final answer. Those modes make different trade-offs around latency, cost, faithfulness, and ability to handle many nodes. The right choice depends on whether the user expects a precise answer, a broad summary, or a structured extraction.
@@ -386,7 +403,7 @@ The durable mental model is simple: LlamaIndex is the evidence preparation and r
 - **LlamaIndex uses namespaced Python packages**: The current ecosystem separates core abstractions from integrations, so modern examples import framework objects from `llama_index.core` and install provider-specific packages as needed.
 - **Nodes are first-class retrieval units**: A Node can store text, metadata, relationships, and identifiers, which makes it more than a plain string chunk.
 - **Response synthesis is configurable**: Query engines can use different synthesis modes, which changes how retrieved nodes are combined into an answer.
-- **Persistence is explicit for local stores**: In-memory data can be persisted through a storage context, then loaded later with functions such as `load_index_from_storage`.
+- **Directory readers filter hidden path segments by default**: `SimpleDirectoryReader` can treat dot-prefixed directories in the absolute path as hidden, so explicit file lists are safer in generated examples and worktree checkouts.
 
 ## Common Mistakes
 
