@@ -29,6 +29,14 @@ export default defineConfig({
       '/ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting/',
     '/ai-ml-engineering/classical-ml/module-1.3-time-series-forecasting/':
       '/ai-ml-engineering/machine-learning/module-1.12-time-series-forecasting/',
+    // #1639 Option B §4: retired moved-stubs — prompt/harness/symphony teaching
+    // consolidated into the canonical ai-engineering-foundations spine.
+    '/ai/ai-native-work/module-2.1-harness-engineering/':
+      '/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/',
+    '/ai/ai-native-work/module-2.2-orchestrating-fleets-symphony/':
+      '/ai/ai-engineering-foundations/module-4.1-symphony-work-orchestration-as-applied-harness/',
+    '/ai-ml-engineering/ai-native-development/module-1.6-prompt-engineering-fundamentals/':
+      '/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/',
   },
   markdown: {
     remarkPlugins: [remarkMath],
