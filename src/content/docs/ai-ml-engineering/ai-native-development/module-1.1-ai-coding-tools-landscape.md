@@ -28,7 +28,7 @@ That distinction matters because AI coding tools do not differ only by brand. Th
 
 This module gives you a practical landscape map. You will not memorize every plan name or model version, because those change too quickly. Instead, you will learn a durable evaluation model: decide what work needs to be done, identify the authority a tool needs to do that work, and put verification around the authority you grant. By the end, you should be able to choose a sane starter stack, explain why it fits your constraints, and reject tools that look impressive but solve the wrong problem.
 
-> **Where this fits:** This phase maps tooling authority; the canonical prompt → context → harness → symphony spine lives in [AI Engineering Foundations](/ai/ai-engineering-foundations/).
+> **Go deeper:** This phase maps tooling authority; the canonical prompt → context → harness → symphony spine lives in [AI Engineering Foundations](/ai/ai-engineering-foundations/).
 
 ## The Landscape Is About Authority, Not Hype
 
