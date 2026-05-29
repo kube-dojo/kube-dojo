@@ -10,6 +10,8 @@ sidebar:
 **Reading Time**: 4-5 hours
 **Prerequisites**: Module 1.1, Claude Code installed and working
 
+> **Go deeper:** For repository layout, retrieval and memory boundaries, dynamic context, and harness guardrails behind CLI agents, see [Repository Engineering for Agents](/ai/ai-engineering-foundations/module-2.2-repository-engineering-for-agents/), [Dynamic Context Orchestration](/ai/ai-engineering-foundations/module-2.4-dynamic-context-orchestration/), and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
+
 ---
 
 ## The Night That Changed Everything: When a Bug Fixed Itself

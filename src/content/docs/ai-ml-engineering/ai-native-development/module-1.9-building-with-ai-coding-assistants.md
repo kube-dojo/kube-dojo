@@ -11,6 +11,8 @@ revision_pending: false
 >
 > **Prerequisites**: Prompt engineering fundamentals, Git workflow, basic testing, secure coding basics, and experience with at least one IDE or terminal workflow
 
+> **Go deeper:** For context packaging, retrieval boundaries, and harness fundamentals behind multi-tool workflows, see [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/), [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/), and [Harness Fundamentals](/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/).
+
 ---
 
 ## What You'll Be Able to Do

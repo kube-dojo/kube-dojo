@@ -15,6 +15,8 @@ Even when direct compensation is limited, incidents like this can still create l
 
 Deploying agents to production is fundamentally different from building a local prototype. In production, you must account for adversarial prompt injection, runaway looping costs, hallucinated tool arguments, and compliance leaks. This module transforms your fragile local prototypes into hardened, enterprise-ready systems.
 
+> **Go deeper:** For guardrails, harness operations, and fleet-scale orchestration of multi-agent systems, see [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/), [Operating the Harness](/ai/ai-engineering-foundations/module-3.3-operating-the-harness/), and [Symphony](/ai/ai-engineering-foundations/module-4.1-symphony-work-orchestration-as-applied-harness/).
+
 ## Learning Outcomes
 
 By the end of this module, you will be able to:

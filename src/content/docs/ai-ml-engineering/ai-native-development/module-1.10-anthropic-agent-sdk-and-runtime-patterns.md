@@ -14,6 +14,8 @@ sidebar:
 
 **Prerequisites**: Claude Code & CLI Deep Dive, CLI AI Coding Agents, Building with AI Coding Assistants, and Model Context Protocol for Agents
 
+> **Go deeper:** For retrieval boundaries, dynamic context orchestration, and production harness operation around agent runtimes, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/), [Dynamic Context Orchestration](/ai/ai-engineering-foundations/module-2.4-dynamic-context-orchestration/), and [Operating the Harness](/ai/ai-engineering-foundations/module-3.3-operating-the-harness/).
+
 ---
 
 ## Learning Outcomes

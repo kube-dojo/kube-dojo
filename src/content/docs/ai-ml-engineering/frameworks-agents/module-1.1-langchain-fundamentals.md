@@ -13,6 +13,8 @@ sidebar:
 **Reading Time**: 6-7 hours  
 **Prerequisites**: Module 14, Python fundamentals, basic HTTP/API concepts, and beginner familiarity with LLM prompts.
 
+> **Go deeper:** For prompt interfaces, retrieval boundaries, and harness guardrails underlying LangChain pipelines, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/), [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/), and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
+
 ## What You'll Be Able to Do
 
 By the end of this module, you will:

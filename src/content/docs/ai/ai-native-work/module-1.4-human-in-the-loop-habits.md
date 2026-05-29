@@ -12,6 +12,8 @@ revision_pending: false
 >
 > **Prerequisites**: AI-native work modules 1.1-1.3, basic command-line comfort, and basic Kubernetes manifest familiarity
 
+> **Go deeper:** For guardrails, gates, and operating production harnesses around human review, see [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/) and [Operating the Harness](/ai/ai-engineering-foundations/module-3.3-operating-the-harness/).
+
 ---
 
 ## What You'll Be Able to Do

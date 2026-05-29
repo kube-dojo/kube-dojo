@@ -29,6 +29,8 @@ By the end of this module, you will be able to:
 
 5. **Implement** a repeatable hybrid workflow that uses local models for routine coding and API models for high-reasoning tasks.
 
+> **Go deeper:** For prompt design and context budgeting that make local and hybrid workflows predictable, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/) and [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/).
+
 ---
 
 ## Why This Module Matters
@@ -680,7 +682,7 @@ You are ready for the next module when the following are true:
 
 ## Next Module
 
-Next: **Module 1.3: Prompt Engineering Fundamentals**
+Next: **[Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/)**
 
 In the next module, you will learn how to write prompts that produce better code, better tests, and better reviews across both local and API models. The workflow from this module gives you the execution environment; prompt engineering gives you the control surface for using that environment well.
 

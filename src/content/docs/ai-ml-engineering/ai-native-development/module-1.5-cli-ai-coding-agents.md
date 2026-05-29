@@ -18,6 +18,8 @@ Without graphical interfaces, traditional debugging slowed to an excruciating cr
 
 This incident underscores a critical reality for modern infrastructure engineers: your most severe problems will not happen inside a comfortable graphical editor. They will happen in raw terminals, inside containers, and on remote servers. Command-line AI coding agents bridge this gap, bringing the full analytical power of Large Language Models directly to the lowest levels of your system architecture. Understanding how to operate these tools is no longer a novelty; it is a fundamental requirement for incident resolution, systemic automation, and modern infrastructure engineering.
 
+> **Go deeper:** For harness layers, guardrails, and operating agent loops in headless environments, see [Harness Fundamentals](/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/), [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/), and [Operating the Harness](/ai/ai-engineering-foundations/module-3.3-operating-the-harness/).
+
 ---
 
 ## What You'll Be Able to Do
@@ -808,7 +810,7 @@ They are failing to utilize the explicit autopilot mode, which is specifically d
 
 You now understand the profound architectural differences between graphical AI extensions and raw, terminal-based CLI agents. The selection criteria depend solely on your operational constraints and the need for programmatic automation.
 
-[Proceed to Module 02: Prompt Engineering Fundamentals](/ai-ml-engineering/ai-native-development/module-02-prompt-fundamentals/) — Begin constructing robust logical constraints to force deterministic outputs from chaotic language models.
+[Proceed to Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/) — Begin constructing robust logical constraints to force deterministic outputs from chaotic language models.
 
 ## Sources
 

@@ -18,6 +18,8 @@ By the end of this module, you will be able to:
 - **Design** a cloud-native debugging workflow that combines logs, traces, metrics, Kubernetes debug tools, and AI-assisted hypothesis refinement.
 - **Optimize** slow code paths by profiling first, asking targeted questions, validating equivalent behavior, and measuring the actual speedup.
 
+> **Go deeper:** For prompt discipline, safety checks, and harness guardrails around AI-suggested fixes, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/), [Prompt Safety and Evaluation](/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation/), and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
+
 ## Why This Module Matters
 
 The same risk pattern is covered in *Infrastructure as Code*: the canonical *Knight Capital 2012* incident shows how partial rollouts and weak feature-flag controls can turn a production release into an availability crisis. <!-- incident-xref: knight-capital-2012 -->

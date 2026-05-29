@@ -12,6 +12,8 @@ sidebar:
 **Reading Time**: 4-5 hours
 **Prerequisites**: Modules 1-2
 
+> **Go deeper:** For systematic prompt design, reasoning patterns, and safety evaluation before you trust generated code, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/), [Reasoning and Logic Prompts](/ai/ai-engineering-foundations/module-1.2-reasoning-and-logic-prompts/), and [Prompt Safety and Evaluation](/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation/).
+
 ---
 
 ## What You'll Be Able to Do

@@ -9,6 +9,9 @@ sidebar:
 
 ---
 **Prerequisites**: Module 1.1-1.3 complete
+
+> **Go deeper:** For how applications package context and how harness layers record agent work, see [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/) and [Harness Fundamentals — Layers and System of Record](/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/).
+
 ---
 
 San Francisco. November 18, 2025. 10:17 AM. Sarah Chen stared at her screen in disbelief. Her team had just received early access to Google Antigravity, and what she saw fundamentally changed how she thought about coding.

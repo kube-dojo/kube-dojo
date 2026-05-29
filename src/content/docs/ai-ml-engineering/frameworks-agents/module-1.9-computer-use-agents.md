@@ -18,6 +18,8 @@ Upon successful completion of this module, you will be able to:
 - Compare the architectural tradeoffs between visual-only agents (Operator) and hybrid DOM/visual agents in terms of latency, token cost, and reliability.
 - Implement state-reduction algorithms, such as image diffing, to manage context window bloat during long-running agent sessions.
 
+> **Go deeper:** For dynamic context orchestration and harness guardrails around perception-action loops, see [Dynamic Context Orchestration](/ai/ai-engineering-foundations/module-2.4-dynamic-context-orchestration/) and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
+
 ## Why This Module Matters
 
 In late 2024, a rapidly scaling fintech company attempted to automate their legacy compliance auditing process using an early iteration of an OS-level computer use agent. The agent was tasked with logging into a virtual machine, opening a legacy desktop application, and cross-referencing user records. Due to a transient UI lag, the agent's coordinate-based click missed the application icon and instead opened a misconfigured terminal window. Hallucinating that it was interacting with the database CLI, the agent typed and executed a command that recursively deleted the local directory structure. Because the sandbox was improperly isolated and had mounted a shared network drive for log storage without read-only restrictions, the deletion propagated, wiping out three terabytes of critical audit trails. The incident resulted in a $3.8 million regulatory fine and a complete halt of their automation initiatives.
