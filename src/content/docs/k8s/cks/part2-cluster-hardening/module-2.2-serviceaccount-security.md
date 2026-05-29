@@ -792,4 +792,4 @@ When you finish, keep the verification commands as your personal runbook. The ex
 
 ## Next Module
 
-Next: [Module 2.3: Pod Security Standards](/k8s/cks/part2-cluster-hardening/module-2.3-pod-security-standards/) builds on ServiceAccount isolation by controlling what pods are allowed to run in the first place.
+Next: [Module 2.3: API Server Security](/k8s/cks/part2-cluster-hardening/module-2.3-api-server-security/) builds on ServiceAccount isolation by hardening the Kubernetes API server itself.

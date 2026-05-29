@@ -1122,7 +1122,7 @@ Create `training-readiness.md` summarizing whether your MNIST training script is
 
 ## Next Module
 
-Next: [Training Deep Networks](/ai-ml-engineering/deep-learning/module-1.4-training-deep-networks/) covers initialization, normalization, regularization, learning-rate schedules, and deeper debugging strategies for models that are harder to optimize.
+Next: [CNNs & Computer Vision](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) covers convolutional architectures, spatial feature learning, and production image-classification pipelines for vision workloads.
 
 ---
 

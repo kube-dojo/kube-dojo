@@ -506,7 +506,7 @@ If the Workload API returns `no identity issued`, the attestation failed. Check 
 
 ## Next Module
 
-Ready to dive deeper into identity-aware networking? Head over to [Module 6.6: Advanced Service Mesh Authorization](/on-premises/security/module-6.6-advanced-service-mesh-authorization/), where we will use our newly minted SPIFFE identities to enforce strict Layer 7 access controls using Envoy and Open Policy Agent.
+Ready to operationalize secrets at scale? Head over to [Module 6.6: Secrets Management with Vault](/on-premises/security/module-6.6-secrets-management-vault/), where we deploy HashiCorp Vault, External Secrets Operator, and encryption-at-rest patterns for bare-metal clusters.
 
 ## Sources
 

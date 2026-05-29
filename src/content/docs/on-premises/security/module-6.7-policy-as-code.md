@@ -609,7 +609,7 @@ If the Kyverno admission controller does not become ready within 90 seconds, che
 
 ## Next Module
 
-Continue to [Module 6.8: Compliance & Audit](/on-premises/security/module-6.8-compliance-and-audit/) to learn how to demonstrate the policies you have built to auditors using CIS benchmarks, audit logs, and tamper-evident evidence pipelines.
+Continue to [Module 6.8: Zero Trust Architecture](/on-premises/security/module-6.8-zero-trust-architecture/) to learn how to replace implicit perimeter trust with identity-aware access, mTLS, and microsegmentation on bare-metal fleets.
 
 ## Sources
 

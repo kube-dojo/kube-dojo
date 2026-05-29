@@ -1025,4 +1025,4 @@ kubectl logs daemonset/nvidia-device-plugin-daemonset -n gpu-operator
 
 ## Next Module
 
-Now that you can reason about GPU node provisioning, device plugin allocation, Time-Slicing, MIG, telemetry, and DRA, continue to **[Module 9.2: Advanced Topology and RDMA Fabrics](/on-premises/ai-ml-infrastructure/module-9.2-advanced-topology-rdma-fabrics/)**. The next module moves from single-node accelerator operations to multi-node training fabrics, covering InfiniBand, RoCEv2, topology-aware placement, and the network constraints that decide whether large AI training jobs scale cleanly or stall under communication overhead.
+Now that you can reason about GPU node provisioning, device plugin allocation, Time-Slicing, MIG, telemetry, and DRA, continue to **[Module 9.2: Private AI Training](/on-premises/ai-ml-infrastructure/module-9.2-private-ai-training/)**. The next module moves from single-node accelerator operations to distributed training infrastructure—PyTorch, NCCL, batch schedulers, and the platform constraints that decide whether large AI jobs scale cleanly on bare metal.
