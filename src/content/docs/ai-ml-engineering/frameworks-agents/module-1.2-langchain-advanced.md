@@ -12,6 +12,8 @@ sidebar:
 **Reading Time**: 6-7 hours
 **Prerequisites**: Module 15
 
+> **Go deeper:** For retrieval and tool boundaries and production guardrails around tool-calling agents, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/) and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
+
 ---
 
 ## What You'll Be Able to Do

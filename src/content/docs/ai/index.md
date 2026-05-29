@@ -6,7 +6,7 @@ sidebar:
   label: "AI"
 ---
 
-> **AI Track** | 25 modules | 5 sections | ~43-64 hours
+> **AI Track** | 37 modules | 6 sections | ~64-95 hours
 
 ## Overview
 
@@ -44,6 +44,14 @@ The conceptual base:
 - verification
 - privacy and safety
 - using AI in real learning and work
+
+### [AI Engineering Foundations](ai-engineering-foundations/) — 12 modules
+
+The engineering spine between literacy and production agents:
+- prompt design, reasoning, safety, and contracts (1.1–1.4)
+- context, repository layout, retrieval boundaries, and orchestration (2.1–2.4)
+- harness layers, guardrails, and operating agent loops (3.1–3.3)
+- Symphony-style work orchestration as applied harness (4.1)
 
 ### [AI-Native Work](ai-native-work/) — 4 modules
 
@@ -85,6 +93,8 @@ The practitioner differentiator:
 ```text
 AI Foundations
    |
+AI Engineering Foundations
+   |
 AI-Native Work
    |
 AI Building
@@ -110,6 +120,7 @@ The safest way to avoid duplication is to keep the tracks answering different qu
 | If the question is... | Stay in... | Do **not** jump to yet... |
 |---|---|---|
 | what AI is and how to use it safely | `AI Foundations` | deep model or infra phases |
+| how prompts, context, and harnesses fit together | `AI Engineering Foundations` | framework-specific agent tutorials before the spine |
 | how to work with AI without losing judgment | `AI-Native Work` | engineering tooling and framework phases |
 | how to turn AI use into a real product feature | `AI Building` | full MLOps or model-training depth |
 | how open models, runtimes, and local hardware choices work | `Open Models & Local Inference` | production infra unless you truly need it |
@@ -122,6 +133,7 @@ In other words:
 ## Good First Clicks
 
 - [What Is AI?](foundations/module-1.1-what-is-ai/)
+- [Prompt Fundamentals](ai-engineering-foundations/module-1.1-prompt-fundamentals/)
 - [How to Verify AI Output](foundations/module-1.4-how-to-verify-ai-output/)
 - [Practical AI Tool Use](ai-native-work/module-1.1-practical-ai-tool-use/)
 - [From Chat To AI Systems](ai-building/module-1.1-from-chat-to-ai-systems/)

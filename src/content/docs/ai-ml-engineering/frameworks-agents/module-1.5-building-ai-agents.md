@@ -20,6 +20,8 @@ In late 2022, developers building with early LLMs quickly ran into a recurring p
 
 The lesson here is foundational for modern AI engineering: models are commoditized compute, but your proprietary data is your competitive moat. Every enterprise has access to the same foundational models via APIs. The only differentiator is how effectively an organization can connect those models to their internal knowledge bases and orchestrate them to take meaningful action. In this module, you will explore the ecosystem of frameworks that have emerged to solve this problem, learning how to select, deploy, and scale the right framework for the right architectural challenge, avoiding the catastrophic failures of early adopters.
 
+> **Go deeper:** For retrieval boundaries and Symphony-style orchestration when agents coordinate real work, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/) and [Symphony](/ai/ai-engineering-foundations/module-4.1-symphony-work-orchestration-as-applied-harness/).
+
 ## What You'll Be Able to Do
 
 By the end of this module, you will be able to:
