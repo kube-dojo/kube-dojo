@@ -27,11 +27,11 @@ This bridge is for learners who can operate Kubernetes in managed-cloud or certi
 |---|---|---|
 | Kubernetes API fluency | Physical infrastructure ownership | [Planning & Economics](/on-premises/planning/) |
 | CKA-style cluster operations | Linux host and kernel confidence | [Linux Deep Dive](/linux/) |
-| Managed node groups | Bare-metal provisioning workflow | [Bare Metal Provisioning](/on-premises/bare-metal-provisioning/) |
+| Managed node groups | Bare-metal provisioning workflow | [Bare Metal Provisioning](/on-premises/provisioning/) |
 | Cloud load balancers | BGP, VIPs, and bare-metal service exposure | [On-Premises Networking](/on-premises/networking/) |
 | Cloud block storage | Ceph and distributed storage operations | [On-Premises Storage](/on-premises/storage/) |
 | Cloud failure domains | Rack, power, switch, and disk fault domains | [Planning & Economics](/on-premises/planning/) |
-| Managed control plane expectations | Self-managed control-plane lifecycle | [Bare Metal Provisioning](/on-premises/bare-metal-provisioning/) |
+| Managed control plane expectations | Self-managed control-plane lifecycle | [Bare Metal Provisioning](/on-premises/provisioning/) |
 | Single-cluster administration | Multi-cluster recovery and placement patterns | [Multi-Cluster Patterns](/on-premises/multi-cluster/) |
 | Application troubleshooting | Infrastructure troubleshooting below Kubernetes | [Linux Deep Dive](/linux/) |
 | Cloud cost awareness | Capital expense, depreciation, spares, and utilization | [Planning & Economics](/on-premises/planning/) |
@@ -44,7 +44,7 @@ This bridge is for learners who can operate Kubernetes in managed-cloud or certi
 2. Read [Planning & Economics](/on-premises/planning/).
    Why this step: bare-metal clusters are capacity plans and operating commitments before they are Kubernetes clusters.
 
-3. Work through [Bare Metal Provisioning](/on-premises/bare-metal-provisioning/).
+3. Work through [Bare Metal Provisioning](/on-premises/provisioning/).
    Why this step: repeatable node installation is the difference between a recoverable fleet and a pile of special-case servers.
 
 4. Study [On-Premises Networking](/on-premises/networking/).

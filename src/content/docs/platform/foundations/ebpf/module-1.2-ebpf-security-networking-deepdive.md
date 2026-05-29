@@ -578,7 +578,7 @@ Mark the lab complete when all of the following are true:
 
 ## Next Module
 
-Continue to toolkit operations: [Cilium 5.1](/platform/toolkits/infrastructure-networking/networking/module-5.1-cilium/) for Hubble-first debugging and policy authoring, [Tetragon 4.5](/platform/toolkits/security-quality/security-tools/module-4.5-tetragon/) for TracingPolicy catalogs, [Advanced Cilium](/platform/k8s/cca/module-1.1-advanced-cilium/) for certification-depth topics, and [Hubble](/platform/toolkits/observability-intelligence/observability/module-1.7-hubble/) for flow observability. Revisit [eBPF Fundamentals](module-1.1-ebpf-fundamentals/) when you need verifier, CO-RE, or map-pressure vocabulary that applies to any BPF workload, not only Cilium and Tetragon.
+Continue to toolkit operations: [Cilium 5.1](/platform/toolkits/infrastructure-networking/networking/module-5.1-cilium/) for Hubble-first debugging and policy authoring, [Tetragon 4.5](/platform/toolkits/security-quality/security-tools/module-4.5-tetragon/) for TracingPolicy catalogs, [Advanced Cilium](/k8s/cca/module-1.1-advanced-cilium/) for certification-depth topics, and [Hubble](/platform/toolkits/observability-intelligence/observability/module-1.7-hubble/) for flow observability. Revisit [eBPF Fundamentals](module-1.1-ebpf-fundamentals/) when you need verifier, CO-RE, or map-pressure vocabulary that applies to any BPF workload, not only Cilium and Tetragon.
 
 ---
 

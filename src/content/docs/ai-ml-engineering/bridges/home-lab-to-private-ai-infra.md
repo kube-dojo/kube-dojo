@@ -26,7 +26,7 @@ This bridge is for learners who run AI workloads on a home workstation, gaming G
 | What you have | What you need | Where to study it |
 |---|---|---|
 | Single-user GPU experimentation | Capacity planning, procurement, and economics | [Planning & Economics](/on-premises/planning/) |
-| Manual workstation setup | Repeatable bare-metal provisioning | [Bare Metal Provisioning](/on-premises/bare-metal-provisioning/) |
+| Manual workstation setup | Repeatable bare-metal provisioning | [Bare Metal Provisioning](/on-premises/provisioning/) |
 | Local model serving | Shared AI infrastructure design | [On-Premises AI/ML Infrastructure](/on-premises/ai-ml-infrastructure/) |
 | Consumer GPU familiarity | Datacenter GPU partitioning and scheduling | [AI Infrastructure](/platform/disciplines/data-ai/ai-infrastructure/) |
 | Local disk use | Shared storage for training and inference | [On-Premises Storage](/on-premises/storage/) |
@@ -41,7 +41,7 @@ This bridge is for learners who run AI workloads on a home workstation, gaming G
 1. Start with [Planning & Economics](/on-premises/planning/).
    Why this step: private AI infrastructure begins with capital planning, utilization targets, power, cooling, rack density, spares, and lifecycle cost.
 
-2. Move to [Bare Metal Provisioning](/on-premises/bare-metal-provisioning/).
+2. Move to [Bare Metal Provisioning](/on-premises/provisioning/).
    Why this step: enterprise GPU fleets need repeatable installation, firmware control, inventory, and recovery workflows.
 
 3. Study [On-Premises Networking](/on-premises/networking/).

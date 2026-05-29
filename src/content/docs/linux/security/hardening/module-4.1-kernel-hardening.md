@@ -767,7 +767,7 @@ A good note states whether the host is a normal server or Kubernetes node, names
 
 ## Next Module
 
-Next up: [Module 4.2: AppArmor Profiles](/linux/security/hardening/module-4.2-apparmor-profiles/) shows how mandatory access control constrains what applications can do after the kernel and node baseline are in place.
+Next up: [Module 4.2: AppArmor Profiles](/linux/security/hardening/module-4.2-apparmor/) shows how mandatory access control constrains what applications can do after the kernel and node baseline are in place.
 
 ## Sources
 
