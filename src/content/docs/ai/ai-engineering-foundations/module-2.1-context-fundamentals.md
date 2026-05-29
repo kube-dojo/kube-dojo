@@ -20,7 +20,7 @@ By the end of this module, you will be able to reason about context as an engine
 
 - **Distinguish** context engineering from prompt engineering and from RAG by naming the unit of optimization for each discipline.
 - **Diagnose** why an agent that worked in one session fails in a fresh session by identifying the missing context inputs.
-- **Design** a context layout that improves prefix-cache hit rate while staying under the effective attention budget.
+- **Design** a context layout that improves cached-token share while staying under the effective attention budget.
 - **Evaluate** the trade-offs of high-context and low-context agent runs across cost, latency, risk, and reviewability.
 - **Compare** session-level context with repo-level context and route information to the surface that will remain authoritative.
 
@@ -122,7 +122,7 @@ This model prevents two common mistakes. The first mistake is treating the conte
 
 Vendors advertise nominal token limits. Engineers operate within effective attention budgets. The nominal limit answers: "How much input can the request accept before truncation or failure?" The effective attention budget answers: "How much of this input can the model use reliably for this task?" Those are different numbers. A model may accept a huge input while still over-weighting the beginning, the end, recent tool outputs, repeated phrasing, or highly salient instructions.
 
-Long-context research, including Google DeepMind's Infini-attention paper, "Leave No Context Behind: Efficient Infinite Context Transformers with Infini-attention" (arXiv:2404.07143), exists because scaling useful attention across very long inputs is a hard systems problem. The practical lesson is not "never use long context." The lesson is "test where performance degrades for your task shape." Long windows are extremely useful for codebase reading, multi-document review, and migration planning. They are less useful when the agent must notice one small acceptance criterion hidden in a noisy transcript.
+Long-context research shows that fitting tokens and using them reliably are different problems (for example, Liu et al., arXiv:2307.03172). Architectures such as Google DeepMind's Infini-attention, "Leave No Context Behind: Efficient Infinite Context Transformers with Infini-attention" (arXiv:2404.07143), address scaling attention itself. The practical lesson is not "never use long context." The lesson is "test where performance degrades for your task shape." Long windows are extremely useful for codebase reading, multi-document review, and migration planning. They are less useful when the agent must notice one small acceptance criterion hidden in a noisy transcript.
 
 The effective budget is especially important when the prompt mixes different kinds of information. Provider documentation can tell you the nominal window size, but your workflow has its own attention profile: a code review with one critical security constraint behaves differently from a broad architecture survey, even if both fit inside the same token limit. A useful benchmark asks the agent to perform the exact decision you care about, places the controlling fact in different prompt regions, and records whether the model still acts on that fact when logs, file excerpts, and old discussion are present.
 
@@ -213,7 +213,7 @@ The phrase "by one reason" is important because uncertainty alone is too vague t
 
 ### Position Bias In Practice
 
-The "lost in the middle" problem is not only an academic curiosity. In agent sessions, it shows up as practical forgetting. An acceptance criterion placed in the middle of a long transcript may be ignored while the model follows the newest command output. A repository rule loaded after several long logs may be treated as less central than the logs.
+The "lost in the middle" problem (Liu et al., arXiv:2307.03172) is not only an academic curiosity. In agent sessions, it shows up as practical forgetting. An acceptance criterion placed in the middle of a long transcript may be ignored while the model follows the newest command output. A repository rule loaded after several long logs may be treated as less central than the logs.
 
 A security note buried in a retrieved document may lose to a confident but generic prior. The repair is not to shout the rule louder in every sentence. The repair is to design a context layout. Put durable rules early. Put the current task and success criteria late. Keep the middle for compressed evidence that directly supports the next decision. When a middle item becomes decision-critical, promote it into the task frame or stable prefix before the next turn.
 
@@ -286,6 +286,8 @@ Context layout is not only about quality. It is also about cost and latency. Pro
 
 The exact implementation differs by provider. Anthropic exposes automatic caching and explicit cache breakpoints such as `cache_control`. OpenAI describes automatic prompt caching for eligible long prompts, with usage fields such as `cached_tokens` and options such as `prompt_cache_key` and retention policy. The engineering principle is provider-neutral: maximize the stable prefix without hiding current task data.
 
+Gim et al. (arXiv:2311.04934) are also cited for framing the economics of stable-prefix reuse in repeated inference runs.
+
 This is where quality and economics point in the same direction. The stable prefix is usually where durable policy, output contracts, tool schemas, and compact repository maps belong, so placing it first helps both attention and cache reuse. The suffix is where current evidence belongs, so keeping it late protects recency without destroying the cached prefix. A context layout that starts with a timestamp, issue title, or raw command output pays more and often teaches the model to focus on the noisiest part of the run.
 
 ### Cache-Friendly Context Layout
@@ -325,7 +327,7 @@ sequenceDiagram
     App->>App: Log cached tokens and latency
 ```
 
-The important metric is not "did caching exist?" The important metric is cache hit rate for the expensive part of the prompt. You can observe that with provider usage fields and local timing, then compare those metrics with output quality so a cache improvement does not hide a worse review result.
+The important metric is not "did caching exist?" The important metric is cached-token share for the expensive part of the prompt. You can observe that with provider usage fields and local timing, then compare those metrics with output quality so a cache improvement does not hide a worse review result.
 
 ### Worked Example: Reordering For Cache
 
@@ -379,12 +381,12 @@ def summarize(runs: list[dict]) -> dict:
     cached_tokens = sum(run["cached_tokens"] for run in runs)
     latency_ms = sum(run["latency_ms"] for run in runs)
     count = len(runs)
-    cache_hit_rate = cached_tokens / prompt_tokens if prompt_tokens else 0
+    cached_token_share = cached_tokens / prompt_tokens if prompt_tokens else 0
     return {
         "runs": count,
         "prompt_tokens": prompt_tokens,
         "cached_tokens": cached_tokens,
-        "cache_hit_rate": round(cache_hit_rate, 3),
+        "cached_token_share": round(cached_token_share, 3),
         "avg_latency_ms": round(latency_ms / count, 1) if count else 0,
     }
 
@@ -401,7 +403,11 @@ cat > agent-cache-runs.jsonl <<'EOF'
 {"prompt_tokens": 18100, "cached_tokens": 15600, "latency_ms": 4100}
 {"prompt_tokens": 17950, "cached_tokens": 15480, "latency_ms": 3980}
 EOF
+```
 
+Save the preceding Python block as `cache_summary.py`, then run:
+
+```bash
 .venv/bin/python cache_summary.py
 ```
 
@@ -412,7 +418,7 @@ The expected output shape should show both the total prompt volume and the cache
   "runs": 3,
   "prompt_tokens": 54050,
   "cached_tokens": 31080,
-  "cache_hit_rate": 0.575,
+  "cached_token_share": 0.575,
   "avg_latency_ms": 5760.0
 }
 ```
@@ -742,7 +748,7 @@ The layout should not optimize only for the model. It should also optimize for h
 | Ignoring tool-output bloat | stale logs become more salient than current facts | summarize resolved outputs and keep only fresh evidence |
 | Keeping durable policy only in chat | fresh sessions miss the rule | promote durable policy to AGENTS.md or structured docs |
 | Copying transient failures into permanent docs | future sessions inherit stale incident state | store transient evidence in session logs or traces |
-| Measuring token count but not outcome | a smaller window can still omit critical facts | measure cache hit rate, latency, errors, and task success together |
+| Measuring token count but not outcome | a smaller window can still omit critical facts | measure cached-token share, latency, errors, and task success together |
 
 ## Quiz
 
@@ -797,7 +803,7 @@ A security review agent performs better when given the full repository policy do
 <details>
 <summary>Answer</summary>
 
-Use staged context. Start with a compact stable security map and the current task frame. Expand into the full policy only when a decision requires a specific rule. If repeated reviews need the same policy excerpt, place that stable excerpt in the prefix and measure cache hit rate.
+Use staged context. Start with a compact stable security map and the current task frame. Expand into the full policy only when a decision requires a specific rule. If repeated reviews need the same policy excerpt, place that stable excerpt in the prefix and measure cached-token share.
 
 </details>
 
@@ -843,7 +849,7 @@ You will refactor an existing agent prompt and context bundle for cache use, att
 - [ ] Add latency measurement around the model call.
 - [ ] Add a list of included context sections to each trace record.
 - [ ] Run the workflow at least three times with similar stable context.
-- [ ] Record the baseline cache hit rate and average latency.
+- [ ] Record the baseline cached-token share and average latency.
 
 ### Part C: Refactor The Layout
 
@@ -857,7 +863,7 @@ You will refactor an existing agent prompt and context bundle for cache use, att
 ### Part D: Re-Measure
 
 - [ ] Run the same workflow again with a similar task shape.
-- [ ] Compare cache hit rate before and after the refactor.
+- [ ] Compare cached-token share before and after the refactor.
 - [ ] Compare latency before and after the refactor.
 - [ ] Inspect the output for missed rules or hallucinated files.
 - [ ] Ask a teammate to reconstruct the agent's working set from your trace.
