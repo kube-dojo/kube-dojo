@@ -7,11 +7,12 @@ sidebar:
 
 > **Complexity:** [COMPLEX]  
 > **Time:** 60-90 min  
-> **Prereqs:** [3.2-vnet](../module-3.2-vnet/), [3.5-dns](../module-3.5-dns/), [3.10-monitor](../module-3.10-monitor/)
+> **Prereqs:** [3.2-vnet](../module-3.2-vnet/), [3.5-dns](../module-3.5-dns/), [3.10-monitor](../module-3.10-monitor/)  
+> Start this module by naming who controls each control boundary, because governance is the operational shortcut that prevents ownership disputes during incidents.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to reason through the full request path, evaluate control boundaries, and make deliberate runbook and rollback choices when multiple teams share one ingress.
 
 - **Debug** Application Gateway failures by following a request through listener, WAF policy, routing rule, backend HTTP settings, probe, and backend pool.
 - **Design** a regional ingress pattern that uses the right boundary: Application Gateway, Front Door, AGIC, Application Gateway for Containers, or an in-cluster ingress controller.
@@ -21,13 +22,11 @@ The emphasis is operational. You are not only learning which Azure resource to c
 
 ## Why This Module Matters
 
-Application Gateway is often described as Azure's Layer 7 load balancer. That description is correct but incomplete. In production, it is a regional traffic appliance that combines HTTP routing, TLS termination, health probing, optional Web Application Firewall protection, autoscaling, and diagnostic logging.
+Application Gateway is often described as Azure's Layer 7 load balancer, and that phrase is true, but incomplete. In production, it is a regional traffic appliance that combines HTTP routing, TLS termination, health probing, optional Web Application Firewall protection, autoscaling, and diagnostic logging into one operational control plane. That combination lets platform teams enforce policy and routing before traffic reaches services, which is why it is often the first place teams look when traffic behavior is inconsistent.
 
-That combination is valuable because it lets platform teams protect and route traffic before it reaches workloads. It is also risky because one gateway can become the shared failure point for many applications.
+The [Application Gateway overview](https://learn.microsoft.com/en-us/azure/application-gateway/overview) is the right entry point, but operations teams need one deeper layer. You must know which component owns hostnames, where TLS terminates, which probe defines readiness, what WAF rule blocks a request, and which log lines prove the answer during an incident. Without that mental map, each team can still correctly explain their own layer and still fail to explain the overall behavior.
 
-The [Application Gateway overview](https://learn.microsoft.com/en-us/azure/application-gateway/overview) is the product entry point. Operators need the next layer of understanding: what owns the hostname, where TLS terminates, how health is measured, what WAF rule blocked a request, and which logs prove the answer.
-
-Consider a common incident. A checkout API returns `403` for some customers, `502` for others, and the application team reports that pods are ready. The gateway may be doing exactly what it was configured to do: WAF blocks a suspicious payload, the backend probe checks the wrong path, or backend TLS expects a different host name. Without a request-path model, each team debugs only its own layer.
+Consider a common incident. A checkout API returns `403` for some customers and `502` for others while pods remain ready at the application layer. In this case, the gateway may be following its configuration exactly, so your first question is not "is the app healthy?" but "which regional policy boundary handled this request?" A likely root cause is that WAF blocked a suspicious payload, the backend probe points at the wrong path, or backend TLS expects a different host name. Without a request-path model, teams still chase their own dashboards and miss shared ownership.
 
 Use this flow as your mental map:
 
@@ -43,21 +42,21 @@ client
   -> application
 ```
 
-The operator goal is not to memorize every property. The goal is to know which property answers which question during a design review or an incident.
+The operator goal is not to memorize every property value. The goal is to know which property answers which question during a design review or an incident, and in practice that means mapping request lifecycle, ownership, and observability together before failure appears.
 
 > **Pause and predict:** If a backend service is healthy at `https://api.internal.example.com/ready` but the gateway probe checks `/` with the wrong host header, what will the application team see, and what will the gateway see?
 
+The point is not to memorize that sequence mechanically, but to be able to trace it with enough precision that an on-call responder can name exactly where the mismatch started. If one person can answer "the probe uses the wrong host header in backend settings" in under 10 seconds, then the team has turned a fragmented incident into a bounded action, because the next steps are known: check backend address contract, confirm DNS path, then adjust listener or route behavior in a controlled change window.
+
 ## When App Gateway, Front Door, or AKS Ingress
 
-Start with the traffic boundary.
+Start with the traffic boundary. If one boundary cannot hold shared blast radius, then architecture decisions become reactive and expensive.
 
-Application Gateway is regional and VNet-integrated. It is a strong fit when a workload needs regional HTTP routing, private backend access, WAF, TLS termination, and Azure Monitor diagnostics inside an Azure network boundary. The [components documentation](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-components) is useful because each component is a separate operational lever.
+Application Gateway is regional and VNet-integrated, so it is a strong fit when a workload needs regional HTTP routing, private backend access, WAF, TLS termination, and Azure Monitor diagnostics inside an Azure network boundary. The [components documentation](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-components) is useful for this reason: each component is a separate operational lever you can discuss during design reviews.
 
-Azure Front Door is global. It is a strong fit when users are distributed across regions, edge latency matters, global failover is required, or the application needs an anycast-style public entry point before traffic reaches regional origins.
+Azure Front Door is global, so it becomes the right choice when users are distributed across regions, edge latency matters, global failover is required, or an anycast-style public entry point is needed before traffic reaches regional origins. AKS ingress is cluster-centered, and that model is effective when Kubernetes teams own routes as Kubernetes objects and already have an accepted ingress or Gateway API operating model.
 
-AKS ingress is cluster-centered. It is a strong fit when Kubernetes teams need to own routes as Kubernetes objects and the cluster already has an accepted ingress or Gateway API layer.
-
-Application Gateway for Containers sits between the last two ideas. It is Kubernetes-native, uses the ALB controller and Gateway API-style workflows, and is the forward-looking Application Gateway path for many container ingress designs.
+Application Gateway for Containers sits between those two ideas by being Kubernetes-native while preserving an Azure boundary model. It uses the ALB controller and Gateway API-style workflows, and for many teams it is the forward-looking path for container ingress designs where platform and application ownership must be split more clearly.
 
 Use this decision sequence:
 
@@ -66,7 +65,7 @@ Use this decision sequence:
 3. If the route lifecycle is owned by Kubernetes teams, evaluate AGIC or Application Gateway for Containers.
 4. If the service is internal to the cluster and does not need Azure-managed WAF, use an in-cluster ingress or Gateway API controller.
 
-Comparison tables should not imply one service wins everywhere:
+Use the comparison table as a boundary check, not as a product ranking:
 
 | Requirement | Better first candidate | Why |
 |---|---|---|
@@ -76,9 +75,9 @@ Comparison tables should not imply one service wins everywhere:
 | New AKS ingress platform with Gateway API ownership | Application Gateway for Containers | Separates platform-owned gateways from app-owned routes. |
 | Cluster-only internal service | AKS ingress or Gateway API controller | A managed regional edge may add cost without adding value. |
 
-Worked example: a public retail site has users in North America and Europe, but each regional API is private inside its VNet. A reasonable design is Front Door at the global edge and Application Gateway in each region. Front Door handles global entry and failover. Application Gateway handles regional WAF policy, private backend routing, and VNet integration.
+Worked example: a public retail site has users in North America and Europe, but each regional API is private inside its VNet. In practice, a strong design is Front Door at the global edge with Application Gateway in each region, because each layer handles a distinct responsibility: global entry/failover at Front Door and regional WAF, private backend routing, and VNet integration at Application Gateway. The same pattern would be overkill for an internal admin tool used by one team in one region, where a private Application Gateway can be enough, or internal AKS ingress can be enough if that tool never needs a managed regional edge.
 
-The same pattern would be overkill for an internal admin tool used by one operations team in one region. There, a private Application Gateway may be enough, or an internal AKS ingress may be enough if the tool never needs a shared regional edge.
+In review sessions, this example is often a useful anti-pattern detector. Teams that propose both services without defining ownership often report higher incident cost later, because "which team owns the global policy?" becomes a recurring meeting topic. A crisp ownership matrix reduces that cost before production: one team owns the Global Edge, one team owns regional policy, and one team is accountable for route lifecycle and rollback sequence.
 
 > **Stop and think:** Which team owns each boundary in your organization: public DNS, global edge, regional listener, WAF policy, Kubernetes route, certificate, and incident dashboard? If the answer is "everyone," the design needs clearer ownership.
 
@@ -98,11 +97,13 @@ A production-shaped deployment normally includes:
 - explicit backend probes;
 - diagnostic settings to Log Analytics.
 
-Do not share the Application Gateway subnet with other resources. Size the subnet for scale-out and future changes. Many teams reserve at least `/24` for production v2 gateways so capacity and migration work do not become emergency subnet surgery.
+Do not share the Application Gateway subnet with other resources, size the subnet for scale-out, and keep room for migration work. Many teams reserve at least `/24` for production v2 gateways, because capacity growth and subnet redesign are easier to plan than to execute during an outage.
+
+When planning these resources, treat each line in the list as a capacity surface. The subnet controls possible future autoscale, the WAF policy controls control-plane blast radius, and the diagnostics setting controls time-to-diagnosis. If any of these are undersized or ambiguous, the environment usually fails first under stress, not during a planned maintenance window.
 
 ### Terraform Example
 
-This snippet is intentionally compact. It shows the relationships an operator must review, not a full reusable module.
+This snippet is intentionally compact, because it shows the relationships an operator must review together, not a full reusable module that fits every estate.
 
 ```hcl
 resource "azurerm_user_assigned_identity" "appgw" {
@@ -227,13 +228,15 @@ resource "azurerm_application_gateway" "appgw" {
 }
 ```
 
-The design choice is to keep the WAF policy separate from the gateway. That lets security reviewers focus on WAF behavior while platform reviewers focus on listeners, routes, and backends.
+The design choice is to keep the WAF policy separate from the gateway so security reviewers can focus on WAF behavior while platform reviewers focus on listeners, routes, and backends. This separation also makes rollbacks cleaner because policy and topology have different owners and risk profiles. The probe uses `/ready`, not `/`, because a root path may redirect, render a marketing page, or depend on optional systems, whereas the readiness endpoint should consistently answer whether this backend should receive traffic now.
 
-The probe uses `/ready`, not `/`. A root path may redirect, render a marketing page, or depend on optional systems. A readiness endpoint should answer whether this backend should receive traffic now.
+A useful preflight for this configuration is to validate each relationship before applying resources: listener-hostname, routing-priority order, probe path, and backend TLS assumptions. If any one relationship is not explicitly documented, the change should not be merged because it adds non-determinism to operational ownership.
 
 ### Bicep Example
 
-The Bicep model is also nested. In production, split this into modules only when ownership becomes clearer.
+The Bicep model is also nested, and that structure is intentional because each nested resource carries lifecycle and ownership concerns. In production, split this into modules only when ownership boundaries are clear enough to avoid drift from dual ownership.
+
+The same idea applies when the team uses module composition in Terraform. Grouping too early can make review difficult because reviewers cannot quickly isolate what changed in one boundary, especially if WAF or certificate values are updated alongside routing priorities. When you keep the nested relationships coherent, ownership and audit traceability become easier than by trying to micro-separate every block.
 
 ```bicep
 param location string = resourceGroup().location
@@ -412,9 +415,7 @@ Before merging a provisioning change, review subnet size, SKU, WAF policy attach
 
 ## WAF Policy Design
 
-Application Gateway WAF is a policy system, not a checkbox. The [WAF overview](https://learn.microsoft.com/en-us/azure/web-application-firewall/ag/ag-overview) explains the managed-rule model; operators need to understand how policy changes are tested, scoped, and rolled back.
-
-Start with managed OWASP rules. Use Detection mode while learning a new application's request profile. Move to Prevention mode when the false-positive path is understood. Do not leave production in Detection mode indefinitely unless the risk is explicitly accepted.
+Application Gateway WAF is a policy system, not a checkbox. The [WAF overview](https://learn.microsoft.com/en-us/azure/web-application-firewall/ag/ag-overview) explains the managed-rule model, but operators need to understand how policy changes are tested, scoped, and rolled back because each change alters what traffic is allowed or denied at scale. Start with managed OWASP rules, use Detection mode while learning a new application's request profile, and move to Prevention once the false-positive behavior is understood. Do not leave production in Detection mode indefinitely unless the risk is explicitly accepted.
 
 A mature WAF workflow has four principles:
 
@@ -473,9 +474,11 @@ resource "azurerm_web_application_firewall_policy" "appgw" {
 
 Why this shape? The URI condition identifies the sensitive surface. The source-IP condition limits exposure to operations networks. The application still owns identity and authorization.
 
+This structure is a defensive layer, not an access model, so it narrows only specific risk before requests reach the backend without replacing service-level authentication.
+
 ### Tuned Rule and Rate-Limit Example
 
-False positives should be narrowed, not bulldozed. Suppose a legacy search client sends a header named `X-Legacy-Search` that trips one SQL injection rule. A per-rule exclusion keeps the rest of the SQLi group active:
+False positives should be narrowed, not bulldozed. Suppose a legacy search client sends a header named `X-Legacy-Search` that trips one SQL injection rule. In that case, a per-rule exclusion keeps the rest of the SQLi group active and avoids weakening broader protection.
 
 ```bash
 az network application-gateway waf-policy managed-rule exclusion rule-set add \
@@ -512,7 +515,7 @@ az network application-gateway waf-policy custom-rule match-condition add \
   --value "/login"
 ```
 
-For geo-blocking, use `RemoteAddr` with `GeoMatch` and document the business owner. Country rules are easy to add and easy to forget.
+For geo-blocking, use `RemoteAddr` with `GeoMatch` and document the business owner. Country rules are easy to add and easy to forget, so include review cadence in the same change.
 
 ### False-Positive Triage Steps
 
@@ -530,15 +533,23 @@ The [WAF customization guidance](https://learn.microsoft.com/en-us/azure/web-app
 
 > **Pause and predict:** If a checkout payload trips a SQL injection rule because a product name contains suspicious punctuation, which is safer: disabling the SQLi rule group globally or excluding one selector for one path after log review?
 
+### WAF Policy Change Loop
+
+A clean policy change loop starts with evidence, not assumptions. Begin by validating what triggered the block in logs, identify the exact matching condition, and confirm whether the path is truly required business behavior. Next, move to scoped testing in a controlled scope; temporary Detection mode can be part of that loop, but only when the control owner has a rollback point and ownership notes in place.
+
+If the false-positive analysis identifies one service path, apply the narrowest change for that path and keep all broader scope changes in the queue for later. This is how teams prevent one-day fixes from becoming one-year exceptions. After change, validate with replay traffic and keep an explicit expiry note so that temporary behavior does not become permanent governance drift.
+
+The result you want from a policy change is threefold: reduced noise, unchanged protection level for unrelated flows, and clear evidence for the next review. If one of those is missing, revert and rework the approach before the next deployment window.
+
 ## Backend Pools: AKS Integration — AGIC vs AGfC
 
-AKS integration is a control-plane decision. You are choosing who expresses routing intent and who is allowed to mutate the edge.
+AKS integration is a control-plane decision, because you are choosing who expresses routing intent and who is allowed to mutate the edge. In this model, the key is not just "what is supported today," but "who owns drift and who can safely change it at 2 a.m."
 
-AGIC, the Application Gateway Ingress Controller, watches Kubernetes Ingress resources and programs an existing Application Gateway. The [AGIC overview](https://learn.microsoft.com/en-us/azure/application-gateway/ingress-controller-overview) remains important because many production clusters use it today.
+That perspective matters most during migration windows. If the team cannot answer who can change listener and route ownership during a release freeze, the best architecture decision is not the one with the most features; it is the one with the clearest ownership path.
 
-Application Gateway for Containers is the successor path for Kubernetes-first Application Gateway designs. The [Application Gateway for Containers overview](https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/overview) describes the newer model built around the ALB controller and Gateway API-style resources.
+AGIC, the Application Gateway Ingress Controller, watches Kubernetes Ingress resources and programs an existing Application Gateway. The [AGIC overview](https://learn.microsoft.com/en-us/azure/application-gateway/ingress-controller-overview) remains important because many production clusters use it today, and it documents the operational assumptions around controller-driven updates. Application Gateway for Containers is the successor path for Kubernetes-first Application Gateway designs; the [Application Gateway for Containers overview](https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/overview) describes the newer model built around the ALB controller and Gateway API-style resources.
 
-Backend pools are not only for AKS. Operators commonly mix backend types during migrations:
+Backend pools are not only for AKS. Operators commonly mix backend types during migrations, and that mix is usually where ownership assumptions get tested first because each backend class drives different readiness behavior and certificate expectations.
 
 | Backend pattern | Pool entry | Health probe concern | HTTPS-to-backend concern |
 |---|---|---|---|
@@ -561,6 +572,8 @@ Pick Application Gateway for Containers when:
 - app teams need route objects while platform teams own gateways;
 - faster Kubernetes route and backend updates are important;
 - you can invest in new runbooks and migration testing.
+
+Teams often use both models during migration, but only with explicit ownership boundaries and one migration runbook that names which object type each team owns in each phase.
 
 ### AGIC Ingress Example
 
@@ -593,7 +606,9 @@ spec:
                   number: 443
 ```
 
-The important parts are not the annotations themselves. The important contract is that Kubernetes now declares host, path, backend protocol, and probe behavior that will affect an Azure gateway.
+The important parts are not the annotations themselves. The important contract is that Kubernetes now declares host, path, backend protocol, and probe behavior that will affect an Azure gateway, so route ownership and gateway behavior are encoded in manifests rather than only portal operations.
+
+Because those declarations are in manifest form, ownership questions become deterministic. Reviewers can diff exactly what changed in one rollout and link an unexpected result to either one host routing rule, one probe target, or one TLS contract, instead of searching through portal history.
 
 ### AGfC Gateway API Example
 
@@ -640,33 +655,35 @@ spec:
           port: 8080
 ```
 
-This example separates ownership. The platform namespace owns the Gateway. The app namespace owns the HTTPRoute only if route policy allows it. That is easier to review than a shared Ingress object with many annotations.
+This example separates ownership. The platform namespace owns the Gateway, and the app namespace owns the HTTPRoute only if route policy allows it. That is easier to review than a shared Ingress object with many annotations because role boundaries are explicit.
 
 > **Stop and think:** In a shared cluster, what outage can happen if any namespace can claim any hostname on the shared gateway?
 
 ## TLS Termination + Key Vault Cert Sync
 
-Application Gateway can terminate TLS at the listener and then connect to backends over HTTP or HTTPS. For production, prefer HTTPS to the backend unless there is a documented reason not to.
+Application Gateway can terminate TLS at the listener and then connect to backends over HTTP or HTTPS; for production, prefer HTTPS to the backend unless there is a documented reason not to, because protocol symmetry is often a security assumption in audits. The [TLS overview](https://learn.microsoft.com/en-us/azure/application-gateway/ssl-overview) explains listener-side TLS, and the [backend HTTP settings documentation](https://learn.microsoft.com/en-us/azure/application-gateway/configuration-http-settings) explains backend protocol, host name, timeout, and probe behavior so you do not mix semantics across hops. Key Vault-backed certificates are the usual production pattern, and the [Key Vault certificate integration documentation](https://learn.microsoft.com/en-us/azure/application-gateway/key-vault-certs) covers the managed identity and secret-reference model.
 
-The [TLS overview](https://learn.microsoft.com/en-us/azure/application-gateway/ssl-overview) explains listener-side TLS. The [backend HTTP settings documentation](https://learn.microsoft.com/en-us/azure/application-gateway/configuration-http-settings) explains backend protocol, host name, timeout, and probe behavior.
+In practice, production TLS design is where many teams discover that staging success is not enough. A shared edge that serves one tenant correctly can still fail another tenant when trust chains or protocol expectations differ, which is why every route model should include explicit TLS and trust chain checks in the same runbook.
 
-Key Vault-backed certificates are the usual production pattern. The [Key Vault certificate integration documentation](https://learn.microsoft.com/en-us/azure/application-gateway/key-vault-certs) covers the managed identity and secret-reference model.
+### TLS Ownership and Failure Interpretation
+
+Failure interpretation is often split into separate tickets when teams do not agree on which certificate value was expected by which hop. Keep one ownership matrix that maps listener certificate, backend certificate, and probe expected identity per route. If one of those three changes and the others do not, you can identify the likely blast radius before opening an incident in production.
+
+For teams using automation, this matrix can be validated with simple scripted checks: read the listener configuration, read the backend TLS settings, then compare the cert subject expectations against recent rollout notes. This avoids waiting for user symptoms to reveal a drift that should have been caught by design review.
 
 ### Rotation Gotchas
 
-Certificate rotation has three timelines: issuance, Key Vault version creation, and Application Gateway sync. Those are not the same event.
-
-Use versionless secret IDs when automatic rotation is intended. Use versioned IDs only when pinning a specific certificate version is deliberate.
+Certificate rotation has three timelines: issuance, Key Vault version creation, and Application Gateway sync. Those are not the same event, so a renewal event in one system does not mean the gateway is instantly updated. Use versionless secret IDs when automatic rotation is intended, and use versioned IDs only when pinning a specific certificate version is deliberate.
 
 Monitor the certificate served by the listener, not just the certificate stored in Key Vault. A renewed Key Vault object does not help users if the gateway cannot read it or has not picked it up.
 
 ### Chain Order
 
-Certificate chain problems are painful because some clients cache intermediates and others do not. Test with a clean client and verify the leaf certificate, intermediates, hostname, expiry, and trust chain.
+Certificate chain problems are painful because some clients cache intermediates and others do not. Test with a clean client and verify the leaf certificate, intermediates, hostname, expiry, and trust chain because partial trust is a common source of intermittent failures.
 
 ### Backend mTLS
 
-Backend TLS validates the backend to the gateway. Backend mTLS also validates the gateway to the backend. Use mTLS when the backend requires client-certificate authentication or compliance demands it, but only if certificate lifecycle automation is mature enough to operate it.
+Backend TLS validates the backend to the gateway. Backend mTLS also validates the gateway to the backend, which creates mutual trust but also adds certificate lifecycle burden. Use mTLS when the backend requires client-certificate authentication or compliance demands it, but only if automation is mature enough to handle that extra complexity.
 
 TLS troubleshooting sequence:
 
@@ -680,11 +697,9 @@ TLS troubleshooting sequence:
 
 ## Autoscaling + Cost
 
-Application Gateway v2 supports autoscaling. The [autoscaling documentation](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-autoscaling-zone-redundant) is the starting point for how minimum and maximum capacity behave.
+Application Gateway v2 supports autoscaling, and the [autoscaling documentation](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-autoscaling-zone-redundant) is the starting point for how minimum and maximum capacity behave. Autoscaling does not remove capacity planning; you still choose minimum capacity for baseline reliability and maximum capacity for cost and blast-radius control.
 
-Autoscaling does not remove capacity planning. You still choose minimum capacity for baseline reliability and maximum capacity for cost and blast-radius control.
-
-Capacity units represent consumption across compute, persistent connections, and throughput. The [pricing documentation](https://learn.microsoft.com/en-us/azure/application-gateway/understanding-pricing) defines one capacity unit as the highest pressure among one compute unit, 2,500 persistent connections, or 2.22 Mbps throughput. A traffic pattern with many long-lived connections can stress the gateway differently than a burst of small requests.
+Capacity units represent consumption across compute, persistent connections, and throughput. The [pricing documentation](https://learn.microsoft.com/en-us/azure/application-gateway/understanding-pricing) defines one capacity unit as the highest pressure among one compute unit, 2,500 persistent connections, or 2.22 Mbps throughput, which is why one metric can look healthy while another saturates behavior. A traffic pattern with many long-lived connections can stress the gateway differently than a burst of small requests.
 
 ```text
 capacity_units = max(
@@ -694,7 +709,7 @@ capacity_units = max(
 )
 ```
 
-Worked example: if the gateway reports 18 compute units, 50,000 current connections, and 16 Mbps throughput, the estimate is `max(18, 20, 7.2)`, so current capacity pressure is about 20 capacity units. If autoscale minimum is two instances, you are already reserving roughly that baseline because each instance maps to 10 reserved capacity units.
+Worked example: if the gateway reports 18 compute units, 50,000 current connections, and 16 Mbps throughput, the estimate is `max(18, 20, 7.2)`, so current capacity pressure is about 20 capacity units. If autoscale minimum is two instances, you are already reserving roughly that baseline because each instance maps to 10 reserved capacity units, and scale-up thresholds should reflect workload volatility around that baseline.
 
 Autoscaling rules of thumb:
 
@@ -716,11 +731,19 @@ Cost-lens checklist:
 
 Cost decisions should be tied to reliability decisions. A shared gateway may be cheaper, but one noisy tenant can affect many services. Dedicated gateways cost more, but they can make ownership and blast radius clearer.
 
+That does not mean cost is ignored for architecture reasons, and it does not mean reliability always wins automatically. It means cost and reliability should be compared in the same table, with explicit owners for when each choice is expected to break and who will absorb that break.
+
+### Capacity Incident Ladder
+
+Think about autoscaling in three tiers: normal, warning, and emergency. In normal, keep minimum capacity high enough for healthy baseline traffic and document why that floor was chosen. In warning, watch sustained pressure against max capacity and route ownership at the same time, because pressure often points to one or two teams owning incompatible release assumptions. In emergency, isolate problematic workloads or temporarily adjust routing before scaling becomes a masking action for broader contract mismatch.
+
+This ladder makes two things explicit: first, that scaling decisions are always coupled to ownership, and second, that cost limits should be changed only after proving whether the issue is capacity, route policy, or backend readiness. If issue classification is absent, autoscaling becomes a temporary patch and the same alert will return with a bigger threshold.
+
 ## Monitoring + Diagnostics
 
-Application Gateway without logs is a black box. Enable diagnostics before sending production traffic.
+Application Gateway without logs is a black box, so enable diagnostics before sending production traffic; otherwise incident response begins with guesswork. Send access logs and WAF logs to Log Analytics, and route metrics to Azure Monitor alerts. For operational clarity, keep one set of dashboards that maps each metric to an expected on-call owner.
 
-Send access logs and WAF logs to Log Analytics. Route metrics to Azure Monitor alerts. Use the [monitoring documentation](https://learn.microsoft.com/en-us/azure/application-gateway/monitor-application-gateway) and [diagnostics documentation](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-diagnostics) to confirm categories for your SKU and collection mode.
+Use the [monitoring documentation](https://learn.microsoft.com/en-us/azure/application-gateway/monitor-application-gateway) and [diagnostics documentation](https://learn.microsoft.com/en-us/azure/application-gateway/application-gateway-diagnostics) to confirm the right categories for your SKU and collection mode, because different SKUs and WAF settings emit different log shapes.
 
 A useful dashboard answers these questions:
 
@@ -743,7 +766,7 @@ AzureDiagnostics
 | order by TimeGenerated desc
 ```
 
-This query starts from user-visible failure and groups by backend pool. If one pool dominates, the incident is probably not gateway-wide.
+This query starts from user-visible failure and groups by backend pool. If one pool dominates, the incident is probably not gateway-wide. Use that signal with 5xx totals to distinguish localized backend contract issues from shared gateway failures before changing autoscaling or WAF defaults.
 
 ### KQL: WAF Blocks by Rule
 
@@ -757,7 +780,7 @@ AzureDiagnostics
 | order by Blocks desc
 ```
 
-This query turns "the WAF broke checkout" into evidence: rule ID, URI, client IP, count, and time window.
+This query turns "the WAF broke checkout" into evidence: rule ID, URI, client IP, count, and time window. If one rule ID clusters across one URI and one source range, you are often dealing with one application behavior shift. If one source generates many URIs, you may have automation, attack traffic, or policy scope tuning needs.
 
 ### KQL: Latency and Error Trend
 
@@ -774,7 +797,39 @@ AzureDiagnostics
 | order by TimeGenerated desc
 ```
 
+Use this query with the WAF and 5xx output so your team can answer whether incidents are transport, application, or policy in origin. A spike in 5xx with flat WAF blocks often points toward probe or backend capacity. A spike in WAF blocks with steady 5xx may be policy tuning before deployment.
+
 Metric alerts should cover unhealthy host count, 5xx spikes, WAF blocked request spikes, capacity approaching maximum, current connections, response latency, and certificate expiration inventory.
+
+When those metrics are aligned with ownership, you get a practical incident response loop: detect, classify, execute, and verify with one owner per step. That avoids duplicate actions by multiple teams that otherwise respond to the same dashboard.
+
+Build a post-incident memo template around those same metrics, because templates reduce memory dependence during late-night incidents. The template should include: observed behavior, likely control ownership, first mitigation attempt, final root cause hypothesis, and one preventive action. Teams that adopt this pattern often reduce mean time to clarity and improve audit readiness because each incident leaves behind reusable operating knowledge.
+
+Teams that keep that evidence package current typically add one line per change request: what ownership boundary changed, what was validated, what failed the first time, and who will close the loop on rollback. This practice avoids discovering ownership questions after an alert fires, and it also reduces the number of ambiguous change approvals because every reviewer has the same expected signal before pressing merge. It turns the runbook into a control-plane artifact rather than a historical postmortem folder, which is why operators can keep speed while still improving reliability.
+
+## Reliability Operating Routine for Shared Ingress
+
+The same artifact that protects architecture clarity during planning also protects it during incidents: a boundary-aware runbook that is updated whenever the gateway topology changes. In practice, that runbook starts with three claims that should already be accepted in the design review. First, each request has a single traceable path from DNS to backend. Second, each control boundary has one accountable owner for change, validation, and rollback. Third, any operational exception should include a bounded time window and an owner responsible for removal.
+
+Treat the runbook as a living contract that sits beside your infrastructure code. A common anti-pattern is to treat YAML and Terraform as the source of truth but leave operational ownership in meeting notes that are never revisited. When the runbook is explicit, routing-policy changes, TLS certificate lifecycle actions, and WAF exception handling become predictable, because every change includes "who changes this", "how they validate it", and "what happens if it misbehaves." This does not replace architecture checks; it removes ambiguity from them.
+
+A practical pre-change review for this module should include this sequence:
+
+1. Confirm the request boundary for the change (global edge, regional gateway, or cluster routing).
+2. Verify readiness probes and readiness semantics against the target workload, including host and path contract.
+3. Confirm WAF mode, exclusion scope, and the expected owner for any temporary Detection or exception.
+4. Validate certificate chain assumptions and whether the source-of-truth for certificate updates is shared.
+5. Validate rollback order: what can be reverted first, what requires downstream coordination, and which alert must clear before final sign-off.
+
+For each step, keep documentation concrete by writing a one-line "expected evidence" statement in the change description. That evidence can be a log ID, a query output assertion, a dashboard condition, or a manual command output, but it should be testable without guessing. If a reviewer cannot identify that evidence before approval, the change is not ready. This simple rule often catches the difference between a theoretical design and an operation-ready one.
+
+Ownership should be explicit before any production rollout for shared boundaries. For an AGIC workflow, that means someone owns the gateway-controller reconciliation behavior, someone owns Kubernetes route intent, and someone owns the WAF policy governance process. For an Application Gateway for Containers rollout, that means someone owns the Gateway object lifecycle and someone owns the route object policy envelope. For a single-namespace team, that can be one person in some environments, but it is still the same accountability model: one name for each control plane action and one name for rollback.
+
+Do not skip staged observability validation because logging is what keeps the incident loop fast. The first release can test only log shape and alert state without business traffic if needed. The second release can validate policy response under controlled synthetic traffic. The third release can complete full synthetic path replay end-to-end. This staging sequence is slower than a direct full rollout, but it reduces the number of unknown unknowns that appear at 2 a.m., because the team already knows whether request mapping, probe health, and WAF policy behavior stay stable under controlled pressure.
+
+When you hit a migration, keep capacity and ownership logic in one sequence instead of spreading it across tools and meetings. In a v1 to v2 migration, for example, the first checkpoint is topology equivalence, the second is WAF posture equivalence, and the third is observability equivalence. In all three checkpoints, ask a single team owner to sign that the equivalent behavior is proven; otherwise your team may have technically completed migration tasks while still changing semantics by accident. This model also works for certificate rotation or policy changes because the same three checkpoints still apply: topology, policy, and observability.
+
+If a design exercise shows pressure to add shared boundaries quickly, use the runbook to prevent accidental broadening. Ask whether each new requirement should change boundary, ownership, or both. If both change, require an explicit migration plan with rollback conditions and at least one rehearsal. If only one changes, keep the other stable. That rule sounds procedural, but it is the same guardrail teams use to stop healthy technical debt from becoming a recurring incident source.
 
 ## Production Gotchas
 
@@ -784,7 +839,7 @@ Moving from a legacy v1 gateway to v2 is not a casual SKU toggle. Treat it as a 
 
 ### Gotcha 2: WAF Blocks Valid Traffic
 
-During a launch, a form field triggers a managed WAF rule. The fastest action is to disable a rule group globally. The operator action is slower but safer: find the rule ID, confirm the match variable and selector, reproduce safely, scope the exclusion to the affected path or policy, and document the reason.
+During a launch, a form field can trigger a managed WAF rule. The fastest action is to disable a rule group globally, but that often creates a hidden blast radius. The safer operator action is slower and more deliberate: find the rule ID, confirm the match variable and selector, reproduce safely, scope the exclusion to the affected path or policy, and document the reason before returning the control posture to a bounded state.
 
 ### Gotcha 3: Certificate Sync Timing
 
@@ -792,7 +847,9 @@ A certificate is renewed in Key Vault, but the gateway still serves the old cert
 
 ### Gotcha 4: Probe Contract Drift
 
-An application changes readiness from `/ready` to `/healthz`, or makes readiness depend on a database that is not required for degraded service. Application Gateway marks backends unhealthy because the probe contract changed. Treat probes as release contracts, not incidental URLs.
+An application can change readiness from `/ready` to `/healthz`, or make readiness depend on a database that is not required for degraded service. When that happens, Application Gateway marks backends unhealthy because the probe contract changed, even if the app appears usable for partial scenarios. Treat probes as release contracts, not incidental URLs, because teams that skip this contract review repeatedly generate false incidents after releases.
+
+A practical way to prevent contract drift is to include probe path and readiness expectations in every rollout checklist. The checklist should include expected response body behavior, expected host name, and whether the app can return ready during partial degradation. If this contract is missing, release teams should pause and complete it before enabling any route promotion.
 
 ## Decision Framework
 
@@ -906,11 +963,11 @@ D. WAF CRS version
 
 ## Hands-On Exercise
 
-This exercise is local-first. You can complete the Kubernetes reasoning with `kind` or `minikube`. The Azure CLI section is optional and requires an Azure subscription with approval to create billable resources.
+This exercise is local-first, and that means you can complete the Kubernetes reasoning with `kind` or `minikube` before deciding whether to run Azure commands. The Azure CLI section is optional and requires an Azure subscription plus approval to create billable resources, so you can still finish the design practice in a developer workstation without touching cloud resources.
 
 ### Setup
 
-Create a local cluster with `kind`:
+Create a local cluster with `kind` so you can validate ownership, route semantics, and manifest-level rollout behavior before adding any Azure-managed edge behavior:
 
 ```bash
 kind create cluster --name appgw-operator
@@ -931,7 +988,7 @@ kubectl -n apps expose deployment orders --port=8080 --target-port=80
 kubectl -n apps get deploy,svc
 ```
 
-This does not create Azure resources. It gives you local Kubernetes objects for route-design practice.
+This does not create Azure resources; it gives you local Kubernetes objects for route-design practice and lowers the cost of validating request flow and ownership boundaries.
 
 ### Tasks
 
@@ -940,6 +997,24 @@ This does not create Azure resources. It gives you local Kubernetes objects for 
 3. Write a Gateway API HTTPRoute for `orders.apps.contoso.example` that attaches to a platform-owned Gateway named `shared-edge`.
 4. Draft a WAF false-positive runbook using the KQL queries from this module.
 5. Decide whether AGIC or Application Gateway for Containers is a better starting point for a new multi-team AKS ingress platform, and explain why.
+
+Expected artifacts from this exercise:
+
+1. A request map with explicit ownership labels for each hop.
+2. One Ingress manifest that proves host and probe intent.
+3. One HTTPRoute manifest that proves namespace ownership and route policy boundaries.
+4. A WAF runbook with one log query per decision step.
+5. A migration recommendation that names who updates policy, who updates routing, and who approves rollback.
+
+### Why this exercise is staged this way
+
+The sequence is deliberate, not accidental. By starting with local path mapping, you force route semantics to come first, then add gateway boundary mechanics, and only at the end test managed platform details. This prevents teams from learning the surface area of Azure commands before they agree on what the request path should actually mean.
+
+The second stage is WAF reasoning, because operators need to connect false-positive decisions to evidence before they rely on policy knobs. The third stage is governance modeling, where you connect manifest intent to migration order, approval owner, and rollback owner. That sequence avoids the common failure mode where teams can deploy a manifest but still disagree on who owns an incident.
+
+If you keep this order, local verification produces stronger value: route changes are testable in minutes, WAF policy behavior is explicit by design, and only then does Azure execution become a controlled deployment of an agreed ownership contract. This is the same operational pattern teams use for reliability-heavy architectures, because ownership clarity is only cheap while you still have a clear blast radius.
+
+If you are using this exercise in a team brown-bag, reviewers should evaluate it by tracing one synthetic request from DNS to backend and confirming that every hop has a defined owner and a defined rollback condition.
 
 ### Azure Subscription Note
 
@@ -974,11 +1049,16 @@ az group delete \
 
 ### Success Criteria
 
-- Your diagram separates global, regional, and Kubernetes boundaries.
-- Your Ingress manifest makes host, service, and probe intent clear.
-- Your HTTPRoute answer explains who owns the parent Gateway.
-- Your WAF runbook requires logs before exclusions.
-- Your AGIC vs AGfC answer explains ownership and rollout behavior, not just product names.
+Your success is complete when the design artifacts clearly show ownership and control decisions, not just command output:
+
+- [ ] Your diagram separates global, regional, and Kubernetes boundaries.
+- [ ] Your Ingress manifest makes host, service, and probe intent clear.
+- [ ] Your HTTPRoute answer explains who owns the parent Gateway.
+- [ ] Your WAF runbook requires logs before exclusions.
+- [ ] Your AGIC vs AGfC answer explains ownership and rollout behavior, not just product names.
+- [ ] You can explain what changed in one request path end-to-end without opening ticket systems.
+
+If you finish without Azure credentials, submit the path diagram and manifest diffs, then validate that each checklist line has a reviewer owner assigned before your next merge cycle.
 
 ## Sources
 
@@ -997,4 +1077,4 @@ az group delete \
 
 ## Next Module
 
-Module 3.14 is not present in this checkout. Continue with the [Enterprise Hybrid Cloud track](../../enterprise-hybrid/).
+Continue with [Module 3.14 — App Service](./module-3.14-app-service.md) for the next track checkpoint, or move to the [Enterprise Hybrid Cloud track](../../enterprise-hybrid/) if your context requires a broader hybrid architecture view.
