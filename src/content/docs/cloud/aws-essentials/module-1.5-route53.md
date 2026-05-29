@@ -11,7 +11,7 @@ sidebar:
 
 ## Prerequisites
 
-Before starting this module, you should have completed:
+Before starting this module, you should have completed the prerequisite networking material and ensured your environment is set for DNS experimentation. The prerequisite check matters because unresolved setup gaps cause teams to focus on tooling errors while trying to learn traffic policy behavior, so please confirm you are fully ready before continuing.
 - [Module 1.2: VPC & Networking Foundations](../module-1.2-vpc/)
 - Basic understanding of domain names and how browsers resolve URLs
 - AWS account with at least one registered domain (or willingness to register one; domain pricing varies by TLD)
@@ -19,7 +19,7 @@ Before starting this module, you should have completed:
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to configure Route 53 with confidence: moving from hosted zones and record sets to routing policies and health-checked failover, while designing DNS behavior that supports reliable public and private resolution in production.
 
 - **Configure Route 53 hosted zones with multiple routing policies (weighted, latency, failover, geolocation)**
 - **Implement DNS-based health checks and failover routing to achieve automated disaster recovery**
@@ -42,7 +42,7 @@ AWS Route 53 is Amazon's managed DNS service, [named after the port that DNS tra
 
 Before we touch Route 53, let us make sure the foundation is solid. DNS is often described as "the phone book of the internet," but that analogy undersells it. A better analogy: DNS is the postal system of the internet -- it translates human-friendly addresses (like `api.yourapp.com`) into machine-routable IP addresses (like `54.231.128.12`).
 
-Here is what happens when a user types your domain into their browser:
+Here is what happens when a user types your domain into their browser: follow this chain step by step, because it shows exactly where caching, delegation, and authority come together to decide how quickly a query reaches your service endpoint.
 
 ```mermaid
 flowchart TD
@@ -156,7 +156,7 @@ flowchart TD
 
 ### Hosted Zone Costs
 
-Route 53 pricing is straightforward but can surprise you at scale:
+Route 53 pricing is straightforward but can surprise you at scale: hosted zones have a predictable base cost, while features and query volume behavior can shift monthly spending as traffic patterns move. Before you optimize anything else, read the cost line items in context of your expected workload.
 
 | Component | Cost |
 |-----------|------|
@@ -348,7 +348,7 @@ aws route53 change-resource-record-sets \
 
 ### Weighted Routing
 
-Distribute traffic across resources in proportions you control. Ideal for blue-green deployments, A/B testing, and gradual migrations.
+Distribute traffic across resources in proportions you control. Ideal for blue-green deployments, A/B testing, and gradual migrations, because you can move capacity by percentage and evaluate risk before making irreversible changes.
 
 ```bash
 # 90% of traffic to production, 10% to canary
@@ -428,7 +428,7 @@ Users in New York get routed to `us-east-1`. Users in London get `eu-west-1`. Us
 
 ### Failover Routing
 
-Active-passive failover. Route 53 returns the primary record unless its health check fails, then switches to secondary.
+Active-passive failover. Route 53 returns the primary record unless its health check fails, then switches to secondary. This is the deterministic behavior you want for regional DR tests because it preserves one preferred target while still guaranteeing continuity when the primary degrades.
 
 ```bash
 # Primary record with health check
@@ -776,7 +776,7 @@ export SECONDARY_IP="52.86.200.34"   # Replace with your us-west-2 resource IP
 
 ### Task 1: Create Health Checks for Both Regions
 
-Create HTTP health checks for the primary and secondary endpoints.
+Create HTTP health checks for the primary and secondary endpoints. Capture both health check IDs because the next step in this exercise attaches each ID to a distinct failover record, which is how Route 53 knows which endpoint to prioritize.
 
 <details>
 <summary>Solution</summary>
@@ -816,7 +816,7 @@ echo "Secondary health check ID: ${SECONDARY_HC}"
 
 ### Task 2: Configure Failover Routing Records
 
-Create the primary and secondary failover records, associating each with its health check.
+Create the primary and secondary failover records, associating each with its health check. Keep this as a single, repeatable workflow so that automation can safely reapply your policy without manual drift.
 
 <details>
 <summary>Solution</summary>
@@ -857,7 +857,7 @@ aws route53 change-resource-record-sets \
 
 ### Task 3: Verify the Configuration
 
-Query your DNS record and confirm it resolves to the primary IP.
+Query your DNS record and confirm it resolves to the primary IP. Do this first while everything is healthy so you have a baseline before you trigger failure simulation.
 
 <details>
 <summary>Solution</summary>
@@ -909,7 +909,7 @@ dig failover-demo.${DOMAIN} +short
 
 ### Task 5: Add CloudWatch Alarm for Health Check Monitoring
 
-Create a CloudWatch alarm that notifies you when a failover occurs.
+Create a CloudWatch alarm that notifies you when a failover occurs. A clear alarm path helps the on-call team spot the failover trigger quickly instead of discovering traffic behavior changes only after user impact is visible.
 
 <details>
 <summary>Solution</summary>
@@ -943,7 +943,7 @@ aws cloudwatch put-metric-alarm \
 
 ### Task 6: Clean Up
 
-Remove all the resources you created to avoid ongoing costs.
+Remove all the resources you created to avoid ongoing costs. Run cleanup deliberately and in order, because stale failover records and lingering health checks can keep affecting routing behavior even after your exercise finishes.
 
 <details>
 <summary>Solution</summary>
