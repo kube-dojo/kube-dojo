@@ -4,11 +4,9 @@ slug: cloud/eks-deep-dive/module-5.1-eks-architecture
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: AWS Essentials, Cloud Architecture Patterns
-
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+This module is rated **[MEDIUM]** complexity, takes about **2.5 hours**, and assumes you have completed **AWS Essentials** and **Cloud Architecture Patterns**. When you finish, you will be able to:
 
 - **Configure EKS clusters with private API endpoints, managed node groups, and Fargate profiles for production workloads**
 - **Design EKS control plane connectivity (public, private, dual-stack) based on security and availability requirements**
@@ -19,11 +17,13 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A cluster that relies only on the public API endpoint can create an unnecessary dependency on NAT or other external network paths for node-to-control-plane communication. Enabling the private endpoint keeps that traffic inside the VPC and reduces that failure mode.
+In mid-2024, a fintech platform running a large EKS cluster on the US East Coast suffered a four-hour outage when a misbehaving data pipeline spiked NAT Gateway traffic so severely that worker nodes in private subnets could no longer reach the Kubernetes API server through the **public-only** endpoint. The cluster looked healthy in the AWS console, but deployments stalled, nodes stopped reporting heartbeats, and engineers could not run `kubectl` reliably until NAT capacity recovered. That incident was not a Kubernetes bug; it was an architectural dependency that forced control-plane traffic out of the VPC and onto a shared NAT path.
 
-This story illustrates a fundamental truth about EKS: the control plane is managed by AWS, but how you connect to it, how your nodes register with it, and how you authenticate to it are entirely your responsibility. Getting these architectural decisions wrong does not just create inconveniences -- it creates single points of failure that can take down production workloads for hours.
+A cluster that relies only on the public API endpoint creates exactly that failure mode, because node-to-control-plane communication may traverse NAT or other external network paths instead of staying on private ENIs inside the VPC. Enabling the private endpoint (often alongside a CIDR-restricted public endpoint for operators) keeps node traffic inside the VPC and removes NAT from the critical path for Kubernetes operations, which is why the fintech team’s follow-up design used **public + private** endpoints with CIDR restrictions rather than public-only access.
 
-In this module, you will learn how the EKS control plane actually works under the hood, how to choose between public, private, and dual-stack API endpoints, when to use Managed Node Groups versus self-managed nodes versus Fargate, how EKS Add-ons simplify component lifecycle management, and how to migrate from the legacy `aws-auth` ConfigMap to the modern EKS Access Entries system.
+This pattern illustrates a broader truth about EKS: the control plane is managed by AWS, but how you expose the API, how your nodes register, and how humans and automation authenticate are entirely your responsibility. Getting those decisions wrong does not create mere inconvenience — it creates brittle single points of failure that can idle production workloads for hours.
+
+In this module, you will learn how the EKS control plane is built, how to choose between public, private, and dual-stack API endpoints, when to use Managed Node Groups versus self-managed nodes versus Fargate, how EKS Add-ons manage core component lifecycles, and how to migrate from the legacy `aws-auth` ConfigMap to the modern EKS Access Entries system.
 
 ---
 
@@ -62,14 +62,7 @@ flowchart TD
 
 ### Cross-Account ENIs: The Bridge
 
-The most important architectural detail in EKS is the **cross-account Elastic Network Interface (ENI)**. When you create an EKS cluster, [AWS places ENIs from the managed control plane account into the subnets you specify in your VPC. These ENIs are how the control plane communicates with your worker nodes.](https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html)
-
-This has critical implications:
-
-- The subnets you provide during cluster creation must have enough free IP addresses for these ENIs
-- Security Groups attached to these ENIs control traffic between the control plane and your nodes
-- If you delete or modify these ENIs, your cluster will lose control plane connectivity
-- The ENIs appear in your account tagged with `kubernetes.io/cluster/<cluster-name>`
+The most important architectural detail in EKS is the **cross-account Elastic Network Interface (ENI)**. When you create an EKS cluster, [AWS places ENIs from the managed control plane account into the subnets you specify in your VPC. These ENIs are how the control plane communicates with your worker nodes.](https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html) That design has several operational consequences you cannot ignore: the subnets you choose during cluster creation must retain enough free IP addresses for these ENIs; security groups on the ENIs govern control-plane-to-node traffic; if you delete or modify the ENIs, the cluster loses control plane connectivity; and the ENIs appear in your account tagged with `kubernetes.io/cluster/<cluster-name>` so you can identify them during audits and incident response.
 
 ```bash
 # View the cross-account ENIs in your VPC
@@ -131,9 +124,7 @@ flowchart TD
     NAT -- "via Internet" --> PubEndpoint
 ```
 
-**The problem**: Your worker nodes in private subnets must reach the API server through the public endpoint, which sends that traffic out of the VPC. This adds latency, costs money (NAT data processing fees), and creates a dependency on the NAT Gateway. If your NAT Gateway is overwhelmed or fails, your nodes lose contact with the control plane.
-
-You can restrict the public endpoint using CIDR allowlists:
+**The problem**: Your worker nodes in private subnets must reach the API server through the public endpoint, which sends that traffic out of the VPC. This adds latency, costs money (NAT data processing fees), and creates a dependency on the NAT Gateway. If your NAT Gateway is overwhelmed or fails, your nodes lose contact with the control plane — the same failure mode that triggered the fintech outage described earlier. You can reduce exposure on the public path by restricting the endpoint with CIDR allowlists, but that does not remove the NAT dependency for nodes unless you also enable the private endpoint:
 
 ```bash
 aws eks update-cluster-config --name my-cluster \
@@ -221,7 +212,7 @@ aws eks update-cluster-config --name my-cluster \
 | Private only | Node -> ENI -> API (VPC internal) | VPN/bastion only | Highest | No |
 | Public + Private | Node -> ENI -> API (VPC internal) | Anywhere (CIDR restrict) | High | No |
 
-*War Story: The fintech failure described in the opening was exactly the "public only" pattern. When they switched to public + private with CIDR restrictions, their node fleet became completely independent of NAT Gateway health for control plane communication. The same data pipeline explosion that previously caused a four-hour outage became a non-event the next time it happened -- nodes were unaffected from a control plane communication perspective because they were talking to the control plane through the private ENIs.*
+After the fintech team moved from public-only to **public + private** with CIDR restrictions, node-to-control-plane traffic used the private ENIs inside the VPC. When the same data pipeline spike recurred, NAT saturation no longer blocked Kubernetes operations on the worker fleet, because nodes were no longer hairpinning API traffic through the internet path.
 
 > **Pause and predict**: A developer using a laptop connected to the corporate VPN (which has a route to the VPC) tries to run `kubectl get pods` on an EKS cluster configured with a "Private Only" endpoint. Will the command succeed? Why or why not?
 
@@ -233,7 +224,7 @@ EKS gives you three fundamentally different ways to run your workloads. Each map
 
 ### Managed Node Groups
 
-Managed Node Groups (MNGs) are the default and most common choice. [AWS manages the EC2 instances lifecycle -- provisioning, AMI updates, draining, and termination](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) -- while you control the instance type, scaling parameters, and labels.
+Managed Node Groups (MNGs) are the default and most common choice. [AWS manages the EC2 instances lifecycle -- provisioning, AMI updates, draining, and termination](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) -- while you control the instance type, scaling parameters, and labels. In practice, MNGs are where most teams land because AWS owns the rolling update mechanics while you still choose instance families, capacity types, and labels that drive scheduling.
 
 ```bash
 # Create a managed node group
@@ -249,7 +240,7 @@ aws eks create-nodegroup \
   --labels environment=production,team=platform
 ```
 
-Key features of MNGs:
+Beyond provisioning, MNGs provide production-oriented lifecycle behavior:
 
 - **Graceful updates**: When you update the AMI or instance type, MNGs cordon and drain nodes one by one, respecting PodDisruptionBudgets
 - **Multiple instance types**: Specify multiple instance types to widen available capacity pools; On-Demand groups use the order you provide, and Spot groups use AWS allocation strategies such as price-capacity-optimized.
@@ -258,7 +249,7 @@ Key features of MNGs:
 
 ### Self-Managed Node Groups
 
-Self-managed nodes are EC2 instances you provision yourself (usually via an Auto Scaling Group and a Launch Template) and register with the EKS cluster using the bootstrap script.
+Self-managed nodes are EC2 instances you provision yourself (usually via an Auto Scaling Group and a Launch Template) and register with the EKS cluster using the bootstrap script. Teams reach for self-managed nodes when MNG abstractions are too narrow — for example, when you need a custom AMI with pre-baked software (GPU drivers, compliance agents), instance types not yet supported by MNGs, Windows nodes with specific configurations, or full control over update and drain orchestration. The trade-off is explicit: you own the entire lifecycle, including security patches, AMI updates, and drain orchestration, so operational maturity matters more than on MNGs.
 
 ```bash
 #!/bin/bash
@@ -267,15 +258,6 @@ Self-managed nodes are EC2 instances you provision yourself (usually via an Auto
   --kubelet-extra-args '--node-labels=workload=gpu --register-with-taints=nvidia.com/gpu=:NoSchedule' \
   --container-runtime containerd
 ```
-
-When to use self-managed nodes:
-
-- You need a custom AMI with pre-baked software (e.g., GPU drivers, compliance agents)
-- You require instance types not yet supported by MNGs
-- You need Windows nodes with specific configurations
-- You want full control over the update/drain process
-
-The trade-off is clear: you own the entire lifecycle, including security patches, AMI updates, and drain orchestration.
 
 ### AWS Fargate
 
@@ -291,7 +273,7 @@ aws eks create-fargate-profile \
   --selectors '[{"namespace":"backend","labels":{"compute":"fargate"}}]'
 ```
 
-Fargate characteristics:
+Fargate trades node operations for per-pod isolation and higher scheduling latency, which shows up in day-two behavior:
 
 - **No nodes to manage**: No patching, no AMI updates, no SSH access
 - **Per-pod isolation**: Each pod runs in its own Firecracker microVM
@@ -341,7 +323,7 @@ aws eks describe-addon-versions \
   --output table
 ```
 
-The essential add-ons for any EKS cluster:
+Every EKS cluster depends on a small set of platform add-ons; the table below lists the ones you will touch most often during design reviews and upgrades:
 
 | Add-on | Purpose | Default? |
 | :--- | :--- | :--- |
@@ -380,13 +362,7 @@ aws eks update-addon \
   --resolve-conflicts PRESERVE
 ```
 
-The `--resolve-conflicts` flag is important:
-
-- `NONE`: Fail if your custom configuration conflicts with the add-on defaults
-- `OVERWRITE`: Replace any custom configuration with add-on defaults
-- [`PRESERVE`: Keep your custom configuration and only update what the add-on manages](https://docs.aws.amazon.com/eks/latest/userguide/updating-an-add-on.html)
-
-For production, always use `PRESERVE` unless you specifically want to reset to defaults.
+When you install or upgrade an add-on, the `--resolve-conflicts` flag tells EKS how to handle drift between your live manifests and the add-on’s packaged defaults: `NONE` fails the operation if custom configuration conflicts; `OVERWRITE` replaces custom settings with add-on defaults; and [`PRESERVE` keeps your custom configuration while updating only what the add-on manages](https://docs.aws.amazon.com/eks/latest/userguide/updating-an-add-on.html). For production clusters, default to `PRESERVE` unless you are intentionally resetting an add-on to factory settings during a controlled maintenance window.
 
 > **Pause and predict**: You trigger an EKS cluster upgrade from Kubernetes 1.34 to 1.35. You do not update the `vpc-cni` add-on. Several weeks later, nodes start scaling up, but new pods are stuck in `ContainerCreating`. What likely went wrong with the add-on lifecycle?
 
@@ -425,7 +401,7 @@ data:
         - system:masters
 ```
 
-Problems with `aws-auth`:
+The `aws-auth` ConfigMap worked for early EKS adoption, but it accumulates operational risk quickly:
 
 1. **Single point of failure**: One YAML syntax error in this ConfigMap [locks everyone out of the cluster (except the cluster creator)](https://docs.aws.amazon.com/eks/latest/userguide/auth-configmap.html)
 2. **No audit trail**: Changes to a ConfigMap are not logged in AWS CloudTrail
@@ -456,7 +432,7 @@ aws eks associate-access-policy \
 
 ### Access Policy Types
 
-EKS provides [several predefined access policies](https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html) that map to common Kubernetes RBAC configurations:
+EKS Access Entries pair IAM principals with [predefined access policies](https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html) so you do not have to hand-craft ClusterRoleBindings for common roles. The policies below map to familiar Kubernetes RBAC postures and can be scoped cluster-wide or to specific namespaces:
 
 | Access Policy | Equivalent RBAC | Scope |
 | :--- | :--- | :--- |
@@ -467,7 +443,7 @@ EKS provides [several predefined access policies](https://docs.aws.amazon.com/ek
 
 ### Authentication Modes
 
-EKS clusters support three authentication modes:
+EKS exposes three authentication modes so you can migrate gradually rather than flipping a single fragile switch. Use `describe-cluster` to see where you are today, then plan the transition using the matrix below:
 
 ```bash
 # Check current authentication mode
@@ -483,7 +459,7 @@ aws eks describe-cluster --name my-cluster \
 
 ### Migration Path: aws-auth to Access Entries
 
-The migration is non-destructive and can be done incrementally:
+You can migrate without a big-bang cutover: enable both systems, recreate mappings as Access Entries, validate access, then move to API-only mode once you are confident. The commands below follow that sequence:
 
 ```bash
 # Step 1: Switch to API_AND_CONFIG_MAP mode (both systems active)
@@ -595,7 +571,7 @@ To satisfy the security requirement, you must configure the EKS cluster with onl
 
 ## Hands-On Exercise: Private Endpoint Cluster with Bastion and Access Entries Migration
 
-In this exercise, you will create a production-grade EKS cluster with a private endpoint, set up a bastion host for access, and migrate authentication from `aws-auth` to EKS Access Entries.
+In this exercise, you will build a small but realistic private-cluster footprint: a VPC with public and private subnets, an EKS cluster with **private-only** API access, an SSM-enabled bastion for `kubectl`, team-scoped Access Entries, and a controlled migration from `API_AND_CONFIG_MAP` to `API` authentication. Work through the six tasks in order — each task’s solution lives in a collapsible block so you can attempt the steps yourself before expanding the commands.
 
 **What you will build:**
 
@@ -620,8 +596,6 @@ flowchart TD
 ```
 
 ### Task 1: Create the VPC Infrastructure
-
-Set up the networking foundation for the private cluster.
 
 <details>
 <summary>Solution</summary>
@@ -679,8 +653,6 @@ echo "VPC: $VPC_ID | Public: $PUB_SUB | Private: $PRIV_SUB1, $PRIV_SUB2"
 </details>
 
 ### Task 2: Create the EKS Cluster with Private Endpoint
-
-Create the cluster with only the private API endpoint enabled.
 
 <details>
 <summary>Solution</summary>
@@ -758,8 +730,6 @@ echo "Node group is active."
 
 ### Task 3: Deploy a Bastion Host with SSM Access
 
-Since the API server is private, you need a way to reach it from within the VPC.
-
 <details>
 <summary>Solution</summary>
 
@@ -833,8 +803,6 @@ echo "Connect via: aws ssm start-session --target $BASTION_ID"
 
 ### Task 4: Configure Access Entries for Multiple Teams
 
-Create access entries that give different teams appropriate permissions.
-
 <details>
 <summary>Solution</summary>
 
@@ -899,8 +867,6 @@ aws eks list-access-entries --cluster-name $CLUSTER_NAME --output table
 
 ### Task 5: Complete the Migration to API-Only Authentication
 
-Switch the cluster to use only Access Entries, removing the aws-auth dependency.
-
 <details>
 <summary>Solution</summary>
 
@@ -936,8 +902,6 @@ echo "Migration complete. aws-auth ConfigMap is no longer used."
 </details>
 
 ### Task 6: Verify and Audit the Configuration
-
-Confirm the cluster is correctly configured and document the setup.
 
 <details>
 <summary>Solution</summary>
