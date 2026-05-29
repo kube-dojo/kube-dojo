@@ -15,8 +15,11 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Extract task class from the dispatch_smart.py command.
-TASK_CLASS=$(echo "$COMMAND" | grep -oE 'dispatch_smart\.py[[:space:]]+[a-z]+' | awk '{print $NF}')
+# Extract task class from the dispatch_smart.py command. The pipeline
+# returns exit 1 when grep finds no match (normal for non-dispatch_smart
+# Bash calls); without `|| true`, `set -euo pipefail` kills the hook
+# silently and the harness reports "PreToolUse:Bash hook error" noise.
+TASK_CLASS=$(echo "$COMMAND" | grep -oE 'dispatch_smart\.py[[:space:]]+[a-z]+' | awk '{print $NF}' || true)
 # Skip read-only task classes — they don't need a worktree.
 if [[ "$TASK_CLASS" == "review" || "$TASK_CLASS" == "search" ]]; then
   exit 0
