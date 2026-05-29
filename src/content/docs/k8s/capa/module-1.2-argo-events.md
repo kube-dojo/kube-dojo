@@ -787,7 +787,7 @@ Extend the Sensor to also accept a manual trigger from a second webhook endpoint
 
 ## Next Module
 
-Continue to [Argo CD — GitOps Continuous Delivery](../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) to connect the event-driven pipeline you built here to a GitOps deployment controller. A verified commit SHA from Argo Events becomes the source of truth for a production deployment, completing the path from code push to running workload without manual intervention.
+Continue to [Argo CD — GitOps Continuous Delivery](../../../platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) to connect the event-driven pipeline you built here to a GitOps deployment controller. A verified commit SHA from Argo Events becomes the source of truth for a production deployment, completing the path from code push to running workload without manual intervention.
 
 ## Sources
 

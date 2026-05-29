@@ -9,7 +9,7 @@ sidebar:
 >
 > **Time to Complete**: 3 hours
 >
-> **Prerequisites**: [Module 5.1 (EKS Architecture)](./module-5.1-eks-architecture/) and [Module 5.2 (EKS Networking)](./module-5.2-eks-networking/)
+> **Prerequisites**: [Module 5.1 (EKS Architecture)](../module-5.1-eks-architecture/) and [Module 5.2 (EKS Networking)](../module-5.2-eks-networking/)
 
 ## What You'll Be Able to Do
 

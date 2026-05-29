@@ -7,7 +7,7 @@ sidebar:
 
 ## What You'll Be Able to Do
 
-This **[COMPLEX]** capstone module takes about **1.5 hours** and assumes you have completed [Modules 1–11](module-2.11-cloud-build/) in GCP DevOps Essentials. When you finish, you will be able to:
+This **[COMPLEX]** capstone module takes about **1.5 hours** and assumes you have completed [Modules 1–11](../module-2.11-cloud-build/) in GCP DevOps Essentials. When you finish, you will be able to:
 
 - **Design** GCP architectures using Shared VPC, Private Service Connect, and hub-spoke network topologies to ensure secure, isolated communication.
 - **Evaluate** GCP-native patterns for microservices (Cloud Run, GKE, App Engine) and select the right compute tier based on workload requirements.
