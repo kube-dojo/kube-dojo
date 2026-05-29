@@ -4,11 +4,11 @@ slug: cloud/gcp-essentials/module-2.1-iam
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101
+> **Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Cloud Native 101
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+When you finish this module, you will be able to configure IAM across the full resource hierarchy, run service accounts with Workload Identity Federation instead of exported keys, scope access with custom roles, and explain denials with Policy Troubleshooter and audit logs. The outcomes below are what you should be able to demonstrate in a real GCP organization:
 
 - **Configure GCP IAM policies across the resource hierarchy (Organization, Folders, Projects) with proper inheritance**
 - **Implement least-privilege service accounts with Workload Identity Federation to eliminate exported key files**
@@ -63,11 +63,7 @@ graph TD
     ProjEngProd --> ResProd
 ```
 
-**Organization**: The root node. It is automatically created when you set up Google Workspace or Cloud Identity for your domain. Every resource in your company ultimately lives under this node. IAM policies set here apply to *everything* underneath.
-
-**Folders**: Optional grouping mechanism. Folders let you organize projects by team, environment, or business unit. You can nest folders up to 10 levels deep (though more than 3-4 levels is generally a sign of over-engineering). Folders are the primary tool for applying environment-wide policies---for example, denying external IP addresses on all VMs in a "Production" folder.
-
-**Projects**: The fundamental unit of resource ownership. Every GCP resource (a VM, a GCS bucket, a Cloud Run service) belongs to exactly one project. Projects provide billing boundaries, API enablement boundaries, and the default scope for most IAM operations. Each project has three identifiers:
+At the top, the **Organization** is the root node: it is created when you set up Google Workspace or Cloud Identity for your domain, and IAM policies bound here apply to every resource underneath. **Folders** are optional groupings for teams, environments, or business units (you can nest them up to ten levels, though more than three or four usually signals over-engineering); they are how you apply environment-wide guardrails, such as denying external IPs on every VM in a Production folder. **Projects** are the fundamental unit of ownership—every VM, bucket, and Cloud Run service lives in exactly one project, which also defines billing, API enablement, and the default scope for most IAM operations. Each project exposes three identifiers you will see constantly in commands and audit logs:
 
 | Identifier | Example | Mutable | Unique Across |
 | :--- | :--- | :--- | :--- |
@@ -75,7 +71,7 @@ graph TD
 | **Project ID** | `eng-dev-382910` | No (set at creation) | Globally unique, forever |
 | **Project Number** | `481726359042` | No (auto-assigned) | Globally unique, forever |
 
-**Resources**: The actual GCP services and objects you create. VMs, databases, storage buckets, Pub/Sub topics---they all live inside a project.
+Below the project line, **resources** are the concrete services and objects you create—VMs, databases, buckets, Pub/Sub topics, and everything else you bill and secure day to day.
 
 > **Pause and predict**: If you move a Project from the "Engineering" folder to the "Finance" folder, what happens to the IAM policies applied to the Project?
 > <details>
@@ -109,7 +105,7 @@ A practical analogy: Think of the resource hierarchy like a building. The Organi
 
 ### Organization Policies vs IAM Policies
 
-New GCP practitioners often confuse Organization Policies with IAM policies. They are fundamentally different tools:
+New GCP practitioners often confuse **Organization Policies** with **IAM policies**, but they solve different problems: IAM answers *who may act*, while organization policies answer *what may exist* regardless of who is signed in. The table below contrasts the two so you reach for the right control when designing guardrails versus granting access.
 
 | Aspect | IAM Policy | Organization Policy |
 | :--- | :--- | :--- |
@@ -127,7 +123,7 @@ gcloud org-policies list --organization=ORGANIZATION_ID
 gcloud org-policies set-policy policy.yaml --folder=FOLDER_ID
 ```
 
-Example `policy.yaml` to block external IPs:
+To block external IPs on every VM under a folder, you attach an organization policy document such as the following `policy.yaml` (the constraint name is what the API enforces; the list policy denies all values):
 
 ```yaml
 constraint: constraints/compute.vmExternalIpAccess
@@ -141,7 +137,7 @@ listPolicy:
 
 ### Principals: Who Can Act?
 
-A principal in GCP is any identity that can be authenticated and authorized. GCP supports several principal types:
+A **principal** in GCP is any identity that can be authenticated and then authorized. Production environments mix several principal types, and the member string format in IAM bindings must match exactly what the policy engine expects:
 
 | Principal Type | Format | Use Case |
 | :--- | :--- | :--- |
@@ -156,11 +152,11 @@ A principal in GCP is any identity that can be authenticated and authorized. GCP
 
 ### The Three Types of Roles
 
-GCP has three categories of IAM roles, and understanding the distinction is critical for both security and operations.
+GCP has three categories of IAM roles, and understanding the distinction is critical for both security and operations because the wrong category is how teams accidentally grant thousands of permissions at once.
 
 #### 1. Basic Roles (Formerly "Primitive Roles")
 
-These are the broadest roles in GCP. They existed before the modern IAM system and are considered **legacy roles** that should be avoided in production.
+**Basic roles** are the broadest grants in GCP: they predate fine-grained IAM and are considered **legacy roles** that should not appear on production projects except during initial bootstrap.
 
 | Role | Permissions | When to Use |
 | :--- | :--- | :--- |
@@ -172,7 +168,7 @@ The `roles/editor` role is particularly dangerous because it grants write access
 
 #### 2. Predefined Roles
 
-Google maintains hundreds of predefined roles that follow the principle of least privilege for specific services. These are the roles you should be using day-to-day.
+**Predefined roles** are maintained by Google for each service and are the roles you should reach for day to day; they bundle permissions for realistic job functions without spanning the entire project.
 
 ```bash
 # List all predefined roles (there are 1000+)
@@ -185,7 +181,7 @@ gcloud iam roles describe roles/storage.objectViewer
 gcloud iam roles list --filter="name:roles/cloudsql"
 ```
 
-Common predefined roles you will use constantly:
+The table below lists predefined roles you will reference constantly when wiring applications, operators, and auditors—notice how each name maps to a narrow API surface rather than a job title.
 
 | Role | What It Grants |
 | :--- | :--- |
@@ -206,7 +202,7 @@ Common predefined roles you will use constantly:
 
 #### 3. Custom Roles
 
-When predefined roles are either too broad or too narrow, you can create custom roles with exactly the permissions you need.
+When predefined roles are either too broad or too narrow for a regulated workload, you can create **custom roles** that include exactly the permission strings you want—and nothing else.
 
 ```bash
 # Create a custom role from a YAML definition
@@ -234,15 +230,11 @@ gcloud iam roles update customStorageReader \
   --add-permissions=storage.buckets.get
 ```
 
-Custom roles have some gotchas:
-- They can be created at the Organization or Project level (not Folder level).
-- They support a maximum of 3000 permissions.
-- Some permissions cannot be used in custom roles (check the documentation for `TESTING` or `NOT_SUPPORTED` launch stages).
-- You must manage their lifecycle yourself---when Google adds new permissions to a service, your custom roles do not automatically get updated.
+Custom roles trade precision for operational ownership: they can be created at the organization or project level (not on folders), support up to 3,000 permissions, and exclude some permissions whose launch stage is `TESTING` or `NOT_SUPPORTED` in the IAM catalog. Most importantly, Google does not auto-update your custom roles when a service ships new APIs—you must review release notes and patch roles yourself, unlike predefined roles that track service growth for you.
 
 ### IAM Deny Policies
 
-Introduced in 2022, IAM Deny Policies solve the inheritance problem. Remember that IAM policies are additive---you cannot revoke inherited permissions. Deny policies allow you to explicitly deny specific permissions, overriding any allow policies.
+Introduced in 2022, **IAM Deny Policies** solve the inheritance problem that frustrates security teams: allow policies are additive, so you cannot subtract an inherited `roles/editor` at a child project, but a deny policy can block specific permissions for everyone except principals you list as exceptions.
 
 ```bash
 # Create a deny policy that prevents anyone from deleting projects
@@ -274,7 +266,7 @@ gcloud iam policies create prevent-project-deletion \
 }
 ```
 
-Deny policies are evaluated **before** allow policies. The evaluation order is:
+At evaluation time, deny policies run **before** allow policies, and organization policy constraints run even earlier. The full decision stack is worth memorizing because Policy Troubleshooter walks the same sequence when it explains a `403`:
 
 ```text
 1. Organization Policy Constraints  →  "Is this action even allowed to exist?"
@@ -319,7 +311,7 @@ gcloud compute instances create data-worker \
 
 ### Service Account Keys: The Danger Zone
 
-Service account keys are JSON files containing long-lived credentials. They are the GCP equivalent of AWS access keys, and they are equally dangerous.
+**Service account keys** are JSON files containing long-lived credentials—the GCP equivalent of AWS access keys—and they are equally dangerous because they work from any network until someone deletes them.
 
 ```bash
 # Creating a key (avoid this whenever possible)
@@ -348,7 +340,7 @@ gcloud iam service-accounts keys delete KEY_ID \
 
 ### Service Account Impersonation
 
-Instead of downloading keys, you can **impersonate** a service account. This gives you temporary credentials without creating a persistent key file.
+Instead of downloading keys, you can **impersonate** a service account so the Security Token Service mints short-lived credentials for a single command or shell session, which means nothing sensitive lands on disk in a CI runner or laptop.
 
 ```bash
 # Impersonate a service account for a single command
@@ -363,7 +355,7 @@ gcloud config set auth/impersonate_service_account \
 gcloud config unset auth/impersonate_service_account
 ```
 
-For impersonation to work, the caller must have the `roles/iam.serviceAccountTokenCreator` role on the target service account.
+Impersonation only succeeds when the human or service account calling `gcloud` already holds `roles/iam.serviceAccountTokenCreator` (or a broader role that includes `iam.serviceAccounts.getAccessToken`) on the target service account, because that permission is what authorizes the token exchange.
 
 ---
 
@@ -391,7 +383,7 @@ graph TD
 
 ### Setting Up Workload Identity Federation for GitHub Actions
 
-This is one of the most common use cases---deploying to GCP from GitHub Actions without storing service account keys as GitHub secrets.
+The most common Workload Identity Federation pattern is deploying from **GitHub Actions** without storing a service account JSON key in GitHub Secrets: the workflow exchanges the GitHub OIDC token for a federated credential, then impersonates a dedicated deployer service account.
 
 ```bash
 # Step 1: Create a Workload Identity Pool
@@ -427,7 +419,7 @@ gcloud iam service-accounts add-iam-binding \
   --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/my-org/my-repo"
 ```
 
-Then in your GitHub Actions workflow:
+After the pool, provider, and `roles/iam.workloadIdentityUser` binding exist, your GitHub Actions workflow only needs the `google-github-actions/auth` step (with `id-token: write`) before deploy tools run:
 
 ```yaml
 # .github/workflows/deploy.yaml
@@ -460,7 +452,7 @@ jobs:
 
 ### The IAM Recommender
 
-GCP includes a built-in tool that analyzes your actual permission usage and recommends tighter roles.
+The **IAM Recommender** is a built-in analyzer that inspects which permissions principals actually exercised and suggests narrower predefined roles, which is how you shrink standing access without guessing from job titles alone.
 
 ```bash
 # List IAM recommendations for a project
@@ -473,11 +465,7 @@ gcloud recommender recommendations list \
 
 ### Audit Logging
 
-Every IAM action in GCP is logged to Cloud Audit Logs. There are three types:
-
-- **Admin Activity logs**: Always on, free. Logs IAM policy changes, resource creation/deletion.
-- **Data Access logs**: Must be enabled, incurs cost. Logs who read/wrote data.
-- **System Event logs**: Always on, free. Logs GCP system actions (live migration, etc.).
+Every IAM change and most data-plane call leaves a trail in **Cloud Audit Logs**, which splits into three families you configure differently. **Admin Activity** logs (always on, no charge) capture IAM policy updates and resource lifecycle events. **Data Access** logs (opt-in, billable) record who read or wrote sensitive payloads such as object bytes or query results. **System Event** logs (always on) capture Google-managed operations like live migration. For investigations, Admin Activity is where `SetIamPolicy` appears; enable Data Access when compliance requires proving who opened a specific record.
 
 ```bash
 # Enable Data Access audit logs for Cloud Storage
@@ -495,13 +483,7 @@ gcloud logging read 'logName="projects/my-project/logs/cloudaudit.googleapis.com
 
 ## Diagnosing Access Issues: Policy Troubleshooter
 
-When a user or service account gets a `403 Permission Denied` error, guessing which role is missing is a frustrating waste of time. GCP provides the **Policy Troubleshooter** specifically to answer the question: *"Why does (or doesn't) this principal have this permission on this resource?"*
-
-The Policy Troubleshooter evaluates:
-1. The principal's direct IAM bindings on the resource.
-2. Inherited IAM bindings from parent projects, folders, and organizations.
-3. IAM Deny policies that might be blocking access.
-4. The roles granted, expanding them to check if the specific API permission is included.
+When a user or service account hits `403 Permission Denied`, guessing which binding is missing wastes hours. **Policy Troubleshooter** answers a precise question: *why does (or doesn't) this principal have this permission on this resource?* It walks direct bindings on the resource, inherited bindings from parent folders and the organization, deny policies that override allows, and the expanded permission set inside each granted role so you see the exact API string under test.
 
 ```bash
 # Check if a specific service account has permission to list objects in a bucket
@@ -582,7 +564,7 @@ When a Compute Engine VM is created without specifying a service account, GCP au
 
 ### Objective
 
-Set up a realistic multi-project environment with proper IAM controls: a Dev project and a Prod project, each with dedicated service accounts following least privilege, integrating Workload Identity Federation and utilizing the Policy Troubleshooter.
+You will stand up a realistic two-project lab (Dev and Prod) with dedicated service accounts, cross-project least-privilege grants, a Workload Identity Federation pool for GitHub-style deploys, a custom role, and Policy Troubleshooter checks—then tear everything down so no billable resources linger.
 
 ### Prerequisites
 
@@ -592,9 +574,7 @@ Set up a realistic multi-project environment with proper IAM controls: a Dev pro
 
 ### Tasks
 
-**Task 1: Create the Project Structure**
-
-Create two projects simulating a Dev/Prod split.
+**Task 1: Create the Project Structure.** Create two projects that simulate a Dev/Prod split, link billing, and enable the Storage and IAM APIs so later tasks have a working foundation.
 
 <details>
 <summary>Solution</summary>
@@ -629,9 +609,7 @@ echo "Prod Project: $PROD_PROJECT"
 ```
 </details>
 
-**Task 2: Create Dedicated Service Accounts**
-
-Create a service account in the Dev project for a data pipeline that needs to read from Cloud Storage in Dev and write logs.
+**Task 2: Create Dedicated Service Accounts.** In the Dev project, create a data-pipeline service account that can read Cloud Storage objects and write logs—without using the default Compute Engine service account.
 
 <details>
 <summary>Solution</summary>
@@ -662,9 +640,7 @@ gcloud projects get-iam-policy $DEV_PROJECT \
 ```
 </details>
 
-**Task 3: Create a Prod Service Account with Cross-Project Access**
-
-Create a service account in the Prod project that can read from a GCS bucket in the Dev project (simulating a promotion pipeline).
+**Task 3: Create a Prod Service Account with Cross-Project Access.** Create a Prod service account that reads artifacts from a Dev bucket, which models a promotion pipeline where production workloads pull build outputs from a lower environment.
 
 <details>
 <summary>Solution</summary>
@@ -696,9 +672,7 @@ gcloud storage ls gs://${DEV_PROJECT}-artifacts/ \
 ```
 </details>
 
-**Task 4: Configure Workload Identity Federation for GitHub Actions**
-
-Simulate configuring keyless authentication for a GitHub repository deploying to the Dev project.
+**Task 4: Configure Workload Identity Federation for GitHub Actions.** Create a workload identity pool and OIDC provider, then bind a repository principal to the Dev service account so a GitHub workflow could deploy without JSON keys.
 
 <details>
 <summary>Solution</summary>
@@ -730,9 +704,7 @@ gcloud iam service-accounts add-iam-binding $DEV_SA \
 ```
 </details>
 
-**Task 5: Diagnose Access with Policy Troubleshooter**
-
-Test why the Dev service account cannot delete objects in the Dev bucket.
+**Task 5: Diagnose Access with Policy Troubleshooter.** Use the troubleshooter to confirm the Dev service account is denied `storage.objects.delete` because you granted only `objectViewer`, not because of a mysterious org-wide deny.
 
 <details>
 <summary>Solution</summary>
@@ -750,9 +722,7 @@ gcloud policy-troubleshoot iam \
 ```
 </details>
 
-**Task 6: Audit the IAM Configuration**
-
-List all IAM bindings for both projects and identify any overly permissive roles.
+**Task 6: Audit the IAM Configuration.** Dump IAM bindings for both projects and flag any basic roles (`roles/editor`, `roles/owner`) still attached to humans or service accounts.
 
 <details>
 <summary>Solution</summary>
@@ -787,9 +757,7 @@ done
 ```
 </details>
 
-**Task 7: Implement a Custom Role**
-
-Create a custom role that allows listing and reading GCS objects but not deleting them.
+**Task 7: Implement a Custom Role.** Define a project-level custom role that lists and reads GCS objects but omits delete permissions, then assign it to the Prod artifact reader.
 
 <details>
 <summary>Solution</summary>
@@ -822,9 +790,7 @@ gcloud projects add-iam-binding $PROD_PROJECT \
 ```
 </details>
 
-**Task 8: Clean Up**
-
-Remove all resources to avoid charges.
+**Task 8: Clean Up.** Delete buckets and projects so the lab does not incur ongoing storage or compute charges (projects enter a 30-day recovery window).
 
 <details>
 <summary>Solution</summary>

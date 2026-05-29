@@ -202,13 +202,13 @@ Weekly reporting is for team leads and platform planning. It should show trends 
 
 Monthly reporting is for finance and executives. It should reconcile to the provider invoice, explain variance from forecast, summarize major drivers, show unit economics where available, and identify decisions needed from leadership. The executive summary should be short: total spend, forecast variance, top changes, savings realized, savings pipeline, risk items, and asks. The details can live in an appendix or dashboard. Executives do not need every namespace; they need confidence that the practice can explain movement and guide tradeoffs.
 
-A mature cadence also includes quarterly policy review. Allocation rules should be revisited when product ownership changes, clusters consolidate, shared services grow, discounts change, or chargeback starts. Optimization policies should be revisited when reliability targets change, new instance families become available, or Kubernetes features change the rightsizing workflow. Reporting without policy updates becomes stale. Policy without reporting becomes opinion. The cadence keeps both sides connected.
+A mature cadence also includes quarterly policy review. Allocation rules should be revisited when product ownership changes, clusters consolidate, shared services grow, discounts change, or chargeback starts. Optimization policies should be revisited when reliability targets change, new instance families become available, or Kubernetes features change the rightsizing workflow. Each review should produce a short changelog: which split rule changed, which label became required, which alert route moved, and which exception expired. Reporting without policy updates becomes stale because teams optimize against last quarter's assumptions. Policy without reporting becomes opinion because nobody can see whether the new rule improved behavior or only moved numbers between cost centers. The cadence keeps both sides connected so FinOps stays an operating practice rather than a one-time tooling project.
 
 ## Learner Check
 
-Before moving to the quiz and labs, pause and test the implementation model against a real or imagined cluster. Pick one production namespace and identify the owner, team label, product label, service label, environment, top controller, requested CPU, requested memory, actual usage, persistent volumes, and load balancers. Then decide which costs are direct, which are shared, and which are idle. If you cannot answer those questions from your current tooling, the next improvement is not a better executive chart. It is better metadata and allocation data.
+Before moving to the quiz and hands-on lab, pause and test the implementation model against a real or imagined cluster. Pick one production namespace and identify the owner, team label, product label, service label, environment, top controller, requested CPU, requested memory, actual usage, persistent volumes, and load balancers. Then decide which costs are direct, which are shared, and which are idle. If you cannot answer those questions from your current tooling, the next improvement is not a better executive chart; it is better metadata, a documented allocation rule, and a cost engine query or dashboard that your teams already trust for day-to-day decisions.
 
-Now test the workflow. Suppose the namespace cost rises sharply after a release. Decide which signal should arrive first, who should receive it, what dashboard they open, what command they run, how they distinguish planned growth from waste, and how the result reaches the next forecast. If the answer depends on one person remembering how to query a spreadsheet, the practice is fragile. If the answer is a documented runbook with an owner and a feedback path, the practice is ready to scale.
+Now test the workflow end to end. Suppose the namespace cost rises sharply after a release: decide which signal should arrive first, who should receive it, what dashboard they open, what command or API call they run, how they distinguish planned growth from waste, and how the result reaches the next forecast. Walk through the anomaly runbook categories from this module—expected growth, planned temporary usage, misconfiguration, pricing change, or unknown—and note which category your scenario would receive. If the answer depends on one person remembering how to query a spreadsheet, the practice is fragile. If the answer is a documented runbook with an owner, baseline, and feedback path into weekly and monthly reporting, the practice is ready to scale.
 
 ## Common Mistakes
 
@@ -294,7 +294,7 @@ Answer: B is correct because anomaly response depends on ownership, scope, basel
 
 ### Setup
 
-These commands are intended for a local lab. Assume `kind`, `kubectl`, `helm`, `curl`, and `jq` are installed.
+These commands are intended for a local lab on your workstation, so you can practice allocation queries without wiring a full cloud billing integration first. Assume `kind`, `kubectl`, `helm`, `curl`, and `jq` are installed, then work through the numbered steps below in order: create a disposable cluster, install Prometheus as the metrics backend, render and apply OpenCost from the Helm chart, and deploy a labeled sample workload in namespace `team-a`. Each step uses explicit namespaces and labels so the later Allocation API response has a predictable owner dimension to inspect.
 
 1. Install `kind` and create a lab cluster.
 
@@ -373,7 +373,7 @@ EOF
 
 ### Exercise: Querying OpenCost
 
-Use the API workflow (not a full billing integration) to generate namespace cost data.
+After the cluster stabilizes, use the Allocation API workflow rather than a billing export to generate namespace-level cost rows for the last hour. Port-forward the OpenCost service, call `allocation/compute` with `aggregate=namespace`, keep idle visible but unshared (`includeIdle=true`, `shareIdle=false`), and inspect the first `data` element with `jq`. A healthy lab response is a JSON object whose rows include both `team-a` (from the labeled checkout Deployment) and `__unallocated__` (workloads or cluster cost not yet mapped to your ownership labels), which confirms the metrics path from Prometheus through OpenCost is producing allocation output you can automate against.
 
 ```bash
 kubectl port-forward --namespace opencost service/opencost 9003:9003 &
@@ -385,9 +385,9 @@ curl -s "http://127.0.0.1:9003/allocation/compute?window=1h&aggregate=namespace&
 kill "$PF_PID"
 ```
 
-Expected output is a JSON object with namespace allocation rows, including `team-a` and `__unallocated__`.
-
 ### Acceptance checks
+
+Confirm each item below before you delete the lab cluster, because a passing curl once does not prove the metrics and pricing inputs stayed healthy for the whole exercise window.
 
 - [ ] `kind get clusters` includes `finops-practice`.
 - [ ] `kubectl wait --for=condition=Available deployment/opencost -n opencost --timeout=180s` exits with zero.

@@ -4,11 +4,10 @@ slug: cloud/azure-essentials/module-3.3-vms
 sidebar:
   order: 4
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.2 (Virtual Networks)
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+This module is rated **[MEDIUM]** complexity, takes about **two hours** to complete, and assumes you have finished [Module 3.2 (Virtual Networks)](../module-3.2-vnet/). When you complete it, you will be able to:
 
 - **Deploy Azure VMs with Availability Sets and Availability Zones for high-availability compute workloads**
 - **Configure VM Scale Sets with autoscaling rules, custom images, and Flexible orchestration mode**
@@ -44,7 +43,7 @@ Azure offers many VM sizes, organized into families based on the workload type t
 
 ### Understanding VM Size Naming
 
-Azure VM sizes follow a naming convention that tells you a lot if you know how to read it:
+Once you pick a family, the size name itself encodes tier, vCPU count, disk capabilities, and hardware generation—so Azure VM sizes follow a naming convention that tells you a lot if you know how to read it:
 
 ```text
     Standard_D4s_v5
@@ -95,9 +94,7 @@ stateDiagram-v2
     Throttled --> Idle_Below_Baseline: Workload decreases (credits accumulate)
 ```
 
-For a lightly used dev/test VM, a burstable B-series instance can cost materially less than a comparable D-series VM, which is why B-series is often attractive for workloads that spend much of their time idle.
-
-**Example pattern**: For workloads like build agents that spend much of their time idle and then burst briefly, moving from fixed-performance VMs to burstable VMs can reduce compute spend substantially if the credit model fits the workload.
+For a lightly used dev/test VM, a burstable B-series instance can cost materially less than a comparable D-series VM, which is why B-series is often attractive for workloads that spend much of their time idle. A common pattern is **build agents** that sit quiet most of the day and spike briefly during CI runs: when bursts stay within accumulated credits, moving from fixed-performance VMs to burstable VMs can cut compute spend without sacrificing acceptable peak performance.
 
 > **Pause and predict**: You're designing an application that processes large batch jobs nightly. These jobs run for 2-3 hours and require significant CPU, but the VMs are idle for the remaining 21 hours. Would B-series VMs be a good fit? Why or why not?
 
@@ -105,11 +102,11 @@ For a lightly used dev/test VM, a burstable B-series instance can cost materiall
 
 ## High Availability: Availability Zones vs Availability Sets
 
-Azure provides two mechanisms to protect your VMs from infrastructure failures. Understanding the difference is essential for designing reliable systems.
+Azure provides two mechanisms to protect your VMs from infrastructure failures—**Availability Zones** and **Availability Sets**—and choosing the wrong one (or using neither) is a frequent cause of preventable outages. Understanding how each mechanism isolates failure is essential for designing reliable systems.
 
 ### Availability Zones (AZs)
 
-[An Availability Zone is a physically separate location within an Azure region. Each zone has independent power, cooling, and networking.](https://learn.microsoft.com/en-us/azure/reliability/availability-zones-overview) If a fire destroys Zone 1, Zones 2 and 3 continue operating. Azure guarantees a [**99.99% SLA**](https://azure.microsoft.com/en-us/explore/global-infrastructure/availability-zones/) for VMs deployed across two or more zones.
+[An Availability Zone is a physically separate location within an Azure region. Each zone has independent power, cooling, and networking.](https://learn.microsoft.com/en-us/azure/reliability/availability-zones-overview) If a fire or power loss affects one zone, VMs in the other zones in the same region can keep serving traffic, which is why zone-spanning designs target a [**99.99% SLA**](https://azure.microsoft.com/en-us/explore/global-infrastructure/availability-zones/) when you run VMs across two or more zones behind a load balancer.
 
 ```mermaid
 graph LR
@@ -256,11 +253,11 @@ az vm encryption show --resource-group myRG --name db-vm -o table
 
 ## VM Extensions and Cloud-Init: Automating Configuration
 
-Manually SSHing into VMs to install software is fragile and does not scale. Azure provides two mechanisms for automated configuration: **VM Extensions** and **cloud-init**.
+Manually SSHing into VMs to install software is fragile, hard to audit, and does not scale past a handful of instances, so production teams automate first-boot configuration instead. Azure supports two complementary approaches: **cloud-init** for portable, first-boot bootstrap (common on Linux marketplace images) and **VM Extensions** for Azure-native post-deployment automation managed through ARM, CLI, or the portal.
 
 ### Cloud-Init
 
-Cloud-init is the industry standard for cross-platform cloud instance initialization. It runs during the first boot of a VM and can install packages, write files, run commands, and configure services.
+Cloud-init is the industry standard for cross-platform cloud instance initialization; on first boot it can update packages, write files, run commands, and enable services before your application accepts traffic.
 
 ```yaml
 # cloud-init.yaml
@@ -312,7 +309,7 @@ az vm create \
 
 ### VM Extensions
 
-VM Extensions are small applications that provide post-deployment configuration and automation. They are Azure-native and can be managed through ARM templates, CLI, or the portal.
+VM Extensions are small, publisher-maintained agents that run on the VM after deployment—examples include Custom Script for ad hoc commands and the Azure Monitor agent for telemetry—and because they are first-class Azure resources, you can install, upgrade, and audit them consistently across a fleet using ARM templates, CLI, or the portal.
 
 ```bash
 # Install the Custom Script Extension to run a script
@@ -339,7 +336,7 @@ az vm extension list -g myRG --vm-name web-vm -o table
 
 ## VM Scale Sets (VMSS): Horizontal Auto-Scaling
 
-[A VM Scale Set is a group of identical, load-balanced VMs that can automatically scale in and out based on demand or a schedule.](https://learn.microsoft.com/en-us/azure/virtual-machines/availability) Think of it as a fleet of VMs managed as a single resource.
+[A VM Scale Set is a group of identical, load-balanced VMs that can automatically scale in and out based on demand or a schedule.](https://learn.microsoft.com/en-us/azure/virtual-machines/availability) Think of it as a fleet of VMs managed as a single resource: you define an image, SKU, and capacity bounds once, and Azure creates or removes instances while keeping them behind a load balancer and optional zone placement rules.
 
 ### VMSS Architecture
 
@@ -374,7 +371,7 @@ graph TD
 
 ### Orchestration Modes
 
-VMSS has two orchestration modes:
+VM Scale Sets support two orchestration modes—**Uniform** (legacy) and **Flexible** (recommended)—and the choice affects whether you can mix VM sizes, attach existing VMs, and how networking and fault domains behave. The table below compares the two modes on the dimensions that matter most when you design for production:
 
 | Feature | Uniform (Legacy) | Flexible (Recommended) |
 | :--- | :--- | :--- |
@@ -537,16 +534,7 @@ Managing cloud costs is as critical as managing performance and availability. Az
 
 [Azure Spot Virtual Machines allow you to utilize unused Azure compute capacity at a significant discount (up to 90% off pay-as-you-go prices). The trade-off is that Azure can evict Spot VMs at any time if it needs the capacity back.](https://learn.microsoft.com/en-us/azure/architecture/guide/spot/spot-eviction)
 
-**Use Cases**:
-- **Batch processing**: Jobs that can be interrupted and restarted.
-- **Development/test environments**: Non-production workloads where occasional interruptions are acceptable.
-- **High-throughput stateless applications**: Workloads like rendering or media encoding where progress can be saved or work redistributed upon eviction.
-- **VM Scale Sets**: Ideal for Spot VMs, as the scale set can automatically replace evicted instances or balance workload.
-
-**Key Considerations**:
-- **Eviction policy**: You can choose to deallocate or delete the VM when Azure evicts it.
-- **Price caps**: You can set a maximum price you're willing to pay, but it's often more effective to let Azure choose the current Spot price for higher availability.
-- **VM size and region**: Spot availability and pricing vary by VM size and region.
+Spot VMs fit workloads that tolerate interruption: **batch processing** jobs that can restart, **development and test** environments where brief downtime is acceptable, and **high-throughput stateless** applications such as rendering or media encoding where progress can be checkpointed or redistributed. They also pair well with **VM Scale Sets**, because the scale set can replace evicted instances and keep capacity aligned with demand. When you adopt Spot, plan for **eviction policy** (deallocate versus delete on eviction), whether to set a **price cap** or let Azure price the instance for higher availability, and that **VM size and region** strongly affect Spot availability and cost.
 
 ```bash
 # Create a single Azure Spot VM
@@ -568,18 +556,7 @@ az vm create \
 
 [Azure Reserved Instances allow you to commit to a specific VM size and region for a one-year or three-year term in exchange for a significant discount (up to 72% compared to pay-as-you-go). When you purchase a reservation, it applies to any qualifying VM in that region, regardless of the specific VM running.](https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/save-compute-costs-reservations)
 
-**Use Cases**:
-- **Steady-state workloads**: Applications with predictable, continuous usage (e.g., production databases, always-on web servers).
-- **Long-running projects**: Any project where you know you'll need compute capacity for an extended period.
-
-**Key Considerations**:
-- **Flexibility**: Reservations offer some flexibility (e.g., instance size flexibility within the same family).
-- **Utilization**: To maximize savings, you need to ensure high utilization of your reserved capacity. Unused reservation hours are wasted.
-- **Payment options**: You can pay upfront or monthly.
-
-**Spot VMs vs. Reserved Instances**:
-- **Spot VMs**: Best for flexible, interruptible workloads where cost is paramount and availability can fluctuate.
-- **Reserved Instances**: Best for stable, continuous workloads where predictable costs and guaranteed capacity are essential.
+Reserved Instances reward **steady-state** production—databases, always-on web tiers, and other workloads with predictable 24/7 usage—and **long-running projects** where you already know you will need the same compute footprint for a year or more. Reservations include **instance size flexibility** within a family in many cases, but savings depend on **utilization**: unused reservation hours do not roll forward as free compute. You can pay **upfront or monthly** depending on how your finance team prefers to recognize spend. In practice, **Spot VMs** win for interruptible, cost-sensitive burst work, while **Reserved Instances** win when you need guaranteed capacity and a stable unit price for continuously running VMs.
 
 ---
 
@@ -658,9 +635,7 @@ For a consistent, 24/7 workload with predictable usage over a three-year term, p
 
 ## Hands-On Exercise: HA Web Tier on VMSS Across Availability Zones with Standard LB
 
-In this exercise, you will deploy a highly available web application using a VM Scale Set spread across three Availability Zones, with a Standard Load Balancer distributing traffic and autoscale rules based on CPU utilization.
-
-**Prerequisites**: Azure CLI installed and authenticated.
+In this exercise, you will deploy a highly available web application using a VM Scale Set spread across three Availability Zones, with a Standard Load Balancer distributing traffic and autoscale rules based on CPU utilization. You need the **Azure CLI installed and authenticated** (`az login`) before you start; the steps below assume you can create resource groups and networking in a subscription where you have Contributor rights.
 
 ### Task 1: Create the Resource Group and Network
 

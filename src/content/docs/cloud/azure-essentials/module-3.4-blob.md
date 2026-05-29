@@ -4,11 +4,11 @@ slug: cloud/azure-essentials/module-3.4-blob
 sidebar:
   order: 5
 ---
-**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC)
+**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC). You should be comfortable assigning Entra ID RBAC roles and running `az` commands with `--auth-mode login` before starting.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to apply the patterns below in production storage designs:
 
 - **Configure Azure Blob Storage with access tiers (Hot, Cool, Cold, Archive) and lifecycle management policies**
 - **Implement storage account security with private endpoints, SAS tokens, and Entra ID-based RBAC access**
@@ -84,7 +84,7 @@ graph LR
     GZRS -.->|Enable read endpoint| RAGZRS
 ```
 
-**Cost comparison (per GB, Hot tier, East US, approximate):**
+The table above shows durability tiers; the bullets below illustrate how redundancy choice shifts **storage cost per GB** on Hot tier in East US (approximate, for planning only):
 * LRS: baseline storage cost
 * ZRS: higher storage cost than LRS
 * GRS: materially higher storage cost than LRS
@@ -349,7 +349,7 @@ sequenceDiagram
     Azure-->>Client: Return file (Access Granted)
 ```
 
-Here is how you generate highly scoped SAS tokens using Entra ID delegation:
+The following commands generate highly scoped SAS tokens using Entra ID user delegation (`--as-user`), so the token is signed by your identity rather than a storage account key:
 
 ```bash
 # Generate a SAS token for a specific blob (read-only, expires in 1 hour)
@@ -378,7 +378,7 @@ az storage container generate-sas \
   --output tsv
 ```
 
-SAS token permission flags:
+When you build a SAS URI, combine permission flags to grant only what the client needs:
 
 | Flag | Permission |
 | :--- | :--- |
@@ -409,13 +409,14 @@ az role assignment create \
   --scope "/subscriptions/<sub>/resourceGroups/myRG/providers/Microsoft.Storage/storageAccounts/$STORAGE_NAME/blobServices/default/containers/application-data"
 ```
 
-**[Key storage RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage):**
+Microsoft documents **[key storage RBAC roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage)** for data-plane access; the ones you will assign most often are:
 *   **Storage Blob Data Reader:** Read and list blobs
 *   **Storage Blob Data Contributor:** Read, write, delete blobs
 *   **Storage Blob Data Owner:** Full access + set POSIX ACLs (Data Lake)
 *   **Storage Blob Delegator:** Generate user delegation SAS tokens
 
-**Authorization Method Decision Tree:**
+Use this decision tree when you are unsure whether to use Managed Identity, Entra ID sign-in, SAS, or a service principal:
+
 ```mermaid
 flowchart TD
     Start{"Is the client an Azure resource<br/>(VM, Function, App)?"}
@@ -431,9 +432,7 @@ flowchart TD
 
 While authorization controls *who* can access your data, network security controls *from where* they can access it. By default, storage accounts are accessible via public endpoints over the internet.
 
-To restrict network access, you have two primary mechanisms:
-1. **Storage Firewall (Service Endpoints):** You can restrict access to specific public IP ranges or specific Azure Virtual Network subnets. Traffic still flows over the Azure backbone, but the storage account rejects requests from unauthorized networks.
-2. **[Private Endpoints (Azure Private Link)](https://learn.microsoft.com/en-us/azure/storage/common/storage-private-endpoints):** This provides the highest level of network security. A Private Endpoint places a virtual network interface (NIC) inside your VNet and assigns it a private IP address. All traffic between your VNet and the storage account travels entirely on the Microsoft private backbone network, never traversing the public internet.
+To restrict network access, you have two primary mechanisms, and many teams combine them. **Storage Firewall (service endpoints)** lets you allow only specific public IP ranges or Azure Virtual Network subnets; traffic still uses Azure's backbone, but the storage account rejects requests from anywhere else. **[Private Endpoints (Azure Private Link)](https://learn.microsoft.com/en-us/azure/storage/common/storage-private-endpoints)** go further by placing a NIC in your VNet with a private IP so blob traffic stays on Microsoft's private network and never crosses the public internet.
 
 ```bash
 # Disable public network access entirely
@@ -487,7 +486,7 @@ az storage fs directory create \
   --auth-mode login
 ```
 
-The key differences between regular Blob Storage and ADLS Gen2 directly impact big data performance:
+Choosing between flat Blob Storage and ADLS Gen2 is not about price---both use the same storage meters---but about namespace semantics, rename behavior, and how analytics tools expect to read data:
 
 | Feature | Blob Storage | ADLS Gen2 |
 | :--- | :--- | :--- |
@@ -593,7 +592,7 @@ To satisfy the network security mandate, you must disable public network access 
 
 In this exercise, you will create a storage account, configure lifecycle management, upload blobs to different tiers, practice generating scoped SAS tokens, and provision a Data Lake Gen2 namespace for big data.
 
-**Prerequisites**: Azure CLI installed and authenticated, "Storage Blob Data Contributor" role on your subscription.
+**Prerequisites**: Install and authenticate the Azure CLI (`az login`), and ensure your signed-in identity has **Storage Blob Data Contributor** (or Owner) on the subscription or resource group you use for the lab.
 
 ### Task 1: Create a Storage Account
 *[Maps to Learning Outcome: Implement storage account security with private endpoints, SAS tokens, and Entra ID-based RBAC access]*
@@ -632,7 +631,8 @@ az storage account show -n "$STORAGE_NAME" -g "$RG" \
 </details>
 
 ### Task 2: Create Containers and Upload Test Data
-*[Maps to Learning Outcome: Configure Azure Blob Storage with access tiers and lifecycle management policies]*
+
+Create containers and upload sample blobs so you can see tier labels and lifecycle prefixes in later steps (learning outcome: access tiers and lifecycle policies).
 
 ```bash
 # Create containers for different purposes
@@ -668,7 +668,8 @@ You should see 5 blobs in Hot tier.
 </details>
 
 ### Task 3: Configure Lifecycle Management Policy
-*[Maps to Learning Outcome: Configure Azure Blob Storage with access tiers and lifecycle management policies]*
+
+Apply a management policy that ages `logs/` blobs through Cool, Cold, and Archive before deletion (learning outcome: access tiers and lifecycle policies).
 
 ```bash
 az storage account management-policy create \

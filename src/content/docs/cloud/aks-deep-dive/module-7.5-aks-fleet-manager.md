@@ -6,15 +6,9 @@ sidebar:
 ---
 > **AKS Deep Dive** | Complexity: `[ADVANCED]` | Time: 2.5h
 
-As organizations scale their Kubernetes footprints, managing a single sprawling cluster often becomes untenable due to blast radius concerns, hard limits, or multi-region requirements. The natural evolution is multi-cluster architecture, but this introduces massive operational overhead: how do you coordinate upgrades, enforce policies, and distribute workloads consistently across dozens of clusters?
+As organizations scale their Kubernetes footprints, managing a single sprawling cluster often becomes untenable because blast radius, hard scalability limits, or multi-region requirements push teams toward many smaller clusters instead of one giant control plane. That shift solves one class of problems but introduces another: how do you coordinate upgrades, enforce policies, and distribute workloads consistently when every cluster has its own API server, credentials, and operational lifecycle? **Azure Kubernetes Fleet Manager (Fleet)** answers that question with a centralized control plane that treats multiple AKS clusters—and Azure Arc-enabled Kubernetes clusters—as members of one logical fleet. Fleet solves the "n-cluster problem" by introducing fleet-level workload placement, coordinated multi-cluster upgrades, and unified governance so platform teams can reason about dozens of clusters the way they once reasoned about namespaces inside a single cluster.
 
-Enter **Azure Kubernetes Fleet Manager (Fleet)**.
-
-Fleet provides a centralized control plane to manage multiple AKS clusters (and Azure Arc-enabled Kubernetes clusters) as a single, cohesive entity. It solves the "n-cluster problem" by introducing fleet-level workload placement, coordinated multi-cluster upgrades, and unified governance.
-
-<!-- v4:generated type=no_exercise model=codex turn=1 -->
 ## Hands-On Exercise
-
 
 Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub to both member clusters, observe reconciliation after drift, and define a staged multi-cluster upgrade strategy.
 
@@ -37,7 +31,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
   az extension update --name fleet
   ```
 
-  Verification:
+  Before creating Azure resources, confirm the active subscription, signed-in user, and installed Fleet extension version match the lab variables you exported:
 
   ```bash
   az account show --query "{subscription:id,user:user.name}" -o table
@@ -64,7 +58,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
     --generate-ssh-keys
   ```
 
-  Verification:
+  List both AKS clusters in the lab resource group and confirm each reports a healthy power state in the expected east and west regions:
 
   ```bash
   az aks list --resource-group "${GROUP}" --query "[].{name:name,location:location,power:powerState.code}" -o table
@@ -97,7 +91,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
     --update-group stage2
   ```
 
-  Verification:
+  List Fleet members from the hub subscription and confirm the east and west clusters appear as members with distinct update groups:
 
   ```bash
   az fleet member list --resource-group "${GROUP}" --fleet-name "${FLEET}" -o table
@@ -119,7 +113,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
   az fleet get-credentials --resource-group "${GROUP}" --name "${FLEET}" --member "${WEST_MEMBER}" --context "${WEST_MEMBER}-ctx" --overwrite-existing
   ```
 
-  Verification:
+  From the hub kube context, list member clusters and confirm Fleet-applied location labels match the east and west regions you used during cluster creation:
 
   ```bash
   kubectl --context "${FLEET}-hub" get memberclusters
@@ -170,7 +164,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
   EOF
   ```
 
-  Verification:
+  Confirm the sample deployment, service, and pod are running on the Fleet hub before you create the cluster-wide placement object:
 
   ```bash
   kubectl --context "${FLEET}-hub" -n fleet-demo get deploy,svc,pods
@@ -195,7 +189,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
   EOF
   ```
 
-  Verification:
+  Describe the placement object on the hub and confirm Fleet reports the `fleet-demo` namespace as scheduled and applied to every member cluster:
 
   ```bash
   kubectl --context "${FLEET}-hub" get clusterresourceplacement fleet-demo-all
@@ -213,7 +207,7 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
   kubectl --context "${WEST_MEMBER}-ctx" -n fleet-demo get deployment web
   ```
 
-  Verification:
+  After deleting the deployment on the west member, confirm Fleet recreates the workload and the placement status still shows a healthy apply:
 
   ```bash
   kubectl --context "${WEST_MEMBER}-ctx" -n fleet-demo get pods
@@ -254,41 +248,43 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
     --stages example-stages.json
   ```
 
-  Verification:
+  Show the update strategy YAML and list available upgrades on the east cluster to confirm staged rollout metadata:
 
   ```bash
   az fleet updatestrategy show --resource-group "${GROUP}" --fleet-name "${FLEET}" --name "${STRATEGY}" -o yaml
   az aks get-upgrades --resource-group "${GROUP}" --name "${CLUSTER_EAST}" -o table
   ```
 
-Success criteria:
+The lab is complete when all of the following success criteria are true:
+
 - The Fleet hub shows both member clusters as joined.
 - `fleet-demo-all` reports as scheduled and applied from the hub.
 - The `fleet-demo` namespace and `web` workload exist on both member clusters.
 - Deleting the deployment from one member cluster results in Fleet recreating it.
 - The Fleet update strategy exists and shows two ordered stages mapped to different update groups.
 
-<!-- /v4:generated -->
 ## When to Adopt Fleet Manager
 
-Before diving into the mechanics, it is crucial to understand *when* you actually need Fleet Manager. Multi-cluster architectures introduce complexity; you should not adopt them prematurely.
+Before diving into the mechanics, it is crucial to understand *when* you actually need Fleet Manager, because multi-cluster architectures introduce operational complexity that you should not take on until a single-cluster model genuinely stops working. A small team in one region with modest node counts can usually satisfy blast-radius and tenancy needs with namespaces, RBAC, and network policies, especially if an external GitOps controller already coordinates releases across a handful of independent clusters.
 
-**Use single-cluster (or a few independent clusters) when:**
-- You operate in a single region and haven't hit AKS scalability limits (e.g., 5,000 nodes).
-- Your team structure is simple, and blast radius concerns are satisfied by namespaces and RBAC.
-- You prefer to manage multi-cluster deployments entirely through an external GitOps tool (like ArgoCD) without needing native Azure coordinated upgrades.
+### When a Single Cluster (or a Few Independent Clusters) Is Enough
 
-**Adopt Azure Kubernetes Fleet Manager when:**
-- **High Availability & Disaster Recovery:** You run active-active or active-passive workloads across multiple Azure regions.
-- **Blast Radius Reduction:** You intentionally split workloads across many smaller clusters rather than one massive cluster to minimize the impact of control plane failures or misconfigurations.
-- **Lifecycle Management at Scale:** You need to orchestrate Kubernetes version upgrades across dozens of clusters in a safe, staged manner (e.g., Dev -> Staging -> Prod/Canary -> Prod/Main) without writing complex custom pipelines.
-- **Hybrid/Edge Footprint:** You manage a mix of AKS and on-premises/edge clusters via Azure Arc and need a single pane of glass for policy and placement.
+- You operate in a single region and have not hit AKS scalability limits (for example, the roughly 5,000-node cluster ceiling).
+- Your team structure is simple, and blast radius concerns are satisfied by namespaces and RBAC alone.
+- You prefer to manage multi-cluster deployments entirely through an external GitOps tool (like Argo CD) without needing native Azure coordinated upgrades.
 
-> **Pause and predict**: If you have 50 AKS clusters across 3 regions, how would you upgrade them without Fleet Manager? You would likely need a complex CI/CD pipeline looping through clusters, checking health, and handling rollbacks. Fleet Manager moves this orchestration logic into the Azure platform itself.
+### When to Adopt Azure Kubernetes Fleet Manager
+
+- **High Availability & Disaster Recovery:** You run active-active or active-passive workloads across multiple Azure regions and need a control plane that understands regional membership.
+- **Blast Radius Reduction:** You intentionally split workloads across many smaller clusters rather than one massive cluster so control plane failures or misconfigurations affect fewer tenants.
+- **Lifecycle Management at Scale:** You must orchestrate Kubernetes version upgrades across dozens of clusters in a safe, staged manner (for example, Dev → Staging → Prod/Canary → Prod/Main) without maintaining bespoke CI/CD loops for every wave.
+- **Hybrid/Edge Footprint:** You manage a mix of AKS and on-premises or edge clusters via Azure Arc and need a single pane of glass for policy and placement.
+
+> **Pause and predict**: If you have 50 AKS clusters across 3 regions, how would you upgrade them without Fleet Manager? You would likely need a complex CI/CD pipeline looping through clusters, checking health, and handling rollbacks. Fleet Manager moves that orchestration logic into the Azure platform itself.
 
 ## Architecture and Topology
 
-Fleet Manager operates on a **hub-and-spoke** topology.
+Fleet Manager operates on a **hub-and-spoke** topology in which a Fleet resource with an enabled hub cluster becomes the centralized control plane, while standard AKS or Arc-enabled clusters join as spokes. The hub is not a place for application workloads: when you enable the hub cluster feature, Azure provisions a managed, headless Kubernetes control plane that stores fleet-level custom resources such as placements and update runs, and member clusters receive synchronized objects through Fleet controllers rather than through ad hoc scripting from your laptop.
 
 1.  **The Fleet (Hub):** An Azure resource that acts as the centralized control plane. Under the hood, a Fleet resource with the "Hub cluster" feature enabled provisions a managed, headless Kubernetes control plane. You do not run user workloads directly on the Hub; it exists solely to store fleet-level custom resources (like placements and update runs) and API objects.
 2.  **Member Clusters (Spokes):** Standard AKS clusters or Azure Arc-enabled clusters that are joined to the Fleet.
@@ -320,7 +316,7 @@ graph TD
 
 ### Joining a Cluster to a Fleet
 
-Clusters are joined to the Fleet by creating a `FleetMember` resource. This can be done via the Azure CLI, ARM templates, Bicep, or Terraform.
+Clusters are joined to the Fleet by creating a `FleetMember` resource through the Azure CLI, ARM templates, Bicep, or Terraform, and once that relationship exists the hub receives the credentials and network path it needs to push placement decisions to each spoke. The join operation is intentionally boring infrastructure work—what matters is that every member cluster becomes addressable from the hub API so propagation and upgrade orchestration can run without per-cluster kubeconfig juggling.
 
 ```bash
 # Create the Fleet resource (with a hub cluster)
@@ -337,17 +333,15 @@ az fleet member create \
     --member-cluster-id /subscriptions/.../managedClusters/app-east-1
 ```
 
-Once joined, the Fleet Hub has the necessary credentials and network line-of-sight to sync resources down to the member clusters.
+After the member record exists, the Fleet Hub maintains line-of-sight to the member API server and can reconcile placed resources whenever the hub desired state changes.
 
 ## Fleet-Level Workload Placement
 
-The most powerful feature of Fleet Manager is the ability to deploy Kubernetes resources to the Hub, and have the Hub intelligently distribute them to the member clusters based on rules. This is achieved using the `ClusterResourcePlacement` Custom Resource Definition (CRD).
-
-Instead of running `kubectl apply` against 10 different clusters, you authenticate to the *Fleet Hub* and apply your standard Kubernetes manifests (Deployments, Services, ConfigMaps, etc.). Then, you create a `ClusterResourcePlacement` to tell the Hub *where* those resources should go.
+The most powerful feature of Fleet Manager is the ability to deploy Kubernetes resources to the Hub and have the Hub intelligently distribute them to member clusters based on rules defined in a `ClusterResourcePlacement` Custom Resource Definition (CRD). Instead of running `kubectl apply` against ten different clusters, you authenticate to the *Fleet Hub*, apply the same Deployments, Services, and ConfigMaps you would use in a single cluster, and let Fleet decide which members should receive each object based on labels, counts, or explicit names.
 
 ### Placement Strategies
 
-Fleet supports several placement policies:
+Fleet supports several placement policies, and choosing among them is how you express blast-radius and capacity intent without rewriting manifests for every member cluster in the fleet:
 
 1.  **`pickAll`:** Distribute the resources to *all* member clusters, optionally filtering by cluster labels.
 2.  **`pickFixed`:** Distribute the resources to a specific, hardcoded list of member cluster names.
@@ -355,7 +349,7 @@ Fleet supports several placement policies:
 
 ### Example: Propagating a Frontend App
 
-Let's say you have a frontend application deployed in the `frontend-app` namespace on the Hub cluster. You want to deploy this namespace (and everything in it) to all member clusters labeled `region: westeurope`.
+Suppose a frontend application lives in the `frontend-app` namespace on the Hub and you want that namespace—and every namespaced object inside it—on all member clusters labeled `region: westeurope`. The placement object below selects the namespace and applies a `PickAll` policy filtered by cluster labels, which is the usual pattern for regional active-active footprints.
 
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1beta1
@@ -378,15 +372,13 @@ spec:
                 region: westeurope
 ```
 
-When you apply this to the Hub, the Fleet controller packages the `frontend-app` namespace, the Deployments, Services, and ConfigMaps within it, and pushes them to the matching member clusters. It also monitors the member clusters to ensure the resources remain synchronized with the Hub's desired state.
+When you apply this manifest to the Hub, the Fleet controller packages the `frontend-app` namespace together with its Deployments, Services, and ConfigMaps, pushes the bundle to matching members, and continues to watch those clusters so drift against the hub desired state is corrected automatically.
 
 > **Stop and think**: If you delete a Deployment directly on one of the member clusters, what happens? Because the Fleet Hub is the source of truth for placed resources, the Fleet controller will detect the drift and automatically recreate the Deployment on the member cluster to match the Hub's state.
 
 ## Coordinated Multi-Cluster Upgrades
 
-Upgrading Kubernetes versions (e.g., from v1.34 to v1.35) is stressful. Upgrading 50 clusters is a nightmare. Fleet Manager provides an orchestration engine for multi-cluster upgrades using **Update Runs**, **Stages**, and **Groups**.
-
-Instead of upgrading clusters randomly or relying on external CI/CD loops, you model your rollout strategy natively in Azure.
+Upgrading Kubernetes versions (for example, from v1.34 to v1.35) is stressful on one cluster and operationally hazardous across fifty, which is why Fleet Manager exposes an orchestration engine built from **Update Runs**, **Stages**, and **Groups** instead of leaving every team to script their own wave logic. Rather than upgrading clusters randomly or relying on external CI/CD loops that are hard to audit, you model rollout intent natively in Azure and let Fleet enforce ordering, bake times, and halt conditions when health checks fail mid-stage.
 
 1.  **Update Groups:** Logical groupings of clusters (e.g., `dev-clusters`, `canary-clusters`, `prod-westeurope`, `prod-eastus`).
 2.  **Update Stages:** Ordered sequences of Update Groups. A stage waits for the previous stage to complete successfully before starting. You can also configure bake times (wait periods) between stages.
@@ -394,7 +386,7 @@ Instead of upgrading clusters randomly or relying on external CI/CD loops, you m
 
 ### Defining an Update Strategy
 
-You can define a reusable `FleetUpdateStrategy`.
+A reusable `FleetUpdateStrategy` captures the wave pattern so every Kubernetes minor bump follows the same safety rails instead of retyping stage JSON under pressure.
 
 ```bash
 az fleet updatestrategy create \
@@ -407,14 +399,7 @@ az fleet updatestrategy create \
       '{"name": "Stage3-Prod", "groups": [{"name": "prod-east"}, {"name": "prod-west"}]}'
 ```
 
-In this strategy:
-1. The `dev-group` upgrades first.
-2. The system waits 1 hour (3600 seconds) to allow for automated alerts to fire if something is broken.
-3. The `canary-group` upgrades.
-4. The system waits 24 hours (86400 seconds) for bake time.
-5. The production groups (`prod-east` and `prod-west`) upgrade concurrently.
-
-You trigger the upgrade by creating an Update Run using this strategy:
+In the strategy above, the `dev-group` upgrades first, the platform waits one hour so automated alerts can surface regressions, the `canary-group` upgrades next, a twenty-four-hour bake window runs, and only then do the `prod-east` and `prod-west` groups upgrade concurrently. You start the real version change by creating an Update Run that references the strategy and target Kubernetes version:
 
 ```bash
 az fleet updaterun create \
@@ -426,38 +411,29 @@ az fleet updaterun create \
     --update-strategy-name safe-rollout-strategy
 ```
 
-If a stage fails (e.g., a cluster upgrade fails or workloads become unhealthy and trigger a halt), the Update Run pauses, preventing the bad update from cascading to your production clusters.
+If a stage fails—because a cluster upgrade errors or workloads become unhealthy and trigger a halt—the Update Run pauses instead of cascading the same change into production, which is the core safety property staged fleets are meant to buy you.
 
 ## GitOps and Policy at Scale
 
-Fleet Manager integrates seamlessly with other Azure scalable management tools.
+Fleet Manager integrates with the broader Azure management stack so hub state, policy, and telemetry can be governed consistently even when member clusters span regions and tenancy models. The integration points below are not mandatory on day one, but they are the patterns teams converge on once fleet size makes manual hub edits unsustainable.
 
 ### GitOps with Flux
 
-While you *can* manually `kubectl apply` resources to the Fleet Hub, best practice is to manage the Hub's state via GitOps. You can install the Flux v2 extension directly onto the Fleet Hub cluster.
-
-1. Commit your Kubernetes manifests and `ClusterResourcePlacement` YAMLs to a Git repository.
-2. Configure the Flux extension on the Fleet Hub to watch that repository.
-3. Flux syncs the resources to the Hub.
-4. Fleet Manager distributes the resources to the member clusters.
-
-This provides a centralized GitOps workflow for a multi-cluster fleet, rather than having to install and configure Flux individually on every single spoke cluster.
+While you *can* manually `kubectl apply` resources to the Fleet Hub, best practice is to manage the Hub's desired state with GitOps: install the Flux v2 extension on the Fleet Hub, commit Kubernetes manifests plus `ClusterResourcePlacement` YAML to a repository, and let Flux reconcile the hub while Fleet propagates the same objects to members. That workflow gives you one Git-driven pipeline for a multi-cluster fleet instead of installing and configuring Flux independently on every spoke cluster, which is how you avoid conflicting sources of truth between hub placement and local controllers.
 
 ### Azure Policy
 
-Azure Policy can be applied at the resource group or subscription level containing your AKS clusters. However, when using Fleet Manager, you can ensure consistent policy enforcement across all members. For instance, you can use Azure Policy to enforce that all clusters in a specific Update Group have the correct labels applied, or that certain privileged containers are blocked globally across the fleet.
+Azure Policy can target the resource groups or subscriptions that contain your AKS clusters, and in a Fleet deployment you typically use it to enforce labels on update groups, block privileged containers fleet-wide, or require diagnostic settings before a cluster is allowed to join a production stage. Fleet membership does not replace Policy; it gives you a natural scope boundary so the same guardrails apply to every member attached to a hub.
 
 ### Multi-Cluster Observability
 
-To monitor a fleet, you must aggregate telemetry. The standard pattern is configuring all member AKS clusters to send their metrics and logs to a centralized **Azure Monitor Workspace** (for Managed Prometheus) and a centralized **Log Analytics Workspace**. Azure Managed Grafana can then connect to the Azure Monitor Workspace, allowing you to build dashboards that query metrics across the entire fleet, filtering by cluster name or region labels.
+To monitor a fleet effectively, you aggregate telemetry from every member into shared backends: configure member AKS clusters to send metrics and logs to a centralized **Azure Monitor Workspace** (for Managed Prometheus) and a centralized **Log Analytics Workspace**, then connect **Azure Managed Grafana** to that workspace so dashboards can query across the fleet using cluster name or region labels. Without that aggregation step, each cluster looks healthy in isolation while regional or placement-level incidents remain invisible until customers complain.
 
 ## Knowledge Check
 
 ### Scenario 1
 
-You are the platform engineer for an e-commerce company running 12 AKS clusters across 4 regions. You have defined a `ClusterResourcePlacement` on your Fleet Hub to deploy a new microservice to all 12 clusters. You commit the YAML to your Git repository, Flux syncs it to the Hub, but the microservice only appears on 3 of the clusters. You check the Hub, and the `ClusterResourcePlacement` status shows it successfully matched and applied to all 12 clusters. 
-
-What is the most likely cause of this discrepancy?
+You are the platform engineer for an e-commerce company running 12 AKS clusters across 4 regions. You have defined a `ClusterResourcePlacement` on your Fleet Hub to deploy a new microservice to all 12 clusters. You commit the YAML to your Git repository, Flux syncs it to the Hub, but the microservice only appears on 3 of the clusters. You check the Hub, and the `ClusterResourcePlacement` status shows it successfully matched and applied to all 12 clusters. Given that the hub believes placement succeeded everywhere, which explanation best accounts for workloads missing on nine members despite a successful Fleet status?
 
 - [ ] A) The Fleet Manager controller is experiencing high latency and the rollout to the remaining 9 clusters is just delayed.
 - [ ] B) The `pickN` placement strategy was accidentally configured to limit the deployment to 3 clusters.
@@ -474,9 +450,7 @@ If the Hub reports successful placement to all 12 clusters, it means the Fleet c
 
 ### Scenario 2
 
-Your organization is preparing to upgrade its entire fleet of 40 AKS clusters from Kubernetes v1.34 to v1.35. You have created a `FleetUpdateStrategy` with three stages: `Dev`, `Staging`, and `Production`, with a 12-hour wait time between Staging and Production. During the `Staging` stage upgrade, one of the 5 clusters in the staging group fails its node image upgrade due to a custom daemonset blocking node drains. 
-
-How will the Fleet Manager Update Run behave in this situation?
+Your organization is preparing to upgrade its entire fleet of 40 AKS clusters from Kubernetes v1.34 to v1.35. You have created a `FleetUpdateStrategy` with three stages: `Dev`, `Staging`, and `Production`, with a 12-hour wait time between Staging and Production. During the `Staging` stage upgrade, one of the 5 clusters in the staging group fails its node image upgrade because a custom daemonset blocks node drains. When that failure happens inside a staged Fleet Update Run, how should you expect Fleet Manager to behave before any production clusters are touched?
 
 - [ ] A) It will immediately rollback the failed staging cluster to v1.34, continue upgrading the other 4 staging clusters, and then proceed to the Production stage.
 - [ ] B) It will halt the entire Update Run at the `Staging` stage. The `Production` stage will not begin until the failed cluster is remediated and the run is resumed.

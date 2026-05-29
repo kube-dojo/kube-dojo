@@ -12,7 +12,7 @@ FinOps is the operating discipline that lets engineering, finance, product, proc
 
 The goal is not to turn engineers into accountants or to make finance teams review every deployment. The goal is to create a shared control system in which cost is visible early enough to matter, technical teams can act without waiting for monthly billing surprises, and business leaders can decide when higher spend is justified by higher value. Kubernetes makes this both more important and more difficult because the unit that creates business value is usually a service or product, while the unit that receives the cloud invoice is often a node, disk, network interface, managed control plane, or account-level charge.
 
-This is a fundamentals module, so it deliberately stops at orientation rather than tool mastery. You will learn the [FinOps framework](https://www.finops.org/framework/), the Crawl/Walk/Run maturity model, why cloud economics differ from on-premises capacity planning, and why Kubernetes cost allocation is harder than tagging a virtual machine. The hands-on section gives you a local kind-based lab with OpenCost, synthetic workloads, request-versus-usage comparison, and a simple namespace report. The next module can go deeper into applied practices once this mental model is in place.
+This is a fundamentals module, so it deliberately stops at orientation rather than tool mastery. You will learn the [FinOps framework](https://www.finops.org/framework/), the Crawl/Walk/Run maturity model, why cloud economics differ from on-premises capacity planning, and why Kubernetes cost allocation is harder than tagging a virtual machine. The hands-on section gives you a local kind-based lab with OpenCost, synthetic workloads, request-versus-usage comparison, and a simple namespace report you can explain to finance or product partners. The next module can go deeper into applied practices once this mental model is in place.
 
 ## What You'll Be Able to Do
 
@@ -144,15 +144,7 @@ Idle cost is especially important in Kubernetes because nodes are purchased or r
 
 A common trap is to assume one service maps neatly to one invoice line. In multi-tenant Kubernetes clusters, a single node pool, shared ingress controller, control plane, or observability stack often serves many teams. The result is that per-service cost can be obscured without explicit shared-cost policy. This is the core challenge described by the CNCF and FinOps collaboration on Kubernetes cost management and the [CNCF FinOps for Kubernetes report](https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf).
 
-In practice, namespace is usually the first allocation boundary because it is visible and easy to query. A namespace usually needs:
-- consistent `namespace` naming and ownership,
-- standardized labels,
-- and reliable `requests`/`limits` on containers.
-
-The cost model then has three layers:
-1. **Node-level costs**: instance and control-plane costs measured at node/pool granularity.
-2. **Pod-level costs**: workload allocation across namespaces and controllers.
-3. **Container-level costs**: a finer split inside pods for mixed behavior.
+In practice, namespace is usually the first allocation boundary because it is visible and easy to query, but a namespace alone is not enough for trustworthy reports. Teams still need consistent naming and ownership, standardized labels, and reliable `requests` and `limits` on containers so allocation tools can connect Kubernetes objects to the people who can act on the numbers. Once that metadata is in place, the cost model usually stacks three layers: **node-level costs** for instance and control-plane spend measured at node or pool granularity, **pod-level costs** for workload allocation across namespaces and controllers, and **container-level costs** when mixed behavior inside a Pod requires a finer split for showback or chargeback.
 
 `kubectl top` is still useful to spot current load, but it cannot answer “how much did Service X cost last week?” because it reports usage at a point in time without applying price models, shared-cost rules, or historical aggregation windows. Use allocation reports for that.
 
@@ -282,7 +274,7 @@ D) Use no tools until the platform reaches Run maturity.
 
 ## Hands-On Lab
 
-This lab runs OpenCost on a local `kind` cluster and produces a namespace allocation view from the OpenCost API.
+This lab runs OpenCost on a local `kind` cluster and produces a namespace allocation view from the OpenCost API. You will create a disposable cluster, install OpenCost without ingress, forward the UI and API to your workstation, deploy a labeled `nginx` workload with explicit requests, and compare allocation output with `kubectl top` and the manifest’s resource fields. Treat the exercise as a teaching loop for Inform-phase visibility rather than a production install pattern.
 
 - [ ] Setup `kind` and create a lab cluster.
 - [ ] Install OpenCost via `kubectl apply` (using Helm template output).
@@ -292,15 +284,17 @@ This lab runs OpenCost on a local `kind` cluster and produces a namespace alloca
 
 ### Step 1 — Setup the environment
 
+Create a dedicated `kind` cluster and two namespaces so OpenCost and the sample workload stay isolated. Before you run the commands, confirm `kind` is on your PATH; if it is not installed yet, follow the [kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/) and install it first so the cluster name `finops-lab` matches the cleanup command at the end of the lab.
+
 ```bash
 kind create cluster --name finops-lab
 kubectl create namespace opencost
 kubectl create namespace finops-lab
 ```
 
-If `kind` is not installed yet, follow the [kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/) and install kind first.
-
 ### Step 2 — Install OpenCost via `kubectl apply`
+
+Render the upstream Helm chart to manifests and apply them with `kubectl` so you can see every object OpenCost creates without leaving a release in your shell history. This path matches the [OpenCost installation documentation](https://opencost.io/docs/installation/install/) and [Helm integration](https://opencost.io/docs/installation/helm/) guidance, and disabling ingress keeps the lab simple because you will reach the UI through port-forward in the next step.
 
 ```bash
 helm repo add opencost https://opencost.github.io/opencost-helm-chart
@@ -313,10 +307,7 @@ helm template opencost opencost/opencost \
   | kubectl apply -f -
 ```
 
-This install path is aligned with the [OpenCost installation documentation](https://opencost.io/docs/installation/install/) and the [OpenCost Helm integration](https://opencost.io/docs/installation/helm/) guidance.
-
-
-Wait for the pod to become ready:
+After apply succeeds, wait until the OpenCost pod reports `Ready` before you forward ports or deploy workloads, because the allocation API may return empty or partial results while controllers are still starting.
 
 ```bash
 kubectl -n opencost wait --for=condition=ready pod -l app.kubernetes.io/name=opencost --timeout=240s
@@ -325,13 +316,11 @@ kubectl -n opencost get pods
 
 ### Step 3 — Run OpenCost and deploy sample workload
 
-Port-forward OpenCost UI and API so both are accessible from your workstation.
+With OpenCost ready, port-forward both the UI and API service ports to your workstation so you can open the dashboard in a browser and query `/allocation` with `curl` from the same machine. In a second terminal, deploy the sample `nginx` workload with explicit CPU and memory requests plus `team` and `environment` labels so the later namespace report has recognizable metadata to aggregate.
 
 ```bash
 kubectl -n opencost port-forward svc/opencost 9090:9090 9003:9003
 ```
-
-Deploy `nginx` with explicit requests and labels.
 
 ```bash
 kubectl apply -f - <<'YAML'
@@ -376,7 +365,7 @@ sleep 120
 
 ### Step 4 — Query OpenCost allocation
 
-Check that API and UI are reachable.
+After the deployment has been running for about two minutes, confirm the UI responds locally and pull a namespace-level allocation window that includes idle cost so you can see both tenant spend and cluster overhead in one response. The same API contract is documented in the [OpenCost API examples](https://opencost.io/docs/integrations/api-examples/) and [OpenCost specification](https://opencost.io/docs/specification/).
 
 ```bash
 curl -sSf http://127.0.0.1:9090/ | head -n 1
@@ -387,7 +376,7 @@ curl -sG 'http://127.0.0.1:9003/allocation' \
   --data-urlencode 'includeIdle=true'
 ```
 
-Filter for your lab namespace and compare namespace cost with Pod request limits. The same API contract is documented in the [OpenCost API examples](https://opencost.io/docs/integrations/api-examples/) and [OpenCost specification](https://opencost.io/docs/specification/).
+Filter the response for `finops-lab` and compare the namespace cost with the Pod’s requested CPU and memory, because that contrast is the core FinOps lesson in this lab.
 
 ```bash
 curl -sG 'http://127.0.0.1:9003/allocation' \

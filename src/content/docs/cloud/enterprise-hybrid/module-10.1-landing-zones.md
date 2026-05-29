@@ -4,11 +4,9 @@ slug: cloud/enterprise-hybrid/module-10.1-landing-zones
 sidebar:
   order: 2
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Cloud Essentials (AWS/Azure/GCP), Kubernetes Basics, Cloud Architecture Patterns
+This module is rated **[COMPLEX]** and typically takes about three hours to complete. You should already be comfortable with Cloud Essentials across AWS, Azure, and GCP, Kubernetes basics, and cloud architecture patterns before you begin.
 
-## What You'll Be Able to Do
-
-After completing this module, you will be able to:
+## What You'll Be Able To Do
 
 - **Design enterprise landing zones using AWS Control Tower, Azure Landing Zones, and GCP Organization Hierarchy**
 - **Implement automated account vending machines that provision cloud accounts and Kubernetes platforms quickly through automation**
@@ -29,11 +27,9 @@ Enterprise Landing Zones solve this exact problem. They are the foundational arc
 
 ## The Landing Zone Mental Model
 
-Before diving into specific cloud implementations, you need to understand what a Landing Zone actually is. Think of it as the building code for a city. Before anyone constructs a building, the city has already defined the zoning regulations, the sewer and electrical grid connections, the fire code, and the permit process. A Landing Zone does the same thing for cloud infrastructure.
+Before diving into specific cloud implementations, you need to understand what a Landing Zone actually is. Think of it as the building code for a city: before anyone constructs a building, the city has already defined zoning regulations, sewer and electrical grid connections, fire code, and the permit process. A Landing Zone does the same thing for cloud infrastructure, and every enterprise Landing Zone—regardless of cloud provider—addresses the same four pillars described below.
 
 ### The Four Pillars
-
-Every enterprise Landing Zone, regardless of cloud provider, addresses four pillars:
 
 ```mermaid
 flowchart TD
@@ -331,7 +327,7 @@ az role assignment create \
 
 ## GCP Organization Hierarchy and Project Factory
 
-[Google Cloud organizes resources under an Organization, with Folders providing the hierarchy and Projects serving as the account boundary](https://docs.cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy).
+[Google Cloud organizes resources under an Organization, with Folders providing the hierarchy and Projects serving as the account boundary](https://docs.cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy). Google's Cloud Foundation Toolkit provides a [Project Factory module that automates project vending](https://github.com/terraform-google-modules/terraform-google-project-factory) with shared VPC attachment, API activation, and labels baked into the template so new projects land in the right folder with guardrails already applied.
 
 ### GCP Landing Zone Structure
 
@@ -359,7 +355,7 @@ flowchart TD
 
 ### Project Factory with Terraform
 
-Google's Cloud Foundation Toolkit provides a [Project Factory module that automates project vending](https://github.com/terraform-google-modules/terraform-google-project-factory):
+The following Terraform pattern shows how Project Factory and a private GKE cluster module compose in one vending workflow:
 
 ```hcl
 # project-factory/team-alpha-prod.tf
@@ -713,9 +709,7 @@ The workflow should process this request using an automated business approval ga
 
 ## Hands-On Exercise: Build a Mini Landing Zone with Account Vending
 
-In this exercise, you will simulate an enterprise Landing Zone using local tools. You will create a multi-account structure, implement guardrails, and build a self-service vending pipeline that provisions a Kubernetes cluster.
-
-**What you will build:**
+In this exercise, you will simulate an enterprise Landing Zone using local tools on a kind management cluster. You will stand up Kyverno as a guardrail layer, write an account-vending script that provisions namespaces with baseline networking and RBAC, vend environments for two teams, prove that policies block non-compliant workloads, and generate a compliance audit across every vended namespace. The diagram below maps the management cluster components and the five-step vending pipeline you will implement end to end.
 
 ```mermaid
 flowchart TD
@@ -742,7 +736,7 @@ flowchart TD
 
 ### Task 1: Create the Management Cluster
 
-Set up the local management cluster that will serve as your Landing Zone control plane.
+Start by creating a local kind cluster with a control plane and two workers so you have a realistic management plane that can host policy engines and later act as the anchor for simulated account vending.
 
 <details>
 <summary>Solution</summary>
@@ -762,7 +756,7 @@ EOF
 kind create cluster --config /tmp/mgmt-cluster.yaml
 
 # Verify the cluster is running
-k get nodes
+kubectl get nodes
 # NAME                               STATUS   ROLES           AGE   VERSION
 # landing-zone-mgmt-control-plane    Ready    control-plane   45s   v1.35.0
 # landing-zone-mgmt-worker           Ready    <none>          30s   v1.35.0
@@ -773,7 +767,7 @@ k get nodes
 
 ### Task 2: Install the Guardrail Layer
 
-Deploy Kyverno and create policies that simulate enterprise guardrails (no privileged containers, mandatory labels, resource limits required).
+Install Kyverno on the management cluster and apply ClusterPolicies that mirror enterprise preventive controls: namespaces must carry a team label, privileged pods are denied, and every workload must declare CPU and memory limits before it can run.
 
 <details>
 <summary>Solution</summary>
@@ -784,7 +778,7 @@ helm repo add kyverno https://kyverno.github.io/kyverno/
 helm install kyverno kyverno/kyverno -n kyverno --create-namespace --wait
 
 # Create enterprise guardrail policies
-cat <<'EOF' | k apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -875,19 +869,19 @@ EOF
 
 # Test the guardrails
 echo "Testing: namespace without team label (should fail)"
-k create namespace bad-namespace 2>&1 || true
+kubectl create namespace bad-namespace 2>&1 || true
 
 echo "Testing: namespace with team label (should succeed)"
-k create namespace good-namespace --dry-run=server -o yaml \
-  | k label --local -f - team=alpha --dry-run=client -o yaml \
-  | k apply -f - --dry-run=server
+kubectl create namespace good-namespace --dry-run=server -o yaml \
+  | kubectl label --local -f - team=alpha --dry-run=client -o yaml \
+  | kubectl apply -f - --dry-run=server
 ```
 
 </details>
 
 ### Task 3: Create an Account Vending Script
 
-Build a script that simulates account vending -- creating a namespace with all the Landing Zone baseline configurations.
+Build a bash script that simulates account vending by creating a labeled namespace, applying default-deny network policies, setting resource quotas, wiring a team-scoped RBAC RoleBinding, and dropping a baseline ConfigMap so every "account" starts from the same template.
 
 <details>
 <summary>Solution</summary>
@@ -1025,16 +1019,16 @@ chmod +x /tmp/vend-account.sh
 /tmp/vend-account.sh beta development
 
 # Verify the vended accounts
-k get namespaces -l managed-by=landing-zone
-k get resourcequota -A -l managed-by!=null 2>/dev/null || k get resourcequota -n alpha-production
-k get networkpolicy -n alpha-production
+kubectl get namespaces -l managed-by=landing-zone
+kubectl get resourcequota -A -l managed-by!=null 2>/dev/null || kubectl get resourcequota -n alpha-production
+kubectl get networkpolicy -n alpha-production
 ```
 
 </details>
 
 ### Task 4: Test Guardrail Enforcement
 
-Verify that the guardrails prevent non-compliant resources in vended accounts.
+Deliberately attempt privileged pods and pods without resource limits in a vended namespace so you can confirm Kyverno enforces the Landing Zone baseline and only compliant workloads are admitted.
 
 <details>
 <summary>Solution</summary>
@@ -1042,7 +1036,7 @@ Verify that the guardrails prevent non-compliant resources in vended accounts.
 ```bash
 # Test 1: Try to create a privileged pod (should be denied)
 echo "--- Test: Privileged pod (expect DENIED) ---"
-cat <<'EOF' | k apply -f - 2>&1 || true
+cat <<'EOF' | kubectl apply -f - 2>&1 || true
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1062,7 +1056,7 @@ EOF
 
 # Test 2: Try to create a pod without resource limits (should be denied)
 echo "--- Test: Pod without limits (expect DENIED) ---"
-cat <<'EOF' | k apply -f - 2>&1 || true
+cat <<'EOF' | kubectl apply -f - 2>&1 || true
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1076,7 +1070,7 @@ EOF
 
 # Test 3: Create a compliant pod (should succeed)
 echo "--- Test: Compliant pod (expect SUCCESS) ---"
-cat <<'EOF' | k apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1098,14 +1092,14 @@ spec:
 EOF
 
 # Verify the compliant pod is running
-k get pods -n alpha-production
+kubectl get pods -n alpha-production
 ```
 
 </details>
 
 ### Task 5: Audit the Landing Zone
 
-Generate a compliance report for all vended accounts.
+Run an audit script that walks every vended namespace and reports whether network policies, resource quotas, RBAC roles, and policy violation summaries are present so you can see detective-style governance in action.
 
 <details>
 <summary>Solution</summary>
