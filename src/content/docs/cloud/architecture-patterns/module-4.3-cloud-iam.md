@@ -503,7 +503,7 @@ Across the three vendor implementations you just learned, the shape is the same 
 
 1. A pod is bound to a Kubernetes ServiceAccount.
 2. That ServiceAccount gets a projected service-account JWT (`sub`, `iss`, `aud`, expiry) at startup.
-3. The cloud provider verifies the projected token against a trusted cluster-issued OIDC identity path.
+3. The cloud provider verifies the workload's identity — for IRSA and the OIDC-federated WI models (GCP, Azure) against a trusted cluster-issued OIDC path; for EKS Pod Identity, via the EKS Pod Identity association rather than a cluster OIDC provider.
 4. A short-lived workload-scoped cloud identity is issued.
 5. The workload uses that identity to call cloud APIs, then repeats the exchange when credentials rotate.
 
@@ -515,8 +515,8 @@ In other words, each provider implements the same trust choreography but with di
 |---|---|---|---|---|
 | **Trust anchor** | Per-cluster OIDC provider object in AWS IAM | EKS control-plane trust via Pod Identity associations | GKE-managed identity pool issuer and provider binding to Google IAM | Azure AD token exchange trust with AKS OIDC issuer + Entra app identity |
 | **SA→identity binding declaration** | ServiceAccount annotation (`eks.amazonaws.com/role-arn`) + IAM trust policy on the role | API-managed association (`aws eks create-pod-identity-association`) linking namespace + ServiceAccount | ServiceAccount annotation (`iam.gke.io/gcp-service-account`) + IAM binding of `roles/iam.workloadIdentityUser` | ServiceAccount annotation (`azure.workload.identity/client-id`) + Entra `federatedIdentityCredential` for subject binding |
-| **Token audience** | `sts.amazonaws.com` (validated in IAM role trust policy) | Same projected token semantics; the exchange still relies on OIDC trust constraints | Identity provider/STS audience defined in the Workload Identity pool/provider configuration | `api://AzureADTokenExchange` as commonly defined in federated credential |
-| **Where creds are exchanged** | AWS STS `AssumeRoleWithWebIdentity` | EKS Pod Identity Agent mediates exchange for AWS credentials | Google Security Token Service and Workload Identity Federation with Google IAM credentials | Azure STS/OAuth token exchange to obtain Entra access token for the target scope |
+| **Token audience** | `sts.amazonaws.com` (validated in IAM role trust policy) | `pods.eks.amazonaws.com` (projected SA token; **not** `sts.amazonaws.com`). Trust is enforced by EKS Pod Identity associations + IAM role trust to `pods.eks.amazonaws.com`, not per-cluster OIDC `aud` conditions | GKE cluster issuer audience for native WI; `sts.googleapis.com` / workload-identity-pool audience for external WIF | `api://AzureADTokenExchange` as commonly defined in federated credential |
+| **Where creds are exchanged** | AWS STS `AssumeRoleWithWebIdentity` | EKS Auth API `AssumeRoleForPodIdentity`, delivered by the node-local Pod Identity Agent — **not** STS `AssumeRoleWithWebIdentity` | Google Security Token Service and Workload Identity Federation with Google IAM credentials | Azure STS/OAuth token exchange to obtain Entra access token for the target scope |
 | **Credential lifetime & rotation** | Temporary AWS credentials (often minutes-to-hour, automatically rotated by workload refresh logic) | Same short-lived model with central EKS agent handling association and refresh patterns | Temporary Google access credentials/impersonation token with frequent refresh via token exchange | Short-lived Entra tokens, rotated through workload identity token exchange on demand |
 | **Scale friction** | OIDC provider trust and trust-policy statements must scale per cluster/application shape | Better operational scaling due to API associations managed separately from role trust text | Requires mapping discipline between Kubernetes subjects and service accounts across projects/pools | Scales via workload identity settings and federated credentials, but object sprawl can grow across many teams/clusters |
 
@@ -589,8 +589,10 @@ SPIRE becomes the bridge when cloud identity and workload identity must be one s
 
 That gives you a useful split:
 
-- **SPIRE/SPIRE** defines **who** a workload is across any cluster.
+- **SPIFFE/SPIRE** defines **who** a workload is across any cluster.
 - **Cloud IAM** still decides **what** that workload is allowed to do.
+
+This exchange is not automatic. SPIRE must run its **OIDC Discovery Provider** (publishing a public JWKS endpoint), and you must register that endpoint as an **IAM OIDC identity provider** in the target cloud. Only then can a workload present its JWT-SVID to `AssumeRoleWithWebIdentity` (or the cloud equivalent) and receive cloud credentials.
 
 This separation is subtle but powerful. If you force one layer to do both, you often leak assumptions between architecture layers.
 
@@ -1136,7 +1138,7 @@ Using the rosetta table above, trace one workload through AWS IRSA, GCP Workload
   - IRSA: SA annotation + IAM trust policy.
   - GCP: `iam.gke.io/gcp-service-account` with IAM `roles/iam.workloadIdentityUser` binding.
   - Azure: `azure.workload.identity/client-id` annotation plus Entra federated credential subject mapping.
-- Validation happens through different trust components, but always with OIDC-based claims checks:
+- Validation happens through different trust components, with OIDC-based claims checks for IRSA, GCP WI, and Azure WI (EKS Pod Identity is the exception — it validates via the EKS Pod Identity association and `pods.eks.amazonaws.com`, not a cluster OIDC provider):
   - IRSA uses IAM role trust policy checks.
   - GCP and Azure use Workload Identity pool/provider and federated credential validation flows.
 - Exchanges are cloud-specific but equivalent in outcome:
