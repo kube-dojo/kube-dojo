@@ -21,7 +21,7 @@
 </head>
 <body>
 
-<h1>Session 70 — #1639 Option B §4 complete</h1>
+<h1>Session 70 — #1639 Option B §4 complete + curriculum audit phase 1</h1>
 <p class="meta">Date: 2026-05-29 · Predecessor: <a href="2026-05-29-session-69-1639-option-b-execution.html">session 69</a> · Model: claude-opus-4-8[1m] · Mode: interactive, "orientate and continue from last session handoff"</p>
 
 <h2>One-line</h2>
@@ -55,11 +55,23 @@
   <tr><td>(residual) 1.3 LangGraph T0 density upgrade</td><td class="todo">RESIDUAL → curriculum audit</td></tr>
 </table>
 
-<h2 class="todo">NEXT SESSION — options (user to direct)</h2>
+<h2>Curriculum audit — Phase 1 (same session, user-directed, then "drive don't ask")</h2>
+<p>After §4 the user directed the queued audit and approved all follow-ons; mid-session the user (rightly) called out that I was over-asking via <code>AskUserQuestion</code> instead of orchestrating — corrected, recorded as memory <code>feedback_no_askuserquestion_for_next_step</code>, drove autonomously after.</p>
+<table>
+  <tr><th>PR</th><th>What</th></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1653">#1653</a></td><td>Audit Phase 1 report (<code>docs/curriculum-audit-2026-05-29-phase1.html</code>) + <strong>8 dangling-link fixes</strong> (12 instances, all live 404s, repo-wide 0 remaining). Cursor-authored, orchestrator-verified.</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1654">#1654</a></td><td><strong>Root-cause fix:</strong> static absolute-internal-link validator added to <code>check_site_health.py</code> (check #14) + a <code>pull_request</code> CI gate (<code>link-check.yml</code>, SHA-pins verified, zizmor-clean). Dangling links now <strong>fail CI</strong> instead of shipping. Self-validated on its own PR.</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1655">#1655</a></td><td><strong>1.3-LangGraph T0 upgrade</strong> (the #1639 carry-forward): T3→T0 — body 1520→5730 words, sources 2→17, section order fixed, DYK→4. codex draft → composer-2.5 R1 APPROVE_WITH_NITS (table-overstatement nit fixed).</td></tr>
+</table>
+<p><strong>Audit findings:</strong> the only real problems were the #1639 scramble (fixed §4) and the 8 dangling links (fixed #1653). <strong>Clean repo-wide:</strong> title/body integrity (heuristic across all modules — no other mislabels), un-redirected stubs (0), orphaned-from-nav (false positives, reached via explicit <code>link:</code> nav). <strong>#1639 residuals both closed:</strong> context-engineering coverage confirmed complete (foundations 2.1–2.4, 7–9k words each); 1.3 density upgraded to T0. <strong>#1639 can now be closed</strong> (all goal items 1–4 done) — left open pending a final glance.</p>
+
+<h2 class="todo">NEXT SESSION</h2>
 <ol>
-  <li><strong>The "more serious curriculum audit"</strong> (briefing focus #2, user 2026-05-29). Scope it as its own phase with a written report: hunt mislabeled modules (title vs body), scattered/duplicate teaching content, dead/moved stubs not wired to redirects, broken internal links, orphaned-from-nav sections. Start with the AI tracks (where this scramble surfaced), then widen. The two #1639 residuals above (1.3 density, context gap-check) fold into this.</li>
-  <li><strong>G5 #1627 + G6 #1628</strong> gap-fill (teaching content; codex author → composer-2.5 R1; keep codex ≤2 concurrent). G4 #1626 gated on modules 9.4/1.5/3.1 rubric ≥3; G2 #1623 gated until Platform Foundations critical &lt; 20.</li>
-  <li><strong>Headless-claude "Prompt is too long"</strong> (briefing, user-requested) — pass minimal <code>.mcp.json</code> + tight <code>--allowedTools</code> for <code>--agent claude</code> write classes; lead in <code>scripts/agent_runtime/adapters/claude.py</code>.</li>
+  <li><strong>Audit Phase 2</strong> — widen the deep scans (orphaned-from-nav reachability via a sidebar-walk script that also honors explicit <code>link:</code> entries; duplicate/scattered-content analysis) across the cert (k8s), platform, and cloud tracks. The Phase-1 scriptable scans (links, title/body, stubs) already ran repo-wide and are clean.</li>
+  <li><strong>Close #1639</strong> if the final glance confirms goal items 1–4 (it should).</li>
+  <li><strong>P2 follow-up</strong> (composer-2.5 R1 nit on 1.3, low priority): several LangGraph illustrative code blocks omit <code>StateGraph</code>/<code>START</code>/<code>END</code> imports in-block — pre-existing, not introduced by the upgrade. A small code-completeness pass would make them copy-paste runnable.</li>
+  <li><strong>G5 #1627 + G6 #1628</strong> gap-fill (teaching content; codex → composer-2.5 R1; codex ≤2 concurrent). G4 #1626 / G2 #1623 gated.</li>
+  <li><strong>Headless-claude "Prompt is too long"</strong> (user-requested) — minimal <code>.mcp.json</code> + tight <code>--allowedTools</code> for <code>--agent claude</code> write classes; lead in <code>scripts/agent_runtime/adapters/claude.py</code>.</li>
 </ol>
 
 <h2>Carried tech-debt (non-#1639)</h2>
@@ -70,7 +82,7 @@
 </ul>
 
 <h2>Agent usage this session</h2>
-<p>codex gpt-5.5 (§4 b/c reconcile + d LlamaIndex author + d fix-pass), composer-2.5/cursor (2× R1 cross-family review per Decision Card C). Orchestrator inline: §4(a) config + the 1.2 regression revert + the §4(b/c) R1-delta fixes (small reviewer-delta application, not authoring). 3 PRs, ~7 dispatches total — within the ≤2-concurrent-codex and review-burst caps.</p>
+<p><strong>6 PRs merged</strong> (#1649, #1650, #1651, #1653, #1654, #1655). codex gpt-5.5 (§4 reconcile + LlamaIndex author + fix-pass; 1.3 T0 upgrade; check_site_health hardening), cursor/composer-2.5 (8 dangling-link fixes + 3× R1 cross-family reviews per Decision Card C). Orchestrator inline: §4(a) config, the 1.2 regression revert, §4(b/c) + 1.3 R1-delta fixes, the audit scans + report (analysis, not authoring). All within ≤2-concurrent-codex + review-burst caps. The codex "post-write hang" was diagnosed (edit-class timeout SIGKILL → recover from worktree) and did not recur on the <code>draft</code>-class dispatches.</p>
 
 </body>
 </html>
