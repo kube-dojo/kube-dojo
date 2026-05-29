@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 69 — #1639 Option B execution (sidebar de-burying + cross-links + briefing fix)</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 860px; margin: 2em auto; padding: 0 1em; line-height: 1.5; }
+  h1, h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.15em; margin-top: 1.5em; }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #f4f4f4; padding: 0.8em; border-radius: 4px; overflow-x: auto; font-size: 0.85em; }
+  table { border-collapse: collapse; margin: 0.5em 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.9em; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .meta { color: #666; font-size: 0.9em; }
+  .ok { color: #137333; font-weight: bold; }
+  .warn { background: #fce8e6; color: #c5221f; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; }
+  .todo { color: #b06000; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Session 69 — #1639 Option B execution + autonomous parallel run</h1>
+<p class="meta">Date: 2026-05-29 · Predecessor: <a href="2026-05-29-session-68-g3-gap-fill-merged-plus-1639-consolidation-plan.html">session 68</a> · Model: claude-opus-4-8[1m] · Mode: user AFK / autonomous, "utilize all agents, parallel on different tasks"</p>
+
+<h2>One-line</h2>
+<p>Executed the non-destructive core of the user-approved <strong>#1639 Option B</strong> consolidation plan and cleared a stack of carried tech-debt — all in parallel across codex + cursor. <strong>5 PRs merged</strong> (#1642 sidebar, #1643 briefing-fix, #1644 cross-links, #1645 housekeeping, + cursor's §1–§3 remainder in flight). The decisive #1639 fix: the canonical <code>ai-engineering-foundations</code> spine was <strong>never in any sidebar</strong> — that invisibility (not duplication) was the "burial." Now navigable + cross-linked + the briefing no longer pulls sessions toward critical-rubric drains.</p>
+
+<h2 class="warn">Read this first — a process miss that cost rework</h2>
+<p>My cold-start read <strong>stale LOCAL main</strong> (the briefing/STATUS reflected session 67; local was behind origin at <code>d80ae61f</code>). I did not <code>git pull</code> first. So I independently re-ran the same #1639 codex audit the prior session-68 run had <em>already done</em>, and re-learned the <code>codex review = danger+worktree</code> lesson (burned 2 dispatches) that session-68's STATUS.md already documented. I only discovered the approved Option B brief (<code>docs/decisions/2026-05-29-1639-ai-engineering-consolidation.md</code>) when a mid-session <code>git pull</code> surfaced it. <strong>Lesson (new memory): cold-start must sync local main with origin BEFORE trusting the briefing/STATUS</strong> — see <code>feedback_cold_start_sync_origin_main</code>. The good news: my independent audit reached the identical conclusion, and the work I did <em>is</em> Option B Steps 1–2.</p>
+
+<h2>What landed (all merged to main)</h2>
+<table>
+  <tr><th>PR</th><th>What</th><th>Author → Reviewer</th></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1642">#1642</a></td><td><strong>§1 nav:</strong> added <code>AI Engineering Foundations</code> (13-module spine) to the AI sidebar in <code>astro.config.mjs</code> — the root-cause de-burying fix for #1639. Build green, 2133 pages.</td><td>codex → build-verified (orchestrator)</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1643">#1643</a></td><td><strong>Briefing priority fix:</strong> stopped <code>critical_quality</code> rubric rows from dominating <code>actions.next</code> in <code>build_session_briefing</code> (they're already in the dedicated <code>critical_quality</code> field + alerts). + regression test. <strong>Verified live</strong> after API restart: <code>actions.next</code> now empty, <code>critical_quality</code> field intact.</td><td>cursor → codex APPROVE</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1644">#1644</a></td><td><strong>§2 cross-links (partial):</strong> 10 additive "Go deeper" links from neighbor AI modules → canonical spine. 20 ins / 0 del.</td><td>cursor → codex NEEDS_CHANGES (label nit) → fixed → CI gemini pass</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1645">#1645</a></td><td><strong>Tech-debt:</strong> (a) propagated the #1629 hook fix to <code>agents_extensions/claude/hooks/inject-codex-danger-mode.sh</code> (source matched deployed → <code>deploy.sh</code> no-op verified); (b) addendum on the 2026-05-26 ADR recording the sidebar root cause it missed.</td><td>orchestrator (worktree)</td></tr>
+</table>
+
+<h2>Other work this session</h2>
+<ul>
+  <li><strong>Re-scoped gap ticket #1626 (G4 LLM golden path)</strong> to teaching-content-only (banner + lab specs → light exercises + parked for #386). #1627/#1628 were already re-scoped by the prior session-68 run.</li>
+  <li><strong>MEMORY.md trimmed 211 → 196 lines</strong> (under the ~200 load limit). Added 2 new learnings; consolidated the closed AI-history book (#394) operational cluster into one <code>project_ai_history_book_closed</code> pointer (the underlying files remain on disk, recall-able). <span class="warn">Note:</span> a botched first attempt (newline-eating <code>\n</code>-prefixed edits) concatenated some entries — recovered via a clean full rewrite.</li>
+  <li><strong>New memories:</strong> <code>feedback_claude_headless_mcp_prompt_bloat</code>, <code>feedback_consolidation_needs_reachability_check</code>, <code>feedback_cold_start_sync_origin_main</code>.</li>
+</ul>
+
+<h2>#1639 Option B — execution status vs the approved brief</h2>
+<table>
+  <tr><th>Step (per decision doc)</th><th>Status</th></tr>
+  <tr><td>§1 add foundations to sidebar</td><td class="ok">DONE (#1642)</td></tr>
+  <tr><td>§1 update <code>ai/index.md</code> counts (25→37 mod, 5→6 sec) + route diagram</td><td class="todo">in flight (cursor, this session)</td></tr>
+  <tr><td>§2 cross-link map (~23 links)</td><td class="todo">10 done (#1644); remaining ~15 in flight (cursor)</td></tr>
+  <tr><td>§3 fix 2 stale links (real bugs: <code>1.5-cli-ai-coding-agents</code> → nonexistent <code>module-02</code>; <code>1.2-local-models</code> next-link → retired stub)</td><td class="todo">in flight (cursor)</td></tr>
+  <tr><td>§4 retire 3 moved-stubs w/ astro <code>redirects</code> (destructive)</td><td class="todo">NOT done — handed off</td></tr>
+  <tr><td>§4 frameworks-agents 1.3/1.4 reconciliation: move LangGraph body 1.4→1.3, dedupe old-1.3 reasoning into foundations 1.2, <strong>author net-new LlamaIndex 1.4</strong></td><td class="todo">NOT done — handed off</td></tr>
+</table>
+
+<h2 class="todo">NEXT SESSION — finish #1639 Option B §4 (the only remaining approved work)</h2>
+<p>Brief is ready: <code>docs/decisions/2026-05-29-1639-ai-engineering-consolidation.md</code> §4 + the "frameworks-agents 1.3/1.4 reconciliation" section. This is the destructive + net-new-authoring tail that needs focused shepherding (a codex author + composer-2.5 R1 cycle), which is why it was NOT auto-run at the tail of an AFK session. Sub-steps (one commit each, all gates):</p>
+<ol>
+  <li><strong>Stub retirement w/ redirects:</strong> add Starlight <code>redirects</code> in <code>astro.config.mjs</code> for the 3 moved-stub slugs (ai-native-work 2.1, 2.2; ai-native-development 1.6), then remove the stub files from nav. Verify no 404s (check_links).</li>
+  <li><strong>LangGraph move:</strong> <code>frameworks-agents/module-1.4-llamaindex.md</code> currently contains a strong LangGraph course (mis-filed). Move that body into <code>module-1.3-langgraph-for-agents.md</code> (already titled/slugged LangGraph).</li>
+  <li><strong>Reasoning dedupe:</strong> old <code>1.3</code> body teaches CoT/ReAct/self-consistency that dupes foundations <code>1.2</code>. Port any unique ReAct material into foundations 1.2; drop the rest.</li>
+  <li><strong>Author real LlamaIndex 1.4:</strong> net-new teaching module (~5000+ words, T0 gates, NO labs) — this is the one genuine missing module the restructure surfaces. codex author → composer-2.5 R1 per Decision Card C.</li>
+</ol>
+<p>Everything else on the approved plan (Steps 1–3) is done or in-flight this session.</p>
+
+<h2>Carried tech-debt (non-#1639)</h2>
+<ul>
+  <li>#1350 agy migration — deadline 2026-06-18.</li>
+  <li>Tech-debt from session 64: <code>citation_backfill</code> REPO_ROOT pinning; inject-step <code>rewrites_disabled_pending_redesign</code> (root cause of #1634).</li>
+  <li><strong>Briefing priority logic</strong> (the session-67 "fix the briefing" item) is now DONE (#1643) — critical-rubric no longer crowds <code>actions.next</code>.</li>
+</ul>
+
+<h2>Agent usage this session</h2>
+<p>codex (sidebar author, 2× review), cursor/composer-2.5 (briefing fix, cross-links ×2, Option B remainder). Claude headless was attempted per the user's explicit request but <strong>failed "Prompt is too long"</strong> — the subscription <code>npx claude-code</code> path eagerly loads all connected MCP tool schemas; re-routed to cursor. The repo's CI gemini-3.1-pro-preview review gates content PRs (the enforced cross-family floor); auto-merge used on content PRs.</p>
+
+</body>
+</html>
