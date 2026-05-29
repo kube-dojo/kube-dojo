@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 68 — G3 gap-fill merged + #1639 consolidation plan approved</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.approved { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 68 — G3 gap-fill merged + #1639 consolidation plan approved</h1>
+<p class="meta">2026-05-29 · Predecessor: session 67 · Model: claude-opus-4-8[1m].
+User directive: "have the missing modules built before we start improving them." Drained the
+gap-fill (G3) work to completion, re-scoped the next gap tickets to teaching-content, and turned
+the user's top concern (#1639 prompt/context/harness scatter) into a verified, approved
+consolidation plan. Per user, #1639 execution is deferred to a FRESH session that first picks up
+a new Claude Code CLI bugfix release.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR / Issue</th><th>State</th><th>What</th><th>Cycle</th></tr>
+<tr><td>#1638</td><td><span class="pill merged">MERGED</span></td><td>distributed-systems 5.4 partial failure &amp; timeouts</td><td>cursor trim (Part 6 lab removed) → codex R1 APPROVE → build → rebase-merge</td></tr>
+<tr><td>#1637</td><td><span class="pill merged">MERGED</span></td><td>distributed-systems 5.5 clock skew &amp; ordering</td><td>cursor trim (lab→light exercise) → codex R1 NEEDS_CHANGES (Lamport-as-dedup) → cursor fix → orchestrator density fix → rebase + index-conflict resolve → auto-merge</td></tr>
+<tr><td>#1624 (G3)</td><td><span class="pill inflight">OPEN</span></td><td>Distributed-systems mental models</td><td>5.4 + 5.5 done; epic covers 2–3 lessons so stays open</td></tr>
+<tr><td>#1627 (G5)</td><td><span class="pill inflight">RE-SCOPED</span></td><td>Cross-cloud workload identity rosetta</td><td>"practice labs" stripped → teaching content; ready to dispatch</td></tr>
+<tr><td>#1628 (G6)</td><td><span class="pill inflight">RE-SCOPED</span></td><td>OpenTelemetry Collector at scale</td><td>"practice labs" stripped → teaching content; ready to dispatch</td></tr>
+<tr><td>#1639</td><td><span class="pill approved">PLAN APPROVED</span></td><td>Consolidate prompt/context/harness into ONE section</td><td>codex audit → verified → Option B approved; execute next session</td></tr>
+</table>
+
+<h2>The #1639 finding (reframes the whole problem)</h2>
+<p>The teaching content is <strong>already consolidated</strong> into <code>ai/ai-engineering-foundations/</code>
+(12-module prompt→context→harness→symphony spine). A prior session moved it there and left 18–25-word
+"this module has moved" stubs. <strong>The real burial is a navigation gap</strong>: that canonical section
+is NOT in the AI sidebar in <code>astro.config.mjs</code> (verified) and its <code>sidebar.order</code> collides
+with <code>ai/foundations</code> — so learners can't reach the unified home.</p>
+<p>Verified during the session: the 3 "overlap" files really are tiny moved-page stubs; the section really is
+missing from the sidebar. Also surfaced a title/content scramble in <code>frameworks-agents</code>:
+<code>1.3-langgraph</code> teaches reasoning basics (dupes foundations 1.2), and <code>1.4-llamaindex</code>
+teaches LangGraph (33 LangGraph refs, 2 LlamaIndex) — so <strong>LlamaIndex is genuinely uncovered</strong>.
+Per user ("more effective to do them in one swoop"), this is folded INTO #1639, not filed separately.</p>
+<p>Full approved plan + brief: <code>docs/decisions/2026-05-29-1639-ai-engineering-consolidation.md</code>
+(Option B — full consolidation).</p>
+
+<h2>Policy / working-style locked this session</h2>
+<h3>1. Gap-fill = teaching content (reaffirmed by action)</h3>
+<p>Trimmed both G3 modules from runnable kind labs to theory + a light conceptual <code>## Hands-On Exercise</code>
+(sibling 5.2/5.3 pattern). Re-scoped #1627 + #1628 issue bodies: stripped runnable-lab specs, parked them for
+the labs project (#386), changed the "Hands-on lab runnable" acceptance criterion to "light conceptual exercise."</p>
+<h3>2. One swoop, not separate tickets (new — user 2026-05-29)</h3>
+<blockquote>"i really dont like this bureaucratic way of handling problems. it is more effective to do them in one swoop"</blockquote>
+<p>Fold related fixes into the current effort rather than spawning separate tickets. Applied: the 1.4-llamaindex
+mislabel was about to be filed as its own issue → instead folded into the #1639 brief. Memory:
+<code>feedback_one_swoop_not_separate_tickets</code>.</p>
+<h3>3. Agent routing this session: zero Claude sub-agents</h3>
+<p>User flagged usage. All dispatches went to cursor (composer-2.5) and codex (gpt-5.5); the only Claude in play
+was the interactive orchestrator (cheap pool). One small density fix done inline by the orchestrator (formatting,
+not authoring) to avoid a 4th cursor round.</p>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Task</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>trim-g3-5-4</td><td>cursor composer-2.5</td><td>edit</td><td>Removed Part 6 lab; added light exercise. 5,582 body words, T0 pass.</td></tr>
+<tr><td>trim-g3-5-5</td><td>cursor composer-2.5</td><td>edit</td><td>Replaced fake-Lamport kind lab with light exercise. 5,139 words, T0 pass.</td></tr>
+<tr><td>review-g3-trims (×2)</td><td>codex gpt-5.5</td><td>review</td><td>FAILED to dispatch — bad <code>--mode read-only</code> then missing cwd for danger mode. Lesson: codex review needs no <code>--mode</code> + a <code>--worktree</code>.</td></tr>
+<tr><td>review-g3-trims3</td><td>codex gpt-5.5</td><td>review</td><td>5.4 APPROVE; 5.5 NEEDS_CHANGES — caught it teaching Lamport timestamps as the metric-dedup mechanism (wrong), a mutating Task 1, 2 nits.</td></tr>
+<tr><td>fix-g3-5-5</td><td>cursor composer-2.5</td><td>edit</td><td>Fixed all 4 R1 items (idempotency-key as primary dedup; read-only Task 1; orphan ref; choice-list). Introduced a 3-consecutive-short-paragraph density regression.</td></tr>
+<tr><td>(inline)</td><td>orchestrator</td><td>edit</td><td>Merged 2 short paragraphs in 5.5 exercise → density gate green (max_consec_short 3→2), T0 pass.</td></tr>
+<tr><td>audit-1639</td><td>codex gpt-5.5</td><td>architect</td><td>Read-only consolidation audit across 4 AI trees (38 modules) → per-module table, dedupe decision, cross-link map, execution sequence, risks.</td></tr>
+</table>
+
+<h2>Headline data (session end)</h2>
+<ul>
+<li>Both G3 modules on <code>main</code>: 5.4 (5,582 body words) + 5.5 (5,156 body words), both T0 all-gates-green, builds clean (2131 / 2133 pages).</li>
+<li>Briefing alerts at start: 109 modules at critical rubric (&lt;2.0); quality-floor gate OPEN curriculum-wide (gap-fill unblocked everywhere).</li>
+<li>Gate context for held gaps: Platform Foundations critical = 28 (G2 #1623 gated until &lt;20).</li>
+<li>Git hygiene: pruned all 5 stale/merged worktrees + branches; only primary <code>main</code> worktree remains.</li>
+</ul>
+
+<h2>What's next (fresh session — picks up new CLI bugfix first)</h2>
+<ul>
+<li><strong>TOP: Execute the approved #1639 plan (Option B)</strong> — brief at
+<code>docs/decisions/2026-05-29-1639-ai-engineering-consolidation.md</code>. Suggested order, one commit each
+(revertible): (1) wire foundations into AI sidebar + fix order collision + AI index counts; (2) fix 2 stale
+links + add ~23 cross-links; (3) retire 3 stubs w/ redirects; (4) move LangGraph 1.4→1.3 + dedupe old-1.3
+reasoning into foundations 1.2; (5) author real LlamaIndex for 1.4 (codex → composer-2.5 R1). Gates:
+check_links, check_site_health, test_pipeline, npm run build.</li>
+<li><strong>Then dispatch G5 #1627 + G6 #1628</strong> (already re-scoped to teaching content; codex author →
+composer-2.5 R1; keep codex ≤2 concurrent).</li>
+<li><strong>Gated gaps:</strong> G4 #1626 (prereq modules 9.4/1.5/3.1 rubric ≥3 — run check first); G2 #1623
+(Platform Foundations critical &lt;20 — currently 28).</li>
+<li><strong>Carried tech-debt (not content):</strong> #1629 hook-drift propagation to <code>agents_extensions/</code>
+source; briefing priority logic still ranks critical-rubric above gap-fill (root cause of session-67 drift);
+MEMORY.md trim (~209 lines, past 200 truncate limit); #1350 agy migration (deadline 2026-06-18).</li>
+</ul>
+
+<h2>Files touched (this session, on main)</h2>
+<ul>
+<li><code>src/content/docs/platform/foundations/distributed-systems/module-5.4-*.md</code> — trimmed to teaching content (Part 6 lab removed)</li>
+<li><code>src/content/docs/platform/foundations/distributed-systems/module-5.5-*.md</code> — lab→light exercise, R1 fixes, density fix</li>
+<li><code>src/content/docs/platform/foundations/distributed-systems/index.md</code> — both module rows + flow diagram</li>
+<li><code>docs/decisions/2026-05-29-1639-ai-engineering-consolidation.md</code> — approved #1639 brief (this session, docs branch)</li>
+<li>GitHub issues #1627, #1628 — re-scoped to teaching content (body + acceptance criteria)</li>
+</ul>
+
+</body></html>
