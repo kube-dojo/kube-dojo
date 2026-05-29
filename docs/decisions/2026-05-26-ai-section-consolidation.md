@@ -1,7 +1,7 @@
 # 2026-05-26 — AI Section Consolidation (Phase 4 of #1530)
 
 ## Status
-Proposed — orchestrator review pending
+Accepted & executed — verified 2026-05-29 (session 68). See the 2026-05-29 addendum at the bottom: all decisions here were implemented, but this ADR **missed the root cause** of #1639 (the canonical track was absent from the sidebar). That gap is now fixed.
 
 ## Context
 KubeDojo recently shipped 12 modules in `src/content/docs/ai/ai-engineering-foundations/` representing the new canonical home for prompt, context, harness, and Symphony engineering. These modules establish the foundational "AI Engineering" layer spanning prompt design, context management, and workflow automation.
@@ -108,3 +108,28 @@ By moving the prompt and context-related orphan out of `ai-native-development`, 
 5. Replace `src/content/docs/ai/ai-native-work/module-2.1-harness-engineering.md` with the Option A redirect stub.
 6. Replace `src/content/docs/ai/ai-native-work/module-2.2-orchestrating-fleets-symphony.md` with the Option A redirect stub.
 7. Run the site builder / Markdown linter to verify no dangling broken references.
+
+---
+
+## Addendum — 2026-05-29 (session 68): execution verified + the missed root cause
+
+This ADR was written and largely executed, but issue **#1639** ("the subject is scattered / buried") was re-opened by the user on 2026-05-28 because the subject still *felt* fragmented. A fresh audit this session found why — and it was something this ADR did not consider.
+
+### What this ADR got right (verified executed)
+- **All 3 orphans are redirect stubs** (Option A done): `ai-native-development/module-1.6-prompt-engineering-fundamentals`, `ai-native-work/module-2.1-harness-engineering`, `ai-native-work/module-2.2-orchestrating-fleets-symphony`. Each is a "this module has moved" stub pointing at the canonical spine module.
+- **All 3 index cross-links exist**: `ai-engineering-foundations/index.md` (→ neighbors, line 52), `ai-native-work/index.md` (→ foundations), `ai-native-development/index.md` (→ foundations).
+- **Context-engineering split accepted** — spine modules 2.1–2.4 cover context engineering at depth; no thin signpost module was added, as decided.
+
+### The root cause this ADR MISSED — and the fix
+The canonical `ai/ai-engineering-foundations/` track (13 modules) **was never added to any sidebar.** `grep ai-engineering-foundations astro.config.mjs` returned zero entries; git history shows it was never wired in when the track shipped (#1530). The redirects and cross-links all pointed *to* a track that was **unreachable through navigation** — visible only by direct URL. That invisibility, not duplication, is why the subject "looked done but stayed buried."
+
+**Fix shipped 2026-05-29:**
+- **PR #1642 (merged)** — added "AI Engineering Foundations" to the AI tab sidebar, between "AI Foundations" (literacy) and "AI-Native Work" (applied). Build-verified, 2133 pages.
+- **PR #1644** — module-level "Go deeper" cross-links from 10 neighbor modules to the spine (this ADR only specified the 3 *index*-level cross-links; #1644 extends them down to individual modules across both the `ai/` and `ai-ml-engineering/` trees). Additive only (20 insertions, 0 deletions); codex cross-family review in progress at time of writing.
+
+### Net status of #1639
+Consolidation approach (keep tracks distinct + redirect orphans + cross-link) was correct and is **done**. With the sidebar fix, the canonical home is now discoverable. Remaining optional polish (not blockers; for user to weigh on return):
+- The 3 redirect stubs still appear as near-empty entries in their sidebars. Could be removed entirely in favor of Starlight `redirects` in `astro.config.mjs` for a cleaner UX (changes URLs → slightly more consequential, hence flagged not auto-done).
+- Consider a one-line pointer to the spine from the **AI/ML Engineering** tab hub (the spine lives in the *AI* tab; the two tabs are bridged only by cross-links today).
+
+**Lesson:** a "consolidation" audit must include a **reachability check** (is the canonical target in the sidebar / nav?), not just a duplication check. Redirecting to an unreachable target hides the target instead of surfacing it.
