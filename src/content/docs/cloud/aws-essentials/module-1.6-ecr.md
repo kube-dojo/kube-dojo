@@ -11,7 +11,8 @@ sidebar:
 
 ## Prerequisites
 
-Before starting this module, you should have completed:
+Before starting this module, you should have completed [Module 1.1: IAM & Security Foundations](../module-1.1-iam/), be comfortable building and tagging container images locally, run Docker on your workstation, and have the AWS CLI configured with IAM permissions that allow ECR repository and image operations in the account and region you will use for the hands-on tasks below.
+
 - [Module 1.1: IAM & Security Foundations](../module-1.1-iam/)
 - Docker fundamentals (building and tagging images)
 - Docker installed locally and running
@@ -19,7 +20,7 @@ Before starting this module, you should have completed:
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to operate ECR as a production registry: configure immutable tagging and lifecycle policies, replicate images across accounts and regions, enforce vulnerability scanning at push time, and keep pulls on the private AWS network using IAM and VPC endpoints. The bullet list below states those outcomes in review-ready form:
 
 - **Configure ECR repositories with immutable tagging and lifecycle policies to manage container image sprawl**
 - **Implement cross-account and cross-region image replication for multi-region deployment pipelines**
@@ -62,15 +63,11 @@ graph TD
     Repo3 --> Img6[Image: sha256:pqr678... | tag: 1.25-custom]
 ```
 
-**Registry**: One per AWS account per region. For private ECR registries in standard AWS regions, the URL format is `{account_id}.dkr.ecr.{region}.amazonaws.com`. You cannot change this URL.
-
-**Repository**: A collection of related container images, like a Git repository for code. Naming convention matters -- use a slash-separated hierarchy like `team/service` or `app/component`.
-
-**Image**: An individual container image, identified by its SHA256 digest and optionally by one or more tags. A single image can have multiple tags.
+An ECR **registry** exists once per AWS account per region; for private registries in standard commercial regions the URI is `{account_id}.dkr.ecr.{region}.amazonaws.com`, and you cannot rename that endpoint after creation. Within the registry, a **repository** groups related images the way a Git repository groups commits — teams usually adopt slash-separated names such as `team/service` or `app/component` so dozens of microservices stay navigable. Each **image** is an immutable manifest addressed by its SHA256 digest and optionally by one or more tags, which means the same digest can simultaneously carry a semantic version and a Git SHA for auditability without duplicating storage.
 
 ### Public vs Private Repositories
 
-ECR offers two flavors:
+ECR offers private and public repository types, and the choice affects authentication, cost, and where your workloads pull images from; the table below summarizes the differences you will weigh when designing a registry layout:
 
 | Feature | ECR Private | ECR Public |
 |---------|------------|------------|
@@ -82,7 +79,7 @@ ECR offers two flavors:
 | Vulnerability scanning | Basic + Enhanced (Inspector) | Not supported |
 | Lifecycle policies | Yes | No |
 
-For most DevOps workflows, you will use private repositories. Public ECR is excellent for distributing open-source tools or shared base images that external teams or customers need to pull.
+For most internal application pipelines you will use private repositories because they integrate with IAM, support lifecycle policies, and keep proprietary layers off the public internet. Public ECR is the better fit when you distribute open-source tools or shared base images that external teams or customers must pull without AWS credentials, because anonymous pulls are allowed even though pushes still require authentication.
 
 ```bash
 # Create a private repository
@@ -107,7 +104,7 @@ aws ecr-public create-repository \
 
 ## Authentication and Pushing Images
 
-ECR uses IAM for authentication, but Docker does not speak IAM natively. You need to exchange your IAM credentials for a Docker login token.
+ECR uses IAM for authentication, but the Docker CLI does not speak IAM natively, so every workstation and CI runner must exchange AWS credentials for a short-lived registry password before `docker push` or `docker pull` will succeed. The commands in the next section show that one-time login pattern; once authenticated, the same tagging workflow applies whether you build on a laptop or in a pipeline.
 
 ### Getting Authenticated
 
@@ -121,11 +118,11 @@ aws ecr get-login-password --region us-east-1 | \
 # For CI/CD pipelines, refresh it at the start of each pipeline run
 ```
 
-For ECS and EKS workloads, you do not need to handle authentication manually. ECS automatically pulls images from ECR using the task execution role. EKS nodes use the instance profile or IRSA (IAM Roles for Service Accounts) to authenticate.
+For ECS and EKS workloads running inside AWS you usually skip manual `docker login` altogether: ECS task execution roles and EKS node instance profiles (or IRSA for pod-level identity) obtain registry tokens on your behalf, which is why platform teams focus IAM policy design on those roles instead of long-lived access keys on nodes.
 
 ### Building and Pushing Images
 
-Here is the complete workflow from Dockerfile to ECR:
+The workflow from a local Dockerfile to a versioned image in ECR is intentionally boring — build, retag with the registry hostname, push, and verify with `describe-images` — because predictable steps are what let you automate the same path in CI. The commands below walk through that minimal path; the shell script after them adds layer caching and dual tagging patterns you will want in production pipelines.
 
 ```bash
 # Step 1: Build your image locally
@@ -144,7 +141,7 @@ aws ecr describe-images \
   --image-ids imageTag=v1.3.0
 ```
 
-For production CI/CD pipelines, here is a more robust script:
+When you move this workflow into CI/CD, add deterministic tags derived from the Git commit, reuse remote layers with `--cache-from`, and fail fast if `docker push` cannot refresh an immutable tag — the script below demonstrates those habits without hiding the underlying ECR calls.
 
 ```bash
 #!/bin/bash
@@ -179,7 +176,7 @@ echo "Pushed ${REGISTRY}/${REPO_NAME}:${IMAGE_TAG}"
 
 ## Image Tagging Strategies and Immutability
 
-Tagging is where most teams get into trouble. Let us get this right.
+Tagging looks deceptively simple because Docker defaults to `latest`, yet tagging policy is where rollbacks, compliance audits, and multi-architecture incidents are won or lost — so the rest of this section pairs immutability settings with naming strategies you can defend in a production review.
 
 ### Tag Immutability
 
@@ -228,22 +225,17 @@ docker tag myapp/api:local \
 # or use a separate mutable repo for 'latest'
 ```
 
-A practical note on immutability and `latest`: they are fundamentally incompatible. If you enable immutability, you cannot push `latest` more than once. Most teams choose one of two patterns:
-
-1. **Enable immutability, never use `latest`** -- deployments always reference explicit versions
-2. **Keep mutability, enforce versioning through CI policy** -- lint your pipeline to reject pushes without a version tag
-
-Pattern 1 is safer. Pattern 2 is more convenient. Choose based on your team's discipline.
+A practical note on immutability and `latest`: they are fundamentally incompatible because `latest` is meant to move while immutable tags are meant to stay fixed, so you cannot push `latest` repeatedly in an immutable repository. Most teams therefore choose one of two patterns: enable immutability and deploy only explicit version or Git SHA tags (safer, slower to misuse), or keep mutability but enforce version tags through CI policy linting (more convenient, requires discipline). Pick the pattern that matches how strictly your release managers want to block overwrites, not whichever default happened to be checked when the repository was created.
 
 ---
 
 ## Vulnerability Scanning
 
-ECR provides two levels of vulnerability scanning: Basic and Enhanced.
+ECR provides two levels of vulnerability scanning — Basic and Enhanced — and the difference is not cosmetic: Basic scanning is included at no extra charge but only inspects OS packages, while Enhanced scanning delegates to Amazon Inspector and surfaces application dependency issues that Basic scans miss entirely.
 
 ### Basic Scanning
 
-Basic scanning uses the open-source Clair engine to check for known CVEs in OS packages. It is included in ECR at no extra cost.
+Basic scanning uses the open-source Clair engine to check for known CVEs in operating system packages installed through apt, yum, or similar package managers, which makes it a useful baseline gate even though it will not read your `package.json` or `requirements.txt`.
 
 ```bash
 # Enable scan-on-push for a repository
@@ -264,7 +256,7 @@ aws ecr describe-image-scan-findings \
 
 ### Enhanced Scanning
 
-Enhanced scanning uses Amazon Inspector and provides deeper analysis including application dependency vulnerabilities (not just OS packages). It costs extra but catches significantly more issues.
+Enhanced scanning uses Amazon Inspector to analyze application dependencies in addition to OS packages, which costs extra per image but routinely surfaces far more findings — especially in language runtimes where OS images look clean while application manifests carry the real risk.
 
 ```bash
 # Enable enhanced scanning at the registry level
@@ -311,7 +303,7 @@ aws ecr describe-image-scan-findings \
   --query 'imageScanFindings.findings[?severity==`HIGH` || severity==`CRITICAL`]'
 ```
 
-A practical CI/CD gate using scan results:
+Once scans finish, wire the counts into your deployment pipeline so a single critical CVE blocks promotion automatically — the shell gate below reads severity totals from `describe-image-scan-findings` and exits non-zero when your thresholds are exceeded, which turns scanning from a dashboard nicety into an enforceable control.
 
 ```bash
 #!/bin/bash
@@ -345,9 +337,7 @@ echo "Scan passed: ${CRITICAL} critical, ${HIGH} high"
 
 ## Lifecycle Policies
 
-Without lifecycle policies, your ECR storage grows indefinitely. Every CI build pushes a new image, and old images accumulate. A team pushing 10 builds per day generates 300+ images per month per repository. At $0.10/GB/month, this adds up.
-
-Lifecycle policies let you automatically expire old images based on rules you define.
+Without lifecycle policies, your ECR storage grows indefinitely because every CI build pushes a new image digest while older tags linger as rollback candidates — a team pushing ten builds per day can accumulate three hundred images per repository per month, and at roughly $0.10 per GB-month those forgotten layers show up on finance slides long after the feature branch merged. Lifecycle policies let you expire images automatically using rule priorities you define once and preview before anything is deleted.
 
 ### Understanding Lifecycle Policy Rules
 
@@ -389,7 +379,7 @@ aws ecr put-lifecycle-policy \
 
 ### Production-Grade Lifecycle Policy
 
-Here is a comprehensive policy that covers the typical scenarios:
+The policy below combines release retention, short-lived feature branch pruning, and aggressive untagged cleanup — a pattern that keeps rollback windows for semver tags without letting experimental prefixes or dangling digests accumulate forever:
 
 ```bash
 aws ecr put-lifecycle-policy \
@@ -438,7 +428,7 @@ aws ecr put-lifecycle-policy \
 
 ### Preview Before You Apply
 
-Lifecycle policies can be destructive -- they delete images. Always preview first:
+Lifecycle policies are destructive once AWS applies them, so treat `put-lifecycle-policy` like a production change: run `start-lifecycle-policy-preview` and read `get-lifecycle-policy-preview` before you rely on a new rule set, because the dry-run output is the cheapest place to discover that your `v` prefix rule would have deleted last week's hotfix tag.
 
 ```bash
 # Preview what a lifecycle policy WOULD delete (dry run)
@@ -452,7 +442,7 @@ aws ecr start-lifecycle-policy-preview \
 
 ### Lifecycle Policy Rule Evaluation Order
 
-ECR evaluates lifecycle rules in a specific order. Understanding this prevents surprises:
+ECR evaluates lifecycle rules in priority order — lowest rule number wins first match — and an image claimed by one rule is never reconsidered by later rules, which is why mis-ordered priorities cause surprises that no amount of tagging discipline can fix after the fact. The flowchart below shows that evaluation path, and the worked examples after it map each rule in the production policy to a concrete keep-or-expire decision:
 
 ```mermaid
 flowchart TD
@@ -465,15 +455,7 @@ flowchart TD
     Claim --> Action[5. Apply Action<br>Expire or Keep]
 ```
 
-**Example with our policy:**
-- Image tagged `v1.3.0` pushed 90 days ago
-  -> Matches Rule 1 (`v`-prefix, < 180 days) -> **KEPT**
-- Image tagged `v1.0.0` pushed 200 days ago
-  -> Matches Rule 1 (`v`-prefix, > 180 days) -> **EXPIRED**
-- Image tagged `feature-auth-fix` (6th feature image)
-  -> Matches Rule 2 (`feature-` prefix, > 5 count) -> **EXPIRED**
-- Untagged image pushed 2 days ago
-  -> Matches Rule 10 (untagged, > 1 day) -> **EXPIRED**
+Walk through the production policy with four representative images and the evaluation order becomes intuitive: a `v1.3.0` image pushed ninety days ago matches Rule 1's `v` prefix and stays inside the 180-day window, so it is **kept**; a `v1.0.0` image pushed two hundred days ago matches the same prefix but exceeds the age threshold, so it is **expired**; a sixth image tagged `feature-auth-fix` exceeds the feature-branch count cap in Rule 2 and is **expired** even though it is young; and an untagged digest pushed two days ago is **expired** by Rule 10 because untagged manifests are treated as build debris rather than rollback candidates.
 
 ---
 
@@ -542,7 +524,7 @@ aws ecr put-replication-configuration \
 
 ### Cross-Account and Cross-Region Together
 
-For organizations with separate accounts per environment and multiple regions:
+Organizations that split CI, staging, and production across accounts and regions usually combine replication with explicit registry policies so images flow automatically while humans never share long-lived access keys across account boundaries — the replication configuration below shows a CI account publishing into a production account in two regions:
 
 ```bash
 # Replicate from CI account (123456789012) to:
@@ -566,7 +548,7 @@ aws ecr put-replication-configuration \
   }'
 ```
 
-The destination account must grant permission for the source account to replicate:
+Replication is not unidirectional magic: the destination account must publish a registry policy that trusts the source account to call `ecr:ReplicateImage` and create repositories on its behalf, which is why the command below is run in the **destination** account even though engineers think of CI as "owning" the images:
 
 ```bash
 # Run this in the DESTINATION account
@@ -596,11 +578,7 @@ aws ecr put-registry-policy \
 
 By default, when your ECS tasks, EKS worker nodes, or EC2 instances pull images from ECR, the traffic travels over the public internet. This requires your subnets to have a NAT Gateway (which incurs data processing charges) or an Internet Gateway (which requires public IP addresses).
 
-For enhanced security and to reduce NAT Gateway costs, you can configure VPC Endpoints (AWS PrivateLink) for ECR. This keeps all container image pull traffic entirely within the AWS private network.
-
-To use ECR privately, you must create two types of VPC endpoints:
-1. **ECR API Endpoint**: `com.amazonaws.region.ecr.api` (Used for authentication and API calls like `DescribeRepositories`)
-2. **ECR Docker Routing Layer Endpoint**: `com.amazonaws.region.ecr.dkr` (Used for the actual Docker `pull` and `push` operations)
+For enhanced security and to reduce NAT Gateway costs, you can configure VPC Endpoints (AWS PrivateLink) for ECR so authentication and layer downloads stay on the AWS backbone instead of traversing the public internet through a NAT gateway. Private ECR access requires **two** interface endpoints in each VPC where tasks pull images: `com.amazonaws.region.ecr.api` for control-plane calls such as `DescribeRepositories`, and `com.amazonaws.region.ecr.dkr` for the Docker registry protocol that actually moves layers during `pull` and `push`.
 
 > **Pause and predict**: You configured both the ECR API and DKR VPC endpoints in your private subnet, routing all ECR traffic locally. However, when your ECS task attempts to start, it authenticates successfully but hangs while downloading the image layers. What crucial network path is missing?
 
@@ -689,7 +667,7 @@ Pulling container images across AWS regions introduces substantial network laten
 
 ## Hands-On Exercise: Build, Push, Scan, and Lifecycle
 
-In this exercise, you will create an ECR repository, build and push images with proper tagging, run vulnerability scans, configure lifecycle policies, and set up cross-account access.
+In this exercise you will walk through seven tasks that mirror a real platform onboarding: create a repository with scan-on-push and immutable tags, build and push a versioned test image, simulate a dozen CI releases to exercise lifecycle rules, read vulnerability findings, apply and preview a retention policy, grant cross-account pull access to a deployment account, and delete every resource so you do not leave storage charges behind. Each task heading states the goal; open the solution details when you want the exact CLI sequence.
 
 ### Setup
 
@@ -702,8 +680,6 @@ export REPO_NAME="kubedojo/ecr-exercise"
 ```
 
 ### Task 1: Create a Repository with Best-Practice Settings
-
-Create an ECR repository with scanning enabled and immutable tags.
 
 <details>
 <summary>Solution</summary>
@@ -724,8 +700,6 @@ aws ecr describe-repositories \
 </details>
 
 ### Task 2: Build and Push a Test Image
-
-Create a simple Dockerfile, build it, and push to ECR with proper tagging.
 
 <details>
 <summary>Solution</summary>
@@ -783,8 +757,6 @@ aws ecr describe-images \
 
 ### Task 3: Push Multiple Versions (Simulate CI/CD History)
 
-Build and push several versions to test lifecycle policies later.
-
 <details>
 <summary>Solution</summary>
 
@@ -809,8 +781,6 @@ aws ecr describe-images \
 </details>
 
 ### Task 4: Check Vulnerability Scan Results
-
-Review the scan results for the latest image.
 
 <details>
 <summary>Solution</summary>
@@ -842,8 +812,6 @@ aws ecr describe-image-scan-findings \
 </details>
 
 ### Task 5: Apply a Lifecycle Policy to Retain Only the Last 10 Images
-
-Configure a lifecycle policy that keeps the 10 most recent tagged images and removes the rest.
 
 <details>
 <summary>Solution</summary>
@@ -902,8 +870,6 @@ aws ecr get-lifecycle-policy-preview \
 
 ### Task 6: Configure Cross-Account Repository Access
 
-Apply a repository policy that allows a simulated deployment account (e.g., AWS Account ID `999988887777`) to pull images from your repository.
-
 <details>
 <summary>Solution</summary>
 
@@ -942,8 +908,6 @@ aws ecr get-repository-policy \
 </details>
 
 ### Task 7: Clean Up
-
-Remove all resources created during this exercise.
 
 <details>
 <summary>Solution</summary>
