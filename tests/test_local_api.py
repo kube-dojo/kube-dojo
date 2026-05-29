@@ -2593,21 +2593,24 @@ def test_briefing_top_modules_surfaces_pipeline_dead_letter(
     assert "pipeline_dead_letter" in reasons
 
 
-def test_briefing_top_modules_covers_critical_quality(tmp_path: Path) -> None:
-    """Codex round-2 gap: top_modules was missing critical_quality
-    and ready_queue categories. Rubric-critical rows must surface as
-    drillable entries, not just stringified actions.next lines."""
+def test_briefing_critical_quality_not_in_actions_next(tmp_path: Path) -> None:
+    """Critical-rubric modules stay on ``critical_quality`` + alerts;
+    they must not crowd ``actions.next`` (gaps-first orchestration)."""
     _setup_repo(tmp_path)
     _write(tmp_path / "STATUS.md", "# s\n\n## TODO\n\n- [ ] x\n")
     _seed_quality_module(tmp_path, "k8s/cka/module-2.8-bad-stub", title="Module 2.8: Bad Stub", filler_lines=30)
     with local_api._QUALITY_AUDIT_CACHE_LOCK:
         local_api._QUALITY_AUDIT_CACHE.clear()
     briefing = local_api.build_session_briefing(tmp_path)
-    reasons = {m.get("reason") for m in briefing["top_modules"]}
-    assert "critical_quality" in reasons
-    # Critical rubric entries must point at the scores endpoint.
-    cq = [m for m in briefing["top_modules"] if m.get("reason") == "critical_quality"]
-    assert cq and cq[0]["endpoint"] == "/api/quality/scores"
+    assert briefing["critical_quality"], "critical modules must surface on dedicated field"
+    next_rows = [r for r in briefing.get("action_rows") or [] if r.get("bucket") == "next"]
+    assert not any(r.get("reason") == "critical_quality" for r in next_rows)
+    assert not any(
+        "rubric-critical rewrite" in (label or "")
+        for label in briefing["actions"]["next"]
+    )
+    top_reasons = {m.get("reason") for m in briefing["top_modules"]}
+    assert "critical_quality" not in top_reasons
 
 
 def test_quality_scores_live_repo_no_citations_force_critical() -> None:
