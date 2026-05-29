@@ -8346,20 +8346,6 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
                 endpoint=f"/api/pipeline/v2/events?module={mk}" if mk else None,
             )
 
-    if isinstance(quality, dict) and quality.get("exists"):
-        for m in (quality.get("critical") or [])[:5]:
-            # Rubric rows don't carry a real ``module_key`` (the
-            # audit uses human-readable labels), so we store the
-            # label itself as the key and point at /api/quality/
-            # scores for drill-down. Agents can cross-reference.
-            _add_row(
-                "next",
-                f"rubric-critical rewrite: {m.get('module','?')} "
-                f"({m.get('track','?')}) score {m.get('score','?')}",
-                module_key=m.get("module"),
-                reason="critical_quality",
-                endpoint="/api/quality/scores",
-            )
     if isinstance(reviews, dict) and reviews.get("exists"):
         for review in (reviews.get("reviews") or [])[:5]:
             mk = review.get("module_key")
