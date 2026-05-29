@@ -207,7 +207,7 @@ Operators sometimes ask whether they should assign the gateway on the host-side 
 
 | Design | Best for | Gateway IP location | Typical Kubernetes analogue |
 |---|---|---|---|
-| Direct veth host↔pod | Single attachment, minimal switching | Often on host-side veth for /30-style links | Less common for multi-pod nodes |
+| Direct veth host to pod | Single attachment, minimal switching | Often on host-side veth for /30-style links | Less common for multi-pod nodes |
 | Bridge + veth ports | Many pods on one node L2 segment | On bridge device (`cni0`, `kd-br0`) | bridge CNI plugins, early docker0 |
 | Routed without bridge | Large clusters, L3 pod networks | On node or fabric, not on veth | Calico BGP, cloud routed ENI |
 
@@ -633,7 +633,7 @@ Run this lab in a disposable Ubuntu 24.04 VM. It uses realistic pod CIDR address
 
 ### Verification commands between steps
 
-After Step 3, these commands should succeed before you continue:
+After Step 3, check that namespace ownership and route behavior are correct before you continue. Run `ip netns exec kd-blue ip -br link` to confirm the namespace interface list, `ip netns exec kd-blue ip route get 10.244.50.1` to verify the gateway path, and `ip netns exec kd-blue ping -c 2 10.244.50.1` to prove namespace-to-gateway connectivity is working.
 
 ```bash
 sudo ip netns exec kd-blue ip -br link
@@ -641,7 +641,7 @@ sudo ip netns exec kd-blue ip route get 10.244.50.1
 sudo ip netns exec kd-blue ping -c 2 10.244.50.1
 ```
 
-After Step 5, add neighbor evidence:
+Before Step 5 is considered complete, validate neighbor state and bridge learning so that you have L2 evidence in addition to the basic route checks. Run `ip netns exec kd-blue ip neigh show dev eth0` and `ip netns exec kd-green ip neigh show dev eth0`, then confirm `bridge fdb show br kd-br0` reflects the expected port learning.
 
 ```bash
 sudo ip netns exec kd-blue ip neigh show dev eth0
@@ -649,7 +649,7 @@ sudo ip netns exec kd-green ip neigh show dev eth0
 bridge fdb show br kd-br0
 ```
 
-After Step 7, compare namespace plan versus host policy:
+After Step 7, compare what the namespace planned with what host policy actually allowed before you draw conclusions from external ping output. Confirm namespace forwarding intent with `sysctl net.ipv4.ip_forward`, inspect the host NAT scope with `sudo iptables -t nat -S POSTROUTING | grep 10.244.50.0/24`, and rerun `ip netns exec kd-blue ip route get 1.1.1.1` so you can confirm the namespace still chooses the expected egress route.
 
 ```bash
 sysctl net.ipv4.ip_forward

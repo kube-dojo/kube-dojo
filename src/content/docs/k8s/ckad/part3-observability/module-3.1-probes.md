@@ -22,7 +22,7 @@ lab:
 
 ## Learning Outcomes
 
-After completing this module, you will be able to:
+After completing this module, you will be able to demonstrate probe design and evaluation with enough confidence to pass CKAD exam questions and defend production incident triage decisions using kubelet behavior signals:
 
 - **Design** liveness, readiness, and startup probe configurations that match an application's startup behavior, dependency model, and failure modes.
 - **Compare** HTTP, TCP, exec, and gRPC probe mechanisms, then select the least risky check for a given workload.
@@ -819,7 +819,7 @@ k get pod probe-demo
 k describe pod probe-demo | grep -E "Startup|Liveness|Readiness"
 ```
 
-Success criteria:
+Success criteria: `k wait --for=condition=Ready pod/probe-demo --timeout=90s` should succeed, `k get pod probe-demo` should show the Pod running and ready, and `k describe pod probe-demo` should confirm startup, liveness, and readiness probe configuration on the `app` container.
 
 - [ ] `k wait` reports that `pod/probe-demo` met the `Ready` condition within the timeout.
 - [ ] `k get pod probe-demo` shows the Pod in `Running` status with the container ready.
@@ -835,7 +835,7 @@ k get svc probe-demo
 k get endpoints probe-demo
 ```
 
-Success criteria:
+Success criteria: after Service creation, confirm at least one endpoint appears for `probe-demo`, and explain how a readiness change can remove that endpoint without triggering a restart.
 
 - [ ] `k get svc probe-demo` shows a Service named `probe-demo`.
 - [ ] `k get endpoints probe-demo` shows at least one endpoint address and port for the Pod.
@@ -852,7 +852,7 @@ k get pod probe-demo
 k describe pod probe-demo | grep -A 20 Events
 ```
 
-Success criteria:
+Success criteria: after deleting the default index and waiting for probe execution, the event stream should show liveness failures and container restarts, not just endpoint-only behavior.
 
 - [ ] The Pod event stream shows failed liveness probe messages or a container restart related to probe failure.
 - [ ] `k get pod probe-demo` shows that restart count changed after the liveness failures.
@@ -869,7 +869,7 @@ k get pod probe-demo
 k get endpoints probe-demo
 ```
 
-Success criteria:
+Success criteria: after the restart clears, the Pod should return to `Ready` and endpoints should reappear, with restart counts matching the observed recovery path.
 
 - [ ] The Pod returns to `Ready` after the restart.
 - [ ] The Service endpoint exists again after readiness succeeds.
@@ -877,14 +877,14 @@ Success criteria:
 
 ### Step 6: Clean Up
 
-Remove the Service and Pod so the practice namespace is ready for the next exercise.
+Remove the Service and Pod so the practice namespace is ready for the next exercise, and verify cleanup leaves no stale probes, pods, or Services that could confuse the next drill.
 
 ```bash
 k delete svc probe-demo --ignore-not-found=true
 k delete pod probe-demo --ignore-not-found=true
 ```
 
-Success criteria:
+Success criteria: remove the Service and Pod and verify the namespace is clean for the next drill, while confirming no unrelated resources were removed.
 
 - [ ] `k get pod probe-demo` no longer returns the practice Pod.
 - [ ] `k get svc probe-demo` no longer returns the practice Service.
@@ -1215,7 +1215,7 @@ Finally, verify behavior with the Kubernetes resources that actually change. Use
 
 ## Next Module
 
-[Module 3.2: Container Logging](../module-3.2-logging/) - Access, manage, and troubleshoot container logs.
+Move next to [Module 3.2: Container Logging](../module-3.2-logging/) to continue with practical log collection patterns once probe behavior and endpoint routing are stable.
 
 ## Sources
 

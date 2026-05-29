@@ -80,11 +80,11 @@ The first design question is not "Which YAML field do I need?" but "What lifecyc
 | Should the data survive Pod deletion or rescheduling? | Yes | PersistentVolumeClaim | The claim decouples application data from the Pod's lifecycle. |
 | Should the Pod inspect files on the node itself? | Rarely | `hostPath` | This couples the Pod to a node and is mainly useful for node-level tooling or labs. |
 
-> **Active learning prompt:** Before reading further, classify three application paths from a real service you know: logs, uploaded files, and runtime cache. Decide whether each path should be container-local, `emptyDir`, ConfigMap or Secret backed, or PVC backed, then explain what failure would prove your choice wrong.
+> **Active learning prompt:** Before reading further, classify three application paths from a real service you know: logs, uploaded files, and runtime cache. Decide whether each path should be container-local, `emptyDir`, ConfigMap or Secret backed, or PVC backed, then explain what failure would prove your choice wrong. This makes the design decision concrete before you touch manifests, because the best storage pattern is always defined by the failure contract.
 
-The second design question is "Who needs to see this data?" A volume mounted into one container is invisible to the other containers unless they also mount it. That behavior is intentional. You can grant the sidecar access to a shared directory without exposing database credentials to it, or you can mount a read-only ConfigMap into the application while leaving a writable scratch volume at a different path.
+The second design question is "Who needs to see this data?" A volume mounted into one container is invisible to the other containers unless they also mount it, so you must reason at container level. That behavior is intentional and enables fine-grained access control inside one Pod. You can grant sidecar access to a shared directory without exposing database credentials to it, or mount a read-only ConfigMap into the application while leaving a writable scratch volume at a different path.
 
-The third design question is "What existing files are at the mount path?" Mounting a volume at a directory path hides the image's original files at that path for the lifetime of the container. That is not a merge operation. If the image has useful defaults under `/etc/app` and you mount a ConfigMap at `/etc/app`, the ConfigMap view replaces the directory contents visible to the process.
+The third design question is "What existing files are at the mount path?" Mounting a volume at a directory path hides the image's original files at that path for the lifetime of the container. That is not a merge operation, and many teams discover this only after moving from local Docker workflows to Kubernetes. If the image has useful defaults under `/etc/app` and you mount a ConfigMap at `/etc/app`, the ConfigMap view replaces the directory contents visible to the process.
 
 ### 2. Use `emptyDir` for Pod-Lifetime Scratch and Sharing
 
@@ -116,7 +116,7 @@ spec:
     emptyDir: {}
 ```
 
-Run the manifest with `kubectl apply -f emptydir-demo.yaml`. In the remaining examples, `k` is used as the common shell alias for `kubectl`; create it with `alias k=kubectl` if your environment does not already provide it.
+Run the manifest with `kubectl apply -f emptydir-demo.yaml`. In the remaining examples, `k` is used as the common shell alias for `kubectl`; create it with `alias k=kubectl` if your environment does not already provide it. This lets you focus on output patterns during troubleshooting instead of command spelling.
 
 ```bash
 k apply -f emptydir-demo.yaml
@@ -124,9 +124,9 @@ k get pod emptydir-demo
 k logs emptydir-demo -c reader
 ```
 
-The important observation is that the `reader` container can see the file created by the `writer` container because both mount the same volume name. If you removed the `volumeMounts` entry from `reader`, the volume would still exist at Pod scope, but the reader process would not see `/data/message`. This is why volume bugs often look like ordinary application file-not-found errors.
+The important observation is that the `reader` container can see the file created by the `writer` container because both mount the same volume name. If you removed the `volumeMounts` entry from `reader`, the volume would still exist at Pod scope, but the reader process would not see `/data/message`. This is why volume bugs often look like ordinary application file-not-found errors, because the Pod can be mounted correctly at the high level yet miss the exact path the process reads.
 
-You can also request a memory-backed `emptyDir` for high-speed scratch data. This is useful for small temporary files that benefit from RAM performance, but it is not free: memory-backed volume usage counts against memory pressure on the node and can contribute to eviction or OOM behavior. Use a `sizeLimit` so the scratch directory cannot grow without bound.
+You can also request a memory-backed `emptyDir` for high-speed scratch data. This is useful for small temporary files that benefit from RAM performance, but it is not free: memory-backed volume usage counts against memory pressure on the node and can contribute to eviction or OOM behavior. If your scratch data suddenly grows, a `sizeLimit` prevents a single debug loop from turning into a node resource incident.
 
 ```yaml
 apiVersion: v1
@@ -148,7 +148,7 @@ spec:
       sizeLimit: 128Mi
 ```
 
-`emptyDir` is also a clean fit for init-container preparation. An init container can populate a directory, exit successfully, and leave the files for the main container. This avoids building runtime-generated files into the image while still keeping the final container simple.
+`emptyDir` is also a clean fit for init-container preparation. An init container can populate a directory, exit successfully, and leave the files for the main container. This avoids building runtime-generated files into the image while still keeping the final container simple, and it makes it easier to reason about startup sequencing when the write path must happen before serving traffic.
 
 ```yaml
 apiVersion: v1
@@ -178,7 +178,7 @@ spec:
 
 > **Active learning prompt:** Predict what happens if the `nginx` container crashes and restarts in the same Pod after the init container wrote `index.html`. Then predict what happens if you delete the Pod and create a new one from the same manifest.
 
-A subtle but important exam detail is that a container restart is not the same thing as Pod replacement. The `emptyDir` survives container restarts within the same Pod, so it can hide bugs during testing. A rollout, eviction, or manual Pod deletion creates a new `emptyDir`, and any files from the old Pod are lost.
+A subtle but important exam detail is that a container restart is not the same thing as Pod replacement. The `emptyDir` survives container restarts within the same Pod, so it can hide bugs during testing if you only watch container restarts. A rollout, eviction, or manual Pod deletion creates a new `emptyDir`, and any files from the old Pod are lost, which is exactly when lifecycle mismatches surface.
 
 ### 3. Mount ConfigMaps and Secrets as Files Without Hiding Needed Directories
 
@@ -220,9 +220,9 @@ graph LR
     Container --> FileB
 ```
 
-The diagram shows why ConfigMap volume mounts are convenient: the application reads files, while Kubernetes supplies the file content. The application does not need to call the Kubernetes API. The trade-off is that a full directory mount changes what the process sees at that mount path.
+The diagram shows why ConfigMap volume mounts are convenient: the application reads files, while Kubernetes supplies the file content. The application does not need to call the Kubernetes API, and this reduces coupling between the image and environment values. The trade-off is that a full directory mount changes what the process sees at that mount path.
 
-If the image already contains files under `/etc/app`, mounting a ConfigMap at `/etc/app` hides those image files. This surprises developers who expect Kubernetes to add one file into the directory. Kubernetes mounts a filesystem at the target path, so the mounted volume view replaces the image directory view for that container.
+If the image already contains files under `/etc/app`, mounting a ConfigMap at `/etc/app` hides those image files. This surprises developers who expect Kubernetes to add one file into the directory. Kubernetes mounts a filesystem at the target path, so the mounted volume view replaces the image directory view for that container, and the app can no longer reach defaults that were previously file-based.
 
 ```yaml
 apiVersion: v1
@@ -275,7 +275,7 @@ spec:
         path: config.yaml
 ```
 
-[Secrets use the same volume pattern, but they are intended for sensitive values such as passwords, tokens, and private keys. Mount Secret volumes read-only unless the application has a very specific reason to write into the mount path. The files are made available from memory-backed storage on the node](https://kubernetes.io/docs/concepts/storage/volumes/), but Kubernetes Secrets are still not a complete secrets-management system by themselves.
+[Secrets use the same volume pattern, but they are intended for sensitive values such as passwords, tokens, and private keys. Mount Secret volumes read-only unless the application has a very specific reason to write into the mount path. The files are made available from memory-backed storage on the node](https://kubernetes.io/docs/concepts/storage/volumes/), but Kubernetes Secrets are still not a complete secrets-management system by themselves. Treat these volumes as one layer in your secret strategy, and avoid conflating file permissions with broader secret distribution, rotation, and audit requirements.
 
 ```bash
 k create secret generic db-creds \
@@ -355,7 +355,7 @@ spec:
               fieldPath: metadata.labels
 ```
 
-Projected volumes reduce mount clutter inside the container, but they can make ownership of each file less obvious to a future maintainer. Use explicit `items` and meaningful paths so the volume contents explain themselves. In an exam setting, projected volumes are usually worthwhile when the task explicitly asks to combine multiple inputs in one directory.
+Projected volumes reduce mount clutter inside the container, but they can make ownership of each file less obvious to a future maintainer. Use explicit `items` and meaningful paths so the volume contents explain themselves. In an exam setting, projected volumes are usually worthwhile when the task explicitly asks to combine multiple inputs in one directory, and they become risky when shared file provenance needs to be inspected quickly.
 
 ```text
 +------------------------------------------------------------+
@@ -369,7 +369,7 @@ Projected volumes reduce mount clutter inside the container, but they can make o
 +------------------------------------------------------------+
 ```
 
-Do not use projected volumes just because they look tidy. Separate mounts are clearer when an application has distinct directories such as `/etc/app`, `/var/run/secrets`, and `/tmp/work`. Use the pattern that makes the runtime contract easiest to inspect and debug.
+Do not use projected volumes just because they look tidy. Separate mounts are clearer when an application has distinct directories such as `/etc/app`, `/var/run/secrets`, and `/tmp/work`. Use the pattern that makes the runtime contract easiest to inspect and debug, then validate each mount path with `k exec` once the Pod is running.
 
 ### 5. Request Durable Storage with PersistentVolumeClaims
 
@@ -388,7 +388,7 @@ spec:
       storage: 1Gi
 ```
 
-[The PVC lifecycle is separate from the Pod lifecycle. If the Pod is deleted, the claim remains unless you delete it](https://v1-35.docs.kubernetes.io/docs/concepts/storage/persistent-volumes/). The underlying storage behavior after PVC deletion depends on the PersistentVolume reclaim policy and storage class, which is more of an administration concern, but a developer still needs to understand that the PVC is the durable contract the Pod consumes.
+[The PVC lifecycle is separate from the Pod lifecycle. If the Pod is deleted, the claim remains unless you delete it](https://v1-35.docs.kubernetes.io/docs/concepts/storage/persistent-volumes/). The underlying storage behavior after PVC deletion depends on the PersistentVolume reclaim policy and storage class, which is more of an administration concern, but a developer still needs to understand that the PVC is the durable contract the Pod consumes. That understanding is what keeps migration and rollback logic from conflating Pod restarts with data loss.
 
 ```yaml
 apiVersion: v1
@@ -493,7 +493,7 @@ k get configmap app-config
 k get secret db-creds
 ```
 
-The Pod event stream is usually the fastest source of truth for mount failures. A typo in a ConfigMap name, a missing Secret, or an unbound PVC appears before the application process even has a chance to run. If events are clean but the application fails, move inside the container and inspect the actual path.
+The Pod event stream is usually the fastest source of truth for mount failures. A typo in a ConfigMap name, a missing Secret, or an unbound PVC appears before the application process even has a chance to run. If events are clean but the application fails, move inside the container and inspect the actual path, because Kubernetes can successfully satisfy scheduling and mount logic while still delivering a runtime path mismatch.
 
 | Symptom | Most Likely Cause | What to Check First | Practical Fix |
 |---|---|---|---|
@@ -504,7 +504,7 @@ The Pod event stream is usually the fastest source of truth for mount failures. 
 | ConfigMap update does not appear in the container. | The file was mounted with `subPath`, or the app cached the old value. | Inspect the volume mount pattern and application reload behavior. | Restart the Pod or avoid `subPath` for live-updated config. |
 | Files disappear after rollout or manual Pod deletion. | Data was stored in container filesystem or `emptyDir`. | Check whether a PVC backs the path. | Move durable data to a PersistentVolumeClaim. |
 
-A common permission fix is to run the process with a known user and grant group ownership to mounted volume files through Pod security context. This is especially useful for writable persistent volumes where the application process should not run as root. Always check the image's expected user model before changing security context fields.
+A common permission fix is to run the process with a known user and grant group ownership to mounted volume files through Pod security context. This is especially useful for writable persistent volumes where the application process should not run as root. Always check the image's expected user model before changing security context fields, because a user mismatch can mask an unrelated bug as a permission failure.
 
 ```yaml
 apiVersion: v1
@@ -530,15 +530,15 @@ spec:
       claimName: data-pvc
 ```
 
-Do not blindly add `fsGroup` to every Pod. [It can change ownership behavior for supported volume types and may add startup overhead for large volumes](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/). Use it when the symptom points to group access or when the application image is intentionally non-root and needs write access to a mounted filesystem.
+Do not blindly add `fsGroup` to every Pod. [It can change ownership behavior for supported volume types and may add startup overhead for large volumes](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/). Use it when the symptom points to group access or when the application image is intentionally non-root and needs write access to a mounted filesystem, and then re-validate both startup time and file permissions together.
 
 ### 9. Worked Example: Share Generated Content Between Containers
 
-**Problem:** A team wants one container to generate a static report and another container to serve it with NGINX. Their first attempt writes the report into the generator container's local filesystem, so the web container returns the default NGINX page instead of the generated report.
+**Problem:** A team wants one container to generate a static report and another container to serve it with NGINX. Their first attempt writes the report into the generator container's local filesystem, so the web container returns the default NGINX page instead of the generated report. The design issue is not the web server itself; it is shared storage visibility across containers in the same Pod.
 
-**Step 1: Identify the lifecycle and sharing requirement.** The report only needs to exist for the lifetime of the Pod, and both containers are in the same Pod. That points to `emptyDir`, not a PVC. The data is shared but not durable, so persistent storage would add unnecessary complexity.
+**Step 1: Identify the lifecycle and sharing requirement.** The report only needs to exist for the lifetime of the Pod, and both containers are in the same Pod. That points to `emptyDir`, not a PVC. The data is shared but not durable, so persistent storage would add unnecessary complexity and the wrong durability expectation.
 
-**Step 2: Mount the same volume into both containers.** The generator writes to `/work`, while NGINX serves from `/usr/share/nginx/html`. The paths differ, but the volume name is the same, so both paths point to the same Pod-level storage.
+**Step 2: Mount the same volume into both containers.** The generator writes to `/work`, while NGINX serves from `/usr/share/nginx/html`. The paths differ, but the volume name is the same, so both paths point to the same Pod-level storage. This is the core pattern that lets different containers cooperate without duplicating data.
 
 ```yaml
 apiVersion: v1
@@ -575,7 +575,7 @@ spec:
     emptyDir: {}
 ```
 
-**Step 3: Apply and verify from both containers.** The generator should create `index.html`, and the web container should see the same file at its own mount path. This proves that the volume source is shared even though each container uses a different internal directory.
+**Step 3: Apply and verify from both containers.** The generator should create `index.html`, and the web container should see the same file at its own mount path. This proves that the volume source is shared even though each container uses a different internal directory. If one side fails, the manifest is likely correct and you should test both `cat` checks before revising storage type.
 
 ```bash
 k apply -f report-pod.yaml
@@ -584,28 +584,28 @@ k exec report-pod -c generator -- cat /work/index.html
 k exec report-pod -c web -- cat /usr/share/nginx/html/index.html
 ```
 
-**Step 4: Interpret the result.** If the generator can read `/work/index.html` but the web container cannot read `/usr/share/nginx/html/index.html`, the problem is not `emptyDir` itself. The likely mistake is a missing `volumeMounts` entry, mismatched volume name, or a different mount path than the one being inspected.
+**Step 4: Interpret the result.** If the generator can read `/work/index.html` but the web container cannot read `/usr/share/nginx/html/index.html`, the problem is not `emptyDir` itself. The likely mistake is a missing `volumeMounts` entry, mismatched volume name, or a different mount path than the one being inspected. Trace each container's `volumeMounts` against the command outputs and correct the single field that blocks visibility.
 
-**Step 5: Connect the pattern to the exam.** When a task says that two containers in one Pod must exchange files, reach for `emptyDir` first unless the task explicitly requires data to survive Pod deletion. The key implementation detail is mounting the same volume name into every container that needs access.
+**Step 5: Connect the pattern to the exam.** When a task says that two containers in one Pod must exchange files, reach for `emptyDir` first unless the task explicitly requires data to survive Pod deletion. The key implementation detail is mounting the same volume name into every container that needs access. In practice, you can decide in seconds by asking two questions: is the data durable, and how many containers need it?
 
 ### 10. Worked Example: Diagnose a Pod Blocked by a PVC
 
-**Problem:** A Pod named `uploads-api` stays in `Pending` after deployment. The application image is valid, and the command is simple, but the Pod never starts. The manifest references a volume named `uploads` using `persistentVolumeClaim.claimName: uploads-pvc`.
+**Problem:** A Pod named `uploads-api` stays in `Pending` after deployment. The application image is valid, and the command is simple, but the Pod never starts. The manifest references a volume named `uploads` using `persistentVolumeClaim.claimName: uploads-pvc`. This usually means the failure is storage dependency before runtime behavior starts.
 
-**Step 1: Check Pod events before changing the image.** A storage dependency can block Pod startup before the container process ever runs. The first command should inspect scheduling and mount-related events.
+**Step 1: Check Pod events before changing the image.** A storage dependency can block Pod startup before the container process ever runs. The first command should inspect scheduling and mount-related events, then confirm whether the event references claim creation, provisioning, or access-mode constraints.
 
 ```bash
 k describe pod uploads-api
 ```
 
-**Step 2: Inspect PVC state.** If the event mentions a claim, check whether the claim exists and whether it is bound. A missing claim and a pending claim require different fixes.
+**Step 2: Inspect PVC state.** If the event mentions a claim, check whether the claim exists and whether it is bound. A missing claim and a pending claim require different fixes, and this is the key branch point before guessing at image-level changes.
 
 ```bash
 k get pvc
 k describe pvc uploads-pvc
 ```
 
-**Step 3: Fix the right failure.** If the PVC is missing, create it or correct the Pod's `claimName`. If the PVC exists but is `Pending`, check requested storage, access mode, and storage class behavior. In a CKAD environment with dynamic provisioning, a simple claim may bind automatically after it is created.
+**Step 3: Fix the right failure.** If the PVC is missing, create it or correct the Pod's `claimName`. If the PVC exists but is `Pending`, check requested storage, access mode, and storage class behavior. In a CKAD environment with dynamic provisioning, a simple claim may bind automatically after it is created, so distinguish configuration errors from environment capacity and quota constraints.
 
 ```yaml
 apiVersion: v1
@@ -628,22 +628,22 @@ k get pvc uploads-pvc
 k describe pod uploads-api
 ```
 
-**Step 5: Explain the lesson.** A `Pending` Pod with an unbound PVC is not fixed by changing `command`, `args`, or container ports. The Pod is waiting for a storage contract to become valid. CKAD troubleshooting is faster when you follow the dependency chain instead of guessing from the application name.
+**Step 5: Explain the lesson.** A `Pending` Pod with an unbound PVC is not fixed by changing `command`, `args`, or container ports. The Pod is waiting for a storage contract to become valid. CKAD troubleshooting is faster when you follow the dependency chain instead of guessing from the application name, and the same chain applies across tasks that involve secrets, config, and PVCs.
 
 ### 11. Worked Example: Preserve Image Defaults While Adding One Config File
 
-**Problem:** A container image ships default files under `/etc/app`, but the team needs to provide `/etc/app/config.yaml` from a ConfigMap. Their first manifest mounts the ConfigMap at `/etc/app`, and the application fails because the other default files are hidden.
+**Problem:** A container image ships default files under `/etc/app`, but the team needs to provide `/etc/app/config.yaml` from a ConfigMap. Their first manifest mounts the ConfigMap at `/etc/app`, and the application fails because the other default files are hidden. The fix is to preserve existing files while still introducing one new file without changing image content.
 
-**Step 1: Recognize the overlay behavior.** A directory volume mount replaces the visible contents of the target directory from the container's point of view. Kubernetes did not delete the image files, but the mounted volume hides them at that path.
+**Step 1: Recognize the overlay behavior.** A directory volume mount replaces the visible contents of the target directory from the container's point of view. Kubernetes did not delete the image files, but the mounted volume hides them at that path. Read this as a filesystem-level override, not a file merge.
 
-**Step 2: Create a ConfigMap with the one file the app needs.** The key should match the file name you plan to mount through `subPath`, because `subPath` selects a single entry from the volume.
+**Step 2: Create a ConfigMap with the one file the app needs.** The key should match the file name you plan to mount through `subPath`, because `subPath` selects a single entry from the volume. This also makes rollout verification easier, because you can predict the exact resulting path in the container.
 
 ```bash
 k create configmap app-file-config \
   --from-literal=config.yaml='mode: production'
 ```
 
-**Step 3: Mount the key as a single file.** The `mountPath` is the final file path inside the container, and `subPath` names the file from the volume. This keeps the rest of `/etc/app` visible from the image.
+**Step 3: Mount the key as a single file.** The `mountPath` is the final file path inside the container, and `subPath` names the file from the volume. This keeps the rest of `/etc/app` visible from the image and avoids replacing all defaults with one config source.
 
 ```yaml
 apiVersion: v1
@@ -668,7 +668,7 @@ spec:
 
 **Step 4: Record the trade-off.** This pattern solves the directory overlay problem, but the mounted file behaves like a snapshot for update purposes. If the team requires live config refresh, they should mount the ConfigMap as a directory and configure the application to read from that directory instead.
 
-**Step 5: Verify the file from inside the container.** The fastest confidence check is to read the exact path the app uses. If that path works but the app still fails, the remaining issue is likely application-level parsing, not Kubernetes volume wiring.
+**Step 5: Verify the file from inside the container.** The fastest confidence check is to read the exact path the app uses. If that path works but the app still fails, the remaining issue is likely application-level parsing, not Kubernetes volume wiring. That split keeps your troubleshooting efficient because you no longer waste cycles checking mounts that already satisfy the filesystem contract.
 
 ```bash
 k apply -f single-config-file.yaml
@@ -689,7 +689,7 @@ When a CKAD task mentions files, pause long enough to classify the file before w
 | Durable uploaded data | PVC | Data lifecycle must outlive the Pod. | Multiple replicas write concurrently without RWX support. |
 | Node filesystem inspection | `hostPath` | The node path itself is the target. | Used as a shortcut for normal application persistence. |
 
-This checklist also keeps assessment aligned with real work. A senior developer does not memorize volume types in isolation; they map failure modes to lifecycle contracts. If the consequence of losing the file is harmless, do not over-engineer. If the consequence is data loss, do not hide behind a restartable Pod abstraction.
+This checklist also keeps assessment aligned with real work. A senior developer does not memorize volume types in isolation; they map failure modes to lifecycle contracts by asking what happens first when something disappears. If the consequence of losing the file is harmless, do not over-engineer. If the consequence is data loss, do not hide behind a restartable Pod abstraction.
 
 ---
 
@@ -789,11 +789,11 @@ This checklist also keeps assessment aligned with real work. A senior developer 
 
 ## Hands-On Exercise
 
-**Task:** Build and debug a Pod storage layout that uses `emptyDir` for shared generated content, a ConfigMap for application settings, a Secret for sensitive input, and a PVC for durable output. The goal is not only to make the manifests apply, but to prove that each mounted path has the lifecycle and visibility the application expects.
+**Task:** Build and debug a Pod storage layout that uses `emptyDir` for shared generated content, a ConfigMap for application settings, a Secret for sensitive input, and a PVC for durable output. The goal is not only to make the manifests apply, but to prove that each mounted path has the lifecycle and visibility the application expects. You will validate that your reasoning matches the observed behavior, because manifest syntax alone does not prove correctness.
 
-**Scenario:** A small reporting workload generates an HTML report, serves it through NGINX, reads its display mode from a ConfigMap, reads a token from a Secret, and writes an audit marker to durable storage. The generated HTML can disappear with the Pod, but the audit marker should remain on the PVC after the Pod is replaced.
+**Scenario:** A small reporting workload generates an HTML report, serves it through NGINX, reads its display mode from a ConfigMap, reads a token from a Secret, and writes an audit marker to durable storage. The generated HTML can disappear with the Pod, but the audit marker should remain on the PVC after the Pod is replaced. This gives you one failure domain per layer, so your exercise reveals whether each source follows its intended persistence contract.
 
-**Step 1: Prepare an isolated namespace and command alias.**
+**Step 1: Prepare an isolated namespace and command alias.** Start in a dedicated namespace so cleanup is easy and you do not accidentally debug resources from another lab. Creating `alias k=kubectl` up front makes the repeated lifecycle checks faster and reduces accidental command drift during troubleshooting.
 
 ```bash
 alias k=kubectl
@@ -801,7 +801,7 @@ k create namespace volumes-lab
 k config set-context --current --namespace=volumes-lab
 ```
 
-**Step 2: Create the configuration and secret inputs.**
+**Step 2: Create the configuration and secret inputs.** Establish the two non-storage inputs with explicit, predictable keys because the resulting files drive what the Pod can render and what it can authenticate. This keeps the exercise focused on mount behavior rather than inline test data.
 
 ```bash
 k create configmap report-config \
@@ -812,7 +812,7 @@ k create secret generic report-token \
   --from-literal=token=lab-token-123
 ```
 
-**Step 3: Create a PVC for durable audit output.**
+**Step 3: Create a PVC for durable audit output.** Durable output is the layer that should survive Pod replacement, so define it before running the Pod to mirror real CKAD sequencing where dependent resources should exist or be provisionable before the workload starts.
 
 ```yaml
 apiVersion: v1
@@ -832,7 +832,7 @@ k apply -f report-audit-pvc.yaml
 k get pvc report-audit-pvc
 ```
 
-**Step 4: Create the reporting Pod with four distinct storage responsibilities.**
+**Step 4: Create the reporting Pod with four distinct storage responsibilities.** Use `emptyDir`, ConfigMap, Secret, and PVC in different roles so you can prove the differences are intentional, not accidental. Each mount should map to a clearly scoped contract: shared scratch, config, credentials, and audit durability.
 
 ```yaml
 apiVersion: v1
@@ -896,7 +896,7 @@ k apply -f report-stack.yaml
 k wait --for=condition=Ready pod/report-stack --timeout=120s
 ```
 
-**Step 5: Verify the visible files from the running container.**
+**Step 5: Verify the visible files from the running container.** Once the Pod is ready, read files from the mounted locations as the web container sees them. If any path is empty or missing, it tells you exactly which mount contract failed in the runtime view.
 
 ```bash
 k exec report-stack -c web -- cat /usr/share/nginx/html/index.html
@@ -904,7 +904,7 @@ k exec report-stack -c web -- cat /audit/created-at.txt
 k describe pod report-stack
 ```
 
-**Step 6: Prove the difference between `emptyDir` and PVC lifecycle.**
+**Step 6: Prove the difference between `emptyDir` and PVC lifecycle.** Delete and recreate the Pod without changing manifests so the difference in persistence is externally visible. If the shared report content changes and the audit marker does not, your data-placement decisions are correct; if both change, the contract is backwards.
 
 ```bash
 k delete pod report-stack
@@ -914,7 +914,7 @@ k exec report-stack -c web -- cat /usr/share/nginx/html/index.html
 k exec report-stack -c web -- cat /audit/created-at.txt
 ```
 
-**Step 7: Introduce and fix one debugging failure.** Edit the Pod manifest so the ConfigMap volume references `report-config-missing`, apply it after deleting the Pod, and inspect the failure with `k describe pod report-stack`. Then restore the correct name and verify the Pod becomes ready again.
+**Step 7: Introduce and fix one debugging failure.** Edit the Pod manifest so the ConfigMap volume references `report-config-missing`, apply it after deleting the Pod, and inspect the failure with `k describe pod report-stack`. Then restore the correct name and verify the Pod becomes ready again, which confirms you diagnosed object-reference failure instead of blaming application behavior.
 
 ```bash
 k delete pod report-stack

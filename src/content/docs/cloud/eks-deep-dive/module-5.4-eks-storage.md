@@ -20,11 +20,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A stateful workload on EKS can fail to restart after rescheduling if its EBS-backed volume is tied to a different Availability Zone, leaving the pod in `Pending` with a volume node affinity conflict.
-
-A zonal storage mismatch during recovery can keep a critical workload offline until operators restore data in a usable zone, which is why Kubernetes storage behavior and AWS zonal constraints matter for stateful services. 
-
-Storage on Kubernetes is deceptively complex. In a traditional virtual machine environment, you attach a disk to an instance and largely forget about it. In Kubernetes, pods are ephemeral by design; they move constantly between nodes, and the scheduler can place them across any Availability Zone in your cluster. If you do not deeply understand the storage abstractions, CSI driver mechanisms, and the geographical constraints of cloud storage, your "highly available" architecture possesses a silent, catastrophic single-AZ failure mode hiding in plain sight. In this module, you will learn to master the EBS, EFS, and Mountpoint for S3 CSI drivers, ensuring your stateful workloads are truly resilient.
+A stateful workload on EKS can fail to restart after rescheduling if its EBS-backed volume is tied to a different Availability Zone, leaving the pod in `Pending` with a volume node affinity conflict. This happens when storage and pod placement drift apart, and it is often discovered only during recovery windows when time pressure is highest. A zonal storage mismatch can keep a critical service offline until operators restore data in a usable zone, so Kubernetes storage behavior and AWS zonal constraints matter for every stateful design. In traditional virtual-machine operations, you usually attach a disk and keep it unchanged, but Kubernetes pods move and are frequently rescheduled by design. If you do not understand StorageClass behavior, CSI mechanisms, and zone geography together, your "highly available" architecture quietly hides a one-AZ failure mode that only appears under pressure. In this module, you will learn to master the EBS, EFS, and Mountpoint for S3 CSI drivers, ensuring your stateful workloads are truly resilient.
 
 ---
 
@@ -245,7 +241,7 @@ k get pvc data-postgres-0 -n database -o json | \
 # 2. The filesystem is expanded online (the CSI driver handles this)
 ```
 
-The underlying orchestration is elegant: the EBS controller plugin commands the AWS API to expand the physical block device. Once AWS confirms the new capacity, the CSI node plugin executing on the host runs standard Linux utilities (`resize2fs` or `xfs_growfs`) to grow the filesystem structure to fill the new boundaries. 
+The underlying orchestration is elegant: the EBS controller plugin commands the AWS API to expand the physical block device, while the PVC remains the stable contract for scheduling and attachment behavior. Once AWS confirms the new capacity, the CSI node plugin executing on the host runs standard Linux utilities (`resize2fs` or `xfs_growfs`) to grow the filesystem structure to fill the new boundaries. This two-phase workflow is what allows teams to resize databases without taking application maintenance windows.
 
 > **Stop and think**: You just expanded an EBS volume from 100Gi to 200Gi for a temporary data migration. A week later, you realize you only need 50Gi long-term and want to reduce costs. Since EBS doesn't support shrinking volumes, what exact Kubernetes and AWS steps would you need to take to migrate your live StatefulSet data to a new 50Gi volume?
 
@@ -259,7 +255,7 @@ EBS has a fundamental architectural limitation: a single volume can only be moun
 
 ### Setting Up EFS
 
-Deploying EFS for EKS requires the EFS CSI driver, a dedicated IAM role, and crucially, an intricate web of security groups and subnet mount targets.
+Deploying EFS for EKS requires the EFS CSI driver, a dedicated IAM role, and crucially, an intricate web of security groups and subnet mount targets. Without all three in place, shared storage can remain technically installed but functionally inaccessible from production workloads. In practice, IAM grants the API permission, while security groups and mount targets determine whether pods can reach file paths consistently across all zones.
 
 ```bash
 # Create IAM role for EFS CSI
@@ -316,7 +312,7 @@ echo "EFS filesystem: $EFS_ID"
 
 ### Using EFS in Pods
 
-EFS relies heavily on the concept of EFS Access Points for dynamic provisioning. [An Access Point is an application-specific entry point into an EFS file system that enforces POSIX identity and root directory paths](https://docs.aws.amazon.com/efs/latest/ug/efs-access-points.html), allowing different applications to safely share the same physical EFS filesystem securely.
+EFS relies heavily on the concept of EFS Access Points for dynamic provisioning. [An Access Point is an application-specific entry point into an EFS file system that enforces POSIX identity and root directory paths](https://docs.aws.amazon.com/efs/latest/ug/efs-access-points.html), allowing different applications to safely share the same physical EFS filesystem securely. This avoids cross-tenant path conflicts and gives operations predictable ownership boundaries as workloads scale.
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -380,7 +376,7 @@ spec:
             claimName: shared-media
 ```
 
-Notice the critical distinction: the PVC leverages `ReadWriteMany`. All five replicas seamlessly mount the exact same file tree at `/usr/share/nginx/html/media`. When any pod modifies an image or file, the changes are generally visible to the other replicas shortly afterward. 
+Notice the critical distinction: the PVC leverages `ReadWriteMany`. All five replicas seamlessly mount the exact same file tree at `/usr/share/nginx/html/media`, and when any pod modifies an image or file, the changes are generally visible to the other replicas shortly afterward. This is why EFS is a natural fit for shared CMS workloads where consistency of shared assets matters as much as service parallelism.
 
 > **Stop and think**: EFS is a regional service, meaning your 5 `cms-web` replicas can be scheduled across 3 different Availability Zones and still read/write to the same filesystem. But what is the hidden cost of this convenience? Consider how data actually flows when a pod in AZ-a reads a file that was physically written by a pod in AZ-b, and what AWS charges for network traffic that crosses AZ boundaries.
 
@@ -409,7 +405,7 @@ graph LR
 
 ### Setup and Configuration
 
-[Mountpoint for S3 is not meant for dynamic provisioning; it is strictly designed to map existing S3 buckets into pods.](https://docs.aws.amazon.com/eks/latest/userguide/s3-csi.html) Thus, you must manually construct a `PersistentVolume` targeting the bucket.
+[Mountpoint for S3 is not meant for dynamic provisioning; it is strictly designed to map existing S3 buckets into pods.](https://docs.aws.amazon.com/eks/latest/userguide/s3-csi.html) Thus, you must manually construct a `PersistentVolume` targeting the bucket so the driver has a concrete object to mount. In practice, this means you treat each existing bucket as a pre-provided data source and keep namespace and access controls explicit at the Kubernetes storage layer.
 
 ```bash
 # Install the Mountpoint for S3 CSI add-on
@@ -490,7 +486,7 @@ Mountpoint does not perfectly emulate a block filesystem. It comes with distinct
 
 ## Stateful Workloads Across Availability Zones
 
-The fundamental lesson learned by the ad-tech company was that high availability at the application layer means nothing if the storage layer acts as a strict geographical anchor.
+The fundamental lesson learned by the ad-tech company was that high availability at the application layer means nothing if the storage layer acts as a strict geographical anchor. They had multiple application pods that could move between zones, yet recovery still stalled when the volume could not follow that movement quickly. That failure path proved that resilience requires alignment between scheduler strategy and storage topology, not just pod-level replication.
 
 ### The Problem
 
@@ -514,7 +510,7 @@ graph TD
 
 ### Solution 1: Topology-Aware Scheduling
 
-Use `WaitForFirstConsumer` for newly provisioned zonal volumes, and remember that already-bound EBS volumes carry node-affinity constraints that keep a pod schedulable only in the volume's zone. Topology rules can help spread replicas across zones, but they do not move an orphaned zonal volume to another AZ.
+Use `WaitForFirstConsumer` for newly provisioned zonal volumes, and remember that already-bound EBS volumes carry node-affinity constraints that keep a pod schedulable only in the volume's zone. Topology rules can help spread replicas across zones, but they do not move an orphaned zonal volume to another AZ. This distinction is why delayed provisioning is useful for first-time scheduling, while remediation after mismatch still often depends on application architecture and relocation strategy.
 
 ```yaml
 apiVersion: apps/v1
@@ -566,7 +562,7 @@ spec:
 
 ### Solution 2: Multiple Nodes Per AZ
 
-You must ensure that your compute plane guarantees sufficient failover capacity within the *same* Availability Zone.
+You must ensure that your compute plane guarantees sufficient failover capacity within the *same* Availability Zone. If a zone is running stateful workloads and only has one node, a single node failure can turn a transient hardware incident into a broader availability issue by removing the only valid mount target for that zone’s EBS workload. Plan capacity in AZ slices, then confirm autoscaling keeps minimums healthy before declaring a workload production ready.
 
 ```bash
 # Create a node group that spans multiple AZs with at least 2 nodes per AZ
@@ -584,7 +580,7 @@ By ensuring there are at least two nodes per Availability Zone, a single node cr
 
 ### Solution 3: Application-Level Replication
 
-For enterprise database tiers, completely abstracting resilience away from the Kubernetes storage layer is the gold standard.
+For enterprise database tiers, completely abstracting resilience away from the Kubernetes storage layer is the gold standard. Storage can still fail, become saturated, or become misbound under stress, but application replication and promotion logic can keep data serviceable during regional disruption.
 
 ```mermaid
 graph LR
@@ -610,13 +606,13 @@ graph LR
     P1 -- "stream rep." --> P2
 ```
 
-In this pattern, each StatefulSet replica is deployed with its own dedicated EBS volume pinned to its respective zone. PostgreSQL manages the asynchronous or synchronous block streaming between the primary and the replicas. If an entire AWS Availability Zone burns down, the application logic detects the outage and intelligently promotes a replica in a surviving zone to assume the primary role.
+In this pattern, each StatefulSet replica is deployed with its own dedicated EBS volume pinned to its respective zone. PostgreSQL manages the asynchronous or synchronous block streaming between the primary and the replicas, depending on your recovery point objective. If an entire AWS Availability Zone burns down, the application logic detects the outage and promotes a replica in a surviving zone to assume the primary role.
 
 ---
 
 ## Storage Decision Matrix
 
-Selecting the proper backend boils down to access patterns and IO profiles.
+Selecting the proper backend boils down to access patterns, data semantics, and recovery requirements. In practice, you pick EBS when low-latency single-writer block semantics dominate, EFS when concurrent read/write access by multiple pods is a business requirement, and Mountpoint S3 when read-heavy object-style workloads outweigh filesystem edit requirements.
 
 | Use Case | Storage Type | Access Mode | Key Constraint |
 | :--- | :--- | :--- | :--- |
@@ -725,7 +721,7 @@ graph TD
 ```
 
 ### Task 1: Install EBS and EFS CSI Drivers
-Your first step is to establish the fundamental storage integrations. Using standard AWS CLI tooling, map the required IAM permissions to Kubernetes service accounts, and then bolt the driver binaries directly into your EKS control plane.
+Your first step is to establish the fundamental storage integrations. Using standard AWS CLI tooling, map the required IAM permissions to Kubernetes service accounts, and then bolt the driver binaries directly into your EKS control plane. A deterministic order here reduces drift: if one driver is missing permissions or misconfigured, the second manifests you deploy later can fail in confusing ways.
 
 <details>
 <summary>Solution</summary>
@@ -773,7 +769,7 @@ k get pods -n kube-system -l 'app.kubernetes.io/name in (aws-ebs-csi-driver,aws-
 </details>
 
 ### Task 2: Create StorageClasses and EFS Filesystem
-Next, construct the `StorageClass` primitives. You must ensure `WaitForFirstConsumer` is implemented for EBS, and successfully expose EFS across all network subnets to prevent cross-AZ latency regressions.
+Next, construct the `StorageClass` primitives in sequence. You must ensure `WaitForFirstConsumer` is implemented for EBS, and successfully expose EFS across all network subnets to prevent cross-AZ latency regressions. This preparation reduces operational surprises when you later add mixed-workload controllers and replicas that depend on both consistent block and shared filesystem behavior.
 
 <details>
 <summary>Solution</summary>
@@ -846,7 +842,7 @@ EOF
 </details>
 
 ### Task 3: Deploy PostgreSQL with EBS Storage
-Bind an EBS block device strictly to a stateful PostgreSQL database. Notice how the headless service orchestrates identity management while block placement guarantees zero-loss persistence.
+Bind an EBS block device strictly to a stateful PostgreSQL database. This gives a predictable persistence model for single-writer workloads, where each write path remains tied to one volume identity. Notice how the headless service orchestrates identity management while block placement guarantees zero-loss persistence in the face of pod recreation.
 
 <details>
 <summary>Solution</summary>
@@ -942,7 +938,7 @@ k exec -n cms postgres-0 -- pg_isready -U cmsadmin -d cmsdb
 </details>
 
 ### Task 4: Deploy CMS Web Tier with EFS Shared Storage
-Distribute a lightweight NGINX fleet across the cluster. The crucial capability here is the integration of the EFS network filesystem. Confirm that data written by one pod instance is instantly visible to the others globally.
+Distribute a lightweight NGINX fleet across the cluster. The crucial capability here is the integration of the EFS network filesystem, which demonstrates when and why shared storage matters for horizontally scaled services. Confirm that data written by one pod instance is visible to the others globally, and then observe how the deployment stays functional when pods shift across node groups.
 
 <details>
 <summary>Solution</summary>
@@ -1033,7 +1029,7 @@ k exec -n cms $(k get pods -n cms -l app=cms-web -o name | tail -1) -- \
 </details>
 
 ### Task 5: Take an EBS Snapshot and Resize the Volume
-Test disaster preparedness. Freeze the block state of your database volume using an immutable snapshot. Then, simulate an enterprise scaling event by aggressively inflating the backing EBS capacity dynamically while the pods maintain active IO.
+Test disaster preparedness and operational scale together. First, freeze the block state of your database volume using an immutable snapshot so you maintain a known recovery point. Then, simulate an enterprise scaling event by inflating the backing EBS capacity dynamically while the pods maintain active IO, proving that expansion workflows can work without planned downtime.
 
 <details>
 <summary>Solution</summary>
@@ -1087,7 +1083,7 @@ k exec -n cms postgres-0 -- df -h /var/lib/postgresql/data
 </details>
 
 ### Task 6: Verify AZ Resilience
-Ensure your system obeys strict geographical boundaries. Use standard topology queries to correlate the EC2 node placement with physical volume attachments. Run a sweeping loop verifying the integrity of the EFS network mount across isolated locations.
+Ensure your system obeys strict geographical boundaries and that failures in one zone do not bleed into another zone’s assumptions. Use standard topology queries to correlate EC2 node placement with physical volume attachments, because this reveals exactly why a pod can stay `Pending` during an AZ mismatch. Run a sweeping loop verifying the integrity of the EFS network mount across isolated locations so shared file performance and availability remain observable under stress.
 
 <details>
 <summary>Solution</summary>
