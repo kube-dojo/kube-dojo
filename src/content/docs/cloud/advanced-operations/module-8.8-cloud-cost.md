@@ -14,24 +14,15 @@ sidebar:
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
-
-- **Implement FinOps practices with cloud-native cost allocation tagging, showback, and chargeback mechanisms**
-- **Configure Kubernetes cost visibility using Kubecost, OpenCost, or cloud-native cost tools across multi-cluster environments**
-- **Optimize compute costs using reserved instances, committed use discounts, Spot/preemptible instances, and right-sizing**
-- **Design automated cost anomaly detection and budget alerting pipelines that trigger remediation actions**
+After completing this module, you will be able to **Implement FinOps practices with cloud-native cost allocation tagging, showback, and chargeback mechanisms**, **Configure Kubernetes cost visibility using Kubecost, OpenCost, or cloud-native cost tools across multi-cluster environments**, **Optimize compute costs using reserved instances, committed use discounts, Spot/preemptible instances, and right-sizing**, and **Design automated cost anomaly detection and budget alerting pipelines that trigger remediation actions**.
 
 ---
 
 ## Why This Module Matters
 
-A fast-growing company with a large cloud bill.
+A fast-growing company with a large cloud bill, and leadership realized cloud spend was growing faster than expected, but the organization still lacked workload-level cost visibility and could not answer basic ownership questions from provider billing alone.
 
-Leadership realized cloud spend was growing faster than expected, but the organization still lacked workload-level cost visibility and could not answer basic ownership questions from provider billing alone.
-
-Detailed cost reviews often uncover underutilized compute, steady workloads still billed at on-demand rates, orphaned storage, long-lived temporary environments, and overlooked network-transfer charges.
-
-Applying right-sizing, commitment discounts, workload-level cost allocation, and carefully chosen interruptible capacity can materially reduce cloud spend without requiring application rewrites.
+Detailed cost reviews often uncover underutilized compute, steady workloads still billed at on-demand rates, orphaned storage, long-lived temporary environments, and overlooked network-transfer charges, so applying right-sizing, commitment discounts, workload-level cost allocation, and carefully chosen interruptible capacity can materially reduce cloud spend without requiring application rewrites.
 
 ---
 
@@ -60,11 +51,9 @@ graph TD
 
 ---
 
-> **Pause and predict**: If three teams share a single Kubernetes node, how can you determine who pays for what?
+> **Pause and predict**: If three teams share a single Kubernetes node, how can you determine who pays for what? Kubernetes makes cost allocation hard because workloads share nodes, and if three teams run pods on the same node, you still need a fair way to decide who pays for that node.
 
 ## Pillar 1: Visibility with Kubecost and OpenCost
-
-Kubernetes makes cost allocation hard because workloads share nodes. If three teams run pods on the same node, who pays for that node?
 
 ### Kubecost Architecture
 
@@ -215,11 +204,9 @@ EOF
 
 ---
 
-> **Stop and think**: Why is over-provisioning a pod's requested CPU worse than over-provisioning its limits?
+> **Stop and think**: Why is over-provisioning a pod's requested CPU worse than over-provisioning its limits? The most common waste pattern in Kubernetes is that developers set resource requests based on guesswork and then never revisit them, which leaves schedulers reserving capacity the workload never uses.
 
 ## Pillar 2: Right-Sizing with VPA and HPA
-
-The most common waste pattern in Kubernetes: developers set resource requests based on guesswork, then never revisit them.
 
 ### Vertical Pod Autoscaler (VPA) for Right-Sizing
 
@@ -407,13 +394,9 @@ gcloud billing accounts describe BILLING_ACCOUNT_ID --format=json
 
 ---
 
-> **Stop and think**: If Spot instances can be terminated at any time, what types of applications are completely unsuitable for them?
+> **Stop and think**: If Spot instances can be terminated at any time, what types of applications are completely unsuitable for them? Interruptible capacity on the major clouds can be substantially cheaper than on-demand pricing, but the exact discount and interruption behavior vary by provider, region, and instance type, so **Spot Instance Golden Rules** apply: because eviction notice windows are short and provider-specific, use Spot only for workloads that tolerate interruption, recover cleanly on other nodes, and do not depend on a single local-stateful replica.
 
 ## Pillar 4: Spot Instance Lifecycle
-
-Interruptible capacity on the major clouds can be substantially cheaper than on-demand pricing, but the exact discount and interruption behavior vary by provider, region, and instance type.
-
-**Spot Instance Golden Rules:** Because eviction notice windows are short and provider-specific, use Spot only for workloads that tolerate interruption, recover cleanly on other nodes, and do not depend on a single local-stateful replica.
 
 ### Spot-Friendly Node Groups
 
@@ -550,11 +533,9 @@ spec:
 
 ## Automated Budget Alerting and Anomaly Detection
 
-Visibility is only useful if it drives action. Relying on humans to check dashboards guarantees that cost spikes will go unnoticed until the end of the month. You must implement automated budget alerting and anomaly detection pipelines.
+Visibility is only useful if it drives action, because relying on humans to check dashboards guarantees that cost spikes will go unnoticed until the end of the month, so you must implement automated budget alerting and anomaly detection pipelines. Kubecost can send alerts directly to Slack or Microsoft Teams when a namespace exceeds its daily budget or when spending anomalies occur.
 
 ### Kubecost Alerts
-
-Kubecost can send alerts directly to Slack or Microsoft Teams when a namespace exceeds its daily budget or when spending anomalies occur.
 
 ```yaml
 # Kubecost custom values.yaml for alerting
@@ -578,7 +559,7 @@ kubecostProductConfigs:
 
 ### Cloud Provider Anomaly Remediation
 
-For cloud-native resources, you can use [AWS Budgets](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-controls.html) or [GCP Budgets](https://cloud.google.com/billing/docs/how-to/budgets) to trigger automated remediation (like shutting down a runaway dev environment) when a threshold is breached.
+For cloud-native resources, you can use [AWS Budgets](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-controls.html) or [GCP Budgets](https://cloud.google.com/billing/docs/how-to/budgets) to trigger automated remediation (like shutting down a runaway dev environment) when a threshold is breached, and once the SNS topic receives the budget breach, it can trigger an AWS Lambda function that acts as a remediation pipeline—for example, automatically patching the cluster's node group `desiredCapacity` to `0` to halt further charges.
 
 ```yaml
 # AWS Budget with an automated SNS action
@@ -610,15 +591,11 @@ spec:
                     Address: "arn:aws:sns:us-east-1:123456789012:CostAlerts"
 ```
 
-Once the SNS topic receives the budget breach, it can trigger an AWS Lambda function that acts as a remediation pipeline—for example, automatically patching the cluster's node group `desiredCapacity` to `0` to halt further charges.
-
 ---
 
-> **Pause and predict**: When a Kubernetes namespace is deleted, what cloud resources might be left behind?
+> **Pause and predict**: When a Kubernetes namespace is deleted, what cloud resources might be left behind? Orphaned resources are cloud resources that are no longer attached to any active workload but continue accruing charges, and they are the silent budget killer.
 
 ## Orphaned Resource Cleanup
-
-Orphaned resources are cloud resources that are no longer attached to any active workload but continue accruing charges. They are the silent budget killer.
 
 ### Common Orphaned Resources
 
@@ -780,7 +757,7 @@ When deleting Kubernetes resources, the underlying cloud infrastructure isn't al
 
 ## Hands-On Exercise: Cost Optimization Audit
 
-In this exercise, you will perform a cost optimization audit on a Kubernetes cluster.
+In this exercise, you will perform a cost optimization audit on a Kubernetes cluster: deploy some intentionally over-provisioned workloads and use kubectl to identify waste, calculate the waste, apply right-sizing, and write a cost optimization report for a fictional team based on the audit findings.
 
 ### Prerequisites
 
@@ -789,8 +766,6 @@ In this exercise, you will perform a cost optimization audit on a Kubernetes clu
 - Metrics server installed (for VPA)
 
 ### Task 1: Identify Over-Provisioned Workloads
-
-Deploy some intentionally over-provisioned workloads and use kubectl to identify waste.
 
 <details>
 <summary>Solution</summary>
@@ -959,8 +934,6 @@ echo "Fits on 1 node easily. Savings: 75%"
 </details>
 
 ### Task 4: Create a Cost Optimization Report
-
-Write a cost optimization report for a fictional team based on the audit findings.
 
 <details>
 <summary>Solution</summary>
