@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agent_runtime.adapters.claude import ClaudeAdapter
+from agent_runtime import delegate_config as delegate_config_mod
 from agent_runtime.delegate_config import (
     CLAUDE_DELEGATE_ALLOWED_TOOLS,
     CLAUDE_DELEGATE_MCP_CONFIG,
@@ -52,6 +53,18 @@ def test_merge_applies_minimal_mcp_for_claude_delegate(entrypoint: str) -> None:
     assert merged["mcp_config_path"] == str(CLAUDE_DELEGATE_MCP_CONFIG)
     assert merged["allowed_tools"] == CLAUDE_DELEGATE_ALLOWED_TOOLS
     assert "mcp__" not in merged["allowed_tools"]
+
+
+def test_merge_skips_when_fixture_missing() -> None:
+    """If the minimal MCP fixture is absent, the merge is a no-op (graceful)."""
+    fake_missing = SimpleNamespace(is_file=lambda: False)
+    with patch.object(delegate_config_mod, "CLAUDE_DELEGATE_MCP_CONFIG", fake_missing):
+        assert merge_delegate_claude_tool_config("claude", "delegate", None) is None
+        passthrough = {"is_new_session": True}
+        assert (
+            merge_delegate_claude_tool_config("claude", "delegate", passthrough)
+            is passthrough
+        )
 
 
 def test_claude_adapter_emits_mcp_flags_for_delegate_tool_config() -> None:
