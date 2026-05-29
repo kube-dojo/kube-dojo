@@ -4,11 +4,11 @@ slug: cloud/gcp-essentials/module-2.3-compute
 sidebar:
   order: 4
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.2 (VPC Networking)
+**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.2 (VPC Networking). This module assumes a networking baseline and is designed to move you from “single instances” into controlled, production-like compute operations with predictable behavior.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to deploy Compute Engine resources with confidence, balance pricing and reliability choices, and apply repeatable OS Login and lifecycle controls at team scale.
 
 - **Deploy Compute Engine instances with custom machine types, preemptible VMs, and managed instance groups**
 - **Configure instance templates and autoscaling policies for self-healing compute clusters on GCP**
@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Teams that run fixed pools of Compute Engine VMs without autoscaling can be overwhelmed by sudden traffic spikes, turning slow boot times and manual scaling into lost revenue.
+Teams that run fixed pools of Compute Engine VMs without autoscaling can be overwhelmed by sudden traffic spikes, turning slow boot times and manual scaling into lost revenue because demand often rises faster than response times. In production, this delay is usually what hurts you: queues grow, error budgets shrink, and users perceive the service as unstable.
 
-This incident captures why Compute Engine is more than "just VMs." Choosing the right machine family, configuring instance templates, using Managed Instance Groups with autoscaling, and setting up global load balancing are the difference between an architecture that handles traffic spikes gracefully and one that collapses under load. Compute Engine is a foundational GCP compute service, and understanding it helps you reason about how many Google Cloud workloads are executed.
+This module captures why Compute Engine is more than "just VMs." Choosing the right machine family, configuring instance templates, using Managed Instance Groups with autoscaling, and setting up global load balancing are the difference between an architecture that handles traffic spikes gracefully and one that collapses under load. Compute Engine is a foundational GCP compute service, and understanding it helps you reason about how many Google Cloud workloads are executed.
 
 In this module, you will learn how to select the right machine family for your workload, leverage preemptible and Spot VMs for massive cost savings, build golden images with custom images, configure Managed Instance Groups for automatic scaling and self-healing, and tie everything together with Cloud Load Balancing.
 
@@ -29,7 +29,7 @@ In this module, you will learn how to select the right machine family for your w
 
 ## Machine Families: Choosing the Right Hardware
 
-Compute Engine offers several machine families; this module focuses on four common categories for learning purposes. Selecting the wrong family is one of the most common ways to overspend.
+Compute Engine offers several machine families; this module focuses on four common categories for learning purposes. Selecting the wrong family is one of the most common ways to overspend. For real-world planning, hardware choice is about expected throughput, memory pressure, and predictability, so the default response is to align workload shape with the family before you benchmark pricing.
 
 ### The Four Families
 
@@ -72,7 +72,7 @@ gcloud compute machine-types list \
 
 ### Custom Machine Types
 
-If predefined machine types do not fit your workload, GCP allows you to specify exact vCPU and memory combinations.
+If predefined machine types do not fit your workload, GCP allows you to specify exact vCPU and memory combinations. You should use custom types when standard shapes overprovision one resource and underdeliver on another, because right-sized resources are the cleanest path to predictable cost and performance. For this reason, always validate limits before creating, and remember these are constrained by the machine series.
 
 ```bash
 # Custom machine type: 6 vCPUs, 24GB RAM
@@ -94,14 +94,14 @@ gcloud compute instances create high-mem-vm \
   --image-project=debian-cloud
 ```
 
-Rules for custom machine types:
+Rules for custom machine types exist for a reason: you must stay within series-specific constraints, or provisioning can fail unexpectedly; for this reason, validate vCPU counts and memory boundaries before running any `--custom-cpu` or `--custom-memory` command.
 - Allowed vCPU counts depend on the machine series; check the current custom-machine-type limits for the series you selected.
 - Allowed memory ranges depend on the machine series, and extended-memory limits are defined per series rather than by one universal GB-per-vCPU rule.
 - Extended memory costs more per GB than standard memory.
 
 ### Shared-Core Machines
 
-For lightweight workloads that do not need a full vCPU, E2 offers shared-core options:
+For lightweight workloads that do not need a full vCPU, E2 offers shared-core options. These machines can be excellent for small sidecars, tiny internal APIs, and lightweight Jenkins tasks where latency is forgiving. The practical downside is contention, so if latency variance starts hurting SLOs, move to a dedicated vCPU machine family instead of overloading shared slices.
 
 | Type | vCPUs | Memory | Use Case | Cost (approx vs e2-medium) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -115,7 +115,7 @@ For lightweight workloads that do not need a full vCPU, E2 offers shared-core op
 
 ### The Pricing Tiers
 
-GCP offers three pricing tiers for the same hardware:
+GCP offers three pricing tiers for the same hardware, and each tier optimizes a different business outcome. On-Demand gives flexibility and predictable behavior with no interruption risk. CUDs reduce cost for steady, long-running workloads through commitment, while Spot is designed for interruption-tolerant tasks that can take advantage of much lower pricing.
 
 | Tier | Discount vs On-Demand | Max Lifetime | Guarantee | Use Case |
 | :--- | :--- | :--- | :--- | :--- |
@@ -172,7 +172,7 @@ gcloud compute instances create batch-worker \
 
 ### Committed Use Discounts (CUDs)
 
-For steady-state production workloads, CUDs offer significant savings without any preemption risk.
+For steady-state production workloads, CUDs offer significant savings without any preemption risk. This model is strongest when you can tolerate a long commitment and can confidently forecast utilization across the relevant machines. If workloads drop unexpectedly, it is still useful to re-evaluate commitments during billing cycles because commitment math changes with team growth.
 
 | Commitment | Duration | Discount |
 | :--- | :--- | :--- |
@@ -193,7 +193,7 @@ gcloud compute commitments create my-commitment \
 gcloud compute commitments list --region=us-central1
 ```
 
-Sustained Use Discounts (SUDs) apply automatically to eligible machine families---no commitment required. After 25% of monthly use, Google Cloud applies incremental discounts, and the maximum discount depends on the machine series and resource type.
+Sustained Use Discounts (SUDs) apply automatically to eligible machine families---no commitment required. After 25% of monthly use, Google Cloud applies incremental discounts, and the maximum discount depends on the machine series and resource type. This means you can stack behavior-based savings with workload rightsizing, and you should compare SUD and CUD impacts before changing a migration plan.
 
 > **Pause and predict**: You are designing a video rendering pipeline. If a rendering job is interrupted, it must start over from the beginning. Some jobs take up to 36 hours. Should you use Spot VMs to save costs here?
 
@@ -237,7 +237,7 @@ gcloud compute instances delete image-builder --zone=us-central1-a --quiet
 
 ### Image Families
 
-[Image families are like a "latest" pointer for your custom images. When you create a new image in a family, it automatically becomes the default.](https://cloud.google.com/compute/docs/images/deprecate-custom)
+[Image families are like a "latest" pointer for your custom images. When you create a new image in a family, it automatically becomes the default.](https://cloud.google.com/compute/docs/images/deprecate-custom) As your teams ship builds, this allows rollout pipelines to reference a stable name and still consume the newest approved artifact.
 
 ```bash
 # Create new version in the same family
@@ -269,7 +269,7 @@ gcloud compute images deprecate my-app-v1-1 \
 
 ### Instance Templates
 
-An instance template is a blueprint that defines the machine type, image, disks, network, and other settings for a VM. [Templates are **immutable**---to change a setting, you create a new template.](https://cloud.google.com/compute/docs/instance-templates)
+An instance template is a blueprint that defines the machine type, image, disks, network, and other settings for a VM. [Templates are **immutable**---to change a setting, you create a new template.](https://cloud.google.com/compute/docs/instance-templates) That immutability is important because every scale or replacement event can use the same known-good definition, which is much easier to audit than manually configured one-off VM launches.
 
 ```bash
 # Create an instance template
@@ -308,7 +308,7 @@ gcloud compute instance-templates create web-template-v2 \
 
 ### Managed Instance Groups (MIGs)
 
-A MIG is a group of identical VMs created from an instance template. [MIGs provide autoscaling, self-healing, rolling updates, and load balancer integration.](https://cloud.google.com/compute/docs/instance-groups)
+A MIG is a group of identical VMs created from an instance template. [MIGs provide autoscaling, self-healing, rolling updates, and load balancer integration.](https://cloud.google.com/compute/docs/instance-groups) In practice, the combination of identity by template and lifecycle by controller gives you consistency under scale, because all replacement VMs inherit the same contract.
 
 ```bash
 # Create a regional MIG (recommended: spans all zones in a region)
@@ -355,7 +355,7 @@ gcloud compute instance-groups managed describe web-mig \
 
 ### Rolling Updates
 
-MIGs support zero-downtime updates by gradually replacing instances with a new template.
+MIGs support zero-downtime updates by gradually replacing instances with a new template. This lets you validate a new software version under live traffic and stop early if rollback conditions appear before all instances change. It is one of the main operational reasons teams rely on MIGs for web services instead of direct instance management.
 
 ```bash
 # Start a rolling update to the new template
@@ -393,7 +393,7 @@ gcloud compute instance-groups managed rolling-action start-update web-mig \
 
 ### Self-Healing
 
-When a health check fails, the MIG automatically recreates the unhealthy VM. This is the simplest form of self-healing in GCP.
+When a health check fails, the MIG automatically recreates the unhealthy VM. This is the simplest form of self-healing in GCP. It protects request handling by replacing only the failed instance and then letting the control plane drive it back to healthy state through the same template.
 
 ```mermaid
 flowchart LR
@@ -420,7 +420,9 @@ flowchart LR
 
 ## Cloud Load Balancing
 
-GCP offers multiple load balancer types, but the most common is the **External Application Load Balancer** (formerly known as the External HTTP(S) Load Balancer).
+GCP offers multiple load balancer types, but the most common is the **External Application Load Balancer** (formerly known as the External HTTP(S) Load Balancer). We use this layer for production-like web endpoints because it pairs naturally with MIG-managed targets and provides consistent global request distribution for HTTPS traffic.
+
+The key point is not only scale, but operational velocity: with a shared frontend plus managed backends, most rollout events become routine capacity transitions instead of one-off networking edits.
 
 ### Load Balancer Types
 
@@ -518,6 +520,8 @@ gcloud compute instance-groups managed set-named-ports web-mig-eu \
 
 ## Disk Types and Storage
 
+Storage policy should match workload behavior, because disks are not interchangeable once you are in steady production. Logs and backups tolerate latency more than metadata-heavy databases, and that distinction affects whether `pd-balanced` is enough or `pd-ssd` is required. Treat disk selection as part of the same design conversation as machine type, or you may optimize compute and lose at the storage layer.
+
 | Disk Type | IOPS (Read) | Throughput | Use Case | Cost |
 | :--- | :--- | :--- | :--- | :--- |
 | **pd-standard** | 0.75 per GiB | 0.12 MiB/s per GiB | Bulk storage, logs | Lowest |
@@ -552,7 +556,7 @@ gcloud compute resource-policies create snapshot-schedule daily-snapshot \
 
 ## Securing Access: OS Login and SSH Keys
 
-Historically, accessing a Linux VM involved generating an SSH key pair and pasting the public key into the project or instance metadata. This approach does not scale well: when an employee leaves, you must hunt down and remove their keys across all instances. 
+Historically, accessing a Linux VM involved generating an SSH key pair and pasting the public key into the project or instance metadata. This approach does not scale well: when an employee leaves, you must hunt down and remove their keys across all instances. It is exactly this manual cleanup burden that leads to stale keys and access drift as teams and environments grow.
 
 [OS Login solves this by linking SSH access to IAM (Identity and Access Management). Instead of managing individual SSH keys, you assign IAM roles (`roles/compute.osLogin` or `roles/compute.osAdminLogin`) to users or groups.](https://cloud.google.com/compute/docs/oslogin/set-up-oslogin)
 
@@ -648,7 +652,7 @@ When OS Login is enabled at the project level, Compute Engine completely bypasse
 
 ### Objective
 
-Build a production-like architecture with MIGs in two regions behind a global HTTPS load balancer.
+Build a production-like architecture with MIGs in two regions behind a global HTTPS load balancer. Use this exercise to connect the concepts from this module: template-driven instances, regional redundancy, autoscaling policy, and endpoint load distribution through a single global IP. The goal is to complete a repeatable rollout that you can adapt into a real environment when your test and verification steps are in place.
 
 ### Prerequisites
 
@@ -658,7 +662,7 @@ Build a production-like architecture with MIGs in two regions behind a global HT
 
 ### Tasks
 
-**Task 1: Create the Network Foundation**
+### Task 1: Create the Network Foundation
 
 <details>
 <summary>Solution</summary>
@@ -704,7 +708,7 @@ gcloud compute firewall-rules create web-vpc-allow-iap \
 ```
 </details>
 
-**Task 2: Create an Instance Template**
+### Task 2: Create an Instance Template
 
 <details>
 <summary>Solution</summary>
@@ -740,7 +744,7 @@ gcloud compute instance-templates describe web-template \
 ```
 </details>
 
-**Task 3: Create Regional MIGs with Autoscaling**
+### Task 3: Create Regional MIGs with Autoscaling
 
 <details>
 <summary>Solution</summary>
@@ -794,7 +798,7 @@ done
 ```
 </details>
 
-**Task 4: Create the Global Load Balancer**
+### Task 4: Create the Global Load Balancer
 
 <details>
 <summary>Solution</summary>
@@ -848,7 +852,7 @@ echo "Load balancer will be available at http://$WEB_IP in 3-5 minutes"
 ```
 </details>
 
-**Task 5: Test and Verify**
+### Task 5: Test and Verify
 
 <details>
 <summary>Solution</summary>
@@ -881,7 +885,7 @@ gcloud compute backend-services get-health web-backend-svc --global
 ```
 </details>
 
-**Task 6: Clean Up**
+### Task 6: Clean Up
 
 <details>
 <summary>Solution</summary>
