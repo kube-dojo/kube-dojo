@@ -1077,4 +1077,4 @@ If you finish without Azure credentials, submit the path diagram and manifest di
 
 ## Next Module
 
-Continue with [Module 3.14 — App Service](./module-3.14-app-service.md) for the next track checkpoint, or move to the [Enterprise Hybrid Cloud track](../../enterprise-hybrid/) if your context requires a broader hybrid architecture view.
+Continue with [Module 3.14 — App Service](../module-3.14-app-service/) for the next track checkpoint, or move to the [Enterprise Hybrid Cloud track](../../enterprise-hybrid/) if your context requires a broader hybrid architecture view.
