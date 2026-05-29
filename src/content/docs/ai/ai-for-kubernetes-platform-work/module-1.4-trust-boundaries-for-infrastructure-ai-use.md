@@ -215,7 +215,7 @@ Use the commands only to verify a candidate change or inspect current state, not
 
 ## Next Module
 
-This module is the last in [AI for Kubernetes & Platform Work](./index/). Continue to [AI/ML Engineering](../../ai-ml-engineering/) when you want to build and operate deeper AI systems—tooling, MLOps, and platform-scale inference—or return to the [section index](./index/) to review the full operator-focused path.
+This module is the last in [AI for Kubernetes & Platform Work](../). Continue to [AI/ML Engineering](../../ai-ml-engineering/) when you want to build and operate deeper AI systems—tooling, MLOps, and platform-scale inference—or return to the [section index](../) to review the full operator-focused path.
 
 ## Sources
 

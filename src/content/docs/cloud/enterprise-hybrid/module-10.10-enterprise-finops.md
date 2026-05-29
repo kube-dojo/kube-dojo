@@ -1027,7 +1027,7 @@ rm /tmp/efficiency-report.sh /tmp/chargeback-report.sh /tmp/optimization-plan.sh
 
 ## Next Module
 
-You have covered FinOps at enterprise scale — discounts, forecasting, chargeback, multi-cloud economics, and cultural practices. Continue to [Module 10.11: Cloud Custodian — Policy-as-Code Governance Across Multi-Cloud](module-10.11-cloud-custodian/) for declarative governance that complements cost controls with automated policy enforcement. You can also return to the [Enterprise & Hybrid index](index/) to review the full phase roadmap.
+You have covered FinOps at enterprise scale — discounts, forecasting, chargeback, multi-cloud economics, and cultural practices. Continue to [Module 10.11: Cloud Custodian — Policy-as-Code Governance Across Multi-Cloud](../module-10.11-cloud-custodian/) for declarative governance that complements cost controls with automated policy enforcement. You can also return to the [Enterprise & Hybrid index](../) to review the full phase roadmap.
 
 ## Sources
 
