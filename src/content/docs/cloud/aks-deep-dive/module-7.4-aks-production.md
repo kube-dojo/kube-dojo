@@ -4,11 +4,12 @@ slug: cloud/aks-deep-dive/module-7.4-aks-production
 sidebar:
   order: 5
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/)
+**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/).
+This module is focused on production-ready AKS operations where storage reliability, observability signal quality, and scaling behavior must be treated as one coupled reliability system rather than independent checkboxes.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to evaluate which storage, monitoring, and scaling choices map to real workload behavior. You will also be able to implement those choices with explicit controls, then confirm the cluster responds correctly under pressure instead of only by design intent. In short, each outcome below is framed around decisions you can execute during a live production incident.
 
 - **Debug** event-driven autoscaling configurations using KEDA on AKS.
 - **Implement** AKS observability with Azure Monitor Container Insights, Managed Prometheus, and Managed Grafana.
@@ -46,7 +47,7 @@ graph TD
     end
 ```
 
-When defining a StorageClass for Azure Disks, you map the `skuName` to the tier you need. 
+When defining a StorageClass for Azure Disks, you map the `skuName` to the tier you need. For example, moving from Standard HDD to Premium SSD changes not only latency, but also the operational envelope for failures, rebuild time, and sustained write throughput. Because this choice is persistent for every claim using that class, it is the most visible lever for shaping workload economics and reliability from the outset.
 
 ```yaml
 # StorageClass for Premium SSD v2 with provisioned IOPS
@@ -65,7 +66,7 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 ```
 
-And then you can safely request the volume using a PersistentVolumeClaim (PVC):
+And then you can safely request the volume using a PersistentVolumeClaim (PVC): this maps the chosen class into pod-level scheduling, so Kubernetes can only place the workload with storage behavior that you intentionally encoded.
 
 ```yaml
 # PVC using the StorageClass
@@ -214,7 +215,7 @@ Observability is the nervous system of your cluster. Container Insights is Azure
 
 ### Enabling Container Insights
 
-You can enable this integration at cluster creation or dynamically attach it to an existing environment:
+You can enable this integration at cluster creation or dynamically attach it to an existing environment. In both cases, the operational workflow is the same: enable the addon, point it at a purpose-built Log Analytics workspace, and verify the agent is actively collecting the expected telemetry streams before you build dashboards.
 
 ```bash
 # Create a Log Analytics workspace
@@ -241,6 +242,10 @@ k get pods -n kube-system -l component=ama-logs
 ### What Container Insights Collects
 
 Once the AMA is deployed, it begins scraping extensive data streams shortly afterward:
+- node and pod metrics for capacity and pressure,
+- container logs for error signals and behavior changes,
+- and Kubernetes events for scheduling or health anomalies.
+Because all three streams are correlated to a single Log Analytics workspace, you can identify causality much faster than if each layer is investigated in isolation.
 - **Node metrics**: Deep hardware utilization metrics like disk I/O, network throughput, and CPU load.
 - **Pod metrics**: Actual resource consumption contrasted against Kubernetes requested boundaries.
 - **Container logs**: Every line of `stdout` and `stderr` emitted by the container runtime.
@@ -294,7 +299,7 @@ k apply -f container-insights-config.yaml
 
 ## Managed Prometheus and Grafana: Cloud-Native Monitoring
 
-Container Insights is fantastic for log aggregation and infrastructural health, but it struggles with application-specific custom metrics. 
+Container Insights is fantastic for log aggregation and infrastructural health, but it struggles with application-specific custom metrics. For application teams, this means you get excellent infrastructure visibility first, then still need a dedicated path for domain metrics such as checkout conversion rate, queue depth, or user session concurrency.
 
 > **Stop and think**: If you rely strictly on Container Insights for everything, what happens when your application needs to expose a custom business metric like "active_user_sessions"? Why is Managed Prometheus a better fit for this?
 
@@ -402,7 +407,7 @@ az monitor metrics alert create \
   --evaluation-frequency 1m
 ```
 
-You can also codify complex Alertmanager-style configurations using native Kubernetes custom resources.
+You can also codify complex Alertmanager-style configurations using native Kubernetes custom resources. This keeps alert rules version controlled alongside other platform manifests, so operational policies can be promoted, audited, and rolled back with the same Git workflow as your application infrastructure.
 
 ```yaml
 # PrometheusRuleGroup for custom alerts
@@ -816,7 +821,7 @@ echo "Service Bus Namespace: $SB_NAMESPACE"
 
 ### Task 3: Set Up Workload Identity for KEDA and the Consumer
 
-Create a managed identity that KEDA and the consumer pods will use to read from the queue.
+Create a managed identity that KEDA and the consumer pods will use to read from the queue. Workload Identity is the recommended pattern here because it avoids embedding shared access keys in Secrets and gives you auditable, Kubernetes-native trust boundaries between identities, queue resources, and consumers.
 
 <details>
 <summary>Solution</summary>
@@ -875,7 +880,7 @@ EOF
 
 ### Task 4: Deploy the Consumer Application and KEDA ScaledObject
 
-Deploy the consumer and configure KEDA to scale it based on queue depth.
+Deploy the consumer and configure KEDA to scale it based on queue depth. This pattern preserves cost efficiency, because replicas only exist when real work is waiting, while still guaranteeing there is enough consumer capacity to process spikes before the backlog grows uncontrollably.
 
 <details>
 <summary>Solution</summary>
@@ -968,7 +973,7 @@ k get hpa -n orders
 
 ### Task 5: Send Messages and Observe Scaling
 
-Flood the queue with messages and watch KEDA scale the consumer.
+Flood the queue with messages and watch KEDA scale the consumer. You should see the deployment move from `0` to higher replica counts as backlog rises, then trend back toward the configured minimum as backlog drains and the poller reflects reduced demand.
 
 <details>
 <summary>Solution</summary>
@@ -1012,7 +1017,7 @@ az servicebus queue show \
 
 ### Task 6: Set Up Azure Monitor Alert for Queue Backlog
 
-Create an alert that fires when the queue depth exceeds a threshold, indicating consumers cannot keep up.
+Create an alert that fires when the queue depth exceeds a threshold, indicating consumers cannot keep up. Use two thresholds to separate warning and critical conditions so responders get a practical runbook: first for early intervention, and second for immediate scaling or incident escalation.
 
 <details>
 <summary>Solution</summary>
@@ -1062,7 +1067,7 @@ az monitor metrics alert create \
 
 ### Task 7: Verify Scale-to-Zero
 
-Drain the queue and confirm KEDA scales the deployment back to zero.
+Drain the queue and confirm KEDA scales the deployment back to zero. This final verification is important because it proves scale-to-zero safety for idle periods, and confirms no lingering Pod churn or stale alerts are triggered after normal completion.
 
 <details>
 <summary>Solution</summary>
