@@ -4,11 +4,9 @@ slug: cloud/eks-deep-dive/module-5.3-eks-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane)
+**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane). After completing this module, you will be able to:
 
 ## What You'll Be Able to Do
-
-After completing this module, you will be able to:
 
 - **Configure IRSA (IAM Roles for Service Accounts) and EKS Pod Identity to grant pods least-privilege AWS access**
 - **Implement OIDC provider trust relationships between EKS clusters and AWS IAM for workload authentication**
@@ -52,7 +50,7 @@ flowchart TD
 
 If an attacker exploits a vulnerability in Pod A (which should not need any AWS access at all), they can reach the instance metadata service at `169.254.169.254` and obtain temporary credentials for the node role -- giving them access to DynamoDB, S3, SQS, and Secrets Manager.
 
-Pod-level identity solves this:
+Pod-level identity solves this by ensuring that each pod receives only its own credentials. In practice, each workload can be scoped to the permissions required by its role. As a result, a compromise of a logging pod does not automatically grant access to every workload-level permission available on the node.
 
 ```mermaid
 flowchart LR
@@ -74,11 +72,9 @@ flowchart LR
 
 ## IRSA: IAM Roles for Service Accounts (The Legacy Approach)
 
-IRSA was the first solution to pod-level identity on EKS. It works by leveraging OpenID Connect (OIDC) to establish a trust relationship between your EKS cluster and IAM.
+IRSA was the first solution to pod-level identity on EKS. It works by leveraging OpenID Connect (OIDC) to establish a trust relationship between your EKS cluster and IAM. The flow involves four components: the EKS OIDC provider, IAM, the pod's service account, and the AWS SDK inside the pod.
 
 ### How IRSA Works
-
-The flow involves four components: the EKS OIDC provider, IAM, the pod's service account, and the AWS SDK inside the pod.
 
 ```mermaid
 flowchart TD
@@ -101,7 +97,7 @@ flowchart TD
 
 ### Setting Up IRSA
 
-**Step 1: Create the OIDC provider for your cluster.**
+**Step 1: Create the OIDC provider for your cluster.** Start by reading the issuer URL from the cluster and associating it so IAM can trust service-account token identity for that cluster.
 
 ```bash
 # Get the OIDC issuer URL
@@ -128,7 +124,7 @@ aws iam create-open-id-connect-provider \
   --thumbprint-list $THUMBPRINT
 ```
 
-**Step 2: Create an IAM role with a trust policy referencing the OIDC provider.**
+**Step 2: Create an IAM role with a trust policy referencing the OIDC provider.** The role name, trust policy ARN, and condition fields must align with the service account so that only the intended namespace and service account can assume it.
 
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -163,7 +159,7 @@ aws iam attach-role-policy \
   --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
 ```
 
-**Step 3: Annotate the Kubernetes ServiceAccount with the role ARN.**
+**Step 3: Annotate the Kubernetes ServiceAccount with the role ARN.** Add this annotation so the IRSA flow maps workload pods to `OrderServiceRole` through the service account identity.
 
 ```yaml
 apiVersion: v1
@@ -175,7 +171,7 @@ metadata:
     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/OrderServiceRole
 ```
 
-**Step 4: Use the ServiceAccount in your pod.**
+**Step 4: Use the ServiceAccount in your pod.** Attach this service account to the workload, and the pod-level AWS SDK uses those projected credentials automatically.
 
 ```yaml
 apiVersion: apps/v1
@@ -205,7 +201,7 @@ spec:
 
 > **Pause and predict**: If your organization manages 50 EKS clusters across 10 AWS accounts, and a backend microservice deployed in every cluster needs to read from a single centralized S3 bucket, what operational bottlenecks will you encounter when setting up IRSA for this service?
 
-IRSA works, but it has real operational friction:
+IRSA works, but it has real operational friction: as you scale across multiple clusters and accounts, the trust relationship, role reuse, and policy lifecycle all become harder to operate consistently.
 
 1. **OIDC provider management**: You must create and manage the OIDC provider per cluster, per region
 2. **Trust policy complexity**: Each role's trust policy includes the full OIDC issuer URL, making it cluster-specific and hard to reuse across clusters
@@ -217,7 +213,7 @@ IRSA works, but it has real operational friction:
 
 ## EKS Pod Identity: The Modern Approach
 
-EKS Pod Identity, launched in November 2023, replaces IRSA with a simpler, AWS-native approach. Instead of OIDC federation, Pod Identity uses an agent running on each node to inject credentials directly into pods.
+EKS Pod Identity, launched in November 2023, replaces IRSA with a simpler, AWS-native approach. Instead of OIDC federation, Pod Identity uses an agent running on each node to inject credentials directly into pods. As a result, Pod Identity does not require an OIDC provider, does not need role trust policy modifications with cluster-specific OIDC URLs, and is managed entirely through the AWS EKS API.
 
 ### How Pod Identity Works
 
@@ -240,11 +236,9 @@ flowchart TD
     end
 ```
 
-The key difference: Pod Identity does not require an OIDC provider, does not need role trust policy modifications with cluster-specific OIDC URLs, and is managed entirely through the AWS EKS API.
-
 ### Setting Up Pod Identity
 
-**Step 1: Install the Pod Identity Agent add-on.**
+**Step 1: Install the Pod Identity Agent add-on.** This step deploys the node-level Pod Identity Agent so pods can request credentials through a managed AWS-native exchange path.
 
 ```bash
 aws eks create-addon \
@@ -257,7 +251,7 @@ k get daemonset eks-pod-identity-agent -n kube-system
 k get pods -n kube-system -l app.kubernetes.io/name=eks-pod-identity-agent
 ```
 
-**Step 2: Create an IAM role with a Pod Identity trust policy.**
+**Step 2: Create an IAM role with a Pod Identity trust policy.** Keep the service principal as `pods.eks.amazonaws.com` and include both role-assumption actions required by Pod Identity.
 
 ```bash
 cat > /tmp/pod-identity-trust.json << 'EOF'
@@ -285,9 +279,9 @@ aws iam attach-role-policy \
   --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
 ```
 
-Notice the trust policy: it trusts `pods.eks.amazonaws.com` as a service principal. There is no cluster-specific OIDC URL. This means the same role can be used across any EKS cluster in the account without modifying the trust policy.
+Notice the trust policy: it trusts `pods.eks.amazonaws.com` as a service principal. There is no cluster-specific OIDC URL, and this means the same role can be used across any EKS cluster in the account without modifying the trust policy. That same role then becomes the one mapped by the Pod Identity Association for a namespace/service-account pair.
 
-**Step 3: Create the Pod Identity Association.**
+**Step 3: Create the Pod Identity Association.** This mapping ties the target namespace and service account to the role that was configured for Pod Identity trust.
 
 ```bash
 aws eks create-pod-identity-association \
@@ -297,7 +291,7 @@ aws eks create-pod-identity-association \
   --role-arn arn:aws:iam::123456789012:role/OrderServiceRole-PodIdentity
 ```
 
-**Step 4: Create the ServiceAccount (no annotation needed!).**
+**Step 4: Create the ServiceAccount (no annotation needed!).** Leave IRSA annotations out entirely here because Pod Identity relies on association mapping instead.
 
 ```yaml
 apiVersion: v1
@@ -308,7 +302,7 @@ metadata:
   # No eks.amazonaws.com/role-arn annotation needed!
 ```
 
-That is it. Any pod using this ServiceAccount in the `production` namespace will automatically receive credentials for the associated IAM role. No OIDC provider, no trust policy per cluster, no annotation.
+That is it. Any pod using this ServiceAccount in the `production` namespace will automatically receive credentials for the associated IAM role. No OIDC provider, no trust policy per cluster, and no annotation are required. In practice, that makes rollouts straightforward when you already have identity boundaries enforced at the service-account level.
 
 ### IRSA vs Pod Identity: Complete Comparison
 
@@ -337,7 +331,7 @@ Pod Identity is the recommended approach for new setups, but IRSA is still neces
 
 ## Cross-Account Access
 
-Both IRSA and Pod Identity support cross-account IAM role assumption, but the setup differs significantly.
+Both IRSA and Pod Identity support cross-account IAM role assumption, but the setup differs significantly. The difference shows up in where trust anchors are defined and how role assumptions are delegated across namespaces, accounts, and associations.
 
 ### Cross-Account with Pod Identity
 
@@ -400,7 +394,7 @@ aws iam attach-role-policy \
   --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess
 ```
 
-In the application code, you chain the role assumption:
+In the application code, you chain the role assumption. The workload starts with credentials from Pod Identity and then explicitly assumes the cross-account role before issuing AWS API calls that target the remote account.
 
 ```python
 import boto3
@@ -430,11 +424,11 @@ table = dynamodb.Table('orders')
 
 ## Troubleshooting STS Errors
 
-Identity issues on EKS produce some of the most confusing error messages in all of AWS. Here is your troubleshooting guide.
+Identity issues on EKS produce some of the most confusing error messages in all of AWS. Here is your troubleshooting guide. The fastest way to solve them is to test each piece of the credential chain in order so you can isolate where the exchange fails first.
 
 ### Error: "An error occurred (AccessDenied) when calling the AssumeRoleWithWebIdentity"
 
-This is the most common IRSA error. The OIDC provider, trust policy, or service account does not match.
+This is the most common IRSA error. The OIDC provider, trust policy, or service account does not match. Work through the checks in order, because each step validates one link in the chain that must all align for AssumeRoleWithWebIdentity to succeed.
 
 ```bash
 # 1. Verify the OIDC provider exists
@@ -456,7 +450,7 @@ k exec -it order-service-pod -n production -- \
 
 ### Error: "No credentials provider found" or "Unable to locate credentials"
 
-The AWS SDK is not detecting the injected credentials.
+The AWS SDK is not detecting the injected credentials. In practice, that usually means either the expected credential provider environment variables are missing or the webhook injection path was not completed. Start from pod-level env inspection, then confirm the workload's service account mapping before moving to API-level checks.
 
 ```bash
 # Check that the environment variables are set in the pod
@@ -473,7 +467,7 @@ k exec -it order-service-pod -n production -- env | grep AWS
 
 ### Error: "ExpiredTokenException"
 
-The service account token has expired. IRSA tokens have a default lifetime of 24 hours.
+The service account token has expired. IRSA tokens have a default lifetime of 24 hours. If a pod holds stale credentials past that window, the SDK will fail to refresh unless you are using an SDK/runtime path that supports automatic token refresh.
 
 ```bash
 # Check token expiry
@@ -511,7 +505,7 @@ Pod Identity Not Working? Check in this order:
 
 ## Migration: IRSA to Pod Identity
 
-Migrating from IRSA to Pod Identity can be done incrementally, service by service, with zero downtime.
+Migrating from IRSA to Pod Identity can be done incrementally, service by service, with zero downtime. In practice, you can complete one service at a time and validate traffic, so the migration risk stays bounded while you compare identity behavior across both models.
 
 ### Migration Steps Per Service
 
@@ -630,9 +624,9 @@ EKS Pod Identity relies on a node-level component, the Pod Identity Agent Daemon
 
 ## Hands-On Exercise: DynamoDB App -- IRSA to Pod Identity Migration
 
-In this exercise, you will deploy a simple application that reads from a DynamoDB table using IRSA, then migrate it to Pod Identity with zero downtime.
+In this exercise, you will deploy a simple application that reads from a DynamoDB table using IRSA, then migrate it to Pod Identity with zero downtime. You will first establish a working IRSA baseline, then switch to Pod Identity and verify identical application behavior after each step.
 
-**What you will build:**
+**What you will build:** You will create a DynamoDB-backed workload, migrate it from IRSA to Pod Identity, and confirm data access remains intact after each cutover. The exercise is designed to keep verification close to the commands so you can reproduce the process reliably.
 
 ```mermaid
 flowchart TD
@@ -686,7 +680,7 @@ aws dynamodb scan --table-name dojo-orders --query 'Items[*].orderId.S'
 
 ### Task 2: Set Up IRSA (Legacy Approach)
 
-Configure OIDC provider and create an IRSA-based role.
+Configure OIDC provider and create an IRSA-based role. You will then attach the role to a service account and verify the pod can reach DynamoDB before proceeding to migration.
 
 <details>
 <summary>Solution</summary>
@@ -785,7 +779,7 @@ k exec -n demo order-reader -- \
 
 ### Task 3: Migrate to Pod Identity
 
-Switch from IRSA to Pod Identity without service disruption.
+Switch from IRSA to Pod Identity without service disruption. You will update the role trust, create the association, remove annotation debt, and then verify that the same workload still performs reads using Pod Identity credentials.
 
 <details>
 <summary>Solution</summary>
@@ -865,7 +859,7 @@ k exec -n demo order-reader -- \
 
 ### Task 4: Verify and Audit
 
-Confirm the migration is complete and verify the audit trail.
+Confirm the migration is complete and verify the audit trail. You will compare association state, SA annotations, and CloudTrail indicators so you can demonstrate both functional behavior and operational evidence for the identity mode change.
 
 <details>
 <summary>Solution</summary>

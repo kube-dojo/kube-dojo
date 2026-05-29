@@ -28,15 +28,13 @@ A strong AI product is designed around that mismatch, and the builder chooses a 
 
 It then introduces structured output because software needs contracts, and it finishes with the validation layer because structured output without validation is just a better-looking failure.
 
-> **Go deeper:** For end-to-end context engineering (budgets, retrieval boundaries, and orchestration), see [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/).
+> **Go deeper:** For end-to-end context engineering (budgets, retrieval boundaries, and orchestration), see [Context Engineering Fundamentals](../ai-engineering-foundations/module-2.1-context-fundamentals/).
 
 ## Model Choice Is Product Design
 
-Model choice is not only an infrastructure decision, and it changes the user experience, and it changes cost. It changes latency, and it changes how often the application needs fallback behavior, and it changes which tasks should be automated and which tasks should pause for review. A model that is excellent for a slow, high-stakes analysis may be a poor choice for inline autocomplete. A model that is excellent for cheap classification may be a poor choice for debugging a multi-step incident report.
+Model choice is not only an infrastructure decision, and it changes the user experience, and it changes cost. It changes latency, and it changes how often the application needs fallback behavior, and it changes which tasks should be automated and which tasks should pause for review. A model that is excellent for a slow, high-stakes analysis may be a poor choice for inline autocomplete, and a model that is excellent for cheap classification may be a poor choice for debugging a multi-step incident report.
 
-A model that supports tools may be required for a workflow that needs search, file lookup, or code execution. A model with a large context window may let the application include complete documents. A smaller model may require retrieval and summarization before the call. A model with stronger reasoning may reduce review burden in complex cases. A faster model may make the interface feel immediate. The important product question is not "which model is best?"
-
-The important question is "which model is best for this workflow under these constraints?", and those constraints are usually visible before implementation. You can list them, and you can rank them, and you can test them. You can revisit them when usage grows.
+A model that supports tools may be required for a workflow that needs search, file lookup, or code execution, and a model with a large context window may let the application include complete documents while a smaller model may require retrieval and summarization before the call. A model with stronger reasoning may reduce review burden in complex cases, and a faster model may make the interface feel immediate, so the important product question is not "which model is best?" but "which model is best for this workflow under these constraints?". Those constraints are usually visible before implementation, and you can list them, rank them, test them, and revisit them when usage grows.
 
 ### The Basic Tradeoff Map
 
@@ -50,9 +48,7 @@ The important question is "which model is best for this workflow under these con
 | Long contract review | context size and grounding strategy | the model needs enough source material |
 | Workflow automation | tool support and validation | the model may trigger real actions |
 
-This table is a starting point, not a scoring system, and the same feature may have multiple modes. A support product might use a fast model to classify every ticket. It might use a stronger model only when the first model reports low confidence, and it might send high-risk billing cases to a human even when the model is confident. That layered design is usually better than choosing one expensive model for everything.
-
-It is also usually better than choosing one cheap model for everything.
+This table is a starting point, not a scoring system, and the same feature may have multiple modes. A support product might use a fast model to classify every ticket, use a stronger model only when the first model reports low confidence, and send high-risk billing cases to a human even when the model is confident, so that layered design is usually better than choosing one expensive model for everything and is also usually better than choosing one cheap model for everything.
 
 ### Worked Decision Example: Support Ticket Triage
 
@@ -65,7 +61,7 @@ A team is building a support ticket triage feature, and the feature receives new
 - `security_risk`
 - `other`
 
-It must also assign severity:
+Each ticket must also receive one of these severity values:
 
 - `low`
 - `medium`
@@ -76,23 +72,17 @@ The team is choosing between two specific models in its API catalog, and the fir
 
 The second requirement says security-risk tickets must not be missed, and the third requirement says the team processes many routine tickets every day. The fourth requirement says a human support lead already reviews critical escalations. A weak decision would say: "Use the strongest model because it is best." That ignores cost and workflow shape. Another weak decision would say: "Use the cheapest model because it is only classification." That ignores the high-risk class.
 
-A stronger decision separates the workflow, and use `gpt-5 mini` for the first-pass classification because most tickets are routine and the output schema is narrow. Add validation rules that reject impossible combinations, and add a second pass with `gpt-5.2` only for ambiguous, security-related, or high-severity tickets. Send any ticket that remains uncertain to a human queue, and this is product design, and the model choice is connected to the user experience, risk model, and operational cost.
-
-The implementation does not pretend one model solves every case, and it creates a path for ordinary cases and a different path for risky cases.
+A stronger decision separates the workflow, and use `gpt-5 mini` for the first-pass classification because most tickets are routine and the output schema is narrow. Add validation rules that reject impossible combinations, and add a second pass with `gpt-5.2` only for ambiguous, security-related, or high-severity tickets. Send any ticket that remains uncertain to a human queue, and this is product design, and the model choice is connected to the user experience, risk model, and operational cost. The implementation does not pretend one model solves every case, and it creates a path for ordinary cases and a different path for risky cases.
 
 ### Decision Point: Choose The Model Path
 
 Your team is adding an AI feature to a live chat support tool, and the agent types a short customer question and expects a suggested reply while the customer waits. Some conversations mention account lockouts, and some conversations mention possible fraud, and you have two implementation options. Option A uses a fast model for every suggestion and blocks messages that match a high-risk policy, and option B uses a stronger model for every suggestion and makes the agent wait longer.
 
-Before reading the answer, decide which option you would start with and what guardrail you would add. A reasonable first design is Option A with clear escalation behavior. The fast model keeps the interface responsive, and the policy check prevents the application from casually suggesting unsafe actions in high-risk cases. The stronger model can still be used as a second pass when the case is complex, sensitive, or unclear. The key is not that fast is always better.
-
-The key is that the user experience requires speed for ordinary cases and caution for risky cases, and that pushes you toward a tiered design.
+Before reading the answer, decide which option you would start with and what guardrail you would add. A reasonable first design is Option A with clear escalation behavior. The fast model keeps the interface responsive, and the policy check prevents the application from casually suggesting unsafe actions in high-risk cases. The stronger model can still be used as a second pass when the case is complex, sensitive, or unclear. The key is not that fast is always better, because the user experience requires speed for ordinary cases and caution for risky cases, and that pushes you toward a tiered design.
 
 ### A Simple Model Selection Checklist
 
-Start with the task, and do not start with the model catalog, and ask what the user is trying to accomplish. Ask what the application will do with the result, and ask whether the model output affects money, security, health, access, legal status, production systems, or customer trust. Ask how quickly the user expects a response, and ask whether the task requires current information, and ask whether the task needs tools. Ask whether the task needs long context.
-
-Ask whether the result can be checked mechanically, and ask what happens when the model is uncertain, and ask what happens when the model is wrong. Only after those questions should you choose the model. A practical selection record can be short, and it should be explicit enough that a teammate can challenge it.
+Start with the task, and do not start with the model catalog, and ask what the user is trying to accomplish. Ask what the application will do with the result, and ask whether the model output affects money, security, health, access, legal status, production systems, or customer trust. Ask how quickly the user expects a response, and ask whether the task requires current information, and ask whether the task needs tools. Ask whether the task needs long context, whether the result can be checked mechanically, what happens when the model is uncertain, and what happens when the model is wrong. Only after those questions should you choose the model. A practical selection record can be short, and it should be explicit enough that a teammate can challenge it.
 
 ```text
 Feature: support ticket routing
@@ -124,15 +114,11 @@ This record is not busywork, and it documents the product logic, and it also mak
 
 ### Model Choice Anti-Pattern: Hype-First Architecture
 
-Hype-first architecture starts with a model announcement, and then the team looks for a place to use it, and that approach often creates fragile systems. The model may be powerful but mismatched to the workflow, and the output may be impressive but not inspectable. The feature may demo well but fail under repeated usage, and the better approach starts with workflow design, and the model is one component in that workflow. The API request is one boundary in that workflow.
-
-The context package is one input to that workflow, and the validation layer is one safety control in that workflow. The human review path is one operational control in that workflow. A senior builder can explain all of those pieces. A beginner often focuses only on the prompt, and this module moves you from the beginner view to the system view.
+Hype-first architecture starts with a model announcement, and then the team looks for a place to use it, and that approach often creates fragile systems. The model may be powerful but mismatched to the workflow, and the output may be impressive but not inspectable. The feature may demo well but fail under repeated usage, and the better approach starts with workflow design, and the model is one component in that workflow. The API request is one boundary in that workflow, the context package is one input to that workflow, the validation layer is one safety control in that workflow, and the human review path is one operational control in that workflow. A senior builder can explain all of those pieces, while a beginner often focuses only on the prompt, and this module moves you from the beginner view to the system view.
 
 ## Context Is The Real Interface
 
-The model only sees what you provide, and that sounds obvious, and it is the reason many AI features fail. A human support agent sees the customer account, the product area, the service level, the previous conversation, and the company's policies. A model sees only the request payload, and if the request payload does not include the policy, the model cannot obey the policy reliably. If the request payload does not include the customer plan, the model may assume the wrong entitlement.
-
-If the request payload does not include examples of the expected classification, the model may invent its own labels. If the request payload includes too much irrelevant material, the model may focus on the wrong evidence, and context is the real interface between your application and the model. The prompt is only one part of that context.
+The model only sees what you provide, and that sounds obvious, and it is the reason many AI features fail. A human support agent sees the customer account, the product area, the service level, the previous conversation, and the company's policies, while a model sees only the request payload. If the request payload does not include the policy, the model cannot obey the policy reliably, and if the request payload does not include the customer plan, the model may assume the wrong entitlement. If the request payload does not include examples of the expected classification, the model may invent its own labels, and if the request payload includes too much irrelevant material, the model may focus on the wrong evidence, so context is the real interface between your application and the model and the prompt is only one part of that context.
 
 ### What Goes Into Context
 
@@ -159,7 +145,7 @@ This is the first mental model to keep, and the model is not reading your databa
 
 ### Weak Prompt Versus Designed Context
 
-A weak approach asks for a good prompt.
+A weak approach asks for a good prompt, as in this example:
 
 ```text
 Read this support ticket and tell me what it is about.
@@ -201,7 +187,7 @@ The second version is not better because it is longer, and it is better because 
 
 ### Prediction Check: Missing Context
 
-Imagine a ticket says:.
+Imagine a ticket says the following:
 
 ```text
 Unable to log in. This is urgent. We have payroll today.
@@ -223,27 +209,21 @@ This is where AI engineering becomes normal software engineering, and the model 
 
 Every model has a context limit, and even large context windows are not a reason to dump everything, and more context can help when the extra material is relevant. More context can hurt when the extra material distracts from the task, and the practical question is not "how much can I fit. The practical question is "what evidence does the model need to make this decision", and for classification, the model may need only the ticket, policy, labels, and a few examples.
 
-For contract review, it may need the full clause, related definitions, and the playbook, and for incident analysis, it may need logs, timeline, deployment diff, and service ownership data. For code generation, it may need interfaces, tests, constraints, and surrounding files. A good context package is shaped by the task. If the context is too large, consider retrieval, and if retrieval returns too much, rank or summarize, and if summarization loses important details, use structured extraction first.
-
-If the task is high risk, prefer preserving source excerpts over lossy summaries.
+For contract review, it may need the full clause, related definitions, and the playbook, and for incident analysis, it may need logs, timeline, deployment diff, and service ownership data. For code generation, it may need interfaces, tests, constraints, and surrounding files. A good context package is shaped by the task. If the context is too large, consider retrieval, and if retrieval returns too much, rank or summarize, and if summarization loses important details, use structured extraction first, because if the task is high risk, prefer preserving source excerpts over lossy summaries.
 
 ### Designing Context In Layers
 
 You can design context in layers, and the first layer is stable instruction, and it changes rarely. It defines the role, allowed behavior, and output contract, and the second layer is workflow policy, and it changes when the business changes. It includes escalation rules, allowed labels, and thresholds, and the third layer is case data, and it changes on every request. It includes the ticket, document, conversation, or user input, and the fourth layer is retrieved evidence.
 
-It changes depending on search results, file results, or tool calls, and the fifth layer is examples, and it changes when evaluation shows the model needs calibration. Layering matters because each layer has a different owner, and product and policy owners may review workflow policy, and engineers may review output contract and validation. Support leads may review examples, and security teams may review high-risk rules, and when all of this is hidden in one giant prompt string, ownership becomes unclear.
-
-When context is structured deliberately, the system becomes easier to maintain.
+It changes depending on search results, file results, or tool calls, and the fifth layer is examples, and it changes when evaluation shows the model needs calibration. Layering matters because each layer has a different owner, and product and policy owners may review workflow policy, and engineers may review output contract and validation. Support leads may review examples, and security teams may review high-risk rules, and when all of this is hidden in one giant prompt string, ownership becomes unclear, so when context is structured deliberately, the system becomes easier to maintain.
 
 ## Free-Form Output, Structured Output, And Contracts
 
-Free-form output is useful, and it is often the right choice, and if a human is meant to read the answer, prose may be fine. A writing assistant can return a paragraph. A tutor can explain a concept. A brainstorming tool can offer several options. A code review assistant can write narrative feedback, and the problem appears when software needs to act on that output. Downstream logic needs stable fields. A router needs labels.
-
-A UI renderer needs predictable properties. A database insert needs types, and an alerting rule needs thresholds. An automation engine needs explicit commands, and free-form prose makes those systems brittle, and structured output gives the application a contract. The contract does not make the answer true, and it makes the answer inspectable, and it gives the application a way to reject invalid output. It gives tests something concrete to assert.
+Free-form output is useful, and it is often the right choice, and if a human is meant to read the answer, prose may be fine. A writing assistant can return a paragraph, a tutor can explain a concept, a brainstorming tool can offer several options, and a code review assistant can write narrative feedback, and the problem appears when software needs to act on that output. Downstream logic needs stable fields, a router needs labels, a UI renderer needs predictable properties, a database insert needs types, and an alerting rule needs thresholds, so an automation engine needs explicit commands and free-form prose makes those systems brittle while structured output gives the application a contract. The contract does not make the answer true, and it makes the answer inspectable, and it gives the application a way to reject invalid output and gives tests something concrete to assert.
 
 ### Free-Form Output Versus Structured Output
 
-Free-form output is good for:.
+Free-form output is good for human-facing tasks such as:
 
 - explanation
 - drafting
@@ -252,7 +232,7 @@ Free-form output is good for:.
 - mentoring
 - summarizing for a human reader
 
-Structured output is better for:.
+Structured output is better for automation-facing tasks such as:
 
 - field extraction
 - classification
@@ -271,7 +251,7 @@ If the system needs downstream logic, structured output is usually the safer cho
 Read this support ticket and tell me what it is about.
 ```
 
-This prompt asks for meaning, and it does not ask for a contract, and the model may answer:.
+This prompt asks for meaning, and it does not ask for a contract, and the model may answer with prose like this:
 
 ```text
 The customer is frustrated because they cannot access their account and need urgent help.
@@ -318,7 +298,7 @@ This object is useful because each field has a job, and `issue_type` drives queu
 
 A schema is a contract for shape, and it says which fields exist, and it says which types are expected. It says which values are allowed, and it can say which fields are required, and it can say how long a string may be. It can say whether extra fields are allowed, and it cannot prove that the model's classification is correct, and it cannot prove that the model's evidence is sufficient. It cannot prove that the model understood the customer's business context.
 
-That distinction is central. A schema catches shape errors, and business validation catches policy errors. Human review catches cases where judgment is required, and you often need all three.
+That distinction is central, because a schema catches shape errors, business validation catches policy errors, human review catches cases where judgment is required, and you often need all three.
 
 ### Runnable Validation Example
 
@@ -427,13 +407,13 @@ Run it from the repository root or any directory with Python available.
 .venv/bin/python validate_ticket.py
 ```
 
-The expected output is:.
+The expected output is `ACCEPT`:
 
 ```text
 ACCEPT
 ```
 
-Now change the object so that `severity` is `critical` and `requires_human_escalation` is `false`, and run the script again, and the expected output is:.
+Now change the object so that `severity` is `critical` and `requires_human_escalation` is `false`, and run the script again. The expected output is `REJECT` with a policy error:
 
 ```text
 REJECT
@@ -444,18 +424,11 @@ This is the point of structured output, and it lets ordinary software reject uns
 
 ### Active Check: Prose Or Object?
 
-You want to route incoming support requests, and should the model return:.
-
-- a paragraph explanation
-- a structured classification object
-
-The better answer is the object, because the system needs stable downstream logic. A paragraph can still be included for the human. It should not be the only output used by the router, and the router should read fields with allowed values. The validator should reject invalid fields, and the workflow should escalate risky cases.
+You want to route incoming support requests, and should the model return a paragraph explanation or a structured classification object? The better answer is the object, because the system needs stable downstream logic. A paragraph can still be included for the human, but it should not be the only output used by the router, and the router should read fields with allowed values while the validator rejects invalid fields and the workflow escalates risky cases.
 
 ### Decision Point: Which Output Shape Fits?
 
-A design team is building three features, and the first feature drafts a friendly response for a support agent to edit. The second feature routes tickets into queues, and the third feature displays a compact triage card in an internal dashboard. Choose the output shape for each one before reading the answer, and the draft response can be free-form prose because a human edits it. The router should use structured output because software acts on the fields.
-
-The dashboard should use structured output with a short summary because UI rendering needs predictable properties, and one product may use all three patterns. The mistake is using the same output style everywhere, and the output shape should match the consumer, and humans consume prose. Programs consume contracts, and dashboards consume predictable fields plus readable summaries.
+A design team is building three features, and the first feature drafts a friendly response for a support agent to edit. The second feature routes tickets into queues, and the third feature displays a compact triage card in an internal dashboard. Choose the output shape for each one before reading the answer, and the draft response can be free-form prose because a human edits it. The router should use structured output because software acts on the fields, and the dashboard should use structured output with a short summary because UI rendering needs predictable properties. One product may use all three patterns, and the mistake is using the same output style everywhere, because the output shape should match the consumer: humans consume prose, programs consume contracts, and dashboards consume predictable fields plus readable summaries.
 
 ## The Validation Layer
 
@@ -490,15 +463,13 @@ The validation layer sits after the AI API and before downstream logic, and it d
 
 A validation layer can check several categories, and the first category is syntax, and is the output valid JSON. Can the application parse it, and are there extra fields, and are required fields present. The second category is type, and is `requires_human_escalation` a boolean, and is `confidence` a number. Is `evidence` a list, and is `short_summary` a string, and the third category is value. Is `issue_type` one of the allowed labels, and is `severity` one of the allowed values.
 
-Is the summary short enough for the UI, and is the model name allowed for this workflow, and the fourth category is business policy. Does critical severity require human escalation, and does a security-risk ticket require human escalation, and does a refund above a threshold require human review. Does an account deletion require a second confirmation, and the fifth category is evidence, and does the evidence field quote or point to actual input. Does the evidence support the selected label.
-
-Does the output cite a retrieved document that was actually provided, and does the model claim facts that were not in context. The sixth category is risk, and is this an irreversible action, and could the output affect money, access, security, legal status, or production systems. Should the system pause and ask for a human decision. A good validation layer does not try to make the model perfect. It limits the damage when the model is imperfect.
+Is the summary short enough for the UI, and is the model name allowed for this workflow, and the fourth category is business policy. Does critical severity require human escalation, and does a security-risk ticket require human escalation, and does a refund above a threshold require human review. Does an account deletion require a second confirmation, and the fifth category is evidence, and does the evidence field quote or point to actual input. Does the evidence support the selected label, and does the output cite a retrieved document that was actually provided, and does the model claim facts that were not in context. The sixth category is risk, and is this an irreversible action, and could the output affect money, access, security, legal status, or production systems, and should the system pause and ask for a human decision. A good validation layer does not try to make the model perfect, and it limits the damage when the model is imperfect.
 
 ### Validation Is Not One Thing
 
 Validation often happens in stages, and the parser checks whether the object can be read, and the schema validator checks shape. The policy validator checks workflow rules, and the evidence checker compares claims to provided context, and the risk gate decides whether automation is allowed. The observability layer records the decision, and the fallback path gives the user a safe outcome, and each stage can fail differently. A parse failure may retry with a clearer instruction.
 
-A schema failure may ask the model to repair the object. A policy failure should not ask the model to override the policy. A high-risk output may go directly to human review. A repeated validation failure may disable automation for that request. The important idea is that not every failure deserves the same response.
+A schema failure may ask the model to repair the object, a policy failure should not ask the model to override the policy, a high-risk output may go directly to human review, and a repeated validation failure may disable automation for that request, so the important idea is that not every failure deserves the same response.
 
 ### Mermaid Flow: Candidate Output To Action
 
@@ -525,13 +496,11 @@ When validation fails, the application should not silently continue, and it shou
 
 ### What Structured Output Does Not Solve
 
-Structured output does not guarantee truth, and it does not guarantee completeness, and it does not guarantee safety. It does not guarantee policy compliance, and it does not guarantee that the model used the right evidence, and it does not guarantee that the model understood the business. It does not remove the need for tests, and it does not remove the need for monitoring, and it does not remove the need for human review in high-risk cases.
-
-It makes all of those things easier to build, and that is enough reason to use it.
+Structured output does not guarantee truth, and it does not guarantee completeness, and it does not guarantee safety. It does not guarantee policy compliance, and it does not guarantee that the model used the right evidence, and it does not guarantee that the model understood the business. It does not remove the need for tests, and it does not remove the need for monitoring, and it does not remove the need for human review in high-risk cases, but it makes all of those things easier to build, and that is enough reason to use it.
 
 ### Failure Example: Valid Shape, Wrong Decision
 
-Consider this candidate output.
+Consider this candidate output:
 
 ```json
 {
@@ -548,7 +517,7 @@ Consider this candidate output.
 }
 ```
 
-The schema may accept it, and the types are correct, and the labels are allowed. The summary is short, and but the original ticket says:.
+The schema may accept it, and the types are correct, and the labels are allowed, and the summary is short, but the original ticket says the following:
 
 ```text
 I am the CFO. We were charged twice for our enterprise renewal.
@@ -560,7 +529,7 @@ Now the business policy should reject the candidate, and the ticket mentions a h
 
 ### Prediction Check: What Should The Validator Do?
 
-A model returns this object for a ticket.
+A model returns this object for a ticket:
 
 ```json
 {
@@ -580,15 +549,11 @@ Predict whether the validator should accept it, and it should reject it or send 
 
 ## APIs Are Product Boundaries
 
-An AI API call is not just a function call, and it is a boundary between your application and an external system. That boundary has latency, and it has cost, and it has rate limits. It has model behavior, and it has request and response formats, and it has privacy implications. It has failure modes, and it may have tool calls, and it may stream output. It may return partial results, and it may change behavior when you change models.
-
-The API integration should be designed like any other production dependency.
+An AI API call is not just a function call, and it is a boundary between your application and an external system. That boundary has latency, and it has cost, and it has rate limits. It has model behavior, and it has request and response formats, and it has privacy implications. It has failure modes, and it may have tool calls, and it may stream output. It may return partial results, and it may change behavior when you change models, so the API integration should be designed like any other production dependency.
 
 ### What To Log
 
-Log the model name, and log the model version or snapshot when available, and log the feature name. Log the validation outcome, and log the schema version, and log the policy version. Log the latency, and log the token usage or request cost if available, and log retry count. Log fallback path, and log whether a human review was required, and be careful with user content. Do not casually log sensitive prompts, documents, or personal data, and if the organization needs prompt logs for debugging, define retention and access controls.
-
-A useful log event might look like this.
+Log the model name, and log the model version or snapshot when available, and log the feature name. Log the validation outcome, and log the schema version, and log the policy version. Log the latency, and log the token usage or request cost if available, and log retry count. Log fallback path, and log whether a human review was required, and be careful with user content. Do not casually log sensitive prompts, documents, or personal data, and if the organization needs prompt logs for debugging, define retention and access controls. A useful log event might look like this:
 
 ```json
 {
@@ -608,27 +573,23 @@ This event avoids storing the full ticket, and it still tells operators what hap
 
 ### What To Test
 
-Test the happy path, and test missing fields, and test invalid enum values. Test malformed JSON, and test high-risk labels, and test low-confidence outputs. Test contradictory evidence, and test repeated validation failures, and test model timeout. Test rate limit handling, and test fallback behavior, and test human review routing. Test UI rendering with rejected output, and test database writes only after validation. A model integration without tests is not a product feature. It is a demo. A tested integration can still fail.
-
-But failures become visible and bounded.
+Test the happy path, and test missing fields, and test invalid enum values. Test malformed JSON, and test high-risk labels, and test low-confidence outputs. Test contradictory evidence, and test repeated validation failures, and test model timeout. Test rate limit handling, and test fallback behavior, and test human review routing. Test UI rendering with rejected output, and test database writes only after validation. A model integration without tests is not a product feature. It is a demo. A tested integration can still fail, but failures become visible and bounded.
 
 ### Evaluation Before Release
 
 Before release, create a small evaluation set, and use real examples when policy allows, and use synthetic examples when privacy prevents real data. Include easy cases, and include ambiguous cases, and include high-risk cases. Include adversarial wording, and include cases that should be rejected, and include cases that should escalate. Measure more than accuracy, and measure invalid output rate, and measure escalation correctness. Measure latency, and measure cost, and measure user correction rate. Measure how often the model cites evidence that does not support its decision.
 
-Measure how often validation catches a problem, and the goal is not to prove the feature is perfect, and the goal is to understand how it behaves before users depend on it.
+Measure how often validation catches a problem, because the goal is not to prove the feature is perfect but to understand how it behaves before users depend on it.
 
 ### Runtime Fallbacks
 
-Every production AI feature needs a fallback. A fallback is not a sign of failure, and it is part of the design. The fallback may be a human review queue, and it may be a simpler rules-based classifier, and it may be a safe default label. It may be a message asking the user for more information, and it may be a disabled automation with manual action available. The fallback should be boring, and it should be predictable.
-
-It should be safe, and do not make the fallback another unvalidated model output, and do not hide failures from the user when the user needs to know. Do not write partial data to downstream systems unless the workflow can tolerate it. A good fallback protects trust.
+Every production AI feature needs a fallback. A fallback is not a sign of failure, and it is part of the design. The fallback may be a human review queue, and it may be a simpler rules-based classifier, and it may be a safe default label. It may be a message asking the user for more information, and it may be a disabled automation with manual action available. The fallback should be boring, and it should be predictable, and it should be safe, so do not make the fallback another unvalidated model output, and do not hide failures from the user when the user needs to know. Do not write partial data to downstream systems unless the workflow can tolerate it, because a good fallback protects trust.
 
 ### Streaming And Partial Output
 
 Some AI APIs support streaming, and streaming is useful for chat and long-form text, and it can make a product feel faster. It is less useful when the application needs a complete structured object before acting, and if the model streams prose to a user, the UI can display partial text. If the model streams JSON for routing, the application should not act until the object is complete and validated. This distinction matters.
 
-A partial sentence can be useful. A partial decision object is usually not safe, and if you stream structured output, buffer it until validation succeeds. Then update downstream logic.
+A partial sentence can be useful, but a partial decision object is usually not safe, so if you stream structured output, buffer it until validation succeeds and then update downstream logic.
 
 ### Tools And Structured Output
 
@@ -638,23 +599,17 @@ Check permissions, and check idempotency, and check whether the action is revers
 
 ### Decision Point: Act Now Or Ask For Review?
 
-A model classifies a support ticket as `billing`, and it sets severity to `critical`, and it sets `requires_human_escalation` to `true`. It includes evidence that the customer says a renewal charge was duplicated, and the downstream system has an automation that can issue refunds below a defined limit. The ticket does not include the charge amount, and should the system issue a refund automatically, and the better answer is no. The model output is not enough.
-
-The required amount is missing, and the severity is critical, and the model requested human escalation. The validation layer should route to review and ask for the missing billing context, and this is the difference between a clever assistant and a safe workflow. The assistant can identify the likely issue, and the system still controls the action.
+A model classifies a support ticket as `billing`, and it sets severity to `critical`, and it sets `requires_human_escalation` to `true`. It includes evidence that the customer says a renewal charge was duplicated, and the downstream system has an automation that can issue refunds below a defined limit. The ticket does not include the charge amount, and should the system issue a refund automatically, and the better answer is no because the model output is not enough. The required amount is missing, and the severity is critical, and the model requested human escalation, so the validation layer should route to review and ask for the missing billing context. This is the difference between a clever assistant and a safe workflow: the assistant can identify the likely issue, and the system still controls the action.
 
 ## Bringing The Pieces Together
 
-A production AI feature is a pipeline, and it starts with a user or system event, and it builds context. It chooses a model, and it calls the API, and it receives a candidate output. It validates the output, and it either acts, rejects, retries, or escalates, and it records enough metadata to debug the decision. That pipeline is the lesson of this module, and the beginner view sees only the prompt, and the intermediate view sees prompt plus model.
-
-The senior view sees the whole boundary, and the senior view asks what happens when each part fails.
+A production AI feature is a pipeline, and it starts with a user or system event, and it builds context. It chooses a model, and it calls the API, and it receives a candidate output. It validates the output, and it either acts, rejects, retries, or escalates, and it records enough metadata to debug the decision. That pipeline is the lesson of this module, and the beginner view sees only the prompt, the intermediate view sees prompt plus model, and the senior view sees the whole boundary and asks what happens when each part fails.
 
 ### End-To-End Example: Ticket Routing Pipeline
 
 A support ticket arrives, and the application loads the customer's account tier, and the application loads the routing policy. The application selects the first-pass model, and the application builds context with the ticket, labels, policy, and schema, and the model returns a candidate JSON object. The parser reads the object, and the schema validator checks required fields and types, and the policy validator checks escalation rules. The evidence checker verifies that the selected label has support in the ticket.
 
-The risk gate decides whether automation can proceed, and the workflow routes the ticket or sends it to human review. The system logs model name, schema version, policy version, validation result, and fallback path, and at no point does the application assume that formatted output is automatically correct. At no point does the model directly own the business decision, and this is the core pattern, and you will reuse it in retrieval systems. You will reuse it in tool-using agents.
-
-You will reuse it in code assistants, and you will reuse it in data extraction, and you will reuse it in workflow automation.
+The risk gate decides whether automation can proceed, and the workflow routes the ticket or sends it to human review. The system logs model name, schema version, policy version, validation result, and fallback path, and at no point does the application assume that formatted output is automatically correct or does the model directly own the business decision. This is the core pattern, and you will reuse it in retrieval systems, tool-using agents, code assistants, data extraction, and workflow automation.
 
 ### Design Review Questions
 
@@ -764,9 +719,7 @@ Investigate context and policy inputs, and the routing policy may have changed, 
 
 ## Hands-On Exercise
 
-**Task**: Design a structured-output and validation plan for an AI support ticket router.
-
-You will create a small architecture decision record, a context package, a candidate output schema, and validation rules. You do not need to call a live model, and the goal is to design the boundary around the model.
+**Task**: Design a structured-output and validation plan for an AI support ticket router. You will create a small architecture decision record, a context package, a candidate output schema, and validation rules. You do not need to call a live model, and the goal is to design the boundary around the model.
 
 ### Scenario
 
@@ -774,15 +727,7 @@ Your company receives support tickets through email, and the first AI feature wi
 
 ### Step 1: Define The Workflow
 
-Write a short decision record covering:
-
-- feature name
-- user workflow
-- downstream action
-- risk of a wrong decision
-- fallback path
-
-Example format:
+Write a short decision record covering feature name, user workflow, downstream action, risk of a wrong decision, and fallback path. Use this example format:
 
 ```text
 Feature:
@@ -812,9 +757,7 @@ Choose a primary model for the common path and decide whether a second model is 
 - can the output be mechanically validated?
 - when should a human take over?
 
-Your answer should name the tradeoff. A good answer is not "use the best model."
-
-A good answer ties the model path to the workflow.
+Your answer should name the tradeoff. A good answer is not "use the best model," and a good answer ties the model path to the workflow.
 
 ### Step 3: Design The Context Package
 
@@ -862,7 +805,7 @@ Return a JSON object that matches the application schema.
 
 ### Step 4: Define The Candidate Output
 
-Create an example object using this shape or improve it.
+Create an example object using this shape or improve it:
 
 ```json
 {
@@ -915,7 +858,7 @@ Write the metadata your system should log. Do not log sensitive ticket text unle
 - [ ] fallback path
 - [ ] human review flag
 
-Explain how these fields help operators debug the feature.
+Explain how these fields help operators debug the feature without logging sensitive ticket text.
 
 ### Success Criteria
 
@@ -931,15 +874,7 @@ Explain how these fields help operators debug the feature.
 
 ### Extension Challenge
 
-Add a second-pass review path.
-
-Define:
-
-- when the first model's output should be sent to a stronger model
-- when the stronger model's output should still go to a human
-- how the application prevents the second model from overriding hard policy rules
-
-A strong answer keeps policy outside the model. The model can recommend, while the application decides.
+Add a second-pass review path. Define when the first model's output should be sent to a stronger model, when the stronger model's output should still go to a human, and how the application prevents the second model from overriding hard policy rules. A strong answer keeps policy outside the model: the model can recommend, while the application decides.
 
 ## Sources
 
@@ -957,4 +892,4 @@ A strong answer keeps policy outside the model. The model can recommend, while t
 
 ## Next Module
 
-Continue to [Tools, Retrieval, and Boundaries](./module-1.3-tools-retrieval-and-boundaries/).
+Continue to [Tools, Retrieval, and Boundaries](../module-1.3-tools-retrieval-and-boundaries/).

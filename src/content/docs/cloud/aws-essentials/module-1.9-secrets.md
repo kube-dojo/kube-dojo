@@ -4,11 +4,10 @@ slug: cloud/aws-essentials/module-1.9-secrets
 sidebar:
   order: 10
 ---
-**Complexity:** `[MEDIUM]` | **Time to Complete:** 1.5 hours | **Track:** AWS DevOps Essentials
+**Complexity:** `[MEDIUM]` | **Time to Complete:** 1.5 hours | **Track:** AWS DevOps Essentials. Before starting this module, ensure you have:
 
 ## Prerequisites
 
-Before starting this module, ensure you have:
 - Completed [Module 1.1: IAM & Access Management](../module-1.1-iam/) (IAM policies, roles, trust relationships)
 - An AWS account with admin access (or scoped permissions for SSM, Secrets Manager, KMS)
 - AWS CLI v2 installed and configured
@@ -16,7 +15,7 @@ Before starting this module, ensure you have:
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to configure AWS Secrets Manager for automatic rotation, work with KMS key hierarchies, compare SSM Parameter Store with Secrets Manager, and deploy secrets to EC2, ECS, and Lambda without hardcoding credentials:
 
 - **Configure AWS Secrets Manager with automatic rotation schedules for database credentials and API keys**
 - **Implement KMS encryption key hierarchies and key policies to control access to sensitive data at rest**
@@ -66,15 +65,13 @@ flowchart TD
     end
 ```
 
-There are two types of keys you will encounter:
-
-**AWS Managed Keys** are created and managed by AWS for specific services. When you encrypt an SSM parameter with the default key, you are using `aws/ssm`. These are free, but you cannot change their rotation schedule, key policy, or share them across accounts.
+There are two types of keys you will encounter. **AWS Managed Keys** are created and managed by AWS for specific services. When you encrypt an SSM parameter with the default key, you are using `aws/ssm`. These are free, but you cannot change their rotation schedule, key policy, or share them across accounts.
 
 **Customer Managed Keys (CMKs)** are keys you create and control. You define who can use them via key policies, you decide the rotation schedule, and you can share them across accounts. They cost $1/month each plus $0.03 per 10,000 API calls.
 
 ### Envelope Encryption
 
-This is the pattern that makes large-scale encryption practical:
+This is the pattern that makes large-scale encryption practical, because the payload encryption stays with the application while KMS handles only the key operations.
 
 ```mermaid
 sequenceDiagram
@@ -160,7 +157,7 @@ AWS Systems Manager Parameter Store is the workhorse for configuration managemen
 | `StringList` | None | 4 KB | 8 KB | Free (Standard) |
 | `SecureString` | KMS | 4 KB | 8 KB | Free (Standard) |
 
-**Standard parameters** are free for up to 10,000 per account per region. **Advanced parameters** cost $0.05 per parameter per month, support up to 8 KB values, and parameter policies (TTL, expiration notifications). Higher throughput (up to 10,000 TPS) is an account-level setting available for both Standard and Advanced parameters.
+**Standard parameters** are free for up to 10,000 per account per region. **Advanced parameters** cost $0.05 per parameter per month, support up to 8 KB values, and parameter policies (TTL, expiration notifications). Higher throughput (up to 10,000 TPS) is an account-level setting available for both Standard and Advanced parameters. The real power of Parameter Store is its path-based hierarchy, which is why this approach works best when you structure your parameters like a filesystem:
 
 ### Hierarchical Naming
 
@@ -205,11 +202,11 @@ aws ssm get-parameters-by-path \
   --with-decryption
 ```
 
-That last command -- `get-parameters-by-path` -- is a game changer. Your application can load its entire configuration tree with a single API call. No need to know every parameter name in advance.
+That last command -- `get-parameters-by-path` -- is a game changer. Your application can load its entire configuration tree with a single API call, so you do not need to know every parameter name in advance. This is invaluable for debugging because when someone says "the app broke after the config change," you can see exactly what changed and when.
 
 ### Versioning and History
 
-Every time you update a parameter, Parameter Store keeps the previous version:
+Every time you update a parameter, Parameter Store keeps the previous version, which makes rollbacks and safe recovery much easier when a change causes unexpected behavior:
 
 ```bash
 # Update a parameter (creates version 2)
@@ -290,7 +287,7 @@ aws secretsmanager get-secret-value \
 
 ### Version Stages: AWSCURRENT vs AWSPREVIOUS
 
-Secrets Manager uses version stages to manage credential rotation without downtime:
+Secrets Manager uses version stages to manage credential rotation without downtime. By using staged labels and staged promotions, your application usually avoids a window where an old credential is invalid while the replacement has not yet been activated. This pattern is designed so production traffic remains stable during normal rotation operations:
 
 ```mermaid
 flowchart LR
@@ -309,11 +306,11 @@ flowchart LR
     end
 ```
 
-This two-phase approach is designed so your application does not usually see a moment where the old password is invalid but the new one is not yet available.
+This two-phase approach is designed so your application does not usually see a moment where the old password is invalid but the new one is not yet available. Because `AWSCURRENT`, `AWSPREVIOUS`, and `AWSPENDING` are coordinated, secret consumers can continue using valid credentials during transition.
 
 ### Automatic Rotation
 
-This is the killer feature. Secrets Manager can automatically rotate database credentials on a schedule you define:
+This is the killer feature. Secrets Manager can automatically rotate database credentials on a schedule you define. That gives you a managed way to change credentials over time instead of building custom rotation orchestration for every secret:
 
 ```bash
 # Enable rotation for an RDS secret
@@ -323,13 +320,13 @@ aws secretsmanager rotate-secret \
   --rotation-rules '{"ScheduleExpression":"rate(30 days)"}'
 ```
 
-AWS provides pre-built Lambda rotation functions for:
+AWS provides pre-built Lambda rotation functions for common AWS-native databases and credential stores:
 - Amazon RDS (MySQL, PostgreSQL, Oracle, SQL Server, MariaDB)
 - Amazon Redshift
 - Amazon DocumentDB
 - Generic credentials (you provide the rotation logic)
 
-The rotation Lambda follows a four-step protocol:
+The rotation Lambda follows a four-step protocol that moves credentials through create, test, and promotion phases:
 
 ```mermaid
 flowchart TD
@@ -341,7 +338,7 @@ flowchart TD
     A --> B --> C --> D
 ```
 
-If any step fails, the rotation rolls back and the existing AWSCURRENT credentials remain valid. Your application should not break.
+If any step fails, the rotation rolls back and the existing AWSCURRENT credentials remain valid, so your application should not break during the rotation attempt.
 
 > **Stop and think**: During a database credential rotation via Secrets Manager, what happens if the `testSecret` step fails because the newly generated password does not meet the database's internal complexity requirements? How does this affect the application currently using the database?
 
@@ -351,9 +348,9 @@ If any step fails, the rotation rolls back and the existing AWSCURRENT credentia
 
 Storing secrets is only half the problem. The other half is getting them into your running application without exposing them in plaintext along the way.
 
-### EC2 Instances
-
 For EC2, your application retrieves secrets at startup using the AWS SDK or CLI. The instance's IAM role provides the authorization.
+
+### EC2 Instances
 
 ```bash
 # IAM policy for the EC2 instance role
@@ -386,7 +383,7 @@ cat <<'EOF'
 EOF
 ```
 
-A Python application retrieving secrets at startup:
+A Python application retrieving secrets at startup can fetch the secret once and parse it into runtime values before the service begins work. In this pattern, you can build your database bootstrap from explicit fields like `host`, `username`, and `password` rather than scattering them through configuration files. **Important**: Cache the secret in memory and refresh periodically (every 5-15 minutes). Calling Secrets Manager on every database connection adds latency and costs money.
 
 ```python
 import boto3
@@ -409,11 +406,9 @@ db_user = creds['username']
 db_pass = creds['password']
 ```
 
-**Important**: Cache the secret in memory and refresh periodically (every 5-15 minutes). Calling Secrets Manager on every database connection adds latency and costs money.
-
 ### ECS / Fargate
 
-ECS has native integration with both SSM Parameter Store and Secrets Manager. You reference secrets directly in your task definition, and the ECS agent injects them as environment variables at container startup:
+ECS has native integration with both SSM Parameter Store and Secrets Manager. You reference secrets directly in your task definition, and the ECS agent injects them as environment variables at container startup. This means secret material can enter your containers without hardcoded values in the task definition image itself.
 
 ```json
 {
@@ -449,24 +444,22 @@ ECS has native integration with both SSM Parameter Store and Secrets Manager. Yo
 }
 ```
 
-Notice the distinction between two IAM roles:
+Notice the distinction between two IAM roles in secret injection: your task role is for runtime application calls, while the execution role is for launch-time secret injection and container startup permissions:
 
 - **Task Role**: What the application code can do at runtime (e.g., read from S3, write to DynamoDB)
 - **Execution Role**: What the ECS agent needs to start the container (e.g., pull image from ECR, read secrets for injection)
 
-The execution role needs `secretsmanager:GetSecretValue` and `ssm:GetParameters` permissions. The task role only needs these if your application also reads secrets at runtime (in addition to the injected environment variables).
+The execution role needs `secretsmanager:GetSecretValue` and `ssm:GetParameters` permissions. The task role only needs these if your application also reads secrets at runtime (in addition to the injected environment variables). This is the key split in ECS secret-injection ownership because roles are evaluated at different points in the launch and runtime flow.
 
-The `valueFrom` ARN for Secrets Manager supports a special syntax for extracting individual JSON keys:
+The `valueFrom` ARN for Secrets Manager supports a special syntax for extracting individual JSON keys, and `...:db-credentials:password::` extracts just the `password` field from the JSON secret using the current version.
 
 ```
 arn:aws:secretsmanager:REGION:ACCOUNT:secret:SECRET_NAME:JSON_KEY:VERSION_STAGE:VERSION_ID
 ```
 
-So `...:db-credentials:password::` extracts just the `password` field from the JSON secret, using the current version.
-
 ### Lambda Functions
 
-Lambda supports the same secret injection pattern but with a different mechanism. You can use Lambda environment variables (encrypted at rest with KMS) or retrieve secrets in your function code:
+Lambda supports the same secret injection pattern but with a different mechanism. You can use Lambda environment variables (encrypted at rest with KMS) or retrieve secrets in your function code, and both are used in real teams depending on startup behavior, rotation tolerance, and operational preferences:
 
 ```python
 import boto3
@@ -511,7 +504,7 @@ aws lambda update-function-configuration \
 
 ### Least Privilege for Secrets
 
-Never grant `secretsmanager:GetSecretValue` on `*`. Scope permissions to exactly the secrets the application needs:
+Never grant `secretsmanager:GetSecretValue` on `*`. Scope permissions to exactly the secrets the application needs so only the expected producers and consumers can read values.
 
 ```json
 {
@@ -532,7 +525,7 @@ The six question marks (`??????`) at the end match the random suffix that Secret
 
 ### Audit Access with CloudTrail
 
-Every call to `GetSecretValue`, `GetParameter`, and KMS `Decrypt` is logged in CloudTrail. Set up alerts for unusual access patterns:
+Every call to `GetSecretValue`, `GetParameter`, and KMS `Decrypt` is logged in CloudTrail, so you can trace who read what when. Set up alerts for unusual access patterns and review those events when they appear outside normal deployment windows.
 
 ```bash
 # Check who accessed a secret recently
@@ -545,7 +538,7 @@ aws cloudtrail lookup-events \
 
 ### Block Secrets in Code Repositories
 
-Even with proper secrets management, developers make mistakes. Use pre-commit hooks and repository scanning:
+Even with proper secrets management, developers make mistakes. Use pre-commit hooks and repository scanning to prevent accidental secret checks from reaching version control:
 
 ```bash
 # Install git-secrets (by AWS Labs)
@@ -632,14 +625,14 @@ Build a complete secrets pipeline: create a secret in Secrets Manager, configure
 
 ### Setup
 
-Ensure you have:
+Ensure you have these preconditions before you start:
 - AWS CLI configured with sufficient permissions
 - A default VPC with subnets (or know your VPC/subnet IDs)
 - An ECS cluster (create one if needed: `aws ecs create-cluster --cluster-name secrets-lab`)
 
 ### Task 1: Create the Secret
 
-Store simulated database credentials in Secrets Manager.
+Store simulated database credentials in Secrets Manager so the lab can consistently consume a single secret name across task definitions, verification commands, and cleanup steps.
 
 <details>
 <summary>Solution</summary>
@@ -664,7 +657,7 @@ aws secretsmanager get-secret-value \
 
 ### Task 2: Create IAM Roles for ECS
 
-Create the execution role (for pulling secrets at startup) and a task role.
+Create the execution role (for pulling secrets at startup) and a task role, which keeps launch-time permissions separate from application runtime permissions during the lab workflow.
 
 <details>
 <summary>Solution</summary>
@@ -727,7 +720,7 @@ aws iam create-role \
 
 ### Task 3: Register an ECS Task Definition with Secret Injection
 
-Create a Fargate task definition that injects the database username and password as environment variables.
+Create a Fargate task definition that injects the database username and password as environment variables so the task launch can demonstrate real ECS secret wiring.
 
 <details>
 <summary>Solution</summary>
@@ -789,7 +782,7 @@ aws ecs register-task-definition \
 
 ### Task 4: Run the Task and Verify Secrets Were Injected
 
-Launch the Fargate task and check CloudWatch Logs to confirm the secrets appeared as environment variables.
+Launch the Fargate task and check CloudWatch Logs to confirm the secrets appeared as environment variables, then verify startup-time substitution behavior from actual runtime logs.
 
 <details>
 <summary>Solution</summary>
@@ -835,7 +828,7 @@ aws logs get-log-events \
 
 ### Task 5: Clean Up
 
-Remove all resources created in this exercise.
+Remove all resources created in this exercise, including the secret, task definition, IAM roles, log group, and cluster, so the lab finishes in a clean state.
 
 <details>
 <summary>Solution</summary>
