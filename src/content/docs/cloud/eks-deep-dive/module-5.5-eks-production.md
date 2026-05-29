@@ -5,11 +5,15 @@ sidebar:
   order: 6
 ---
 
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 5.1 (EKS Architecture), Module 5.2 (EKS Networking)
+> **Complexity**: `[COMPLEX]`
+>
+> **Time to Complete**: 3 hours
+>
+> **Prerequisites**: [Module 5.1 (EKS Architecture)](./module-5.1-eks-architecture/) and [Module 5.2 (EKS Networking)](./module-5.2-eks-networking/)
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+Running EKS in production means your cluster must scale compute faster than users notice, emit telemetry you can trust during incidents, and attribute spend to the teams that caused it. After completing this module, you will be able to:
 
 - **Implement** Karpenter for intelligent, constraint-based node autoscaling that optimizes cost and bin-packing on EKS 1.35+.
 - **Design** EKS observability pipelines with CloudWatch Container Insights, AWS Distro for OpenTelemetry, and Prometheus.
@@ -17,25 +21,31 @@ After completing this module, you will be able to:
 - **Evaluate** cluster telemetry to diagnose scaling bottlenecks and resolve node contention incidents.
 - **Debug** complex scheduling and infrastructure cost allocation issues using OpenCost and Kubecost.
 
+You will move back and forth among these outcomes during the module: autoscaling manifests establish capacity, observability tools explain whether capacity or configuration failed, and cost tooling proves whether the cluster grew for good reasons. Keep that loop in mind when a single section feels tool-heavy—the tools are facets of one production story.
+
 ---
 
 ## Why This Module Matters
 
-In September 2023, a major video streaming company running on EKS launched a highly anticipated new series that rapidly went viral. Within twenty minutes, their backend encoding and delivery services scaled from 200 pods to 1,800 pods. The Horizontal Pod Autoscaler operated perfectly, emitting the necessary scaling events and generating the pods. However, the legacy Cluster Autoscaler fundamentally failed to keep pace. It took 8 minutes to iterate through pending pods, 3 minutes to evaluate and scale the underlying Auto Scaling Groups (ASGs), and another 2 minutes for the EC2 instances to bootstrap and join the cluster. 
+In September 2023, a major video streaming company running on EKS launched a highly anticipated new series that rapidly went viral. Within twenty minutes, their backend encoding and delivery services scaled from 200 pods to 1,800 pods, and the Horizontal Pod Autoscaler operated perfectly: it emitted scaling events, the scheduler created objects, and the cluster state reflected the desired replica count. The bottleneck was not application autoscaling logic but infrastructure reaction time, because pending pods accumulated while the data plane could not place them on nodes that did not exist yet.
 
-By the time infrastructure capacity caught up to application demand, users had experienced 13 continuous minutes of degraded service. The outcome included widespread buffering, playback failures, and massive negative sentiment on social media platforms. The failure was a direct result of relying on legacy, group-based scaling architectures for a dynamic, modern microservices payload. Furthermore, the financial impact of this event was staggering. Because the scaling occurred entirely on On-Demand instances, the 1,800-pod spike incurred approximately $12,000 in compute costs for a single day.
+The legacy Cluster Autoscaler failed to keep pace with that pod wall. It spent roughly eight minutes iterating across pending pods, three minutes deciding which Auto Scaling Group to grow, and another two minutes waiting for EC2 instances to boot and join the cluster, which means more than thirteen minutes elapsed before additional schedulable capacity existed. During that window, users experienced continuous playback degradation because encoders and edge caches could not land on nodes with free CPU and memory.
+
+By the time infrastructure capacity caught up to application demand, users had experienced thirteen continuous minutes of degraded service, including widespread buffering, playback failures, and negative social media sentiment. The failure was a direct result of relying on legacy, group-based scaling architectures for a dynamic microservices payload, and the financial sting followed immediately: because every burst node launched as On-Demand capacity, the 1,800-pod spike incurred roughly $12,000 in compute costs for a single day even while pods remained unschedulable.
 
 Following the incident, the engineering team modernized their cluster architecture by replacing Cluster Autoscaler with Karpenter, implementing native Spot instance orchestration, and deploying OpenCost for granular namespace attribution. During subsequent traffic spikes, Karpenter detected unschedulable pods, formulated an optimized instance mix, and invoked the EC2 Fleet API directly. Compute capacity became available in under 90 seconds, completely eliminating user-facing degradation. In this module, you will master the exact architecture that enables this performance, alongside the essential observability and cost attribution frameworks required for production EKS at scale.
+
+Production EKS operations converge on three reinforcing practices that the incident above violated in sequence. First, **compute elasticity** must track pending pods faster than users time out, which is why node provisioning architecture matters as much as Horizontal Pod Autoscaler configuration. Second, **telemetry** must separate control-plane audit trails from node and pod saturation signals so you can tell whether an outage is authorization, scheduling, or resource starvation. Third, **financial feedback loops** must tie CPU and memory requests to team labels; otherwise optimization debates stay abstract while idle nodes silently burn budget. The sections that follow walk through each practice with manifests and queries you can adapt without changing the underlying technical claims, using the same Helm, Karpenter, and EKS add-on versions already referenced in the code blocks throughout this module on Amazon EKS.
 
 ---
 
 ## Karpenter: Next-Generation Node Provisioning
 
-Karpenter is an open-source, high-performance Kubernetes node provisioner built by AWS. It replaces the traditional Cluster Autoscaler with a fundamentally different paradigm. Instead of scaling pre-defined Auto Scaling Groups, Karpenter provisions individual nodes by calculating the exact aggregate requirements of pending pods and directly calling the EC2 Fleet API.
+Karpenter is an open-source, high-performance Kubernetes node provisioner built by AWS, and it replaces the traditional Cluster Autoscaler with a fundamentally different paradigm. Instead of scaling pre-defined Auto Scaling Groups whose instance types you chose weeks ago, Karpenter watches pending pods, sums their resource requests, and provisions individual nodes by calling the EC2 Fleet API with an instance type that fits that exact workload mix. Because it reasons about pods first and infrastructure second, you stop paying for empty headroom in oversized node groups and you stop waiting for ASG iteration loops during traffic spikes.
 
 ### Karpenter vs Cluster Autoscaler
 
-To understand why Karpenter is transformative, consider an analogy: Cluster Autoscaler is like having to pre-purchase a fleet of identical delivery trucks and calling the depot for more of the exact same trucks whenever packages pile up. Karpenter, conversely, looks at the specific dimensions and weight of the pending packages and custom-builds a vehicle perfectly sized for that exact payload in under 60 seconds.
+To understand why Karpenter is transformative, consider an analogy: Cluster Autoscaler is like having to pre-purchase a fleet of identical delivery trucks and calling the depot for more of the exact same trucks whenever packages pile up, even when half the trucks return half empty. Karpenter, conversely, looks at the specific dimensions and weight of the pending packages and custom-builds a vehicle perfectly sized for that exact payload in under 60 seconds, so you pay for capacity that matches demand instead of capacity that matches yesterday's template. The comparison table below summarizes the operational differences you will feel in production: provisioning latency, bin-packing quality, and how Spot capacity is orchestrated.
 
 ```mermaid
 graph TD
@@ -69,9 +79,11 @@ graph TD
 | **Node groups** | Required (one per instance type mix) | Not required (NodePools define constraints, not specific groups) |
 | **Maintenance** | ASG + Launch Template management | NodePool + EC2NodeClass CRDs |
 
+When you read this table during a design review, focus on the columns that change incident behavior rather than marketing language. Provisioning speed and bin-packing directly affect how long pods stay Pending during a spike, while scale-down behavior determines whether you pay for overnight idle after a deploy rolls back. Spot handling is another divider: ASG mixed-instance policies can use Spot, but Karpenter can pivot instance types per scheduling wave, which is why interruption diversity and fallback weights show up later in this module. Maintenance shifts from launch-template sprawl to two CRDs (`NodePool` plus `EC2NodeClass`), so platform engineers document constraints instead of maintaining one ASG per instance size.
+
 ### Installing Karpenter
 
-Installing Karpenter requires specific IAM roles to allow the controller to manage EC2 instances. Once IAM is established, installation is handled natively via Helm targeting the modern OCI registry.
+Installing Karpenter requires specific IAM roles so the controller can create and terminate EC2 instances, pass instance profiles to nodes, and tag subnets and security groups for discovery. Those permissions are not optional shortcuts; without them the controller will loop on authorization errors while pods stay Pending. Once IAM is established, installation is handled natively via Helm targeting the modern OCI registry shown below, and you should treat the cluster name and API endpoint values as mandatory wiring so Karpenter can register nodes against the correct control plane.
 
 ```bash
 # Install Karpenter using Helm
@@ -87,9 +99,11 @@ helm install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --wait
 ```
 
+After Helm reports a ready release, confirm the controller pod is running and watch its logs during a deliberate scale-up test. You should see reconciliation loops when unschedulable pods appear, followed by EC2 launch activity in CloudTrail or the EC2 console. If launches fail, the error is usually IAM-related (missing `ec2:CreateFleet`) or discovery-related (subnets missing `karpenter.sh/discovery`), and those failures surface in controller logs long before Kubernetes events explain the symptom.
+
 ### NodePool: Defining Constraints
 
-A `NodePool` is a Custom Resource Definition (CRD) that defines the acceptable boundaries for the nodes Karpenter creates. It acts as a set of constraints rather than a strict template.
+A `NodePool` is a Custom Resource Definition (CRD) that defines the acceptable boundaries for the nodes Karpenter creates, and it acts as a set of constraints rather than a strict launch template. The `requirements` block is where you express architecture (`amd64`), capacity type (On-Demand versus Spot), instance families, generations, sizes, and zones; Karpenter intersects those constraints with live EC2 pricing and availability when it picks a concrete instance type. The `limits` section caps total fleet size so a scheduling storm cannot provision unbounded vCPU, while `disruption.consolidationPolicy` and `consolidateAfter` tell Karpenter how aggressively to pack workloads onto fewer nodes after demand drops. Setting `expireAfter` forces periodic node rotation so AMIs and kubelet versions do not drift for months on long-lived workers.
 
 ```yaml
 apiVersion: karpenter.sh/v1
@@ -138,7 +152,7 @@ spec:
 
 ### EC2NodeClass: AWS Infrastructure Binding
 
-While the `NodePool` defines Kubernetes-native scheduling constraints, the `EC2NodeClass` maps those requests to specific AWS infrastructure parameters, including subnets, security groups, block devices, and IAM profiles.
+While the `NodePool` defines Kubernetes-native scheduling constraints, the `EC2NodeClass` maps those requests to specific AWS infrastructure parameters, including subnets, security groups, block devices, and IAM profiles. Subnet and security group selectors typically use the `karpenter.sh/discovery` tag so only network resources intended for the cluster are eligible, which prevents accidental launches into the wrong VPC slice. The `amiSelectorTerms` alias keeps worker AMIs current without manual launch-template edits each release, and `metadataOptions` with `httpTokens: required` enforces IMDSv2 so instance metadata is not exposed to legacy hop-limited clients. Block device mappings define root volume size and encryption defaults that apply to every node launched through this class.
 
 ```yaml
 apiVersion: karpenter.k8s.aws/v1
@@ -176,7 +190,7 @@ spec:
 
 ### How Karpenter Selects Instance Types
 
-When evaluating pending pods, Karpenter executes a rapid, multi-dimensional bin-packing algorithm. It evaluates the collective resource requests and identifies the cheapest viable EC2 instance from the permitted pool.
+When evaluating pending pods, Karpenter executes a rapid, multi-dimensional bin-packing algorithm that evaluates the collective CPU and memory requests together rather than scaling a fixed instance size. It simulates packing pending pods onto each compatible instance type allowed by the NodePool, estimates hourly cost from its pricing cache, and launches the cheapest option that still satisfies scheduling constraints including topology and taints. The worked example below is intentionally small so you can see why a single larger node can cost less than several smaller nodes when bin-packing efficiency improves.
 
 ```text
 Pending Pods:
@@ -192,9 +206,11 @@ Karpenter evaluates:
 Karpenter selects Option 3 (cheapest that satisfies all pod requirements)
 ```
 
+In production you will rarely see only three pending pods, but the decision rule scales the same way: simulate feasible instance types, respect topology spread and affinity rules, then minimize cost among feasible options. When teams complain that Karpenter “always picks compute-optimized instances,” the fix is usually requirements that exclude memory-optimized families, not a bug in the provisioner.
+
 ### Karpenter Disruption and Consolidation
 
-Continuous optimization is a hallmark of Karpenter. Over time, as deployments scale up and down, clusters experience fragmentation. Karpenter constantly monitors the fleet to execute consolidation strategies.
+Continuous optimization is a hallmark of Karpenter because static node groups tend to leave clusters fragmented after deployments scale up and down. Karpenter monitors utilization continuously and, when policy allows, drains underutilized nodes so workloads reschedule onto a denser remainder, which is how you reclaim idle CPU and memory without manual node pruning scripts. Consolidation respects PodDisruptionBudgets and termination grace periods, so the controller will not yank capacity faster than your applications can evacuate. The diagram below shows the before-and-after shape: three partially used nodes become one adequately utilized node, and the emptied instances terminate automatically.
 
 ```mermaid
 graph LR
@@ -215,15 +231,17 @@ graph LR
     N3 -->|Terminate| N4
 ```
 
+Tune consolidation carefully when you run stateful systems or Jobs with long shutdown paths. Aggressive `consolidateAfter` values save money on batch clusters but can churn nodes during rolling deploys if PDBs are missing or grace periods are too short. Start with consolidation enabled in non-production, watch eviction metrics, then tighten timing in production once you trust application `preStop` behavior.
+
 ---
 
 ## Spot Instance Orchestration
 
-Spot instances represent excess AWS capacity available at steep discounts (often 60-90%). However, AWS can reclaim them at any time with a brief two-minute interruption notice. Karpenter fundamentally changes how organizations consume Spot capacity by building fallback logic and instance diversification natively into the scaler.
+Spot instances represent excess AWS capacity available at steep discounts, often sixty to ninety percent below On-Demand pricing for the same instance families. The trade-off is explicit: AWS can reclaim capacity with a two-minute interruption notice, so your workloads must tolerate eviction and you must design redundancy at the pod level rather than assuming a node is permanent. Karpenter changes how organizations consume Spot because it can diversify instance types per launch, react to `InsufficientInstanceCapacity` by trying alternatives, and fall back to On-Demand NodePools without a separate operator-run playbook.
 
 ### Configuring Spot in Karpenter
 
-By explicitly specifying `"spot"` in the capacity-type array, you signal to Karpenter that it should attempt to source from the Spot market first.
+By explicitly specifying `"spot"` in the capacity-type array, you signal to Karpenter that it should attempt to source from the Spot market first for any pod scheduled against that NodePool. Taints such as `spot=true:NoSchedule` isolate batch or fault-tolerant tiers so stateful systems do not land on interruptible hardware by accident, and pairing taints with tolerations in the Deployment or Job spec makes the contract obvious to application teams reviewing manifests in pull requests.
 
 ```yaml
 apiVersion: karpenter.sh/v1
@@ -262,7 +280,7 @@ spec:
 
 ### Spot Best Practices
 
-Tolerating Spot capacity requires a combined approach from both the infrastructure and application layers. You must diversify instance choices at the node level, and utilize PodDisruptionBudgets (PDBs) at the workload level. 
+Tolerating Spot capacity requires a combined approach from both the infrastructure and application layers because either side alone leaves a gap. At the infrastructure layer you diversify instance families, generations, sizes, and Availability Zones so a reclaim event in one pool does not eliminate all capacity at once. At the application layer you use PodDisruptionBudgets so Kubernetes never drains more replicas than your service can lose, and you set `terminationGracePeriodSeconds` plus `preStop` hooks so in-flight work finishes before the kubelet sends SIGKILL.
 
 ```yaml
 # PodDisruptionBudget for Spot workloads
@@ -318,7 +336,7 @@ spec:
 
 ### On-Demand Fallback Pattern
 
-A critical production architecture pattern involves configuring Karpenter to prefer Spot capacity but to gracefully fall back to On-Demand instances if the requested Spot capacity pools are exhausted or heavily contested.
+A critical production architecture pattern involves configuring Karpenter to prefer Spot capacity but to gracefully fall back to On-Demand instances if the requested Spot capacity pools are exhausted or heavily contested. You implement that preference with two NodePools that share the same `EC2NodeClass` but differ in `karpenter.sh/capacity-type` requirements and `weight`, so the scheduler tries the higher-weight Spot pool first and only provisions On-Demand when Spot APIs return capacity errors.
 
 ```yaml
 # Primary: Spot (cheap)
@@ -360,17 +378,21 @@ spec:
   weight: 10     # Lower weight = fallback only
 ```
 
-Karpenter evaluates `weight` strictly. The primary `compute-spot` NodePool forces an attempt on the Spot market. Only upon an `InsufficientInstanceCapacity` error from the AWS API will Karpenter fall through to the On-Demand NodePool.
+Karpenter evaluates `weight` strictly, so the primary `compute-spot` NodePool with weight 100 is always attempted before the `compute-ondemand` NodePool at weight 10. Only when EC2 returns `InsufficientInstanceCapacity` for the Spot constraints does Karpenter fall through to On-Demand, which is why weights are not merely documentation—they are ordering semantics for capacity negotiation.
 
 > **Stop and think**: If Karpenter provisions a Spot instance for your workload and AWS reclaims it with a two-minute warning, how does your application ensure zero downtime? (Hint: Think about PodDisruptionBudgets, replicas, and the pod lifecycle.)
+
+During an interruption, the node lifecycle moves through cordon, drain, and terminate phases while Kubernetes schedules replacements elsewhere. Karpenter may launch replacement Spot capacity in another instance type pool if the NodePool allows diversity, which is why operators monitor interruption rates per family rather than per node. Application teams should test SIGTERM handling in CI the same way they test HTTP health checks, because infrastructure can only offer two minutes—not unlimited graceful shutdown—once AWS issues the reclaim notice.
 
 ---
 
 ## Control Plane Logging
 
-Visibility into the Kubernetes control plane is non-negotiable for security forensics and debugging scheduling anomalies. Because EKS abstracts the control plane components away from user administration, AWS provides control plane logging directly to CloudWatch.
+Visibility into the Kubernetes control plane is non-negotiable for security forensics and debugging scheduling anomalies, because you cannot SSH into managed etcd or apiserver processes on EKS the way you might on self-managed clusters. AWS streams control plane component logs directly to CloudWatch Logs, which means your retention, encryption, and access policies follow the same tooling you already use for application telemetry. The operational discipline is selective enablement: turn on the log types that justify their ingestion cost continuously, and enable high-volume types temporarily while you are actively debugging.
 
 ### Enabling Control Plane Logs
+
+Control plane logging is configured at the cluster object level, so treat enablement like any other infrastructure change with a change ticket and a rollback plan. Enabling all five types at once is convenient for a short proof of concept but expensive for a busy production API server; start with the minimal set in the table, expand during incidents, and document who disabled high-volume types when the incident closes.
 
 ```bash
 aws eks update-cluster-config --name my-cluster \
@@ -385,7 +407,9 @@ aws eks update-cluster-config --name my-cluster \
 | `controllerManager` | Controller loops (ReplicaSet, Deployment) | Why pods are not being created |
 | `scheduler` | Scheduling decisions and failures | Why pods are Pending |
 
-Querying logs is efficiently done using CloudWatch Logs Insights. For example, to identify API clients hitting 400-level errors:
+In practice, platform teams enable `audit` and `authenticator` continuously because security questions arrive months after an event and you cannot reconstruct auth decisions retroactively. `scheduler` logs earn a temporary enablement window when pods sit Pending despite apparently free capacity, because the scheduler records why a pod did not fit a node. `controllerManager` logs help when ReplicaSets exist but Deployments never materialize new pods, and `api` logs are the noisiest: they shine when you are chasing a specific client spamming LIST calls, but they should not run unfiltered forever on large clusters.
+
+After logging is enabled, querying is most efficient through CloudWatch Logs Insights because you can filter across `audit`, `api`, and `authenticator` streams with structured fields instead of grepping raw files on nodes that do not exist for you to access. The examples below show how to find clients receiving HTTP 400 responses and how to reconstruct who deleted a pod in a production namespace, patterns you will reuse during incident reviews.
 
 ```sql
 -- Find all failed API calls in the last hour
@@ -409,9 +433,11 @@ fields @timestamp, verb, requestURI, user.username, sourceIPs.0
 
 ## Container Insights: Node and Pod Metrics
 
-While control plane logs reveal *what* happened, performance metrics reveal *why* it happened. Amazon CloudWatch Container Insights provides native metric aggregation, generating dashboards for cluster, node, pod, and container resource saturation.
+While control plane logs reveal *what* happened at the API layer, performance metrics reveal *why* nodes and pods behaved the way they did under load. Amazon CloudWatch Container Insights aggregates cluster, node, pod, and container utilization into dashboards and alarms without you operating a metrics database, which is attractive for platform teams that want a default observability baseline on day one. The trade-off appears at scale: custom metrics billing grows with cardinality, so you should know when Container Insights is the right default and when to graduate workloads to Prometheus-style pipelines described later in this module.
 
 ### Enabling Container Insights
+
+Container Insights is not a separate daemon you install by hand on every node when you use the managed add-on path; AWS packages the agents and wires them to CloudWatch on your behalf. That reduces day-one friction but still requires an IAM role for the service account so agents can publish metrics. Plan a short validation window after enablement where you compare Container Insights node graphs with `kubectl top` and with Prometheus node exporters if both exist, so you know the signals agree before you wire alarms.
 
 ```bash
 # Install via the EKS add-on
@@ -432,17 +458,21 @@ aws eks create-addon \
 | `cluster_failed_node_count` | ContainerInsights | > 0 |
 | `pod_status_phase` (Pending) | ContainerInsights | > 0 for > 5 min |
 
+Treat the metrics table as an on-call cheat sheet rather than a shopping list of alarms. Node CPU and memory utilization tell you whether Karpenter should add capacity or whether requests are mis-sized; pod CPU over limit warns that throttling is imminent even when the node looks healthy. Filesystem utilization catches log and emptyDir growth before kubelet evictions, while `cluster_failed_node_count` should always page because it signals registration or CNI failures, not application bugs. Pending pods longer than five minutes bridge back to the Karpenter sections: confirm whether unschedulable events exist, whether taints block Spot nodes, and whether IP or ENI limits from networking modules still apply.
+
+The `amazon-cloudwatch-observability` EKS add-on bundles the agents needed for Container Insights and can also deploy AWS Distro for OpenTelemetry (ADOT) collectors when you standardize on OpenTelemetry pipelines. You do not have to choose between “CloudWatch only” and “Prometheus only” on day one: many teams emit infrastructure metrics to Container Insights for baseline dashboards while exporting application traces and custom metrics through ADOT to AMP or a self-managed backend.
+
 > **Pause and predict**: You notice that `kube_pod_container_status_restarts_total` is rapidly increasing for your core API namespace, but `node_cpu_utilization` is completely normal. What might be causing the pods to restart if it isn't node-level resource starvation? (Hint: Think about memory limits, liveness probes, or application-level crashes.)
 
 ---
 
 ## Prometheus Integration
 
-While Container Insights offers a seamless zero-ops experience, high-cardinality clusters will inevitably encounter prohibitive cost scaling. At scale, the industry standard mandates transitioning to a Prometheus-backed observability pipeline. 
+While Container Insights offers a seamless zero-ops experience, high-cardinality clusters will inevitably encounter prohibitive cost scaling because every new label combination can become a billable custom metric. At scale, teams standardize on Prometheus-compatible scraping and PromQL because the data model is portable across clouds and because self-managed or managed backends charge per samples ingested rather than per named metric in the same way. EKS fits naturally into that model: node and kube-state metrics are well understood, and the `kube-prometheus-stack` chart gives you Grafana dashboards with modest operational overhead.
 
 ### Amazon Managed Prometheus (AMP)
 
-Amazon Managed Prometheus (AMP) provides a serverless ingestion and query backend, allowing you to use PromQL without managing underlying storage infrastructure.
+Amazon Managed Prometheus (AMP) provides a serverless ingestion and query backend, allowing you to use PromQL without operating Cortex or Thanos storage clusters yourself. You still run collectors—typically Prometheus agents or the full stack in-cluster—but AMP absorbs long-term retention and federated query load, which is why many production EKS platforms remote-write from in-cluster Prometheus to AMP and keep Grafana as the visualization layer.
 
 ```bash
 # Create a workspace
@@ -454,9 +484,11 @@ echo "Workspace: $WORKSPACE_ID"
 echo "Endpoint: https://aps-workspaces.us-east-1.amazonaws.com/workspaces/$WORKSPACE_ID"
 ```
 
+Treat AMP as the long-term store and Grafana as the lens, not as a replacement for in-cluster scraping discipline. You still need relabeling rules, scrape intervals, and cardinality controls on exporters, because remote-write only shifts retention costs—it does not magically drop high-cardinality labels created by misconfigured ServiceMonitors.
+
 ### Deploying Prometheus to Scrape EKS Metrics
 
-Deploying Prometheus via the `kube-prometheus-stack` configures local scraping and remote-writing to AMP.
+Deploying Prometheus via the `kube-prometheus-stack` Helm chart configures ServiceMonitor-driven scraping of the Kubernetes control plane and kubelets, ships Grafana dashboards, and can remote-write samples to AMP when you set the `remoteWrite` URL and SigV4 region on the Prometheus custom resource. The first install block below is suitable for labs that keep metrics inside the cluster for fifteen days, while the second block shows the minimal AMP wiring you would enable in production after creating a workspace.
 
 ```bash
 # Install the Prometheus stack using Helm
@@ -483,7 +515,9 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 
 ### Essential PromQL Queries for EKS
 
-Prometheus excels at complex, cross-dimensional data analysis.
+Prometheus excels at cross-dimensional analysis because PromQL lets you ratio usage to requests, detect restart storms independent of node CPU charts, and observe Karpenter provisioning latency directly if you export its metrics. Build a small dashboard with the four queries below and annotate it with your cluster’s normal ranges during business hours; that baseline makes anomalies obvious when autoscaling misbehaves or when a single Namespace begins restart storms after a deploy.
+
+When you later connect these panels to alerts, prefer multi-window burn rates for user-facing services and simple thresholds for infrastructure signals such as NotReady nodes or sustained Pending pods. The goal is fewer, clearer pages—not hundreds of graphs nobody opens during incidents—and that discipline keeps on-call cognitive load manageable. The queries below are starting points for capacity reviews: namespace CPU pressure relative to requests, memory working set versus limits, restart rates, NotReady nodes, and a p99 on Karpenter scheduling duration when that histogram is available in your scrape config.
 
 ```promql
 # CPU usage by namespace (percentage of requests)
@@ -506,15 +540,25 @@ sum(kube_node_status_condition{condition="Ready", status="true"} == 0) by (node)
 histogram_quantile(0.99, sum(rate(karpenter_provisioner_scheduling_duration_seconds_bucket[5m])) by (le))
 ```
 
+After you install scraping, validate each query in Grafana with a known load test. Namespace CPU ratios above one hundred percent usually mean requests are set too low, not that magic extra CPU exists. Memory working-set-over-limit ratios highlight OOM risk before Kubernetes kills containers. Restart rates decoupled from node utilization often point to misconfigured liveness probes or application panics, which matches the troubleshooting narrative in the pause-and-predict callout above. Karpenter latency histograms close the loop on autoscaling SLOs: if p99 provisioning drifts from under ninety seconds toward minutes, revisit NodePool constraints before blaming application code.
+
+---
+
+## Savings Plans, Spot, and Right-Sizing
+
+Cost optimization on EKS is a portfolio decision, not a single knob. Spot and Karpenter consolidation attack **hourly waste** on interruptible or over-provisioned capacity, while **right-sizing** attacks inflated `requests` that cause Karpenter to launch larger nodes than workloads need. **Savings Plans** (and Reserved Instances where they still fit) attack the baseline On-Demand footprint that remains after you move batch tiers to Spot. Mature platforms combine all three: Spot for fault-tolerant compute, consolidation for stranded capacity, VPA or dashboard recommendations for request tuning, and Savings Plans on the steady On-Demand slice that Spot cannot absorb.
+
+When you present this portfolio to finance stakeholders, translate Kubernetes actions into their language. Karpenter consolidation and Spot usage reduce **variable** hourly burn, Savings Plans reduce **committed** baseline rates on the remaining On-Demand footprint, and right-sizing reduces **requested** capacity that drives both node size and allocation reports. Without that framing, leaders may ask for “more Spot” while the cluster still looks expensive because requests remain inflated.
+
 ---
 
 ## Cost Allocation with Kubecost and OpenCost
 
-Kubernetes abstractly pools resources, leading directly to the "tragedy of the commons"—teams provision massive resource requests because they lack financial visibility into their architectural choices. OpenCost provides the telemetry mapping required to solve this.
+Kubernetes abstractly pools resources, which creates a tragedy-of-the-commons dynamic: teams inflate CPU and memory requests because nobody sees a departmental invoice tied to a Deployment manifest. FinOps on EKS therefore requires two capabilities at once—accurate measurement of who consumed CPU, memory, and GPU time, and guardrails that stop unlabeled workloads from hiding in an "unallocated" bucket. OpenCost and Kubecost both sit on Prometheus-style metrics and cloud billing APIs; OpenCost is the open-source core many teams self-host, while Kubecost adds commercial allocation views and recommendations on top of a similar data model.
 
 ### OpenCost (Open Source)
 
-OpenCost maps real-time AWS billing data to specific pod usage telemetry, tracking expenses down to individual labels.
+OpenCost maps real-time AWS billing data—including Spot price feeds when configured—to pod usage telemetry so you can aggregate cost by namespace, label, or controller. The Helm values below enable the UI for exploratory reviews and wire Spot pricing buckets when you want interruption-aware amortization instead of assuming every node hour cost the same On-Demand rate.
 
 ```bash
 # Install OpenCost
@@ -532,6 +576,10 @@ helm install opencost opencost/opencost \
 
 ### Kubecost (Commercial + Free Tier)
 
+A monthly FinOps review with either tool should follow the same agenda every time so results compound instead of becoming a one-off spreadsheet exercise. Start with idle and unallocated totals, then rank namespaces by growth week over week, then inspect the top ten Deployments by cost with the highest request-to-usage gap. Only after those three views should you change NodePool consolidation timings or Spot weights, because otherwise you risk optimizing nodes while applications still request double the CPU they need.
+
+Kubecost packages the same class of allocation queries with opinionated dashboards, savings recommendations, and multi-cluster views that larger enterprises often standardize on. The install mirrors OpenCost in complexity: you point it at Prometheus metrics with a `cluster_id` label and let it correlate utilization to cloud bills. Teams frequently run OpenCost for transparency in platform namespaces and Kubecost where finance wants certified showback reports.
+
 ```bash
 helm repo add kubecost https://kubecost.github.io/cost-analyzer
 helm repo update
@@ -545,7 +593,7 @@ helm install kubecost kubecost/cost-analyzer \
 
 ### Cost Allocation Strategies
 
-Without discipline, OpenCost will simply report massive unallocated spend. Financial attribution requires strict labeling logic.
+Without discipline, OpenCost will simply report massive unallocated spend, which means your optimization program argues over percentages of a chart that still lacks owners. Financial attribution requires consistent labels on Deployments and Namespaces—`team`, `environment`, and `cost-center` are the minimum viable set—and those labels must survive from CI templates into production manifests so chargeback queries stay stable quarter to quarter.
 
 ```yaml
 # Enforce cost-tracking labels on all pods
@@ -569,7 +617,7 @@ spec:
         cost-center: cc-1234
 ```
 
-To prevent unallocated workloads from executing, leverage an admission controller like Kyverno.
+To prevent unallocated workloads from executing in the first place, leverage an admission controller like Kyverno so non-compliant objects never reach the scheduler; enforcement is cheaper than monthly cleanup meetings where platform engineers chase missing labels.
 
 ```yaml
 # Kyverno policy to require cost labels
@@ -608,24 +656,31 @@ spec:
 | (idle) | (unallocated) | $1,800 | $2,300 | $4,100 |
 | **TOTAL CLUSTER** | | | | **$14,970** |
 
-In this scenario, the idle/unallocated sum ($4,100) highlights a massive surface area for savings through tighter consolidation policies or more aggressive resource right-sizing.
+In this scenario, the idle and unallocated sum of $4,100 is not a rounding error—it is nearly thirty percent of total cluster spend with no owner accountable for rightsizing. That line item should trigger consolidation tuning on Karpenter, VPA recommendation reviews for over-requested pods, and a policy pass to ensure new Deployments cannot land without cost labels.
 
 ---
 
 ## EKS Upgrade Runbooks
 
-Kubernetes issues minor releases routinely, and maintaining operational readiness requires rigid upgrade paths. For clusters navigating up to and beyond v1.35, the process involves careful synchronization between the control plane and data plane.
+Kubernetes issues minor releases routinely, and maintaining operational readiness requires rigid upgrade paths because version skew between the control plane and kubelets is enforced by policy, not by goodwill. For clusters on EKS 1.35 and later, treat upgrades as a sequenced runbook rather than a single button click: validate API compatibility, move the managed control plane, align add-ons, then rotate workers so no kubelet speaks a newer dialect than the apiserver allows.
 
-1. **Pre-flight API Checks**: Ensure tooling like `pluto` inspects your Helm charts to eliminate deprecated API usage ahead of the upgrade.
-2. **Control Plane Upgrade**: Issue the upgrade sequence to AWS. The highly available architecture ensures the core API remains responsive.
-3. **Core Add-on Upgrades**: Transition VPC CNI, CoreDNS, and kube-proxy components to the exact builds verified against v1.35.
-4. **Data Plane (Node) Rotation**: Karpenter streamlines this exponentially. By mapping the `amiSelectorTerms` to the latest alias, node drift mechanics automatically initiate a rolling replacement across the fleet seamlessly.
+**Pre-flight API checks** come first because Helm charts and operators often embed deprecated API versions long after upstream removal warnings appear in release notes. Tools such as Pluto scan rendered manifests and chart templates so you fix `batch/v1beta1` style leftovers before the upgrade window, which is far cheaper than discovering a failed apply during production maintenance.
+
+**Control plane upgrades** are initiated through the EKS API or console and run on AWS-managed infrastructure, so your responsibility is sequencing and communication rather than etcd backups. The HA control plane should remain available, but you should still pause deploys that mutate CRDs until add-ons are verified.
+
+**Core add-on upgrades**—VPC CNI, CoreDNS, kube-proxy, and any observability agents tied to kubelet versions—must match the target Kubernetes minor release matrix published for EKS. Skipping this step produces subtle failures such as DNS timeouts or IP allocation regressions that look like application bugs.
+
+**Data plane rotation** is where Karpenter earns its keep: updating `amiSelectorTerms` to a newer Amazon Linux 2023 alias and letting `expireAfter` force replacement yields rolling nodes without maintaining multiple ASG launch templates. Drain behavior still honors PDBs, so you should watch pod disruption budgets during the rotation weekend the same way you would with managed node groups.
+
+Document the upgrade sequence in your team wiki with explicit owners: who runs Pluto, who bumps the control plane version, who pins add-on versions, and who monitors Karpenter drains. Managed EKS removes etcd toil, but human coordination errors still cause outages when application teams deploy new CRDs mid-upgrade or when node rotation outruns PDB budgets.
 
 > **Stop and think**: Why must you upgrade the EKS control plane *before* upgrading the worker nodes? (Hint: The Kubernetes version skew policy dictates compatibility rules between the kube-apiserver and the kubelet running on nodes.)
 
 ---
 
 ## Did You Know?
+
+The facts below are worth revisiting after you run the hands-on exercise, because they connect autoscaling math, logging bills, Spot statistics, and industry utilization benchmarks to the dashboards you will actually see.
 
 1. Karpenter evaluates over 600 EC2 instance types when deciding what to launch. For each set of pending pods, it simulates packing them onto every compatible instance type, calculates the cost, and selects the cheapest option. This evaluation happens in milliseconds thanks to an in-memory instance type database that Karpenter refreshes from the EC2 pricing API every 6 hours.
 
@@ -635,9 +690,13 @@ Kubernetes issues minor releases routinely, and maintaining operational readines
 
 4. Kubecost analysis across thousands of Kubernetes clusters found that the average cluster utilization (actual CPU/memory usage vs provisioned) is only 20-35%. This means 65-80% of infrastructure spend is wasted on idle resources. The three highest-impact optimizations are: (1) right-sizing pod resource requests using VPA recommendations, (2) enabling Karpenter consolidation to remove underutilized nodes, and (3) using Spot instances for stateless and fault-tolerant workloads.
 
+Taken together, these facts explain why production EKS is as much about telemetry and finance as it is about YAML. Karpenter’s instance database makes rapid cost-aware provisioning possible, audit logs make compliance possible, Spot diversification makes interruptible capacity viable, and utilization benchmarks remind you that autoscaling out without rightsizing in only moves waste faster.
+
 ---
 
 ## Common Mistakes
+
+The table below collects failure modes platform teams rediscover during their first Karpenter and FinOps rollouts. Use it as a pre-production checklist: if you recognize your current design in the “Mistake” column, fix the root cause before a traffic spike proves it expensive.
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
@@ -650,9 +709,13 @@ Kubernetes issues minor releases routinely, and maintaining operational readines
 | **Cost allocation without label enforcement** | Labels are optional, most teams do not add them, and 60% of cost is "unallocated." | Enforce `team` and `cost-center` labels using admission policies. Reject deployments that lack required labels. |
 | **Ignoring idle cost in Kubecost** | Focusing on per-team costs while ignoring the 30%+ of cluster spend that is idle. | Review idle cost weekly. Right-size pod requests, enable Karpenter consolidation, and set aggressive `consolidateAfter` values. |
 
+If you are preparing for a production cutover, schedule a game day that combines three failures: a sudden Deployment scale-up, a Spot interruption during that scale-up, and an audit question about who changed a Namespace limit. Your runbooks should point to Karpenter metrics, scheduler logs, and audit queries from this module respectively. Passing that game day means the prose patterns here are operational habits, not checklist reading.
+
 ---
 
 ## Quiz
+
+The questions below mirror the learning outcomes at the top of the module. Attempt each one before expanding the answer, then read the explanation to connect the concept back to the manifests and queries you practiced.
 
 <details>
 <summary>Question 1: During a massive traffic spike, your application needs 50 new nodes. With Cluster Autoscaler, this took 8 minutes, causing an outage. You switch to Karpenter and it takes 45 seconds. What architectural difference allows Karpenter to provision nodes so much faster in this scenario?</summary>
@@ -700,9 +763,7 @@ Karpenter uses pod **resource requests** (not limits) to determine what instance
 
 ## Hands-On Exercise: Replace Cluster Autoscaler with Karpenter + Spot Batch Processing
 
-In this exercise, you will deploy Karpenter, create NodePools for general and Spot workloads, run a batch processing job on Spot instances, and set up basic cost visibility.
-
-**What you will build:**
+In this exercise, you will deploy Karpenter, create NodePools for general and Spot workloads, run a batch processing job on Spot instances, and set up basic cost visibility so you can connect autoscaling behavior to dollars on a dashboard. You will build a small but realistic split cluster where On-Demand nodes carry general services, Spot nodes carry batch Jobs behind taints, and OpenCost attributes spend by namespace and team label as illustrated below.
 
 ```mermaid
 graph TD
@@ -716,6 +777,8 @@ graph TD
         OC[OpenCost: Cost allocation dashboard]
     end
 ```
+
+Work through the tasks in order because each step assumes the previous artifacts exist: Karpenter cannot discover subnets without tags, NodePools reference the shared `EC2NodeClass`, and OpenCost needs running pods with labels to produce meaningful allocation output. If you are using a shared lab cluster, coordinate removals so you do not delete another learner’s autoscaler deployment.
 
 ### Task 1: Remove Cluster Autoscaler (If Present)
 
@@ -738,6 +801,8 @@ k get pods -n kube-system | grep autoscaler
 </details>
 
 ### Task 2: Install Karpenter
+
+Tag discovery consistently across every subnet and security group the NodePool might use, including new subnets added later by network automation. Missing tags are the most common reason Karpenter logs show launch failures that look like mysterious Pending pods to application teams.
 
 <details>
 <summary>Solution</summary>
@@ -920,6 +985,8 @@ k get nodepools
 
 ### Task 5: Run a Batch Processing Job on Spot
 
+While the Job runs, watch for Spot nodes appearing with diversified instance types; if every node is the same size, widen the NodePool requirements. Compare Karpenter logs to Kubernetes events so you can narrate the timeline during a post-exercise review.
+
 <details>
 <summary>Solution</summary>
 
@@ -1001,6 +1068,8 @@ kill $LOG_PID $POD_PID 2>/dev/null
 
 ### Task 6: Install OpenCost and View Cost Allocation
 
+OpenCost needs a few minutes of steady traffic before allocation APIs return stable totals, so run the batch Job long enough to generate pod-hours on Spot nodes. When you query by `team` label, confirm the batch namespace appears under the media team; if it lands in unallocated, revisit labels on the Job template rather than blaming the exporter.
+
 <details>
 <summary>Solution</summary>
 
@@ -1040,6 +1109,8 @@ curl -s http://localhost:9090/allocation/compute \
 
 ### Clean Up
 
+Deleting NodePools before uninstalling Helm ensures Karpenter drains and terminates nodes it created, which is faster and safer than orphaning EC2 instances that still appear healthy in the AWS console but no longer match your desired cluster state.
+
 ```bash
 k delete namespace batch
 k delete job video-encode-batch -n batch 2>/dev/null
@@ -1053,6 +1124,8 @@ helm uninstall karpenter -n kube-system
 
 ### Success Checklist
 
+If every item below is true, you have exercised the full production loop this module describes: provision quickly, observe honestly, and attribute spend precisely.
+
 - [ ] I removed Cluster Autoscaler (if present) before installing Karpenter.
 - [ ] I installed Karpenter and created an EC2NodeClass with IMDSv2 enforcement.
 - [ ] I created a general-purpose NodePool with On-Demand instances and consolidation policies.
@@ -1062,13 +1135,19 @@ helm uninstall karpenter -n kube-system
 - [ ] I installed OpenCost and generated cost allocation reviews by namespace and label.
 - [ ] I can articulate why Karpenter's direct API interaction accelerates provisioning over legacy ASG approaches.
 
+Write a short post-exercise note comparing time-to-node for your batch Job against the thirteen-minute Cluster Autoscaler story in the introduction. Even rough timestamps help your team internalize why provisioning architecture belongs in service-level objectives next to application replica counts.
+
 ---
 
 ## Next Module
 
-You have completed the EKS Deep Dive series. You now fundamentally understand advanced EKS architecture, complex networking, deep identity integrations, and granular production operations logic. To continue scaling your cloud capabilities across different vendor philosophies, explore the [AKS Deep Dive](/cloud/aks-deep-dive/) or [GKE Deep Dive](/cloud/gke-deep-dive/) series, or compare the nuances of all three providers simultaneously with the [Hyperscaler Rosetta Stone](/cloud/hyperscaler-rosetta-stone/).
+You have completed the EKS Deep Dive series. You now understand advanced EKS architecture, complex networking, identity integrations, and the production operations patterns—fast autoscaling, selective control-plane logging, metrics pipelines, and chargeback—that keep clusters both responsive and accountable. When you move to another hyperscaler, expect the same conceptual layers with different control planes: managed Kubernetes still needs node provisioning strategy, observability baselines, and FinOps labels, even if the autoscaler and monitoring products change names.
+
+To continue scaling your cloud capabilities across different vendor philosophies, explore the [AKS Deep Dive](/cloud/aks-deep-dive/) or [GKE Deep Dive](/cloud/gke-deep-dive/) series, or compare the nuances of all three providers simultaneously with the [Hyperscaler Rosetta Stone](/cloud/hyperscaler-rosetta-stone/).
 
 ## Sources
+
+The references below anchor the autoscaling, logging, and version-skew guidance in this module. When AWS updates EKS user guide pages, reconcile Helm chart versions and add-on compatibility matrices against those docs before you change production runbooks.
 
 - [Scale cluster compute with Karpenter and Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) — This is the current Amazon EKS entry point for supported autoscaling options and Karpenter context.
 - [Send control plane logs to CloudWatch Logs](https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html) — It documents the five EKS control-plane log types, defaults, and operational caveats.
