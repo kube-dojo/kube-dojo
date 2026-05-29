@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Curriculum Coherence Audit — Phase 1 (AI tracks + repo-wide scriptable scans)</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 920px; margin: 2em auto; padding: 0 1em; line-height: 1.5; }
+  h1, h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.15em; margin-top: 1.5em; }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #f4f4f4; padding: 0.8em; border-radius: 4px; overflow-x: auto; font-size: 0.85em; }
+  table { border-collapse: collapse; margin: 0.5em 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.88em; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .meta { color: #666; font-size: 0.9em; }
+  .ok { color: #137333; font-weight: bold; }
+  .p1 { background: #fce8e6; color: #c5221f; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; font-weight: bold; }
+  .p2 { background: #fef7e0; color: #b06000; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; font-weight: bold; }
+  .clean { background: #e6f4ea; color: #137333; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Curriculum Coherence Audit — Phase 1</h1>
+<p class="meta">Date: 2026-05-29 (session 70) · Auditor: orchestrator (claude-opus-4-8) · Scope: AI tracks (<code>ai/</code> + <code>ai-ml-engineering/</code>, 147 modules) deep; scriptable dimensions widened repo-wide · Origin: user request after the #1639 frameworks-agents 1.3/1.4 title/content scramble was found by accident ("we need to do a more serious audit after these").</p>
+
+<h2>Executive summary</h2>
+<p>The AI tracks are in <strong>good structural shape</strong>: no orphaned-from-nav sections, no un-redirected stubs, and — after the #1639 fix — <strong>no remaining title/content scrambles</strong>. The one real, systemic problem the audit surfaced is <strong>dangling internal links from content drift</strong>: <strong>8 distinct broken link targets (12 link instances)</strong> repo-wide, where a "next module" or cross-reference points at a module name that was later renamed or never created. <strong>The current <code>check_site_health.py</code> catches only 1 of the 8</strong> — a real tooling blind spot. The #1639 residuals are dispositioned: context-engineering coverage is confirmed complete (no gap); the LangGraph module's T0-density upgrade is the one carry-forward fix.</p>
+
+<h2>Findings by dimension</h2>
+<table>
+  <tr><th>Dimension</th><th>Result</th><th>Detail</th></tr>
+  <tr><td>Mislabeled (title vs body)</td><td><span class="clean">CLEAN</span></td><td>Title-term-vs-body-frequency heuristic across all 147 AI modules: no module has its key topic-term absent from its body. The lowest scorers were filler/compound title words ("basics", "foundations", "next-gen" → 0, as expected) or acronym spelling ("RNNs" written "RNN" 16×). The #1639 1.3/1.4 scramble was the only true mislabel and is fixed.</td></tr>
+  <tr><td>Dead/moved stubs not redirected</td><td><span class="clean">CLEAN</span></td><td>Zero un-redirected stubs repo-wide. The 3 #1639 stubs were retired with redirects (#1649). The only remaining "has moved" string matches are in prose ("the data has moved").</td></tr>
+  <tr><td>Orphaned-from-nav sections</td><td><span class="clean">CLEAN (AI)</span></td><td>Every <code>ai/</code> + <code>ai-ml-engineering/</code> content directory has a matching <code>autogenerate</code> entry in <code>astro.config.mjs</code>. Repo-wide reachability deferred to Phase 2 (needs a proper sidebar-walk script).</td></tr>
+  <tr><td>Duplicate/scattered content</td><td><span class="clean">RESOLVED</span></td><td>#1639 already consolidated the prompt/context/harness overlap. The two prompt modules (<code>ai/foundations/1.3-prompting-basics</code> beginner ↔ <code>ai-engineering-foundations/1.1-prompt-fundamentals</code> canonical) are intentionally layered and already cross-linked — the acceptable resolution per #1639 goal item 2.</td></tr>
+  <tr><td>Broken/dangling internal links</td><td><span class="p2">8 TARGETS</span></td><td>See the table below. The headline finding.</td></tr>
+</table>
+
+<h2 class="p2">Headline: dangling internal links (8 targets, 12 instances)</h2>
+<p>All are absolute internal links to a slug that does not exist and has no redirect. Most are "Next Module" links whose <em>text</em> also describes the nonexistent module, so the fix is link URL <strong>and</strong> the surrounding sentence. Resolved correct targets:</p>
+<table>
+  <tr><th>#</th><th>Broken link (from → to)</th><th>Correct target</th><th>Notes</th></tr>
+  <tr><td>1</td><td><code>/on-premises/bare-metal-provisioning/</code> — from <code>k8s/bridges/onprem-readiness.md</code> (×3) + <code>ai-ml-engineering/bridges/home-lab-to-private-ai-infra.md</code> (×2)</td><td><code>/on-premises/provisioning/</code> (dir is <code>provisioning</code>, titled "Bare Metal Provisioning")</td><td><strong>Cross-track sibling cluster (5 links, 2 files).</strong> Link text is fine; only the URL is wrong.</td></tr>
+  <tr><td>2</td><td><code>.../deep-learning/module-1.4-training-deep-networks/</code> — from <code>deep-learning/module-1.3-training-neural-networks.md:1125</code></td><td><code>module-1.4-cnns-computer-vision</code></td><td>Next-link names a module that doesn't exist; real 1.4 is CNNs. Text must be rewritten.</td></tr>
+  <tr><td>3</td><td><code>/platform/k8s/cca/module-1.1-advanced-cilium/</code> — from <code>platform/foundations/ebpf/module-1.2-...:581</code></td><td><code>/k8s/cca/module-1.1-advanced-cilium/</code> (wrong path prefix)</td><td>The only one <code>check_site_health</code> already warns on.</td></tr>
+  <tr><td>4</td><td><code>.../cks/.../module-2.3-pod-security-standards/</code> — from <code>cks/.../module-2.2-serviceaccount-security.md:795</code></td><td><code>module-2.3-api-server-security</code></td><td>Drift; text describes a different module.</td></tr>
+  <tr><td>5</td><td><code>/on-premises/security/module-6.8-compliance-and-audit/</code> — from <code>on-premises/security/module-6.7-policy-as-code.md:612</code></td><td><code>module-6.8-zero-trust-architecture</code></td><td>Drift.</td></tr>
+  <tr><td>6</td><td><code>/on-premises/security/module-6.6-advanced-service-mesh-authorization/</code> — from <code>on-premises/security/module-6.5-workload-identity-spiffe.md:509</code></td><td><code>module-6.6-secrets-management-vault</code></td><td>Drift.</td></tr>
+  <tr><td>7</td><td><code>/on-premises/ai-ml-infrastructure/module-9.2-advanced-topology-rdma-fabrics/</code> — from <code>on-premises/ai-ml-infrastructure/module-9.1-gpu-nodes-accelerated.md:1028</code></td><td><code>module-9.2-private-ai-training</code></td><td>Drift.</td></tr>
+  <tr><td>8</td><td><code>/linux/security/hardening/module-4.2-apparmor-profiles/</code> — from <code>linux/security/hardening/module-4.1-kernel-hardening.md:770</code></td><td><code>module-4.2-apparmor</code></td><td>Slug mismatch (<code>apparmor-profiles</code> vs <code>apparmor</code>).</td></tr>
+</table>
+<p><strong>Pattern:</strong> these are "next module" links written when a sibling had a planned name, then never updated when the module was renamed/replaced. Astro/Starlight does not fail the build on dead internal markdown links, so they are <strong>live 404s on the site</strong>.</p>
+
+<h2>#1639 residuals — dispositioned</h2>
+<table>
+  <tr><th>Residual</th><th>Status</th></tr>
+  <tr><td>Goal item 4 — context-engineering coverage</td><td><span class="ok">RESOLVED — no gap.</span> Foundations 2.1–2.4 (Context Fundamentals, Repository Engineering for Agents, Retrieval/Tools/Memory Boundaries, Dynamic Context Orchestration) are all substantial (7.1k / 9.4k / 9.0k / 9.2k words). Context engineering is thoroughly covered.</td></tr>
+  <tr><td><code>frameworks-agents/1.3-langgraph</code> T0 density</td><td><span class="p2">CARRY-FORWARD FIX.</span> 1520 prose words, 2 sources, Did-You-Know=3, section order wrong → fails T0 (stays T3). Pre-existing (was T3 as the mis-filed 1.4 body). Needs a single <code>draft</code>-class codex pass: expand prose to ≥5000, add ≥10 sources, reorder sections (Did-You-Know after core, Hands-On after Quiz), Did-You-Know→4.</td></tr>
+</table>
+
+<h2>Tooling gap (recommend fixing — prevents the whole class)</h2>
+<p><code>scripts/check_site_health.py</code> checked 4799 links but flagged only 1 of the 8 dangling targets above; <code>check_links.py</code> crawled just 42 pages (it follows links from the homepage, so deep modules are never reached). <strong>Recommendation:</strong> add a static absolute-internal-link validator (resolve each <code>](/...)</code> against the known slug set + <code>astro.config</code> redirects — exactly the ~30-line scan this audit used) and run it in CI. This converts dangling-link drift from "silent 404" to "build/CI failure," preventing recurrence.</p>
+
+<h2>Recommended next actions (ranked)</h2>
+<ol>
+  <li><strong>Fix the 8 dangling links</strong> (one bounded sweep — repoint URL + rewrite the next-link sentence to the actual module). Cross-track, so route to one bug-fixer dispatch (cursor/composer-2.5) with this table as the spec. Sibling-aware: target #1 appears in 2 files.</li>
+  <li><strong>Harden <code>check_site_health.py</code></strong> with the absolute-internal-link validator + wire into CI (prevents recurrence).</li>
+  <li><strong>1.3-LangGraph T0 upgrade</strong> (the #1639 carry-forward) — one <code>draft</code>-class codex pass.</li>
+  <li><strong>Phase 2 — widen the deep dimensions</strong> beyond AI: repo-wide orphaned-from-nav reachability (sidebar-walk script) + duplicate/scattered-content analysis on the cert + platform + cloud tracks.</li>
+</ol>
+
+<h2>Method</h2>
+<ul>
+  <li>Module enumeration + per-section counts (<code>find</code>).</li>
+  <li>Title-vs-body mismatch: per-module title-content-word frequency in body, ranked ascending (147 AI modules); near-zero key-term cases verified by reading.</li>
+  <li>Stub scan: grep "has moved" phrasings + files &lt;60 words; cross-checked against <code>astro.config</code> redirects.</li>
+  <li>Orphaned-nav: content dirs vs <code>autogenerate</code> directories in <code>astro.config.mjs</code>.</li>
+  <li>Broken links: extracted every absolute <code>](/...)</code> link repo-wide, resolved against the full slug set (frontmatter <code>slug:</code> + path-derived) + redirect sources; correct targets resolved by listing real sibling modules.</li>
+</ul>
+
+</body>
+</html>
