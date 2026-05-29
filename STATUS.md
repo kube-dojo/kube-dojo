@@ -74,6 +74,7 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (64 dated
 - [x] ~~Trim MEMORY.md~~ — DONE session 69 (211→197 lines; closed AI-history book cluster consolidated into `project_ai_history_book_closed`).
 - [ ] **citation_backfill REPO_ROOT pinning** — writes to PRIMARY repo dir regardless of `cd`; add `--repo-root` arg or document the worktree-local copy pattern.
 - [ ] **inject step `rewrites_disabled_pending_redesign`** — root cause of #1634; design pass.
+- [ ] **Investigate headless-claude "Prompt is too long" (user-requested 2026-05-29)** — `dispatch_smart edit --agent claude` fails instantly; the headless `npx claude-code` loads every connected MCP server's tool schemas and overflows. Lead: the adapter (`scripts/agent_runtime/adapters/claude.py:169-172,181`) already supports `--mcp-config`/`--allowedTools`/`--exclude-dynamic-system-prompt-sections`, but `dispatch_smart.py` doesn't pass them for write classes. Fix: pass a minimal `.mcp.json` + tight `--allowedTools` (and/or always `--exclude-dynamic-system-prompt-sections`) for `--agent claude`. Repro + full notes in memory `feedback_claude_headless_mcp_prompt_bloat`.
 - [ ] **#1620** dispatch_smart cwd default for codex review · **#1609** author real Neural Network Fundamentals module · **#1504** backfill cadence (resume 3-5/session) · **#1350** agy migration (deadline 2026-06-18) · **#393** AI/ML history depth pass · **#373** Phase 2/3 (defer until content clears).
 
 **Date-bound:**
