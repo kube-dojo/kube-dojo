@@ -20,6 +20,7 @@ After completing this module, you will be able to:
 - **Implement** least-privilege access for workloads accessing cloud services, such as object storage and databases, directly from ephemeral pods.
 - **Diagnose** IAM-to-Kubernetes authentication failures across trust policy boundaries, OIDC provider configurations, and annotation misconfigurations.
 - **Evaluate** the security posture of existing cluster credential management systems and migrate static secrets to ephemeral federated identities without workload downtime.
+- **Compare** AWS, GCP, and Azure workload-identity mechanisms and **choose** when a SPIFFE/SPIRE bridge is warranted for multi-cloud identity.
 
 ## Why This Module Matters
 
@@ -495,6 +496,128 @@ metadata:
   labels:
     azure.workload.identity/use: "true"
 ```
+
+## The Cross-Cloud Rosetta: One Trust Chain, Three Clouds
+
+Across the three vendor implementations you just learned, the shape is the same even when the configuration surface looks different:
+
+1. A pod is bound to a Kubernetes ServiceAccount.
+2. That ServiceAccount gets a projected service-account JWT (`sub`, `iss`, `aud`, expiry) at startup.
+3. The cloud provider verifies the projected token against a trusted cluster-issued OIDC identity path.
+4. A short-lived workload-scoped cloud identity is issued.
+5. The workload uses that identity to call cloud APIs, then repeats the exchange when credentials rotate.
+
+In other words, each provider implements the same trust choreography but with different operational APIs. The only useful comparison is where policy lives and how many moving parts you must maintain.
+
+### The Cross-Cloud Rosetta Table
+
+| Mechanism | AWS IRSA | AWS EKS Pod Identity | GCP Workload Identity | Azure Workload Identity |
+|---|---|---|---|---|
+| **Trust anchor** | Per-cluster OIDC provider object in AWS IAM | EKS control-plane trust via Pod Identity associations | GKE-managed identity pool issuer and provider binding to Google IAM | Azure AD token exchange trust with AKS OIDC issuer + Entra app identity |
+| **SA→identity binding declaration** | ServiceAccount annotation (`eks.amazonaws.com/role-arn`) + IAM trust policy on the role | API-managed association (`aws eks create-pod-identity-association`) linking namespace + ServiceAccount | ServiceAccount annotation (`iam.gke.io/gcp-service-account`) + IAM binding of `roles/iam.workloadIdentityUser` | ServiceAccount annotation (`azure.workload.identity/client-id`) + Entra `federatedIdentityCredential` for subject binding |
+| **Token audience** | `sts.amazonaws.com` (validated in IAM role trust policy) | Same projected token semantics; the exchange still relies on OIDC trust constraints | Identity provider/STS audience defined in the Workload Identity pool/provider configuration | `api://AzureADTokenExchange` as commonly defined in federated credential |
+| **Where creds are exchanged** | AWS STS `AssumeRoleWithWebIdentity` | EKS Pod Identity Agent mediates exchange for AWS credentials | Google Security Token Service and Workload Identity Federation with Google IAM credentials | Azure STS/OAuth token exchange to obtain Entra access token for the target scope |
+| **Credential lifetime & rotation** | Temporary AWS credentials (often minutes-to-hour, automatically rotated by workload refresh logic) | Same short-lived model with central EKS agent handling association and refresh patterns | Temporary Google access credentials/impersonation token with frequent refresh via token exchange | Short-lived Entra tokens, rotated through workload identity token exchange on demand |
+| **Scale friction** | OIDC provider trust and trust-policy statements must scale per cluster/application shape | Better operational scaling due to API associations managed separately from role trust text | Requires mapping discipline between Kubernetes subjects and service accounts across projects/pools | Scales via workload identity settings and federated credentials, but object sprawl can grow across many teams/clusters |
+
+### How to read the table under pressure
+
+When onboarding a new environment, this table helps you compare three immediate outcomes:
+
+- **Ownership surface**: who maintains trust definitions and who can change them.
+- **Binding mechanism**: whether policy is annotation-first, association-first, or federated-credential-first.
+- **Scale burden**: whether adding a new workload mostly changes Kubernetes manifests, IAM metadata, or both.
+
+In other words, this is less about which vendor has the best feature and more about which operational system your team can run without identity debt in six months.
+
+A practical way to consume this table is to ask three questions every time you add a new workload:
+
+1. **How will the identity-binding statement be added** (annotation, association, or external object)?
+2. **Where does trust logic live** (inside IAM policy files, per-cluster controllers, or identity platform metadata)?
+3. **What grows first**: role statements, service bindings, or federation objects?
+
+If the answer to the third question is "everything grows everywhere", you likely need a stronger ownership model before adding more workloads.
+
+Here is the same idea as a compact mapping:
+
+```text
+AWS IRSA            => explicit per-role trust conditions and per-cluster OIDC state
+EKS Pod Identity    => per-cluster association API, centralized at EKS layer
+GCP Workload Identity => provider/namespace mappings in IAM + annotation-driven links
+Azure Workload ID   => ServiceAccount annotation + Entra federated credential objects
+```
+
+### Which model would you choose here?
+
+> **Pause and predict**: You are launching a shared service platform with one big EKS cluster and a small burst of AKS and GKE test clusters. Should you default to IRSA, Pod Identity, GCP Workload Identity, or Azure Workload Identity per environment? What management burden should you expect if every service has a unique access boundary?
+
+## Beyond One Cloud: The SPIFFE/SPIRE Bridge
+
+Native workload identity is excellent inside a single cloud provider, but it usually ends at that cloud boundary. When workloads must act across AWS, GCP, Azure, and on-prem together, you often need a common identity abstraction.
+
+SPIFFE/SPIRE provides that abstraction:
+
+- **SPIFFE ID**: a stable workload identity URI, e.g. `spiffe://platform.example/ns/order-api/sa/api`.
+- **SVID**: a workload proof of identity, emitted as either:
+  - **X.509-SVID** for mTLS identities between workloads.
+  - **JWT-SVID** for assertion-style flows and federated token exchange.
+- **SPIRE server + SPIRE agent**: the server stores trust policy and root CA material, agents run on nodes, attest identities, and hand out SVIDs.
+- **Node attestation**: validates node identity before workloads are trusted.
+- **Workload attestation**: validates workload identity selectors (`sa`, `namespace`, image, label) before issuing SVIDs.
+- **Trust domains + federation**: lets multiple SPIFFE domains trust each other so workloads keep identity semantics while moving across environments.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Pod as Kubernetes Pod (Any Cloud)
+    participant Agent as SPIRE Agent
+    participant Server as SPIRE Server
+    participant Cloud as Cloud IAM OIDC Provider
+
+    Pod->>Agent: Node + workload attestation evidence
+    Agent->>Server: Verify node and workload selectors
+    Server-->>Agent: Issue JWT-SVID / X.509-SVID
+    Pod->>Agent: Retrieve SVID
+    Pod->>Cloud: Present SVID via OIDC-style exchange
+    Cloud-->>Pod: Issue cloud-scoped temporary credentials
+```
+
+SPIRE becomes the bridge when cloud identity and workload identity must be one source of truth:
+
+- Workload-to-workload traffic in a service mesh can use SPIFFE X.509-SVID-based mTLS.
+- Workload-to-cloud calls can exchange SPIFFE JWT-SVIDs into each cloud's OIDC trust path to assume native cloud roles.
+
+That gives you a useful split:
+
+- **SPIRE/SPIRE** defines **who** a workload is across any cluster.
+- **Cloud IAM** still decides **what** that workload is allowed to do.
+
+This separation is subtle but powerful. If you force one layer to do both, you often leak assumptions between architecture layers.
+
+### What SPIFFE/SPIRE does *not* solve by itself
+
+- **Downstream IAM policy quality**: SPIRE can only carry identity; it cannot prevent you from attaching overly broad cloud roles.
+- **Kubernetes namespace hardening**: compromised namespaces and overly permissive RBAC are still real risks.
+- **Operational burden elimination**: SPIRE creates its own trust root, upgrade lifecycle, and incident workflows.
+
+Many teams therefore start with a strict "single cluster trust boundary" proof and expand only when business need appears.
+
+### Practical rollout pattern
+
+1. Keep native cloud WI as the baseline for each individual cloud.
+2. Introduce SPIRE only where a service requires:
+   - workload-to-workload mTLS across runtimes, or
+   - identical identity semantics between cloud + cloud/on-prem.
+3. Add a narrow set of federated audiences and restrict where JWT-SVIDs can be exchanged.
+4. Enforce policy that maps SPIFFE SVID claims to least-privilege cloud roles.
+
+**Trade-off paragraph**: SPIFFE/SPIRE lowers cross-environment identity fragmentation, but you pay for another critical control plane. You need agent rollout, key rotation hygiene, attestation hardening, and policy governance that spans environments. If your platform has only one cloud and simple cloud API needs, native WI stays simpler and often lower risk.
+
+**Mini decision guide**:
+- Use native cloud WI when workload identity is single-cloud and you mainly need cloud API federation.
+- Add SPIFFE/SPIRE when you need consistent identity semantics across cloud boundaries or workload-to-workload mTLS everywhere.
+
+> **Which would you choose here?** If your organization adds five new clusters across two cloud providers plus on-prem within a quarter, would you ship SPIFFE/SPIRE first or keep native WI and add a sidecar identity layer later? Explain the failure mode you fear most from each choice.
 
 ## Auditing Cloud API Calls Back to Pods
 
@@ -997,6 +1120,32 @@ aws cloudtrail lookup-events \
 ```
 </details>
 
+### Task 5 (Optional): Trace the Same Trust Chain Across Clouds (Pen and Paper)
+
+Using the rosetta table above, trace one workload through AWS IRSA, GCP Workload Identity, and Azure Workload Identity.
+
+1. What identity artifact starts inside the pod?
+2. Which trust component validates it?
+3. Which exchange endpoint returns temporary credentials?
+4. Which part gets hardest to operate at scale?
+
+<details>
+<summary>Solution</summary>
+
+- The starting artifact is still the projected Kubernetes ServiceAccount JWT in all three vendors, but the binding model differs:
+  - IRSA: SA annotation + IAM trust policy.
+  - GCP: `iam.gke.io/gcp-service-account` with IAM `roles/iam.workloadIdentityUser` binding.
+  - Azure: `azure.workload.identity/client-id` annotation plus Entra federated credential subject mapping.
+- Validation happens through different trust components, but always with OIDC-based claims checks:
+  - IRSA uses IAM role trust policy checks.
+  - GCP and Azure use Workload Identity pool/provider and federated credential validation flows.
+- Exchanges are cloud-specific but equivalent in outcome:
+  - AWS: STS token exchange.
+  - GCP: Google STS / IAM token exchange.
+  - Azure: Entra token exchange for API-scoped credentials.
+- Scale risk usually appears in binding sprawl and audit correlation, which is why a normalized comparison and strict selector governance are important before multi-cloud expansion.
+</details>
+
 ### Success Criteria
 
 - [ ] Designed one granular IAM role per service with enforced least-privilege permissions.
@@ -1013,6 +1162,10 @@ aws cloudtrail lookup-events \
 ## Sources
 
 - [kubernetes.io: secret](https://kubernetes.io/docs/concepts/configuration/secret/) — The Kubernetes Secrets documentation explicitly distinguishes Secret storage from simple base64 encoding and recommends stronger handling for sensitive data.
+- [SPIFFE specification](https://spiffe.io/docs/latest/spiffe-specs/spiffe/) — Defines SPIFFE ID and SPIFFE specification building blocks used for portable workload identity.
+- [SPIRE about](https://spiffe.io/docs/latest/spire-about/) — Explains SPIRE components, agent/server workflow, and workload attestation for practical deployment.
+- [SPIFFE Federation spec](https://spiffe.io/docs/latest/spiffe-specs/spiffe_federation/) — Describes trust-domain federation and interoperability between SPIFFE trust domains.
+- [SPIFFE keyless OIDC federation (AWS)](https://spiffe.io/docs/latest/keyless/oidc-federation-aws/) — Documents OIDC token flow patterns for workload identity federation.
 - [docs.aws.amazon.com: iam roles for service accounts.html](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — The EKS IRSA documentation states that each cluster has a public OIDC discovery endpoint with signing keys for projected service account tokens.
 - [kubernetes.io: service accounts admin](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/) — The Kubernetes service account administration docs describe bound projected tokens, TokenRequest, default lifetimes, and pod-scoped claims.
 - [docs.aws.amazon.com: iamserviceaccounts.html](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html) — The eksctl IRSA guide documents injection of `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` and notes that recent SDKs use them.
