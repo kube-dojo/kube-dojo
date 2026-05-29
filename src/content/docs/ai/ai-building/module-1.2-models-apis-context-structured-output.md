@@ -28,6 +28,8 @@ A strong AI product is designed around that mismatch, and the builder chooses a 
 
 It then introduces structured output because software needs contracts, and it finishes with the validation layer because structured output without validation is just a better-looking failure.
 
+> **Go deeper:** For end-to-end context engineering (budgets, retrieval boundaries, and orchestration), see [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/).
+
 ## Model Choice Is Product Design
 
 Model choice is not only an infrastructure decision, and it changes the user experience, and it changes cost. It changes latency, and it changes how often the application needs fallback behavior, and it changes which tasks should be automated and which tasks should pause for review. A model that is excellent for a slow, high-stakes analysis may be a poor choice for inline autocomplete. A model that is excellent for cheap classification may be a poor choice for debugging a multi-step incident report.

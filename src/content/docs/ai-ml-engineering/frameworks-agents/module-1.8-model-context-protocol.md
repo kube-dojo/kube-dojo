@@ -17,6 +17,8 @@ This incident highlighted the extreme fragility of treating tool integration as 
 
 The Model Context Protocol (MCP) fundamentally solves this problem by introducing a standardized, open-source architecture for connecting AI models to data sources and tools. By decoupling the client (the model or agent) from the server (the data or tool provider), MCP allows developers to build robust, reusable integrations that work seamlessly across different models and platforms. Understanding and implementing MCP is no longer an optional optimization; it is the foundational requirement for building secure, scalable, and maintainable AI agent architectures in the modern enterprise landscape. It represents the shift from artisanal prompt engineering to rigorous systems engineering in the AI domain.
 
+> **Go deeper:** MCP is one harness integration surface; for layers, system-of-record, and operating the loop around tools, see [Harness Fundamentals](/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/).
+
 ## Learning Outcomes
 
 Upon completing this module, you will be able to:

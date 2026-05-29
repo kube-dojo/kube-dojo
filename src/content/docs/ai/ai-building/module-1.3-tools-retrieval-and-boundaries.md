@@ -37,6 +37,8 @@ Real practitioners separate two questions that beginners often merge: what does 
 
 This module teaches you to keep those questions separate. You will classify product briefs, climb a capability ladder gradually, evaluate tool boundaries before exposure, and debug failures by locating the layer that introduced them. The goal is not to avoid powerful systems; the goal is to earn power one boundary at a time, with enough evidence that each promotion is justified.
 
+> **Go deeper:** For the canonical treatment of retrieval, tools, and memory boundaries in production agents, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/).
+
 ## The Real Distinction: Knowledge Versus Capability
 
 The first thing to internalize is that "give the model more power" is not a single design decision. It is at least two decisions stacked on top of each other, and they have very different risk profiles. Knowledge expands what the model has in its working context when it answers: documents, snippets, search results, embeddings of internal data, or explicit facts returned by a trusted retriever. Capability expands what happens outside the chat as a side effect of the model's response: a function called, a row written, a ticket closed, an email sent, or a Kubernetes object changed. Treating those as the same lever is the architectural mistake that turns a promising assistant into an incident waiting for a prompt.

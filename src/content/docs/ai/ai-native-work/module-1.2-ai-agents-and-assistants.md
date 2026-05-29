@@ -31,6 +31,8 @@ This module gives you a practical vocabulary for that decision. You will separat
 
 The important habit is to define the workflow before choosing the tool. A mature team does not ask whether it can use an agent everywhere. It asks where delegated action reduces toil, where bounded tool use improves feedback, and where human review remains the cheapest control. That discipline keeps AI-native work from turning into either fear of automation or blind trust in automation.
 
+> **Go deeper:** For harness layers, system-of-record, and how agent loops sit inside controlled runtimes, see [Harness Fundamentals](/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/).
+
 ## The Autonomy Spectrum
 
 People often use the words chatbot, assistant, copilot, and agent as if they were interchangeable. They are related, but they are not the same operational pattern. The difference is not whether a model is impressive or whether the interface looks conversational. The difference is who drives the loop, which context enters the system, which tools can be called, and what happens after the model produces an answer.

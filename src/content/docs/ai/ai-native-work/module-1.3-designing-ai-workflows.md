@@ -30,6 +30,8 @@ That difference matters because the real value of AI usually comes from workflow
 
 In this module, you will design workflows the way an engineer designs a production path: define the input, shape the context, constrain the output, verify the result, revise when the result fails, and assign responsibility before anything important changes state. You will not learn a magic prompt that fixes every task. You will learn a repeatable design method for deciding where AI belongs, where it should stop, and what evidence must exist before a person or system trusts its output.
 
+> **Go deeper:** When workflows graduate to multi-agent orchestration and fleet-scale coordination, see [Symphony](/ai/ai-engineering-foundations/module-4.1-symphony-work-orchestration-as-applied-harness/) in the engineering-foundations spine.
+
 ## From Prompting to Workflow Design
 
 A workflow is not "a lot of prompts." A workflow is a repeatable structure for moving from an input, through a sequence of steps, toward an output, with clear ownership and verification. That definition sounds simple, but it is the line between casual AI usage and operational AI usage. A casual prompt can be helpful when you are exploring ideas alone. A workflow is what you need when another person must repeat the process, review the result, or depend on the output later.
