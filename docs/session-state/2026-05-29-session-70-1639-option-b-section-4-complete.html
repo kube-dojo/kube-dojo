@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 70 — #1639 Option B §4 complete (stub retirement + frameworks scramble + LlamaIndex)</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 860px; margin: 2em auto; padding: 0 1em; line-height: 1.5; }
+  h1, h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.15em; margin-top: 1.5em; }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #f4f4f4; padding: 0.8em; border-radius: 4px; overflow-x: auto; font-size: 0.85em; }
+  table { border-collapse: collapse; margin: 0.5em 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.9em; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .meta { color: #666; font-size: 0.9em; }
+  .ok { color: #137333; font-weight: bold; }
+  .warn { background: #fce8e6; color: #c5221f; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; }
+  .todo { color: #b06000; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Session 70 — #1639 Option B §4 complete</h1>
+<p class="meta">Date: 2026-05-29 · Predecessor: <a href="2026-05-29-session-69-1639-option-b-execution.html">session 69</a> · Model: claude-opus-4-8[1m] · Mode: interactive, "orientate and continue from last session handoff"</p>
+
+<h2>One-line</h2>
+<p>Finished the destructive + net-new-authoring tail of the user-approved <strong>#1639 Option B</strong> consolidation. <strong>3 PRs merged</strong> (#1649 stub-retirement, #1650 frameworks 1.3/1.4 scramble + ReAct port, #1651 net-new LlamaIndex module). All gates green on main; both reconciled modules cross-family reviewed by composer-2.5. #1639's structural consolidation (goal items 1–3) is now <span class="ok">done</span>; two residuals (1.3 density upgrade + context-engineering gap-check) folded into the queued curriculum audit, so #1639 stays open.</p>
+
+<h2>Cold-start went clean this time</h2>
+<p>Per the new <code>feedback_cold_start_sync_origin_main</code> memory, synced local main with origin <em>before</em> trusting the briefing (was 2 commits behind — session-69 handoff). No re-done audits, no re-burned dispatches. The approved Option B brief (<code>docs/decisions/2026-05-29-1639-ai-engineering-consolidation.md</code> §4) was the spec; I verified its title/content-scramble claim against actual ref-counts before executing.</p>
+
+<h2>What landed (all merged to main)</h2>
+<table>
+  <tr><th>PR</th><th>What</th><th>Author → Reviewer</th></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1649">#1649</a></td><td><strong>§4(a) stub retirement:</strong> deleted 3 inert "moved" stubs (ai-native-work 2.1/2.2, ai-native-development 1.6), added 3 Starlight <code>redirects</code> keeping the old slugs alive, dropped the redundant 1.6 index row. Sidebar is autogenerate → auto-removed from nav.</td><td>orchestrator (inline) → CI gemini pass</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1650">#1650</a></td><td><strong>§4(b/c) frameworks scramble:</strong> moved the mis-filed LangGraph course body into <code>module-1.3-langgraph-for-agents</code> (was teaching reasoning); ported the unique ReAct material into foundations <code>module-1.2-reasoning-and-logic-prompts</code> (had zero ReAct coverage). 1.2 stays <span class="ok">T0 PASS</span>.</td><td>codex gpt-5.5 → composer-2.5 APPROVE_WITH_NITS (fixes applied)</td></tr>
+  <tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1651">#1651</a></td><td><strong>§4(d) LlamaIndex:</strong> authored the genuinely-missing LlamaIndex teaching module into <code>module-1.4-llamaindex</code> (5292 words, <span class="ok">T0 PASS</span>, v0.10+ namespaced API verified, 12 live sources). Teaching-only, no labs (#386 split).</td><td>codex gpt-5.5 → composer-2.5 NEEDS_CHANGES → fixed → green</td></tr>
+</table>
+
+<h2 class="warn">Two things worth knowing</h2>
+<p><strong>1. The codex "post-write hang" is the edit-class timeout (new memory).</strong> The §4(b/c) <code>edit --model gpt-5.5</code> dispatch was <strong>SIGKILLed (rc=-9) at the 1800s edit timeout</strong> after finishing all edits but before <code>git commit</code>. The work was intact in the worktree — I verified completeness with <code>verify_module.py</code> + read the diff, then committed it myself. The §4(d) <code>draft</code>-class dispatch (3600s) committed fine and did NOT hang → it's the timeout, not a freeze. Memory: <code>feedback_codex_sigkill_at_timeout_recover_from_worktree</code> (use <code>draft</code> class or <code>--timeout 3600</code> for large multi-file edits).</p>
+<p><strong>2. Caught + fixed a regression.</strong> While porting ReAct into foundations 1.2, codex over-added a 9th Common Mistakes row + 9th quiz question, breaking the 6-8 caps that 1.2 passed at base. Reverted both over-additions (ReAct teaching section retained); 1.2 back to T0 PASS. composer-2.5 R1 then smoke-tested the LangGraph snippets against langgraph 1.2.2 and found 2 real runnability bugs (<code>SqliteSaver</code>/<code>PostgresSaver.from_conn_string</code> are context managers) + a placeholder ROI table — all fixed before merge.</p>
+
+<h2>A quality call made on the user's behalf (confirm if you disagree)</h2>
+<p>The LangGraph body moved into 1.3 is pedagogically complete (6 sections, code, quiz, exercise) but <strong>prose-light by current standards</strong> — 1520 body words, 2 sources → fails the T0 density gate, staying <strong>T3</strong>. It was T3 <em>before</em> too (as the mis-filed 1.4 body), so the move is not a regression. The approved §4 plan said "move the strong body," not "rewrite to T0." I <strong>shipped the move as-is</strong> and logged the density upgrade for the audit. If the user wants a T0 rewrite of 1.3 folded in instead, it's a single codex <code>draft</code> dispatch (expand prose to 5000+, add sources, reorder sections, Did-You-Know→4).</p>
+
+<h2>#1639 status vs the approved plan</h2>
+<table>
+  <tr><th>Goal item</th><th>Status</th></tr>
+  <tr><td>1. Make ai-engineering-foundations canonical (sidebar)</td><td class="ok">DONE (#1642 s69, #1649 s70 redirects)</td></tr>
+  <tr><td>2. Audit + dedupe (prompt-fundamentals duplicates)</td><td class="ok">DONE (1.6 stub retired + redirect)</td></tr>
+  <tr><td>3. Fold/cross-link strays + fix scramble</td><td class="ok">DONE (#1644/#1646 s69, #1650 s70)</td></tr>
+  <tr><td>4. Context-engineering gap-check (foundations 2.1–2.4)</td><td class="todo">RESIDUAL → curriculum audit</td></tr>
+  <tr><td>(residual) 1.3 LangGraph T0 density upgrade</td><td class="todo">RESIDUAL → curriculum audit</td></tr>
+</table>
+
+<h2 class="todo">NEXT SESSION — options (user to direct)</h2>
+<ol>
+  <li><strong>The "more serious curriculum audit"</strong> (briefing focus #2, user 2026-05-29). Scope it as its own phase with a written report: hunt mislabeled modules (title vs body), scattered/duplicate teaching content, dead/moved stubs not wired to redirects, broken internal links, orphaned-from-nav sections. Start with the AI tracks (where this scramble surfaced), then widen. The two #1639 residuals above (1.3 density, context gap-check) fold into this.</li>
+  <li><strong>G5 #1627 + G6 #1628</strong> gap-fill (teaching content; codex author → composer-2.5 R1; keep codex ≤2 concurrent). G4 #1626 gated on modules 9.4/1.5/3.1 rubric ≥3; G2 #1623 gated until Platform Foundations critical &lt; 20.</li>
+  <li><strong>Headless-claude "Prompt is too long"</strong> (briefing, user-requested) — pass minimal <code>.mcp.json</code> + tight <code>--allowedTools</code> for <code>--agent claude</code> write classes; lead in <code>scripts/agent_runtime/adapters/claude.py</code>.</li>
+</ol>
+
+<h2>Carried tech-debt (non-#1639)</h2>
+<ul>
+  <li>citation_backfill REPO_ROOT pinning; inject-step <code>rewrites_disabled_pending_redesign</code> (root cause of #1634).</li>
+  <li>#1350 agy migration — deadline 2026-06-18.</li>
+  <li>git hygiene: 2 prunable worktrees remain (<code>session-68-handoff</code>, <code>todo-ptl</code>) + prunable branches — run <code>git cleanup-merged</code>.</li>
+</ul>
+
+<h2>Agent usage this session</h2>
+<p>codex gpt-5.5 (§4 b/c reconcile + d LlamaIndex author + d fix-pass), composer-2.5/cursor (2× R1 cross-family review per Decision Card C). Orchestrator inline: §4(a) config + the 1.2 regression revert + the §4(b/c) R1-delta fixes (small reviewer-delta application, not authoring). 3 PRs, ~7 dispatches total — within the ≤2-concurrent-codex and review-burst caps.</p>
+
+</body>
+</html>
