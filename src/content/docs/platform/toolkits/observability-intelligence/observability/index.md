@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "Observability"
 ---
-> **Toolkit Track** | 11 Modules | ~8 hours total
+> **Toolkit Track** | 12 Modules | ~9 hours total
 
 ## Overview
 
@@ -35,6 +35,7 @@ Before starting this toolkit:
 | 1.9 | [Continuous Profiling](module-1.9-continuous-profiling/) | `[MEDIUM]` | 40 min |
 | 1.10 | [SLO Tooling](module-1.10-slo-tooling/) | `[MEDIUM]` | 40 min |
 | 1.11 | [eBPF Tracing Tools](module-1.11-ebpf-tracing-tools/) | `[MEDIUM]` | 50 min |
+| 1.12 | [OpenTelemetry Collector at Production Scale](module-1.12-otel-collector-production/) | `[COMPLEX]` | 60 min |
 
 ## Learning Outcomes
 
@@ -51,6 +52,7 @@ After completing this toolkit, you will be able to:
 9. **Read continuous profiles** — Parca and Pyroscope flame graphs for code-level resource analysis
 10. **Manage SLO tooling** — Sloth, Pyrra, and OpenSLO workflows for error-budget operations
 11. **Run ad-hoc eBPF tracing tools** — bpftrace, BCC, and Inspektor Gadget for on-demand debugging
+12. **Operate the Collector at fleet scale** — Operator-managed topologies, tail sampling, cardinality control, and multi-tenancy
 
 ## The Observability Stack
 
