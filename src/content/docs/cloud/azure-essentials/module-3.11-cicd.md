@@ -4,11 +4,11 @@ slug: cloud/azure-essentials/module-3.11-cicd
 sidebar:
   order: 12
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.6 (ACR), Module 3.7 (Container Apps), Module 3.1 (Entra ID)
-
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.6 (ACR), Module 3.7 (Container Apps), Module 3.1 (Entra ID)
+
+When you finish this module, you will be able to design, secure, and operate CI/CD pipelines that build container images and deploy them to Azure using either Azure DevOps Pipelines or GitHub Actions. The learning outcomes below map directly to the hands-on exercise and quiz, so you can verify each skill as you go.
 
 - **Design multi-stage CI/CD pipelines incorporating container builds and release approvals for platforms like Azure DevOps and GitHub Actions**
 - **Configure GitHub Actions workflows with Azure login, container builds, and Container Apps deployment steps**
@@ -29,11 +29,11 @@ In this module, you will learn how to build secure CI/CD pipelines targeting Azu
 
 ## Azure DevOps Pipelines
 
-Azure DevOps is Microsoft's integrated DevOps platform providing [source control (Azure Repos), CI/CD (Azure Pipelines), project management (Boards), artifact management (Artifacts), and testing (Test Plans)](https://learn.microsoft.com/en-us/azure/devops/).
+Azure DevOps is Microsoft's integrated DevOps platform providing [source control (Azure Repos), CI/CD (Azure Pipelines), project management (Boards), artifact management (Artifacts), and testing (Test Plans)](https://learn.microsoft.com/en-us/azure/devops/). Teams that already standardize on Microsoft tooling often choose Azure DevOps because source control, pipelines, and release management live in one project boundary, which simplifies permissions and audit trails compared with stitching together separate products.
 
 ### Pipeline Basics
 
-Azure Pipelines uses YAML files (typically `azure-pipelines.yml`) to define build and deployment workflows. A pipeline consists of [**stages**, **jobs**, and **steps**](https://learn.microsoft.com/en-us/azure/devops/pipelines/yaml-schema/?view=azure-pipelines).
+Azure Pipelines uses YAML files (typically `azure-pipelines.yml`) to define build and deployment workflows. A pipeline consists of [**stages**, **jobs**, and **steps**](https://learn.microsoft.com/en-us/azure/devops/pipelines/yaml-schema/?view=azure-pipelines). Stages group related work (for example, build versus deploy), jobs run on an agent pool within a stage, and steps are the individual tasks such as checking out code or pushing an image. In practice, you express the entire delivery path in one version-controlled file so every change to the pipeline itself goes through the same review process as application code.
 
 ```mermaid
 graph TD
@@ -130,9 +130,11 @@ stages:
                     imageToDeploy: '$(acrName).azurecr.io/$(imageName):$(tag)'
 ```
 
+The example above follows a common multi-stage pattern: a Build stage produces and pushes a tagged image to ACR, DeployStaging rolls that image into a non-production Container App, and DeployProduction waits for staging to succeed before targeting production. Deployment jobs reference named environments (`staging`, `production`) so Azure DevOps can enforce [manual approval checks](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/approvals?view=azure-devops) on the production environment without embedding approval logic in YAML. Path filters on the trigger keep documentation-only commits from kicking off full builds, which saves agent minutes on large monorepos.
+
 ### Service Connections (OIDC/Workload Identity Federation)
 
-Service Connections are how Azure DevOps authenticates with Azure. The modern approach uses [**Workload Identity Federation** (OIDC)](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/configure-app-secret?view=azure-devops), which eliminates client secrets entirely.
+Service Connections are how Azure DevOps authenticates with Azure. The modern approach uses [**Workload Identity Federation** (OIDC)](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/configure-app-secret?view=azure-devops), which eliminates client secrets entirely. Instead of storing a client secret that a compromised pipeline could exfiltrate, the pipeline requests a short-lived OIDC token from Azure DevOps and exchanges it with Entra ID for an Azure access token scoped to the service connection's RBAC assignment.
 
 ```mermaid
 flowchart TD
@@ -147,7 +149,7 @@ flowchart TD
     end
 ```
 
-To create a Workload Identity Federation service connection in Azure DevOps:
+To create a Workload Identity Federation service connection in Azure DevOps, use the project settings UI or replicate the same trust relationship manually with the Azure CLI commands below. The UI path is usually faster because Azure DevOps creates the app registration and federated credential for you, but understanding the manual steps helps when you need custom scopes or when automating tenant bootstrap.
 
 1. Go to Project Settings > Service Connections > New service connection
 2. Select "Azure Resource Manager"
@@ -183,11 +185,11 @@ az role assignment create \
 
 ## GitHub Actions Targeting Azure
 
-GitHub Actions is GitHub's built-in CI/CD platform. If your code lives on GitHub, Actions provides tight integration with zero additional tooling.
+GitHub Actions is GitHub's built-in CI/CD platform. If your code lives on GitHub, Actions provides tight integration with zero additional tooling, which means you can colocate workflow definitions with application code and reuse the same branch protection and review rules for both.
 
 ### Workflow Basics
 
-GitHub Actions workflows live in `.github/workflows/` and are triggered by events (push, pull_request, schedule, manual dispatch).
+GitHub Actions workflows live in `.github/workflows/` and are triggered by events such as push, pull_request, schedule, or manual workflow_dispatch. Each workflow file declares one or more jobs that run on hosted or self-hosted runners, and jobs can depend on one another so build artifacts or output variables flow naturally into deploy steps. The pattern mirrors Azure DevOps stages and jobs, but the syntax uses GitHub-specific contexts like `${{ github.ref }}` and `${{ secrets.NAME }}` instead of Azure DevOps predefined variables.
 
 ```yaml
 # .github/workflows/deploy.yml
@@ -288,7 +290,11 @@ jobs:
           imageToDeploy: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}
 ```
 
+This workflow separates concerns across three jobs: build produces and pushes the image (skipping push on pull requests so untrusted forks cannot publish to your registry), deploy-staging targets the staging environment, and deploy-production targets production only after staging succeeds. Associating deploy jobs with GitHub Environments (`staging`, `production`) lets you require reviewers before production steps run and scope environment-specific secrets so a staging job never sees production credentials.
+
 ### OIDC Setup for GitHub Actions
+
+The Azure CLI commands in this section create an app registration, service principal, and federated credentials that trust GitHub's OIDC issuer. You typically create one federated credential per branch, pull-request context, or environment subject so Entra ID only accepts tokens that match the workflow's actual execution context.
 
 ```bash
 # Create an app registration for GitHub Actions
@@ -339,12 +345,7 @@ az role assignment create \
   --scope "/subscriptions/<sub-id>/resourceGroups/myRG"
 ```
 
-Then add to GitHub repository secrets:
-- `AZURE_CLIENT_ID`: The application (client) ID
-- `AZURE_TENANT_ID`: Your Entra ID tenant ID
-- `AZURE_SUBSCRIPTION_ID`: Your Azure subscription ID
-
-No secrets or passwords---OIDC handles authentication using short-lived tokens generated per workflow run.
+After the app registration and RBAC assignments exist, add three repository secrets so the `azure/login` action can locate your tenant and subscription: `AZURE_CLIENT_ID` (the application ID), `AZURE_TENANT_ID` (your Entra ID tenant), and `AZURE_SUBSCRIPTION_ID` (the target subscription). These values are identifiers, not passwords—OIDC handles authentication using short-lived tokens generated per workflow run, so you never store a client secret that an attacker could copy from the secrets store.
 
 > **Stop and think**: If an OIDC token is valid for only 10 minutes, how does a pipeline that takes 45 minutes to run maintain authentication to Azure?
 
@@ -352,11 +353,7 @@ No secrets or passwords---OIDC handles authentication using short-lived tokens g
 
 ## Self-Hosted Agents and Runners
 
-Both Azure DevOps and GitHub Actions offer hosted runners (Microsoft/GitHub manages the VM), but you may need self-hosted runners for:
-- Accessing private VNet resources (private endpoints, internal APIs)
-- Using specialized hardware (GPU, high-memory)
-- Reducing build times with persistent caches
-- Compliance requirements (builds must run in your environment)
+Both Azure DevOps and GitHub Actions offer hosted runners where Microsoft or GitHub manages the underlying VM, which is the default choice for most teams because it requires zero infrastructure maintenance. You may need self-hosted runners when builds must reach private VNet resources (private endpoints, internal APIs), when you require specialized hardware such as GPU or high-memory SKUs, when persistent caches between runs materially shorten build times, or when compliance mandates that compilation and packaging happen inside your own environment rather than on a shared multi-tenant runner fleet.
 
 ### Azure DevOps Self-Hosted Agent
 
@@ -396,7 +393,7 @@ az vm create \
 # runner-cloud-init.yaml would install the runner package and register it
 ```
 
-For production, use the official **Actions Runner Controller (ARC)** on AKS, which [auto-scales runners based on pending jobs](https://github.com/actions/actions-runner-controller/blob/master/docs/automatically-scaling-runners.md).
+Self-hosted runners introduce operational responsibility: you patch the OS, rotate registration tokens, and ensure one job cannot read another job's workspace artifacts. For production GitHub Actions scale-out, use the official **Actions Runner Controller (ARC)** on AKS, which [auto-scales runners based on pending jobs](https://github.com/actions/actions-runner-controller/blob/master/docs/automatically-scaling-runners.md) so you pay for capacity only while workflows are queued or running.
 
 > **Pause and predict**: Why might deploying a self-hosted runner inside your production virtual network introduce new security risks compared to using Microsoft-hosted runners?
 
@@ -435,13 +432,13 @@ If a repository can run or merge workflow changes without adequate review and a 
 
 ## Did You Know?
 
-1. **GitHub Actions OIDC tokens are short-lived** and include claims that scope them to the repository and workflow context. Compared with storing long-lived client secrets in the pipeline, that materially reduces credential exposure.
+1. **GitHub Actions OIDC tokens are short-lived** and include claims that scope them to the repository and workflow context. Compared with storing long-lived client secrets in the pipeline, that materially reduces credential exposure because even a successful exfiltration yields a token that expires within minutes and cannot be reused outside the intended subject claim.
 
-2. **Azure DevOps supports pipeline caching** that persists across runs. On dependency-heavy projects, restoring a warm cache can be much faster than reinstalling dependencies from scratch. Over repeated pipeline runs, that can save meaningful build time. Use the [`Cache@2` task](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops) with a hash of your lock file as the cache key.
+2. **Azure DevOps supports pipeline caching** that persists across runs. On dependency-heavy projects, restoring a warm cache can be much faster than reinstalling dependencies from scratch, and over repeated pipeline runs that difference compounds into meaningful build-time savings. Use the [`Cache@2` task](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops) with a hash of your lock file as the cache key so cache invalidation tracks dependency changes rather than arbitrary timestamps.
 
-3. **GitHub Actions hosted runners are ephemeral and fresh for every job.** Each job gets a brand-new VM with a clean filesystem. This is excellent for security (no contamination between builds) but means every job starts from scratch. Self-hosted runners persist between jobs, enabling persistent caches and pre-installed tools, but require you to manage security (ensuring one job cannot access another job's data).
+3. **GitHub Actions hosted runners are ephemeral and fresh for every job.** Each job gets a brand-new VM with a clean filesystem, which is excellent for security because one build cannot leave artifacts that contaminate the next tenant's job, but it also means every job cold-starts without local caches. Self-hosted runners persist between jobs, enabling persistent caches and pre-installed tools, but require you to manage security by ensuring one job cannot access another job's data on the same disk.
 
-4. **Azure DevOps Pipelines can deploy beyond Azure** by using service connections and deployment tasks for external systems such as Kubernetes clusters, Docker registries, and other remote services.
+4. **Azure DevOps Pipelines can deploy beyond Azure** by using service connections and deployment tasks for external systems such as Kubernetes clusters, Docker registries, and other remote services. The same YAML pipeline model that pushes to ACR can therefore orchestrate a hybrid release where container images land in Azure while manifests roll out to on-premises or multi-cloud Kubernetes without switching CI products.
 
 ---
 
@@ -502,9 +499,9 @@ You should design a single workflow with three sequential jobs: a build job, a s
 
 ## Hands-On Exercise: GitHub Actions OIDC Auth to ACR Build and Container Apps Deploy
 
-In this exercise, you will set up OIDC authentication between GitHub Actions and Azure, build a container image with ACR Tasks, and deploy it to Container Apps.
+In this exercise, you will set up OIDC authentication between GitHub Actions and Azure, build a container image with ACR Tasks, and deploy it to Container Apps. The sequence mirrors what many teams adopt in production: provision registry and runtime infrastructure, establish federated trust between GitHub and Entra ID, then wire a workflow that builds on every push to main without storing Azure passwords in GitHub.
 
-**Prerequisites**: Azure CLI, a GitHub repository, `gh` CLI (optional).
+You need the Azure CLI, a GitHub repository, and optionally the `gh` CLI for setting repository secrets from your terminal. Work through the tasks in order because later steps reference resource names and object IDs created earlier.
 
 ### Task 1: Create Azure Infrastructure
 
@@ -604,7 +601,7 @@ You should see the federated credential for your GitHub repository.
 
 ### Task 3: Create the Application Code
 
-In your GitHub repository, create these files:
+Create a minimal nginx-based application in your GitHub repository root so the pipeline has something to build and deploy. The Dockerfile copies a static HTML page that embeds the Git commit SHA, which gives you a visible signal on the live site when a new deployment succeeds.
 
 ```bash
 # Dockerfile
