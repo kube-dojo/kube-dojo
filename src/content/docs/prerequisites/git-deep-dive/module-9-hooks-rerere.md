@@ -196,7 +196,7 @@ spec:
         image: nginx:1.26
         env:
         - name: DATABASE_PASSWORD
-          value: "super_secret_production_123!" # FATAL ERROR: Hardcoded secret exposed
+          value: "password=super_secret_production_123!" # FATAL ERROR: Hardcoded secret exposed
 ```
 
 ```bash
@@ -212,9 +212,7 @@ stdin
 
 CRITICAL: YAML validation failed for manifest -> broken-deploy.yaml
 --> Scanning staged blobs for hardcoded credentials...
-        - name: DATABASE_PASSWORD
-          value: "super_secret_production_123!" # FATAL ERROR: Hardcoded secret exposed
-FATAL: Potential hardcoded secret identified within -> broken-deploy.yaml
+blocked: potential secret in broken-deploy.yaml
 
 COMMIT ABORTED: Security or syntax violations detected.
 Please remediate the errors highlighted above, stage your fixes, and try again.
@@ -679,7 +677,7 @@ git add aws-credentials.sh
 git commit -m "chore: add local aws credentials script"
 # Expected Output: FATAL: Hardcoded AWS secret string identified...
 # Followed by: COMMIT ABORTED: Quality gates failed.
-git restore --staged aws-credentials.sh
+git rm --cached -f aws-credentials.sh
 rm -f aws-credentials.sh
 ```
 
@@ -690,7 +688,7 @@ dd if=/dev/urandom of=massive_binary.bin bs=1M count=2
 git add massive_binary.bin
 git commit -m "chore: add massive database dump binary"
 # Expected Output: FATAL: File massive_binary.bin violates size constraints...
-git restore --staged massive_binary.bin
+git rm --cached -f massive_binary.bin
 rm -f massive_binary.bin
 ```
 
@@ -738,9 +736,8 @@ exit 0
 Install the hook in the repository you already created (template changes do not retrofit existing repos):
 
 ```bash
-cp ~/.git-templates/hooks/commit-msg k8s-manifests-repo/.git/hooks/commit-msg
-chmod +x k8s-manifests-repo/.git/hooks/commit-msg
-cd k8s-manifests-repo
+cp ~/.git-templates/hooks/commit-msg .git/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
 ```
 
 Test the implementation:
@@ -762,7 +759,49 @@ Enable rerere globally, reproduce the `app-config.yaml` conflict from the lesson
 <details>
 <summary><strong>Solution: Task 5</strong></summary>
 
-Use the rerere sequence from Part 5 in a disposable repository. After Git reports `Resolved 'app-config.yaml' using previous resolution.`, run `git diff` and confirm the file contains `version: "2.0-beta"` without conflict markers. Then stage the file if needed and continue the operation. If you want to prove the memory can be cleared, run `git rerere forget app-config.yaml` and repeat the conflict.
+Create an isolated throwaway repository so the global `commit-msg` template from Task 4 does not reject rerere walkthrough commits:
+
+```bash
+cd ~/git-hooks-lab
+git init -b main rerere-lab
+cd rerere-lab
+rm -f .git/hooks/commit-msg   # isolate from Jira ticket enforcement installed in Task 4
+
+git config rerere.enabled true
+
+# On the main branch
+echo 'version: "1.0"' > app-config.yaml
+git add app-config.yaml && git commit -m "chore: add initial config"
+
+git checkout -b feature
+echo 'version: "2.0-beta"' > app-config.yaml
+git commit -am "feat: update config to beta release"
+
+git checkout main
+echo 'version: "1.1"' > app-config.yaml
+git commit -am "chore: bump version to 1.1"
+
+git merge feature
+# Expect: CONFLICT in app-config.yaml and "Recorded preimage for 'app-config.yaml'"
+
+printf 'version: "2.0-beta"\n' > app-config.yaml
+git diff app-config.yaml   # confirm no <<<<<<< conflict markers remain
+git add app-config.yaml
+git commit -m "Merge feature branch"
+# Expect: "Recorded resolution for 'app-config.yaml'."
+
+git reset --hard HEAD~1
+
+git checkout feature
+git rebase main
+# Expect: "Resolved 'app-config.yaml' using previous resolution."
+
+git diff   # confirm version: "2.0-beta" without conflict markers
+git add app-config.yaml
+git rebase --continue
+```
+
+After Git reports `Resolved 'app-config.yaml' using previous resolution.`, run `git diff` and confirm the file contains `version: "2.0-beta"` without conflict markers. Then stage the file if needed and continue the operation. If you want to prove the memory can be cleared, run `git rerere forget app-config.yaml` and repeat the conflict.
 
 </details>
 

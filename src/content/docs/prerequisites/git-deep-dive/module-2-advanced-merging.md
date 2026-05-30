@@ -27,7 +27,7 @@ revision_pending: false
 
 ## Why This Module Matters
 
-On October 21, 2018, routine optical hardware maintenance severed the US East Coast network hub from the primary US East Coast data center for 43 seconds. An automated failover promoted the US-West hub to primary, but the US-East hub continued to accept writes. Both sites held authoritative-looking records for the same rows. Recovery required 24 hours of manual reconciliation between two diverged timelines, and approximately 200,000 webhook payloads were permanently dropped. The incident demonstrated that divergent timelines can each appear correct in isolation while creating massive conflict at infrastructure scale. The same problem exists in source control every time long-lived branches are reconciled. Advanced Git merging is the practiced skill that keeps that reconciliation from becoming an outage.
+On October 21, 2018, routine optical hardware maintenance severed the US East Coast network hub from the primary US East Coast data center for 43 seconds. An automated failover promoted the US-West hub to primary, but the US-East hub continued to accept writes. Both sites held authoritative-looking records for the same rows. The incident caused more than 24 hours of degraded service; engineers had to manually reconcile the records that both sites had accepted during the brief split before consistency could be restored, and approximately 200,000 webhook payloads were permanently dropped. The incident demonstrated that divergent timelines can each appear correct in isolation while creating massive conflict at infrastructure scale. The same problem exists in source control every time long-lived branches are reconciled. Advanced Git merging is the practiced skill that keeps that reconciliation from becoming an outage.
 
 For Kubernetes platform work, merging is more than a repository housekeeping task because the merged text often becomes a desired-state contract consumed by controllers, admission policies, scanners, and deployment automation. A clean-looking merge can still leave a selector pointing at the wrong labels, a generated Secret missing from a Kustomize overlay, or a release branch carrying assumptions that are no longer true for Kubernetes 1.35 clusters. This module treats merging as an operational design skill: you will inspect graph shape, choose the right integration method, resolve conflicts by synthesizing intent, and validate that the resulting manifests still describe a coherent system.
 
@@ -385,8 +385,8 @@ spec:
 
 The exercise then required validation before committing, because a syntactically broken Deployment is still a failed merge even when the Git conflict markers have been removed:
 ```bash
-kubectl apply -f deployment.yaml --dry-run=client
-# Expect output: deployment.apps/api-server created (dry run)
+kubeconform -summary deployment.yaml
+# Expect output confirming the Deployment schema is valid
 ```
 ```bash
 git add deployment.yaml
@@ -481,8 +481,8 @@ spec:
 
 **Task 5: Validate the YAML**
 ```bash
-kubectl apply -f deployment.yaml --dry-run=client
-# Expect output: deployment.apps/api-server created (dry run)
+kubeconform -summary deployment.yaml
+# Expect output confirming the Deployment schema is valid
 ```
 
 **Task 6: Finalize the Merge**
