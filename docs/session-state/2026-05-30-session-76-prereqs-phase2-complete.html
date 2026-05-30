@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 76 — Prerequisites track 100% complete (Phase-2 was mostly stale, not rewrites)</title>
+<meta name="session-label" content="session-76-prereqs-phase2-complete">
+<meta name="date" content="2026-05-30">
+<meta name="predecessor" content="session-75-prereqs-phase1-complete">
+<meta name="model" content="claude-opus-4-8[1m]">
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#1a1a1a}
+h1{font-size:1.5rem;border-bottom:2px solid #326ce5;padding-bottom:.3rem}
+h2{font-size:1.15rem;margin-top:1.6rem;color:#326ce5}
+code{background:#f4f4f4;padding:.1em .3em;border-radius:3px;font-size:.9em}
+table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ddd;padding:.35rem .5rem;text-align:left;font-size:.9rem}
+th{background:#f0f4ff}
+.tldr{background:#f0f4ff;border-left:4px solid #326ce5;padding:.6rem .9rem;border-radius:4px}
+.win{background:#eaf7ea;border-left:4px solid #2e8b2e;padding:.6rem .9rem;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Session 76 — Prerequisites track 100% complete</h1>
+
+<p class="tldr"><strong>TL;DR:</strong> Date 2026-05-30 · Predecessor: session 75 · Model: claude-opus-4-8[1m] · Mode: standalone orchestrator. User: "gemini has quota; when do you plan the prereqs rewrites?" → did them this session before <code>linux</code>. <strong>Finished the entire prerequisites track: 44/44 modules now <code>done</code></strong> (board done 267→273, needs_rewrite 181→176, shipped_unreviewed 247→246) via PRs <strong>#1681</strong> (5 modules) + <strong>#1682</strong> (zt-0.3). The key finding: the 5 "needs_rewrite" modules were <strong>stale-flagged-but-already-dense</strong> (router prose_words 816–951 vs live 5403–6004) — not rewrites. Phase 2 across the curriculum is therefore likely ≈ Phase 1 cost (review + stage-flip), not authoring.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Module</th><th>Was</th><th>Review</th><th>Fix</th></tr>
+<tr><td>git-deep-dive/1-git-internals</td><td>needs_rewrite (FAILED)</td><td>codex depth → cursor R1 → codex R2 APPROVE 9/10 (lab re-run, Git 2.54)</td><td>3 lab-runnability bugs (git init -b main, packed-ref rev-parse, 2nd-commit-before-detach)</td></tr>
+<tr><td>kubernetes-basics/1.4-deployments</td><td>needs_rewrite (FAILED)</td><td>gemini depth → cursor R1 (all tech claims verified)</td><td>ownerRefs UID-not-crypto; RS count-not-UIDs; proportional-scaling integer-vs-%; prereq xref</td></tr>
+<tr><td>kubernetes-basics/1.5-services</td><td>needs_rewrite (FAILED)</td><td>agy NC = FALSE POSITIVE → cursor APPROVE corroboration</td><td>none (illustrative blocks; agy misread the convention)</td></tr>
+<tr><td>modern-devops/1.1-iac</td><td>needs_rewrite (FAILED)</td><td>cursor depth → codex R1</td><td>display-yaml→heredoc; etcd; plan refresh; Argo reconciles</td></tr>
+<tr><td>philosophy-design/1.4-dead-ends</td><td>needs_rewrite (FAILED)</td><td>agy NC = REAL factual errors (web-verified)</td><td>Docker Swarm NOT removed (Mirantis maintains); Twitter→K8s 2019 not 2020; $2.3M Mesos story → hypothetical</td></tr>
+<tr><td>zero-to-terminal/0.3-first-commands</td><td>shipped_unreviewed</td><td>cursor NC</td><td>Toy Story 2 citation (verified source); cat-after-rm runnability bug; dead GNU URL; prereq chain</td></tr>
+</table>
+
+<h2 class="win">Headline finding — Phase 2 is mostly NOT rewrites</h2>
+<p>All 5 prereqs <code>needs_rewrite</code> modules passed the density gate on the live file (5403–6004 prose words); the pipeline's <code>route.prose_words</code> (816–951) and <code>stage=FAILED</code> were <strong>stale</strong> (predated a prior expansion / old failed auto-write). The board's ~176 <code>needs_rewrite</code> backlog is very likely mostly this class. <strong>Recommendation: density-check the live file before authoring; treat Phase 2 as review + stage-flip, not rewrites.</strong> Saved as memory <code>feedback_needs_rewrite_often_stale_not_real</code>.</p>
+
+<h2>Process notes / gotchas (in the memory)</h2>
+<ul>
+<li><strong>Finalize gotcha:</strong> a stale json <code>review.verdict=changes_requested</code> keeps a module <code>needs_review</code> even after stage=COMMITTED + an APPROVE review record — must also set json verdict to approve (gitignored local state). k8s-1.4 hit this.</li>
+<li><strong>Worktree builds fail</strong> on <code>Homepage.astro</code>'s <code>../../node_modules</code> relative import (no node_modules in worktree; symlink doesn't fix). Build content PRs in PRIMARY (temp-apply → build → revert).</li>
+<li><strong>agy false-positive on illustrative-runnability — 3rd occurrence</strong> (k8s-1.5). Always corroborate agy "runnability" P1s with cursor/codex.</li>
+<li><code>.pipeline/quality-pipeline/*.json</code> + <code>.pipeline/reviews/*.md</code> are gitignored → done-state is LOCAL only, not in the PR. reset-stage/record writes hit PRIMARY regardless of cwd.</li>
+</ul>
+
+<h2>NEXT — track <code>linux</code> (Phase 1)</h2>
+<p>Per curriculum order (prerequisites now 100% done): <code>linux</code> track — <strong>14 shipped_unreviewed + 20 needs_review = 34 modules</strong> for cross-family review (3 already done). Then ai → ai-history → k8s → cloud → ai-ml-engineering → on-premises → platform. Apply the stale-route check to each track's needs_rewrite first. gemini-cli quota is back (use the full 4-pool review mix; one module per pool). Working log: <code>logs/remediation/session76-prereqs-phase2-rewrites.md</code>.</p>
+</body>
+</html>
