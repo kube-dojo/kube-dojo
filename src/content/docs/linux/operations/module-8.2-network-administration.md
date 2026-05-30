@@ -31,7 +31,7 @@ After this module, you will be able to perform and justify these network adminis
 
 ## Why This Module Matters
 
-In October 2021, a major social network disappeared from the internet for several hours after a backbone configuration change removed the routes that told the rest of the world how to reach its DNS systems. Engineers could not simply open a browser, connect through the usual remote tooling, and undo the change, because the failure had damaged the control plane they normally used to reach the machines that could fix it. Public reporting estimated billions of dollars in market value movement and tens of millions in lost advertising revenue, but the operational lesson is even more direct: when network administration fails at the host and routing layer, every higher-level service inherits the blast radius.
+**Hypothetical scenario:** A large online service drops off the internet for several hours after a backbone configuration change withdraws the routes that told the rest of the world how to reach its DNS and edge systems. Engineers cannot simply open a browser, connect through the usual remote tooling, and undo the change, because the same failure has damaged the control plane they normally use to reach the machines that could fix it. The operational lesson is direct: when network administration fails at the host and routing layer, every higher-level service inherits the blast radius, and recovery depends on out-of-band access that the team must have prepared before the outage.
 
 A smaller version of that story happens constantly inside ordinary Linux estates. A server receives the correct address but no default route, so local pings succeed while package downloads fail. A firewall rule is added permanently but never loaded into the running ruleset, so the reboot looks correct while live traffic still drops. A password-login hardening change is made before key login is tested, and the only reachable shell disappears. These are not exotic protocol failures; they are routine administration mistakes caused by treating networking as a set of commands instead of a chain of evidence.
 
@@ -189,7 +189,7 @@ sudo nmcli connection down bond0-slave1
 
 Before running this, what output do you expect in `/proc/net/bonding/bond0` after `bond0-slave1` is brought down? The important fields are not only whether `bond0` exists, but which slave is active, whether MII status is up, and whether the bond driver has recorded a link failure. If your prediction mentions only the logical interface address, you are still looking too high in the stack.
 
-A common war story is the LACP deployment that looked healthy because both Linux interfaces were up and the switch LEDs were green. The team had configured mode 4 on the server, but the switch ports were still independent access ports rather than members of one port channel. Traffic was distributed across links that the switch did not consider a single logical path, causing out-of-order delivery, retransmissions, and intermittent timeouts that looked like an application problem. The fix was a short switch change, but the lesson was larger: link state proves cables, not aggregation semantics.
+**Hypothetical scenario:** An LACP deployment looked healthy because both Linux interfaces were up and the switch LEDs were green. The team had configured mode 4 on the server, but the switch ports were still independent access ports rather than members of one port channel. Traffic was distributed across links that the switch did not consider a single logical path, causing out-of-order delivery, retransmissions, and intermittent timeouts that looked like an application problem. The fix was a short switch change, but the lesson was larger: link state proves cables, not aggregation semantics.
 
 Bridges solve a different problem. A bridge is a software switch inside the Linux host, and it is most useful when another endpoint needs to appear directly on the same Layer 2 network. Virtual machines use bridges so their virtual NICs can attach to the same broadcast domain as the physical NIC. Containers and hypervisors often create bridges automatically, but LFCS-level administration still expects you to recognize when the host IP belongs on the bridge rather than on the physical port that has become a bridge member.
 
@@ -515,8 +515,11 @@ sudo firewall-cmd --zone=external --change-interface=eth0 --permanent
 # Assign internal interface to internal zone
 sudo firewall-cmd --zone=internal --change-interface=eth1 --permanent
 
-# Allow forwarding from internal to external
-sudo firewall-cmd --zone=internal --add-forward --permanent
+# Allow inter-zone forwarding (internal → external) via a firewalld policy
+sudo firewall-cmd --permanent --new-policy nat-internal-to-external
+sudo firewall-cmd --permanent --policy nat-internal-to-external --add-ingress-zone internal
+sudo firewall-cmd --permanent --policy nat-internal-to-external --add-egress-zone external
+sudo firewall-cmd --permanent --policy nat-internal-to-external --set-target ACCEPT
 
 sudo firewall-cmd --reload
 
@@ -804,7 +807,7 @@ Check local firewall policy and the SSH service configuration next. Successful p
 <details>
 <summary>Question 6: A private lab network can reach its Linux gateway, and the gateway can reach the internet, but lab hosts cannot reach external sites. Masquerading is enabled on the external zone. What do you check next?</summary>
 
-Check whether IP forwarding is enabled with `cat /proc/sys/net/ipv4/ip_forward` or `sysctl net.ipv4.ip_forward`. Masquerading rewrites packet addresses, but the kernel still must be allowed to forward packets between the internal and external interfaces. Also confirm that the internal and external interfaces are assigned to the intended firewalld zones and that forwarding is allowed from the internal side. NAT problems often require all three pieces: forwarding, zone assignment, and masquerade policy.
+Check whether IP forwarding is enabled with `cat /proc/sys/net/ipv4/ip_forward` or `sysctl net.ipv4.ip_forward`. Masquerading rewrites packet addresses, but the kernel still must be allowed to forward packets between the internal and external interfaces. Also confirm that the internal and external interfaces are assigned to the intended firewalld zones and that a forwarding policy connects the internal and external zones (for example, a policy with ingress zone `internal`, egress zone `external`, and target `ACCEPT`). NAT problems often require all three pieces: kernel forwarding, zone assignment, and masquerade plus inter-zone policy.
 </details>
 
 ## Hands-On Exercise: Secure a Server from Scratch
