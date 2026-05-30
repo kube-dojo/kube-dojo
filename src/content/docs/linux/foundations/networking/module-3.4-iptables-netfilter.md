@@ -27,7 +27,7 @@ Before starting this module, complete [Module 3.1: TCP/IP Essentials](../module-
 
 ## Why This Module Matters
 
-During a holiday sale, a regional retailer watched checkout latency climb from a few hundred milliseconds to many seconds after a routine Kubernetes Service rollout. The pods were healthy, DNS resolved, and the load balancer reported open connections, but customers still abandoned carts while engineers bounced between application logs, cloud firewalls, and kube-proxy restarts. The root cause was not in the application at all: the node had accumulated thousands of service and endpoint rules, a stale drop rule sat before the expected accept path, and the only clue was an iptables counter that stopped increasing where it should have climbed. The financial impact was measured in lost orders, refund credits, and emergency consulting time, all because the team treated node packet filtering as invisible plumbing.
+**Hypothetical scenario:** During a holiday sale, a regional retailer watched checkout latency climb from a few hundred milliseconds to many seconds after a routine Kubernetes Service rollout. The pods were healthy, DNS resolved, and the load balancer reported open connections, but customers still abandoned carts while engineers bounced between application logs, cloud firewalls, and kube-proxy restarts. The root cause was not in the application at all: the node had accumulated thousands of service and endpoint rules, a stale drop rule sat before the expected accept path, and the only clue was an iptables counter that stopped increasing where it should have climbed. The financial impact was measured in lost orders, refund credits, and emergency consulting time, all because the team treated node packet filtering as invisible plumbing.
 
 That kind of incident is why iptables and netfilter still matter even in clusters that advertise higher-level networking. Kubernetes Services, NodePorts, many network policy engines, container egress NAT, and debugging workflows still rely on the Linux kernel's packet filtering hooks. When traffic disappears, the important question is rarely "what command lists rules?" The useful question is "where was this packet in the kernel when it changed direction, changed address, or stopped moving?"
 
@@ -71,7 +71,7 @@ The tables are another layer over the same hooks. The filter table decides wheth
 | Table | Purpose | Chains |
 |-------|---------|--------|
 | filter | Accept/drop packets | INPUT, FORWARD, OUTPUT |
-| nat | Address translation | PREROUTING, OUTPUT, POSTROUTING |
+| nat | Address translation | PREROUTING, INPUT, OUTPUT, POSTROUTING |
 | mangle | Packet modification | All chains |
 | raw | Connection tracking exceptions | PREROUTING, OUTPUT |
 
@@ -146,7 +146,7 @@ sudo iptables -L INPUT -n --line-numbers
 sudo iptables-save
 ```
 
-One war story illustrates why the saved format matters. A team allowed an emergency SSH source by appending a rule, verified that the rule existed, and still remained locked out from a maintenance subnet. The problem was a previous reject rule with a broader subnet match above the new rule. `iptables -L` showed both rules, but `iptables-save` made the order and table context obvious enough to spot the mistake during a bridge call.
+**Hypothetical scenario:** One war story illustrates why the saved format matters. A team allowed an emergency SSH source by appending a rule, verified that the rule existed, and still remained locked out from a maintenance subnet. The problem was a previous reject rule with a broader subnet match above the new rule. `iptables -L` showed both rules, but `iptables-save` made the order and table context obvious enough to spot the mistake during a bridge call.
 
 When deleting rules, prefer deletion by exact specification when you can reproduce the rule safely, and deletion by line number only after listing the chain immediately beforehand. Line numbers are not stable if another automation loop edits the chain between your list and delete commands. Kubernetes and CNI agents may reconcile their own chains continuously, so manual edits inside their managed chains are usually overwritten. Manual rules belong in your own chain or in a host firewall system that is designed to coexist with cluster automation.
 
@@ -213,7 +213,7 @@ sudo iptables -F INPUT
 sudo iptables -F
 
 # Save rules (Debian/Ubuntu)
-sudo iptables-save > /etc/iptables/rules.v4
+sudo sh -c 'iptables-save > /etc/iptables/rules.v4'
 
 # Restore rules
 sudo iptables-restore < /etc/iptables/rules.v4
@@ -288,10 +288,10 @@ Network policy adds another layer, and the exact chain names depend on the plugi
 
 ```bash
 # Network policy rules (typically in KUBE-NWPLCY chains)
-sudo iptables -L KUBE-NWPLCY-* -n 2>/dev/null
+sudo iptables-save | grep -E 'KUBE-NWPLCY|cali-'
 
 # Calico uses its own chains
-sudo iptables -L cali-* -n 2>/dev/null | head -50
+sudo iptables-save | grep -E 'KUBE-NWPLCY|cali-'
 ```
 
 To inspect kube-proxy behavior with the alias, use the Kubernetes API for intent and iptables for implementation. The API tells you which Service and endpoints should exist; the node rules tell you whether kube-proxy actually programmed a path. If the API object is right but no matching rule exists, look at kube-proxy health, permissions, node selectors, and EndpointSlice readiness. If the rule exists but the counter stays at zero, the packet may be taking a different node, interface, IP family, or policy path.
@@ -319,12 +319,15 @@ sudo iptables -t raw -A PREROUTING -p tcp --dport 80 -j TRACE
 sudo iptables -t raw -A OUTPUT -p tcp --dport 80 -j TRACE
 
 # View traces
+# Legacy iptables stores TRACE entries in kernel logs
 sudo dmesg | grep TRACE
 
-# Or
-sudo tail -f /var/log/kern.log | grep TRACE
+# nft-backed iptables surfaces trace events via xtables-monitor
+sudo xtables-monitor --trace
 
-# Don't forget to remove trace rules when done!
+# Remove temporary trace rules
+sudo iptables -t raw -D PREROUTING -p tcp --dport 80 -j TRACE
+sudo iptables -t raw -D OUTPUT -p tcp --dport 80 -j TRACE
 ```
 
 TRACE is powerful because it shows rule traversal, but it is also noisy enough to damage your ability to see anything else. On a high-traffic node, tracing a common port can flood kernel logs, increase CPU load, and rotate away useful messages from the incident. Use narrow matches, reproduce once or twice, save the evidence, and remove the trace rules immediately. Stop and think: why is a trace rule in the raw table especially risky if you forget it during peak traffic?
@@ -381,7 +384,7 @@ The table is useful, but it should not be treated as a universal ranking. iptabl
 
 ```text
 Small cluster (< 100 services): iptables is fine
-Medium cluster (100-1000 services): Consider IPVS
+Medium cluster (100-1000 services): Prefer nftables for new Linux kube-proxy designs; IPVS is legacy/compatibility only
 Large cluster (1000+ services): nftables or eBPF (Cilium)
 Advanced features needed: eBPF (Cilium)
 ```
@@ -458,8 +461,8 @@ For change review, translate every proposed rule into a sentence that includes a
 
 - **A busy Kubernetes node can have 10,000+ iptables rules** - Each service creates multiple rules, and Kubernetes 1.35+ operators should evaluate nftables or eBPF when service scale makes linear rule traversal expensive.
 - **iptables is just the CLI** - The packet filtering work happens in the kernel's netfilter subsystem, while iptables loads rules into that subsystem from user space.
-- **nftables is replacing iptables in many distributions** - RHEL 9 and Debian 11 ship nftables tooling by default, and the `nft` command uses a cleaner ruleset model.
-- **Every Kubernetes service creates multiple generated decisions** - A Service needs dispatch rules, per-Service chains, and endpoint rules, so 100 Services with three endpoints each can produce 1,500+ service-related rule entries.
+- **nftables is replacing iptables in many distributions** - Most modern Linux distributions ship nftables tooling by default, and the `nft` command uses a cleaner ruleset model.
+- **Every Kubernetes service creates multiple generated decisions** - A Service needs dispatch rules, per-Service chains, and endpoint rules, so 100 Services with three endpoints each can produce on the order of a thousand-plus service-related rule entries.
 
 ## Common Mistakes
 
@@ -592,19 +595,16 @@ The custom chain should log and accept ICMP packets that reach it from INPUT. Th
 ### Part 3: NAT Example
 
 ```bash
-# 1. Enable forwarding
-sudo sysctl -w net.ipv4.ip_forward=1
-
-# 2. View current NAT
+# 1. View current NAT
 sudo iptables -t nat -L -n -v
 
-# 3. Add a port redirect (local)
+# 2. Add a port redirect (local)
 sudo iptables -t nat -A OUTPUT -p tcp --dport 8888 -j REDIRECT --to-port 80
 
-# 4. Test (if web server on 80)
+# 3. Test (if web server on 80)
 # curl localhost:8888  # Would go to localhost:80
 
-# 5. Remove rule
+# 4. Remove rule
 sudo iptables -t nat -D OUTPUT -p tcp --dport 8888 -j REDIRECT --to-port 80
 ```
 
@@ -628,7 +628,8 @@ sudo iptables -t nat -L KUBE-SERVICES -n | head -20
 kubectl get svc my-service -o wide
 
 # Find iptables rules for it
-sudo iptables-save | grep <ClusterIP>
+CLUSTER_IP=$(kubectl get svc my-service -o jsonpath='{.spec.clusterIP}')
+sudo iptables-save | grep -- "$CLUSTER_IP"
 
 # 4. View DNAT rules
 sudo iptables -t nat -L -n | grep DNAT | head -10
