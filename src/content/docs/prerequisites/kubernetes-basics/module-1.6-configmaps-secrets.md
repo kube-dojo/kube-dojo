@@ -27,7 +27,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A credential that should have lived as runtime configuration becomes part of an application artifact the moment it is baked into a container image, committed into source control, or hardcoded in a deployment manifest. Once that happens, rotation is no longer a single operation — the team must find every copy, invalidate every leaked credential, rebuild every artifact that contains it, retest every deployment that uses it, and hope no old image is still running in a forgotten environment. The CKS-track module on [secrets management](/k8s/cks/part4-microservice-vulnerabilities/module-4.3-secrets-management/) walks through one of the canonical examples of this failure mode in detail. <!-- incident-xref: uber-2022-hardcoded-creds --> The lesson for prerequisites is simpler: the choice between treating a value as configuration or as code is the choice between rotating in seconds and rotating in weeks.
+A credential that should have lived as runtime configuration becomes part of an application artifact the moment it is baked into a container image, committed into source control, or hardcoded in a deployment manifest. Once that happens, rotation is no longer a single operation — the team must find every copy, invalidate every leaked credential, rebuild every artifact that contains it, retest every deployment that uses it, and hope no old image is still running in a forgotten environment. The CKS-track module on [secrets management](/k8s/cks/part4-microservice-vulnerabilities/module-4.3-secrets-management/) explores this failure mode further for exam-focused security work. <!-- incident-xref: uber-2022-hardcoded-creds --> The lesson for prerequisites is simpler: the choice between treating a value as configuration or as code is the choice between rotating in seconds and rotating in weeks.
 
 Kubernetes gives you two built-in resources for avoiding that trap: ConfigMaps for non-sensitive configuration and Secrets for sensitive data. They let the same container image run in development, staging, and production while the cluster supplies the values that vary between those environments. That design is powerful, but it also creates a new responsibility: you must know exactly how those resources are stored, delivered, refreshed, and protected, because moving a password into a Secret does not automatically make the surrounding workflow secure.
 
@@ -198,6 +198,8 @@ spec:
     - configMapRef:
         name: app-config
 ```
+
+You can combine `env` and `envFrom` in the same container when you need one key addressed explicitly and the rest imported in bulk — they are not mutually exclusive.
 
 This environment variable pattern is easy to read and works well for values that are naturally scalar, such as `LOG_LEVEL`, `ENVIRONMENT`, or a feature flag. Its limitation is just as important: changing the ConfigMap later does not mutate the environment of a running process. Linux processes receive their environment at start time, and Kubernetes does not rewrite it under the process. To pick up a new value, you delete the Pod, trigger a Deployment rollout, or use a controller pattern that changes a Pod template annotation when config changes.
 
@@ -451,7 +453,7 @@ Finally, ask how often the value changes and how dangerous a bad change would be
 
 ## Did You Know?
 
-- **1 MiB Payload Limit**: ConfigMap and Secret individual object sizes are strictly limited to exactly 1 MiB to protect the etcd datastore from bloated memory consumption and unresponsive queries.
+- **1 MiB Payload Limit**: ConfigMap and Secret individual object sizes cannot exceed 1 MiB to protect the etcd datastore from bloated memory consumption and unresponsive queries.
 - **KMS v2 GA Date**: The modern KMS v2 encryption provider achieved General Availability in Kubernetes v1.29, finally replacing the slow, network-heavy KMS v1 architecture that is disabled by default.
 - **Immutability GA Timeline**: Immutable ConfigMaps and Secrets reached stable status in Kubernetes v1.21, though early enhancement planning materials targeted an earlier release.
 - **Two-Minute Propagation Window**: When mounting ConfigMaps as volumes, changes can take roughly two minutes to appear because kubelet sync timing and cache propagation both matter.
@@ -531,28 +533,32 @@ No. ConfigMaps and Secrets have a 1 MiB object size limit, and pushing multi-meb
 
 This exercise uses a disposable namespace so you can inspect ConfigMaps and Secrets without touching other work. You will create non-sensitive application settings, create a Secret, run a Pod that consumes both, and then modify the design to practice file-based delivery. The goal is not just to make the YAML apply; it is to predict which values are visible where and which changes require a new Pod.
 
-Before you begin, confirm that your current context points at a disposable cluster or namespace where creating and deleting lab resources is safe:
+Before you begin, confirm that your current context points at a disposable cluster where creating and deleting lab resources is safe, then create an isolated lab namespace:
 
 ```bash
 kubectl config current-context
-kubectl get namespace default
+kubectl create namespace config-lab
 ```
+
+All commands in this exercise use `-n config-lab` so lab objects stay separate from other work.
 
 ### Task 1: Create the configuration objects
 
-Use the original quick path to create a ConfigMap and Secret, then inspect them with the alias. The literal Secret value is intentionally a lab placeholder, not a production credential pattern.
+Use the original quick path to create a ConfigMap and Secret, then inspect them with full `kubectl get ... -o yaml` commands. The literal Secret value is intentionally a lab placeholder, not a production credential pattern.
 
 ```bash
 # 1. Create ConfigMap
 kubectl create configmap app-config \
   --from-literal=LOG_LEVEL=debug \
-  --from-literal=APP_NAME=myapp
+  --from-literal=APP_NAME=myapp \
+  -n config-lab
 
 # 2. DECISION POINT: Create the secret.
 # Will you use --from-literal or create a YAML file with stringData? 
 # We'll use the CLI for speed here:
 kubectl create secret generic app-secret \
-  --from-literal=DB_PASS=secretpassword
+  --from-literal=DB_PASS=secretpassword \
+  -n config-lab
 
 # 3. Create pod using both
 cat << 'EOF' | kubectl apply -f -
@@ -560,6 +566,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: config-test
+  namespace: config-lab
 spec:
   containers:
   - name: test
@@ -577,13 +584,13 @@ spec:
 EOF
 
 # 4. Verify env vars are present
-kubectl wait --for=condition=Ready pod/config-test --timeout=60s
-kubectl logs config-test | grep -E "LOG_LEVEL|APP_NAME|DB_PASSWORD"
+kubectl wait --for=condition=Ready pod/config-test -n config-lab --timeout=60s
+kubectl logs config-test -n config-lab | grep -E "LOG_LEVEL|APP_NAME|DB_PASSWORD"
 ```
 
 <details><summary>Solution notes for Task 1</summary>
 
-The original commands create one ConfigMap, one Secret, and one Pod. Useful inspection commands at this point are `kubectl get configmap app-config -o yaml`, `kubectl get secret app-secret -o yaml`, and `kubectl logs config-test`. Notice that the Pod logs show plaintext environment values because the process received them at startup. That visibility is useful for a lab and risky for real credentials in production logs.
+The original commands create one ConfigMap, one Secret, and one Pod in `config-lab`. Useful inspection commands at this point are `kubectl get configmap app-config -n config-lab -o yaml`, `kubectl get secret app-secret -n config-lab -o yaml`, and `kubectl logs config-test -n config-lab`. Notice that the Pod logs show plaintext environment values because the process received them at startup. That visibility is useful for a lab and risky for real credentials in production logs.
 
 </details>
 
@@ -592,8 +599,8 @@ The original commands create one ConfigMap, one Secret, and one Pod. Useful insp
 Read the stored Secret and decode the single value so you can see exactly where base64 applies. This step builds the habit of distinguishing Kubernetes serialization from actual confidentiality.
 
 ```bash
-kubectl get secret app-secret -o yaml
-kubectl get secret app-secret -o jsonpath='{.data.DB_PASS}' | base64 -d
+kubectl get secret app-secret -n config-lab -o yaml
+kubectl get secret app-secret -n config-lab -o jsonpath='{.data.DB_PASS}' | base64 -d
 ```
 
 <details><summary>Solution notes for Task 2</summary>
@@ -610,9 +617,10 @@ Update the ConfigMap after the Pod is running, then compare the API object with 
 kubectl create configmap app-config \
   --from-literal=LOG_LEVEL=info \
   --from-literal=APP_NAME=myapp \
+  -n config-lab \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl get configmap app-config -o jsonpath='{.data.LOG_LEVEL}'
-kubectl logs config-test | grep LOG_LEVEL
+kubectl get configmap app-config -n config-lab -o jsonpath='{.data.LOG_LEVEL}'
+kubectl logs config-test -n config-lab | grep LOG_LEVEL
 ```
 
 <details><summary>Solution notes for Task 3</summary>
@@ -626,12 +634,13 @@ The ConfigMap object changes, but the environment in the existing container does
 Delete the original Pod and recreate it with the ConfigMap mounted at `/etc/app-config`. Then inspect the directory to see how keys become files.
 
 ```bash
-kubectl delete pod config-test
+kubectl delete pod config-test -n config-lab
 cat << 'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
   name: config-test
+  namespace: config-lab
 spec:
   containers:
   - name: test
@@ -645,9 +654,9 @@ spec:
     configMap:
       name: app-config
 EOF
-kubectl wait --for=condition=Ready pod/config-test --timeout=60s
-kubectl exec config-test -- ls -l /etc/app-config
-kubectl exec config-test -- cat /etc/app-config/LOG_LEVEL
+kubectl wait --for=condition=Ready pod/config-test -n config-lab --timeout=60s
+kubectl exec config-test -n config-lab -- ls -l /etc/app-config
+kubectl exec config-test -n config-lab -- cat /etc/app-config/LOG_LEVEL
 ```
 
 <details><summary>Solution notes for Task 4</summary>
@@ -661,14 +670,15 @@ Each ConfigMap key appears as a file under `/etc/app-config`. This layout is bet
 Remove the disposable resources after you have confirmed both environment and file delivery behavior. Cleanup matters because stale Secrets and ConfigMaps make later debugging harder.
 
 ```bash
-kubectl delete pod config-test
-kubectl delete configmap app-config
-kubectl delete secret app-secret
+kubectl delete pod config-test -n config-lab
+kubectl delete configmap app-config -n config-lab
+kubectl delete secret app-secret -n config-lab
+kubectl delete namespace config-lab
 ```
 
 <details><summary>Solution notes for Task 5</summary>
 
-The cleanup commands remove only the resources created in this exercise. If a delete command reports that a resource is not found, confirm you are in the expected namespace before assuming the resource never existed. In a shared cluster, explicit namespaces are safer than relying on the current context.
+The cleanup commands remove only the resources created in `config-lab`. If a delete command reports that a resource is not found, confirm you passed `-n config-lab` before assuming the resource never existed.
 
 </details>
 
@@ -679,7 +689,7 @@ Success criteria:
 - [ ] Pod `config-test` reached the Running state and displayed the expected environment values.
 - [ ] Updating the ConfigMap did not change the already-running environment variable.
 - [ ] The ConfigMap was mounted as files under `/etc/app-config`.
-- [ ] All lab resources were deleted after verification.
+- [ ] All lab resources in `config-lab` were deleted after verification.
 
 ## Sources
 
