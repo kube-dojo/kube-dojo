@@ -289,21 +289,28 @@ The diagnostic decision tree fits the module best because it keeps the human in 
 </details>
 
 <details>
-<summary>Question 5: AI generates a Kubernetes RBAC policy that makes a deployment work immediately, but it uses wildcards for nearly every resource and verb. The rollout is blocked, and the team is tempted to merge it because the model probably knows the standard pattern. What is the correct response?</summary>
+<summary>Question 5: A teammate prompts "Explain Kubernetes networking." The answer is generic. Which revised prompt best matches this module's decompose, compare, constrain, verify pattern?</summary>
+
+The strongest revision decomposes the topic, adds constraints, and asks for reviewable output instead of a single broad summary. For example: "I am preparing for CKAD and already understand Services and Endpoints. Decompose Kubernetes networking into layers I should study in order. For each layer, compare two common misconceptions, constrain the explanation to Kubernetes 1.35 behavior, and give me three self-quiz questions with answers I can verify against official docs." That prompt matches the Diagnose and Improve Prompts section because it names context, asks for structure before depth, and defines how to verify the result. A weaker revision would only say "explain it better" or "make it simpler," which leaves the model guessing level, goal, and evidence.
+
+</details>
+
+<details>
+<summary>Question 6: AI generates a Kubernetes RBAC policy that makes a deployment work immediately, but it uses wildcards for nearly every resource and verb. The rollout is blocked, and the team is tempted to merge it because the model probably knows the standard pattern. What is the correct response?</summary>
 
 Do not merge the broad policy simply because it works. The generated YAML may pass a functional check while violating least privilege and increasing cluster-wide blast radius. The correct response is to identify the exact resources and verbs the workload needs, narrow the role, and test that narrower policy. This answer compares the pattern of AI as code assistant with the anti-pattern of permission by convenience.
 
 </details>
 
 <details>
-<summary>Question 6: A developer says, "The tests passed, so I do not need to understand the AI-generated change." How should they apply the module's self-check?</summary>
+<summary>Question 7: A developer says, "The tests passed, so I do not need to understand the AI-generated change." How should they apply the module's self-check?</summary>
 
 They should ask whether they can explain the output in their own words, defend the decision without the model, and name what still needs verification. Passing tests are important, but tests may not cover maintainability, security scope, edge cases, or operational intent. If the developer cannot explain the change, they have not completed the human checkpoint. The right next step is to read the code, inspect risk areas, and add or adjust tests where the generated change is under-specified.
 
 </details>
 
 <details>
-<summary>Question 7: You want a reusable practice routine for AI-supported learning, writing, research, and coding. What loop should you implement, and why does it work across all four workflows?</summary>
+<summary>Question 8: You want a reusable practice routine for AI-supported learning, writing, research, and coding. What loop should you implement, and why does it work across all four workflows?</summary>
 
 Implement a loop that starts with your own attempt, asks AI for targeted help, compares the output against your intent, verifies risky parts, and records what you accepted or rejected. It works across learning, writing, research, and coding because each workflow can fail when fluent output arrives before understanding or evidence. The baseline preserves your thinking, the targeted prompt focuses assistance, and the verification checkpoint keeps responsibility with you. Recording the decision makes the work reviewable later.
 
@@ -448,4 +455,4 @@ Success criteria:
 
 ## Next Module
 
-Continue to [AI-Native Work](../ai-native-work/) to examine how workflows, tools, and team practices change when AI becomes a regular part of engineering delivery.
+Continue to [AI-Native Work](../../ai-native-work/) to examine how workflows, tools, and team practices change when AI becomes a regular part of engineering delivery.
