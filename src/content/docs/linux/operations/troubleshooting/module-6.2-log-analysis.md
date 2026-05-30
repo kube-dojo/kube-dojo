@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 6.2: Log Analysis
-
 > **Linux Troubleshooting** | Complexity: `[MEDIUM]` | Time: 25-30 min for a focused learner, with extra practice time encouraged if you are new to production log formats.
 
 ## Prerequisites

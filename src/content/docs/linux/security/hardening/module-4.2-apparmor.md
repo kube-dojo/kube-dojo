@@ -12,8 +12,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 4.2: AppArmor Profiles
-
 > **Linux Security** | Complexity: `[MEDIUM]` | Time: 30-35 min | Focus: kernel-enforced process confinement for hosts, containers, and Kubernetes workloads.
 
 ## Prerequisites

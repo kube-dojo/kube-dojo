@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 5.3: Memory Management
-
 > **Linux Performance** | Complexity: `[MEDIUM]` | Time: 30-35 min. This module treats memory as an operational system, not a dashboard number, and connects Linux reclaim behavior to Kubernetes 1.35+ container failures.
 
 ## Prerequisites

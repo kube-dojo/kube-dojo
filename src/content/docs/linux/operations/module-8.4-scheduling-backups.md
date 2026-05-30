@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 8.4: Task Scheduling and Backup Strategies
-
 > **Operations — LFCS** | Complexity: `[COMPLEX]` | Time: 45-55 min. This lesson treats scheduling and backups as one reliability practice, because a backup that is not scheduled will be forgotten and a scheduled job that cannot be restored is only noise.
 
 ## Prerequisites

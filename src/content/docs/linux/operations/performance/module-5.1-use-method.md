@@ -11,7 +11,6 @@ lab:
   difficulty: advanced
   environment: ubuntu
 ---
-# Module 5.1: USE Method
 
 > **Linux Performance** | Complexity: `[MEDIUM]` | Time: 25-30 min. This module treats performance triage as an operational discipline: you will learn how to inspect resources in a repeatable order, explain the evidence clearly, and know when Linux is not the bottleneck.
 

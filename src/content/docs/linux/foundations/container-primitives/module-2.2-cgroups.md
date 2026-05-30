@@ -5,7 +5,6 @@ slug: linux/foundations/container-primitives/module-2.2-cgroups
 sidebar:
   order: 3
 ---
-# Module 2.2: Control Groups (cgroups)
 
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 30-35 min. This medium-depth lesson assumes you can already read basic Linux commands and Kubernetes pod output, and it focuses on turning cgroup files into practical operational decisions.
 

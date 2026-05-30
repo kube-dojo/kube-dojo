@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 7.4: DevOps Automation
-
 > **Shell Scripting** | Complexity: `[MEDIUM]` | Time: 30-35 min | Kubernetes: 1.35+
 
 ## Prerequisites

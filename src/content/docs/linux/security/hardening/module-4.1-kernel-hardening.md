@@ -11,7 +11,6 @@ lab:
   difficulty: "advanced"
   environment: "ubuntu"
 ---
-# Module 4.1: Kernel Hardening & sysctl
 
 > **Linux Security** | Complexity: `[MEDIUM]` | Time: 25-30 min, focused on practical kernel controls for production Linux and Kubernetes nodes.
 

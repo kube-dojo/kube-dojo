@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 6.1: Systematic Troubleshooting
-
 **Linux Troubleshooting** | Complexity: `[MEDIUM]` | Time: 25-30 min
 
 This module teaches the operating discipline behind reliable debugging: how to slow down just enough to collect evidence, choose the next useful test, protect diagnostic state, and restore service without turning one fault into several new ones.

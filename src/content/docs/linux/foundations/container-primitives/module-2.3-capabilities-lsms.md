@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 2.3: Capabilities & Linux Security Modules
-
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 35-45 min | Focus: least-privilege process control for container workloads on shared Linux kernels.
 
 ## Prerequisites
