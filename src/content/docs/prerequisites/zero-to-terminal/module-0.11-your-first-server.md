@@ -102,7 +102,11 @@ On macOS or Windows, install one of those desktop tools and start it before usin
 sudo apt update && sudo apt install docker.io -y
 sudo systemctl start docker
 sudo usermod -aG docker $USER
+```
 
+**Important:** The new `docker` group is not active in your current shell. Start a **new terminal session** (log out and back in), or run `newgrp docker`, **before** the `docker run` commands below — otherwise you will get "permission denied".
+
+```bash
 # Option B: Podman (no daemon, no root needed)
 sudo apt update && sudo apt install podman -y
 ```
@@ -472,7 +476,13 @@ The expected result is the raw HTML of your page or an HTTP response that clearl
 
 ### Task 3: Break the Deployment Deliberately
 
-Introduce one controlled failure and write down the symptom before fixing it. For Option A, stop and remove your working container, then start a replacement with a different host port such as `docker run -d -p 9090:80 --name broken-site nginx`; visiting the old 8080 URL should fail. For Option B, rename `/var/www/html/index.html` to `/var/www/html/broken.html`; the root URL should no longer show the custom page.
+Introduce one controlled failure and write down the symptom before fixing it. For Option A, stop and remove your working container, then start a replacement with a different host port such as `docker run -d -p 9090:80 --name broken-site nginx`; visiting the old 8080 URL should fail. For Option B, rename the web root file:
+
+```bash
+sudo mv /var/www/html/index.html /var/www/html/broken.html
+```
+
+The root URL should no longer show the custom page.
 
 <details>
 <summary>Solution guidance</summary>
@@ -531,7 +541,7 @@ You have finished **Zero to Terminal**. From here, choose [Linux Fundamentals](/
 
 ```mermaid
 graph TD
-    Current(["YOU ARE HERE<br/>Module 0.10 (Capstone)"]) --> PathA["Path A<br/>Linux Deep Dive"]
+    Current(["YOU ARE HERE<br/>Module 0.11 (Capstone)"]) --> PathA["Path A<br/>Linux Deep Dive"]
     Current --> PathB["Path B<br/>Cloud Native 101"]
 
     PathA --> L1["Kernel, processes<br/>Networking internals<br/>Security, hardening"]

@@ -257,7 +257,19 @@ A possible output might look like this. The exact home directory prefix and file
         └── pasta-carbonara.txt
 ```
 
-Updating installed software is a separate operational decision. On Ubuntu and Debian, you normally refresh metadata first and then apply available upgrades. The first command asks what is available now; the second changes installed packages based on that refreshed view.
+Updating installed software is a separate operational decision, and the inspect-before-mutate habit matters here too. On Ubuntu and Debian, list packages that would be upgraded before you change anything:
+
+```bash
+apt list --upgradable
+```
+
+On macOS, Homebrew's non-mutating equivalent is:
+
+```bash
+brew outdated
+```
+
+Read that plan first. Only after you understand what would change should you refresh metadata and apply upgrades. On Ubuntu and Debian, `apt update` refreshes the catalog and `apt upgrade` applies available package upgrades:
 
 ```bash
 sudo apt update
@@ -270,11 +282,15 @@ You will often see the two commands joined with `&&`. The operator means "run th
 sudo apt update && sudo apt upgrade
 ```
 
+Run those upgrade commands only after reviewing the plan, ideally in a disposable lab or VM.
+
 Homebrew uses a similar two-step shape with different verbs. `brew update` refreshes Homebrew's metadata, while `brew upgrade` upgrades installed formulae that have newer versions available.
 
 ```bash
 brew update && brew upgrade
 ```
+
+Again, run `brew update && brew upgrade` only after reviewing `brew outdated`, ideally in a disposable lab or VM.
 
 Removing software should also go through the package manager when possible. If you installed a package with `apt`, let `apt` remove it so the package database stays accurate. Manually deleting binaries can leave configuration files, dependencies, service units, or package records behind, which makes later troubleshooting harder.
 
@@ -482,10 +498,10 @@ The successful result is not a particular package count. The important sign is t
 
 ### Task 2: Install and Run `htop`
 
-On Ubuntu or Debian, install `htop` with `apt`. The `-y` flag automatically answers yes to confirmation prompts, which is convenient in labs but should be used carefully on important machines because it skips a manual confirmation moment.
+On Ubuntu or Debian, install `htop` with `apt`. When prompted, read the proposed package and dependency plan, then type `y` only if it matches your expectations. The `-y` flag automatically answers yes to confirmation prompts, which is convenient in scripted labs but skips that manual confirmation moment on important machines.
 
 ```bash
-sudo apt install htop -y
+sudo apt install htop
 ```
 
 On macOS, install the same tool with Homebrew. Notice again that the package name is the same while the package manager and privilege model differ.
@@ -508,10 +524,10 @@ A successful run opens the interactive `htop` interface rather than printing "co
 
 ### Task 3: Install and Use `tree`
 
-On Ubuntu or Debian, install `tree` through `apt`. This utility is small, but it teaches the same install pattern you will later use for more important tools.
+On Ubuntu or Debian, install `tree` through `apt`. Read the dependency plan when prompted, then confirm with `y` only if it looks right. This utility is small, but it teaches the same install pattern you will later use for more important tools.
 
 ```bash
-sudo apt install tree -y
+sudo apt install tree
 ```
 
 On macOS, install `tree` through Homebrew. If the package is already installed, Homebrew should tell you instead of installing a duplicate copy.
