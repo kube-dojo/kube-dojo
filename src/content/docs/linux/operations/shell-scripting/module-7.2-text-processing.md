@@ -77,6 +77,8 @@ grep -n -A 2 -B 2 "CrashLoopBackOff" /var/log/kubelet.log
 grep -n -C 3 "error" /var/log/kube-apiserver.log
 ```
 
+> **Predict:** If a log file has 100 lines and exactly 3 match `"error"`, how many lines does `grep -C 3 "error"` print at most? Run the command on a small fixture to check your estimate.
+
 Selective file traversal with `--include` and `--exclude` keeps scans realistic under incident pressure. A direct search across every file can silently include generated output, vendored content, and binaries, which increases run time and confuses outcomes when partial matches appear from unrelated files.
 
 ```bash
@@ -99,6 +101,8 @@ grep -L "deprecated" /etc/kubernetes/manifests/*.yaml
 ```bash
 grep -o "[0-9]\{3\}" /var/log/access.log | sort | uniq -c | sort -nr | head -n 20
 ```
+
+> **Try it:** Before running the `grep -o` pipeline above, predict whether the output will show status codes in ascending or descending frequency order. Which command in the chain determines the final sort?
 
 ```mermaid
 flowchart LR
@@ -239,7 +243,7 @@ paste -d'\t' namespaces.txt nodes.txt cpu.txt
 `sort` and `uniq -c` are a classic frequency pair, and their order dependence is often misunderstood. To get stable counts by category, sort first and aggregate second, then optionally sort in reverse numeric mode for top results.
 
 ```bash
-grep -o '"phase": "[A-Za-z]+"' /var/log/pods.json | sed 's/"//g' | sort | uniq -c | sort -nr | head
+grep -oE '"phase": "[A-Za-z]+"' /var/log/pods.json | sed 's/"//g' | sort | uniq -c | sort -nr | head
 cut -d' ' -f1 events.log | sort | uniq -c | sort -nr
 ```
 
@@ -311,7 +315,7 @@ find . -type f -path './.git/*' -prune -o -name '*.md' -print
 ```bash
 find /tmp/reports -name '*.txt' -print0 | xargs -0 -n 8 echo batch:
 xargs -a pod-names.txt -n 1 kubectl delete pod
-find pods.txt | xargs -I{} echo pod:{}
+xargs -a pods.txt -I{} echo pod:{}
 ```
 
 `--null` (or `-0`) is the critical safety switch for whitespace. Without it, names and paths containing spaces break into multiple arguments and can run against wrong resources.
@@ -598,8 +602,8 @@ cat /tmp/endpoint_outliers.tsv
 ```
 Expected output is deterministic because this fixture is fixed; `/tmp/endpoint_outliers.tsv` should contain numeric frequency counts with the highest-volume endpoint patterns listed first:
 ```text
+     3 /api/v1/orders
      2 /api/v1/health
-     2 /api/v1/orders
      1 /api/v1/users
      1 /api/v2/auth
 ```
@@ -643,26 +647,10 @@ else
 fi
 cat /tmp/log_scan/output/summary.txt
 ```
-Expected output should be deterministic for this fixed fixture: `/tmp/log_scan/output/summary.txt` reports `hits=4` when incident markers are present, or `no_hits` otherwise:
+Expected output should be deterministic for this fixed fixture: `/tmp/log_scan/output/summary.txt` reports `hits=5` when incident markers are present, or `no_hits` otherwise:
 ```text
-hits=4
+hits=5
 ```
-
-## Sources
-
-- [sed man page](https://man7.org/linux/man-pages/man1/sed.1.html)
-- [awk man page](https://man7.org/linux/man-pages/man1/awk.1p.html)
-- [grep man page](https://man7.org/linux/man-pages/man1/grep.1.html)
-- [find man page](https://man7.org/linux/man-pages/man1/find.1.html)
-- [xargs man page](https://man7.org/linux/man-pages/man1/xargs.1.html)
-- [sort man page](https://man7.org/linux/man-pages/man1/sort.1.html)
-- [cut man page](https://man7.org/linux/man-pages/man1/cut.1.html)
-- [tr man page](https://man7.org/linux/man-pages/man1/tr.1.html)
-- [jq manual](https://jqlang.github.io/jq/manual/)
-- [yq documentation](https://mikefarah.gitbook.io/yq/)
-- [ripgrep performance notes](https://blog.burntsushi.net/ripgrep/)
-- [kubectl jsonpath reference](https://kubernetes.io/docs/reference/kubectl/jsonpath/)
-
 
 ## Deep-Dive Playbook: Evidence-first Text Pipelines
 
@@ -751,3 +739,18 @@ Finally, archive the minimal evidence and retire temporary files. If you used pr
 ## Next Module
 
 - [Module 7.3: Practical Scripts](../module-7.3-practical-scripts/)
+
+## Sources
+
+- [sed man page](https://man7.org/linux/man-pages/man1/sed.1.html)
+- [awk man page](https://man7.org/linux/man-pages/man1/awk.1p.html)
+- [grep man page](https://man7.org/linux/man-pages/man1/grep.1.html)
+- [find man page](https://man7.org/linux/man-pages/man1/find.1.html)
+- [xargs man page](https://man7.org/linux/man-pages/man1/xargs.1.html)
+- [sort man page](https://man7.org/linux/man-pages/man1/sort.1.html)
+- [cut man page](https://man7.org/linux/man-pages/man1/cut.1.html)
+- [tr man page](https://man7.org/linux/man-pages/man1/tr.1.html)
+- [jq manual](https://jqlang.github.io/jq/manual/)
+- [yq documentation](https://mikefarah.gitbook.io/yq/)
+- [ripgrep performance notes](https://blog.burntsushi.net/ripgrep/)
+- [kubectl jsonpath reference](https://kubernetes.io/docs/reference/kubectl/jsonpath/)

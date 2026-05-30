@@ -31,7 +31,7 @@ After this module, you will be able to turn common shell patterns into practical
 
 ## Why This Module Matters
 
-At 02:13 on a Sunday, a payments team discovered that a maintenance script had quietly turned a routine certificate rotation into a regional outage. The script downloaded a new bundle, rewrote a configuration file in place, and restarted a proxy process while another automation job was reading the same file. For several minutes, instances saw a truncated configuration and rejected healthy traffic. The incident review found no exotic root cause, no kernel bug, and no vendor failure; it found a shell script that worked during the happy-path demo and failed under ordinary production timing.
+> **Hypothetical scenario:** During an overnight maintenance window, a payments team discovers that a certificate-rotation script has turned routine work into a regional outage. The script downloaded a new bundle, rewrote a configuration file in place, and restarted a proxy process while another automation job was reading the same file. For several minutes, instances saw a truncated configuration and rejected healthy traffic. The post-incident review found no exotic root cause, no kernel bug, and no vendor failure; it found a shell script that worked during the happy-path demo and failed under ordinary production timing.
 
 The financial cost was not only the lost transactions during the outage window. Engineers spent the next business day proving which customer requests were retried, which alerts were noise, and whether any temporary data had been left behind by interrupted jobs. That investigation was harder because the script had no structured logging, no reliable exit codes, no cleanup trap, and no dry-run mode that could reproduce the dangerous path without changing the system. A script that looked small in code review created a large operational blast radius because it had no contract with the environment around it.
 
@@ -205,7 +205,7 @@ Cleanup is the other half of error handling because failed scripts usually leave
 # Cleanup on exit, error, or interrupt
 cleanup() {
     local exit_code=$?
-    log "Cleaning up..."
+    log_info "Cleaning up..."
     rm -f "$TEMP_FILE"
     [[ -d "$TEMP_DIR" ]] && rm -rf "$TEMP_DIR"
     exit $exit_code
@@ -484,7 +484,7 @@ sequenceDiagram
     App->>ProdFile: 4. Reads fully updated config
 ```
 
-> **War Story**: In 2018, a major SaaS provider had a cronjob that rebuilt their HAProxy configuration every minute using `cat new_config > /etc/haproxy/haproxy.cfg`. Once, the script ran out of memory halfway through the `cat` command. HAProxy automatically reloaded the half-empty configuration file, causing a global load balancer outage that took 45 minutes to resolve. If they had written to a temporary file and used `mv`, the partial file would never have been loaded.
+> **Hypothetical scenario:** A SaaS provider runs a cronjob that rebuilds HAProxy configuration every minute using `cat new_config > /etc/haproxy/haproxy.cfg`. Once, the script runs out of memory halfway through the `cat` command. HAProxy automatically reloads the half-empty configuration file, causing a global load balancer outage that takes 45 minutes to resolve. If they had written to a temporary file and used `mv`, the partial file would never have been loaded.
 
 ```bash
 # Atomic write (write to temp, then move)
