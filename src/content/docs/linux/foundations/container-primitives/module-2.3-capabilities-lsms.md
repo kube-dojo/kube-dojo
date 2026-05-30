@@ -25,7 +25,7 @@ After this module, you will be able to perform practical security reviews rather
 
 ## Why This Module Matters
 
-In 2019, a public cloud customer learned an expensive lesson from a small convenience flag. Their internal build service ran a helper container with broad Linux privileges because one maintenance script occasionally needed network administration access. When an attacker exploited a vulnerable package download step, the compromised process did not stay boxed inside the intended build environment; it had enough kernel-facing power to inspect host state, manipulate mounts, and reach credentials that should never have been visible to a routine build job. The incident response bill, emergency rebuilds, and delayed product launch cost far more than the original engineering shortcut had saved.
+**Hypothetical scenario:** A cloud customer learns an expensive lesson from a small convenience flag. Their internal build service runs a helper container with broad Linux privileges because one maintenance script occasionally needs network administration access. When an attacker exploits a vulnerable package download step, the compromised process does not stay boxed inside the intended build environment; it has enough kernel-facing power to inspect host state, manipulate mounts, and reach credentials that should never be visible to a routine build job. The incident response bill, emergency rebuilds, and delayed product launch cost far more than the original engineering shortcut saves.
 
 That story is not unusual because containers sit on a narrow line between isolation and shared-kernel reality. Namespaces make a process feel as though it has its own process tree, network stack, mount table, and hostname, but the kernel is still the same kernel that protects the node. If a container keeps too many privileges, then a bug in an ordinary service can become a host-level security event, especially when teams reach for `--privileged`, `CAP_SYS_ADMIN`, or unconfined seccomp profiles during debugging.
 
@@ -208,7 +208,7 @@ spec:
 
 This configuration is most valuable when it is paired with non-root execution, a read-only root filesystem, and runtime defaults for seccomp. Capabilities are not a replacement for user separation; they are a way to avoid giving root-shaped powers to a process that should have only one exceptional permission. In review, ask the owner to show the application behavior that needs the added capability, the command or syscall that fails without it, and the reason a less privileged design is not available.
 
-War story: a platform team once spent an afternoon chasing a failed sidecar deployment because the application log said only `operation not permitted` during startup. One engineer wanted to add `privileged: true`, another wanted to change the container user, and a third suspected a read-only filesystem issue. The actual failure was narrower: the process needed to bind a low port while running as a non-root user, so adding `NET_BIND_SERVICE` after dropping all other capabilities solved the incident without granting network administration, ptrace, or broad filesystem bypass powers.
+**Hypothetical scenario:** A platform team spends an afternoon chasing a failed sidecar deployment because the application log says only `operation not permitted` during startup. One engineer wants to add `privileged: true`, another wants to change the container user, and a third suspects a read-only filesystem issue. The actual failure is narrower: the process needs to bind a low port while running as a non-root user, so adding `NET_BIND_SERVICE` after dropping all other capabilities solves the incident without granting network administration, ptrace, or broad filesystem bypass powers.
 
 ## Linux Security Modules: Mandatory Policy After Permissions
 
@@ -372,18 +372,11 @@ The filter result matters for reliability as much as security. Returning an erro
       "names": ["accept", "accept4", "access", "..."],
       "action": "SCMP_ACT_ALLOW"
     }
-  ],
-  "blocked": [
-    "kexec_load",
-    "reboot",
-    "mount",
-    "ptrace",
-    "...40+ others"
   ]
 }
 ```
 
-Docker's default seccomp profile is an allow-list with an error default, which means unlisted syscalls fail instead of silently proceeding. The profile blocks high-risk operations such as loading a new kernel with `kexec_load`, rebooting the host, mounting filesystems, and tracing processes in ways that ordinary application containers should not need. This is why disabling seccomp for convenience should feel like removing a guardrail from the shared kernel rather than like flipping a harmless compatibility setting.
+Docker's default seccomp profile is an allow-list with an error default, which means unlisted syscalls fail instead of silently proceeding. Because `defaultAction` is `SCMP_ACT_ERRNO`, denied calls such as `kexec_load`, `reboot`, `mount`, and `ptrace` do not need a separate top-level `blocked` key in a schema-valid default-deny allow-list profile; they are denied when they are absent from an allow entry. This is why disabling seccomp for convenience should feel like removing a guardrail from the shared kernel rather than like flipping a harmless compatibility setting.
 
 | Action | Effect |
 |--------|--------|
@@ -548,8 +541,8 @@ capsh --decode=$(grep CapEff /proc/$$/status | cut -f2)
 # 3. Check a common program
 getcap /usr/bin/ping 2>/dev/null || getcap /bin/ping
 
-# 4. List all files with capabilities
-getcap -r / 2>/dev/null | head -20
+# 4. List common system files with capabilities
+getcap -r /usr/bin /usr/sbin /bin /sbin 2>/dev/null | head -20
 ```
 
 <details>
@@ -639,7 +632,7 @@ Seccomp inspection starts with kernel support and process status. The kernel con
 
 ```bash
 # 1. Check if seccomp is enabled
-grep SECCOMP /boot/config-$(uname -r)
+zcat /proc/config.gz 2>/dev/null | grep SECCOMP || grep SECCOMP /boot/config-$(uname -r) 2>/dev/null
 
 # 2. View process seccomp status
 grep Seccomp /proc/$$/status
@@ -702,4 +695,4 @@ The default container should show nonzero capability masks, while the `--cap-dro
 - [Kubernetes Linux kernel security constraints](https://kubernetes.io/docs/concepts/security/linux-kernel-security-constraints/)
 - [Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
 - [seccomp Linux manual page](https://man7.org/linux/man-pages/man2/seccomp.2.html)
-- [SELinux project documentation](https://selinuxproject.org/page/Main_Page)
+- [SELinux project documentation](https://github.com/SELinuxProject/selinux/wiki)

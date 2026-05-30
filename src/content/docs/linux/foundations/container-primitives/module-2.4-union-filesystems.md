@@ -25,7 +25,7 @@ After this module, you will be able to use union-filesystem mechanics as an oper
 
 ## Why This Module Matters
 
-A platform team at a payments company once treated container disks as if they were just smaller virtual-machine disks. Their service images looked harmless, and each pod started quickly during testing, but the production rollout placed hundreds of replicas on a small node pool while log files and temporary caches were written into the container filesystem. By the second traffic peak, several nodes reported disk pressure, kubelet evicted healthy pods, and the incident team spent the evening deleting unused images while explaining why a rollout that changed only application code could consume so much local storage.
+**Hypothetical scenario:** A platform team treats container disks as if they were just smaller virtual-machine disks. Their service images look harmless, and each pod starts quickly during testing, but the production rollout places hundreds of replicas on a small node pool while log files and temporary caches are written into the container filesystem instead of a mounted volume, host log path, or external cache. By the second traffic peak, several nodes report disk pressure, kubelet evicts healthy pods, and the incident team spends the evening deleting unused images while explaining why a rollout that changed only application code can consume so much local storage.
 
 The real failure was not that containers were unreliable. The failure was that nobody had modeled the storage layer that made containers efficient in the first place. Container runtimes do not normally copy a full image for every running container; they stack read-only image layers and add one writable layer on top. That trick saves disk space and speeds up startup, but it also creates sharp edges when large lower-layer files are modified, when cleanup happens in the wrong Dockerfile layer, or when application data that should live on a volume is written into the ephemeral layer.
 
@@ -81,10 +81,8 @@ The mount command is compact, but each option matters. `lowerdir` names the read
 
 ```bash
 # Mount command:
-mount -t overlay overlay -o \
-  lowerdir=/lower1:/lower2, \
-  upperdir=/upper, \
-  workdir=/work \
+mount -t overlay overlay \
+  -o lowerdir=/lower1:/lower2,upperdir=/upper,workdir=/work \
   /merged
 ```
 
@@ -308,7 +306,7 @@ __pycache__
 
 A `.dockerignore` file protects the build context before the Dockerfile even starts. Without it, the builder may receive `.git`, local dependency directories, compiled bytecode, environment files, and logs. That slows builds, changes cache keys, and can accidentally place sensitive or irrelevant files into layers. The union filesystem cannot save you from a bad build context; it can only stack the layers the builder produced.
 
-An instructive war story comes from teams that add `rm -rf node_modules` or `rm .env` late in the Dockerfile after accidentally copying the entire repository. The final container may not show those paths, but the layer history can still include the copied files. The better design is to exclude them with `.dockerignore`, copy only what the build needs, and use explicit artifact movement from builder stages into the runtime stage. Layer hygiene is easier when unwanted bytes never enter the layer history.
+A common failure pattern appears when teams add `rm -rf node_modules` or `rm .env` late in the Dockerfile after accidentally copying the entire repository. The final container may not show those paths, but the layer history can still include the copied files. The better design is to exclude them with `.dockerignore`, copy only what the build needs, and use explicit artifact movement from builder stages into the runtime stage. Layer hygiene is easier when unwanted bytes never enter the layer history.
 
 ## Debug Container Storage Growth and Runtime Drivers
 
@@ -329,7 +327,7 @@ OverlayFS won in mainstream container operations because it is in the Linux kern
 docker info | grep "Storage Driver"
 
 # containerd
-cat /etc/containerd/config.toml | grep snapshotter
+grep snapshotter /etc/containerd/config.toml
 
 # Podman
 podman info | grep graphDriverName
@@ -551,13 +549,13 @@ The lower directory should still contain its original files until cleanup remove
 
 ```bash
 # 1. Pull an image
-docker pull alpine:3.18
+docker pull alpine:3.21
 
 # 2. View layers
-docker history alpine:3.18
+docker history alpine:3.21
 
 # 3. Inspect layer IDs
-docker inspect alpine:3.18 | jq '.[0].RootFS.Layers'
+docker inspect alpine:3.21 | jq '.[0].RootFS.Layers'
 
 # 4. Find storage location
 docker info | grep "Docker Root Dir"
@@ -613,7 +611,7 @@ The writable size should grow after `/bigfile` is created because the file belon
 # 1. Create bad Dockerfile
 mkdir /tmp/dockerfile-test && cd /tmp/dockerfile-test
 cat > Dockerfile.bad << 'EOF'
-FROM alpine:3.18
+FROM alpine:3.21
 RUN apk update
 RUN apk add curl
 RUN rm -rf /var/cache/apk/*
@@ -625,7 +623,7 @@ docker images bad-layers
 
 # 3. Create good Dockerfile
 cat > Dockerfile.good << 'EOF'
-FROM alpine:3.18
+FROM alpine:3.21
 RUN apk update && apk add curl && rm -rf /var/cache/apk/*
 EOF
 

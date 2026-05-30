@@ -26,9 +26,9 @@ After this module, you will be able to perform resource diagnosis and design wor
 
 ## Why This Module Matters
 
-At 02:18 on a Monday, a payments team at a regional marketplace watched checkout latency climb from ordinary to unusable in under seven minutes. The database was healthy, the application pods were still marked `Running`, and the node dashboards showed enough total CPU left that the first incident commander suspected a network problem. The real fault sat lower in the stack: a new video thumbnail worker had a strict CPU limit, burned through its cgroup quota early in every scheduling period, and then spent half of each period paused by the kernel while queues backed up behind it.
+**Hypothetical scenario:** A checkout team for an online service watches latency climb from ordinary to unusable in under seven minutes. The database is healthy, the application pods are still marked `Running`, and the node dashboards show enough total CPU left that the first incident commander suspects a network problem. The real fault sits lower in the stack: a new video thumbnail worker has a strict CPU limit, burns through its cgroup quota early in every scheduling period, and then spends half of each period paused by the kernel while queues back up behind it.
 
-The same company had seen a different failure the previous quarter when a Java service disappeared during a holiday promotion. Its heap was set to the same size as its container memory limit, so the heap, thread stacks, native buffers, JIT metadata, page cache, and kernel accounting together crossed the hard cgroup boundary. The application never caught an exception, never flushed its final log line, and never ran a graceful shutdown handler because the kernel sent `SIGKILL`. Namespaces explained why the process could not see the host, but cgroups explained why the process could not keep running.
+In the same hypothetical scenario, a Java service disappears during a holiday promotion. Its heap is set to the same size as its container memory limit, so the heap, thread stacks, native buffers, JIT metadata, page cache, and kernel accounting together cross the hard cgroup boundary. The application never catches an exception, never flushes its final log line, and never runs a graceful shutdown handler because the kernel sends `SIGKILL`. Namespaces explain why the process cannot see the host, but cgroups explain why the process cannot keep running.
 
 Control groups are the Linux mechanism behind the resource promises that platform teams make every day. Every Kubernetes memory limit, many CPU throttling mysteries, most pod QoS tradeoffs, and a surprising amount of systemd service behavior eventually reduce to files under `/sys/fs/cgroup`. This module teaches cgroups as an operational tool rather than as a kernel trivia topic: you will follow the hierarchy, translate Kubernetes YAML into kernel controls, read memory and CPU accounting when an incident is live, and decide when a limit protects the node versus when it quietly damages application behavior.
 
@@ -137,7 +137,7 @@ The fastest check on a modern Linux host is `stat -fc %T /sys/fs/cgroup`, which 
 | Process membership | Can be in different groups per controller | One group for all controllers |
 | Memory pressure | Not available | Available (memory.pressure) |
 | I/O control | Limited (blkio) | Better (io) |
-| Kubernetes support | Legacy | Default (1.25+) |
+| Kubernetes support | Legacy; deprecated in 1.35+ | Stable since 1.25; cgroup v1 fails by default in 1.35+ |
 
 The table captures the high-level migration, but the operational consequence is more concrete: your diagnostic commands must match the hierarchy that the host actually runs. In v1, memory usage might be in `memory.usage_in_bytes`; in v2, current usage is in `memory.current`. In v1, CPU quota files often appear as `cpu.cfs_quota_us` and `cpu.cfs_period_us`; in v2, the same idea is represented by `cpu.max`. A good incident response note always starts by naming the cgroup version before listing paths.
 
@@ -299,7 +299,7 @@ resources:
 
 | Setting | Purpose | cgroup Behavior |
 |---------|---------|-----------------|
-| request.memory | Scheduling | Not directly enforced by cgroup |
+| request.memory | Scheduling | Not a hard cgroup cap; v2 runtimes may use it as `memory.min` or `memory.low` hints |
 | request.cpu | Scheduling | Sets cpu.weight (shares) |
 | limit.memory | Hard limit | memory.max |
 | limit.cpu | Throttling | cpu.max |
@@ -375,10 +375,12 @@ systemctl show docker.service | grep -E "(Memory|CPU)"
 MemoryMax=512M
 CPUQuota=50%
 TasksMax=100
+```
 
+```bash
 # Apply
-systemctl daemon-reload
-systemctl restart myapp
+sudo systemctl daemon-reload
+sudo systemctl restart myapp
 ```
 
 systemd names are friendlier than raw cgroup files, but the enforcement still flows through cgroups. `MemoryMax` becomes a memory limit, `CPUQuota` becomes CPU bandwidth control, and `TasksMax` constrains the number of tasks. This is valuable for host-level agents, side services, and legacy workloads that are not packaged as containers. It also means that a service can be throttled or killed by systemd-managed cgroup rules even when no Kubernetes pod is involved.
@@ -458,7 +460,7 @@ The framework also helps prevent overcorrection after incidents. If a service wa
 - **cgroups were originally developed by Google** engineers Paul Menage and Rohit Seth in 2006. They wanted a way to control resource usage in their massive data centers.
 - **Kubernetes memory limits trigger the OOM killer**. When a container exceeds its memory limit, the kernel's Out-Of-Memory killer terminates it; there is no gradual slowdown or catchable application exception.
 - **CPU limits use CFS bandwidth control**. A container can use less than a full host CPU under load because it is throttled after spending its quota within a scheduling period.
-- **cgroups v2 is now the default direction for Kubernetes nodes**. Kubernetes has supported cgroup v2 by default since the 1.25 era, and Kubernetes 1.35+ environments in this curriculum should be validated as cgroup v2 hosts.
+- **cgroups v2 is now the default direction for Kubernetes nodes**. Kubernetes cgroup v2 support has been stable since v1.25, and cgroup v1 is deprecated in Kubernetes 1.35 with kubelet configured to fail on v1 by default through `failCgroupV1`.
 
 ## Common Mistakes
 
@@ -613,11 +615,15 @@ If `cpu.max` prints `max 100000`, there is no hard quota at that cgroup level. I
 #### Part 5: Create a cgroup (v2, requires root)
 
 ```bash
-# 1. Create a test cgroup
-sudo mkdir /sys/fs/cgroup/test-cgroup
+# 1. Enable controllers in the parent cgroup before creating the child
+for controller in memory cpu; do
+  if grep -qw "$controller" /sys/fs/cgroup/cgroup.controllers; then
+    echo "+$controller" | sudo tee /sys/fs/cgroup/cgroup.subtree_control >/dev/null
+  fi
+done
 
-# 2. Enable controllers
-echo "+memory +cpu" | sudo tee /sys/fs/cgroup/test-cgroup/cgroup.subtree_control
+# 2. Create a test cgroup
+sudo mkdir /sys/fs/cgroup/test-cgroup
 
 # 3. Set memory limit (100MB)
 echo "104857600" | sudo tee /sys/fs/cgroup/test-cgroup/memory.max
@@ -625,17 +631,14 @@ echo "104857600" | sudo tee /sys/fs/cgroup/test-cgroup/memory.max
 # 4. Check it
 cat /sys/fs/cgroup/test-cgroup/memory.max
 
-# 5. Move current shell to this cgroup
-echo $$ | sudo tee /sys/fs/cgroup/test-cgroup/cgroup.procs
+# 5. Run a short subshell in this cgroup
+sudo sh -c '
+  echo $$ > /sys/fs/cgroup/test-cgroup/cgroup.procs
+  cat /proc/$$/cgroup
+  cat /sys/fs/cgroup/test-cgroup/memory.current
+'
 
-# 6. Verify
-cat /proc/$$/cgroup
-
-# 7. Check memory usage
-cat /sys/fs/cgroup/test-cgroup/memory.current
-
-# 8. Exit shell to leave cgroup, then cleanup
-exit
+# 6. Cleanup after the subshell exits
 sudo rmdir /sys/fs/cgroup/test-cgroup
 ```
 
@@ -665,7 +668,7 @@ This optional exercise should be done only on a disposable host or lab VM. If th
 - [systemd.resource-control manual](https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html)
 - [Docker resource constraints documentation](https://docs.docker.com/engine/containers/resource_constraints/)
 - [OCI Runtime Specification Linux cgroups](https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#control-groups)
-- [Red Hat cgroups Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/managing_monitoring_and_updating_the_kernel/using-cgroups-v2-to-control-distribution-of-cpu-time-for-applications_managing-monitoring-and-updating-the-kernel)
+- [Linux kernel cgroup v2 admin guide](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 - [Understanding CFS Bandwidth Throttling](https://engineering.indeedblog.com/blog/2019/12/cpu-throttling-regression-fix/)
 
 ## Next Module
