@@ -267,7 +267,7 @@ Each line teaches a small piece of shell behavior. `echo` prints text, which mak
 
 The script also shows why editing text files is more powerful than typing individual commands at a prompt. A command typed at the prompt runs once and then disappears into shell history. A command saved in a script becomes a repeatable artifact that you can inspect, modify, share, review, and run again. That repeatability is one of the bridges from casual terminal use to automation.
 
-A script file is also easier to reason about than a remembered sequence of commands because it gives you a fixed object to inspect. You can read the first line and ask which interpreter will run it. You can read each `echo` line and predict the output before execution. You can notice that `cat kitchen-memo.txt` depends on a separate file being present in the current directory. This habit of reading a script before running it becomes essential when scripts later install packages, change permissions, or call cluster tooling.
+A script file is also easier to reason about than a remembered sequence of commands because it gives you a fixed object to inspect. You can read the first line and ask which interpreter will run it. You can read each `echo` line and predict the output before execution. You can notice that `./my-first-script.sh` depends on the file being in your current directory and on execute permission before the shell will run it directly. This habit of reading a script before running it becomes essential when scripts later install packages, change permissions, or call cluster tooling.
 
 Save with Ctrl+O, press Enter to confirm the filename, and exit with Ctrl+X. At this point the file exists and contains valid shell commands, but it is not necessarily a program the operating system is allowed to execute directly. New files are often created as readable and writable data, not as runnable programs, and that default is a security feature.
 
@@ -295,7 +295,7 @@ Expected output:
 Welcome to the kitchen!
 Today's date is: Sun Mar 23 14:30:00 UTC 2026
 You are logged in as: yourname
-Your current directory is: /Users/yourname
+Your current directory is: /home/yourname
 
 Great job, chef! Your first script works!
 ```
