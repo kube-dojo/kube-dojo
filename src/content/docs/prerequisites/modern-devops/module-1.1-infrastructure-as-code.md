@@ -112,7 +112,7 @@ Review-as-code is the social payoff of that technical model. A pull request agai
 
 > **Pause and predict**: If an imperative bash script creates a Linux user and the pipeline crashes just after the user is created, what happens when the pipeline retries from the beginning? What would an idempotent configuration tool try to prove before making another change?
 
-Version control completes the model because it records the evolution of intent. A plan file or Kubernetes manifest sitting on one laptop is better than memory, but it is still not a team system. Once infrastructure definitions live in Git, ordinary engineering tools become available: pull requests for review, commit history for audit, tags for releases, and diffs for incident investigation.
+Version control completes the model because it records the evolution of intent. A Terraform/OpenTofu configuration file or Kubernetes manifest sitting on one laptop is better than memory, but it is still not a team system. Once infrastructure definitions live in Git, ordinary engineering tools become available: pull requests for review, commit history for audit, tags for releases, and diffs for incident investigation.
 
 ```bash
 git log --oneline infrastructure/
@@ -125,7 +125,7 @@ ghi789 Initial infrastructure setup
 
 The operational promise is simple: if production changed, the team should be able to point to the commit, review, pipeline run, or emergency exception that changed it. When that promise is true, infrastructure becomes easier to reason about during stress. When that promise is false, the team is back to detective work across terminals, chat messages, and console history.
 
-State is the part of this promise that beginners often underestimate. A tool cannot compare desired and actual infrastructure unless it has a way to identify the resources it owns and the attributes it last observed. Terraform and OpenTofu commonly store that knowledge in a state file or remote state backend, Kubernetes stores desired objects in the API server, and configuration tools such as Ansible often infer state from the target machine during each run. The implementation differs, but the operational question is the same: how does the tool know whether it should create, update, leave alone, or delete something?
+State is the part of this promise that beginners often underestimate. A tool cannot compare desired and actual infrastructure unless it has a way to identify the resources it owns and the attributes it last observed. Terraform and OpenTofu commonly store that knowledge in a state file or remote state backend, Kubernetes accepts desired objects through the API server and persists them in etcd, and configuration tools such as Ansible often infer state from the target machine during each run. The implementation differs, but the operational question is the same: how does the tool know whether it should create, update, leave alone, or delete something?
 
 A Terraform-style state file is not a second copy of your configuration. It is the tool's memory of reality: cloud resource IDs, dependency relationships, attributes returned by provider APIs, and sometimes sensitive values that providers echo back during creation. Configuration files describe intent; state records what the tool believes already exists so the next plan can compute a delta instead of guessing from scratch. Without that mapping, `terraform apply` would not know that `aws_instance.web` in your HCL corresponds to `i-0abc123` in AWS, and a harmless-looking argument change might accidentally create a duplicate resource instead of updating the original.
 
@@ -202,9 +202,9 @@ terraform apply     # Create infrastructure
 terraform destroy   # Tear it all down
 ```
 
-The plan/apply loop is the operational heart of Terraform-style IaC, and it mirrors the reconciliation pattern you will see again in Kubernetes and later in GitOps controllers. `plan` reads configuration, reads state, queries provider APIs, and produces a human-readable delta: create this subnet, update that tag, replace this database because an immutable field changed. Nothing mutates during plan, which is why it belongs in pull requests and CI jobs before anyone approves production work. `apply` executes that delta and then writes the new observed reality back into state so the next plan starts from an accurate baseline. The loop is intentionally boring when things are healthy: plan shows no changes, apply confirms convergence, and the team trusts that live infrastructure still matches reviewed intent.
+The plan/apply loop is the operational heart of Terraform-style IaC, and it mirrors the reconciliation pattern you will see again in Kubernetes and later in GitOps controllers. `plan` reads configuration, reads state, queries provider APIs, and produces a human-readable delta: create this subnet, update that tag, replace this database because an immutable field changed. No remote infrastructure changes are carried out during `plan`; Terraform still reads remote objects and refreshes/synchronizes state information before proposing actions, which is why plan belongs in pull requests and CI jobs before anyone approves production work. `apply` executes that delta and then writes the new observed reality back into state so the next plan starts from an accurate baseline. The loop is intentionally boring when things are healthy: plan shows no changes, apply confirms convergence, and the team trusts that live infrastructure still matches reviewed intent.
 
-Kubernetes uses the same reconcile-to-desired-state idea with different machinery. When you run `kubectl apply -f deployment.yaml`, you are not issuing a one-time imperative command; you are declaring an object in the API server, and controllers such as the Deployment controller continuously compare desired spec with observed status until they match. A GitOps tool such as Argo CD or Flux extends that pattern one step outward: Git holds the desired manifests, the controller inside the cluster watches Git, diff-checks the live API objects, and applies only what changed. Module 1.2 explores that Git-driven layer in detail; for now, notice that plan-before-apply in Terraform and commit-before-sync in GitOps are both answers to the same question—how do we preview intent before mutating shared production?
+Kubernetes uses the same reconcile-to-desired-state idea with different machinery. When you run `kubectl apply -f deployment.yaml`, you are not issuing a one-time imperative command; you are declaring an object in the API server, and controllers such as the Deployment controller continuously compare desired spec with observed status until they match. A GitOps tool such as Argo CD or Flux extends that pattern one step outward: Git holds the desired manifests, the controller inside the cluster watches Git, diffs the live API objects against the desired source and reconciles the resources needed to bring the cluster back into sync. Module 1.2 explores that Git-driven layer in detail; for now, notice that plan-before-apply in Terraform and commit-before-sync in GitOps are both answers to the same question—how do we preview intent before mutating shared production?
 
 Architectural trade-offs sit underneath those workflows and often matter more than brand choice. Immutable infrastructure treats servers, nodes, or images as disposable: when configuration changes, you build a new artifact and replace the old instance rather than patching it in place. Mutable infrastructure keeps long-lived machines and applies incremental updates through SSH, package managers, or configuration management. Immutable patterns reduce snowflake drift because every replacement starts from a known image, but they require strong rollout, health-check, and rollback design. Mutable patterns can be faster for small teams with modest fleet sizes, yet they accumulate hand-tuned differences that become expensive to reproduce after an incident.
 
@@ -282,8 +282,9 @@ For the rest of this module, use the full `kubectl` command so the examples rema
 kubectl version --client
 ```
 
-```yaml
-# deployment.yaml - Desired state
+```bash
+# Write desired state, then apply it
+cat <<'EOF' > deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -301,10 +302,8 @@ spec:
       containers:
       - name: nginx
         image: nginx:1.27
-```
+EOF
 
-```bash
-# Apply desired state
 kubectl apply -f deployment.yaml
 
 # Kubernetes reconciles actual state to match desired state
@@ -325,7 +324,7 @@ Kubernetes also teaches the difference between the declared object and the gener
 
 A useful IaC repository is more than a dumping ground for YAML and HCL. It needs to help readers answer three questions quickly: what resources exist, which environment they belong to, and which shared components they reuse. If the layout makes those questions hard, engineers will copy files, patch production directly, or invent local conventions because the official structure feels slower than the console.
 
-```bash
+```text
 infrastructure/
 ├── terraform/
 │   ├── main.tf
@@ -359,7 +358,7 @@ module "api_server" {
 }
 ```
 
-```bash
+```text
 environments/
 ├── dev/
 │   └── main.tf      # Small instances, single replica
