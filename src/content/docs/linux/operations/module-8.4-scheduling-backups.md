@@ -31,7 +31,7 @@ After this module, you will be able to perform four concrete operations that are
 
 ## Why This Module Matters
 
-At 02:30 on a quiet Tuesday, an online retailer's order database began returning corrupted records after a storage controller failed during a routine batch job. The on-call engineer was not worried at first because the dashboard showed a green nightly backup, a green network share, and a green cron status line. By sunrise, the team learned that their scheduled backup had been writing empty archives for weeks after a credential rotation, and the last usable restore point was old enough to force manual reconciliation from payment processor exports and application logs.
+**Hypothetical scenario:** At 02:30 on a quiet Tuesday, an online retailer's order database began returning corrupted records after a storage controller failed during a routine batch job. The on-call engineer was not worried at first because the dashboard showed a green nightly backup, a green network share, and a green cron status line. By sunrise, the team learned that their scheduled backup had been writing empty archives for weeks after a credential rotation, and the last usable restore point was old enough to force manual reconciliation from payment processor exports and application logs.
 
 The painful part of that incident was not that a disk failed or that a human changed a password. Those are ordinary operational events. The expensive failure was that scheduling and backup design were treated as clerical tasks instead of as a control system: no meaningful exit handling, no archive-size check, no restore drill, no offsite copy that could survive local damage, and no schedule that matched how the service actually behaved under maintenance.
 
@@ -336,7 +336,7 @@ On many distributions, the familiar `cron.daily`, `cron.weekly`, and `cron.month
 
 Backups are not files; backups are a promise that a specific recovery can be completed under pressure. A tarball on a disk may be part of that promise, but it is not enough by itself. You need to know what data is included, what data is intentionally excluded, how often it is captured, where it is stored, how old copies expire, who can read it, and how someone proves a restore without overwriting production.
 
-A mid-size e-commerce company ran nightly backups of its PostgreSQL database to a network share. The cron job ran dutifully every night. Nagios showed green. The backup script exited with code 0. Life was good for six months, at least according to every superficial signal the team had chosen to measure.
+**Hypothetical scenario:** A mid-size e-commerce company ran nightly backups of its PostgreSQL database to a network share. The cron job ran dutifully every night. Nagios showed green. The backup script exited with code 0. Life was good for six months, at least according to every superficial signal the team had chosen to measure.
 
 Then a developer accidentally ran a `DROP TABLE` on the production orders table. No problem, they thought, because there were backups. The DBA went to restore and discovered that the backup script had been silently failing since a password rotation months earlier. The `pg_dump` command returned an authentication error, wrote an empty file, and exited in a way the wrapper script did not treat as fatal because it used `pg_dump ... ; gzip` instead of `pg_dump ... && gzip`.
 
@@ -363,7 +363,7 @@ tar -czvf backup.tar.gz /home/user/documents
 
 The archive flags break down logically once you stop treating them as magic letters and read them as verbs. In review, ask whether the command creates or extracts, which compression format it expects, and whether the filename flag is attached to the archive path you intend.
 - `-c` = **c**reate
-- `-z` = g**z**ip, `-j` = b**j**ip2 (bzip2), `-J` = x**J** (xz)
+- `-z` = gzip, `-j` = bzip2 (bzip2), `-J` = xz
 - `-f` = **f**ilename (must be last flag before the filename)
 - `-v` = **v**erbose
 
@@ -578,11 +578,18 @@ mkdir -p "${DAILY_DIR}"
 for src in ${BACKUP_SOURCE}; do
     dir_name=$(basename "${src}")
     log "Backing up ${src} ..."
+    rsync_rc=0
     rsync -a --delete \
         --exclude='*.tmp' \
         --exclude='.cache' \
         --exclude='node_modules' \
-        "${src}/" "${DAILY_DIR}/${dir_name}/" 2>> "${LOG_FILE}"
+        "${src}/" "${DAILY_DIR}/${dir_name}/" 2>> "${LOG_FILE}" || rsync_rc=$?
+    if [[ "${rsync_rc}" -eq 24 ]]; then
+        log "warning: source files vanished from ${src} during backup"
+        rsync_rc=0
+    elif [[ "${rsync_rc}" -gt 0 ]]; then
+        exit "${rsync_rc}"
+    fi
     log "  Done: ${src}"
 done
 
@@ -764,9 +771,7 @@ Which approach would you choose here and why: a nightly backup for a developer l
 
 Use a systemd timer for the nightly server backup if dependencies, journal logs, and missed-run handling matter; cron is acceptable only when the job is simple and the host is reliably online. Use `at` for the one-time midnight reboot because repetition would be dangerous. Use anacron or a persistent systemd timer for the laptop backup because the host may miss the exact overnight window. The reasoning is based on workload shape: recurring stable work, one-time work, and eventual catch-up are different scheduling contracts.
 
-```ini
-OnCalendar=Mon..Fri *-*-* 09:00:00
-```
+
 </details>
 
 <details>
