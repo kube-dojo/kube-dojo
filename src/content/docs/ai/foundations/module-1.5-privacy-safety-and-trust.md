@@ -53,9 +53,12 @@ The following preserved example shows a local model path for sensitive manifest 
 # Deploy a local instance to ensure data sovereignty
 docker run -d -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
 
+# Pull a model before the first API call (required on a fresh setup)
+docker exec ollama ollama pull llama3.2
+
 # Execute an inference call where the prompt never leaves your local network
 curl http://localhost:11434/api/generate -d '{
-  "model": "llama3",
+  "model": "llama3.2",
   "prompt": "Review this internal k8s manifest for security misconfigurations: [MANIFEST_CONTENT]",
   "stream": false
 }'
@@ -75,7 +78,9 @@ Metadata is a third boundary. Even if the content is sanitized, the pattern of r
 
 Before running this, what output do you expect if the incident file includes customer names after a manual redaction pass? A local model will still summarize what it sees, so the risk depends on whether the file stays inside the approved boundary. If the same command were pointed at a public chat tool, the lack of passwords would not be enough. The safer workflow is to scrub first, route to the right environment, and treat the result as advisory.
 
-```bash
+The following is an illustrative example only — it assumes a running Ollama server and an on-disk incident file that are not created elsewhere in this module.
+
+```text
 # Example: Using a local inference engine to analyze sensitive logs
 # This keeps all data within your VPC or local machine, bypassing cloud privacy risks.
 ollama run llama3:8b "Summarize this internal post-mortem and identify the root cause: $(cat production_incident_log.txt)"
@@ -115,7 +120,9 @@ raw_prompt = "Contact Jane Smith (ID: 9912) regarding the Berlin deployment."
 results = analyzer.analyze(text=raw_prompt, entities=["PERSON", "LOCATION"], language='en')
 
 # Anonymize ensures the LLM sees the context but not the identity
-sanitized_prompt = anonymizer.anonymize(text=raw_prompt, analyzer_results=results)
+anonymized = anonymizer.anonymize(text=raw_prompt, analyzer_results=results)
+sanitized_prompt = anonymized.text
+print(sanitized_prompt)
 # Output: "Contact <PERSON> (ID: 9912) regarding the <LOCATION> deployment."
 ```
 
