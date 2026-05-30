@@ -34,7 +34,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At 03:40 during a regional incident, checkout latency spikes while CPU graphs stay flat. Application logs blame “upstream timeouts,” the ingress team insists TLS is healthy, and someone proposes restarting kube-proxy on every node because “that fixed it last time.” Twenty minutes later the cluster is noisier, SSH sessions on two nodes flicker, and nobody can answer a simple question: did the client’s SYN packet reach the pod listener, or did it die in overlay MTU, a full conntrack table, or a resolver search storm?
+**Hypothetical scenario:** At 03:40 during a regional incident, checkout latency spikes while CPU graphs stay flat. Application logs blame “upstream timeouts,” the ingress team insists TLS is healthy, and someone proposes restarting kube-proxy on every node because “that fixed it last time.” Twenty minutes later the cluster is noisier, SSH sessions on two nodes flicker, and nobody can answer a simple question: did the client’s SYN packet reach the pod listener, or did it die in overlay MTU, a full conntrack table, or a resolver search storm?
 
 Network outages punish confident narratives. `ping` succeeding does not prove TCP handshakes work. CoreDNS pods being Ready does not prove a pod’s `ndots:5` search list is sane. A Service object with endpoints does not prove kube-proxy programmed the mode you think you run. The expensive mistake is attributing a transport failure to application code, or a DNS failure to kube-proxy, because the first command an operator ran happened to return plausible text.
 
@@ -145,8 +145,8 @@ Process columns (`-p`) require privileges matching `/proc` access—typically ro
 For Kubernetes, run parallel checks on the node and inside the pod network namespace:
 
 ```bash
-POD=$(kubectl get pod -n default -l app=target -o jsonpath='{.items[0].metadata.name}')
-PID=$(pgrep -f "$POD" | head -n 1)
+CONTAINER_ID=$(kubectl get pod -n default -l app=target -o jsonpath='{.items[0].status.containerStatuses[0].containerID}' | sed 's|.*://||')
+PID=$(sudo crictl inspect "$CONTAINER_ID" | jq .info.pid)
 sudo nsenter -t "$PID" -n ss -tanp
 ```
 
@@ -228,7 +228,8 @@ When CoreDNS returns `SERVFAIL` or times out, split the path:
 
 ```bash
 kubectl -n kube-system get endpoints kube-dns -o wide
-kubectl -n kube-system exec -it deploy/coredns -- wget -qO- --timeout=2 http://127.0.0.1:8080/health 2>/dev/null || true
+POD_IP=$(kubectl -n kube-system get pod -l k8s-app=kube-dns -o jsonpath='{.items[0].status.podIP}')
+kubectl run -n default dns-check --rm -it --restart=Never --image=nicolaka/netshoot -- curl -s "http://${POD_IP}:8080/health"
 kubectl run -n default dns-upstream --rm -it --restart=Never --image=nicolaka/netshoot -- \
   dig +time=2 +tries=1 @kube-dns.kube-system.svc.cluster.local kubernetes.default.svc.cluster.local
 ```
@@ -575,7 +576,7 @@ Optional (lab only, when you have node `docker exec` access): lower the **server
 ```bash
 NODE=$(docker ps --filter "name=${KIND_CLUSTER:-netdebug}-control-plane" -q)
 CONTAINER_ID=$(kubectl get pod -l app=mtu-demo -o jsonpath='{.items[0].status.containerStatuses[0].containerID}' | sed 's|containerd://||')
-PID=$(docker exec "$NODE" crictl inspect "$CONTAINER_ID" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['pid'])")
+PID=$(docker exec "$NODE" sh -c "crictl inspect \"$CONTAINER_ID\" | jq .info.pid")
 docker exec "$NODE" nsenter -t "$PID" -n ip link set dev eth0 mtu 1450
 # re-run the kubectl exec netshoot block above; restore: nsenter ... ip link set dev eth0 mtu 1500
 ```

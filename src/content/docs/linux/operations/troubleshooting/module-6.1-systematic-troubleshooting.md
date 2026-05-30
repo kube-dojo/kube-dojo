@@ -36,7 +36,7 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-At 03:12 one Saturday, a regional retailer lost checkout across its web and mobile properties during a promotion that finance had expected to generate several million dollars in same-day revenue. The first responder saw 500 errors, restarted the checkout service, flushed a cache, and rolled back the most recent deployment within the first few minutes. Each action looked reasonable in isolation, but the combined effect erased the logs that showed database connection refusals, caused a cache stampede against an already memory-starved database, and made the later post-incident review depend on guesses instead of evidence.
+**Hypothetical scenario:** At 03:12 one Saturday, a regional retailer lost checkout across its web and mobile properties during a promotion that finance had expected to drive heavy same-day revenue. The first responder saw 500 errors, restarted the checkout service, flushed a cache, and rolled back the most recent deployment within the first few minutes. Each action looked reasonable in isolation, but the combined effect erased the logs that showed database connection refusals, caused a cache stampede against an already memory-starved database, and made the later post-incident review depend on guesses instead of evidence.
 
 The incident did not last because the team lacked Linux commands. It lasted because the team lacked a shared method for deciding which command came next and what decision the output should drive. The final root cause was ordinary: a database process had been killed under memory pressure after a batch job consumed more memory than expected. The expensive part was not the bug itself; the expensive part was the unstructured response that destroyed the trail, hid the trigger, and made every engineer argue from a different partial story.
 
@@ -80,7 +80,7 @@ Hypotheses (by likelihood):
 6. Bad deployment
 
 Test each:
-1. curl localhost:5432    # Can reach DB?
+1. nc -zv localhost 5432  # Can reach DB? (or pg_isready)
 2. systemctl status api   # Service running?
 3. df -h                  # Disk space?
 4. dmesg | grep oom       # OOM events?
@@ -92,7 +92,7 @@ Notice that the test list is not a script to run blindly. It is a set of questio
 
 The scientific method also protects teams from status games during an incident. Instead of saying "I think the database is fine," you can say "The database accepts TCP connections from the API host, the service account can authenticate, and the slow query log did not spike during the incident window." That is more useful because another engineer can inspect the same evidence and build the next test from it.
 
-War story: a platform team once spent most of an incident chasing a deployment because errors began within minutes of a release. The release was innocent. The real cause was an external certificate bundle update on a subset of hosts, which broke TLS validation only for calls leaving those hosts. The team found it after returning to the method: compare affected and unaffected hosts, predict what should differ, and test the smallest environmental difference first.
+**Hypothetical scenario:** A platform team once spent most of an incident chasing a deployment because errors began within minutes of a release. The release was innocent. The real cause was an external certificate bundle update on a subset of hosts, which broke TLS validation only for calls leaving those hosts. The team found it after returning to the method: compare affected and unaffected hosts, predict what should differ, and test the smallest environmental difference first.
 
 ## Triage Severity and Resource Scope in the First Minute
 
@@ -236,6 +236,8 @@ Before running this, what output do you expect if DNS is broken for clients but 
 In Kubernetes, divide and conquer usually means moving across layers deliberately. Start outside the cluster if the user sees a public failure, then test the ingress or load balancer, then the service, then the endpoints, then the pod, then the application dependency. With the `k` alias in place, commands such as `k get events`, `k describe pod`, and `k logs` are useful, but they should answer a question rather than become a reflexive sequence.
 
 ```bash
+alias k=kubectl
+
 # Recent system changes
 rpm -qa --last | head -20                    # Package installs
 ls -lt /etc/*.conf | head -10                # Config changes
@@ -274,7 +276,7 @@ cat /var/log/dnf.log | tail -50           # RHEL
 
 The danger in "what changed?" is confirmation bias. If you personally deployed something, you may overfocus on that deployment because it is vivid and embarrassing. If another team changed a dependency, you may underweight it because it feels outside your area. A timeline is useful because it lists candidate changes in time order and lets evidence, not ownership, drive priority.
 
-War story: an API team once rolled back three versions because a latency spike started after a release. The real trigger was a cron job that compressed a large log tree and saturated disk I/O on the database host. The release had merely increased traffic enough to reveal the shared bottleneck. Timeline analysis found the overlap; the USE Method explained the resource saturation.
+**Hypothetical scenario:** An API team once rolled back three versions because a latency spike started after a release. The real trigger was a cron job that compressed a large log tree and saturated disk I/O on the database host. The release had merely increased traffic enough to reveal the shared bottleneck. Timeline analysis found the overlap; the USE Method explained the resource saturation.
 
 ## Diagnose Slow Systems Without Guessing
 
@@ -291,7 +293,7 @@ vmstat 1 5
 free -h
 vmstat 1 5 | awk '{print $7, $8}'  # si/so
 
-# Disk bottleneck?
+# Disk bottleneck? (iostat and sar require the sysstat package)
 iostat -x 1 5
 
 # Network?
@@ -322,7 +324,7 @@ curl -I endpoint          # Test connectivity
 # Non-destructive tests
 ping host                 # Network reachability
 dig domain                # DNS resolution
-telnet host port          # Port connectivity
+nc -zv host port          # Port connectivity (telnet may be absent)
 
 # Careful with write operations
 # - Don't restart unless sure
@@ -694,7 +696,7 @@ Next, continue to [Module 6.2: Log Analysis](/linux/operations/troubleshooting/m
 
 - [Google SRE Book - Effective Troubleshooting](https://sre.google/sre-book/effective-troubleshooting/)
 - [Brendan Gregg's USE Method](https://www.brendangregg.com/usemethod.html)
-- [How to Debug Anything](https://www.youtube.com/watch?v=0Vl8i5QwKp8)
+- [How to Debug Anything — GoRuCo 2014](https://www.youtube.com/watch?v=VV7b7fs4VI8)
 - [Rubber Duck Debugging](https://rubberduckdebugging.com/)
 - [systemd journalctl manual](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html)
 - [systemd systemctl manual](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html)
@@ -702,5 +704,5 @@ Next, continue to [Module 6.2: Log Analysis](/linux/operations/troubleshooting/m
 - [Linux man-pages: dmesg](https://man7.org/linux/man-pages/man1/dmesg.1.html)
 - [Kubernetes docs: Debug Running Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/)
 - [Kubernetes docs: Events](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/event-v1/)
-- [Red Hat: Getting started with systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/assembly_getting-started-with-systemd_configuring-basic-system-settings)
-- [Ubuntu Server documentation: Logs](https://documentation.ubuntu.com/server/explanation/logs/)
+- [systemctl(1) — Linux manual page](https://man7.org/linux/man-pages/man1/systemctl.1.html)
+- [systemd-journald.service(8) — Linux manual page](https://man7.org/linux/man-pages/man8/systemd-journald.service.8.html)

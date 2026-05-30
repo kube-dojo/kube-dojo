@@ -33,7 +33,7 @@ After this module, you will be able to make evidence-based troubleshooting decis
 
 ## Why This Module Matters
 
-In 2017, British Airways suffered a major IT outage that disrupted flights across London airports and forced thousands of passengers into cancellations, delays, and manual recovery work. Public reporting described costs in the tens of millions of pounds, but the operational pain was not only financial: teams had to reconstruct which services failed first, which alarms were symptoms, and which restart actions made recovery better or worse. During incidents like that, logs become the closest thing an engineering team has to a flight recorder, and the team that can read them calmly has a decisive advantage over the team that only reacts to the loudest error message.
+In 2017, British Airways suffered a major IT outage that disrupted flights across London airports and forced thousands of passengers into cancellations, delays, and manual recovery work [source]. The operational pain was not only financial: teams had to reconstruct which services failed first, which alarms were symptoms, and which restart actions made recovery better or worse. During incidents like that, logs become the closest thing an engineering team has to a flight recorder, and the team that can read them calmly has a decisive advantage over the team that only reacts to the loudest error message.
 
 Modern Linux systems generate logs from many layers at once. The kernel records device, memory, and networking events; `systemd-journald` indexes service messages; traditional files under `/var/log` hold syslog, authentication, package, web server, and database history; container runtimes collect stdout and stderr; Kubernetes exposes a simplified view through `kubectl logs`, and later examples define `alias k=kubectl` before using the shorter `k logs` form. A single outage might leave useful clues in all of those places, and the important evidence is often not the first scary line you find but the sequence of smaller events that led to it.
 
@@ -175,7 +175,7 @@ journalctl -p warning
 # 0: emerg, 1: alert, 2: crit, 3: err
 # 4: warning, 5: notice, 6: info, 7: debug
 
-# Range
+# Range (warning=4 down to err=3; lower number = higher severity)
 journalctl -p warning..err
 ```
 
@@ -831,7 +831,7 @@ k logs -l app=nginx --all-containers --tail=100
 
 <details><summary>Solution notes for Task 6</summary>
 
-The retention commands help you design rather than merely consume logs. If a journal is large, identify whether the cause is retention policy, debug verbosity, or a noisy service. The Kubernetes commands reinforce the habit of checking previous logs, choosing the correct container, and controlling volume with labels, time filters, and tails.
+The retention commands help you design rather than merely consume logs. If a journal is large, identify whether the cause is retention policy, debug verbosity, or a noisy service. The Kubernetes commands reinforce the habit of checking previous logs, choosing the correct container, and controlling volume with labels, time filters, and tails. If no cluster is available, a not-found error is expected — the goal is recognizing the flag pattern.
 
 </details>
 
@@ -851,9 +851,10 @@ The retention commands help you design rather than merely consume logs. If a jou
 
 ## Sources
 
-- [journalctl man page](https://www.freedesktop.org/software/systemd/man/journalctl.html)
-- [systemd-journald.service man page](https://www.freedesktop.org/software/systemd/man/systemd-journald.service.html)
-- [journald.conf man page](https://www.freedesktop.org/software/systemd/man/journald.conf.html)
+- [journalctl(1) — Linux manual page](https://man7.org/linux/man-pages/man1/journalctl.1.html)
+- [systemd-journald.service(8) — Linux manual page](https://man7.org/linux/man-pages/man8/systemd-journald.8.html)
+- [journald.conf(5) — Linux manual page](https://man7.org/linux/man-pages/man5/journald.conf.5.html)
+- [British Airways 2017 IT outage — FlightGlobal](https://www.flightglobal.com/interruption-of-power-supply-took-out-it-systems-ba/124220.article)
 - [GNU Grep Manual](https://www.gnu.org/software/grep/manual/)
 - [GNU Awk User's Guide](https://www.gnu.org/software/gawk/manual/)
 - [AWK One-Liners](https://catonmat.net/awk-one-liners-explained-part-one)
