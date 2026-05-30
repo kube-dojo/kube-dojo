@@ -28,7 +28,7 @@ Upon completing this module, you will be able to:
 
 ## Why This Module Matters
 
-During a major retail sale, a payments team watched healthy application pods restart until checkout traffic collapsed. The application code had not changed, the cluster control plane was available, and CPU graphs looked ordinary, so the first responders spent valuable time chasing deployment history and network policies. The failure lived lower in the stack: container logs had grown until `/var/log` on several nodes had no usable space, kubelet could not rotate or write the files it needed, and a storage choice that had looked harmless during testing turned into a revenue incident measured in millions of dollars.
+**Hypothetical scenario:** During a major retail sale, a payments team watched healthy application pods restart until checkout traffic collapsed. The application code had not changed, the cluster control plane was available, and CPU graphs looked ordinary, so the first responders spent valuable time chasing deployment history and network policies. The failure lived lower in the stack: container logs had grown until `/var/log` on several nodes had no usable space, kubelet could not rotate or write the files it needed, and a storage choice that had looked harmless during testing turned into a major business-impacting incident.
 
 That kind of outage feels unfair until you know how Linux organizes the machine. The filesystem hierarchy is not a decorative directory tree; it is an operating contract between the kernel, boot process, service manager, package manager, container runtime, Kubernetes components, and administrators. When `/etc` is treated like a scratchpad, configuration drift becomes invisible. When `/var` is treated like an unlimited bucket, logs and runtime data can starve the node. When `/proc` and `/sys` are mistaken for ordinary directories, an operator can misread live kernel state or write a dangerous runtime setting.
 
@@ -242,7 +242,7 @@ cat /sys/fs/cgroup/cgroup.controllers 2>/dev/null && echo "cgroup v2" || echo "c
 graph LR
     dev["/dev/"] --> null_dev["null (Discard all data)"]
     dev --> zero["zero (Endless stream of zero bytes)"]
-    dev --> random["random (Blocking secure RNG)"]
+    dev --> random["random (secure RNG; may block only during early boot before the pool is initialized)"]
     dev --> urandom["urandom (Non-blocking RNG)"]
     dev --> tty["tty (Current terminal)"]
     dev --> stdin["stdin (Standard input symlink)"]
@@ -263,7 +263,7 @@ echo "hello, world!" > /dev/null
 # Generate 16 cryptographically secure random bytes and display them in hexadecimal
 head -c 16 /dev/urandom | xxd
 
-# Create a 1MB file filled with zeros (useful for testing disk I/O or creating swap files)
+# Stream 1 MiB of zeros and count the bytes (nothing is written to disk)
 dd if=/dev/zero bs=1M count=1 | wc -c  # Counts the bytes written
 ```
 
@@ -448,8 +448,8 @@ Kubernetes is portable at the API level, but a node is still a Linux machine wit
 | `/var/lib/kubelet/` | Kubelet's persistent data directory, including its internal state, plugin data, and volume information. |
 | `/var/lib/kubelet/pods/` | Subdirectory where Kubelet stores data related to running pods, including mounted volumes and temporary files. |
 | `/var/lib/containerd/` | Containerd's data directory, holding image layers, container metadata, and writable container layers. |
-| `/var/log/pods/` | Directory where Kubernetes stores symlinks to container logs. Each pod has its own subdirectory. |
-| `/var/log/containers/` | Contains actual container log files, often symlinked from `/var/log/pods`. |
+| `/var/log/pods/` | Directory where the container runtime writes the actual container log files; each pod has its own subdirectory. |
+| `/var/log/containers/` | Per-container symlinks that point to the log files under `/var/log/pods/`, commonly consumed by node log agents. |
 | `/run/containerd/` | Location for the containerd socket and runtime-specific data, typically transient. |
 
 The table is not a promise that every distribution uses only these paths, but it is the right starting map for kubeadm-style nodes and many common installations. Managed services, hardened images, and custom runtime configurations can move or hide pieces, so your first command should confirm existence and ownership rather than assuming the textbook path is authoritative. If the directory exists, inspect it carefully; if it does not, use service configuration and runtime documentation to find the configured alternative.
@@ -512,10 +512,10 @@ You can use this framework during design review as well as incident response. As
 
 ## Did You Know?
 
-- **The Filesystem Hierarchy Standard dates back to 1994**: FHS 1.0 appeared in 1994, and FHS 3.0 was published in 2015 to keep core locations predictable across distributions and software packages.
+- **The Filesystem Hierarchy Standard evolved over time**: The predecessor FSSTND was released in 1994, and the FHS name followed as the scope widened to other Unix-like systems.
 - **Everything really is a file in Linux**: hardware devices can appear under `/dev`, process state appears under `/proc`, and kernel device relationships appear under `/sys`, which gives scripts a common read and write model.
 - **`/proc` is not stored on disk**: reading `/proc/meminfo` asks the kernel to synthesize current memory information at that moment, so the file's contents can change immediately between reads.
-- **Container images often carry more shared operating-system content than application content**: an image over 200 MB may contain only 20-50 MB of unique application files because layers reuse common Linux directories and libraries.
+- **Container images often carry more shared operating-system content than application content**: a large image is often mostly shared base-OS layers, with application files making up a smaller portion because layers commonly reuse common Linux directories and libraries.
 
 ## Common Mistakes
 
