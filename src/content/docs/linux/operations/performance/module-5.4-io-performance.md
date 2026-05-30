@@ -28,13 +28,13 @@ After this module, you will be able to perform the following tasks in a lab or p
 
 - **Measure** disk I/O performance using `iostat`, `iotop`, and `fio` benchmarks.
 - **Diagnose** I/O bottlenecks by interpreting `await`, `%util`, and queue depth metrics together.
-- **Configure** I/O schedulers and cgroup `blkio` limits for container workloads.
+- **Inspect and evaluate** I/O schedulers and cgroup I/O limits for container workloads.
 - **Evaluate** storage performance requirements for database, logging, cache, and Kubernetes PersistentVolume workloads.
 - **Implement** a repeatable I/O test plan that separates page cache effects from real device behavior.
 
 ## Why This Module Matters
 
-At 02:10 on a payroll processing night, a regional payments company watched its checkout latency climb from normal subsecond responses to timeouts that lasted long enough for customers to abandon carts. The on-call engineer saw idle CPUs, plenty of free memory, and application logs that only said database queries were slow. The incident review later traced the outage to a small burst of synchronous audit logging on the same cloud block volume that stored the database write-ahead log, and the team estimated that the hour of degraded service cost more than a senior engineer's annual training budget.
+**Hypothetical scenario:** At 02:10 on a payroll processing night, a regional payments company watched its checkout latency climb from normal subsecond responses to timeouts that lasted long enough for customers to abandon carts. The on-call engineer saw idle CPUs, plenty of free memory, and application logs that only said database queries were slow. The incident review later traced the outage to a small burst of synchronous audit logging on the same cloud block volume that stored the database write-ahead log, and the team estimated that the hour of degraded service cost more than a senior engineer's annual training budget.
 
 That kind of failure feels unfair when you first meet Linux performance work, because the obvious dashboards can make the machine look healthy. CPU utilization may be low because threads are asleep, memory may look comfortable because the page cache is doing exactly what it should, and the application may only report that file operations are taking too long. I/O diagnosis is therefore a discipline of following latency through layers rather than staring at a single red number.
 
@@ -94,7 +94,7 @@ iostat -x 1
 # svctm = service time (deprecated/removed in newer iostat)
 ```
 
-A practical war story illustrates the difference. A team moved a small PostgreSQL database from local SSD to a managed network volume because the cloud console promised enough provisioned IOPS. Bulk report exports still looked fine, but checkout writes became spiky because each commit waited for network round trips and durability acknowledgements. Their old dashboard tracked MB/s, so it missed the latency regression that users actually felt.
+**Hypothetical scenario:** A team moved a small PostgreSQL database from local SSD to a managed network volume because the cloud console promised enough provisioned IOPS. Bulk report exports still looked fine, but checkout writes became spiky because each commit waited for network round trips and durability acknowledgements. Their old dashboard tracked MB/s, so it missed the latency regression that users actually felt.
 
 Before running any command in a production incident, write down what you expect the metric to prove. If you expect high IOPS with low latency, you are testing whether the device is busy but healthy. If you expect low IOPS with high latency, you are looking for remote storage delays, a failing disk, filesystem stalls, or a workload that is serializing on synchronous writes. That prediction keeps you from changing schedulers or buying storage before you know which layer is responsible.
 
@@ -107,7 +107,7 @@ The core measurement tool for block devices is `iostat -x`, because it shows rat
 ```bash
 # Basic I/O stats
 iostat -x 1
-# Device         r/s     w/s   rkB/s   wkB/s  %util  await  avgqu-sz
+# Device         r/s     w/s   rkB/s   wkB/s  %util  await  aqu-sz
 # sda          100.0   200.0  4000.0  8000.0   75.2   12.5      2.3
 # nvme0n1      500.0   300.0 20000.0 12000.0   45.0    1.5      0.8
 
@@ -116,16 +116,16 @@ iostat -x 1
 # rkB/s, wkB/s = Throughput
 # %util        = Percentage of time device was busy
 # await        = Average I/O time (ms)
-# avgqu-sz     = Average queue size (saturation indicator)
+# aqu-sz       = Average queue size (formerly avgqu-sz; saturation indicator)
 ```
 
-Read `iostat` as a cluster of clues. The `r/s` and `w/s` columns describe operation rate, while `rkB/s` and `wkB/s` describe byte throughput. The `await` column tells you the average time an operation spends from submission to completion, including queue wait. The `avgqu-sz` column shows whether requests are backing up, and `%util` tells you whether the device was busy during the interval rather than whether the workload has reached the device's true ceiling.
+Read `iostat` as a cluster of clues. The `r/s` and `w/s` columns describe operation rate, while `rkB/s` and `wkB/s` describe byte throughput. The `await` column tells you the average time an operation spends from submission to completion, including queue wait. The `aqu-sz` column shows whether requests are backing up, and `%util` tells you whether the device was busy during the interval rather than whether the workload has reached the device's true ceiling.
 
 | Metric | Meaning | Concerning Value |
 |--------|---------|-----------------|
 | `%util` | Time busy | >80% for HDDs |
 | `await` | Total latency | >10ms for SSD, >50ms for HDD |
-| `avgqu-sz` | Queue depth | >1 means I/O backing up |
+| `aqu-sz` | Queue depth | >1 means I/O backing up |
 | `r_await/w_await` | Read/write latency separately | Large difference indicates problem |
 
 Those concerning values are starting points, not laws. A busy HDD at 80 percent can become user-visible trouble because it has little parallelism and expensive seeks. A busy NVMe device can show high `%util` while keeping `await` under a millisecond, which means it is working hard but not necessarily hurting callers. The right question is whether latency and queueing are rising relative to the service objective for the application.
@@ -202,7 +202,7 @@ Treat scheduler changes as experiments, not rituals. `mq-deadline` can protect l
 | NVMe | none or kyber |
 | VM disk | none (host handles it) |
 
-A common scheduler war story starts with a team changing every server to the same setting after one benchmark improves. The database hosts improve because their virtual disks stop paying unnecessary scheduler overhead, but the log aggregation host with older SATA SSDs becomes less predictable during burst writes. The lesson is that the scheduler is part of a workload and device pairing, so a setting that is correct in one place can be a regression in another.
+**Hypothetical scenario:** A team changed every server to the same scheduler setting after one benchmark improved. The database hosts improved because their virtual disks stopped paying unnecessary scheduler overhead, but the log aggregation host with older SATA SSDs became less predictable during burst writes. The lesson is that the scheduler is part of a workload and device pairing, so a setting that is correct in one place can be a regression in another.
 
 Filesystems add another layer of tradeoffs. ext4 is mature, widely understood, and excellent for general-purpose Linux systems. XFS is strong for large files and high concurrency, which is why it is common in enterprise Linux environments. Btrfs brings snapshots and checksums, but its copy-on-write behavior can be costly for some database patterns unless configured carefully. tmpfs is fastest because it lives in memory, but data disappears when the system restarts.
 
@@ -262,14 +262,18 @@ Containers do not remove the Linux I/O stack; they add ownership and isolation q
 
 ```bash
 # View container I/O limits
-cat /sys/fs/cgroup/blkio/docker/<container>/blkio.throttle.read_bps_device
-cat /sys/fs/cgroup/blkio/docker/<container>/blkio.throttle.write_bps_device
+CONTAINER_ID="..."
+CG="/sys/fs/cgroup/blkio/docker/$CONTAINER_ID"
+cat "$CG/blkio.throttle.read_bps_device"
+cat "$CG/blkio.throttle.write_bps_device"
 
 # Format: major:minor bytes_per_second
 # 8:0 10485760  = sda limited to 10MB/s
 
-# I/O stats
-cat /sys/fs/cgroup/blkio/docker/<container>/blkio.io_service_bytes
+# cgroup v2
+CG="/sys/fs/cgroup/kubepods.slice"
+cat "$CG/io.max" 2>/dev/null
+cat "$CG/io.stat" 2>/dev/null
 ```
 
 The exact cgroup paths differ between cgroup v1, cgroup v2, Docker, containerd, and the host distribution, but the principle is stable. Limits attach I/O policy to a control group, and the kernel accounts work against that group. If a container is throttled, the application may report slow writes even while the device itself looks underused, because the queue is not at the device; it is at the policy boundary.
@@ -302,6 +306,20 @@ parameters:
   type: gp3
   iops: "3000"
   throughput: "125"
+volumeBindingMode: WaitForFirstConsumer
+---
+# PVC for the StorageClass above
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: fast-storage
+  resources:
+    requests:
+      storage: 10Gi
 ---
 # Pod using PVC
 apiVersion: v1
@@ -321,7 +339,7 @@ spec:
       claimName: my-pvc
 ```
 
-A Kubernetes war story: an operations team moved a write-heavy queue worker to a PersistentVolume backed by a general-purpose cloud disk and kept the same pod resource requests. CPU and memory graphs stayed calm, but queue lag grew after the daily reporting job started. The fix was not a CPU request change; it was separating the queue data from report exports and choosing a volume class with explicit IOPS and throughput guarantees.
+**Hypothetical scenario:** An operations team moved a write-heavy queue worker to a PersistentVolume backed by a general-purpose cloud disk and kept the same pod resource requests. CPU and memory graphs stayed calm, but queue lag grew after the daily reporting job started. The fix was not a CPU request change; it was separating the queue data from report exports and choosing a volume class with explicit IOPS and throughput guarantees.
 
 When you evaluate a Kubernetes storage problem, follow the path from pod to node to volume. Check whether many pods share a node-local device, whether the CSI driver provisions the expected class, whether the workload is mounted through a network filesystem, and whether the application uses many small synchronous writes. If `k get pvc` says the claim is bound, that only proves scheduling and provisioning worked; it does not prove the workload has the latency budget it needs.
 
@@ -351,8 +369,8 @@ High utilization with acceptable latency can be normal during backups, compactio
 ```bash
 # Long I/O times - check queue
 iostat -x 1
-# If avgqu-sz > 1, requests are queuing
-# If avgqu-sz ~ 0 but await high, device is slow
+# If aqu-sz > 1, requests are queuing
+# If aqu-sz ~ 0 but await high, device is slow
 
 # For HDDs: Could be fragmentation, failing disk
 # For network storage: Network latency
@@ -363,7 +381,7 @@ dmesg | grep -i "error\|fault\|reset" | grep -i sd
 smartctl -a /dev/sda | grep -i error
 ```
 
-High `await` with a growing queue suggests saturation or contention. High `await` with a small queue suggests each operation is intrinsically slow, which is common with network-backed disks, degraded hardware, forced flushes, or storage throttling. That distinction is why `avgqu-sz` belongs beside `await` in your mental model. Latency without queueing is a service-time problem; latency with queueing is often a demand problem.
+High `await` with a growing queue suggests saturation or contention. High `await` with a small queue suggests each operation is intrinsically slow, which is common with network-backed disks, degraded hardware, forced flushes, or storage throttling. That distinction is why `aqu-sz` belongs beside `await` in your mental model. Latency without queueing is a service-time problem; latency with queueing is often a demand problem.
 
 ```bash
 # Check what's waiting
@@ -401,7 +419,7 @@ rm /tmp/testfile /tmp/fiotest
 
 `fio --direct=1` is especially useful because it reduces page cache distortion for device-focused tests. That does not make direct I/O the only valid measurement; many real applications benefit from the page cache and should be measured with it. The point is to know which path you are measuring. If you benchmark cached reads and later size a cold recovery path from that result, the number will mislead you.
 
-The best incident notes turn raw metrics into a causal sentence. "At 13:05, `w_await` rose above 70ms while `avgqu-sz` exceeded 8 on the database volume; `iotop` showed backup compression writing to the same device; moving backups to a separate volume removed queueing." That sentence names time, symptom, queue behavior, owner, and fix. It is far more useful than "disk was slow," which cannot be tested or prevented.
+The best incident notes turn raw metrics into a causal sentence. "At 13:05, `w_await` rose above 70ms while `aqu-sz` exceeded 8 on the database volume; `iotop` showed backup compression writing to the same device; moving backups to a separate volume removed queueing." That sentence names time, symptom, queue behavior, owner, and fix. It is far more useful than "disk was slow," which cannot be tested or prevented.
 
 When the evidence is still ambiguous, choose the next command by elimination. If process-level writers are quiet, inspect filesystem and mount behavior. If local block metrics are quiet but the application waits on file operations, inspect network storage, remote database calls, or cgroup throttles. If the benchmark is healthy but production is slow, compare block size, concurrency, cache state, and durability requirements. This narrowing process is slower than guessing, but it leaves a trail that another engineer can audit.
 
@@ -453,10 +471,10 @@ This framework also helps you decide when not to tune Linux. If the application 
 | Mistake | Why It Happens | How to Fix It |
 |---------|----------------|---------------|
 | Ignoring iowait context | CPU tools show `%wa`, so the team assumes the CPU is the bottleneck. | Check `iostat`, `iotop`, and `D` state processes before adding CPU capacity. |
-| Treating `%util` as capacity | The metric looks like CPU utilization, but storage devices can process parallel queues. | Read `%util` with `await`, `avgqu-sz`, device type, and application latency. |
+| Treating `%util` as capacity | The metric looks like CPU utilization, but storage devices can process parallel queues. | Read `%util` with `await`, `aqu-sz`, device type, and application latency. |
 | Choosing the wrong scheduler | A setting that helped one device is copied to every host. | Match scheduler experiments to HDD, SSD, NVMe, or VM disk behavior and record rollback steps. |
 | Adding sync writes everywhere | Developers use flushes for safety without measuring the latency cost. | Keep durability where it matters, batch where safe, and measure `w_await` around commits. |
-| Not monitoring queue depth | Dashboards show throughput but hide the line of waiting requests. | Add `avgqu-sz` or equivalent queue-depth panels beside latency and IOPS graphs. |
+| Not monitoring queue depth | Dashboards show throughput but hide the line of waiting requests. | Add `aqu-sz` or equivalent queue-depth panels beside latency and IOPS graphs. |
 | Placing log files on slow shared disks | Operational logs are treated as harmless background traffic. | Separate log volumes, reduce noisy logs, or apply cgroup limits to protect critical paths. |
 | Forgetting SSD maintenance | TRIM and discard policy are left to defaults that may not match the device. | Use the distribution's recommended scheduled trim or discard configuration for the storage type. |
 
@@ -477,7 +495,7 @@ The page cache explains the change. During the first pass, the service reads dat
 </details>
 
 <details>
-<summary>An older HDD server shows `avgqu-sz` spikes above 15 and `await` above 200ms during user complaints, while `%util` averages 60 percent. What is the likely bottleneck?</summary>
+<summary>An older HDD server shows `aqu-sz` spikes above 15 and `await` above 200ms during user complaints, while `%util` averages 60 percent. What is the likely bottleneck?</summary>
 
 The workload is overwhelming the mechanical disk during bursts, even if the average busy percentage does not reach 100 percent. HDDs have limited parallelism because seek time and rotational delay dominate random access. A queue depth above 15 means requests are waiting in line, and `await` includes that waiting time. You should identify the writer or reader causing bursts, then reduce contention, move the workload, or use storage with better random I/O performance.
 
@@ -552,16 +570,25 @@ Record the device that backs the filesystem you will test, such as `sda`, `vda`,
 Check the active scheduler and queue depth for the test device. Do not change the scheduler yet. The point is to learn what the host is using, connect the setting to the device type, and decide what you would test if a scheduler change became part of a controlled experiment.
 
 ```bash
-# 1. Check current scheduler
-cat /sys/block/sda/queue/scheduler 2>/dev/null || \
-cat /sys/block/vda/queue/scheduler 2>/dev/null || \
-echo "Check your disk name with lsblk"
+# 1. Derive the test disk from lsblk
+DEV=$(lsblk -ndo NAME,TYPE | awk '$2=="disk"{print $1; exit}')
 
-# 2. List available schedulers
+# 2. Check current scheduler
+if [ -n "$DEV" ]; then
+  cat "/sys/block/$DEV/queue/scheduler" 2>/dev/null
+else
+  echo "No block disk detected; check your disk name with lsblk"
+fi
+
+# 3. List available schedulers
 # Bracketed one is active
 
-# 3. Check queue depth
-cat /sys/block/sda/queue/nr_requests 2>/dev/null
+# 4. Check queue depth
+if [ -n "$DEV" ]; then
+  cat "/sys/block/$DEV/queue/nr_requests" 2>/dev/null
+else
+  echo "No block disk detected; check your disk name with lsblk"
+fi
 ```
 
 <details>
@@ -584,6 +611,7 @@ dd if=/dev/zero of=/tmp/iotest bs=1M count=500 2>&1
 iostat -x 1 10
 
 # 3. Test read
+sync
 echo 3 | sudo tee /proc/sys/vm/drop_caches  # Clear cache
 dd if=/tmp/iotest of=/dev/null bs=1M 2>&1
 
@@ -674,7 +702,7 @@ docker rm -f io-test
 ### Success Criteria
 
 - [ ] Identified disk devices and current utilization.
-- [ ] Measured `iostat` output for utilization, latency, and queue depth.
+- [ ] Measured `iostat` output for utilization, latency, and queue depth (`aqu-sz`).
 - [ ] Observed I/O during file operations and explained cache effects.
 - [ ] Found per-process I/O consumers with `iotop` or `pidstat`.
 - [ ] Checked filesystem mount options, byte usage, and inode usage.
