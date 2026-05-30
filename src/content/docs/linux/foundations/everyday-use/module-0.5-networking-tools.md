@@ -511,7 +511,7 @@ A strong answer confirms that the OUTPUT chain changed by exactly one rule, the 
 
 ## Next Module
 
-Next up: [System Essentials](../system-essentials/) moves from everyday host operation into the Linux internals that explain processes, kernels, filesystems, and the low-level behavior behind the tools you have been using.
+Next up: [System Essentials](../../system-essentials/) moves from everyday host operation into the Linux internals that explain processes, kernels, filesystems, and the low-level behavior behind the tools you have been using.
 
 ## Sources
 

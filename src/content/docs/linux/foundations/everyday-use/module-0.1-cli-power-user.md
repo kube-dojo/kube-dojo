@@ -18,14 +18,14 @@ lab:
 
 After this module, you will be able to:
 
-- **Chain** commands with pipes, redirects, and subshells to build reliable one-line investigations.
+- **Chain** commands with pipes and redirects to build reliable one-line investigations.
 - **Search** files and content efficiently using `find`, `grep`, and `xargs` without losing results to shell expansion.
-- **Process** text streams with `cut`, `sort`, `uniq`, `awk`, and `sed` for log analysis.
+- **Process** text streams with `cut`, `sort`, `uniq`, and `awk` for log analysis.
 - **Redirect** stdout, stderr, and combined streams for scripting, debugging, and audit trails.
 
 ## Why This Module Matters
 
-At 2:13 AM, an on-call engineer at a midsize payments company gets paged because checkout latency has crossed the incident threshold and support is reporting failed card attempts. The application still responds to health checks, the database is reachable, and the dashboard shows only that error rates are climbing. Somewhere in a large directory of rotated logs is the difference between a customer-facing outage and a noisy alert, but opening files one at a time would waste the most expensive minutes of the incident.
+**Hypothetical scenario:** Picture an on-call page around 2 AM because checkout latency has crossed the incident threshold and support is reporting failed card attempts. The application still responds to health checks, the database is reachable, and the dashboard shows only that error rates are climbing. Somewhere in a large directory of rotated logs is the difference between a customer-facing outage and a noisy alert, but opening files one at a time would waste the most expensive minutes of the incident.
 
 The engineer does not need a new observability platform in that moment; they need enough command-line fluency to turn raw text into evidence. A focused pipeline can search across files, keep the database-related failures, and show the latest matches in seconds. That speed matters because incident response is usually a sequence of narrowing questions: which service failed, when did it start, which host saw it first, and whether the symptom is still happening.
 
@@ -174,15 +174,15 @@ echo "=== Deploy started ===" >> deploy.log
 echo "Version: 2.4.1" >> deploy.log
 echo "=== Deploy finished ===" >> deploy.log
 
-# Append today's disk usage to a daily report
-df -h >> /var/log/daily_disk_report.txt
+# Append today's disk usage to a daily report (use a path you can write without sudo)
+df -h >> ~/daily_disk_report.txt
 ```
 
 In a real script, append mode turns individual command output into an operational journal. The line below is simple, but it shows a useful pattern: generate a timestamp at the moment of success, attach a short message, and write that observation to a place the next shift can inspect. Even a small log line becomes valuable when it is consistent.
 
 ```bash
 # Every time this script runs, it appends a timestamped entry
-echo "$(date): Backup completed successfully" >> /var/log/backup.log
+echo "$(date): Backup completed successfully" >> ~/backup.log
 ```
 
 Redirecting stderr is what keeps a broad search readable. If you search from the filesystem root as a regular user, many directories are intentionally off limits, and each denied path can produce an error line. Sending stream 2 somewhere else does not make the command more privileged; it only prevents diagnostics from drowning out valid matches on stream 1.
@@ -555,9 +555,9 @@ ps aux | grep "[r]unaway_script" | awk '{print $2}' | xargs kill
 
 The runaway-process command is compact, but it deserves respect because the final stage changes system state. The bracket trick prevents `grep` from matching its own process, `awk` extracts the PID column, and `xargs` passes those PIDs to `kill`. A careful operator would first run the pipeline without `xargs kill`, verify the selected process IDs, and only then add the terminating action.
 
-### War Story: The 3 AM Log Hunt
+### Hypothetical Scenario: The 3 AM Log Hunt
 
-A junior engineer once joined an incident where payment processing had stopped for a subset of customers. They SSH'd into the host, opened `/var/log/app.log` in a terminal editor, and began searching manually. The file was several gigabytes, the editor became sluggish, and each attempt to jump around the file added more frustration than evidence.
+**Hypothetical scenario:** A junior engineer joins an incident where payment processing has stopped for a subset of customers. They SSH'd into the host, opened `/var/log/app.log` in a terminal editor, and began searching manually. The file was several gigabytes, the editor became sluggish, and each attempt to jump around the file added more frustration than evidence.
 
 A senior engineer joined the call and reduced the question to a stream problem: find payment-related lines, keep the error lines, and show only the latest few matches. The command was not fancy, but it matched the incident shape perfectly. Instead of reading the whole file, the team asked the file for the lines that could explain the symptom.
 
@@ -774,13 +774,13 @@ Expected output:
 <summary>Solution</summary>
 
 ```bash
-grep -i -B 1 "database\|memory" ~/investigation/logs/*.log
+grep -i -B 1 -E 'ERROR.*(database|memory)|(database|memory).*ERROR' ~/investigation/logs/*.log
 ```
 
 Or using two greps with a pipe:
 
 ```bash
-cat ~/investigation/logs/*.log | grep -i -B 1 -E "database|memory"
+grep "ERROR" ~/investigation/logs/*.log | grep -i -E 'database|memory'
 ```
 </details>
 
@@ -821,7 +821,7 @@ You have completed this exercise when:
 
 ## Next Module
 
-Next up: [Module 0.2: Environment & Permissions](../module-0.2-environment-permissions/) teaches how Linux knows who you are, how shell configuration shapes your working environment, and how permissions protect shared systems.
+Next up: [Module 0.2: Environment & Permissions (Who You Are & Where You Are)](../module-0.2-environment-permissions/) teaches how Linux knows who you are, how shell configuration shapes your working environment, and how permissions protect shared systems.
 
 ## Sources
 

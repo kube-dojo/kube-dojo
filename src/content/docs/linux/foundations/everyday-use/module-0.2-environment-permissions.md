@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: "linux-0.2-environment-permissions"
   url: "https://killercoda.com/kubedojo/scenario/linux-0.2-environment-permissions"
-  duration: "30 min"
+  duration: "45 min"
   difficulty: "intermediate"
   environment: "ubuntu"
 ---
@@ -33,7 +33,7 @@ After this module, you will be able to perform these troubleshooting tasks in a 
 
 ## Why This Module Matters
 
-In 2024, a small platform team lost most of a release window because a deployment helper existed on disk, passed code review, and still refused to run on the production jump host. The engineer on call tried `deploy.sh` and got one error, tried `./deploy.sh` and got another, then escalated to a root shell because the clock was moving and the rollback window was closing. The immediate outage cost was measured in delayed customer migrations rather than a public headline, but the internal post-incident review found a familiar chain: unclear `PATH`, missing execute permission, a file edited with `sudo`, and a service account that could no longer read its own configuration.
+**Hypothetical scenario:** A small platform team loses most of a release window because a deployment helper exists on disk, passes code review, and still refuses to run on the production jump host. The engineer on call tried `deploy.sh` and got one error, tried `./deploy.sh` and got another, then escalated to a root shell because the clock was moving and the rollback window was closing. The immediate outage cost was measured in delayed customer migrations rather than a public headline, but the internal post-incident review found a familiar chain: unclear `PATH`, missing execute permission, a file edited with `sudo`, and a service account that could no longer read its own configuration.
 
 ```text
 bash: ./deploy.sh: Permission denied
@@ -178,6 +178,11 @@ type ls
 
 type cd
 # Output: cd is a shell builtin                (built into bash itself)
+
+# A script file is not a command name unless a directory in PATH contains it
+type deploy.sh
+# Output: deploy.sh is /usr/local/bin/deploy.sh   (when that path is in PATH)
+# Output: bash: type: deploy.sh: not found        (when the file exists only in .)
 ```
 
 `which` is useful, but `type` is often better during shell debugging because it can reveal aliases, functions, and builtins. If `type k` says the command is an alias, the shell expands it before normal lookup continues. If `type cd` says the command is a builtin, there is no external executable to find. This layered resolution model is why "command not found" is only one possible failure among several, and why the first diagnostic step should be identifying what the shell believes the word means.
@@ -195,7 +200,7 @@ echo $PATH
 
 Do not add the current directory, `.`, to the beginning of `PATH`. The convenience looks harmless until you stand in a directory controlled by someone else. A malicious executable named `ls`, `ssh`, or `kubectl` can then win command lookup simply because the shell checks the current directory first. Saving two characters with `./` is not worth allowing untrusted directories to become command sources.
 
-War Story: a team inherited an old build host where root's `PATH` began with `.` because an administrator wanted local helper scripts to feel convenient. During an incident, a temporary directory contained a file named `ls` from a failed tool extraction. A root shell entered that directory and ran `ls`, which executed the local file instead of `/usr/bin/ls`. The compromise was contained quickly, but the root cause was not an advanced exploit; it was command lookup order combined with unnecessary root authority.
+**Hypothetical scenario:** A team inherits an old build host where root's `PATH` began with `.` because an administrator wanted local helper scripts to feel convenient. During an incident, a temporary directory contained a file named `ls` from a failed tool extraction. A root shell entered that directory and ran `ls`, which executed the local file instead of `/usr/bin/ls`. The compromise was contained quickly, but the root cause was not an advanced exploit; it was command lookup order combined with unnecessary root authority.
 
 Before running this, what output do you expect from `type deploy.sh` when `deploy.sh` exists in the current directory but no directory in `PATH` contains that name? If you expect "command not found," you are tracking the shell's perspective correctly. Existence in the current directory is not enough for name-based lookup, and the shell does not treat visible files as commands unless the path rules say it should.
 
@@ -515,7 +520,7 @@ sudo cat myfile.txt    # If you own the file, just use cat!
 sudo vim notes.txt     # The file will end up owned by root - now YOU cannot edit it
 ```
 
-War Story: a junior engineer once ran `sudo vim` to edit a config file in their home directory because they had recently used sudo for a system service and stayed in the habit. The file became owned by root. Hours later, an application running as the normal user crashed with `Permission denied` while reading that config, and the team investigated application code before noticing ownership. The fix was one `chown`, but the lesson was sharper: use privilege for the command that needs it, then put it down.
+**Hypothetical scenario:** A junior engineer runs `sudo vim` to edit a config file in their home directory because they had recently used sudo for a system service and stayed in the habit. The file became owned by root. Hours later, an application running as the normal user crashed with `Permission denied` while reading that config, and the team investigated application code before noticing ownership. The fix was one `chown`, but the lesson was sharper: use privilege for the command that needs it, then put it down.
 
 There is one more sudo trap worth knowing early. Shell redirection happens in your current shell before `sudo` runs the command, so `sudo echo "line" >> /etc/hosts` still asks the unprivileged shell to open `/etc/hosts` for appending. Use `sudo tee -a /etc/hosts` instead when the privileged operation is the write itself. That pattern keeps the privilege narrow while moving it to the process that opens the protected file.
 
