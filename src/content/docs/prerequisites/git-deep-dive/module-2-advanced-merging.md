@@ -27,7 +27,7 @@ revision_pending: false
 
 ## Why This Module Matters
 
-On October 21, 2018, routine optical hardware maintenance disconnected GitHub's US-East hub from its primary database for 43 seconds. An automated failover promoted the US-West hub to primary, but the US-East hub continued to accept writes. Both sites held authoritative-looking records for the same rows. Recovery required 24 hours of manual reconciliation between two diverged timelines, and approximately 200,000 webhook payloads were permanently dropped. The incident demonstrated that divergent timelines can each appear correct in isolation while creating massive conflict at infrastructure scale. The same problem exists in source control every time long-lived branches are reconciled. Advanced Git merging is the practiced skill that keeps that reconciliation from becoming an outage.
+On October 21, 2018, routine optical hardware maintenance severed the US East Coast network hub from the primary US East Coast data center for 43 seconds. An automated failover promoted the US-West hub to primary, but the US-East hub continued to accept writes. Both sites held authoritative-looking records for the same rows. The incident caused more than 24 hours of degraded service; engineers had to manually reconcile the records that both sites had accepted during the brief split before consistency could be restored, and approximately 200,000 webhook payloads were permanently dropped. The incident demonstrated that divergent timelines can each appear correct in isolation while creating massive conflict at infrastructure scale. The same problem exists in source control every time long-lived branches are reconciled. Advanced Git merging is the practiced skill that keeps that reconciliation from becoming an outage.
 
 For Kubernetes platform work, merging is more than a repository housekeeping task because the merged text often becomes a desired-state contract consumed by controllers, admission policies, scanners, and deployment automation. A clean-looking merge can still leave a selector pointing at the wrong labels, a generated Secret missing from a Kustomize overlay, or a release branch carrying assumptions that are no longer true for Kubernetes 1.35 clusters. This module treats merging as an operational design skill: you will inspect graph shape, choose the right integration method, resolve conflicts by synthesizing intent, and validate that the resulting manifests still describe a coherent system.
 
@@ -119,7 +119,7 @@ The true hidden genius of Git's architecture lies in exactly how it calculates a
 git merge-base main feature/ingress-update
 ```
 
-The output of `git merge-base` is the single commit hash that represents the best common ancestor of the two branches, which Git uses as the starting point for its three-way merge calculation. Understanding exactly which commit acts as the base is critical when diagnosing why Git seems to be generating strange or counterintuitive conflicts.
+The output of `git merge-base` is one selected best common ancestor commit hash for the two branches, which Git uses as the starting point for its three-way merge calculation. In criss-cross histories with multiple equally good bases, run `git merge-base --all` to list every candidate. Understanding exactly which commit acts as the base is critical when diagnosing why Git seems to be generating strange or counterintuitive conflicts.
 
 > **Pause and predict**: Look at the following branch topology:
 > ```mermaid
@@ -142,7 +142,7 @@ The output of `git merge-base` is the single commit hash that represents the bes
 > 
 > *Answer*: The merge base is commit `B`. To find it, trace backwards from `main` (commit D) and `feature/cache` (commit H) until their paths intersect. They first meet at `B`, making it the common ancestor used for the three-way merge.
 
-Git provides six distinct, mathematically specialized merge strategies that govern how files are combined: `ort`, `recursive`, `resolve`, `octopus`, `ours`, and `subtree`. 
+Git provides several merge strategies that govern how files are combined: `ort`, `recursive` (now an alias/synonym for `ort`), `resolve`, `octopus`, `ours`, and `subtree`. 
 
 For standard two-branch merges, modern Git uses the `ort` strategy as the universal default. Standing for "Ostensibly Recursive's Twin", the `ort` strategy became the default in Git 2.34.0 (released in November 2021) and it defaults to using `diff-algorithm=histogram` internally. This algorithmic choice makes it significantly faster and vastly more accurate at handling massive file renames and complex directory restructurings across diverged branches. The `ort` backend entirely replaced the legacy `recursive` strategy, which was subsequently fully deprecated in Git 2.50.0 and now exists merely as a silent synonym and alias for `ort` to preserve backwards compatibility for old scripts.
 
@@ -218,7 +218,7 @@ git merge feature/redis-auth
 # Automatic merge failed; fix conflicts and then commit the result.
 ```
 
-If you panic upon seeing massive multi-file infrastructure conflicts, remember that running `git merge --abort` is functionally equivalent to running `git reset --merge` when a `MERGE_HEAD` is present. It will safely and immediately return your entire repository to the pristine pre-merge state. If you choose to proceed, you must synthesize the conflicting configurations accurately, ensuring no YAML structures are broken.
+If you panic upon seeing massive multi-file infrastructure conflicts, remember that running `git merge --abort` is functionally equivalent to running `git reset --merge` when a `MERGE_HEAD` is present, but only when your working tree and index are clean enough for Git to unwind the merge safely. If you have unstaged edits outside the conflict, stash or commit them first, or use `git merge --abort` only after understanding what will be discarded. When `merge.autostash` is enabled, Git may temporarily stash local changes during the merge and restore them on abort via `MERGE_AUTOSTASH`. If you choose to proceed instead of aborting, you must synthesize the conflicting configurations accurately, ensuring no YAML structures are broken.
 
 To successfully resolve this specific scenario, we must determine the desired outcome across all files: we want High Availability (replicas: 3) AND authentication (env vars). For the infrastructure to actually work, the Kustomization file must include BOTH the `commonLabels` AND the `secretGenerator` so that the `redis-secret` referenced in the deployment actually exists.
 
@@ -256,7 +256,7 @@ Always comprehensively validate the structural integrity of your infrastructure-
 After finalizing a complex merge, you or a reviewer may need to isolate and review only the specific manual conflict resolutions you made, without the noise of unrelated feature changes. You can achieve this by inspecting the merge commit with `git show <merge-commit-hash>`, which displays a specialized "combined diff" that intelligently filters the output to highlight only the lines modified differently from both parent branches.
 
 ```bash
-kustomize build . | kubectl apply -f - --dry-run=client
+kubectl kustomize . | kubeconform -summary -
 
 # If successful:
 git add redis-deployment.yaml kustomization.yaml
@@ -385,8 +385,8 @@ spec:
 
 The exercise then required validation before committing, because a syntactically broken Deployment is still a failed merge even when the Git conflict markers have been removed:
 ```bash
-kubectl apply -f deployment.yaml --dry-run=client
-# Expect output: deployment.apps/api-server created (dry run)
+kubeconform -summary deployment.yaml
+# Expect output confirming the Deployment schema is valid
 ```
 ```bash
 git add deployment.yaml
@@ -481,8 +481,8 @@ spec:
 
 **Task 5: Validate the YAML**
 ```bash
-kubectl apply -f deployment.yaml --dry-run=client
-# Expect output: deployment.apps/api-server created (dry run)
+kubeconform -summary deployment.yaml
+# Expect output confirming the Deployment schema is valid
 ```
 
 **Task 6: Finalize the Merge**
@@ -523,7 +523,7 @@ git merge feature/ingress feature/autoscaling feature/network-policies
 
 > **Pause and predict**: What do you think happens if Git successfully merges `feature/ingress` and `feature/autoscaling`, but then detects a complex conflict when attempting to merge `feature/network-policies`? Will it pause and ask you to resolve it like a standard three-way merge?
 
-**The All-or-Nothing Rule:** Unlike a standard two-branch three-way merge which politely pauses mid-flight and leaves interactive conflict markers directly in your working directory, an octopus merge is an inherently brittle operation. It will categorically refuse to complete and will immediately abort the entire transaction if it encounters *any* conflict requiring manual resolution across any of the branches involved.
+**The All-or-Nothing Rule:** Unlike a standard two-branch three-way merge, which pauses mid-flight and leaves interactive conflict markers in your working directory while keeping the branch pointer unchanged, an octopus merge stops as soon as it hits a conflict it cannot resolve automatically. Git prints `Automatic merge failed; fix conflicts and then commit the result.`, does **not** move the branch ref, and leaves the working tree and index in a conflicted or partially merged state. Run `git merge --abort` to discard that in-progress merge and return to the pre-merge snapshot.
 
 > **Stop and think**: If an octopus merge fails due to a conflict between `feature/autoscaling` and `feature/network-policies`, which approach would you choose:
 > A) Abandon the octopus merge entirely and merge all three sequentially.
@@ -602,7 +602,7 @@ Advanced merging becomes safer when a team treats every integration as a design 
 
 The most reliable pattern is small, frequent integration against a protected trunk. A developer can still use a short-lived branch for review, but the branch should be measured in hours or a small number of days rather than weeks. This cadence keeps the merge base close to current reality, which means Git compares each branch against a recent ancestor and produces smaller, more intelligible conflict regions. For Kubernetes manifests, that difference is practical rather than aesthetic: a small conflict might ask whether `replicas` should be three or five, while a stale branch may force the resolver to reconcile probes, selectors, container names, generated Secrets, and network policy labels all at once.
 
-Another durable pattern is schema-aware validation immediately after conflict resolution. Git knows that two lines of YAML text differ, but it does not know whether a `secretKeyRef` points at a Secret that Kustomize still generates, whether a selector matches the labels inside a Pod template, or whether an API field is valid in Kubernetes 1.35. The resolver therefore has to move from text reconciliation to platform reconciliation. Running `kubectl apply --dry-run=client`, `kustomize build`, or an admission-style validation tool is the engineering step that converts "Git accepted the file" into "this configuration still represents a coherent cluster object."
+Another durable pattern is schema-aware validation immediately after conflict resolution. Git knows that two lines of YAML text differ, but it does not know whether a `secretKeyRef` points at a Secret that Kustomize still generates, whether a selector matches the labels inside a Pod template, or whether an API field is valid in Kubernetes 1.35. The resolver therefore has to move from text reconciliation to platform reconciliation. Running `kubeconform -summary <manifest.yaml>` (offline schema validation), `kubectl kustomize`, or an admission-style validation tool is the engineering step that converts "Git accepted the file" into "this configuration still represents a coherent cluster object."
 
 A third pattern is reviewable merge commits. When a merge commit exists only because two timelines were joined, it should contain only the conflict synthesis required to join them. That discipline makes `git show <merge-commit>` useful during review because the combined diff can focus on the lines changed differently from both parents. If the resolver also folds in refactors, formatting changes, or unrelated policy edits, the merge commit becomes an opaque bundle, and reviewers lose the ability to distinguish conflict resolution from opportunistic feature work. This is how teams accidentally bless an "evil merge" that introduces behavior neither parent branch intended.
 
@@ -631,7 +631,7 @@ Use the following decision matrix as a practical guide when you are under pressu
 | :--- | :--- | :--- | :--- |
 | Current branch is behind and has no unique commits | `git merge --ff-only incoming` | The branch pointer can move without creating a synthetic merge commit. | Run the relevant tests or render manifests if the incoming branch was not already validated. |
 | Two fresh branches touched different files | Normal three-way merge with `ort` | Git can synthesize independent file changes cleanly while preserving both parents. | Review the merge commit and run targeted CI for changed areas. |
-| Two branches touched the same Kubernetes manifest | Manual conflict resolution with schema validation | Human intent matters more than text adjacency when selectors, probes, and generated resources interact. | Run `kubectl apply --dry-run=client`, `kustomize build`, and any policy checks your repo requires. |
+| Two branches touched the same Kubernetes manifest | Manual conflict resolution with schema validation | Human intent matters more than text adjacency when selectors, probes, and generated resources interact. | Run `kubeconform -summary` on rendered manifests, `kubectl kustomize`, and any policy checks your repo requires. |
 | Several independent branches need one release branch | Octopus merge only if conflicts are unlikely | The history stays compact, but the operation refuses manual conflicts. | Pre-merge each branch against trunk and retry only when every pair is clean. |
 | Old branch has a stale merge base | Recreate from current `main` and cherry-pick intent | The old graph encodes obsolete assumptions about the platform. | Test each selected commit after replay, especially migrations and API changes. |
 | Pull request contains noisy local commits | Interactive rebase before review | Reviewers see a coherent story instead of temporary savepoints. | Re-run tests after rewriting and force-push only to branches you own. |
@@ -644,7 +644,7 @@ For day-to-day work, a compact flow helps prevent panic decisions. Start with `g
 
 1. The `ort` merge strategy, short for Ostensibly Recursive's Twin, became the default two-head merge engine in Git 2.34.0 in November 2021 and uses the histogram diff algorithm internally for many merge comparisons.
 2. Running the maintenance command `git rerere gc` prunes unresolved conflict records older than 15 days and resolved conflict records older than 60 days, which keeps repeated-resolution caches from growing without bound.
-3. Linus Torvalds designed Git's octopus merge for the Linux kernel workflow, where subsystem maintainer branches often needed to be joined into a single integration history without a long sequence of two-parent merge commits.
+3. Octopus merges fit the Linux-style maintainer workflow of bundling many topic branches into a single integration history without a long sequence of two-parent merge commits.
 4. The conflict marker symbols (`<<<<<<<`, `=======`, `>>>>>>>`) predate Git by decades and were established by earlier merge tooling in the RCS era, which is why they appear familiar across many version control systems.
 
 ## Common Mistakes
@@ -652,7 +652,7 @@ For day-to-day work, a compact flow helps prevent panic decisions. Start with `g
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | **Panic committing unresolved markers** | Engineer feels overwhelmed, attempts to save work mid-conflict by running `git commit -a`, thereby committing `<<<<<<<` directly into the codebase. | Run `git merge --abort` immediately to reset the working directory to the pre-merge state, take a breath, and start over. |
-| **Breaking YAML indentation** | Manually deleting conflict markers and inadvertently shifting blocks of YAML, creating invalid structural relationships. | Always use `kubectl diff` or `kubectl apply --dry-run=client` on the modified file before finalizing the merge commit. |
+| **Breaking YAML indentation** | Manually deleting conflict markers and inadvertently shifting blocks of YAML, creating invalid structural relationships. | Always use `kubectl diff` or `kubeconform -summary` on the modified file before finalizing the merge commit. |
 | **"Ostrich merging" (ignoring upstream)** | Keeping a feature branch alive for 6 weeks without pulling from main, resulting in a monolithic, unresolvable conflict later. | Merge `main` into your feature branch (or rebase against it) daily. Conflict resolution should be a continuous, small-scale tax, not a massive end-of-project penalty. |
 | **Resolving logic, breaking syntax** | Focusing so hard on getting both sets of configuration into the file that you create duplicate keys (e.g., two `spec` blocks in a pod definition). | Understand the schema of the file you are editing. Use IDE plugins with Kubernetes schema validation enabled during conflict resolution. |
 | **Accidental "Evil Merges"** | While resolving a conflict, the engineer sneaks in an unrelated fix or typo correction that was not part of either branch. | A merge commit should *only* contain the resolution of the conflict. Make unrelated fixes in a separate, discrete commit afterward. |
@@ -669,7 +669,7 @@ To safely integrate your work without creating a messy history, you should fetch
 
 <details>
 <summary>Question 2: You trigger an automated pipeline that attempts an octopus merge, integrating four different microservice deployment updates into a staging branch. Git halts and reports a conflict between two of the branches. What happens to the staging branch in this exact moment, and how is the pipeline affected?</summary>
-In this exact moment, nothing happens to the staging branch because an octopus merge is an all-or-nothing operation designed for independent branches. Unlike a standard two-branch merge that pauses mid-flight and leaves conflict markers in your working directory, Git will completely abort the octopus merge automatically upon detecting any conflict. It immediately resets your working directory and staging branch back to their exact pre-merge state. This built-in safety mechanism is highly beneficial for automated pipelines, as it prevents CI/CD systems from becoming trapped in complex, multi-dimensional conflict states that require manual human intervention.
+In this exact moment, the staging branch ref does not move because an octopus merge stops when it cannot finish automatically. Git reports `Automatic merge failed; fix conflicts and then commit the result.` Unlike a standard two-branch merge that pauses with conflict markers while leaving the merge in progress, an octopus merge does not advance the branch pointer, but it **does** leave the working tree and index dirty with conflict markers or partial merge results until you run `git merge --abort` (or resolve and commit). Pipelines must treat this as a failed merge attempt that needs cleanup, not as a no-op that left the workspace pristine.
 </details>
 
 <details>
@@ -696,13 +696,13 @@ Attempting a direct three-way merge with a year-old base is extremely dangerous,
 
 In this lab you will create a small Kubernetes manifest repository, force a real conflict that modern Git cannot safely auto-merge, inspect the merge base, resolve the conflict by synthesizing intent, and validate the final object before committing. The exercise uses a Deployment and a ConfigMap because they reveal the two failure modes you will see in platform work: one conflict is about competing runtime behavior, while the other is about a dependency between files. The goal is not to memorize conflict markers; the goal is to practice slowing down enough to identify what each branch was trying to accomplish.
 
-Work in a scratch directory outside any production repository. The commands below assume a Unix-like shell and Git with the default `ort` merge engine. They also assume `kubectl` is installed and available on your `PATH`. If you do not have a live cluster context, `--dry-run=client` still validates local object structure, which is enough for this exercise because the point is to catch broken YAML and object references before committing the merge.
+Work in a scratch directory outside any production repository. The commands below assume a Unix-like shell and Git with the default `ort` merge engine. They also assume `kubeconform` is installed and available on your `PATH` (for example `brew install kubeconform` on macOS). `kubeconform -summary` validates manifest shape against Kubernetes OpenAPI schemas without contacting a cluster, which is enough for this exercise because the point is to catch broken YAML and object references before committing the merge.
 
 - [ ] Create the repository, add the baseline Deployment and ConfigMap, and commit the initial state.
 - [ ] Create `feature/harden-api` to add a health probe and stricter ConfigMap setting.
 - [ ] Create `feature/scale-api` to change replicas and a competing ConfigMap setting.
-- [ ] Merge `feature/scale-api` into `feature/harden-api`, inspect the merge base, and resolve both conflicted files.
-- [ ] Validate the resolved manifests with `kubectl apply --dry-run=client` before committing the merge.
+- [ ] Merge `feature/scale-api` into `feature/harden-api`, inspect the merge base, review the auto-merged `deployment.yaml`, and resolve the conflict in `configmap.yaml`.
+- [ ] Validate the resolved manifests with `kubeconform -summary` before committing the merge.
 - [ ] Inspect the final merge commit with `git show` and explain which lines were human conflict resolutions.
 
 <details>
@@ -788,7 +788,7 @@ git merge feature/scale-api
 git status
 ```
 
-Resolve `deployment.yaml` by keeping both the readiness probe and the scaled replica count:
+Review `deployment.yaml`. Git should auto-merge it cleanly, combining the readiness probe from `feature/harden-api` with the scaled replica count from `feature/scale-api`. Confirm the file matches this expected result:
 
 ```yaml
 apiVersion: apps/v1
@@ -834,8 +834,8 @@ data:
 Validate and commit:
 
 ```bash
-kubectl apply -f configmap.yaml --dry-run=client
-kubectl apply -f deployment.yaml --dry-run=client
+kubeconform -summary configmap.yaml
+kubeconform -summary deployment.yaml
 git add configmap.yaml deployment.yaml
 git commit -m "Merge scale-api into harden-api resolving replicas and feature mode"
 git show --stat --summary HEAD
@@ -844,7 +844,7 @@ git show HEAD
 
 </details>
 
-The success criteria are intentionally broader than "Git says the merge is complete." You should be able to point to the merge base, describe each branch's intent, explain why one ConfigMap value survived, show that the Deployment still references an existing ConfigMap, and demonstrate that Kubernetes 1.35-compatible client validation accepts both objects. If you cannot explain those facts from the final commit, the merge may be mechanically complete but operationally unreviewable.
+The success criteria are intentionally broader than "Git says the merge is complete." You should be able to point to the merge base, describe each branch's intent, explain why one ConfigMap value survived, show that the Deployment still references an existing ConfigMap, and demonstrate that `kubeconform -summary` accepts both objects. If you cannot explain those facts from the final commit, the merge may be mechanically complete but operationally unreviewable.
 
 ## Sources
 
@@ -857,6 +857,7 @@ The success criteria are intentionally broader than "Git says the merge is compl
 - [Git attributes documentation for merge drivers](https://git-scm.com/docs/gitattributes)
 - [Kubernetes kubectl apply reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/)
 - [Kubernetes Kustomize documentation](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
+- [GitHub October 21 2018 post-incident analysis](https://github.blog/news-insights/company-news/oct21-post-incident-analysis/)
 - [GitHub pull request merge methods](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/about-merge-methods-on-github)
 - [GitLab merge request methods](https://docs.gitlab.com/user/project/merge_requests/methods/)
 

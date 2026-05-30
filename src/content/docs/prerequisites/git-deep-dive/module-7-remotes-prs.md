@@ -542,12 +542,13 @@ Create the Kubernetes manifests using two distinct, atomic commits with conventi
 
 Create the namespace manifest first. Keeping the namespace in its own file lets reviewers verify the target scope before they inspect workload settings that depend on it:
 
-```yaml
-# namespace.yaml
+```bash
+cat <<'EOF' > namespace.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
   name: web-tier
+EOF
 ```
 
 Commit only the namespace prerequisite. This makes the first commit a small, reversible change with one clear purpose:
@@ -559,8 +560,8 @@ git commit -m "feat(k8s): add web-tier namespace"
 
 Create the deployment manifest as a separate review unit. Its diff should show the workload, replica count, labels, and image without mixing in namespace setup:
 
-```yaml
-# deployment.yaml
+```bash
+cat <<'EOF' > deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -579,6 +580,7 @@ spec:
       containers:
       - name: nginx
         image: nginx:1.27-alpine
+EOF
 ```
 
 Commit only the workload. The second commit now tells reviewers exactly when application runtime configuration entered the branch:
@@ -652,10 +654,10 @@ Push the newly squashed commit to upstream, simulating the maintainer hitting "M
 git push upstream main
 ```
 
-Now delete your local feature branch to keep your workspace clean after the integration branch contains the accepted change:
+Now delete your local feature branch to keep your workspace clean after the integration branch contains the accepted change. A squash merge does not record merge ancestry, so Git still treats `feat/nginx-deployment` as unmerged; use force delete (`-D`) after the squash commit is on `main`:
 
 ```bash
-git branch -d feat/nginx-deployment
+git branch -D feat/nginx-deployment
 ```
 
 Fetch from upstream and sync your fork's `main`. The final rebase makes your fork reflect the accepted upstream history instead of leaving a stale local integration state:

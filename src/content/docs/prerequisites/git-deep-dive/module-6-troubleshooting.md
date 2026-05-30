@@ -316,8 +316,10 @@ That result gives you a concise timeline, but an incident investigator usually n
 
 The `-G` option answers a broader question. Instead of counting occurrences of one exact string, it searches diff lines with a regular expression. This is useful when the value changes over time or the exact text is unknown. CPU limits, memory quantities, port numbers, hostnames, and API versions are often better searched by pattern than by one literal value.
 
+`git log -G` and `git log -S` use POSIX extended regular expressions (ERE), not PCRE, so use `[[:space:]]` instead of `\s` for whitespace.
+
 ```bash
-git log -G "cpu:\s*[0-9]+m" --oneline -p
+git log -G "cpu:[[:space:]]*[0-9]+m" --oneline -p
 ```
 
 Output snippet:
@@ -336,9 +338,8 @@ diff --git a/k8s/frontend-deployment.yaml b/k8s/frontend-deployment.yaml
          resources:
            requests:
              cpu: 100m
--          limits:
+           limits:
 -            cpu: 200m
-+          limits:
 +            cpu: 500m
 ```
 
@@ -531,7 +532,7 @@ In practice, investigations loop through this framework more than once. A Pickax
 1. **The Pickaxe name is old Git culture**: `git log -S` is commonly called Pickaxe because it digs through patch history for string additions and removals rather than searching only the current checkout.
 2. **`git bisect visualize` can show your current search state**: during a complicated bisection, `git bisect visualize` or `git bisect view` opens a viewer such as `gitk` so you can inspect commits marked good, bad, and untested.
 3. **Reverse blame can search deletion history**: `git blame --reverse START..END file` can help identify where a line disappeared across a bounded range, which is useful when normal blame cannot see removed text.
-4. **Kubernetes dry-run modes changed operational habits**: server-side dry runs let teams validate manifests against the API server without persisting objects, which makes Git bisection safer for Kubernetes 1.35-era troubleshooting.
+4. **Kubernetes dry-run modes changed operational habits**: server-side dry runs (available since roughly Kubernetes 1.18, including modern 1.35+ clusters) let teams validate manifests against the API server without persisting objects, which makes Git bisection safer when a reachable cluster is available.
 
 ## Common Mistakes
 
@@ -747,4 +748,4 @@ The `git blame` command targets the regular expression `/containerPort/` and ren
 
 ## Next Module
 
-Now that you can dissect history to locate regressions and build forensic audit trails, look outward to collaboration workflows. Learn how to synchronize local work with external servers, handle complex merge conflicts, and manage upstream changes safely in [Module 7: Professional Collaboration](../module-7-remotes-prs/).
+Now that you can dissect history to locate regressions and build forensic audit trails, look outward to collaboration workflows. Learn how to synchronize local work with external servers, handle complex merge conflicts, and manage upstream changes safely in [Module 7: Professional Collaboration - Remotes and PRs](../module-7-remotes-prs/).
