@@ -6,8 +6,6 @@ sidebar:
   order: 103
 ---
 
-# LFCS Running Systems and Networking Practice
-
 > **LFCS Track** | Complexity: `[COMPLEX]` | Time: 45-60 min | Kubernetes target: 1.35+. This practice module focuses on Linux host operations that also support reliable Kubernetes node administration.
 
 **Reading Time**: 45-60 minutes, depending on whether you only read the chapter or also run the drills in a disposable lab environment.

@@ -6,8 +6,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 5.3: Runtime Security
-
 > **Complexity**: `[MEDIUM]` - Core knowledge
 >
 > **Time to Complete**: 60-75 minutes

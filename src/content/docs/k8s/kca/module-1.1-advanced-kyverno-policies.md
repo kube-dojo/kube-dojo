@@ -5,7 +5,6 @@ revision_pending: false
 sidebar:
   order: 2
 ---
-# Module 1.1: Advanced Kyverno Policies
 
 > **Complexity**: `[COMPLEX]` - Domain 5: Kyverno Advanced Policy Writing (32% of exam)
 >

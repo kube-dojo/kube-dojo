@@ -7,8 +7,6 @@ sidebar:
 revision_pending: false
 ---
 
-# CGOA GitOps Principles Review
-
 > **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 45-60 minutes

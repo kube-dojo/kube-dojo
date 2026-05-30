@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 6.3: Security Assessments
-
 > **Complexity**: `[MEDIUM]` - Conceptual knowledge with practical triage
 >
 > **Time to Complete**: 45-60 minutes

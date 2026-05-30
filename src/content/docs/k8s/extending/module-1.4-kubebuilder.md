@@ -13,8 +13,6 @@ sidebar:
 
 ---
 
-# Module 1.4: The Operator Pattern & Kubebuilder
-
 ## Learning Outcomes
 
 After completing this module, you will be able to:

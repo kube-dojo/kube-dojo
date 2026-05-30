@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 2.3: Storage Orchestration
-
 **Complexity**: `[MEDIUM]` - Storage concepts. **Time to Complete**: 45-60 minutes. **Prerequisites**: Module 2.2 (Scaling). All commands in this module assume Kubernetes 1.35 or newer and use the standard shell shortcut `alias k=kubectl`, so `k get pods` means the same API request as the longer command while keeping examples readable.
 
 ---

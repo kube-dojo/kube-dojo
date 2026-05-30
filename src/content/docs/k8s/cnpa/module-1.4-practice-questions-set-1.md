@@ -7,8 +7,6 @@ sidebar:
   order: 104
 ---
 
-# CNPA Practice Questions Set 1
-
 > **Complexity**: `[MEDIUM]`
 > **Time to Complete**: 55-70 minutes
 > **Prerequisites**: Platform engineering foundations, cloud native architecture basics, Kubernetes API objects, observability basics, and self-service delivery concepts

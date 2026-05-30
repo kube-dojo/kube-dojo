@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 1.2: Custom Resource Definitions Deep Dive
-
 > **Complexity**: `[MEDIUM]` - Defining your own Kubernetes APIs
 >
 > **Time to Complete**: 3 hours

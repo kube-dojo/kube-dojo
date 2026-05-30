@@ -5,7 +5,6 @@ slug: k8s/kcna/part1-kubernetes-fundamentals/module-1.4-node-components
 sidebar:
   order: 5
 ---
-# Module 1.4: Kubernetes Architecture - Node Components
 
 > **Complexity**: `[MEDIUM]` - Core architecture concepts
 >

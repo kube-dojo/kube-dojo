@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 1.3: Kubernetes Architecture - Control Plane
-
 > **Complexity**: `[MEDIUM]` - Core architecture concepts
 >
 > **Time to Complete**: 60-75 minutes

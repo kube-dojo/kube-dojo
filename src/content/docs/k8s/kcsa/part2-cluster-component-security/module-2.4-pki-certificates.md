@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 2.4: PKI and Certificates
-
 > **Complexity**: `[MEDIUM]` - Core knowledge | **Time to Complete**: 45-60 minutes | **Prerequisites**: [Module 2.3: Network Security](../module-2.3-network-security/)
 
 This module uses Kubernetes 1.35+ behavior and the short command alias `k` for `kubectl`. If you run the examples in a lab cluster, define the alias once with `alias k=kubectl`, then keep using `k` so the commands match the lesson and the troubleshooting flow stays concise.

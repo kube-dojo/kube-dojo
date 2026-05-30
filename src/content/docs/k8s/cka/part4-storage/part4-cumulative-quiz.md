@@ -5,8 +5,6 @@ sidebar:
   order: 7
 ---
 
-# Part 4 Cumulative Quiz: Storage
-
 > **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 65-80 minutes

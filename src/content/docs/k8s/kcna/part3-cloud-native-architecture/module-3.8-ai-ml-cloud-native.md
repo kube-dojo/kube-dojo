@@ -7,8 +7,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 3.8: AI/ML on Cloud Native Infrastructure
-
 > **Complexity**: `[MEDIUM]` - Cloud native architecture and workload design
 >
 > **Time to Complete**: 35-45 minutes

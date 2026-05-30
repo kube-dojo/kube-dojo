@@ -6,8 +6,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 3.3: Cloud Native Patterns
-
 **Complexity**: `[MEDIUM]` architecture concepts. **Time to Complete**: 60-75 minutes. **Prerequisites**: Module 3.2, working Kubernetes vocabulary, and a Kubernetes 1.35+ cluster for the optional practice. We use the `k` alias for kubectl in examples; configure it with `alias k=kubectl` before running commands.
 
 ## Learning Outcomes

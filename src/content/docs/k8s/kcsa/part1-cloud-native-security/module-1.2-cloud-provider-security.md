@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 1.2: Cloud Provider Security
-
 > **Complexity**: `[MEDIUM]` - Foundational knowledge
 >
 > **Time to Complete**: 45-60 minutes

@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 2.4: Configuration
-
 > **Complexity**: `[MEDIUM]` - Configuration concepts
 >
 > **Time to Complete**: 40-50 minutes

@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 0.2: KCNA Study Strategy
-
 | Metadata | Value |
 |---|---|
 | Complexity | `[QUICK]` - Essential exam preparation |

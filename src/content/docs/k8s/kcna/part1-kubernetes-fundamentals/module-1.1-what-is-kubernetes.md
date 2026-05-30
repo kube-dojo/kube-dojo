@@ -5,7 +5,6 @@ slug: k8s/kcna/part1-kubernetes-fundamentals/module-1.1-what-is-kubernetes
 sidebar:
   order: 2
 ---
-# Module 1.1: What is Kubernetes?
 
 **Complexity**: `[QUICK]` - Foundational concepts. **Time to Complete**: 35-45 minutes. **Prerequisites**: None, although basic familiarity with servers, applications, and containers will make the examples easier to connect to real work.
 

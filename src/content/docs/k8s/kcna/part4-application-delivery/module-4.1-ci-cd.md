@@ -5,7 +5,6 @@ slug: k8s/kcna/part4-application-delivery/module-4.1-ci-cd
 sidebar:
   order: 2
 ---
-# Module 4.1: CI/CD Fundamentals
 
 > **Complexity**: `[MEDIUM]` - Delivery concepts
 >

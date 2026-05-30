@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 5.1: Image Security
-
 > **Complexity**: `[MEDIUM]` - Core knowledge for engineers who can read Pod YAML and now need to evaluate image risk across build, registry, admission, and runtime boundaries.
 >
 > **Time to Complete**: 35-40 minutes, including the audit exercise and the policy reasoning needed to connect Dockerfile choices to Kubernetes 1.35+ controls.

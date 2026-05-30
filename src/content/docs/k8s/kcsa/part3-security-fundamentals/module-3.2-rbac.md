@@ -5,7 +5,6 @@ slug: k8s/kcsa/part3-security-fundamentals/module-3.2-rbac
 sidebar:
   order: 3
 ---
-# Module 3.2: RBAC Fundamentals
 
 **Complexity**: `[MEDIUM]` - Core knowledge. **Time to Complete**: 40-50 minutes. **Prerequisites**: [Module 3.1: Pod Security](../module-3.1-pod-security/). This lesson assumes you already know the Pod Security Standards from the previous module and are ready to connect workload hardening with API authorization decisions.
 

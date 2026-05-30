@@ -13,8 +13,6 @@ lab:
   environment: kubernetes
 ---
 
-# Module 1.4: Kustomize - Template-Free Configuration
-
 > **Complexity**: `[MEDIUM]` - Essential CKA skill for Kubernetes 1.35+
 >
 > **Time to Complete**: 40-55 minutes

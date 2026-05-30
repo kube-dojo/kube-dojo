@@ -6,8 +6,6 @@ sidebar:
   order: 104
 ---
 
-# CNPE Observability, Security, and Operations Lab
-
 > **CNPE Track** | Complexity: `[COMPLEX]` | Time to Complete: 75-90 min
 >
 > **Prerequisites**: CNPE Exam Strategy and Environment, Observability Theory, SRE, Security Principles, DevSecOps, Prometheus, OpenTelemetry, Grafana, Loki, OPA/Gatekeeper, Kyverno, Falco

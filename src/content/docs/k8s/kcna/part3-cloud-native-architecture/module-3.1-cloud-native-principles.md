@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 3.1: Cloud Native Principles
-
 **Complexity**: `[MEDIUM]` architecture concepts. **Time to Complete**: 45-55 minutes. **Prerequisites**: Part 2, Container Orchestration, including basic familiarity with Pods, Deployments, Services, and the difference between desired state and actual state.
 
 ## What You'll Be Able to Do

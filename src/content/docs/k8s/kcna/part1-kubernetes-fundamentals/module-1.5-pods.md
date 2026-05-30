@@ -6,8 +6,6 @@ sidebar:
   order: 6
 ---
 
-# Module 1.5: Pods
-
 > **Complexity**: `[MEDIUM]` - Core resource concept
 >
 > **Time to Complete**: 45-55 minutes

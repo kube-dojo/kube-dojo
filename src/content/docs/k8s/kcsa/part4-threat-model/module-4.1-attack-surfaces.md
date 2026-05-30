@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 4.1: Attack Surfaces
-
 | Complexity | Time to Complete | Prerequisites |
 |------------|------------------|---------------|
 | `[MEDIUM]` - Threat awareness | 35-45 minutes | [Module 3.5: Network Policies](/k8s/kcsa/part3-security-fundamentals/module-3.5-network-policies/) |

@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 0.1: KCSA Exam Overview
-
 | Metadata | Value |
 |----------|-------|
 | **Complexity** | `[QUICK]` - Essential orientation |

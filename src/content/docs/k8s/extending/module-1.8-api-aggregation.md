@@ -7,8 +7,6 @@ sidebar:
   order: 9
 ---
 
-# Module 1.8: API Aggregation & Extension API Servers
-
 > **Complexity**: `[COMPLEX]` - Building custom API servers
 >
 > **Time to Complete**: 5 hours

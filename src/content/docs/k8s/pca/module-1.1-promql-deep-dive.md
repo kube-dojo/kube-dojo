@@ -5,7 +5,6 @@ slug: k8s/pca/module-1.1-promql-deep-dive
 sidebar:
   order: 2
 ---
-# Module 1.1: PromQL Deep Dive
 
 > **PCA Track** | Complexity: `[COMPLEX]` | Time: 50-60 min | Kubernetes target: 1.35 and newer for the lab examples and operational assumptions.
 

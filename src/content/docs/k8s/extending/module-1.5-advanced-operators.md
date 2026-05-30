@@ -6,8 +6,6 @@ sidebar:
   order: 6
 ---
 
-# Module 1.5: Advanced Operator Development
-
 > **Complexity**: `[COMPLEX]` - Production-grade operator patterns
 >
 > **Time to Complete**: 5 hours

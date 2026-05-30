@@ -6,8 +6,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 2.2: Scaling
-
 **Complexity**: `[HIGH]` - advanced orchestration concepts with direct impact on reliability, cost, and application design. **Time to complete**: 45-60 minutes. **Prerequisites**: Module 2.1, Scheduling. This module assumes Kubernetes 1.35 or newer behavior for autoscaling APIs and examples. The full Kubernetes command is `kubectl`; in runnable commands after the setup line, this module uses the shorter exam-friendly alias `k`, defined as `alias k=kubectl`.
 
 ```bash

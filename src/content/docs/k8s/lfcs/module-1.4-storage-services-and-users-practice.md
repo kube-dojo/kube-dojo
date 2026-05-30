@@ -6,8 +6,6 @@ sidebar:
   order: 104
 ---
 
-# LFCS Storage, Services, and Users Practice
-
 > **LFCS Track** | Complexity: `[COMPLEX]` | Time: 50-70 min for an integrated Linux administration practice module covering identity, storage, services, limits, and verification.
 
 **Reading Time**: 50-70 minutes, with enough hands-on depth to pause between sections, run the commands in a disposable lab, and compare evidence after each change.

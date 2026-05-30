@@ -12,8 +12,6 @@ lab:
   environment: kubernetes
 ---
 
-# Module 0.2: Developer Workflow
-
 > **Complexity**: `[QUICK]` - Essential kubectl patterns for CKAD speed and accuracy
 >
 > **Time to Complete**: 35-45 minutes

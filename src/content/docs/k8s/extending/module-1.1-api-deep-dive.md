@@ -11,8 +11,6 @@ sidebar:
 >
 > **Prerequisites**: CKA or equivalent Kubernetes experience, basic Go programming, and access to a Kubernetes 1.35+ cluster
 
-# Module 1.1: Kubernetes API & Extensibility Architecture
-
 ## Learning Outcomes
 
 After completing this module, you will be able to:

@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 4.2: Common Vulnerabilities
-
 **Complexity**: `[MEDIUM]` threat awareness and prioritization. **Time to Complete**: 25-30 minutes. **Prerequisites**: [Module 4.1: Attack Surfaces](../module-4.1-attack-surfaces/). This module assumes Kubernetes 1.35 or newer, and command examples use the `alias k=kubectl` shorthand after naming `kubectl` once.
 
 ## What You'll Be Able to Do

@@ -6,8 +6,6 @@ sidebar:
   order: 8
 ---
 
-# Module 1.7: Services
-
 > **Complexity**: `[MEDIUM]` - Core networking concept
 >
 > **Time to Complete**: 65-75 minutes

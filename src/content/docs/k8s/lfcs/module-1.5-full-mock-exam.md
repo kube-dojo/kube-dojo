@@ -6,8 +6,6 @@ sidebar:
   order: 105
 ---
 
-# LFCS Full Mock Exam
-
 > **LFCS Track** | Complexity: `[COMPLEX]` | Time: 90-120 min
 
 **Reading Time**: 25-35 minutes to brief, then one full timed run and one structured debrief.

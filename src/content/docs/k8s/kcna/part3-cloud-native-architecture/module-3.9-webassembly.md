@@ -6,8 +6,6 @@ sidebar:
   order: 10
 ---
 
-# Module 3.9: WebAssembly and Cloud Native
-
 > **Complexity**: `[MEDIUM]` - Runtime architecture and workload placement
 >
 > **Time to Complete**: 45-60 minutes

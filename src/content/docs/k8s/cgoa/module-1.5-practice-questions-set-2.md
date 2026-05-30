@@ -6,8 +6,6 @@ sidebar:
   order: 105
 ---
 
-# CGOA Practice Questions Set 2
-
 > **CGOA Track** | Practice questions | Set 2
 > **Complexity:** Beginner to intermediate
 > **Estimated time:** 60-75 minutes

@@ -7,8 +7,6 @@ sidebar:
   order: 101
 ---
 
-# CNPA Exam Strategy and Blueprint Review
-
 > **CNPA Track** | Multiple-choice exam prep | **120 minutes** | **No prerequisites** | **Beginner to Senior**
 
 ## Learning Outcomes

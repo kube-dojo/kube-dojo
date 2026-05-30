@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 4.3: Container Escape
-
 > **Complexity**: `[MEDIUM]` - Threat awareness
 >
 > **Time to Complete**: 55-65 minutes

@@ -5,7 +5,6 @@ slug: k8s/kcna/part0-introduction/module-0.1-kcna-overview
 sidebar:
   order: 2
 ---
-# Module 0.1: KCNA Exam Overview
 
 > **Complexity**: `[QUICK]` - Essential orientation
 >

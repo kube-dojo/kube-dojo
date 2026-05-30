@@ -7,8 +7,6 @@ sidebar:
 revision_pending: false
 ---
 
-# CGOA Practice Questions Set 1
-
 > **CGOA Track** | Practice questions | Set 1  
 > **Complexity:** Beginner to intermediate  
 > **Estimated time:** 45-60 minutes  
