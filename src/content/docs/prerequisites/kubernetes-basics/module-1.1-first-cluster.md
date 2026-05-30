@@ -127,10 +127,10 @@ Local Kubernetes tools all answer the same high-level need, but they do not buil
 
 | Tool | Underlying Architecture | Primary Use Case | Pros | Cons |
 |---|---|---|---|---|
-| **minikube** | Virtual Machines (historically) or Containers | Traditional local development | Massive feature set, mature ecosystem. VM mode uses fixed-size virtual disks, protecting host disk space. | Can be heavily resource intensive. Slower startup times. Emulates a cluster rather than running pure upstream. |
+| **minikube** | Virtual Machines (historically) or Containers | Traditional local development | Massive feature set, mature ecosystem. VM mode uses fixed-size virtual disks, protecting host disk space. | Can be heavily resource intensive. Slower startup times. Driver and runtime choices, add-ons, and local-dev defaults differ from a bare upstream cluster even though minikube runs real Kubernetes locally. |
 | **kind** (Kubernetes IN Docker) | Docker Containers acting as Nodes | CI/CD pipelines, automated testing, rigorous local dev | Extremely fast, identical to pure upstream Kubernetes, highly customizable multi-node topologies. | Requires Docker daemon. Complex networking edge cases when exposing services to host. |
 | **k3d** | Docker Containers running k3s | Edge computing simulation, IoT | Minimal memory footprint, extraordinarily fast startup. | Uses k3s (a stripped-down, modified Kubernetes distribution), which may lack 100% parity with cloud providers. |
-| **Docker Desktop / Colima** | Integrated Hypervisor / Lightweight VM | Quick validation for Mac/Windows users | Zero configuration, GUI integration, easy volume mounting. | Inflexible, limited strictly to a single monolithic node, tightly coupled to the virtualization engine. |
+| **Docker Desktop / Colima** | Integrated Hypervisor / Lightweight VM | Quick validation for Mac/Windows users | Zero configuration, GUI integration, easy volume mounting. | Inflexible compared with scriptable tools; Docker Desktop Kubernetes was historically single-node, though newer versions can provision multi-node clusters via the kind provisioner. Tightly coupled to the virtualization engine. |
 
 `kind` stands for Kubernetes IN Docker, and the name is literal. A `kind` node is a Docker container that is privileged enough to run Kubernetes node processes inside it. When you create a three-node `kind` cluster, Docker starts three node containers, and each node container runs its own kubelet and `containerd`. The cluster feels distributed to Kubernetes because each node has a separate identity and network address, even though all of those nodes are ultimately containers on your workstation. This is not the same as production hardware, but it is close enough to teach scheduling, kubeconfig, controller behavior, and many networking patterns.
 
@@ -604,8 +604,10 @@ You should see exactly three nodes listed, all explicitly marked with the contro
 Finally, practice cleaning up the environment and observing a raw control plane failure.
 
 ```bash
-# Aggressively clean up the environment
-kind delete cluster --all
+# Delete only the lab clusters created earlier in this exercise
+kind delete cluster --name primary-dojo
+kind delete cluster --name legacy-dojo
+kind delete cluster --name ha-dojo
 
 # Create the target cluster
 kind create cluster --name broken-dojo
@@ -621,6 +623,11 @@ kubectl get nodes
 ```
 
 The connection will either hang until timeout or immediately fail with a TCP connection refused error. This demonstrates that without the API server container operating, the cluster interface is unavailable. You cannot read state through Kubernetes, nor can you alter it, even if some previous workload process might have existed before the control plane disappeared.
+
+```bash
+# Remove the failure-lab cluster when you are done observing
+kind delete cluster --name broken-dojo
+```
 </details>
 
 ### Success Criteria
