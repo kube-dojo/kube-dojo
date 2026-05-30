@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 25 minutes
 >
-> **Prerequisites**: [Module 0.1 - What is a Computer?](../module-0.1-what-is-a-computer/)
+> **Prerequisites**: [Module 0.2: What is a Terminal?](../module-0.2-what-is-a-terminal/) — You should be able to open a terminal and type commands.
 
 ---
 
@@ -296,7 +296,7 @@ rm daily-specials.txt
 
 The file is gone. More precisely, the directory entry is removed immediately, and normal shell usage does not provide an Undo button. Specialized recovery may sometimes be possible before data is overwritten, depending on file system and storage details, but that is not a workflow you should rely on. Treat `rm` as a final action unless you have a backup, a copy, or a version-control history.
 
-For a real example of why backups matter, Pixar's *Toy Story 2* production nearly lost a large amount of work after files were removed from production storage. The team recovered because a supervising technical director had a copy outside the main system, but the incident still required reconstruction. This example is not here to dramatize the terminal; it is here to show the practical relationship between destructive commands and recovery planning.
+For a real example of why backups matter, Pixar's *Toy Story 2* nearly lost roughly 90% of the film's production files in 1998 when a command removed them from production storage; [backups had also been failing, and the work was recovered only because supervising technical director Galyn Susman had a full copy on her home workstation](https://thenextweb.com/news/how-pixars-toy-story-2-was-deleted-twice-once-by-technology-and-again-for-its-own-good) (see also Pixar's "Studio Stories: The Movie Vanishes" featurette on the *Toy Story 2* special features). The team still required reconstruction. This example is not here to dramatize the terminal; it is here to show the practical relationship between destructive commands and recovery planning.
 
 That relationship becomes more important as you move from practice files to real project work. A disposable folder named `restaurant` can be rebuilt in seconds, but a generated report, a downloaded certificate, or a hand-edited configuration file may represent work you cannot easily recreate. The terminal cannot know which file matters to you. It sees paths and permissions, not intent, so you have to supply the intent by choosing narrow targets and verifying them before destructive operations.
 
@@ -338,7 +338,11 @@ ls | head -5
 
 `ls` lists entries, but `head -5` keeps only the first 5 lines. This is useful when a directory has hundreds of files and you want a quick sample without flooding the screen. The left command does not need to know that `head` exists, and `head` does not need to know how `ls` found the names. The pipe connects them by text.
 
-The second pipeline searches for a word inside a file, turning a full file display into a focused question about matching lines:
+The second pipeline searches for a word inside a file, turning a full file display into a focused question about matching lines. Earlier in this module you removed `daily-specials.txt` during the deletion practice, so recreate a small sample file before filtering:
+
+```bash
+echo "Wednesday: pasta with marinara" > daily-specials.txt
+```
 
 ```bash
 cat daily-specials.txt | grep "pasta"
@@ -617,7 +621,6 @@ Use this success criteria checklist to confirm that you practiced every aligned 
 - [POSIX `cp`](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/cp.html) — Standard copy utility behavior, including recursive copying.
 - [POSIX `mv`](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/mv.html) — Standard move and rename utility behavior.
 - [POSIX `rm`](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/rm.html) — Standard removal utility behavior and recursive deletion options.
-- [GNU Coreutils manual](https://www.gnu.org/software/coreutils/manual/html_node/) — Reference documentation for common GNU command-line utilities.
 
 ## Next Module
 
