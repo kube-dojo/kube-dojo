@@ -9,7 +9,7 @@ sidebar:
 >
 > **Time to Complete**: 30-35 minutes
 >
-> **Prerequisites**: Module 1 (Containers), Module 2 (Docker). This lesson assumes you can explain why teams package applications as containers and can recognize a basic Docker image or container command, but it does not assume previous Kubernetes experience.
+> **Prerequisites**: Module 1.1 (Containers), Module 1.2 (Docker). This lesson assumes you can explain why teams package applications as containers and can recognize a basic Docker image or container command, but it does not assume previous Kubernetes experience.
 
 ---
 
@@ -150,7 +150,7 @@ flowchart TD
     API <==>|"Manages"| K3
 ```
 
-> **Connect to Module 0.1**: Remember the restaurant kitchen from Module 0.1? The control plane is the restaurant management team. The API Server is the front desk where all orders go, the Scheduler is the floor manager deciding which kitchen handles which order, etcd is the order log recording the truth, and the Controller Manager is the shift supervisor checking that the right number of staff are working.
+> **Restaurant analogy**: Picture a busy restaurant kitchen. The control plane is the management team that coordinates work without cooking every dish itself. The API Server is the front desk where all orders go, the Scheduler is the floor manager deciding which kitchen station handles which order, etcd is the order log recording the truth, and the Controller Manager is the shift supervisor checking that the right number of staff are working.
 
 The API server is the front door to the cluster. Every create, update, delete, and read operation goes through it, whether the request came from `k`, a CI pipeline, a controller, or a custom operator. This central entry point gives Kubernetes a consistent place to authenticate users, authorize requests, validate resource shape, and store accepted changes. When the API server is unreachable, the cluster becomes hard to manage even if many workloads are still serving traffic.
 
