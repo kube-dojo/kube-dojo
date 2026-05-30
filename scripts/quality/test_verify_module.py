@@ -220,7 +220,7 @@ kubectl get pods
     assert _gate_results(runnable_shell=metrics)["runnable_no_kubectl_alias"] is True
 
 
-def test_runnable_no_kubectl_alias_fails_on_alias_definition() -> None:
+def test_runnable_no_kubectl_alias_passes_on_alias_definition() -> None:
     text = """---
 title: Demo
 ---
@@ -229,11 +229,11 @@ alias k=kubectl
 ```
 """
     metrics = verify_module.runnable_shell_metrics(text)
-    assert metrics["kubectl_alias_violations"] == ["alias k=kubectl"]
-    assert _gate_results(runnable_shell=metrics)["runnable_no_kubectl_alias"] is False
+    assert metrics["kubectl_alias_violations"] == []
+    assert _gate_results(runnable_shell=metrics)["runnable_no_kubectl_alias"] is True
 
 
-def test_runnable_no_kubectl_alias_fails_on_kubectl_shorthand() -> None:
+def test_runnable_no_kubectl_alias_fails_on_kubectl_shorthand_without_alias() -> None:
     text = """---
 title: Demo
 ---
@@ -244,6 +244,20 @@ k get pods
     metrics = verify_module.runnable_shell_metrics(text)
     assert metrics["kubectl_alias_violations"] == ["k get"]
     assert _gate_results(runnable_shell=metrics)["runnable_no_kubectl_alias"] is False
+
+
+def test_runnable_no_kubectl_alias_passes_on_documented_alias_then_shorthand() -> None:
+    text = """---
+title: Demo
+---
+```bash
+alias k=kubectl
+k get pods
+```
+"""
+    metrics = verify_module.runnable_shell_metrics(text)
+    assert metrics["kubectl_alias_violations"] == []
+    assert _gate_results(runnable_shell=metrics)["runnable_no_kubectl_alias"] is True
 
 
 def test_runnable_no_kubectl_alias_allows_text_blocks() -> None:
