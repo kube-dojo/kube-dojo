@@ -5,8 +5,6 @@ sidebar:
   order: 11
 ---
 
-# Module 9.10: BentoML — Python-First Model Packaging and Serving
-
 ## Complexity: [COMPLEX]
 
 **Time to Complete**: 50-60 min

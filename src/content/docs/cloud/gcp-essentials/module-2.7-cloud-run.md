@@ -6,8 +6,6 @@ sidebar:
   order: 8
 ---
 
-# Module 2.7: GCP Cloud Run (Serverless Containers)
-
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 2.1 (IAM), Module 2.6 (Artifact Registry)
 
 ## Learning Outcomes

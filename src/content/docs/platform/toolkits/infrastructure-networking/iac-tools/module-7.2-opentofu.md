@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 7.2: OpenTofu - The Open Source Fork
-
 ## Complexity: [MEDIUM]
 
 ## Time to Complete: 50 minutes

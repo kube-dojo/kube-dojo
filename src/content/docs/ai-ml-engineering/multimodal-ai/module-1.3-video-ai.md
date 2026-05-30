@@ -5,8 +5,6 @@ sidebar:
   order: 904
 ---
 
-# Video AI: When Images Just Aren't Enough
-
 ## Why This Module Matters
 
 In May 2016, a fatal crash involving a semi-autonomous vehicle operating on a major highway highlighted a catastrophic limitation in early computer vision systems. The vehicle's cameras detected a white tractor-trailer crossing the road against a brightly lit sky, but the system failed to recognize the obstruction and did not brake, underscoring how brittle perception systems can be in complex real-world conditions. This incident tragically demonstrated that analyzing the world one frame at a time is fundamentally insufficient for understanding dynamic environments.

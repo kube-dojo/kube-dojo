@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 10.3: Observability AI Features
-
 > **Toolkit Track** | Complexity: `[MEDIUM]` | Time: 50-65 minutes
 
 ## Prerequisites

@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 4.2: Shift-Left Security
-
 > **Discipline Module** | Complexity: `[MEDIUM]` | Time: 45-55 min | Track: DevSecOps
 
 ## Prerequisites

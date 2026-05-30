@@ -8,8 +8,6 @@ sidebar:
   order: 78
 ---
 
-# Observability at Scale
-
 **Complexity:** Advanced. **Time to complete:** 90-120 minutes. **Prerequisites:** Prometheus fundamentals, Kubernetes operations, basic object storage concepts, and comfort reading YAML manifests.
 
 ## Learning Outcomes

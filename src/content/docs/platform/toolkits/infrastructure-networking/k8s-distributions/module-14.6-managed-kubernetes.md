@@ -6,8 +6,6 @@ sidebar:
   order: 7
 ---
 
-# Module 14.6: Managed Kubernetes - EKS vs GKE vs AKS
-
 ## Complexity: [COMPLEX]
 
 ## Time to Complete: 55-60 minutes

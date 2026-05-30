@@ -7,8 +7,6 @@ sidebar:
   order: 5
 ---
 
-# Module 6.4: Compliance for Regulated Industries
-
 **Complexity**: `[ADVANCED]` | **Time**: 75 minutes | **Prerequisites**: [Physical Security & Air-Gapped Environments](../module-6.1-air-gapped/), [Hardware Security (HSM/TPM)](../module-6.2-hardware-security/), and [Enterprise Identity](../module-6.3-enterprise-identity/). These examples assume Kubernetes 1.35 or newer; when running Kubernetes commands, define `alias k=kubectl` once in your shell and then use `k` for CLI examples.
 
 ## What You'll Be Able to Do

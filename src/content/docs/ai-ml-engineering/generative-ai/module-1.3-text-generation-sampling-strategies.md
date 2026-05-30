@@ -8,8 +8,6 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
 
-# Text Generation & Sampling Strategies: The Art of Controlled Randomness
-
 ## Learning Outcomes
 
 By the end of this module, you will be able to:

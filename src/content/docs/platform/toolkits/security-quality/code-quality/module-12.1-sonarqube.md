@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 12.1: SonarQube - The Code Quality Platform
-
 ## Complexity: [COMPLEX]
 
 ## Time to Complete: 50-60 minutes

@@ -6,8 +6,6 @@ sidebar:
   order: 9
 ---
 
-# Module 7.8: SST - The Modern Serverless Framework
-
 ## Complexity: [MEDIUM]
 
 ## Time to Complete: 45-50 minutes

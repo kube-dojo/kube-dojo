@@ -7,8 +7,6 @@ sidebar:
   order: 45
 ---
 
-# Database Operators
-
 Operating stateful databases on bare-metal Kubernetes requires replacing cloud-provider managed services (like RDS or ElastiCache) with in-cluster orchestration. Standard `StatefulSet` primitives handle identity and stable storage, but lack application-specific knowledge required for safe failover, replication scaling, Point-in-Time Recovery (PITR), and zero-downtime upgrades. 
 
 Database operators encode DBA operational routines into custom controllers. Following the standard Kubernetes Operator pattern, they combine a Custom Resource Definition (CRD) with a custom controller that implements a continuous reconciliation loop, constantly driving the observed state of the database cluster toward the desired state.

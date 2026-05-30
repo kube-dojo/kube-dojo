@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 3.3: Argo Workflows
-
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 55-70 min | Prerequisites: CI/CD concepts, Kubernetes Pods and Jobs, container images, basic YAML, and the idea of a Directed Acyclic Graph.
 
 ## Learning Outcomes

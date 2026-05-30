@@ -5,7 +5,6 @@ slug: ai-ml-engineering/ai-infrastructure/module-1.4-local-inference-stack-for-l
 sidebar:
   order: 705
 ---
-# Local Inference Stack for Learners
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
 

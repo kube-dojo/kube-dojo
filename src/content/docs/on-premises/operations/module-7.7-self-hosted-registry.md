@@ -6,8 +6,6 @@ sidebar:
   order: 77
 ---
 
-# Self-Hosted Container Registry
-
 ## Learning Outcomes
 
 * Configure a production-grade OCI-compliant container registry on bare metal Kubernetes.

@@ -5,8 +5,6 @@ sidebar:
   order: 306
 ---
 
-# Vector Space Visualization
-
 ## Why This Module Matters
 
 In November 2018, a leading global fashion retailer deployed a highly anticipated feature for the holiday shopping season: an updated search engine for their catalog. Historically, the retailer relied strictly on exact keyword matching, utilizing traditional inverted indices and TF-IDF scoring. If a user searched for "crimson winter coat," the system would strictly scan the relational database for the exact strings "crimson," "winter," and "coat." While highly predictable and easily debuggable, this rigid approach entirely ignored the implicit semantic intent of the user's query. When users began searching for "burgundy cold weather jacket," the keyword-based system returned zero results, despite the warehouse being fully stocked with thousands of perfectly matching items that happened to use slightly different product descriptions.

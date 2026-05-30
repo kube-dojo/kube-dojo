@@ -5,7 +5,6 @@ sidebar:
   order: 204
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5
-# Or: The 90% of Claude Code You've Been Missing
 
 **Reading Time**: 4-5 hours
 **Prerequisites**: Module 1.1, Claude Code installed and working

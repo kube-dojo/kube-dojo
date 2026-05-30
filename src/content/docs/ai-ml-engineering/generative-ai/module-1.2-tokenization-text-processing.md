@@ -6,8 +6,6 @@ sidebar:
   order: 303
 ---
 
-# Tokenization & Text Processing
-
 > **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 55-75 minutes

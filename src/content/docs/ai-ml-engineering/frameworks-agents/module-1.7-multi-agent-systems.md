@@ -5,8 +5,6 @@ sidebar:
   order: 508
 ---
 
-# Multi-Agent Systems: Production Deployments
-
 ## Why This Module Matters
 
 In 2022, Air Canada deployed an AI agent to handle customer service inquiries. When a grieving passenger asked about bereavement fares, the chatbot hallucinated a completely fictitious policy, instructing the passenger to book a full-price ticket and claim a refund later. When Air Canada refused the refund based on their real policy, the passenger sued. The civil tribunal ruled against Air Canada, forcing them to pay damages and publicly acknowledging the failure of their AI deployment. 
