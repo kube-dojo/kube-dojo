@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 6.2: CIS Benchmarks
-
 > **Complexity**: `[MEDIUM]` - Technical knowledge
 >
 > **Time to Complete**: 35-45 minutes

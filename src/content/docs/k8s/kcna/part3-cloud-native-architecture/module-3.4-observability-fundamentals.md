@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 3.4: Observability Fundamentals
-
 Complexity: `[MEDIUM]` - Observability concepts for Kubernetes 1.35 and newer. Time to complete: 45-55 minutes. Prerequisites: Module 3.3, Cloud Native Patterns, plus basic comfort reading Pods, Services, and application logs in a Kubernetes cluster.
 
 ## What You'll Be Able to Do

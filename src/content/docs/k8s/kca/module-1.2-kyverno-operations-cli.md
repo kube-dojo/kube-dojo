@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 1.2: Kyverno Operations & CLI
-
 > **Complexity**: `[MEDIUM]` - Multiple tools and operational concepts
 >
 > **Time to Complete**: 70-80 minutes

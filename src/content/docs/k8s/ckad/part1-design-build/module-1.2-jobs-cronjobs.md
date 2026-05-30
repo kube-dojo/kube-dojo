@@ -12,8 +12,6 @@ lab:
   environment: kubernetes
 ---
 
-# Module 1.2: Jobs and CronJobs
-
 > **Complexity**: `[MEDIUM]` - Essential CKAD skill with specific production tradeoffs
 >
 > **Time to Complete**: 45-50 minutes

@@ -12,8 +12,6 @@ lab:
   environment: kubernetes
 ---
 
-# Module 1.5: CRDs & Operators - Extending Kubernetes
-
 > **Complexity**: `[MEDIUM]` - New to CKA 2025
 >
 > **Time to Complete**: 35-45 minutes

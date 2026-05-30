@@ -5,8 +5,6 @@ sidebar:
   order: 6
 ---
 
-# Part 0 Cumulative Quiz: Environment & Exam Technique
-
 > **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 45-60 minutes

@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 4.3: Release Strategies
-
 > **Complexity**: `[MEDIUM]` - Delivery strategy and operational trade-offs
 >
 > **Time to Complete**: 40-50 minutes

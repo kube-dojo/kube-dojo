@@ -7,8 +7,6 @@ sidebar:
   order: 102
 ---
 
-# CNPA Core Platform Fundamentals Review
-
 > **Complexity**: `[MEDIUM]`
 >
 > **Time to Complete**: 75-95 minutes

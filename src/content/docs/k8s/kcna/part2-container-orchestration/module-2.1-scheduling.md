@@ -6,8 +6,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 2.1: Scheduling
-
 > **Complexity**: `[MEDIUM]` - Orchestration concepts
 >
 > **Time to Complete**: 60-75 minutes

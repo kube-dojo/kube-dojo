@@ -6,8 +6,6 @@ sidebar:
   order: 103
 ---
 
-# CNPE Platform APIs and Self-Service Lab
-
 > **CNPE Track** | Complexity: `[COMPLEX]` | Time to Complete: 75-90 min
 >
 > **Prerequisites**: CNPE Exam Strategy and Environment, Platform Engineering fundamentals, CRDs and Operators, Backstage, Crossplane, Kubebuilder, vCluster

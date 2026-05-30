@@ -6,8 +6,6 @@ sidebar:
   order: 6
 ---
 
-# Module 3.5: Observability Tools
-
 - **Complexity**: `[QUICK]` - tool selection and first-run practice
 - **Time to Complete**: 40-55 minutes
 - **Prerequisites**: Module 3.4 (Observability Fundamentals), basic Kubernetes workloads, and a local Kubernetes 1.35+ cluster for the optional lab

@@ -6,8 +6,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 3.6: Security Basics (Theory)
-
 - **Complexity**: `[QUICK]` - Foundations only
 - **Time to Complete**: 35-40 minutes
 - **Prerequisites**: Modules 3.1-3.5 (Cloud Native Architecture)

@@ -5,7 +5,6 @@ slug: k8s/kcsa/part2-cluster-component-security/module-2.2-node-security
 sidebar:
   order: 3
 ---
-# Module 2.2: Node Security
 
 > **Complexity**: `[MEDIUM]` - Core knowledge
 >

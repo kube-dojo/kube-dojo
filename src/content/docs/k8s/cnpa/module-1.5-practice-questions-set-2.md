@@ -6,8 +6,6 @@ sidebar:
   order: 105
 ---
 
-# CNPA Practice Questions Set 2
-
 > **CNPA Track** | Practice questions | Set 2 | Complexity: Medium | Time: 75 minutes | Prerequisites: CNPA modules 1.1 through 1.4, basic Kubernetes objects, and platform engineering vocabulary
 
 This second practice set focuses on comparison traps: platform engineering versus traditional operations, reconciliation versus one-time deployment, guardrails versus unrestricted access, and measurement that proves the platform is useful rather than merely busy. Read the explanations as carefully as the answers, because the exam often rewards the learner who can explain why three plausible answers are still weaker than the best answer.

@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 2.3: Network Security
-
 > **Complexity**: `[MEDIUM]` - Core knowledge
 >
 > **Time to Complete**: 35-40 minutes

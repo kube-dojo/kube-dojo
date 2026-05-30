@@ -6,8 +6,6 @@ sidebar:
   order: 105
 ---
 
-# CNPE Full Mock Exam
-
 - **CNPE Track**: Complexity `[COMPLEX]`
 - **Time to Complete**: 90-120 min
 - **Prerequisites**: CNPE Exam Strategy and Environment, GitOps and Delivery Lab, Platform APIs and Self-Service Lab, Observability Security and Operations Lab

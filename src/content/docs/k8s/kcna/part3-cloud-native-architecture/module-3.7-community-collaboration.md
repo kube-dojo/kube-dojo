@@ -6,8 +6,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 3.7: Cloud Native Community & Collaboration
-
 > **Complexity**: `[MEDIUM]` | **Time**: 45-60 minutes | **Prerequisites**: Modules 3.1-3.6, basic Kubernetes operations, and enough command-line comfort to inspect public repositories and run Kubernetes 1.35+ commands after introducing `alias k=kubectl` for the `k` alias.
 
 ## Learning Outcomes

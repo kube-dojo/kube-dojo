@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 5.4: Security Tooling
-
 > **Complexity**: `[MEDIUM]` - Tool awareness, operational comparison, and practical stack design
 >
 > **Time to Complete**: 55-65 minutes

@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 6.1: Compliance Frameworks
-
 > **Complexity**: `[MEDIUM]` - Conceptual knowledge with practical Kubernetes control mapping
 >
 > **Time to Complete**: 35-45 minutes

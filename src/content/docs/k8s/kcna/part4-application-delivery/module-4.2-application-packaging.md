@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 4.2: Application Packaging
-
 > **Complexity**: `[MEDIUM]` - Tool concepts
 >
 > **Time to Complete**: 35-40 minutes

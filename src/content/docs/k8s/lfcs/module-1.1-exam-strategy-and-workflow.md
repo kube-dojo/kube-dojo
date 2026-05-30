@@ -5,7 +5,6 @@ slug: k8s/lfcs/module-1.1-exam-strategy-and-workflow
 sidebar:
   order: 101
 ---
-# LFCS Exam Strategy and Workflow
 
 Complexity: `[MEDIUM]` | Time: 1-2 hours | Prerequisites: familiarity with the LFCS hub, Linux command-line fundamentals, and enough shell confidence to create files, inspect services, and read manual pages without a graphical helper. KubeDojo's Kubernetes certification material targets Kubernetes 1.35+, but this LFCS module is focused on Linux administration habits that transfer into every later terminal-heavy track.
 

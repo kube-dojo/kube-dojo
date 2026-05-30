@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 1.3: Security Principles
-
 **Complexity**: `[MEDIUM]` - Foundational concepts. **Time to Complete**: 45-60 minutes. **Prerequisites**: [Module 1.2: Cloud Provider Security](../module-1.2-cloud-provider-security/). This module assumes you can recognize core Kubernetes objects and now need a reliable way to evaluate whether those objects are configured with secure operating principles.
 
 ## Learning Outcomes

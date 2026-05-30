@@ -6,8 +6,6 @@ sidebar:
   order: 8
 ---
 
-# Module 1.7: Customizing the Scheduler
-
 > **Complexity**: `[COMPLEX]` - Extending Kubernetes scheduling decisions
 >
 > **Time to Complete**: 4 hours

@@ -7,8 +7,6 @@ sidebar:
   order: 101
 ---
 
-# CGOA Exam Strategy and Blueprint Review
-
 > **CGOA Track** | **Complexity**: Medium | **Time to Complete**: 90 minutes | **Prerequisites**: No Kubernetes operations experience required, but basic Git and CI/CD vocabulary will help
 
 ## Learning Outcomes

@@ -12,8 +12,6 @@ lab:
   environment: kubernetes
 ---
 
-# Module 1.1: Control Plane Deep-Dive
-
 > **Complexity**: `[MEDIUM]` - Conceptual understanding required
 >
 > **Time to Complete**: 35-45 minutes

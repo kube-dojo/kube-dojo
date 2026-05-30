@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 2.1: Control Plane Security
-
 - **Complexity**: `[MEDIUM]` - Core knowledge
 - **Time to Complete**: 30-35 minutes
 - **Prerequisites**: [Module 1.3: Security Principles](/k8s/kcsa/part1-cloud-native-security/module-1.3-security-principles/)

@@ -5,7 +5,6 @@ slug: k8s/kcsa/part3-security-fundamentals/module-3.5-network-policies
 sidebar:
   order: 6
 ---
-# Module 3.5: Network Policies
 
 > **Complexity**: `[MEDIUM]` - Core knowledge
 >

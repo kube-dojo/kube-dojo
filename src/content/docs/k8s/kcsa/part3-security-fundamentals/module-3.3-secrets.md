@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 3.3: Secrets Management
-
 **Complexity**: `[MEDIUM]` - Core knowledge. **Time to Complete**: 25-30 minutes. **Prerequisites**: [Module 3.2: RBAC Fundamentals](../module-3.2-rbac/). This module assumes Kubernetes 1.35 or newer and uses `k` as the `kubectl` alias after you define it with `alias k=kubectl` in your shell.
 
 ## Learning Outcomes

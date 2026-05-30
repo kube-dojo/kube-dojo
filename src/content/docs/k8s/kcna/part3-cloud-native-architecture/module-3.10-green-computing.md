@@ -7,8 +7,6 @@ sidebar:
   order: 11
 ---
 
-# Module 3.10: Green Computing and Sustainability
-
 > **Complexity**: `[QUICK]` - Awareness and applied analysis level
 > **Time to Complete**: 45-60 minutes
 > **Prerequisites**: Module 3.1 (Cloud Native Principles), Module 3.2 (CNCF Ecosystem), basic Kubernetes resource requests and limits, and the ability to inspect Kubernetes objects with `kubectl` or its common alias `k`.

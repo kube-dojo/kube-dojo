@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 0.2: Security Mindset
-
 This is a `[QUICK]` foundational module for the Kubernetes and Cloud Native Security Associate path. Plan for 20-25 minutes, and complete [Module 0.1: KCSA Overview](../module-0.1-kcsa-overview/) first so the exam domains and certification goal are already familiar before you start judging security trade-offs.
 
 ## What You'll Be Able to Do

@@ -12,8 +12,6 @@ lab:
   environment: kubernetes
 ---
 
-# Module 1.2: Extension Interfaces - CNI, CSI, CRI
-
 > **Complexity**: `[MEDIUM]` - Conceptual with practical diagnostics
 >
 > **Time to Complete**: 35-45 minutes

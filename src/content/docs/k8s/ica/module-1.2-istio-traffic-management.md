@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 1.2: Istio Traffic Management
-
 ## Complexity: `[COMPLEX]`
 ## Time to Complete: 60-75 minutes
 

@@ -6,8 +6,6 @@ sidebar:
   order: 7
 ---
 
-# Module 1.6: Workload Resources
-
 > **Complexity**: `[MEDIUM]` - Core resource concepts
 >
 > **Time to Complete**: 30-35 minutes

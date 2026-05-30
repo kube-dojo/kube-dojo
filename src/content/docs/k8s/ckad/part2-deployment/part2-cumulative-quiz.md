@@ -5,8 +5,6 @@ sidebar:
   order: 5
 ---
 
-# Part 2 Cumulative Quiz: Application Deployment
-
 > **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 70-90 minutes

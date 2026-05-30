@@ -5,7 +5,6 @@ revision_pending: false
 sidebar:
   order: 4
 ---
-# Module 1.3: Building Controllers with client-go
 
 > **Complexity**: `[COMPLEX]` - Full controller implementation from scratch
 >

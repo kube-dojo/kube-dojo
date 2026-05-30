@@ -5,7 +5,6 @@ slug: k8s/kcsa/part5-platform-security/module-5.2-observability
 sidebar:
   order: 3
 ---
-# Module 5.2: Security Observability
 
 > **Complexity**: `[MEDIUM]` - Core knowledge. **Time to Complete**: 25-30 minutes. **Prerequisites**: [Module 5.1: Image Security](../module-5.1-image-security/). This module assumes Kubernetes 1.35 or newer and uses `k` as the short command form after you define `alias k=kubectl` in your shell.
 

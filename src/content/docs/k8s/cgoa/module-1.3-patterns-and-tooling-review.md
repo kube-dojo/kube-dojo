@@ -6,8 +6,6 @@ sidebar:
   order: 103
 ---
 
-# CGOA Patterns and Tooling Review
-
 > **CGOA Track** | Complexity: **MEDIUM** | Time: **75 minutes** | Prerequisites: GitOps principles, Kubernetes objects, basic CI/CD vocabulary | Kubernetes target: **1.35+**
 
 ## Learning Outcomes
