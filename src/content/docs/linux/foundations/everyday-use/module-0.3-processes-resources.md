@@ -31,7 +31,7 @@ After this module, you will be able to perform the following tasks in a live she
 
 ## Why This Module Matters
 
-At 2:13 AM, a payments team at a mid-sized retailer watched checkout latency jump from seconds to minutes during a regional promotion. The application was healthy in the dashboard, the load balancer still accepted requests, and the database showed no obvious deadlocks. The incident cost the company a six-figure amount before anyone noticed that one worker node had a full `/var` filesystem, a runaway log file, and several application processes stuck waiting on disk I/O.
+**Hypothetical scenario:** Picture a 2 AM page during a regional promotion when checkout latency jumps from seconds to minutes. The application looks healthy in the monitoring dashboard, the load balancer still accepts requests, and the database shows no obvious deadlocks. Before anyone checks disk pressure on a worker node, several application processes can sit stuck waiting on I/O while a full `/var` filesystem and a runaway log file go unnoticed.
 
 The painful part was not that Linux behaved mysteriously. The painful part was that Linux was reporting the facts the whole time, but the responders did not have a repeatable way to read them. `df` showed the full filesystem, `du` could have found the log file, `top` showed high wait time, and `ps` showed which processes were blocked. Once the team followed that trail, the fix was straightforward; before that, every restart only moved the problem around.
 
@@ -141,7 +141,7 @@ The `STAT` column is your first clue about why a process is or is not making pro
 
 A lowercase `s` after the state, such as `Ss`, means the process is a session leader. A plus sign means the process belongs to the foreground process group for that terminal. Those flags explain job-control behavior later in the module, so do not worry about memorizing every variant now. The operational habit is simpler: treat `R`, `D`, and `Z` as prompts to ask a follow-up question, not as final diagnoses.
 
-War story: during a batch export incident, a team saw hundreds of `gzip` workers in `S` state and assumed the server was idle. The real bottleneck was a single slow network mount; the workers were sleeping while waiting for reads, and killing them only caused the orchestrator to start new workers that blocked again. The useful observation was the state transition pattern, not the raw process count.
+**Hypothetical scenario:** During a batch export incident, a team sees hundreds of `gzip` workers in `S` state and assumes the server is idle. The real bottleneck was a single slow network mount; the workers were sleeping while waiting for reads, and killing them only caused the orchestrator to start new workers that blocked again. The useful observation was the state transition pattern, not the raw process count.
 
 ## Watching CPU and Memory Pressure with `top`, `htop`, and `free`
 
@@ -277,7 +277,7 @@ Stop and think: before reading further, if you run `kill` on a normal `sleep` pr
 
 The same pattern appears in Kubernetes 1.35+ pod termination. When a pod is deleted, kubelet asks the container runtime to send SIGTERM to the container's main process, waits for the configured grace period, and then sends SIGKILL if the process has not exited. That behavior only works well if PID 1 inside the container forwards or handles signals correctly. A shell wrapper that ignores SIGTERM can turn a graceful rollout into repeated forced kills.
 
-War story: a team once used `kill -9` on a stuck log processor because it looked harmless. The processor had already read data from a queue but had not committed its checkpoint, so the replacement process replayed a large batch and duplicated downstream events. SIGTERM would not have guaranteed perfection, but it would have given the process a chance to persist the offset before exiting.
+**Hypothetical scenario:** A team uses `kill -9` on a stuck log processor because it looks harmless. The processor had already read data from a queue but had not committed its checkpoint, so the replacement process replayed a large batch and duplicated downstream events. SIGTERM would not have guaranteed perfection, but it would have given the process a chance to persist the offset before exiting.
 
 ## Managing Foreground, Background, and Disconnects
 
@@ -439,7 +439,7 @@ sdb      8:16   0  200G  0 disk
 
 That output tells you `/var` is backed by a separate 200 GiB disk in the example. If `/var` fills, expanding `/dev/sda1` would not help because `/var` is on `sdb1`. This is the kind of simple infrastructure fact that prevents a tired responder from spending an hour on the wrong volume.
 
-War story: a platform team once cleaned several gigabytes from `/home` while kubelet continued failing image pulls. The alert referred to node disk pressure, but the exhausted path was under `/var/lib/containerd` on a separate mount. `df -h` would have shown the mount, and `du` under `/var` would have found the image store before anyone touched user directories.
+**Hypothetical scenario:** A platform team cleans several gigabytes from `/home` while kubelet continues failing image pulls. The alert referred to node disk pressure, but the exhausted path was under `/var/lib/containerd` on a separate mount. `df -h` would have shown the mount, and `du` under `/var` would have found the image store before anyone touched user directories.
 
 ## Kubernetes Connection: Processes in Pods
 
