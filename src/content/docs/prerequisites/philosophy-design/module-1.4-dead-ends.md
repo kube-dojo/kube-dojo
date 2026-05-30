@@ -25,7 +25,7 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2018, a large retailer spent roughly $2.3 million building a container platform on Apache Mesos and Marathon. The team hired specialists, wrote custom deployment workflows, and trained application engineers to think in frameworks that looked sensible at the time because Twitter, Airbnb, and Apple had all used Mesos in serious production environments. By 2020, the platform choice had become a liability: hiring was harder, vendor integrations were thinning, the internal tooling required constant maintenance, and the migration plan pointed straight toward Kubernetes. The painful part was not merely that a tool lost popularity; it was that two years of operational habit had to be unwound while the business still expected releases to continue.
+Consider a hypothetical but representative case. A large retailer invests heavily — easily over a million dollars in salaries, consultants, and engineering time — building a container platform on Apache Mesos and Marathon. The team hires specialists, writes custom deployment workflows, and trains application engineers to think in frameworks that looked sensible at the time, because Twitter, Airbnb, and Apple had all used Mesos in serious production environments. Within a couple of years the platform choice has become a liability: hiring is harder, vendor integrations are thinning, the internal tooling requires constant maintenance, and the migration plan points straight toward Kubernetes. The painful part is not merely that a tool lost popularity; it is that years of operational habit have to be unwound while the business still expects releases to continue.
 
 That story matters because beginners often assume the best career move is to learn every technology that appears in old architecture diagrams. In cloud-native engineering, that instinct is expensive. A dead-end technology can still have documentation, conference talks, and working clusters, so the question is not whether it ever solved a problem. The question is whether it is still a good place to invest learning time, production risk, and team attention when Kubernetes 1.35 and the surrounding ecosystem have become the default platform vocabulary.
 
@@ -51,16 +51,16 @@ Docker Swarm is the simplest example because it was attached to the company that
 
 **What it was**: Docker's native orchestration solution.
 
-**Status**: Effectively deprecated. Docker Desktop removed Swarm mode in 2022.
+**Status**: No longer a mainstream choice for new projects. Swarm mode is still built into Docker Engine and Docker Desktop, and Mirantis — which acquired Docker's enterprise business in 2019 — continues to maintain and develop it. The industry's momentum, tooling, and hiring, however, have consolidated around Kubernetes.
 
 ```mermaid
 timeline
     title Docker Swarm Timeline
     2015 : Docker Swarm launched as K8s competitor
     2017 : Docker adds K8s support (admission of defeat)
-    2019 : Docker Enterprise sold to Mirantis
-    2020 : Mirantis announces Swarm deprecation timeline
-    2022 : Swarm removed from Docker Desktop
+    2019 : Docker Enterprise (incl. Swarm) sold to Mirantis
+    2020 : Mirantis commits to long-term Swarm support
+    2023 : Swarm still maintained, but niche; Kubernetes is the default
 ```
 
 The Swarm lesson is not that vendor-built tools are automatically bad. The lesson is that infrastructure platforms need trust from organizations that compete with one another. When a single vendor controls the roadmap, every other vendor asks whether deep integration helps the platform owner more than the customer. Kubernetes avoided that trap by moving under the CNCF and becoming a neutral target. That governance shift gave the ecosystem a place to cooperate while still competing on managed services, networking, storage, and developer experience.
@@ -79,7 +79,7 @@ timeline
     2009 : Mesos created at UC Berkeley
     2013 : Marathon launched for containers
     2016 : Peak adoption (Twitter, Airbnb, Apple)
-    2020 : Twitter announces migration to K8s
+    2019 : Twitter announces migration to K8s
     2021 : Marathon declared unmaintained
     2022 : Mesos usage effectively zero for new projects
 ```
@@ -245,7 +245,7 @@ gantt
     containerd (Default K8s runtime)   :active, 2017-01-01, 2026-12-31
     
     section Orchestration
-    Docker Swarm (Deprecated)          :done, 2015-01-01, 2022-01-01
+    Docker Swarm (Niche; still maintained) :done, 2015-01-01, 2020-01-01
     Apache Mesos (Abandoned)           :done, 2013-01-01, 2021-01-01
     Kubernetes (Winner)                :active, 2014-06-01, 2026-12-31
 ```
