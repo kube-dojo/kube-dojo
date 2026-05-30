@@ -147,7 +147,7 @@ Profiles are stored as plain text files on the disk before being compiled by the
 /var/cache/apparmor/
 ```
 
-A useful war story is the deployment that "worked on two nodes" and failed on the third after a routine rollout. The manifest was identical, the image digest was identical, and the team spent an hour inspecting registry credentials before checking `aa-status` on the failing node. The profile file had been copied by hand during testing but never included in the node bootstrap process, so Kubernetes asked for a `Localhost` profile that the scheduled worker had never loaded.
+**Hypothetical scenario:** A useful war story is the deployment that "worked on two nodes" and failed on the third after a routine rollout. The manifest was identical, the image digest was identical, and the team spent an hour inspecting registry credentials before checking `aa-status` on the failing node. The profile file had been copied by hand during testing but never included in the node bootstrap process, so Kubernetes asked for a `Localhost` profile that the scheduled worker had never loaded.
 
 Before running this in your own environment, what output do you expect if AppArmor is compiled into the kernel but the service has not loaded any profiles? You should expect the module to report as loaded while profile counts are low or zero, which points you toward the profile lifecycle rather than toward kernel support or application permissions.
 
@@ -334,7 +334,7 @@ Notice the explicit `deny` rules at the bottom. AppArmor is already default-deny
 
 There is a tradeoff hiding in this example. The profile allows recursive reads of `/var/www/**` because a static site can have nested directories, but it allows writes only where runtime behavior requires writes. If the application later grows an upload feature, the right response is not to make the entire content root writable; create a specific upload path, constrain it, and make the application architecture match the confinement boundary.
 
-A practical production team once discovered this distinction during a certificate rotation incident. The profile allowed `/etc/ssl/** r,` but the automation wrote a temporary file under a different staging directory before atomically moving it into place, so Nginx reloads failed only during rotation. The fix was not to unconfine Nginx; the fix was to decide whether Nginx should read the staging path, then encode that path explicitly or change the rotation workflow so runtime reads stayed inside the approved certificate directory.
+**Hypothetical scenario:** A practical production team once discovered this distinction during a certificate rotation incident. The profile allowed `/etc/ssl/** r,` but the automation wrote a temporary file under a different staging directory before atomically moving it into place, so Nginx reloads failed only during rotation. The fix was not to unconfine Nginx; the fix was to decide whether Nginx should read the staging path, then encode that path explicitly or change the rotation workflow so runtime reads stayed inside the approved certificate directory.
 
 ## AppArmor in Containerized Environments
 
@@ -579,7 +579,7 @@ The AppArmor-versus-SELinux decision should also consider how your organization 
 - **Mainline Kernel Integration:** Linus Torvalds merged AppArmor into the mainline Linux kernel in version 2.6.36 in October 2010, ending a long debate over competing security module approaches.
 - **Docker's Silent Shield:** Docker's default AppArmor profile blocks many privileged mount and process-tracing paths, giving ordinary containers a MAC baseline even when users never mention AppArmor directly.
 - **High-Performance Parsing:** AppArmor policies are compiled into a deterministic finite automaton, so path mediation can be evaluated quickly in the kernel rather than interpreted as slow text rules.
-- **Ubuntu's Adoption Path:** Canonical acquired Immunix in 2005, and Ubuntu later made AppArmor a default MAC system for the distribution family that many Kubernetes labs still use.
+- **Ubuntu's Adoption Path:** Novell acquired Immunix (AppArmor's creator) in 2005. After Novell's acquisition by Attachmate in 2011, Canonical took over as AppArmor's primary maintainer and made it Ubuntu's default MAC system.
 
 ## Common Mistakes
 
@@ -747,17 +747,18 @@ sudo aa-enforce /etc/apparmor.d/tmp.test-app.sh
 If you have Docker installed on your host, observe how the runtime automatically applies the default baseline profile to contain behavior. This step is optional, but it helps connect the host-level policy language to the container defaults you inherit in many development environments.
 
 ```bash
-# 1. Check default profile
-docker run --rm alpine cat /proc/1/attr/current
+# 1. Check default profile (on modern multi-LSM kernels, use /proc/1/attr/apparmor/current)
+docker run --rm alpine cat /proc/1/attr/apparmor/current
 # Should show: docker-default
 
 # 2. Run unconfined (compare)
-docker run --rm --security-opt apparmor=unconfined alpine cat /proc/1/attr/current
+docker run --rm --security-opt apparmor=unconfined alpine cat /proc/1/attr/apparmor/current
 # Shows: unconfined
 
 # 3. Test restriction
 docker run --rm alpine cat /etc/shadow
-# Fails due to docker-default profile
+# docker-default does NOT deny reading files inside the container. Shadow access is governed by
+# DAC (file permissions/user); AppArmor's default profile restricts capabilities, mount, and ptrace.
 
 docker run --rm --security-opt apparmor=unconfined alpine cat /etc/shadow
 # May work (if root)
@@ -805,8 +806,8 @@ Next, move to **[Module 4.3: SELinux Contexts](/linux/security/hardening/module-
 
 - [Linux kernel AppArmor documentation](https://docs.kernel.org/admin-guide/LSM/apparmor.html)
 - [AppArmor project documentation](https://apparmor.net/)
-- [Ubuntu AppArmor documentation](https://documentation.ubuntu.com/server/how-to/security/apparmor/)
-- [Ubuntu AppArmor profiles reference](https://documentation.ubuntu.com/server/explanation/intro-to/apparmor/)
+- [Ubuntu AppArmor documentation](https://ubuntu.com/server/docs/how-to/security/apparmor/)
+- [Ubuntu AppArmor profiles reference](https://ubuntu.com/server/docs/apparmor)
 - [Kubernetes AppArmor tutorial](https://kubernetes.io/docs/tutorials/security/apparmor/)
 - [Kubernetes security context documentation](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 - [Kubernetes Linux kernel security constraints](https://kubernetes.io/docs/concepts/security/linux-kernel-security-constraints/)

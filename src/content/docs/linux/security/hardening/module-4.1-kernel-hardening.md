@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: "linux-4.1-kernel-hardening"
   url: "https://killercoda.com/kubedojo/scenario/linux-4.1-kernel-hardening"
-  duration: "35 min"
+  duration: "25-30 min"
   difficulty: "advanced"
   environment: "ubuntu"
 ---
@@ -31,7 +31,7 @@ After this module, you will be able to make and defend kernel-hardening decision
 
 ## Why This Module Matters
 
-On October 21, 2016, Dyn's managed DNS platform was hit by the Mirai botnet, and the outage rippled into major websites because a network control plane dependency was suddenly unreachable. That incident was not solved by a single sysctl flag, but it is the kind of event that makes kernel hardening practical rather than academic. When hosts accept spoofed routes, answer broadcast probes, keep weak TCP defaults, or expose kernel internals to untrusted processes, they become easier to abuse during the first minutes of an incident, when responders have the least time and the worst visibility.
+On October 21, 2016, Dyn's managed DNS platform was hit by the Mirai botnet, and the outage rippled into major websites because a network control plane dependency was suddenly unreachable. Source: [2016 Dyn cyberattack (Wikipedia)](https://en.wikipedia.org/wiki/DDoS_attacks_on_Dyn). That incident was not solved by a single sysctl flag, but it is the kind of event that makes kernel hardening practical rather than academic. When hosts accept spoofed routes, answer broadcast probes, keep weak TCP defaults, or expose kernel internals to untrusted processes, they become easier to abuse during the first minutes of an incident, when responders have the least time and the worst visibility.
 
 A Kubernetes platform team sees the same lesson at a smaller scale. A worker node is not just a Linux server running containers; it is also a packet forwarder, a bridge participant, a conntrack consumer, a process scheduler, and a shared memory boundary for workloads from different teams. If a hardening script blindly disables IP forwarding, pods lose cross-node traffic. If the team leaves pointer exposure and unrestricted tracing enabled, a compromised workload gains better reconnaissance inside the node. The financial impact usually shows up as missed SLOs, wasted incident hours, emergency consulting, SLA credits, and delayed releases, even when no public breach headline appears.
 
@@ -377,6 +377,7 @@ net.bridge.bridge-nf-call-ip6tables = 1
 
 # Load br_netfilter module first
 modprobe br_netfilter
+echo br_netfilter | sudo tee /etc/modules-load.d/br_netfilter.conf
 ```
 
 Bridge netfilter settings are a good example of dependency order. If the `br_netfilter` module is not loaded, the corresponding sysctl keys may not exist yet, and a configuration reload can appear to fail or skip the setting. A node bootstrap process should load required modules before applying the sysctl file, then verify that the expected keys exist and hold the intended values.
@@ -416,6 +417,8 @@ Notice that `kernel.kptr_restrict = 1` appears here rather than the stricter val
 
 CIS benchmark rules are valuable because they make common hardening expectations explicit, measurable, and reviewable. They are not a substitute for architecture knowledge. Some rules include phrases such as "unless routing is required," and a Kubernetes worker is exactly the kind of host where routing may be required. Your job is to document that exception, keep compensating controls in place, and verify the final risk posture.
 
+CIS section numbers vary by benchmark and platform (e.g. RHEL 9 maps several of these to §3.3.x); cross-check against the benchmark PDF for your distribution.
+
 ```bash
 # Key CIS Benchmark sysctl requirements:
 
@@ -445,7 +448,7 @@ Persistent configuration is where hardening becomes reproducible. A running valu
 
 ```bash
 # Create configuration file
-cat <<EOF | sudo tee /etc/sysctl.d/99-hardening.conf
+cat <<'EOF' | sudo tee /etc/sysctl.d/99-hardening.conf
 # Network hardening
 net.ipv4.conf.all.send_redirects = 0
 net.ipv4.conf.default.send_redirects = 0
@@ -780,4 +783,4 @@ Next up: [Module 4.2: AppArmor Profiles](/linux/security/hardening/module-4.2-ap
 - [Kubernetes install tools: Linux sysctl bridge prerequisites](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)
 - [Kubernetes networking concepts](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
 - [AIDE manual](https://aide.github.io/doc/)
-- [Red Hat rpm verify documentation](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/managing_software_with_the_dnf_tool/verifying-installed-packages_using-appstream)
+- [rpm(8) — package verification](https://man7.org/linux/man-pages/man8/rpm.8.html)
