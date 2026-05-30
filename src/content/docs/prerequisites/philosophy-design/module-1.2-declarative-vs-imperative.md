@@ -10,7 +10,7 @@ sidebar:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: Module 1 (Why Kubernetes Won)
+> **Prerequisites**: Module 1.1 (Why Kubernetes Won)
 >
 > **Kubernetes Version**: 1.35+
 
@@ -29,7 +29,7 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-The on-call engineer at a SaaS company got paged at 2 AM because a revenue-critical checkout service was crash-looping during a regional promotion. Half-asleep, she treated the system like an old fleet of hand-managed servers: SSH into the node, restart the container, watch the process come back, and close the alert. Kubernetes immediately killed her manually started container and replaced it with a new pod from the Deployment template, which still contained the broken environment variable. She restarted it again, Kubernetes removed it again, and the incident stretched for 45 minutes while customers abandoned carts and the incident channel filled with contradictory theories.
+Imagine an on-call engineer is paged at 2 AM because a revenue-critical checkout service is crash-looping during a regional promotion. Half-asleep, she treats the system like an old fleet of hand-managed servers: SSH into the node, restart the container, watch the process come back, and close the alert. Kubernetes immediately kills her manually started container and replaces it with a new pod from the Deployment template, which still contains the broken environment variable. She restarts it again, Kubernetes removes it again, and the incident stretches for 45 minutes while customers abandon carts and the incident channel fills with contradictory theories.
 
 Nothing in that story requires Kubernetes to be broken. The cluster was doing exactly what it was built to do: compare the declared desired state with the observed current state and move reality back toward the declaration. The operational failure came from using imperative instincts inside a declarative control system. When the engineer finally changed the Deployment YAML, committed the fix, and applied the corrected manifest, the next rollout converged in seconds because she stopped fighting the controller and started changing the source of truth.
 
@@ -512,7 +512,8 @@ First, create a clean namespace and a small declarative Deployment. The manifest
 kubectl create namespace declarative-lab --dry-run=client -o yaml > namespace.yaml
 ```
 
-```yaml
+```bash
+cat <<'EOF' > web-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -533,6 +534,7 @@ spec:
         image: nginx:1.27
         ports:
         - containerPort: 80
+EOF
 ```
 
 Apply the namespace and Deployment from files, then inspect what Kubernetes created. The important observation is that you apply one higher-level object, but the controller creates lower-level pods to satisfy it.

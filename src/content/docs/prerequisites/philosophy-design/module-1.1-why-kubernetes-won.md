@@ -131,7 +131,7 @@ The honest version of the Kubernetes story includes that last disadvantage. Kube
 The deepest difference between Kubernetes and many early approaches is the move from imperative commands to declarative desired state. Imperative operation tells the system exactly which steps to perform: start this container here, restart that process there, add two more replicas when traffic grows, and run this rollback command if a release fails. Declarative operation records the intended final condition and lets controllers continuously compare that intent with the actual cluster. This is the mental model behind Deployments, Services, ConfigMaps, Secrets, custom resources, and almost every advanced Kubernetes pattern you will meet later.
 
 ```text
-Imperative (Swarm/Traditional):
+Imperative (manual Docker/SSH scripts):
 "Start 3 nginx containers on server-1"
 "If one dies, start another"
 "If traffic increases, start 2 more"
@@ -140,6 +140,8 @@ Declarative (Kubernetes):
 "I want 3 nginx replicas running. Always."
 (Kubernetes figures out the rest)
 ```
+
+Docker Swarm mode also offered declarative desired-state reconciliation, so Kubernetes did not win simply because Swarm lacked that behavior; it won on API extensibility, neutral CNCF governance, managed-provider adoption, and ecosystem breadth.
 
 The phrase "Kubernetes figures out the rest" should not be read as magic. It means the API server stores desired state, controllers watch that state, the scheduler selects nodes, kubelets run workloads, and status flows back into the control plane. Each controller owns a narrow reconciliation loop: observe reality, compare it with the desired object, and take the next safe step toward convergence. If a pod disappears but the Deployment still declares three replicas, the system does not need a human to remember that the missing pod was supposed to exist.
 
@@ -201,13 +203,13 @@ timeline
     2015 : Kubernetes 1.0 released (July)
          : CNCF formed, Kubernetes donated
     2016 : Pokemon Go runs on Kubernetes (massive validation)
-         : All major clouds announce K8s support
-    2017 : Docker Inc. adds Kubernetes support (surrender)
+    2017 : Docker Inc. adds Kubernetes support (confirming market demand)
+         : AWS announces EKS (preview, re:Invent)
          : Kubernetes becomes de facto standard
     2018 : Kubernetes first CNCF project to graduate (March)
          : EKS and AKS become generally available (June)
+    2019 : Docker Swarm momentum slows as Mirantis acquires Docker Enterprise
          : Twitter begins deprecating Mesos
-    2019 : Docker Swarm enters maintenance mode under Mirantis
     2020+ : Focus shifts from "should we use K8s?" to "how do we use K8s better?"
     2025 : Apache Mesos formally retired
 ```
@@ -226,7 +228,7 @@ gantt
     
     section Docker Swarm
     Active Development :2014, 2019
-    Maintenance Only   :done, 2019, 2026
+    Reduced momentum   :done, 2019, 2026
     
     section Mesos/Marathon
     Active Adoption    :2014, 2018
@@ -265,7 +267,7 @@ The preserved misconception table below captures three useful corrections. Keep 
 
 | Misconception | Reality |
 |---------------|---------|
-| "K8s won because Google" | Google helped, but neutral governance was key. AWS wouldn't adopt a Google-controlled product. |
+| "K8s won because Google" | Google helped, but neutral governance was key. Competitors had stronger reasons to adopt once Kubernetes moved under neutral CNCF governance. |
 | "Swarm lost because Docker" | Swarm lost because it couldn't match K8s features or ecosystem. Company issues accelerated it. |
 | "Mesos was inferior technology" | Mesos was powerful but too complex. Technology alone doesn't win—ecosystem and simplicity matter. |
 
