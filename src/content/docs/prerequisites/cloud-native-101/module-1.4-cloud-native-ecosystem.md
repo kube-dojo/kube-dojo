@@ -26,9 +26,9 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-At 02:18 on a holiday sale weekend, a mid-sized e-commerce company discovered that its Kubernetes migration had not created a platform; it had created a museum of every cloud native project that had impressed someone in a conference talk. The lead architect had mandated a complex service mesh before the team had reliable metrics, selected a sandbox distributed database before the operations team had backup drills, and enabled advanced eBPF networking before anyone could explain the packet path during an outage. When checkout latency spiked, the incident room filled with dashboards, proxy logs, custom resource definitions, and half-remembered architecture diagrams, but no one could tell which layer owned the failure.
+Imagine a holiday-sale weekend where a team discovers their Kubernetes migration did not create a platform; it created a museum of every cloud native project that had impressed someone in a conference talk. The lead architect mandated a complex service mesh before the team had reliable metrics, selected a sandbox distributed database before the operations team had backup drills, and enabled advanced eBPF networking before anyone could explain the packet path during an outage. When checkout latency spikes, the incident room fills with dashboards, proxy logs, custom resource definitions, and half-remembered architecture diagrams, but no one can tell which layer owns the failure.
 
-The bill was not theoretical. The company lost a full afternoon of peak orders, paid emergency consulting fees, and spent the following quarter unwinding tools that had been adopted before their problem statements were clear. The painful lesson was that the CNCF landscape is a menu, not a checklist. A production platform needs a small set of well-operated tools that solve known problems; it does not need every project that appears near Kubernetes on a landscape map.
+In that scenario, the cost is real: a full afternoon of peak orders lost, emergency consulting fees, and a quarter spent unwinding tools adopted before their problem statements were clear. The painful lesson is that the CNCF landscape is a menu, not a checklist. A production platform needs a small set of well-operated tools that solve known problems; it does not need every project that appears near Kubernetes on a landscape map.
 
 This module teaches you how to read that ecosystem without drowning in it. You will learn how CNCF maturity levels signal risk, how tool categories map to real operational problems, and why a beginner should recognize more tools than they can operate deeply. The goal is not to memorize hundreds of logos. The goal is to hear a teammate say "we need policy enforcement," "we need GitOps," or "we need distributed tracing," and know which part of the ecosystem they are reaching for, what trade-off they are accepting, and what question to ask before the tool enters production.
 
@@ -50,19 +50,16 @@ flowchart TD
             K8s[Kubernetes]
             Helm[Helm]
             Prom[Prometheus]
-            Cont[containerd]
-            Flu[Fluentd]
-            Env[Envoy]
-            Jae[Jaeger]
-            Vit[Vitess]
+            Arg[Argo]
+            Cil[Cilium]
+            Fal[Falco]
         end
         
         subgraph Incubating ["INCUBATING PROJECTS (Growing adoption, maturing)"]
             direction LR
-            Arg[Argo]
-            Cil[Cilium]
-            Fal[Falco]
-            Kus[Kustomize]
+            BS[Backstage]
+            Th[Thanos]
+            Lit[Litmus]
         end
         
         subgraph Sandbox ["SANDBOX PROJECTS (Early stage, experimental)"]
