@@ -30,7 +30,7 @@ After this module, you will be able to apply process-management concepts to real
 
 ## Why This Module Matters
 
-In 2021, a payments company lost a full evening of card settlement traffic because a small Java worker ignored termination signals during a routine rollout. The orchestrator sent a graceful stop, waited for the configured grace period, and then killed the process while it still held work in memory. The incident review did not find an exotic kernel bug or a failed cloud region; it found a team that could deploy containers but could not explain what happened to PID 1, child processes, or signal delivery when the platform asked the application to stop.
+**Hypothetical scenario:** During a routine rollout, a small Java worker ignored termination signals, and its process did not drain queued work before the platform reached its final stop path. The orchestrator sent a graceful stop, waited for the configured grace period, and then escalated to force. The incident review found no exotic kernel bug or failed cloud region; it showed that the team could deploy containers but could not explain what happened to PID 1, child processes, and signal delivery when the platform asked the application to stop.
 
 That pattern shows up outside containers too. A boot-time database migration can block the whole host if its unit dependencies are wrong, a zombie leak can exhaust the process table while CPU and memory dashboards look calm, and a service can restart forever because systemd is faithfully applying a policy that nobody read closely. Linux gives you excellent inspection tools, but those tools only help when you know which layer is responsible for process creation, scheduling, signal handling, service supervision, and boot recovery.
 
@@ -43,6 +43,16 @@ For Kubernetes work, keep one convention in mind early: define `alias k=kubectl`
 A process is a running instance of a program, but that definition is only useful if you notice the word running. The program is the file on disk, such as `/usr/bin/nginx`; the process is what the kernel creates when that file's instructions, memory mappings, open file descriptors, credentials, scheduling state, and parent relationship come together at runtime. Two processes can execute the same program and still behave differently because they have different PIDs, environments, working directories, limits, and open connections.
 
 The kernel tracks a process as a managed object with code, memory, resources, and metadata. When an engineer says "the app is down," the next useful question is usually more specific: is the process absent, sleeping, blocked in I/O, stopped by a signal, restarting under systemd, or alive but serving no traffic? Those states are different failure modes, and treating all of them as "restart it" hides the evidence you need for a durable fix.
+
+### Quick /proc checks
+
+Use these commands on your own shell so the outcome is obvious from kernel metadata:
+
+```bash
+cat /proc/$$/status
+tr '\0' ' ' < /proc/$$/cmdline
+cat /proc/$$/stat
+```
 
 ```mermaid
 flowchart TD
@@ -147,7 +157,7 @@ flowchart LR
 
 ```bash
 # You can see this in action
-strace -f -e fork,execve bash -c 'ls' 2>&1 | grep -E 'fork|exec'
+strace -f -e trace=process bash -c 'ls | cat' 2>&1 | grep -E 'clone|fork|exec'
 ```
 
 The `strace` command makes the boundary visible without requiring you to write C code. If fork succeeds but exec fails, you usually have a path, permission, interpreter, mount, or architecture problem. In containers, a missing interpreter on the shebang line can look like "file not found" even when the script file is present, because the kernel is really telling you that the interpreter named by the script could not be executed.
@@ -494,7 +504,8 @@ sudo vi /etc/default/grub
 
 Key settings in `/etc/default/grub` define boot-menu timing, default entry selection, and kernel command-line parameters for future generated configurations.
 
-```bash
+```text
+# excerpt from /etc/default/grub
 GRUB_TIMEOUT=5                          # Seconds to wait at boot menu
 GRUB_DEFAULT=0                          # Boot first entry by default
 GRUB_CMDLINE_LINUX_DEFAULT="quiet"      # Kernel params for default entry
@@ -536,7 +547,7 @@ Temporary boot edits are powerful because they let you change the next boot with
 ### Rescue Mode and Password Recovery
 
 ```bash
-# If you've lost the root password:
+# RHEL/Rocky-specific flow: If you've lost the root password:
 # 1. Boot with rd.break (edit GRUB line as above)
 # 2. At the initramfs prompt:
 mount -o remount,rw /sysroot
@@ -548,6 +559,8 @@ reboot
 ```
 
 The SELinux relabel step is not optional on systems that enforce SELinux labels. Changing the root password from an initramfs context can leave labels inconsistent, and `touch /.autorelabel` asks the system to relabel on the next boot. The operation may take time, but skipping it can leave you with a password that changed and a system that still fails in confusing ways because security context metadata no longer matches expectations.
+
+On Debian-family hosts (including Ubuntu Server 24.04), password recovery usually follows the GRUB `systemd.unit=rescue.target` workflow when the filesystem layout and boot process are in a recoverable state; use that path when recovery mode is available and you do not need initramfs-level editing.
 
 Exam tip: the LFCS may ask you to change default kernel parameters or recover a system with a lost root password, but the production value is broader. Any time a host fails before normal services start, the boot chain gives you a structured way to ask where control stopped: firmware, bootloader, kernel, initrd, systemd target, or a specific unit dependency.
 
@@ -943,15 +956,14 @@ The unit asks an unprivileged user to bind a privileged port, so the service sho
 ## Sources
 
 - [systemd Documentation](https://www.freedesktop.org/software/systemd/man/)
-- [The Linux Process Journey](https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/)
+- [The Definitive Guide to Linux System Calls](https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/)
 - [Signals in Linux](https://man7.org/linux/man-pages/man7/signal.7.html)
-- [Understanding Zombie Processes](https://blog.phusion.nl/2015/01/20/docker-and-the-pid-1-zombie-reaping-problem/)
+- [Understanding Zombie Processes](https://grahamdumpleton.me/posts/2015/12/issues-with-running-as-pid-1-in-docker/)
 - [systemd.service manual](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)
 - [systemd.exec manual](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html)
 - [systemd.kill manual](https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html)
 - [systemctl manual](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html)
 - [journalctl manual](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html)
-- [Linux signal(7) manual page](https://man7.org/linux/man-pages/man7/signal.7.html)
 - [Linux proc_pid_stat(5) manual page](https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html)
 - [Kubernetes Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/)
 - [Kubernetes container lifecycle hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/)

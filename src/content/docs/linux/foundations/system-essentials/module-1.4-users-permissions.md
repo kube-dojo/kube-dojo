@@ -37,7 +37,7 @@ That framing changes how an operator debugs. If a container runs as UID `10001`,
 the editor can escape to a shell. The operator skill is to turn those facts into a short diagnostic chain instead of widening permissions until the error disappears.
 
 This module teaches that chain at the level you need for Kubernetes and CKS work. You will connect account databases to numeric kernel identities, ordinary mode bits to ACLs, root to capabilities, sudo to audit trails, PAM to login-time policy, and `securityContext` fields to Linux process attributes. The goal is not to memorize every permission command. The goal is to make a defensible decision under pressure: change the identity, change the group, change the file mode, add an ACL, drop a capability, adjust a volume security context, or reject the design because it depends on root-equivalent behavior. The examples use Ubuntu Server 24.04 style commands where
-Debian-family systems prefer `adduser`, and RHEL 9 style commands where the platform documentation shows `useradd`, `usermod --append -G`, and rootless Podman with `/etc/subuid` and `/etc/subgid`. ([Ubuntu User Management](https://ubuntu.com/server/docs/how-to/security/user-management/), [RHEL 9 Managing Users and Groups](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html-single/configuring_basic_system_settings/index))
+Debian-family systems (like Ubuntu Server 24.04) prefer `adduser`, while RHEL 9 style commands follow documentation that shows `useradd`, `usermod --append -G`, and rootless Podman with `/etc/subuid` and `/etc/subgid`. ([Ubuntu User Management](https://ubuntu.com/server/docs/how-to/security/user-management/), [RHEL 9 Managing Users and Groups](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html-single/configuring_basic_system_settings/index))
 
 ## Analyze UID/GID Resolution
 
@@ -106,6 +106,7 @@ The distinction between `EACCES` and `EPERM` is useful but not enough by itself.
 ([chmod(2)](https://man7.org/linux/man-pages/man2/chmod.2.html))
 
 ```bash
+sudo mkdir -p /srv/app/current && sudo touch /srv/app/current/config.yml && sudo chown root:deploy /srv/app/current/config.yml
 namei -l /srv/app/current/config.yml
 ls -ld /srv /srv/app /srv/app/current
 ls -l /srv/app/current/config.yml
@@ -220,15 +221,15 @@ Capability review should include all sets, not only the one visible in a manifes
 `sudo` is policy-controlled privilege execution, not a magic synonym for good administration. The sudoers manual defines rich policy syntax for users, hosts, runas targets, commands, defaults, environment handling, and logging. A rule such as `ops ALL=(ALL) NOPASSWD: ALL` is easy to type and hard to defend because it grants broad root-equivalent execution without fresh authentication. A narrow rule should name the actor, the runas target, the exact command path, and any arguments you intend to permit. It should also avoid interactive programs with shell escapes unless the business decision is genuinely "this user may become root." Use `visudo -cf` on drop-in files before
 relying on them, because a sudoers syntax error can lock out normal escalation paths. ([sudoers(5)](https://www.man7.org/linux/man-pages/man5/sudoers.5.html))
 
-```text
+```bash
+cat <<'EOF' | sudo tee /etc/sudoers.d/releasebot
 # /etc/sudoers.d/releasebot
 Cmnd_Alias APP_RESTART = /usr/bin/systemctl restart app.service, \
                          /usr/bin/systemctl status app.service
 
 releasebot ALL=(root) PASSWD: APP_RESTART
-```
+EOF
 
-```bash
 sudo visudo -cf /etc/sudoers.d/releasebot
 sudo -l -U releasebot
 ```
@@ -280,7 +281,7 @@ These policy files are not interchangeable. `login.defs` shapes defaults used by
 
 ## Implement Kubernetes SecurityContext and User Namespace Patterns
 
-Kubernetes security context fields are Linux identity and privilege knobs expressed in YAML. `runAsUser` sets the UID used by container processes unless overridden by image or container-level settings. `runAsGroup` sets the primary GID. `runAsNonRoot` asks the kubelet to reject a container that would run as UID `0`, but it is not a substitute for choosing a known numeric UID. `fsGroup` adds a supplementary group intended for mounted volumes and may cause ownership or permission changes depending on volume type and policy. `fsGroupChangePolicy: OnRootMismatch` tells the kubelet to skip the recursive chown/chmod pass when the volume's root directory already has `fsGroup` as its owning group AND carries the setgid or group-read bit, which matters on large volumes where the recursive walk is otherwise the slow part of pod startup. `allowPrivilegeEscalation: false` directly controls the Linux `no_new_privs` flag for the container process, and the `PR_SET_NO_NEW_PRIVS` man page
+Kubernetes security context fields are Linux identity and privilege knobs expressed in YAML. `runAsUser` sets the UID used by container processes unless overridden by image or container-level settings. `runAsGroup` sets the primary GID. `runAsNonRoot` asks the kubelet to reject a container that would run as UID `0`, but it is not a substitute for choosing a known numeric UID. `fsGroup` adds a supplementary group intended for mounted volumes and may cause ownership or permission changes depending on volume type and policy. `fsGroupChangePolicy: OnRootMismatch` tells the kubelet to skip the recursive chown/chmod pass when the volume's root directory already has `fsGroup` as its owning group and carries group read and write permissions, which matters on large volumes where the recursive walk is otherwise the slow part of pod startup. `allowPrivilegeEscalation: false` directly controls the Linux `no_new_privs` flag for the container process, and the `PR_SET_NO_NEW_PRIVS` man page
 explains that once set, `execve` will not grant privileges through setuid, setgid, or file capability transitions. `readOnlyRootFilesystem: true` mounts the image root read-only, pushing writes into declared volumes. ([Kubernetes Security Context](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/), [PR_SET_NO_NEW_PRIVS](https://man7.org/linux/man-pages/man2/PR_SET_NO_NEW_PRIVS.2const.html))
 
 ```yaml
