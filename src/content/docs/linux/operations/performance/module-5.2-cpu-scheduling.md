@@ -66,7 +66,7 @@ ps -eo pid,state,ni,pri,pcpu,cmd --sort=-pcpu | head -n 30
 
 ```mermaid
 graph LR
-  R[Runnable tasks] --> A{Scheduler chooses next]
+  R[Runnable tasks] --> A{Scheduler chooses next?}
   A -->|Sufficient budget| B[CPU execution]
   A -->|No budget| C[Throttled delay window]
   S[Sleeping tasks] --> D[Wait on timer or I/O]
@@ -153,8 +153,9 @@ top -b -n 1 | head -n 20
 mpstat -P ALL 1 8
 pidstat -u -t 1 10
 sar -u 1 10
-sudo perf sched latency
-schedtool -p 0 -a 0 $$
+# perf sched latency requires a prior perf sched record session
+sudo perf sched record -a sleep 5 && sudo perf sched latency
+chrt -p $$
 ```
 
 ## Linux Process Files for Verifiable Evidence (LO-4)
@@ -185,7 +186,7 @@ When a pod throttles, `nr_throttled` and `throttled_time` often explain latency 
 ```bash
 # Typical pod cgroup paths map from namespace file
 PID=$(pgrep -o -f your-service | head -n 1)
-CG=$(awk -F: '$2=="0" {print $3}' /proc/$PID/cgroup)
+CG=$(awk -F: '$1=="0" {print $3}' /proc/$PID/cgroup)
 cat /sys/fs/cgroup/$CG/cpu.max
 cat /sys/fs/cgroup/$CG/cpu.stat
 cat /sys/fs/cgroup/$CG/cpu.pressure
@@ -372,7 +373,7 @@ Third snapshot: collect process-level accounting and cgroup counters for the sel
 PID=$(pgrep -o -f your-service | head -n 1)
 grep -E 'State|voluntary_ctxt_switches|nonvoluntary_ctxt_switches' /proc/$PID/status
 sed -n '1,140p' /proc/$PID/sched
-CG=$(awk -F: '$2=="0" {print $3}' /proc/$PID/cgroup)
+CG=$(awk -F: '$1=="0" {print $3}' /proc/$PID/cgroup)
 cat /sys/fs/cgroup$CG/cpu.max
 cat /sys/fs/cgroup$CG/cpu.stat
 cat /sys/fs/cgroup$CG/cpu.pressure
@@ -380,7 +381,7 @@ cat /sys/fs/cgroup$CG/cpu.pressure
 
 Fourth snapshot: test one control change in isolation for a fixed window and capture the same signals again.
 ```bash
-# Example: controlled concurrency reduction
+# Example: controlled priority reduction (niceness increase)
 TASKS=$(pgrep -f your-service | head -n 1)
 renice -n 5 -p $TASKS
 sleep 12
@@ -539,7 +540,23 @@ Expected output: you should identify whether scheduler contention is per-core, p
 ```bash
 kind create cluster --name cpu-sched-lab
 kubectl create ns cpu-sched-lab
-kubectl run cpu-throttle --namespace cpu-sched-lab --image=busybox --requests='cpu=100m' --limits='cpu=100m' -- sh -c 'while true; do true; done'
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-throttle
+  namespace: cpu-sched-lab
+spec:
+  containers:
+  - name: cpu-throttle
+    image: busybox
+    command: ["sh", "-c", "while true; do true; done"]
+    resources:
+      requests:
+        cpu: 100m
+      limits:
+        cpu: 100m
+EOF
 ```
 
 - [ ] Read pod-level controls and verify throttling counters.
@@ -551,7 +568,7 @@ kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.pressure
 
 - [ ] Raise limit only and compare trend counters.
 ```bash
-kubectl patch pod cpu-throttle -n cpu-sched-lab --type merge -p '{"spec":{"containers":[{"name":"cpu-throttle","resources":{"limits":{"cpu":"300m"}}}]}}'
+kubectl patch pod cpu-throttle -n cpu-sched-lab --subresource resize --type merge -p '{"spec":{"containers":[{"name":"cpu-throttle","resources":{"limits":{"cpu":"300m"}}}]}}'
 sleep 8
 kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.max
 kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.stat

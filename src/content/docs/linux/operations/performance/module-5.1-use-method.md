@@ -33,7 +33,7 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-At 09:12 on a Tuesday, an internal payments platform started timing out during a regional promotion. The team had dashboards, container metrics, and a chat room full of guesses, but each person chased a different lead: one engineer restarted pods, another blamed the database, and a third raised CPU limits because the nodes looked busy. The incident lasted more than an hour, checkout failures climbed, and the eventual root cause was not exotic. A single storage volume was queueing writes so badly that healthy application code looked broken from the outside.
+**Hypothetical scenario:** At 09:12 on a Tuesday, an internal payments platform started timing out during a regional promotion. The team had dashboards, container metrics, and a chat room full of guesses, but each person chased a different lead: one engineer restarted pods, another blamed the database, and a third raised CPU limits because the nodes looked busy. The incident lasted more than an hour, checkout failures climbed, and the eventual root cause was not exotic. A single storage volume was queueing writes so badly that healthy application code looked broken from the outside.
 
 That kind of outage hurts because the first minutes are usually spent deciding where to look. A slow request might be waiting for CPU, stuck behind disk I/O, stalled on swap, retransmitting packets, or blocked in application code. If the team jumps straight to the tool they know best, they can make the system noisier without getting closer to the cause. The USE Method gives you a compact question set for every resource: how busy is it, is work waiting, and are errors occurring?
 
@@ -255,8 +255,12 @@ dmesg | grep -i "error\|fail\|i/o"
 # SMART data (disk health)
 sudo smartctl -a /dev/sda | grep -i error
 
-# Filesystem errors
-sudo fsck -n /dev/sda1
+# Filesystem capacity (read-only — safe on mounted roots)
+df -h
+findmnt /
+
+# Filesystem repair (maintenance window / unmounted volume only)
+# sudo fsck -n /dev/sda1
 ```
 
 Disk errors change the response from tuning to protection. If the kernel reports I/O errors, filesystem errors, or device resets, your first priority is preserving data and moving work away from the unhealthy path. Do not hide those errors by restarting services until you know whether the storage layer is safe. In a Kubernetes cluster, disk errors can also surface as eviction pressure, image pull failures, or pods stuck because the node cannot perform local filesystem work reliably.
@@ -284,15 +288,11 @@ sudo iftop -i eth0
 Bandwidth utilization is only one part of the network story. A service can use a small percentage of link capacity and still suffer from packet loss, retransmits, DNS stalls, connection tracking pressure, or upstream throttling. That is why local network utilization should be followed by queue and drop evidence rather than treated as a clean bill of health. Low throughput with rising retransmits is not healthy; it is a sign that useful work is being repeated.
 
 ```bash
-# Socket queues
+# Socket queues and drop summary — prefer ss -s over legacy netstat -s (net-tools package)
 ss -s
-# Shows socket statistics
-
-# Dropped packets (queue overflow)
-netstat -s | grep -i drop
 ip -s link | grep -i drop
 
-# TCP retransmits (network saturation)
+# TCP retransmits (network saturation) — netstat -s requires net-tools package
 netstat -s | grep retrans
 ```
 
@@ -329,7 +329,7 @@ k describe node worker-1 | grep -A 5 Conditions
 
 # These map to USE:
 # MemoryPressure = Memory saturation
-# DiskPressure = Disk utilization
+# DiskPressure = disk/filesystem capacity pressure (df/imagefs eviction thresholds, NOT iostat %util)
 # PIDPressure = Process saturation
 ```
 
@@ -364,9 +364,9 @@ resources:
 
 Requests and limits connect directly to USE thinking. Requests influence placement by telling the scheduler how much capacity a workload expects to reserve. Limits define what happens when a container tries to exceed policy: CPU can be throttled, and memory can end in an OOM kill. Those outcomes are not just configuration details; they are saturation and error signals in the container layer. A pod that is slow because it is CPU-throttled needs a different fix from a node that is globally out of CPU.
 
-A practical Kubernetes triage starts by asking where the queue lives. If the node has high load and many runnable tasks, the queue may be on the node. If one container shows throttling while the node is otherwise healthy, the queue may be inside that container's CPU quota. If `DiskPressure` is true and `iostat` shows high await, the node storage path is a better explanation than a bad Deployment rollout. The value of USE is that it keeps node evidence, pod evidence, and policy evidence in the same conversation.
+A practical Kubernetes triage starts by asking where the queue lives. If the node has high load and many runnable tasks, the queue may be on the node. If one container shows throttling while the node is otherwise healthy, the queue may be inside that container's CPU quota. If `DiskPressure` is true with low free space or inodes, treat it as a capacity problem and check `df -h` and imagefs usage. If `iostat` shows high `await` or `aqu-sz` without `DiskPressure`, treat it as I/O saturation and inspect the storage path rather than assuming a bad Deployment rollout. The value of USE is that it keeps node evidence, pod evidence, and policy evidence in the same conversation.
 
-War story: a platform team once raised memory limits for a service because `k top pod` showed high memory utilization during traffic spikes. The change delayed OOM kills but made node-level reclaim worse, and the next spike caused several unrelated pods to slow down. A USE pass would have separated utilization from saturation: the service was using memory, but the node's pain came from reclaim and swap activity. The better fix was right-sizing requests, reducing per-request allocation, and moving the workload away from already pressured nodes.
+**Hypothetical scenario:** a platform team once raised memory limits for a service because `k top pod` showed high memory utilization during traffic spikes. The change delayed OOM kills but made node-level reclaim worse, and the next spike caused several unrelated pods to slow down. A USE pass would have separated utilization from saturation: the service was using memory, but the node's pain came from reclaim and swap activity. The better fix was right-sizing requests, reducing per-request allocation, and moving the workload away from already pressured nodes.
 
 Kubernetes also changes the social shape of troubleshooting. The application team may own the Deployment, the platform team may own node pools, and the infrastructure team may own storage classes or cloud quotas. USE gives those teams a shared vocabulary. "The pod is CPU-throttled by its limit" points to workload policy. "The node has disk queue growth and `DiskPressure`" points to host or storage pressure. "The USE pass is clean" points the application team toward tracing without implying blame.
 
@@ -405,7 +405,7 @@ ip -s link show | grep -E "^[0-9]:|errors"
 echo ""
 
 echo "=== Recent Errors ==="
-dmesg | tail -20 | grep -i "error\|fail\|oom" || echo "None recent"
+(dmesg 2>/dev/null || { echo "dmesg unavailable (needs host/sudo)"; exit 0; }) | tail -20 | grep -i "error\|fail\|oom" || echo "None recent"
 ```
 
 This script is deliberately modest. It does not calculate every threshold, open an incident, or decide which team owns the fix. It creates a shared snapshot that starts with CPU, memory, disk, network, and recent kernel errors. That makes it safe to run early in an incident, paste into a ticket, and compare against later output. The important implementation detail is not shell cleverness; it is keeping the USE categories visible in the output.
@@ -468,7 +468,7 @@ Use the same loop when the first hypothesis fails. Suppose you expect network dr
 
 ## Did You Know?
 
-- **USE was created by Brendan Gregg** — The method was documented in 2012 and became widely used because it fits real incident response: check utilization, saturation, and errors for every resource before jumping into deeper tools.
+- **USE was created by Brendan Gregg** — The method was documented in 2013 and became widely used because it fits real incident response: check utilization, saturation, and errors for every resource before jumping into deeper tools.
 - **Linux load average includes more than running tasks** — Tasks in uninterruptible sleep can contribute to load, which is why high load with idle CPU often points toward I/O waits instead of pure CPU pressure.
 - **Kubernetes node conditions are compressed signals** — `MemoryPressure`, `DiskPressure`, and `PIDPressure` summarize kubelet observations, but they do not replace Linux metrics when you need the category and cause.
 - **The famous 60-second Linux checklist is intentionally short** — It proves that a small, ordered set of commands can eliminate many wrong theories before teams spend time on advanced profiling.
@@ -649,7 +649,7 @@ Use available memory as the main utilization signal and use `si` plus `so` as th
 iostat -x 1 3
 
 # 2. Identify busy disks
-iostat -x | awk '$NF > 50 {print "Busy:", $1, $NF"%"}'
+iostat -x | awk '/^(sd|nvme|vd)/ && $NF+0 > 50 {print "Busy:", $1, $NF"%"}'
 
 # 3. Check for errors
 dmesg | grep -i "i/o error\|disk" | tail -5
@@ -668,8 +668,8 @@ Treat filesystem fullness and disk I/O saturation as related but different findi
 #### Part 4: Network Analysis
 
 ```bash
-# 1. Check interface errors
-ip -s link show | grep -A 6 "^2:"
+# 1. Check interface errors (substitute eth0 with your interface name)
+ip -s link show eth0
 
 # 2. Check socket statistics
 ss -s
