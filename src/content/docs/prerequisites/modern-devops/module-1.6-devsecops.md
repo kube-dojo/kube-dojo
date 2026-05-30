@@ -28,7 +28,7 @@ After completing this module, you will be able to:
 
 Cloud-native incidents tend to start small. A management interface gets deployed without authentication so a developer can iterate quickly; an IAM role gets a permissive policy because the precise list of required actions was hard to enumerate; a workload gets a host-path mount because a pre-flight check was easier to write that way. Each of those choices, by itself, looks like a reasonable trade-off in a sprint. Together, they create the conditions where one misconfiguration cascades into a cluster-wide compromise — because the network, identity, and runtime layers were never tightened independently. The CKS-track modules walk through two canonical examples in detail: an [exposed Kubernetes dashboard](/k8s/cks/part1-cluster-setup/module-1.5-gui-security/) <!-- incident-xref: tesla-2018-cryptojacking --> and a [cloud metadata service compromise](/k8s/cks/part1-cluster-setup/module-1.4-node-metadata/) <!-- incident-xref: capital-one-2019 -->. This module operates one layer up: how do engineering teams stop those small choices from accumulating in the first place?
 
-In April 2021, the answer to that question was rewritten by a single supply-chain attack. The Codecov bash uploader — a script that thousands of CI pipelines piped directly into `bash` — was modified to exfiltrate environment variables from every CI run that used it. The attackers harvested credentials, deploy keys, and signed-artifact secrets from the pipelines of dozens of high-profile customers. The lesson was uncomfortable: a CI tool that handles secrets is itself a production system, and "trusted" external scripts deserve the same scrutiny as internal code. DevSecOps is the engineering discipline that makes that scrutiny routine rather than reactive.
+In April 2021, the answer to that question was rewritten by a single supply-chain attack. The Codecov bash uploader — a script that thousands of CI pipelines piped directly into `bash` — was modified to exfiltrate environment variables from every CI run that used it. The attackers harvested credentials, deploy keys, and signed-artifact secrets from the pipelines of customers whose CI environment variables could be exfiltrated. The lesson was uncomfortable: a CI tool that handles secrets is itself a production system, and "trusted" external scripts deserve the same scrutiny as internal code. DevSecOps is the engineering discipline that makes that scrutiny routine rather than reactive.
 
 DevSecOps is the engineering response to that pattern. It does not mean adding one scanner to the end of a pipeline or asking a security team to approve every release by hand. It means turning security requirements into repeatable checks that run where engineers already work, then enforcing the highest-risk rules at the cluster boundary so a tired person cannot accidentally deploy a dangerous workload on a Friday afternoon.
 
@@ -115,7 +115,7 @@ COPY app /app
 CMD ["nginx"]
 
 # GOOD: Minimal image, non-root user
-FROM nginx:1.25-alpine
+FROM nginx:1.27-alpine
 RUN adduser -D -u 1000 appuser
 COPY --chown=appuser:appuser app /app
 USER appuser
@@ -124,14 +124,14 @@ EXPOSE 8080
 
 The bad example uses a floating tag and leaves the process running as root. The good example still needs validation, but it makes two important choices explicit: a more constrained base image and a non-root user. Pinning to a specific image tag improves traceability, while running as a dedicated user limits what the process can do if the application is exploited.
 
-Image tags deserve special attention because they are human-friendly labels, not immutable guarantees. The tag `nginx:1.25-alpine` is more specific than a floating tag, but a digest is stronger when you need reproducibility. In production pipelines, teams often build from approved base images, scan the output, sign the digest, and deploy by digest so the workload that passed review is the workload the cluster receives.
+Image tags deserve special attention because they are human-friendly labels, not immutable guarantees. The tag `nginx:1.27-alpine` is more specific than a floating tag, but a digest is stronger when you need reproducibility. In production pipelines, teams often build from approved base images, scan the output, sign the digest, and deploy by digest so the workload that passed review is the workload the cluster receives.
 
 ```bash
 # Trivy - most popular open-source scanner
-trivy image nginx:1.25
+trivy image nginx:1.27
 
 # Example output:
-# nginx:1.25 (debian 12.0)
+# nginx:1.27 (debian 12.0)
 # Total: 142 (UNKNOWN: 0, LOW: 89, MEDIUM: 45, HIGH: 7, CRITICAL: 1)
 ```
 
@@ -193,6 +193,8 @@ spec:
     runAsNonRoot: true
     runAsUser: 1000
     fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: app
     image: myapp
@@ -238,10 +240,13 @@ The important operational choice is enforcement mode. `warn` helps developers se
 
 Use full `kubectl` commands in shared examples and automation, even if you personally use a shorter interactive alias in your terminal. The habit matters because a command copied from curriculum into CI, a runbook, or a shell script should work in a non-interactive environment without depending on local shell setup.
 
+> **Warning:** Labeling a namespace changes Pod Security Admission for every workload in it. Use a disposable demo cluster and a throwaway namespace — not a shared `production` namespace.
+
 ```bash
-kubectl label namespace production pod-security.kubernetes.io/enforce=restricted --overwrite
-kubectl label namespace production pod-security.kubernetes.io/warn=restricted --overwrite
-kubectl label namespace production pod-security.kubernetes.io/audit=restricted --overwrite
+kubectl create namespace devsecops-demo
+kubectl label namespace devsecops-demo pod-security.kubernetes.io/enforce=restricted --overwrite
+kubectl label namespace devsecops-demo pod-security.kubernetes.io/warn=restricted --overwrite
+kubectl label namespace devsecops-demo pod-security.kubernetes.io/audit=restricted --overwrite
 ```
 
 Before running this in a shared cluster, what output do you expect when a developer submits the earlier insecure pod to a namespace with `enforce=restricted`? The correct expectation is an admission rejection before scheduling, because the API server evaluates the request and refuses to persist a pod that violates the selected profile.
@@ -314,7 +319,9 @@ metadata:
 subjects:
 - kind: User
   name: developer@company.com
+  apiGroup: rbac.authorization.k8s.io
 roleRef:
+  apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin    # Too much power!
 ```
@@ -347,7 +354,9 @@ metadata:
 subjects:
 - kind: User
   name: developer@company.com
+  apiGroup: rbac.authorization.k8s.io
 roleRef:
+  apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: developer
 ```
@@ -435,7 +444,7 @@ trivy image myapp:v1
 trivy config .
 
 # Scan running cluster
-trivy k8s --report summary cluster
+trivy k8s --report summary
 ```
 
 Trivy is often chosen because one tool can cover several surfaces: images, repositories, infrastructure configuration, and clusters. That breadth is convenient for smaller teams, but it still requires policy decisions. A scanner can produce data; your program must define which findings block a merge, which create tickets, and which are accepted with documented reasoning.
@@ -706,9 +715,11 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: app
-        image: nginx:1.25-alpine
+        image: nginxinc/nginx-unprivileged:1.27-alpine
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -717,6 +728,13 @@ spec:
             - ALL
         ports:
         - containerPort: 8080
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
         resources:
           limits:
             memory: "128Mi"
@@ -724,6 +742,13 @@ spec:
           requests:
             memory: "64Mi"
             cpu: "250m"
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
 EOF
 
 # 6. Compare the two
@@ -756,6 +781,7 @@ Success criteria:
 
 ## Sources
 
+- [Codecov security update (April 2021)](https://about.codecov.io/security-update/)
 - [Kubernetes: Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
 - [Kubernetes: Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/)
 - [Kubernetes: Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)

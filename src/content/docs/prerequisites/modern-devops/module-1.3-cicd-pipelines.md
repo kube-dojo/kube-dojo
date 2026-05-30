@@ -10,7 +10,7 @@ sidebar:
 >
 > **Time to Complete:** 60-75 minutes
 >
-> **Prerequisites:** [Module 1.1: Infrastructure as Code](/prerequisites/modern-devops/module-1.1-infrastructure-as-code/), basic Git knowledge
+> **Prerequisites:** [Module 1.1: Infrastructure as Code](/prerequisites/modern-devops/module-1.1-infrastructure-as-code/), [Module 1.2: GitOps](/prerequisites/modern-devops/module-1.2-gitops/), basic Git knowledge
 
 ---
 
@@ -26,9 +26,9 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-On July 2, 2019, Cloudflare pushed a new Web Application Firewall rule to every edge node simultaneously. The rule contained a regular expression whose backtracking behaviour was quadratic, and within seconds CPU on every machine serving HTTP traffic saturated to 100%. Global traffic dropped 82%; the fix took twenty-seven minutes. The rule had passed static review, but a safety mechanism that would have caught the catastrophic regex had been deleted in a refactor weeks earlier. A CI/CD pipeline is the single chokepoint where the safety of an artifact is decided. If the pipeline's verification weakens, every downstream node receives the same flawed artifact at the same time; if the verification holds, the blast radius of a human error stays bounded by the gates the pipeline still enforces.
+On [July 2, 2019](https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/), Cloudflare pushed a new Web Application Firewall rule to every edge node simultaneously. The rule contained a regular expression whose backtracking behaviour was quadratic, and within seconds CPU on every machine serving HTTP traffic saturated to 100%. Global traffic dropped 82%; the fix took twenty-seven minutes. The rule had passed static review, but a safety mechanism that would have caught the catastrophic regex had been deleted in a refactor weeks earlier. A CI/CD pipeline is the single chokepoint where the safety of an artifact is decided. If the pipeline's verification weakens, every downstream node receives the same flawed artifact at the same time; if the verification holds, the blast radius of a human error stays bounded by the gates the pipeline still enforces.
 
-In 2020, attackers compromised the SolarWinds Orion build environment and inserted malicious code into a signed software update that customers trusted. That incident widened the definition of deployment risk from "will our app crash?" to "can we prove where this artifact came from, who changed it, which dependencies are inside it, and whether anything touched it after the build?" A modern pipeline is therefore not a convenience script wrapped around Git. It is the software factory, the audit trail, the security checkpoint, the release controller, and the first place where weak engineering discipline becomes visible.
+In [2020](https://www.cisa.gov/news-events/alerts/2020/12/13/active-exploitation-solarwinds-software), attackers compromised the SolarWinds Orion build environment and inserted malicious code into a signed software update that customers trusted. That incident widened the definition of deployment risk from "will our app crash?" to "can we prove where this artifact came from, who changed it, which dependencies are inside it, and whether anything touched it after the build?" A modern pipeline is therefore not a convenience script wrapped around Git. It is the software factory, the audit trail, the security checkpoint, the release controller, and the first place where weak engineering discipline becomes visible.
 
 Think of CI/CD as the automated assembly line for software. Source code enters as raw material, moves through quality stations, becomes a container image, receives a label and signature, and is promoted only if each station records a clean result. A team can still choose when a release reaches users, but the release should never depend on someone remembering which commands to run on which host. Kubernetes 1.35+ assumes this world: applications arrive as versioned container images, rollout controllers converge toward desired state, and platform teams rely on repeatable automation rather than personal deployment folklore.
 
@@ -151,7 +151,7 @@ SLSA, the Supply-chain Levels for Software Artifacts framework, gives teams a ma
 | **Trivy** (Aqua) | Comprehensive Container & Repo scanning | Yes | Incredibly fast. Scans OS packages, language dependencies, and Infrastructure as Code (Terraform). The gold standard for easy CI integration. |
 | **Grype** (Anchore) | Vulnerability scanning for containers | Yes | Often paired directly with Syft (for SBOM generation). Excellent accuracy and deep inspection. |
 | **Snyk** | Developer-focused security platform | Freemium | Deep IDE integration, provides automated fix pull requests to developers before they even commit code. |
-| **Kube-linter** | IaC / Kubernetes Manifest scanning | Yes | Checks Kubernetes YAML manifests for security misconfigurations (e.g., running containers as root, missing resource limits) *before* deployment. |
+| **KubeLinter** | IaC / Kubernetes Manifest scanning | Yes | Checks Kubernetes YAML manifests for security misconfigurations (e.g., running containers as root, missing resource limits) *before* deployment. |
 
 Security gates need thresholds, not vibes. Blocking on every low-severity finding can train developers to ignore the pipeline, especially when the fix is unavailable or unrelated to runtime risk. Blocking on critical exploitable vulnerabilities in the base image, leaked credentials, unsigned release images, or privileged Kubernetes manifests is much easier to defend. A strong platform team publishes the policy in plain language, runs the checks consistently, and gives developers a fast remediation path instead of a mysterious red mark.
 
@@ -241,8 +241,8 @@ When a pipeline fails, diagnose it by layer. If the build fails, inspect depende
 
 ## Did You Know?
 
-- **300x Faster:** The DORA research program has repeatedly found that high-performing software delivery organizations deploy far more frequently than low performers while also recovering faster from incidents.
-- **50% Less Time:** Teams that integrate automated vulnerability scanning early in the pipeline often spend far less time remediating critical security issues than teams that scan only before release.
+- **Deploy far more frequently:** The [DORA research program](https://dora.dev/research/) has repeatedly found that high-performing software delivery organizations deploy far more frequently than low performers while also recovering faster from incidents.
+- **Less time remediating vulnerabilities:** Teams that integrate automated vulnerability scanning early in the pipeline often spend far less time remediating critical security issues than teams that scan only before release.
 - **The First CI Server:** CruiseControl, one of the first widely used Continuous Integration tools, was created by ThoughtWorks developers in 2001 and helped popularize automated build feedback.
 - **10 Deploys a Day:** In 2009, Flickr engineers presented "10+ Deploys per Day," a talk that made frequent production deployment feel practical to many teams that still treated monthly releases as fast.
 
@@ -322,19 +322,18 @@ server.listen(8080, () => {
 });
 ```
 
-3. Create a `package.json` to simulate real-world dependencies:
+3. Create a `package.json` (no runtime dependencies — the app uses only Node's built-in `http` module):
 
 ```json
 {
   "name": "kubedojo-pipeline-app",
-  "version": "1.0.0",
-  "dependencies": {
-    "express": "^4.18.2"
-  }
+  "version": "1.0.0"
 }
 ```
 
-4. Create a `Dockerfile`. Notice that this base image is intentionally outdated for the lab:
+4. Generate a lockfile for the npm cache key: run `npm install` locally and commit the resulting `package-lock.json` before pushing (the workflow's `cache: 'npm'` keys off that file).
+
+5. Create a `Dockerfile`. Notice that this base image is intentionally outdated for the lab:
 
 ```dockerfile
 # INSECURE BASE IMAGE FOR TESTING PIPELINE GATES
@@ -370,12 +369,13 @@ EOF
 cat <<EOF > package.json
 {
   "name": "kubedojo-pipeline-app",
-  "version": "1.0.0",
-  "dependencies": {
-    "express": "^4.18.2"
-  }
+  "version": "1.0.0"
 }
 EOF
+
+# Generate package-lock.json for the workflow cache key
+npm install
+git add package-lock.json
 
 # Create Dockerfile
 cat <<EOF > Dockerfile
@@ -465,7 +465,7 @@ Append this step to your `build-and-test` job:
 If you pushed this to GitHub, the workflow would run and fail when Trivy reports critical vulnerabilities in the old base image. For a local simulation, build the image and run Trivy with Docker against the local image. The important learning moment is the non-zero exit code: CI/CD tools do not need to understand every vulnerability detail as long as the scanning step produces a clear pass or fail result.
 
 1. Build the image locally to test: `docker build -t kubedojo-app:test .`
-2. Run Trivy locally using Docker: `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity CRITICAL --exit-code 1 kubedojo-app:test`
+2. Run Trivy locally using Docker (match CI flags): `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity CRITICAL --ignore-unfixed --vuln-type os,library --exit-code 1 kubedojo-app:test`
 3. Observe that the scanner returns exit code `1`, which would halt the pipeline before deployment.
 
 <details>
@@ -618,6 +618,11 @@ If a slow install, hung test, or stalled scan takes longer than 15 minutes, GitH
 
 ## Sources
 
+- [Cloudflare outage on July 2, 2019 (post-mortem)](https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/)
+- [CISA: SolarWinds Orion supply-chain compromise (2020)](https://www.cisa.gov/news-events/alerts/2020/12/13/active-exploitation-solarwinds-software)
+- [DORA Research Program](https://dora.dev/research/)
+- [CruiseControl (ThoughtWorks, 2001)](https://www.thoughtworks.com/en-us/insights/blog/history-cruise-control)
+- [Flickr: 10+ Deploys Per Day (Velocity 2009)](https://www.slideshare.net/slideshow/velocity-2009/1302790)
 - [GitHub Actions workflow syntax](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions)
 - [GitHub Actions dependency caching](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows)
 - [GitLab CI/CD YAML syntax reference](https://docs.gitlab.com/ci/yaml/)
