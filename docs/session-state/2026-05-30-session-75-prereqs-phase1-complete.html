@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 75 — Prerequisites track Phase-1 review COMPLETE (17 modules, 557→540)</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+  h1{font-size:1.5rem;border-bottom:2px solid #2563eb;padding-bottom:.4rem}
+  h2{font-size:1.15rem;margin-top:1.8rem;color:#1e3a8a}
+  code{background:#f1f5f9;padding:.1em .35em;border-radius:3px;font-size:.88em}
+  pre{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.7rem;overflow:auto;font-size:.82em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9em}
+  th,td{border:1px solid #cbd5e1;padding:.4rem .6rem;text-align:left;vertical-align:top}
+  th{background:#eff6ff}
+  .tl{background:#eff6ff;border-left:4px solid #2563eb;padding:.7rem 1rem;border-radius:4px}
+  .win{background:#ecfdf5;border-left:4px solid #10b981;padding:.6rem 1rem;border-radius:4px}
+  .warn{background:#fef3c7;border-left:4px solid #f59e0b;padding:.6rem 1rem;border-radius:4px}
+  em.k{color:#b91c1c;font-style:normal;font-weight:600}
+</style>
+</head>
+<body>
+<h1>Session 75 — Prerequisites track Phase-1 review COMPLETE</h1>
+<p class="tl"><strong>Date:</strong> 2026-05-30 · <strong>Predecessor:</strong> session 74 · <strong>Model:</strong> claude-opus-4-8[1m] · <strong>Mode:</strong> standalone orchestrator, user said "continue from last handoff".<br>
+<strong>One line:</strong> Continued session-74's review-first Phase 1 through the last three prerequisites sections — <strong>17 modules → <code>done</code></strong> (modern-devops 5, philosophy-design 3, git-deep-dive 9) via PRs <strong>#1677/#1678/#1679</strong>, board <strong>557→540</strong> (done 250→267). The <strong>entire prerequisites track Phase-1 review is now complete</strong> (38 done; only <code>zero-to-terminal/0.3</code> + 5 <code>needs_rewrite</code> remain — all Phase 2). 7 of 8 NC-rate held. <strong>Ground-checking every reviewer finding caught and corrected reviewer errors at every stage</strong> — nothing shipped on a single reviewer's say-so.</p>
+
+<h2>Shipped (3 PRs, 17 modules → done)</h2>
+<table>
+<tr><th>PR</th><th>Section / modules</th><th>What cross-family review caught (invisible to score/gates)</th></tr>
+<tr><td><strong>#1677</strong></td><td>modern-devops 1.2–1.6 (codex 3.0 / cursor 4.3 / agy 4.8 / deepseek 4.0 / codex 3.4)</td><td>1.2: Cloudflare-2022 outage reframed (dropped unsupported "not reviewed"; cited postmortem), restricted AppProject, <code>git revert</code> rollback, Flux <code>v1</code>, <code>rm -rf</code> guarded. 1.3: Cloudflare-2019/SolarWinds citations, npm lockfile lab. 1.4: <code>kubectl wait</code> race, W3C Trace Context 2020. 1.5: Kratix disclaimer, Gartner cite. 1.6: <em class="k">seccompProfile missing</em> (PSS restricted), RBAC <code>apiGroup</code>, hardened nginx <em class="k">non-deployable</em> → nginx-unprivileged + emptyDir.</td></tr>
+<tr><td><strong>#1678</strong></td><td>philosophy-design 1.1–1.3 (codex 3.5 / agy 4.5 / deepseek 4.9)</td><td>1.1: Docker Swarm <em class="k">mislabeled imperative</em> (Swarm mode is declarative), timeline date errors (EKS/AKS 2018 not "all clouds 2016"), stale "Swarm maintenance only", loaded framings neutralized. 1.2 + 1.3: <em class="k">generic war-stories stated as fact</em> → hypothetical; <code>web-deployment.yaml</code> applied-but-never-written → heredoc.</td></tr>
+<tr><td><strong>#1679</strong></td><td>git-deep-dive 2–10 (4 NC + 5 APPROVE)</td><td>Mod 2: <em class="k">false octopus-merge teaching</em> (codex repro'd: tree left dirty, not "auto-aborted") + bogus offline <code>kubectl --dry-run=client</code> → <code>kubeconform</code>. Mod 9: <em class="k">secret-leaking pre-commit hook</em> + destructive <code>nuke</code> global alias removed; runnability (unborn-repo cleanup, template-hook isolation, rerere lab made self-contained). Mods 5/9: <code>git init -b main</code>. Mod 7: <code>branch -D</code> after squash, manifest heredocs. Mod 6: <code>-G</code> POSIX <code>\s</code> bug. Mod 10: argocd is a <em class="k">StatefulSet</em>, <code>gpgsign --local</code>.</td></tr>
+</table>
+<p class="win"><strong>Board:</strong> done 250→<strong>267</strong>, "left" 557→<strong>540</strong>. <strong>Prerequisites Phase-1 COMPLETE</strong>: 38 done; remaining = <code>zero-to-terminal/0.3</code> (real Pixar Toy Story 2 incident → Phase-2 browser-source) + 5 <code>needs_rewrite</code> (kb 1.4/1.5, modern-devops 1.1, philosophy 1.4, git-internals). All 3 PRs full CI green (CodeQL ×3, incident-dedup, CI gemini-3.1-pro review, site-health, build).</p>
+
+<h2>The loop (proven s74, run 3× this session)</h2>
+<p>Per section: dispatch <strong>one cross-family review per module</strong> across 4 OAuth pools (one module/pool — no burst); ground-check every finding; one <code>cursor --model auto</code> fix batch → PR; <strong>codex R2 on heavy modules</strong>, orchestrator self-verify on light ones; write <code>.pipeline/reviews/&lt;key__&gt;.md</code> with a trailing <code>APPROVE</code> entry → <code>python3 -m scripts.quality.pipeline reset-stage &lt;slug&gt; COMMITTED</code> → board flips to <code>done</code>. (Mechanism from <code>feedback_review_to_done_mechanism</code>.) gemini-cli was quota-exhausted all session → pool = <strong>codex + cursor + agy + deepseek</strong>.</p>
+
+<h2>Ground-checking ROI — reviewer errors caught (do NOT ship on one reviewer)</h2>
+<ul>
+<li><strong>agy false-positives ×2:</strong> (a) modern-devops 1.4 "cross-ref 404" — wrong (every module uses <code>../module-X/</code>; Starlight renders trailing-slash dirs; site-health green; cursor concurred). (b) git module-4 "snippets fail run-sequentially" — wrong; those are <em>illustrative body fragments with baked output</em>, not a lab (the real Hands-On lab runs). <strong>Rule learned: agy applies an over-literal runnability standard to illustrative snippets.</strong> Contrast: agy's phil-1.2 / git-7 lab flags were REAL (genuine numbered labs). The discriminator = <em>is it a numbered "run these" lab or a conceptual illustration?</em></li>
+<li><strong>deepseek hallucination-safe:</strong> Kratix "real schema" recall → did NOT trust it; applied a verdict-independent <code># illustrative</code> disclaimer instead.</li>
+<li><strong>codex's own overcorrection:</strong> its first Cloudflare reframe ("no staged rollout") was itself inaccurate → its R2 caught it → fixed to "staggered but too coarse" (matches postmortem).</li>
+<li><strong>codex R2 on git-deep-dive caught 6 bugs cursor's fix introduced/missed</strong> (sibling-miss <code>--dry-run=client</code> ×2, secret-regex didn't match the example, <code>git restore --staged</code> fails in an unborn repo, cwd copy bug, template-hook breaks the rerere lab). R3 then confirmed end-to-end in temp repos. <strong>Heavy modules with unsafe commands / runnable labs need codex (it executes), not static review.</strong></li>
+</ul>
+
+<h2>Roster notes (this session's data)</h2>
+<ul>
+<li><strong>Back-catalog NC rate held ~88%</strong> (15 NC / 17). git-deep-dive ran cleaner (5/9 APPROVE) — advanced modules are better-authored — but its 2 heavies (mod 2, mod 9) were the worst defects of the session (false teaching + unsafe hooks).</li>
+<li><strong>cursor <code>--model auto</code></strong> = reliable fix author on precise briefs, but on heavy multi-P1 modules it misses siblings and introduces subtle runnability bugs → codex R2/R3 is the mandatory net.</li>
+<li><strong>deepseek</strong> needs <code>--worktree</code> for review (workspace-write); reliable on verifiable facts (URLs, counts), risky on schema recall.</li>
+<li>Inline orchestrator fixes used only for tiny reviewer-dictated nits (modern-devops 1.2 ×2); everything substantive went through dispatch.</li>
+</ul>
+
+<h2>NEXT — track <code>linux</code> (fresh-session boundary)</h2>
+<p>Prerequisites is done; next in curriculum order is <strong><code>linux</code> (34 modules)</strong>, then <code>ai</code> → <code>ai-history</code> → <code>k8s</code> → <code>cloud</code> → <code>ai-ml-engineering</code> → <code>on-premises</code> → <code>platform</code>. Same loop. <code>linux</code> is a whole new track — start it fresh. Working log: <code>logs/remediation/session75-phase1-reviews.md</code>.</p>
+<p class="warn"><strong>Phase 2 (prereqs) parked:</strong> <code>zero-to-terminal/0.3</code> (real Toy Story 2 <code>rm -rf</code> incident — needs a browser-fetched citation, NOT a reframe; plus a <code>cat</code>-after-<code>rm</code> runnability fix). 5 <code>needs_rewrite</code>: kubernetes-basics 1.4/1.5, modern-devops 1.1-infrastructure-as-code, philosophy-design 1.4-dead-ends, git-deep-dive module-1-git-internals (these need authoring, not review). Phase-2 backlog repo-wide = 181 needs_rewrite.</p>
+
+<h2>Housekeeping</h2>
+<ul>
+<li>gemini-cli quota resets ~22:13 local (2026-05-30) → restore the 5-way reviewer mix next session.</li>
+<li>All session-75 worktrees pruned; review-s75/s75b branches deleted.</li>
+<li>Uncommitted session artifacts (handoffs 71–75, decision doc, STATUS, this log) committed at session end.</li>
+</ul>
+</body>
+</html>

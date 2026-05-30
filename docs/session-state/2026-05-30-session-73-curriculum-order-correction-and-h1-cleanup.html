@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 73 — Curriculum-order correction, 3-axis quality model, and the review-first progression plan</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1040px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.6rem;border-bottom:3px solid #326ce5;padding-bottom:.3rem}
+  h2{font-size:1.25rem;margin-top:2rem;color:#326ce5;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+  h3{font-size:1.05rem;margin-top:1.3rem}
+  code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.86em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0}
+  th,td{border:1px solid #ddd;padding:.35rem .55rem;text-align:left;font-size:.9rem;vertical-align:top}
+  th{background:#f3f4f6}
+  .tldr{background:#eef4ff;border-left:4px solid #326ce5;padding:.8rem 1rem;border-radius:0 6px 6px 0}
+  .win{background:#e9f9ee;border-left:4px solid #1a9e4b;padding:.6rem 1rem;border-radius:0 6px 6px 0}
+  .warn{background:#fff7e6;border-left:4px solid #e8a317;padding:.6rem 1rem;border-radius:0 6px 6px 0}
+  .key{background:#fdeef0;border-left:4px solid #d6336c;padding:.6rem 1rem;border-radius:0 6px 6px 0}
+</style>
+</head>
+<body>
+<h1>Session 73 — Curriculum-order correction, the 3-axis quality model, and a review-first progression</h1>
+<p class="tldr"><strong>Date:</strong> 2026-05-30 · <strong>Predecessor:</strong> session 72 · <strong>Model:</strong> claude-opus-4-8[1m] · <strong>Mode:</strong> user-directed corrections, then driven autonomously.<br>
+<strong>One line:</strong> The user corrected processing order to <em>curriculum order</em>; that exposed the inherited "de-frag engine" as the wrong tool (de-frag completes 1 module curriculum-wide). Shipped 4 merged PRs (109 modules → verifier-T0) via deterministic + gate-calibration fixes. Then discovered the dashboard the user watches (<code>/quality</code>, "577 left") tracks a <strong>third axis — cross-family review status</strong> — which none of tonight's tier work moves. This handoff lays out the unified review-first progression + agent routing.</p>
+
+<h2 class="win">Merged tonight (4 PRs, ~109 modules → verifier-T0)</h2>
+<table>
+<tr><th>PR</th><th>What</th><th>Result</th></tr>
+<tr><td>#1666/#1667/#1668</td><td>Repo-wide leaked source-H1 removal (175 modules) via new deterministic tool <code>scripts/quality/fix_leaked_source_h1.py</code></td><td>42 → T0, 0 demotions, build-green</td></tr>
+<tr><td>#1669</td><td>Retuned <code>runnable_no_kubectl_alias</code> gate to accept the documented <code>alias k=kubectl</code> convention (user decision)</td><td>86 cleared, 67 → T0, 44/44 tests</td></tr>
+</table>
+<p>Durable: processing order corrected (memories <code>feedback_process_worklist_sequentially</code>, <code>feedback_t3_is_not_always_density</code>); the master gate-by-gate diagnostic; body_words floor validated (correct — failing modules genuinely thin, median 2012 words); war-story inventory (171 markers / 155 files). 3 decisions recorded in <code>docs/decisions/2026-05-30-remediation-strategy-after-curriculum-order-correction.md</code>.</p>
+
+<h2 class="key">THE KEY INSIGHT — three independent quality axes</h2>
+<p>A module's "quality" is tracked three different ways, and they do NOT move together. Confusing them is what made the de-frag engine spin and what made tonight's tier work invisible on the dashboard.</p>
+<table>
+<tr><th>#</th><th>Axis</th><th>Source / where seen</th><th>Tonight</th></tr>
+<tr><td>1</td><td><strong>Verifier tier</strong> (T0…T3) — does it pass the gates?</td><td><code>scripts/quality/verify_module.py</code>; `tier_reasons`</td><td>Drove this → 109 to T0</td></tr>
+<tr><td>2</td><td><strong>Heuristic rubric score</strong> (1–5)</td><td><code>/api/quality/scores</code>; avg 4.52, 111 critical (&lt;2.0)</td><td>Untouched</td></tr>
+<tr><td>3</td><td><strong>Review status</strong> (done / needs_review / shipped_unreviewed / needs_rewrite)</td><td><code>/quality</code> page + <code>/api/quality/board</code>; <strong>230 done / 577 left</strong></td><td>Untouched ← the dashboard the user watches</td></tr>
+</table>
+<p class="warn"><strong>Why prereqs aren't green:</strong> e.g. <code>prerequisites/cloud-native-101/*</code> score <strong>5.0</strong> and are verifier-T0, but their review status is <code>needs_review</code> — they never went through cross-family review. <code>/quality</code>'s "done" = <strong>reviewed</strong>. "577 left" = 279 shipped_unreviewed + 117 needs_review + 181 needs_rewrite. Tonight's leaked-H1 / gate work raised tier (axis 1) but does not mark anything reviewed (axis 3), so the 577 didn't move. Not a bug — different axes. (Note: <code>ai-history</code> is the closed "History of AI" book and is NOT on the review board.)</p>
+
+<h2>Review backlog by track (curriculum order) — the real worklist for axis 3</h2>
+<table>
+<tr><th>Track</th><th>done</th><th>needs_review</th><th>shipped_unreviewed</th><th>needs_rewrite</th><th>left</th></tr>
+<tr><td>prerequisites</td><td>1</td><td>5</td><td>33</td><td>5</td><td><strong>43</strong></td></tr>
+<tr><td>linux</td><td>3</td><td>20</td><td>14</td><td>0</td><td><strong>34</strong></td></tr>
+<tr><td>ai</td><td>24</td><td>0</td><td>2</td><td>11</td><td><strong>13</strong></td></tr>
+<tr><td>k8s</td><td>29</td><td>88</td><td>71</td><td>7</td><td><strong>166</strong></td></tr>
+<tr><td>cloud</td><td>7</td><td>0</td><td>79</td><td>6</td><td><strong>85</strong></td></tr>
+<tr><td>ai-ml-engineering</td><td>58</td><td>0</td><td>45</td><td>1</td><td><strong>46</strong></td></tr>
+<tr><td>on-premises</td><td>17</td><td>2</td><td>22</td><td>16</td><td><strong>40</strong></td></tr>
+<tr><td>platform</td><td>91</td><td>2</td><td>13</td><td>135</td><td><strong>150</strong></td></tr>
+<tr><td><strong>TOTAL</strong></td><td><strong>230</strong></td><td>117</td><td>279</td><td>181</td><td><strong>577</strong></td></tr>
+</table>
+
+<h2>THE PROGRESSION — review-first, in curriculum order</h2>
+<p>Process tracks in curriculum order: <code>prerequisites → linux → ai → k8s → cloud → ai-ml-engineering → on-premises → platform</code> (ai-history excluded). Within a track, ascending module number. The dashboard moves when modules become <code>done</code> (reviewed), so review is the spine; authoring is what un-sticks the modules that can't pass review yet.</p>
+
+<h3>Phase 0 — deterministic / gate fixes (cheap, no fabrication risk)</h3>
+<ul>
+<li>Leaked-H1: <strong>DONE</strong> repo-wide.</li>
+<li>kubectl-alias gate: <strong>DONE</strong>. Follow-up: the <strong>43 alias-less <code>k</code> modules</strong> (real copy-paste bug the retune exposed) — add <code>alias k=kubectl</code> to follow the convention. Small per-module edit; codex, batched.</li>
+<li>Sweep other deterministic gate fails as found (leaked placeholders, etc.) with scripts, not agents.</li>
+</ul>
+
+<h3>Phase 1 — REVIEW the unreviewed (396: 279 shipped_unreviewed + 117 needs_review)</h3>
+<p>Prioritise modules that are already <strong>verifier-T0 + rubric ≥ 4.5</strong> — they'll mostly pass review → <code>done</code> fast. Start with <strong>prerequisites (38 to review; mostly score 5.0)</strong> so that section finally turns green, then linux, ai, k8s, …</p>
+<ul>
+<li>Each module: cross-family review (rubric + verifier + fabrication/factual check) per <code>docs/review-protocol.md</code> + Decision Card C.</li>
+<li>Verdict <code>APPROVE</code> → mark reviewed (done). <code>NEEDS_CHANGES</code> → drop into Phase 2.</li>
+<li>Caveat (<code>feedback_back_catalog_full_review_required</code>): a 2026-05 sample of shipped_unreviewed was ~80% NEEDS_CHANGES — expect real bounces, especially low-score tracks. High-score prereq/ai-ml will pass cleanly; platform's <code>needs_rewrite:135</code> won't.</li>
+</ul>
+
+<h3>Phase 2 — REWRITE / AUTHOR the failures (181 needs_rewrite + Phase-1 bounces)</h3>
+<p>These are the genuinely-thin (body_words median 2012w), war-story, and structural failures. Fabrication-prone — every output cross-family reviewed before merge.</p>
+<ul>
+<li><strong>Thin / body_words:</strong> full authoring to ~5000+ words with real sources (the module-writer brief). Curriculum order.</li>
+<li><strong>War-stories (155 files):</strong> per user — real source or remove; each incident told <em>once</em>, referenced elsewhere (dovetails with the CI incident-dedup gate). Most fabrication-inducing task → fetch primary sources via browser BEFORE the author brief; mandatory review.</li>
+<li><strong>Density-only (1 module):</strong> cursor de-frag.</li>
+<li>Then re-review (Phase 1) → done.</li>
+</ul>
+
+<h2>Agent routing (use the right agent for the work)</h2>
+<table>
+<tr><th>Work</th><th>Primary</th><th>Fallback / mix</th><th>Notes</th></tr>
+<tr><td>Cross-family review (back-catalog, Phase 1)</td><td>composer-2.5 (cursor) — <strong>≤1 concurrent</strong> (user cap)</td><td>codex gpt-5.5 (danger+worktree), gemini-3.1-pro-preview, agy→Claude</td><td>Decision Card C. MIX agents for parallel reviews — never 3 on one OAuth (<code>feedback_parallel_review_oauth_burst</code>). With cursor capped at 1, lean codex/gemini/agy for the parallel lanes.</td></tr>
+<tr><td>T0 authoring / rewrite (Phase 2)</td><td>codex gpt-5.5</td><td>cursor composer-2.5 (≤1), deepseek-v4-pro, gemini-3.1-pro</td><td>codex = best factual/version/runnability accuracy. Cap 3 codex parallel.</td></tr>
+<tr><td>Reviewer of composer-2.5-authored</td><td>codex (danger + <code>--worktree</code>)</td><td>gemini-3.1-pro</td><td>Decision Card C symmetric routing.</td></tr>
+<tr><td>De-frag (density — rare)</td><td>cursor composer-2.5</td><td>—</td><td>codex introduces structural-dup 2/2; cursor authors, codex reviews.</td></tr>
+<tr><td>War-story primary-source fetch</td><td><code>mcp__claude-in-chrome__*</code> (browser)</td><td>grok-4.3 (x.com only)</td><td>Fetch the real source BEFORE briefing the author, so it isn't invented.</td></tr>
+<tr><td>Deterministic gate fixes (H1, placeholders)</td><td>script (no agent)</td><td>—</td><td>Tonight's <code>fix_leaked_source_h1.py</code> pattern: reconcile vs verifier, then run.</td></tr>
+<tr><td>Gate calibration</td><td>codex (code + tests, three-way rule)</td><td>—</td><td>Tonight's #1669 pattern.</td></tr>
+<tr><td>Orchestration / planning / synthesis</td><td>claude (this session)</td><td>—</td><td>Never inline-author content/code (pre-2026-06-15 rule).</td></tr>
+</table>
+<p><strong>Pacing (hard limits):</strong> cursor ≤1 concurrent (user); codex ≤3 parallel; warn before 3+ parallel or 5+ sequential to any single agent (<code>feedback_warn_before_gemini_quota_burn</code>). Read <code>logs/dispatch_responses/&lt;task-id&gt;.txt</code> on the background-completion notification — no watcher loops.</p>
+
+<h2>NEXT SESSION — first actions</h2>
+<ol>
+<li><strong>Sync main</strong> (<code>git fetch/pull</code>) — local should already be at #1669; verify.</li>
+<li><strong>Phase 1, prerequisites first:</strong> cross-family review the 38 unreviewed prereq modules (33 shipped_unreviewed + 5 needs_review), mixing reviewers (composer-2.5 ×1 + codex + gemini). Mark APPROVE → done; bounce NEEDS_CHANGES to Phase 2. This is what turns the prereq section green.</li>
+<li>Then linux (34), ai (13), and onward in curriculum order.</li>
+<li><strong>Wave-2</strong> (6 cloud/k8s de-frags) is held on <code>remediate2/lane-{a..f}</code> (<code>logs/remediation/wave2-held.json</code>) — review + merge when the sequence reaches cloud/k8s.</li>
+</ol>
+
+<h2>Held / open</h2>
+<ul>
+<li><strong>43 alias-less <code>k</code> modules</strong> — add <code>alias k=kubectl</code> (Phase 0 follow-up).</li>
+<li><strong>headless-claude MCP bloat</strong> — still unfixed; route content edits to cursor/codex.</li>
+<li><strong>111 modules at critical rubric score (&lt;2.0)</strong> — these overlap the needs_rewrite set; Phase 2 fixes them.</li>
+<li>Worktrees: lane-a/b/c/d used for tonight's PR branches (deleted on merge); lane-e/f hold wave-2.</li>
+</ul>
+</body>
+</html>

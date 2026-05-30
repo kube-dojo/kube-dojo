@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 74 — Phase-1 review→done loop proven (zero-to-terminal, 4 modules green)</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+  h1{font-size:1.5rem;border-bottom:2px solid #2563eb;padding-bottom:.4rem}
+  h2{font-size:1.15rem;margin-top:1.8rem;color:#1e3a8a}
+  code{background:#f1f5f9;padding:.1em .35em;border-radius:3px;font-size:.88em}
+  pre{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.7rem;overflow:auto;font-size:.82em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9em}
+  th,td{border:1px solid #cbd5e1;padding:.4rem .6rem;text-align:left;vertical-align:top}
+  th{background:#eff6ff}
+  .tl{background:#eff6ff;border-left:4px solid #2563eb;padding:.7rem 1rem;border-radius:4px}
+  .win{background:#ecfdf5;border-left:4px solid #10b981;padding:.6rem 1rem;border-radius:4px}
+  .warn{background:#fef3c7;border-left:4px solid #f59e0b;padding:.6rem 1rem;border-radius:4px}
+  em.k{color:#b91c1c;font-style:normal;font-weight:600}
+</style>
+</head>
+<body>
+<h1>Session 74 — Phase-1 review→done loop proven; first chapter going green</h1>
+<p class="tl"><strong>Date:</strong> 2026-05-30 · <strong>Predecessor:</strong> session 73 · <strong>Model:</strong> claude-opus-4-8[1m] · <strong>Mode:</strong> user-directed, then driven.<br>
+<strong>One line:</strong> Executed session-73's review-first Phase 1. Traced (and proved) the <em class="k">undocumented mechanism</em> that flips a back-catalog module to <code>done</code> on <code>/quality</code>, then ran the full loop end-to-end through <strong>three prereq sections</strong>: <strong>20 modules → <code>done</code></strong> (zero-to-terminal 10/11, cloud-native-101 5/5, kubernetes-basics 6/8), board <strong>577→557</strong>, prereqs 1/44→21/44, via PRs #1670–#1676. Live-confirmed the back-catalog defect rate: <strong>~19/20 reviewed score-5.0 modules needed real fixes</strong> — including <strong>4 pre-existing fabricated war-stories / a fabricated <code>vault</code> CLI command</strong>, deprecated-registry / stale-version / wrong-CNCF-maturity errors, an invalid <code>kind --all</code> flag, and unsafe <code>--force</code> cleanups taught to beginners. Used all four reviewer pools per user direction (codex, cursor <code>--model auto</code>, agy, gemini-cli).</p>
+
+<h2>Shipped (2 PRs, 4 modules → done)</h2>
+<table>
+<tr><th>PR</th><th>Modules</th><th>What the cross-family review caught (none visible to score/gates)</th></tr>
+<tr><td><strong>#1670</strong></td><td>0.1 what-is-a-computer (codex 4.6)<br>0.2 what-is-a-terminal (codex 4.0)</td><td>0.1: <em class="k">false</em> "first computer bug" claim (Smithsonian: "bug" predates the 1947 moth). 0.2: unsafe runnable <code>mv</code>-rename loop shown before file-ops taught → non-executed illustration; <em class="k">false</em> "PowerShell has <code>date</code>" claim (it's <code>Get-Date</code>) reconciled across all 5 sites.</td></tr>
+<tr><td><strong>#1671</strong></td><td>0.4 files-and-directories (codex 4.4)<br>0.5 editing-files (composer-2.5 4.0)</td><td>0.4: unsafe <code>head -n 10 ~/.kube/config</code> (dumps real tokens/certs) → <code>ls -l</code>; placeholder-path <code>bash</code> blocks → <code>text</code>. 0.5: wrong-artifact reference → <code>./my-first-script.sh</code>; macOS <code>/Users/yourname</code> in an <code>ubuntu</code> lab → <code>/home/yourname</code>.</td></tr>
+<tr><td><strong>#1672</strong></td><td>0.6 git-basics (codex 4.4)<br>0.7 what-is-networking (composer-2.5 4.4)</td><td>0.6: <code>git init</code> assumed <code>main</code> (modern Git → <code>master</code>) → <code>--initial-branch=main</code>; copy-paste block set <em class="k">global</em> git identity to fake "Alex Chen" → placeholder + substitute-note; "chronological order" vs <code>git log</code> newest-first. 0.7: DNS-timeline citation error (implied RFC 1034/1987 explains pre-1983 history) → corrected (HOSTS.TXT → DNS 1983 → RFC 1034 1987).</td></tr>
+</table>
+<tr><td><strong>#1674</strong></td><td>cloud-native-101 1.1–1.4 (codex 4.3 / agy 4.5 / cursor-auto 4.6 / gemini 4.5)</td><td>1.1: deprecated GCR → Artifact Registry, nginx 1.25→1.31, unsourced density/history. 1.2 + 1.4: <em class="k">fabricated war-stories</em> stated as fact → reframed hypothetical. 1.3: prereq cross-refs + self-contained analogy. 1.4: CNCF maturity diagram (Argo/Cilium/Falco are Graduated, Kustomize isn't CNCF).</td></tr>
+<tr><td><strong>#1675</strong></td><td>cloud-native-101 1.5 (codex 4.4)</td><td>Amazon Obidos/API-mandate history unsupported by cited source → hedged; Shopify "majestic"→"modular monolith"; unsourced Stack Overflow claim removed.</td></tr>
+<tr><td><strong>#1676</strong></td><td>kubernetes-basics 1.1/1.3/1.6/1.7/1.8 (codex 3.7 / agy 4.1 / cursor-auto 4.3 / gemini 4.8 / cursor 4.6)</td><td>1.1: invalid <code>kind delete cluster --all</code> (v0.31.0) + unsafe global cleanup → named deletes; Docker Desktop/minikube accuracy. 1.3: <em class="k">fabricated</em> <code>vault pull-secrets</code> command → placeholder; removed <code>--force --grace-period=0</code>; race → <code>kubectl wait</code>; tiered hints. 1.6: alias→full kubectl, lab namespace isolation, CKS xref, 1 MiB precision. 1.7: <em class="k">fabricated</em> "2 a.m." war-story → hypothetical. 1.8: alias clause vs convention.</td></tr>
+</table>
+<p class="win"><strong>Board:</strong> done 230→<strong>250</strong>, "left" 577→<strong>557</strong>, prereqs 1/44→<strong>21/44</strong>. Three sections (zero-to-terminal 10/11, cloud-native-101 5/5, kubernetes-basics 6/8). All 7 PRs: full CI green (CodeQL ×3, incident-dedup, CI gemini-3.1-pro review, site-health, local build).</p>
+
+<h2>THE KEY MECHANISM (session 73 left this unspecified — now traced &amp; proven)</h2>
+<p>Session-73's plan said "APPROVE → mark reviewed (<code>done</code>)" but never said <em>how</em>. The board's <code>_quality_board_classify</code> returns <code>done</code> only when <strong>score≥4 AND stage∈{COMMITTED,SKIPPED} (or no state file) AND latest_verdict≠reject</strong>. The 279 shipped_unreviewed sit at <code>stage=UNAUDITED</code> <em>with</em> a state file → a review verdict <strong>alone does nothing</strong>.</p>
+<p class="warn"><strong>Do NOT just run the pipeline to fix this.</strong> <code>stages.py</code> route sends score-5.0/density-PASS/structurally-complete content to <code>CITATION_CLEANUP_ONLY → COMMITTED</code>, <em class="k">skipping the teaching review</em> (code comment: judge "deferred to Phase 2a", unimplemented). That would mark the back-catalog <code>done</code> WITHOUT the cross-family review the 80%-NEEDS_CHANGES data demands — metric-gaming.</p>
+<p><strong>The honest bridge (no new code), per module:</strong></p>
+<pre>1. Dispatch real cross-family review (dispatch_smart.py review --agent codex --worktree &lt;wt&gt; --mode danger,
+   or cursor/gemini). Read FULL verdict from logs/dispatch_responses/&lt;task-id&gt;.txt (wrapper tails only).
+2. NEEDS_CHANGES → fix on worktree branch (cursor), PR (chore(content): + ## Learner check blockquote
+   >=30 chars verbatim from a touched file IN THE PR BODY), green build, merge. Re-review only if the
+   fix is non-trivial — self-verify mechanical 1-liners to save a dispatch.
+3. Write .pipeline/reviews/&lt;key-with-__&gt;.md whose LAST heading matches
+   ^## &lt;ISO-ts&gt; — `REVIEW` — `APPROVE`   (key = path minus .md, / → __)
+4. python3 -m scripts.quality.pipeline reset-stage &lt;slug&gt; COMMITTED   (slug = path / → -, minus .md; run -m!)
+→ board flips to done.</pre>
+<p>Saved to memory <code>feedback_review_to_done_mechanism</code>. Reusable finalize-script pattern (records + reset-stage): see <code>/tmp/finalize-zt-done*.sh</code> in-session (reproduce per batch). Board state (<code>.pipeline/reviews</code> + <code>quality-pipeline</code>) is <strong>gitignored = local-only</strong> — the local <code>/quality</code> dashboard reads it; content fixes are durable on main via the PRs.</p>
+
+<h2>Finding that matters for budgeting the 396</h2>
+<p><strong>~19 of 20</strong> reviewed score-5.0 modules = NEEDS_CHANGES (re-confirms <code>feedback_back_catalog_full_review_required</code>'s May n=15 80%) — including <strong>4 fabricated war-stories and a fabricated <code>vault</code> CLI command stated as fact</strong>, a swath of stale-version / deprecated-API / wrong-attribution errors, and unsafe destructive commands (<code>--force --grace-period=0</code>, <code>kind delete --all</code>) taught to beginners. Only 1 module (0.8) passed clean. The <em>reviews</em> are cheap; the <strong>fixes are the real spend</strong>. Turning the whole "573" green ≈ <strong>~400 reviews + ~300 fix cycles</strong>. User asked about review overhead → confirmed policy is <strong>one cross-family review per module</strong> (the floor); cost lever applied this session: <strong>self-verify trivial mechanical fixes</strong> (skip the re-review dispatch), reserve re-review for substantive rewrites.</p>
+
+<h2>Reviewer pool note</h2>
+<p class="warn"><strong>gemini-cli quota EXHAUSTED</strong> mid-session (TerminalQuotaError, ~13h reset ≈ 22:13 local). This session's usable pool was <strong>codex (danger+worktree) + cursor/composer-2.5 (≤1)</strong> only. When gemini resets, restore the 3-way mix to spread OAuth load. agy/deepseek remain available (deepseek review needs <code>--mode workspace-write</code>).</p>
+
+<h2>NEXT SESSION — first actions</h2>
+<ol>
+<li><strong>Continue Phase 1, next prereq sections in curriculum order:</strong> modern-devops → philosophy-design → git-deep-dive (~23 prereqs left), same 4-pool loop. Then linux → ai → k8s → cloud → ai-ml-eng → on-prem → platform.</li>
+<li><strong>Phase 2 parked:</strong> <strong>0.3</strong> first-commands (Pixar Toy Story 2 <code>rm -rf</code> is REAL but uncited → fetch a real source per Q2 policy + <code>cat</code>-after-<code>rm</code> reorder). <strong>needs_rewrite</strong> prereqs (stage FAILED): git-internals, k8s-basics 1.4/1.5, modern-devops 1.1, philosophy 1.4 → Phase 2 author.</li>
+<li><strong>Process tip:</strong> a stale <code>.git/index.lock</code> once interrupted a local <code>pull</code> after a successful origin merge (board showed <code>done</code> but local tree was behind 1) — always confirm <code>git status</code> isn't "behind" after the merge+pull; the canonical state (origin/main + board) was correct.</li>
+<li><strong>Reviewer routing (user-locked):</strong> cursor uses <code>--model auto</code> (NOT <code>--model composer-2.5</code>); use all 4 pools (codex/cursor-auto/agy/gemini-cli) one module each. gemini-cli OAuth is user-rotated; on exhaustion → agy first.</li>
+<li><strong>Then linux (34) → ai (13) → k8s (166) → cloud (85) → ai-ml-eng (46) → on-prem (40) → platform (150)</strong> — curriculum order, ascending module#.</li>
+<li>Per-module: fix the actual reviewer must-fixes (not blind de-frag). War-stories are their own Phase-2 workstream (source-or-remove, browser-first). Cross-family review per batch; cursor ≤1; pace codex.</li>
+</ol>
+<p>Working log of every verdict: <code>logs/remediation/session74-phase1-reviews.md</code>.</p>
+</body>
+</html>
