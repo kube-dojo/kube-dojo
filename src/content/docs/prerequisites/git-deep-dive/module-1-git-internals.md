@@ -12,7 +12,7 @@ sidebar:
 >
 > **Prerequisites**: Zero to Terminal Module 0.6 (Git Basics: init, add, commit, push, pull)
 >
-> **Next Module**: [Module 2: The Art of the Branch](../module-2-advanced-merging/)
+> **Next Module**: [Module 2: The Art of the Branch — Advanced Merging](../module-2-advanced-merging/)
 
 ---
 
@@ -26,7 +26,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-Most engineers learn Git as a set of porcelain commands — `git add`, `git commit`, `git push`, `git pull` — and rely on muscle memory for everything that does not break. The trouble starts the first time a branch behaves in a way the porcelain cannot explain. A merge appears to lose work that is in fact still recoverable. A reset moves a pointer in a way the engineer assumed would also delete history. A rebase rewrites commits whose original SHAs are still in the reflog, but only for ninety days. Underneath the surface, Git is a small content-addressable database of immutable objects (blobs, trees, commits, tags) plus a set of movable names (refs) that point at those objects. Once that mental model clicks, the porcelain stops being magic and starts being a thin layer over a system that is, by design, hard to permanently destroy.
+Most engineers learn Git as a set of porcelain commands — `git add`, `git commit`, `git push`, `git pull` — and rely on muscle memory for everything that does not break. The trouble starts the first time a branch behaves in a way the porcelain cannot explain. A merge appears to lose work that is in fact still recoverable. A reset moves a pointer in a way the engineer assumed would also delete history. A rebase rewrites commits whose original SHAs are still in the reflog, but by default only for ninety days (the `gc.reflogExpire` setting defaults to 90 days). Underneath the surface, Git is a small content-addressable database of immutable objects (blobs, trees, commits, tags) plus a set of movable names (refs) that point at those objects. Once that mental model clicks, the porcelain stops being magic and starts being a thin layer over a system that is, by design, hard to permanently destroy.
 
 Platform engineers manage that same content-addressable model at scale every day. A Kubernetes `ConfigMap` that disappears from a release branch is not a mystery; it is either still present in an earlier tree object, still in the working tree, still in the index, or still in a reflog entry on someone's laptop. Knowing how Git stores and references that content is the difference between recovery and panic. When later KubeDojo modules discuss Kubernetes 1.35+ operations, runnable examples use the full `kubectl` binary so copied commands behave the same in scripts and interactive terminals.
 
@@ -46,8 +46,8 @@ Let's peek inside a freshly initialized repository.
 mkdir my-git-repo
 cd my-git-repo
 
-# Initialize a Git repository
-git init
+# Initialize a Git repository (pin default branch to main)
+git init -b main
 
 # List the contents of the .git directory
 ls -F .git
@@ -74,7 +74,7 @@ This separation is the first recovery superpower. If a developer says, "I staged
 | Working tree | Editable files on disk | `git status --short` | File looks changed, deleted, or untracked |
 | Index | Proposed next commit | `git ls-files --stage` | Staged content differs from editor content |
 | Object database | Immutable blobs, trees, commits, tags | `git cat-file -t <hash>` | Hash exists, is missing, or has unexpected type |
-| Refs | Branch and tag pointers | `cat .git/refs/heads/main` | Branch points at the wrong commit |
+| Refs | Branch and tag pointers | `git rev-parse main` | Branch points at the wrong commit |
 | `HEAD` | Current checkout pointer | `cat .git/HEAD` | Detached state or wrong symbolic ref |
 
 ### Reading `.git` Without Treating It as a Toy
@@ -176,7 +176,7 @@ The output of `git cat-file -p "$COMMIT_HASH"` will show a line beginning with `
 
 ```bash
 # Read the content of the root tree object
-TREE_HASH=$(git cat-file -p "$COMMIT_HASH" | grep tree | awk '{print $2}')
+TREE_HASH=$(git rev-parse "$COMMIT_HASH^{tree}")
 git cat-file -p "$TREE_HASH"
 ```
 
@@ -286,7 +286,7 @@ git ls-files --stage
 
 The second column is the object ID of the blob currently staged for `configmap.yaml`. If you commit now, Git will create a tree pointing to that blob, then create a commit pointing to the tree, then move the current branch ref to the new commit. If you edit the file again before committing, the index still points at this staged blob until you add the file again. That is the core reason staging supports carefully curated commits.
 
-Before running this in a real repository, what output do you expect from `git diff`, `git diff --staged`, and `git status --short` after you stage a file and then edit it again? The first command compares working tree to index, so it should show the second edit. The staged diff compares index to `HEAD`, so it should show the first edit. Status should reveal both staged and unstaged changes for the same path.
+> **Pause and predict**: Before running this in a real repository, what output do you expect from `git diff`, `git diff --staged`, and `git status --short` after you stage a file and then edit it again? The first command compares working tree to index, so it should show the second edit. The staged diff compares index to `HEAD`, so it should show the first edit. Status should reveal both staged and unstaged changes for the same path.
 
 The index also supports advanced workflows such as partial staging, conflict stages during merges, and mode changes. During a merge conflict, `git ls-files --stage` may show multiple entries for the same path with different stage numbers, representing the merge base, "ours," and "theirs." You do not need that detail for every commit, but it explains why the index is more than a clipboard. It is a structured staging database that lets Git model unresolved states before producing a clean tree.
 
@@ -387,13 +387,13 @@ garbage: 0
 size-garbage: 0
 ```
 
-The `count` line is the loose-object count, which some tools label `loose-objects`. `in-pack` counts objects already stored in packfiles, `size-pack` reports packfile disk usage in KiB, and `garbage` counts files under `.git/objects` that Git does not recognize as valid objects. If the numbers show a real storage problem, `git repack -a -d` rewrites packs and drops redundant loose objects in one pass, but it belongs after diagnosis rather than in the first recovery reflex.
+The `count` line reports the number of loose objects. `in-pack` counts objects already stored in packfiles, `size-pack` reports packfile disk usage in KiB, and `garbage` counts files under `.git/objects` that Git does not recognize as valid objects. If the numbers show a real storage problem, `git repack -a -d` rewrites packs and drops redundant loose objects in one pass, but it belongs after diagnosis rather than in the first recovery reflex.
 
 That layered view prevents two opposite mistakes. One mistake is to deny that packfiles store deltas internally, which makes Git's disk usage and network transfer behavior seem mysterious. The other mistake is to reason about history as if commits are patches rather than snapshots, which makes restore operations seem harder than they are. A commit names a complete project tree even if Git stored some underlying bytes efficiently. When you ask for `git show <commit>:configmap.yaml`, Git reconstructs the blob content through the object database and presents the file as it existed in that snapshot.
 
 Hashing also has social consequences in distributed teams. Because object IDs are derived locally from content, two developers can create identical blob objects without coordinating with a server. Because commit objects include parent IDs, author data, committer data, timestamps, tree IDs, and messages, two commits with identical file changes can still have different commit IDs. That is why rebasing changes commit IDs even when the final files look the same. The graph records both content and ancestry, and collaboration tools build their review logic on that graph.
 
-Which approach would you choose here and why: inspect a suspected missing file by searching old commits with porcelain commands, or inspect raw objects with plumbing first? In a normal repository, start with porcelain such as `git log -- path` and `git show <commit>:<path>` because paths and commits preserve meaning. Drop to plumbing when porcelain cannot answer the question, such as when a branch pointer moved, the path name is uncertain, or you only have an object ID from `git fsck` or reflog output.
+> **Stop and think**: Which approach would you choose here and why: inspect a suspected missing file by searching old commits with porcelain commands, or inspect raw objects with plumbing first? In a normal repository, start with porcelain such as `git log -- path` and `git show <commit>:<path>` because paths and commits preserve meaning. Drop to plumbing when porcelain cannot answer the question, such as when a branch pointer moved, the path name is uncertain, or you only have an object ID from `git fsck` or reflog output.
 
 The integrity tradeoff is also worth stating carefully. Hashes make accidental corruption visible, but they do not replace reviews, backups, signed releases, or protected branches. A valid commit can still delete the wrong file, and a forced push can still move a shared branch to a harmful commit. Git's object model gives you tools for investigation and recovery; it does not make operational discipline optional.
 
@@ -423,8 +423,8 @@ Let's see our current `HEAD` and branch ref:
 # View what HEAD points to
 cat .git/HEAD
 
-# View the main branch ref (assuming 'main' is your default branch)
-cat .git/refs/heads/main
+# View the main branch ref (works for loose and packed refs)
+git rev-parse main
 ```
 
 **Expected Output (similar to):**
@@ -433,7 +433,7 @@ cat .git/refs/heads/main
 # cat .git/HEAD
 ref: refs/heads/main
 
-# cat .git/refs/heads/main
+# git rev-parse main
 2f1a... (this will be the hash of your latest commit)
 ```
 
@@ -580,7 +580,7 @@ Run `git hash-object configmap.yaml` twice without changing the file and confirm
 
 <details><summary>Solution for task 5</summary>
 
-Check out the previous commit by object ID to enter detached `HEAD`, make a small commit, and inspect `cat .git/HEAD`. Before switching away, create a branch name at the current commit with `git branch recovered-detached-work HEAD`. Then switch back to `main` and verify that `cat .git/refs/heads/recovered-detached-work` contains the preserved commit ID. The success condition is that no useful commit depends only on detached `HEAD`.
+Make a second commit on `main` (for example, add a comment line to `configmap.yaml`, stage, and commit) so the branch has at least two commits. Note the first commit hash with `git rev-list --max-parents=0 HEAD`. Check out that commit in detached `HEAD` with `git switch --detach "$(git rev-list --max-parents=0 HEAD)"`, make a small edit, stage, and commit. Inspect `cat .git/HEAD` — it should show a raw commit hash, not `ref: refs/heads/...`. Before switching away, create a branch at the current commit with `git branch recovered-detached-work HEAD`. Switch back to `main` with `git switch main` and verify with `git rev-parse recovered-detached-work` that the preserved commit ID matches your detached commit. The success condition is that no useful commit depends only on detached `HEAD`.
 
 For a related unreachable-object check, create a throwaway branch with one commit that is not merged anywhere, delete that branch, and run `git fsck --unreachable`. The success condition is that you can identify the dangling commit or blob as recoverable evidence before any reflog expiration or pruning.
 </details>
@@ -609,4 +609,4 @@ For a related unreachable-object check, create a throwaway branch with one commi
 - [Git documentation: hash-function-transition (SHA-256)](https://git-scm.com/docs/hash-function-transition)
 
 ## Next Module
-Next, continue to [Module 2: The Art of the Branch](../module-2-advanced-merging/) to practice branch movement, merge structure, and conflict recovery with the object model you built here.
+Next, continue to [Module 2: The Art of the Branch — Advanced Merging](../module-2-advanced-merging/) to practice branch movement, merge structure, and conflict recovery with the object model you built here.
