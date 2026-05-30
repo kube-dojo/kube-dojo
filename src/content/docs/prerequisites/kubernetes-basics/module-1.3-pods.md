@@ -155,7 +155,7 @@ spec:
   initContainers:
     - name: vault-bootstrap
       image: hashicorp/vault-agent:1.16
-      command: ["/bin/sh", "-c", "vault pull-secrets > /shared/secrets.env"]
+      command: ["/app/fetch-secrets.sh"]
       volumeMounts:
         - name: tmp-scratch-data
           mountPath: /shared
@@ -373,7 +373,21 @@ In this hands-on exercise, you will create a multi-container Pod, inspect its sh
 
 Write a declarative YAML manifest named `multi-pod.yaml` that creates a single Pod containing two communicating containers. The Pod name should be `web-logger`. The first container should be named `nginx-server`, use the `nginx:1.27-alpine` public image, and mount a shared volume named `html-dir` at `/usr/share/nginx/html`. The second container should be named `content-writer`, use the `busybox:1.36.1` public image, mount the same volume at `/data`, and continuously write the current date to `/data/index.html` every 5 seconds. The shared volume must be an `emptyDir`.
 
-**Solution:**
+<details>
+<summary>Concept hint</summary>
+
+Both containers need the same `emptyDir` volume declared once under `spec.volumes`, then mounted at different paths so the writer updates a file the web server can serve.
+</details>
+
+<details>
+<summary>Command hint</summary>
+
+Define `spec.volumes` with `emptyDir: {}`, then give each container a `volumeMounts` entry pointing at that volume name with the paths from the task description.
+</details>
+
+<details>
+<summary>Full solution</summary>
+
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -397,13 +411,28 @@ spec:
           mountPath: /data
 ```
 </details>
+</details>
 
 <details>
 <summary>Task 2: Apply and Verify the Architecture</summary>
 
 Apply the declarative manifest to your local cluster. Verify that the Pod transitions through `Pending` into `Running`, confirm both containers become ready, and then use port-forwarding to view the generated page through the API server tunnel.
 
-**Solution:**
+<details>
+<summary>Concept hint</summary>
+
+Use `kubectl apply` to submit the manifest, wait until the Pod reports Ready, then tunnel port 80 from the Pod to a local port and curl it from your workstation.
+</details>
+
+<details>
+<summary>Command hint</summary>
+
+Run `kubectl apply -f multi-pod.yaml`, then `kubectl wait --for=condition=Ready pod/web-logger --timeout=60s`, then `kubectl port-forward pod/web-logger 8080:80` in the background and curl `http://localhost:8080`.
+</details>
+
+<details>
+<summary>Full solution</summary>
+
 ```bash
 # Apply the declarative manifest to the API Server
 kubectl apply -f multi-pod.yaml
@@ -429,13 +458,28 @@ curl http://localhost:8080
 kill %1
 ```
 </details>
+</details>
 
 <details>
 <summary>Task 3: Interactive Namespace Exploration</summary>
 
 The `content-writer` container continuously overwrites the physical file on the shared volume. Use `kubectl exec` to open an interactive shell inside the `nginx-server` container. Once inside, install `curl` and make a local HTTP request to `localhost:80`. Explain why this works across container boundaries.
 
-**Solution:**
+<details>
+<summary>Concept hint</summary>
+
+Containers in the same Pod share a network namespace, so `localhost` inside one container reaches listeners in another. The shared volume is what lets one container write the file another serves.
+</details>
+
+<details>
+<summary>Command hint</summary>
+
+Use `kubectl exec -it web-logger -c nginx-server -- /bin/sh`, install curl with `apk add --no-cache curl`, then curl `http://localhost:80`.
+</details>
+
+<details>
+<summary>Full solution</summary>
+
 ```bash
 # Execute an interactive shell inside the specific container
 kubectl exec -it web-logger -c nginx-server -- /bin/sh
@@ -455,13 +499,28 @@ exit
 ```
 Even though you entered the `nginx-server` container's filesystem namespace, Nginx listens on port 80 of the Pod's shared network namespace. The loopback interface is shared by all containers in the Pod, while the mounted volume lets one container write the file another container serves.
 </details>
+</details>
 
 <details>
 <summary>Task 4: Intentionally Triggering an OOMKilled Event</summary>
 
 Create a new file named `oom-pod.yaml`. Define a Pod that runs the `polinux/stress` image, give it a strict memory limit of `50Mi`, and set the command to allocate more memory than the cgroup permits. Apply the file and watch its lifecycle status.
 
-**Solution:**
+<details>
+<summary>Concept hint</summary>
+
+Set a low `resources.limits.memory` value, then run a stress command that asks for substantially more memory than the limit allows. Wait for the container to terminate before checking status.
+</details>
+
+<details>
+<summary>Command hint</summary>
+
+Use the `polinux/stress` image with `--vm-bytes` above the limit, apply the manifest, then wait for `OOMKilled` with `kubectl wait --for=jsonpath='{.status.containerStatuses[0].state.terminated.reason}'=OOMKilled pod/memory-hog --timeout=60s` or watch with `kubectl get pod memory-hog --watch`.
+</details>
+
+<details>
+<summary>Full solution</summary>
+
 ```yaml
 # oom-pod.yaml
 apiVersion: v1
@@ -481,11 +540,12 @@ spec:
 # Apply the doomed pod to the cluster
 kubectl apply -f oom-pod.yaml
 
-# Watch the failure unfold after the process asks for too much memory
-sleep 5
+# Wait until the kernel terminates the over-limit process
+kubectl wait --for=jsonpath='{.status.containerStatuses[0].state.terminated.reason}'=OOMKilled pod/memory-hog --timeout=60s
 kubectl get pod memory-hog
 ```
 You should briefly see the Pod run and then observe a restart cycle. The process asks the kernel for substantially more memory than the configured cgroup permits, so the kernel terminates it to protect the node.
+</details>
 </details>
 
 <details>
@@ -493,12 +553,27 @@ You should briefly see the Pod run and then observe a restart cycle. The process
 
 Use `kubectl describe` to prove why the `memory-hog` Pod died. Find the exact reason and exit code in the container's last state, and connect that result back to the memory limit in the manifest.
 
-**Solution:**
+<details>
+<summary>Concept hint</summary>
+
+`kubectl describe pod` shows container state history. Look for `Last State` with reason `OOMKilled` and exit code `137`.
+</details>
+
+<details>
+<summary>Command hint</summary>
+
+Run `kubectl describe pod memory-hog` and scroll to the `Containers:` section for the `stress-test` container.
+</details>
+
+<details>
+<summary>Full solution</summary>
+
 ```bash
 # Extract the forensic log of the dead pod
 kubectl describe pod memory-hog
 ```
 Scroll to the `Containers:` section, locate the `stress-test` container, and inspect the `Last State:` block. The important evidence is `Reason: OOMKilled` alongside `Exit Code: 137`, which shows that the kernel killed the process after it exceeded the configured memory limit.
+</details>
 </details>
 
 <details>
@@ -506,11 +581,26 @@ Scroll to the `Containers:` section, locate the `stress-test` container, and ins
 
 Cleanly delete both Pods created during this exercise to free cluster resources and leave the training environment ready for the next module.
 
-**Solution:**
+<details>
+<summary>Concept hint</summary>
+
+Delete the Pod objects you created; graceful deletion is the default and appropriate here.
+</details>
+
+<details>
+<summary>Command hint</summary>
+
+Run `kubectl delete pod web-logger memory-hog`.
+</details>
+
+<details>
+<summary>Full solution</summary>
+
 ```bash
 # Delete the pods, returning the cluster to a clean state
-kubectl delete pod web-logger memory-hog --force --grace-period=0
+kubectl delete pod web-logger memory-hog
 ```
+</details>
 </details>
 
 Success criteria:
