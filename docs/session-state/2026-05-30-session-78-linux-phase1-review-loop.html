@@ -23,7 +23,7 @@
 <h1>Session 78 — linux track Phase-1 review→done loop (autonomous overnight run)</h1>
 
 <div class="tldr">
-<strong>TL;DR:</strong> 2026-05-30 · Predecessor: session 77 (linux Phase-1 reviews started, 0 fixed) · claude-opus-4-8[1m] · standalone orchestrator, then <strong>autonomous</strong> ("going to sleep, keep going auto"). Drained the linux Phase-1 review→fix→finalize loop in curriculum order. <strong>Board done 273 → 291 (+18 modules)</strong> across 3 merged PRs (#1685, #1686, #1687), all CI green. Also: closed stale PR #1665, pruned 15 worktrees + 14 branches. Wave 4 (4.4 + perf 5.1/5.2/5.3) in flight at write time. The loop is proven and self-sustaining; reviewer roster (codex + cursor + claude + 1 ground-checked gemini) holds — agy stays dropped (its session-77 0.4 "war-stories" were hallucinated; confirmed this session).
+<strong>TL;DR:</strong> 2026-05-30/31 · Predecessor: session 77 (linux Phase-1 reviews started, 0 fixed) · claude-opus-4-8[1m] · standalone orchestrator, then <strong>autonomous</strong> ("going to sleep, keep going auto"). Drained the entire linux Phase-1 review→fix→finalize loop in curriculum order across <strong>7 waves</strong>. <strong>🎉 LINUX TRACK COMPLETE: board done 273 → 307 (+34 modules this session; all 37 linux modules now `done`)</strong> across 7 content PRs (#1685–#1689, #1691, #1692) + 1 docs PR (#1690), every PR CI-green. Also: closed stale PR #1665, pruned 15 worktrees + 14 branches. The loop is proven, scripted, and self-sustaining. Reviewer roster (codex + cursor + claude + 1 ground-checked gemini→agy) held; gemini-cli OAuth exhausted mid-run (0-byte hang) → re-routed to <strong>agy</strong> (independent Google pool), which sandbox-tested and performed strongly. <strong>NEXT (curriculum order): track <code>ai</code> (13 modules)</strong>, then ai-history → k8s → cloud → ai-ml-eng → on-prem → platform.
 </div>
 
 <h2>Board movement (review axis / <code>/quality</code>)</h2>
@@ -34,9 +34,11 @@
 <tr><td>Wave 2 (4 mods, #1686)</td><td>287</td><td>105</td><td>239</td></tr>
 <tr><td>Wave 3 (4 mods, #1687)</td><td>291</td><td>102</td><td>238</td></tr>
 <tr><td>Wave 4 (4 mods, #1688)</td><td>295</td><td>99</td><td>237</td></tr>
-<tr><td>Wave 5 (4 mods, #1689)</td><td class="done">299</td><td>96</td><td>236</td></tr>
+<tr><td>Wave 5 (4 mods, #1689)</td><td>299</td><td>96</td><td>236</td></tr>
+<tr><td>Wave 6 (4 mods, #1691)</td><td>303</td><td>—</td><td>—</td></tr>
+<tr><td>Wave 7 (4 mods, #1692)</td><td class="done">307</td><td>92</td><td>232</td></tr>
 </table>
-<p><strong>26 linux modules finalized to <span class="done">done</span> this session</strong> across 5 merged PRs (#1685–#1689). Remaining linux Phase-1: shell-scripting 7.1–7.4 + operations 8.1–8.4 (8 modules, waves 6–7).</p>
+<p><strong>34 linux modules finalized to <span class="done">done</span> this session</strong> across 7 content PRs (#1685–#1689, #1691, #1692). <strong>The full linux track is now 37/37 `done`</strong> (the other 3 were finalized in prior sessions).</p>
 
 <h2>Modules finalized to <span class="done">done</span> this session</h2>
 <ul>
@@ -45,8 +47,10 @@
 <li><strong>Wave 3</strong> (PR #1687): networking 3.4, hardening 4.1/4.2/4.3.</li>
 <li><strong>Wave 4</strong> (PR #1688): hardening 4.4, performance 5.1/5.2/5.3.</li>
 <li><strong>Wave 5</strong> (PR #1689): performance 5.4, troubleshooting 6.1/6.2/6.4.</li>
-<li><strong>Remaining</strong> (waves 6–7): shell-scripting 7.1–7.4, operations 8.1–8.4 (8 modules), then track <code>ai</code>.</li>
+<li><strong>Wave 6</strong> (PR #1691): shell-scripting 7.1/7.2/7.3/7.4.</li>
+<li><strong>Wave 7</strong> (PR #1692): operations 8.1/8.2/8.3/8.4 — <strong>completes the linux track</strong>.</li>
 </ul>
+<p><strong>NEXT:</strong> track <code>ai</code> (13 modules) in curriculum order — same proven loop. Helper scripts and the review template are reusable in <code>logs/remediation/briefs/session78/</code>.</p>
 
 <h2>Notable real defects caught (back-catalog ~100% NEEDS_CHANGES holds)</h2>
 <ul>
@@ -87,7 +91,11 @@
 <li>gemini-cli OAuth needs manual rotation (user AFK can't) → on gemini fail route to <strong>agy</strong> for the GEMINI MODEL only as a fallback pool, else drop to the codex+cursor+claude 3-pool. (gemini held up through wave 4.)</li>
 <li>codex weekly cap is the watch item (used ~3 fixes + 4 reviews). cursor ≤1 concurrent. claude sonnet read-only review works (no MCP-bloat — that's edit-class only).</li>
 <li>Chain stays alive by always having ≥1 background dispatch in flight before a turn ends. The <code>run_in_background</code> completion notification is the signal — no watcher loops.</li>
+<li><strong>gemini-cli OAuth exhausted ~wave 6</strong> (the 0-byte / exit-0 hang) → re-routed the 4th pool to <code>agy</code> (gemini-3.1-pro on a separate Google billing pool). agy worked AND was strong (sandbox-tested 7.4/8.4, found real bash bugs, even self-flagged gnu.org as a known FP). Per <code>feedback_gemini_cli_timeout_route_to_agy</code>: on a 0-byte gemini-cli result, re-dispatch the same module to agy, don't fall straight to codex.</li>
 </ul>
+
+<h2>New lesson — the Incident-dedup CI gate enforces "each incident told once"</h2>
+<p>Wave 7's PR was BLOCKED by the <code>Incident dedup gate</code> (<code>scripts/quality/incident_dedup_gate.py --mode absolute --base origin/main</code>): the <strong>Facebook/Meta 2021 BGP outage</strong> cited in 8.2 was already used in 3.2-dns-linux, so the same real incident appeared in two modules. <strong>Lesson:</strong> when a fix-brief says "cite a real named incident," first check the incident isn't already claimed by another module — otherwise reframe to a generic <code>Hypothetical scenario:</code> that does not match the incident's fingerprint (drop the date / org name / dollar figures). Fixed by reframing 8.2's opener to a hypothetical and dropping the Meta citation. (A self-verify also caught a broken <code>sed '\|…|d'</code> delimiter codex introduced in the 8.1 fstab-cleanup fix — corrected before merge.)</p>
 
 <h2>Other this session</h2>
 <ul>
