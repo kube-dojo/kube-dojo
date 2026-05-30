@@ -342,7 +342,7 @@ The model is not a substitute for measurement. It is a way to choose the first m
 
 - **SSDs have no moving parts.** Traditional hard drives use spinning disks and a moving arm, while SSDs store data in electronic circuits, which is why they are usually faster and more shock-resistant.
 
-- **The first computer bug was an actual bug.** In 1947, engineers working on the Harvard Mark II found a moth stuck in a relay and taped it into the logbook as an actual bug.
+- **A famous early computer "bug" was a literal bug.** In 1947, engineers on the Harvard Mark II found a moth stuck in a relay and taped it into the logbook — noting the "first actual case of a bug being found." (Engineers had already been calling glitches "bugs" for decades; this just made the name stick.)
 
 ## Common Mistakes
 
