@@ -36,7 +36,7 @@ After completing this module, you will be able to reason about TCP/IP as an oper
 
 ## Why This Module Matters
 
-At 02:11, a platform team sees checkout requests timing out through an ingress controller. Pods are Ready, the Service exists, CoreDNS is healthy, and the application logs show no errors. The first useful clue comes from a node: `ip route get <pod-ip>` chooses the wrong interface, `ss -tan` shows many client sockets in `SYN-SENT`, and `conntrack -L` shows stale translated Service flows. Nothing in that evidence is Kubernetes-specific. Kubernetes supplied the objects, but Linux made the packet decisions.
+**Hypothetical scenario:** Picture a page when a platform team sees checkout requests timing out through an ingress controller. Pods are Ready, the Service exists, CoreDNS is healthy, and the application logs show no errors. The first useful clue comes from a node: `ip route get <pod-ip>` chooses the wrong interface, `ss -tan` shows many client sockets in `SYN-SENT`, and `conntrack -L` shows stale translated Service flows. Nothing in that evidence is Kubernetes-specific. Kubernetes supplied the objects, but Linux made the packet decisions.
 
 A platform engineer who cannot reason about TCP state machines, MTU, ARP/NDP, routes, and conntrack is blind during real outages. Service IPs are virtual addresses, CNI plugins may use overlays or direct routing, ingress may terminate TCP or QUIC, egress often rewrites source addresses, and active-active VIPs rely on neighbor behavior. The abstraction is useful only when you can descend through it to a packet-on-the-wire decision. Kubernetes documents that Services get cluster IPs through a virtual IP mechanism, and kube-proxy programs Linux packet forwarding rules in iptables, nftables, or IPVS modes depending on configuration. ([Kubernetes Services](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/service/), [Kubernetes Virtual IPs and Service Proxies](https://v1-35.docs.kubernetes.io/docs/reference/networking/virtual-ips/))
 
@@ -96,6 +96,8 @@ network:       10.244.2.0
 usable range:  10.244.2.1 - 10.244.2.254
 broadcast:     10.244.2.255
 ```
+
+> **Predict:** Before reading the network and broadcast lines, compute them yourself for `10.244.9.200/24`.
 
 A Kubernetes cluster normally has at least three address domains. Node IPs belong to the underlay: cloud VPC, bare-metal VLAN, or host network. Pod IPs come from CNI-managed ranges and must be reachable according to the cluster networking design. Service ClusterIPs come from a Service CIDR and are virtual destinations that kube-proxy or another dataplane captures and redirects. Kubernetes states that normal Services resolve to cluster IPs, while headless Services return endpoint IPs instead of relying on virtual IP forwarding. ([Kubernetes DNS for Services and Pods](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/dns-pod-service/), [Kubernetes Services](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/service/))
 
@@ -185,6 +187,8 @@ stateDiagram-v2
     LAST_ACK --> CLOSED: receive ACK
     TIME_WAIT --> CLOSED: 2MSL timeout
 ```
+
+> **Predict:** A client shows `SYN-SENT` for 30 seconds — is this a refused connection or a timeout, and which command proves it?
 
 Read `ss -tan` as evidence. `SYN-SENT` on a client means SYN packets left or are queued but no SYN-ACK has completed the handshake. `SYN-RECV` on a server means SYNs arrived and replies were attempted, but the final ACK did not complete or accept queue pressure exists; it is the `SYN_RECEIVED` state in the diagram above. `ESTAB` proves the handshake completed. `CLOSE-WAIT` means the peer closed and the local application has not closed its side. `TIME-WAIT` is normal on the side that actively closed; it prevents old duplicate segments from corrupting a later connection using the same tuple.
 
@@ -373,9 +377,9 @@ The pattern behind these mistakes is premature conclusion. Each command proves o
 
 ## Knowledge Check
 
-<details><summary>Question 1: A client gets `connection refused` to a ClusterIP Service, but `kubectl get endpoints` shows ready pods. What is your first split?</summary>
+<details><summary>Question 1: A client gets `connection refused` to a ClusterIP Service, but `kubectl get endpointslices` shows ready pods. What is your first split?</summary>
 
-Separate Service translation from backend socket state. `connection refused` usually means a RST returned, so inspect whether the selected backend pod actually has a listener on the targetPort with `ss -tlnp` in the correct namespace or debug container. Then inspect Service port to targetPort mapping and kube-proxy rules. Do not start with MTU or DNS; the refusal is transport evidence.
+Separate Service translation from backend socket state. `connection refused` usually means a RST returned, so inspect whether the selected backend pod actually has a listener on the targetPort with `ss -tlnp` in the correct namespace or debug container. Then inspect Service port to targetPort mapping and kube-proxy rules. Do not start with MTU or DNS; the refusal is transport evidence. For endpoint selection on Kubernetes 1.35+, use `kubectl get endpointslices` rather than the legacy Endpoints API.
 
 </details>
 
@@ -411,7 +415,11 @@ Inspect conntrack and kube-proxy rules. Long-lived Service flows may keep transl
 
 ## Hands-On Exercise
 
-Use a disposable Linux VM, lab node, or Kubernetes worker where you have permission to inspect networking state. Capture outputs in a scratch note and label each one with the layer it proves.
+Use a disposable Linux VM, lab node, or Kubernetes worker where you have permission to inspect networking state. Capture outputs in a scratch note and label each one with the layer it proves. On minimal images, `tracepath` and `mtr` may require `sudo apt install iputils-tracepath mtr`.
+
+### Task 0: Prefix boundaries (IPv4 and IPv6)
+
+For `10.244.9.200/24`, write the network address, broadcast address, and usable host range. For `fd00:abcd:1234::/48`, identify the `/48` prefix boundary (the first 48 bits of the address). Use `ipcalc` or manual bit math; compare with `ip route get` only after you have your answers.
 
 ### Task 1: Map Your Current Packet Path
 
@@ -473,7 +481,7 @@ Find the egress interface MTU and any PMTU clue from `tracepath`. If you are on 
 - [ ] Trace TCP connection state from `SYN-SENT` through `TIME-WAIT` and use `ss -tan` output to distinguish refusal, timeout, backlog, close, and keepalive symptoms.
 - [ ] Diagnose Service and ingress failures by connecting Linux conntrack, DNAT, netfilter hooks, sockets, and kube-proxy proxy modes.
 - [ ] Design a triage sequence for MTU, DNS, ARP/NDP, routing, and transport incidents without falling back to legacy net-tools.
-- [ ] Chose modern `ip`, `ss`, `tcpdump`, `dig`, `mtr`, `nc`, and `conntrack` tools instead of legacy net-tools.
+- [ ] Choose modern `ip`, `ss`, `tcpdump`, `dig`, `mtr`, `nc`, and `conntrack` tools instead of legacy net-tools.
 
 ## Next Module
 
@@ -496,6 +504,11 @@ Next, continue to [Module 3.2: DNS in Linux](../module-3.2-dns-linux/) to go dee
 - [Linux ip-route manual](https://man7.org/linux/man-pages/man8/ip-route.8.html)
 - [Linux ip-rule manual](https://man7.org/linux/man-pages/man8/ip-rule.8.html)
 - [Linux ip-neighbour manual](https://man7.org/linux/man-pages/man8/ip-neighbour.8.html)
+- [Linux ip-link manual](https://man7.org/linux/man-pages/man8/ip-link.8.html)
+- [Linux tcp manual](https://man7.org/linux/man-pages/man7/tcp.7.html)
+- [Linux udp manual](https://man7.org/linux/man-pages/man7/udp.7.html)
+- [Linux nsswitch.conf manual](https://man7.org/linux/man-pages/man5/nsswitch.conf.5.html)
+- [Linux resolv.conf manual](https://man7.org/linux/man-pages/man5/resolv.conf.5.html)
 - [Linux ss manual](https://man7.org/linux/man-pages/man8/ss.8.html)
 - [Linux kernel netfilter documentation](https://docs.kernel.org/networking/netfilter.html)
 - [Linux kernel conntrack sysctl documentation](https://docs.kernel.org/networking/nf_conntrack-sysctl.html)
