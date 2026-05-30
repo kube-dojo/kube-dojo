@@ -65,7 +65,11 @@ Pause and predict: if you had to rename hundreds of files the same way, which in
 
 For example, a GUI workflow for renaming many files can become a fatigue problem. You click a file, choose rename, type a new name, confirm it, then repeat that sequence again and again. A terminal can express the same pattern as a loop, which means the computer handles the repetition while you focus on whether the pattern is correct.
 
-```bash
+> **Illustration only — do not run this yet**
+>
+> Here is what a file-renaming loop *looks like* in a shell. You have not learned file operations or loops yet; running it would rename real `.txt` files on your machine and can overwrite existing `backup_*.txt` names. Read it for the idea; you will run commands like this in a later module.
+
+```text
 for f in *.txt; do mv "$f" "backup_$f"; done
 ```
 
@@ -77,7 +81,7 @@ The same idea applies even when the task is not large. If you run `date` before 
 
 Opening the terminal is slightly different on each operating system, but the first goal is the same everywhere: get to a window that shows a prompt and a blinking cursor. On macOS, press Cmd + Space, type Terminal, and press Enter. On many Linux desktops, Ctrl + Alt + T opens a terminal, and the applications menu usually has a Terminal entry if the shortcut is disabled.
 
-Windows has several valid options, and they serve different purposes. PowerShell is built in and is fine for this first module because commands such as `echo`, `date` aliases, and identity checks exist in some form. Windows Terminal is Microsoft's modern terminal application and is a better day-to-day container for shells. WSL, the Windows Subsystem for Linux, gives you a Linux environment on Windows, which is why it is recommended for the rest of this curriculum.
+Windows has several valid options, and they serve different purposes. Windows Terminal is Microsoft's modern terminal application and is a good day-to-day container for shells. WSL, the Windows Subsystem for Linux, gives you a Linux-style shell on Windows; use a WSL tab for the Unix command names in this module (`date`, `date -u`, and bash-style examples such as `$(date)`). PowerShell is built in and works for `echo` (alias) and identity checks such as `whoami`, but it has **no** `date` command — only the `Get-Date` cmdlet, with no `date` alias — so plain PowerShell will fail if you type `date` as shown below. WSL is recommended for the rest of this curriculum for the same reason.
 
 If you choose WSL later, the official installation path starts from PowerShell and uses Microsoft's installer command. You do not need to run it for this module, but seeing the shape of the command helps you recognize that terminal instructions can install real tools. This curriculum will return to WSL when the operating system details matter more.
 
@@ -150,7 +154,7 @@ $ echo "Hello, World!"
 
 If you are typing by hand, that display style is harmless because you naturally start after the prompt. If you are copying and pasting, it can cause trouble because the shell receives the `$` as text. For that reason, this rewrite uses runnable command blocks without the prompt symbol when the intent is copy-paste practice.
 
-Now ask the computer for the date and time. The exact output depends on your operating system, timezone, locale, and shell, so do not worry if yours is formatted differently from the example. What matters is that the command returns a timestamp and then gives you the prompt again.
+Now ask the computer for the date and time. The exact output depends on your operating system, timezone, locale, and shell, so do not worry if yours is formatted differently from the example. What matters is that the command returns a timestamp and then gives you the prompt again. On Windows, run this in **WSL** (or another bash/zsh shell); in PowerShell only, use `Get-Date` instead — there is no `date` command there.
 
 ```bash
 date
@@ -228,7 +232,7 @@ echo "Hello"
 
 The command is `echo`, and the argument is `"Hello"`. The shell removes the quotes as syntax and gives the command the text inside them. That distinction is subtle at first: quotes are not decorations for humans, they are instructions to the shell about how to group words before the command receives them.
 
-Options change behavior. The `date` command normally prints the local time, but the `-u` option asks for UTC. UTC is a standard time reference used heavily in distributed systems because it avoids confusion when people, servers, or logs are spread across time zones.
+Options change behavior. The `date` command normally prints the local time, but the `-u` option asks for UTC. UTC is a standard time reference used heavily in distributed systems because it avoids confusion when people, servers, or logs are spread across time zones. This option is for Unix-style shells (macOS, Linux, WSL); PowerShell uses `Get-Date` with UTC-oriented formatting instead.
 
 ```bash
 date -u
@@ -439,7 +443,7 @@ Open a terminal, run safe information commands, and practice one recovery move. 
 
 ### Setup
 
-Use any terminal you can open today. macOS Terminal, Windows Terminal with PowerShell, WSL Ubuntu, and a Linux terminal are all acceptable for this first session. If one command prints a slightly different format on your system, treat that as useful evidence rather than a failure.
+Use any terminal you can open today. macOS Terminal, a Linux terminal, or **Windows Terminal with a WSL Ubuntu profile** are the best fit for this exercise because the tasks use Unix-style `date` and bash composition. If you only have PowerShell open, `echo` and `whoami` work, but use `Get-Date` wherever the exercise says `date`, or open a WSL tab to match the examples. If one command prints a slightly different format on your system, treat that as useful evidence rather than a failure.
 
 ### Tasks
 
@@ -498,7 +502,7 @@ Mon Mar 23 14:30:00 UTC 2026
 <details>
 <summary>Solution guidance</summary>
 
-Your exact timestamp will differ from the example because your machine has its own current time, timezone, and formatting rules. The important result is that `date` prints a timestamp and then the prompt returns. If the command is not recognized in a particular Windows shell, use WSL for the Linux-style experience used in later modules.
+Your exact timestamp will differ from the example because your machine has its own current time, timezone, and formatting rules. The important result is that `date` prints a timestamp and then the prompt returns. In plain PowerShell, `date` is not a valid command — run `Get-Date` for the same information, or switch to WSL so `date` matches later modules.
 
 </details>
 
