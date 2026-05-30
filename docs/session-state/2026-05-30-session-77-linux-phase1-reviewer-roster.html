@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 77 — linux Phase-1 review started; reviewer roster overhauled (claude in, gemini-3.1-pro demoted)</title>
+<meta name="session-label" content="session-77-linux-phase1-reviewer-roster">
+<meta name="date" content="2026-05-30">
+<meta name="predecessor" content="session-76-prereqs-phase2-complete">
+<meta name="model" content="claude-opus-4-8[1m]">
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#1a1a1a}
+h1{font-size:1.5rem;border-bottom:2px solid #326ce5;padding-bottom:.3rem}
+h2{font-size:1.15rem;margin-top:1.6rem;color:#326ce5}
+code{background:#f4f4f4;padding:.1em .3em;border-radius:3px;font-size:.9em}
+table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ddd;padding:.35rem .5rem;text-align:left;font-size:.88rem;vertical-align:top}
+th{background:#f0f4ff}
+.tldr{background:#f0f4ff;border-left:4px solid #326ce5;padding:.6rem .9rem;border-radius:4px}
+.warn{background:#fff7e6;border-left:4px solid #d9822b;padding:.6rem .9rem;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Session 77 — linux track Phase-1 review started; reviewer roster overhauled</h1>
+
+<p class="tldr"><strong>TL;DR:</strong> 2026-05-30 · Predecessor: session 76 (prereqs 100% done) · claude-opus-4-8[1m] · standalone orchestrator. User directive: "continue [linux Phase-1] until 500k then handoff" (ended early on user call). <strong>Durable outcome = a reviewer-roster overhaul</strong> prompted by two user questions ("agy has gemini-3.1-pro" / "why not use claude?"): the FP-prone reviewer is the <em>model</em> gemini-3.1-pro (which agy AND gemini-cli both are), not "agy" — so it now gets ONE ground-checked slot, not two. <strong>Claude (sonnet) tested + added as a reviewer</strong> (read-only review has no MCP-bloat; caught a real invalid-seccomp-JSON bug). New rotation: <strong>codex + cursor + claude (3 strong diverse families) + 1 ground-checked gemini</strong>; agy + deepseek dropped. <strong>8 linux modules reviewed (all NEEDS_CHANGES); ZERO fixed/finalized yet</strong> — the fix+finalize work is the next session's job.</p>
+
+<h2>Reviewer roster (THE decision — carry forward)</h2>
+<table>
+<tr><th>Reviewer</th><th>Model</th><th>Verdict</th></tr>
+<tr><td><strong>codex</strong></td><td>gpt-5.5</td><td>Strongest. Runs labs/verifier, near-zero FP. Use for runnability + heavy modules + R2.</td></tr>
+<tr><td><strong>cursor</strong></td><td>composer-2.5 (<code>--model auto</code>)</td><td>Strong. verify_module-backed, reliable. Also the fix author.</td></tr>
+<tr><td><strong>claude</strong> (NEW)</td><td>sonnet-4-6 (<code>dispatch_smart review --agent claude</code>)</td><td>Strong, different family. Read-only review works (MCP-bloat was edit-class only). Caught invalid seccomp JSON schema on 2.3.</td></tr>
+<tr><td>gemini-cli</td><td>gemini-3.1-pro</td><td>ONE ground-checked slot. Catches real war-stories but emits FPs (links/versions/illustrative). 429s sometimes.</td></tr>
+<tr><td><s>agy</s></td><td>gemini-3.1-pro</td><td>DROPPED — same model as gemini-cli (redundant); FP pattern 3-4×.</td></tr>
+<tr><td><s>deepseek</s></td><td>—</td><td>OUT — hallucinates fake gate names/failures.</td></tr>
+</table>
+
+<p class="warn"><strong>Recurring reviewer FP classes to auto-reject (gemini-3.1-pro especially):</strong> (1) "<code>../module-X/</code> sibling link is broken" — it's correct for the slug. <strong>BUT</strong> a <em>cross-section</em> link from a module page (e.g. <code>../system-essentials/</code>) genuinely needs <code>../../system-essentials/</code> — that one is REAL, ground-check don't blanket-reject. (2) "Kubernetes 1.35 is future/invalid" — 1.35 IS the curriculum standard (reviewer knowledge-cutoff). (3) "this illustrative block won't run" — check whether it's a runnable lab first. Briefs now pre-empt #1/#2.</p>
+
+<h2>State: 8 linux modules reviewed, 0 fixed</h2>
+<p>All NEEDS_CHANGES (confirms ~80% back-catalog rate). Dominant fix theme: <strong>fabricated war-stories stated as fact → "Hypothetical scenario:" reframe</strong> (nearly every module) + <strong>dead/404 source URLs</strong> (gnu.org Bash-manual recurring; also others) + per-module accuracy bugs. Verdicts in <code>logs/dispatch_responses/lrev-*.txt</code> (persist locally) + <code>logs/remediation/session76b-linux-phase1.md</code> (gitignored scratch).</p>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Real findings (FPs already filtered)</th></tr>
+<tr><td>everyday-use/0.1-cli-power-user</td><td>codex</td><td>2 war-stories; Task-4 grep logic bug (matches INFO not errors); outcomes promise subshells/sed not taught; /var/log writes fail unprivileged; dead URL</td></tr>
+<tr><td>0.2-environment-permissions</td><td>cursor</td><td>3 war-stories; body_words +25; wrong <code>type deploy.sh</code> output; 30-vs-45min metadata; 3 dead gnu.org URLs</td></tr>
+<tr><td>0.3-processes-resources</td><td>gemini</td><td>4 war-stories. (3 "broken xref" P1s = FP, rejected)</td></tr>
+<tr><td>0.4-services-logs</td><td>agy</td><td>2 war-stories; L100 systemctl-before-install (use sshd/cron for conceptual). (k8s-1.35 flag = FP rejected)</td></tr>
+<tr><td>0.5-networking-tools</td><td>gemini</td><td>war-stories; <strong>L514 cross-section "Next" link <code>../system-essentials/</code> → verify, likely needs <code>../../</code></strong></td></tr>
+<tr><td>system-essentials/1.2-processes-systemd</td><td>cursor</td><td>broken source URL 404 (L948) + read full file</td></tr>
+<tr><td>1.4-users-permissions</td><td>agy (last)</td><td>NEEDS_CHANGES — ground-check hard (gemini-3.1-pro)</td></tr>
+<tr><td>container-primitives/2.2-cgroups</td><td>codex</td><td>cgroup-v2 wording wrong (L140/461): v2 stable since 1.25, v1 deprecated in 1.35, kubelet failCgroupV1 by default</td></tr>
+<tr><td>2.3-capabilities-lsms</td><td>claude</td><td>2 war-stories; seccomp JSON <code>"blocked"</code> field invalid (not in Docker/OCI schema)</td></tr>
+<tr><td>2.4-union-filesystems</td><td>claude</td><td>review in flight at handoff (lrev-24-claude)</td></tr>
+</table>
+
+<h2>NEXT SESSION</h2>
+<ol>
+<li>Read each verdict's full findings; ground-check (reject the 3 FP classes, but VERIFY cross-section links + 2.2 cgroup wording are real).</li>
+<li>Batch-fix per section (cursor <code>--model auto</code>): everyday-use (0.1-0.5), system-essentials (1.2/1.4), container-primitives (2.2/2.3/2.4). Then finalize each: append <code>## &lt;ts&gt; — `REVIEW` — `APPROVE`</code> to <code>.pipeline/reviews/&lt;key__&gt;.md</code> + <code>python3 -m scripts.quality.pipeline reset-stage &lt;slug&gt; COMMITTED</code>. Per-section PR; <strong>build in PRIMARY</strong> (temp-apply → build → revert; worktree builds fail on Homepage.astro <code>../../node_modules</code>).</li>
+<li>Continue the rotation (codex+cursor+claude+1gemini) through the remaining ~26 linux modules: 1.3, 3.1-3.4, 4.1-4.4, 5.1-5.4, 6.1/6.2/6.4, 7.1-7.4, 8.1-8.4. (9 of the 20 needs_review are <code>auto_approved=True</code> with NO real review — they need genuine review, not a shortcut.)</li>
+<li>Consider a systemic fix for the recurring dead gnu.org Bash-manual URL reachability (allowlist or swap to man7.org).</li>
+</ol>
+<p>Board at handoff: done 273, needs_review 112, needs_rewrite 176, shipped_unreviewed 246 (linux contributes 14 shipped_unreviewed + 20 needs_review). Working log: <code>logs/remediation/session76b-linux-phase1.md</code>. gemini-cli quota: restored but occasionally 429s → re-route on failure.</p>
+</body>
+</html>
