@@ -6,8 +6,6 @@ sidebar:
   order: 76
 ---
 
-# Self-Hosted CI/CD
-
 ## Why This Module Matters
 
 Recent software supply-chain incidents have shown that compromising CI/CD tooling can expose build secrets and create downstream customer risk when runner isolation and credential scoping are weak. 

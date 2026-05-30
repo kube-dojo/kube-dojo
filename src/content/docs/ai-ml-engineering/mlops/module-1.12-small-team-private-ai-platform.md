@@ -6,8 +6,6 @@ sidebar:
   order: 613
 ---
 
-# Small-Team Private AI Platform
-
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
 
 **Reading Time**: 2-3 hours  

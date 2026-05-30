@@ -6,8 +6,6 @@ sidebar:
   order: 10
 ---
 
-# Module 9.9: Cloud-Native API Gateways & WAF
-
 **Complexity**: [COMPLEX] | **Time to Complete**: 2.5h | **Prerequisites**: Module 9.3 (Serverless Interoperability), Kubernetes Ingress and Services, HTTP/TLS basics
 
 ## What You'll Be Able to Do

@@ -6,8 +6,6 @@ sidebar:
   order: 507
 ---
 
-# Agent Memory & Planning
-
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
 >
 > **Reading Time**: 8-9 hours

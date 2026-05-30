@@ -6,8 +6,6 @@ sidebar:
   order: 6
 ---
 
-# Module 2.5: Self-Service Infrastructure
-
 > **Discipline Module** | Complexity: `[COMPLEX]` | Time: 50-60 min
 
 ## Prerequisites

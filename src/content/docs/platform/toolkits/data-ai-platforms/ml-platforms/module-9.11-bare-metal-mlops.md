@@ -4,7 +4,6 @@ sidebar:
   order: 12
 slug: module-9.11-bare-metal-mlops
 ---
-# Module 9.11: Bare-Metal MLOps — Building a Production ML Platform Without Managed Cloud
 
 ## Complexity: [COMPLEX]
 

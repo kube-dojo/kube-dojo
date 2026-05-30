@@ -7,8 +7,6 @@ sidebar:
   order: 44
 ---
 
-# Object Storage on Bare Metal
-
 ## Learning Outcomes
 * Architect distributed topologies using Server Pools for horizontal scalability on bare metal hardware.
 * Configure erasure coding profiles to balance storage efficiency against strict fault tolerance requirements.

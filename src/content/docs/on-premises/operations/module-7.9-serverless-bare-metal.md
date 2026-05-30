@@ -6,8 +6,6 @@ sidebar:
   order: 79
 ---
 
-# Serverless on Bare Metal
-
 ## Learning Outcomes
 
 *   **Design and evaluate** Knative Serving architectures alongside bare-metal compatible networking layers like Kourier and Contour.

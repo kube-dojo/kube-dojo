@@ -6,8 +6,6 @@ sidebar:
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
 
-# Or: How AI Learned to See (And Why It Still Can't Find Waldo)
-
 ## Why This Module Matters
 
 This module is designed to bridge the gap between theoretical mathematics and production-grade engineering. You will dissect the precise mathematical operations that allow machines to detect spatial hierarchies, recognize complex patterns, and parse messy reality. By understanding the inner workings of convolutions, pooling layers, and residual connections, you will possess the fundamental prerequisites to design, debug, and deploy vision systems that are robust, efficient, and safe for real-world application.

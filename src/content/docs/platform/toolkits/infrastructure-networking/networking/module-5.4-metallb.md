@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 5.4: MetalLB - Load Balancing for Bare-Metal Kubernetes
-
 > **Toolkit Track** | Complexity: `[MEDIUM]` | Time: ~45 minutes
 
 **Prerequisites**:

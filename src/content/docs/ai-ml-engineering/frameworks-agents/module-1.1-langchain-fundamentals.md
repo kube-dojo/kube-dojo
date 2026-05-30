@@ -8,8 +8,6 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
 
-# LangChain Fundamentals: The Framework That Took Over AI Development
-
 **Reading Time**: 6-7 hours  
 **Prerequisites**: Module 14, Python fundamentals, basic HTTP/API concepts, and beginner familiarity with LLM prompts.
 

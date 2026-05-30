@@ -5,7 +5,6 @@ sidebar:
   order: 205
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-6
-# The New Paradigm: From Autocomplete to Autonomous Agents
 
 ---
 **Prerequisites**: Module 1.1-1.3 complete

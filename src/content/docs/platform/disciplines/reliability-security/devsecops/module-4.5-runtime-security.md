@@ -6,8 +6,6 @@ sidebar:
   order: 7
 ---
 
-# Module 4.5: Runtime Security
-
 > **Discipline Module** | Complexity: `[COMPLEX]` | Time: 45-60 min
 
 ## Prerequisites

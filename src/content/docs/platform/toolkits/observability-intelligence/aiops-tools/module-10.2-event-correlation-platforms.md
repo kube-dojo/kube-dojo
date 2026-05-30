@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 10.2: Event Correlation Platforms
-
 > **Toolkit Track** | Complexity: `[MEDIUM]` | Time: 50-60 min
 
 ## Prerequisites

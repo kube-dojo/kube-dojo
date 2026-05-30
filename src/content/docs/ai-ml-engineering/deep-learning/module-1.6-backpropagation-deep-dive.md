@@ -6,8 +6,6 @@ sidebar:
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours
 
-# Backpropagation Deep Dive: From Autograd to Transformers
-
 **Reading Time**: 8-10 hours
 **Prerequisites**: Module 29
 

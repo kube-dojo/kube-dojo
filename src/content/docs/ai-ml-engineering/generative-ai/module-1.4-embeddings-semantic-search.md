@@ -5,7 +5,6 @@ slug: ai-ml-engineering/generative-ai/module-1.4-embeddings-semantic-search
 sidebar:
   order: 305
 ---
-# Embeddings & Semantic Search
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
 >

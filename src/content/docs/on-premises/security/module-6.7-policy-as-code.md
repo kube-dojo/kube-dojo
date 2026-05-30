@@ -8,8 +8,6 @@ sidebar:
   order: 67
 ---
 
-# Policy as Code & Governance
-
 ## Why This Module Matters
 
 A cluster-wide admission policy change can cascade into control-plane instability if critical system namespaces or dependencies are not exempted. For example, a policy that blocks essential system pods from restarting can turn a routine rollout into a widespread outage.

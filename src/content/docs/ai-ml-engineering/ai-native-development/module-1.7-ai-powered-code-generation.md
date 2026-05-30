@@ -7,8 +7,6 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5 Hours
 
-# AI-Powered Code Generation
-
 **Reading Time**: 4-5 hours
 **Prerequisites**: Modules 1-2
 

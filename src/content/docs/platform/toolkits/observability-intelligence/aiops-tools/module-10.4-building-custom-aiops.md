@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 10.4: Building Custom AIOps
-
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 60-75 minutes
 
 ## Prerequisites

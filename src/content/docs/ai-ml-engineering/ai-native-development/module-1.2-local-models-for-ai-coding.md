@@ -7,8 +7,6 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 3-4 hours
 
-# Local Models for AI Coding
-
 **Reading Time**: 3-4 hours
 
 **Prerequisites**: Module 1.1 complete, comfort using a terminal, basic Git workflow, and at least 8 GB RAM. A 16 GB machine is strongly recommended for the examples in this module.

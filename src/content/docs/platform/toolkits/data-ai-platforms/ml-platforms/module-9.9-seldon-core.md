@@ -5,8 +5,6 @@ sidebar:
   order: 10
 ---
 
-# Module 9.9: Seldon Core — Multi-Framework Model Serving with Inference Graphs
-
 > **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 55-65 minutes

@@ -6,8 +6,6 @@ sidebar:
   order: 4
 ---
 
-# Module 1.3: Grafana
-
 > **Comprehensive Toolkit Track Evaluation Path** | Architectural Complexity Level: `[MEDIUM]` | Estimated Completion Timeframe: 40-45 minutes of focused reading and practical exercises
 
 Prerequisites: complete Module 1.1 on Prometheus metrics collection and Module 1.2 on OpenTelemetry tracing before starting this module. You should already be comfortable reading PromQL, recognizing Kubernetes workload labels, and explaining why modern services need metrics, logs, and traces instead of a single monitoring feed. Kubernetes examples assume version 1.35 or later; when commands use `k`, set the standard shortcut with `alias k=kubectl` before you begin.

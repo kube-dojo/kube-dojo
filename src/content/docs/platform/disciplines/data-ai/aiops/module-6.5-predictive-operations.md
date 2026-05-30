@@ -6,8 +6,6 @@ sidebar:
   order: 6
 ---
 
-# Module 6.5: Predictive Operations
-
 > **Discipline Track** | Complexity: `[COMPLEX]` | Time: 40-45 min
 
 ## Prerequisites

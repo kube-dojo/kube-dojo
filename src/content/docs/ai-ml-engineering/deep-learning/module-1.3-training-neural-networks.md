@@ -6,8 +6,6 @@ sidebar:
   order: 1004
 ---
 
-# Training Neural Networks
-
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8 hours
 >
 > **Prerequisites**: Python fundamentals, NumPy arrays, matrix multiplication, gradient descent, and the previous neural-network-from-scratch module.

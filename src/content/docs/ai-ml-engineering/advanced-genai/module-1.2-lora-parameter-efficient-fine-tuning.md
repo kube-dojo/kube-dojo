@@ -5,8 +5,6 @@ sidebar:
   order: 803
 ---
 
-# LoRA & Parameter-Efficient Fine-tuning
-
 ## Why This Module Matters
 
 Generative artificial intelligence fundamentally redefines how software systems synthesize novel data, but the computational reality of modern neural architectures presents severe operational bottlenecks. Full-parameter fine-tuning on large generative models can become extremely expensive and can still fail if the training setup, data quality, and regularization strategy are poor. The operational lesson is that adaptation strategy matters as much as raw compute budget.

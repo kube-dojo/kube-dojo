@@ -6,8 +6,6 @@ sidebar:
   order: 66
 ---
 
-# Secrets Management on Bare Metal
-
 ## Learning Outcomes
 
 *   Architect a highly available HashiCorp Vault cluster using Integrated Storage (Raft) on bare metal.

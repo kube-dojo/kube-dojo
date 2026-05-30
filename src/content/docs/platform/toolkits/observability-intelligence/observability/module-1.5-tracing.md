@@ -7,8 +7,6 @@ sidebar:
   order: 6
 ---
 
-# Module 1.5: Distributed Tracing
-
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 55-70 min
 
 > **Prerequisites**: [Module 1.2: OpenTelemetry](../module-1.2-opentelemetry/), [Module 1.1: Prometheus](../module-1.1-prometheus/), [Module 1.4: Loki](../module-1.4-loki/), and working familiarity with HTTP services, Kubernetes Deployments, and basic microservice request flows.

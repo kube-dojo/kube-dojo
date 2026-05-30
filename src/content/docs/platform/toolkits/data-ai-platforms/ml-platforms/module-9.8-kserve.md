@@ -5,8 +5,6 @@ sidebar:
   order: 9
 ---
 
-# Module 9.8: KServe — Production-Grade Model Inference on Kubernetes
-
 > **Complexity**: `[COMPLEX]`
 >
 > **Time to Complete**: 55-65 minutes

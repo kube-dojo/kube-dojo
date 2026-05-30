@@ -6,8 +6,6 @@ sidebar:
   order: 302
 ---
 
-# Introduction to Large Language Models
-
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
 >
 > **Prerequisites**: Phase 1 complete, basic Python, basic HTTP/API concepts, and comfort reading small configuration files

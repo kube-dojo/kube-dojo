@@ -5,8 +5,6 @@ sidebar:
   order: 905
 ---
 
-# Multimodal-First AI Design
-
 ## Learning Outcomes
 
 By the end of this module, you will be able to:

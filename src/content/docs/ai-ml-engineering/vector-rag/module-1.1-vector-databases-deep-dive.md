@@ -6,8 +6,6 @@ sidebar:
   order: 402
 ---
 
-# Vector Databases Deep Dive
-
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
 >
 > **Prerequisites**: Prior experience with embeddings, semantic search, Python, HTTP APIs, and basic database concepts.

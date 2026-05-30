@@ -6,8 +6,6 @@ sidebar:
   order: 2
 ---
 
-# Module 1.1: Prometheus
-
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45-50 min
 
 ## Prerequisites

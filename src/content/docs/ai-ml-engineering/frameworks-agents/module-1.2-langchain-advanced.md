@@ -7,8 +7,6 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
 
-# LangChain Advanced: Teaching AI to Use Tools Like a Human
-
 **Reading Time**: 6-7 hours
 **Prerequisites**: Module 15
 

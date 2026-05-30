@@ -6,8 +6,6 @@ sidebar:
   order: 3
 ---
 
-# Module 2.2: Argo Rollouts
-
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 50-65 min
 
 ## Prerequisites

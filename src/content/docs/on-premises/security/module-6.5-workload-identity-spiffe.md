@@ -6,8 +6,6 @@ sidebar:
   order: 65
 ---
 
-# Workload Identity with SPIFFE/SPIRE
-
 ## Why This Module Matters
 
 The 2019 Capital One metadata-service incident (see *Node Metadata Security*) <!-- incident-xref: capital-one-2019 --> shows why static, infrastructure-bound credentials are dangerous: one compromised interface can become a pathway to broad compromise when workload identity is not dynamically validated at runtime.

@@ -7,8 +7,6 @@ sidebar:
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 8-10 hours
 
-# Backpropagation and Autograd from Scratch
-
 **Reading Time**: 6-7 hours
 
 **Prerequisites**: Python, NumPy basics, matrix multiplication, basic derivatives, and prior neural network training experience.

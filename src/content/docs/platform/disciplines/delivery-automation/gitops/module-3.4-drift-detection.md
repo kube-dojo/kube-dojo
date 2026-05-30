@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 3.4: Drift Detection and Remediation
-
 > **Discipline Module** | Complexity: `[MEDIUM]` | Time: 35-45 min | Track: Platform Engineering / GitOps
 
 ## Prerequisites

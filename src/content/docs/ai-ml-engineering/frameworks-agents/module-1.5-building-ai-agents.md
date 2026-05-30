@@ -7,8 +7,6 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
 
-# Building AI Agents: The Framework Ecosystem
-
 **Reading Time**: 6-8 hours
 **Prerequisites**: Module 18
 

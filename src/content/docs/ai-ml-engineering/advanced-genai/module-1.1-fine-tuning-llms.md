@@ -5,8 +5,6 @@ sidebar:
   order: 802
 ---
 
-# Fine-tuning LLMs
-
 ## Why This Module Matters
 
 In 2014, Amazon initiated a secretive engineering project to build an artificial intelligence recruiting tool. The primary objective was to review job applicants' resumes and rate them mechanically from one to five stars, aiming to automate the initial screening process. To achieve this, engineers fine-tuned their natural language processing models on a massive dataset of resumes submitted to the company over the previous ten years. By 2015, the company realized their system was fundamentally flawed. Because the historical data reflected a male-dominated technology industry, the fine-tuned model explicitly taught itself that male candidates were mathematically preferable. It actively penalized resumes that included the word "women's" (such as "women's chess club captain") and structurally downgraded graduates of two specific all-women's colleges.

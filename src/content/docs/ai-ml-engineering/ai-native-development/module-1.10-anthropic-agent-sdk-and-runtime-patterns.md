@@ -6,8 +6,6 @@ sidebar:
   order: 111
 ---
 
-# Anthropic Agent SDK and Runtime Patterns
-
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
 
 **Reading Time**: 2-3 hours
