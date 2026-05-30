@@ -33,7 +33,7 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-In February 2019, a widely deployed container runtime vulnerability showed why a container boundary must be treated as a collection of kernel contracts, not as a single magic wall. The bug let a malicious container replace the host-side runtime binary and gain code execution as root on the node. Many organizations patched quickly, but the operational lesson lasted longer than the incident response: a compromised container process does not need hundreds of kernel entry points to serve web traffic, parse JSON, or write logs, yet default Linux exposes those entry points unless another layer filters them.
+In February 2019, a widely deployed container runtime vulnerability showed why a container boundary must be treated as a collection of kernel contracts, not as a single magic wall. The bug let a malicious container replace the host-side runtime binary and gain code execution as root on the node. Many organizations patched quickly, but the operational lesson lasted longer than the incident response: a compromised container process does not need hundreds of kernel entry points to serve web traffic, parse JSON, or write logs, yet default Linux exposes those entry points unless another layer filters them. Source: [NVD CVE-2019-5736](https://nvd.nist.gov/vuln/detail/cve-2019-5736)
 
 seccomp, short for Secure Computing Mode, exists for that exact gap. AppArmor and SELinux can say which files, sockets, labels, and resources a process may touch, while seccomp says which kernel functions the process may call at all. That difference is not academic. A web server denied access to `/etc/shadow` by AppArmor could still attempt `ptrace`, `bpf`, `unshare`, `mount`, or `keyctl` if those syscalls are available, and several of those calls have a long history of being useful during privilege escalation.
 
@@ -163,7 +163,7 @@ The `defaultAction` is the profile's posture. `SCMP_ACT_ERRNO` means any syscall
 Docker's default profile is a pragmatic baseline rather than a proof that every allowed syscall is necessary for your application. It blocks syscalls that are usually unnecessary or dangerous in containers, including kernel module loading, raw kernel introspection, time changes, namespace transitions, and several memory or process inspection features. That default has to support a broad universe of images, so it cannot be as narrow as a profile for one static Go service or one constrained batch worker.
 
 ```bash
-# Syscalls blocked by Docker default profile:
+# Examples of significant syscalls blocked by Docker's default profile:
 # - acct            - kernel accounting
 # - add_key         - kernel keyring
 # - bpf             - BPF programs
@@ -271,14 +271,19 @@ In Kubernetes, seccomp can be set at the pod level or the container level. A con
 
 `RuntimeDefault` is the normal starting point for Kubernetes 1.35 clusters because it delegates the profile to the node's configured container runtime. `Localhost` is the custom-profile option, and it requires the profile file to exist on every node where the pod may be scheduled. `Unconfined` should be rare because it removes this layer entirely. In regulated environments, admission control often rejects `Unconfined` and may require `RuntimeDefault` or an approved `Localhost` path.
 
-```bash
-# Kubernetes looks for profiles at:
-/var/lib/kubelet/seccomp/profiles/
+The Kubernetes kubelet reads local seccomp profiles from:
 
-# Example
-/var/lib/kubelet/seccomp/profiles/my-profile.json
+```text
+Kubernetes looks for profiles at:
+  /var/lib/kubelet/seccomp/profiles/
 
-# Reference in pod:
+Example:
+  /var/lib/kubelet/seccomp/profiles/my-profile.json
+```
+
+Use this pod-level snippet to reference that file path:
+
+```yaml
 seccompProfile:
   type: Localhost
   localhostProfile: profiles/my-profile.json
@@ -291,6 +296,28 @@ Kubernetes scheduling makes that node dependency visible. A pod that references 
 Admission policy can reduce confusion by setting expectations before workloads reach the kubelet. A namespace policy might require `RuntimeDefault` for ordinary pods and allow only specific `Localhost` paths for approved teams. That policy does not distribute the files or prove the profile is correct, but it prevents the easiest failure: a manifest that accidentally disables seccomp. In mature clusters, seccomp policy, capability policy, privilege settings, and host path restrictions are reviewed together because they describe the same workload boundary from different angles.
 
 ```bash
+# Set the alias used by this section's commands
+alias k=kubectl
+
+# Create a manifest for the local profile example
+cat > secure-pod.yaml << 'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-pod
+spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault    # Use container runtime's default
+  containers:
+  - name: app
+    image: nginx
+    securityContext:
+      seccompProfile:
+        type: Localhost
+        localhostProfile: profiles/my-profile.json
+EOF
+
 # Apply a Kubernetes manifest that uses seccompProfile.
 k apply -f secure-pod.yaml
 
@@ -300,6 +327,8 @@ k get pod secure-pod -o yaml | sed -n '/seccompProfile:/,+4p'
 # Check the process status from inside the container when the image has grep.
 k exec secure-pod -- grep Seccomp /proc/1/status
 ```
+
+Note: the `Localhost` profile file must already exist on each target node or the pod fails with `CreateContainerError`.
 
 These commands intentionally verify both the declared Kubernetes object and the process-level result. The object tells you what you asked Kubernetes to run. The process status tells you whether the kernel actually attached a filter to the container init process. During a real incident, that distinction can save hours because a manifest review alone cannot reveal a missing local profile file or a runtime configuration problem on one node.
 
@@ -398,9 +427,8 @@ The fastest debugging path starts by separating three failure classes. A process
 sudo dmesg | grep -i seccomp
 
 # Example output:
-# audit: type=1326 audit(...): avc:  denied  { sys_admin }
-#   for  pid=1234 comm="myapp" syscall=157 compat=0
-#   syscall=157 → look up in syscall table
+# audit: type=1326 audit(...): arch=c000003e syscall=157 code=0x00000000 sig=0x0 comm="myapp" pid=1234
+#   → translate syscall=157 in architecture-specific tables to identify the blocked call
 
 # Look up syscall number
 ausyscall 157
@@ -495,10 +523,10 @@ Finally, review seccomp together with runtime observability. If the only way to 
 
 ## Did You Know?
 
-- **Linux has over 300 system calls** — seccomp can filter any of them. Most applications use fewer than 100.
+- **Linux has over 300 system calls** — seccomp can filter any of them. Most processes need only a small subset of the ~300+ syscalls.
 - **seccomp-bpf uses Berkeley Packet Filter** — The same technology used for network packet filtering is used to filter syscalls. It's incredibly efficient.
 - **Chrome was an early seccomp adopter** — Google implemented seccomp in Chrome's sandbox in 2012 to protect against renderer exploits.
-- **A seccomp violation is fatal by default** — Unlike AppArmor (returns error), seccomp typically kills the process. This makes debugging harder but security tighter.
+- **A seccomp violation is not always fatal** — Docker's default profile uses `SCMP_ACT_ERRNO`, which returns an error (typically `EPERM`) instead of killing the container. A seccomp profile with a kill action can make violations fatal.
 
 ## Common Mistakes
 
@@ -626,7 +654,7 @@ cat > /tmp/restrictive.json << 'EOF'
 }
 EOF
 
-# 2. Test ls (should work)
+# 2. Run a startup-heavy command intentionally with a very narrow profile
 docker run --rm --security-opt seccomp=/tmp/restrictive.json alpine ls /
 
 # 3. Test something more complex (might fail)
@@ -634,7 +662,7 @@ docker run --rm --security-opt seccomp=/tmp/restrictive.json alpine ping -c 1 12
 # May fail due to missing syscalls
 ```
 
-This profile is intentionally tight enough to teach the debugging workflow. If `ls` fails on your distribution, use the failure as evidence rather than as a surprise, because the base image and runtime may need additional syscalls. If `ping` fails, identify whether the missing behavior relates to sockets, privileges, name resolution, or another runtime setup path.
+This profile is intentionally tight enough to teach the debugging workflow by exposing startup-surface gaps. On many runtimes `ls` is a useful failure signal: if it fails, that confirms startup syscalls are being filtered and you should treat it as expected evidence, not a regression in the exercise. If `ping` fails, identify whether the missing behavior relates to sockets, privileges, name resolution, or another runtime setup path.
 
 #### Part 4: Audit Mode
 
@@ -698,7 +726,7 @@ The default run should report filter mode, and the unconfined run should report 
 
 <details><summary>Part 3 solution</summary>
 
-`ls /` may succeed because the profile includes enough file, memory, and process-exit syscalls for that simple command on many systems. `ping` may fail because it needs additional socket behavior or privileges that the profile does not allow. The correct next step is to inspect the denial and decide whether the workload you actually care about should ever need the missing syscall.
+`ls /` may fail with this restrictive profile if startup syscalls are not all present; this is a useful result because it proves a minimal allowlist can block ordinary process startup behavior. `ping` may fail because it needs additional socket behavior or privileges that the profile does not allow. The correct next step is to inspect the denial and decide whether the workload you actually care about should ever need the missing syscall.
 
 </details>
 
