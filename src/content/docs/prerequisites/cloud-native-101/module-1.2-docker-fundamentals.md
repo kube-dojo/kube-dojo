@@ -318,7 +318,7 @@ Record the Python dependency in `requirements.txt` so dependency installation ca
 flask==3.0.0
 ```
 
-> **Stop and think**: A developer once typed `docker build .` in their home directory instead of the project directory. Because they lacked a `.dockerignore` file, Docker dutifully attempted to copy their entire `Documents`, `Downloads`, and `Pictures` folders into the Docker build context. The build hung for 20 minutes before crashing the machine's memory, which is why build context should be treated as part of the artifact design rather than a harmless default.
+> **Stop and think**: If you run `docker build .` in your home directory without a `.dockerignore`, Docker will try to copy everything — Documents, Downloads, Pictures — into the build context, which can hang the build and exhaust memory. That's why build context belongs in your artifact design, not left to default.
 
 Now create the Dockerfile for the application image, keeping the dependency copy before the source copy so normal code edits do not reinstall Flask.
 ```dockerfile
