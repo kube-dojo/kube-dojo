@@ -203,15 +203,19 @@ check_pods() {
 
     # Count by status
     echo "=== Pod Status Summary ==="
-    kubectl get pods $namespace --no-headers | awk '{print $3}' | sort | uniq -c | sort -rn
+    kubectl get pods $namespace --no-headers -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' \
+        | awk '{print $3}' | sort | uniq -c | sort -rn
 
     # List non-running pods
-    local unhealthy=$(kubectl get pods $namespace --no-headers | awk '$3 != "Running" && $3 != "Completed" {print $1}')
+    local unhealthy=$(kubectl get pods $namespace --no-headers -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase' \
+        | awk '$3 != "Running" && $3 != "Completed" {print $1,$2}')
 
     if [[ -n "$unhealthy" ]]; then
         echo ""
         echo "=== Unhealthy Pods ==="
-        kubectl get pods $namespace | grep -E "^NAME|$(echo $unhealthy | tr ' ' '|')"
+        printf '%s\n' "$unhealthy" | while IFS=' ' read -r ns pod; do
+            kubectl get pod -n "$ns" "$pod"
+        done
         return 1
     fi
 
@@ -232,6 +236,10 @@ Services create another diagnostic layer because running pods do not guarantee r
 set -euo pipefail
 
 check_service() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: check_service <service> [namespace]" >&2
+        return 1
+    fi
     local service=$1
     local namespace=${2:-default}
 
@@ -254,7 +262,7 @@ check_service() {
 
     echo "Endpoints: $endpoints"
 
-    # Try to connect (from inside cluster)
+    # Print connection details
     local cluster_ip=$(kubectl get svc "$service" -n "$namespace" -o jsonpath='{.spec.clusterIP}')
     local port=$(kubectl get svc "$service" -n "$namespace" -o jsonpath='{.spec.ports[0].port}')
 
@@ -287,19 +295,21 @@ resource_report() {
     echo ""
 
     echo "=== Deployments ==="
-    kubectl get deployments $namespace --no-headers | \
+    kubectl get deployments $namespace --no-headers \
+        -o custom-columns='NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas' | \
         awk '{printf "%-40s %s/%s\n", $1, $2, $3}'
     echo ""
 
     echo "=== PVCs ==="
-    kubectl get pvc $namespace --no-headers | \
-        awk '{printf "%-40s %-10s %s\n", $1, $4, $3}'
+    kubectl get pvc $namespace --no-headers \
+        -o custom-columns='NAME:.metadata.name,CAPACITY:.status.capacity.storage,STATUS:.status.phase' | \
+        awk '{printf "%-40s %-10s %s\n", $1, $2, $3}'
 }
 
 resource_report "$@"
 ```
 
-A practical war story illustrates why these small checks matter. A platform team once spent an hour investigating an intermittent checkout outage because every application pod looked Running when viewed one namespace at a time. A scripted report made the pattern obvious: the affected pods were spread across two nodes that had recently crossed disk-pressure thresholds, and image garbage collection was constantly competing with fresh pulls. The fix was not in the application at all. The value of the script was that it compared signals across layers instead of staring at one pod.
+A practical war story illustrates why these small checks matter. **Hypothetical scenario:** a platform team once spent an hour investigating an intermittent checkout outage because every application pod looked Running when viewed one namespace at a time. A scripted report made the pattern obvious: the affected pods were spread across two nodes that had recently crossed disk-pressure thresholds, and image garbage collection was constantly competing with fresh pulls. The fix was not in the application at all. The value of the script was that it compared signals across layers instead of staring at one pod.
 
 Health automation also changes team behavior because it makes evidence cheap. When evidence is expensive, people argue from memory, screenshots, and the last command they happened to run. When evidence is cheap, the team can ask better questions: which namespaces have the same symptom, whether the unhealthy pods share a node, whether Services lost endpoints before or after a rollout, and whether resource pressure appeared before errors increased. The script does not answer every question, but it creates a dependable starting dataset.
 
@@ -344,6 +354,10 @@ Rollback logic should be explicit rather than implied by a pipeline platform. Ma
 set -euo pipefail
 
 deploy() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: deploy <image> [deployment] [namespace]" >&2
+        return 1
+    fi
     local image=$1
     local deployment=${2:-app}
     local namespace=${3:-default}
@@ -422,6 +436,10 @@ The most important thing in this diagram is that the Service selector is the fin
 set -euo pipefail
 
 blue_green_deploy() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: blue_green_deploy <app> <new_image> [namespace]" >&2
+        return 1
+    fi
     local app=$1
     local new_image=$2
     local namespace=${3:-default}
@@ -570,20 +588,9 @@ find_errors() {
 
     echo "Finding errors in pods..."
 
-    local pods=$(kubectl get pods $namespace -o name)
-
-    for pod in $pods; do
-        local ns_args="$namespace"
-        local pod_name="$pod"
-        
-        # If querying all namespaces, extract the namespace from the pod string
-        if [[ "$namespace" == "--all-namespaces" || "$namespace" == "-A" ]]; then
-            local extracted_ns=$(echo "$pod" | cut -d/ -f2)
-            pod_name=$(echo "$pod" | cut -d/ -f3)
-            ns_args="-n $extracted_ns"
-        fi
-
-        local errors=$(kubectl logs "$pod_name" $ns_args --since="$since" 2>/dev/null | \
+    while IFS=' ' read -r pod_namespace pod_name; do
+        [[ -z "$pod_namespace" || -z "$pod_name" ]] && continue
+        local errors=$(kubectl logs "$pod_name" -n "$pod_namespace" --since="$since" 2>/dev/null | \
             grep -iE "error|exception|fatal|panic" | head -5)
 
         if [[ -n "$errors" ]]; then
@@ -591,7 +598,8 @@ find_errors() {
             echo "$errors"
             echo ""
         fi
-    done
+    done < <(kubectl get pods "$namespace" --no-headers \
+        -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name')
 }
 
 find_errors "$@"
@@ -622,7 +630,7 @@ bump_version() {
     case $type in
         major) ((major++)); minor=0; patch=0 ;;
         minor) ((minor++)); patch=0 ;;
-        patch) ((patch++)) ;;
+        patch) ((++patch)) ;;
         *) echo "Unknown type: $type"; return 1 ;;
     esac
 
@@ -740,7 +748,7 @@ backup_secrets() {
         echo "Backing up: $name"
 
         kubectl get "$secret" -n "$namespace" -o yaml | \
-            grep -v "resourceVersion\|uid\|creationTimestamp" > \
+            grep -vE "resourceVersion|uid|creationTimestamp" > \
             "${backup_dir}/${namespace}-${name}.yaml"
     done
 
@@ -1039,18 +1047,9 @@ echo "Since: $since"
 echo ""
 
 found=0
-for pod in $(kubectl get pods $namespace -o name); do
-    # Get namespace if all namespaces
-    if [[ "$namespace" == "--all-namespaces" || "$namespace" == "-A" ]]; then
-        ns=$(echo "$pod" | cut -d'/' -f2)
-        pod_name=$(echo "$pod" | cut -d'/' -f3)
-        ns_flag="-n $ns"
-    else
-        pod_name=$(basename "$pod")
-        ns_flag="$namespace"
-    fi
-
-    matches=$(kubectl logs "$pod_name" $ns_flag --since="$since" 2>/dev/null | \
+kubectl get pods "$namespace" --no-headers -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name' | \
+while IFS=' ' read -r ns pod_name; do
+    matches=$(kubectl logs "$pod_name" -n "$ns" --since="$since" 2>/dev/null | \
         grep -i "$pattern" | head -5 || true)
 
     if [[ -n "$matches" ]]; then
