@@ -9,7 +9,7 @@ revision_pending: false
 >
 > **Time to Complete**: 35 minutes
 >
-> **Prerequisites**: [Module 0.7 - Servers and SSH](/prerequisites/zero-to-terminal/module-0.8-servers-and-ssh/)
+> **Prerequisites**: [Module 0.8 - Servers and SSH](/prerequisites/zero-to-terminal/module-0.8-servers-and-ssh/)
 
 ---
 
@@ -124,7 +124,7 @@ AWS launched its early public cloud services in 2006 and became the reference po
 
 ```
 - The first major cloud provider (launched 2006)
-- As of Q4 2025, Synergy Research Group and Canalys both still placed AWS first by public-cloud revenue
+- AWS is generally the largest public cloud by revenue, with Microsoft Azure and Google Cloud the other two leaders
 - The "original" -- many companies' first cloud platform
 - Kitchen analogy: The biggest chain, the one everyone knows
 ```
@@ -259,8 +259,9 @@ Kubernetes belongs at the end of this beginner path because it manages the compl
 Module 0.1: You learned about one computer (one kitchen)
 Module 0.3: You learned to give commands to that kitchen
 Module 0.5: You learned to write instructions (recipes/scripts)
-Module 0.7: You learned to connect to remote kitchens
-Module 0.9: You learned that the cloud has THOUSANDS of kitchens for rent
+Module 0.8: You learned to connect to remote kitchens (servers and SSH)
+Module 0.9: You learned to install software and manage packages on those kitchens
+Module 0.10: You learned that the cloud has THOUSANDS of kitchens for rent
 
 NOW: Kubernetes is the system that manages all of those kitchens.
 ```
@@ -295,16 +296,17 @@ Kubernetes also shows why abstraction is useful but never free. A Deployment can
 You have also reached the point where the Zero to Terminal track turns into cloud-native work. The next modules will introduce containers, Docker fundamentals, Kubernetes basics, and eventually certification-oriented skills. Those topics will add commands and objects, but the foundation remains the same: software runs on computers, computers need storage and networks, and reliable systems require deliberate operating models.
 
 ```
-Zero to Terminal (YOU ARE HERE -- COMPLETE!)
+Zero to Terminal (YOU ARE HERE -- almost done!)
   ✓ Understand computers
   ✓ Use the terminal
   ✓ Edit files
   ✓ Understand servers and SSH
   ✓ Understand cloud computing
+  → Capstone next: Module 0.11 (Your First Server)
 
         ↓
 
-Cloud Native 101 (NEXT)
+Cloud Native 101 (after Zero to Terminal)
   → What are containers?
   → Docker fundamentals
   → What is Kubernetes?
