@@ -106,11 +106,13 @@ create_server web-1
 ensure_server_exists web-1
 ```
 
-Idempotency is the property that makes repeated runs safe. If an operation is idempotent, running it again has the same final effect as running it once. That does not mean nothing happens internally, and it does not mean every change is harmless. It means the tool is designed around the final desired state rather than around blindly replaying an action history.
+Idempotency is the property that makes repeated runs safe. If an operation is idempotent, running it again has the same final effect as running it once. That does not mean nothing happens internally, and it does not mean every change is harmless. It means the tool is designed around the final desired state rather than around blindly replaying an action history. The combination of declarative files and idempotent convergence is what makes drift visible instead of invisible. When the declared world says three replicas and the live world shows five, a declarative tool treats that mismatch as a problem to resolve or review, whereas an imperative script that only ever says "create three pods" may never notice that someone scaled manually in between runs.
+
+Review-as-code is the social payoff of that technical model. A pull request against a Terraform module or a Kubernetes manifest shows reviewers the intended end state, not a fragile sequence of shell commands whose side effects depend on what already existed when the script started. Reviewers can ask whether a security group should expose port 22, whether a database should be replaced, or whether a replica count matches capacity planning, because the diff describes shape rather than choreography. That review model also improves reproducibility: the same commit applied to a fresh account or an empty namespace should converge toward the same architecture, which is how teams rebuild staging after a mistake or clone production patterns into a new region without rediscovering steps from memory.
 
 > **Pause and predict**: If an imperative bash script creates a Linux user and the pipeline crashes just after the user is created, what happens when the pipeline retries from the beginning? What would an idempotent configuration tool try to prove before making another change?
 
-Version control completes the model because it records the evolution of intent. A plan file or Kubernetes manifest sitting on one laptop is better than memory, but it is still not a team system. Once infrastructure definitions live in Git, ordinary engineering tools become available: pull requests for review, commit history for audit, tags for releases, and diffs for incident investigation.
+Version control completes the model because it records the evolution of intent. A Terraform/OpenTofu configuration file or Kubernetes manifest sitting on one laptop is better than memory, but it is still not a team system. Once infrastructure definitions live in Git, ordinary engineering tools become available: pull requests for review, commit history for audit, tags for releases, and diffs for incident investigation.
 
 ```bash
 git log --oneline infrastructure/
@@ -123,7 +125,11 @@ ghi789 Initial infrastructure setup
 
 The operational promise is simple: if production changed, the team should be able to point to the commit, review, pipeline run, or emergency exception that changed it. When that promise is true, infrastructure becomes easier to reason about during stress. When that promise is false, the team is back to detective work across terminals, chat messages, and console history.
 
-State is the part of this promise that beginners often underestimate. A tool cannot compare desired and actual infrastructure unless it has a way to identify the resources it owns and the attributes it last observed. Terraform and OpenTofu commonly store that knowledge in state, Kubernetes stores desired objects in the API server, and configuration tools often infer state from the target machine during each run. The implementation differs, but the operational question is the same: how does the tool know whether it should create, update, leave alone, or delete something?
+State is the part of this promise that beginners often underestimate. A tool cannot compare desired and actual infrastructure unless it has a way to identify the resources it owns and the attributes it last observed. Terraform and OpenTofu commonly store that knowledge in a state file or remote state backend, Kubernetes accepts desired objects through the API server and persists them in etcd, and configuration tools such as Ansible often infer state from the target machine during each run. The implementation differs, but the operational question is the same: how does the tool know whether it should create, update, leave alone, or delete something?
+
+A Terraform-style state file is not a second copy of your configuration. It is the tool's memory of reality: cloud resource IDs, dependency relationships, attributes returned by provider APIs, and sometimes sensitive values that providers echo back during creation. Configuration files describe intent; state records what the tool believes already exists so the next plan can compute a delta instead of guessing from scratch. Without that mapping, `terraform apply` would not know that `aws_instance.web` in your HCL corresponds to `i-0abc123` in AWS, and a harmless-looking argument change might accidentally create a duplicate resource instead of updating the original.
+
+That memory creates real operational risks if it is treated casually. Two engineers running `apply` against the same local state file can corrupt it or fork reality, which is why production teams use remote backends with locking so only one mutation proceeds at a time. State files can also contain secrets such as generated passwords or private keys returned by providers, so they belong in encrypted storage with tight access control, not in a shared chat attachment or an unencrypted object bucket. Losing state is its own failure mode: the resources may still exist in the cloud even though the tool no longer knows it manages them, and the recovery path usually involves import operations or careful archaeology rather than a simple re-apply. State drift is related but different: the file says one thing, the cloud console shows another because someone edited production manually, and the next plan surfaces that disagreement as something the team must resolve deliberately.
 
 This is also why IaC should not be treated as a collection of clever text files. The files, state, provider APIs, credentials, and pipeline permissions form one system. If the files are reviewed but the state is writable from a laptop, the workflow still has a weak point. If the state is locked but the cloud console remains open for routine production edits, the tool will keep discovering surprises. Mature IaC design includes both the code and the control plane around the code.
 
@@ -195,6 +201,14 @@ terraform plan      # Preview changes
 terraform apply     # Create infrastructure
 terraform destroy   # Tear it all down
 ```
+
+The plan/apply loop is the operational heart of Terraform-style IaC, and it mirrors the reconciliation pattern you will see again in Kubernetes and later in GitOps controllers. `plan` reads configuration, reads state, queries provider APIs, and produces a human-readable delta: create this subnet, update that tag, replace this database because an immutable field changed. No remote infrastructure changes are carried out during `plan`; Terraform still reads remote objects and refreshes/synchronizes state information before proposing actions, which is why plan belongs in pull requests and CI jobs before anyone approves production work. `apply` executes that delta and then writes the new observed reality back into state so the next plan starts from an accurate baseline. The loop is intentionally boring when things are healthy: plan shows no changes, apply confirms convergence, and the team trusts that live infrastructure still matches reviewed intent.
+
+Kubernetes uses the same reconcile-to-desired-state idea with different machinery. When you run `kubectl apply -f deployment.yaml`, you are not issuing a one-time imperative command; you are declaring an object in the API server, and controllers such as the Deployment controller continuously compare desired spec with observed status until they match. A GitOps tool such as Argo CD or Flux extends that pattern one step outward: Git holds the desired manifests, the controller inside the cluster watches Git, diffs the live API objects against the desired source and reconciles the resources needed to bring the cluster back into sync. Module 1.2 explores that Git-driven layer in detail; for now, notice that plan-before-apply in Terraform and commit-before-sync in GitOps are both answers to the same question—how do we preview intent before mutating shared production?
+
+Architectural trade-offs sit underneath those workflows and often matter more than brand choice. Immutable infrastructure treats servers, nodes, or images as disposable: when configuration changes, you build a new artifact and replace the old instance rather than patching it in place. Mutable infrastructure keeps long-lived machines and applies incremental updates through SSH, package managers, or configuration management. Immutable patterns reduce snowflake drift because every replacement starts from a known image, but they require strong rollout, health-check, and rollback design. Mutable patterns can be faster for small teams with modest fleet sizes, yet they accumulate hand-tuned differences that become expensive to reproduce after an incident.
+
+Push and pull describe where deployment authority lives. In a push model, an external system such as a CI pipeline holds credentials that can mutate the cluster or cloud account and applies changes when a job runs. In a pull model, an agent inside the environment watches a trusted source such as Git and reconciles locally, which narrows external credential exposure. Terraform/OpenTofu pipelines are usually push-oriented at the cloud API boundary, while GitOps controllers are pull-oriented at the Kubernetes boundary; many real platforms combine both deliberately. Composition through modules, Helm charts, Kustomize bases, or Pulumi packages is how teams reuse those patterns without copy-pasting entire environments: shared logic lives once, and each environment supplies only the values that should differ.
 
 | Feature | Terraform / OpenTofu | CloudFormation |
 |---------|----------------------|----------------|
@@ -268,8 +282,9 @@ For the rest of this module, use the full `kubectl` command so the examples rema
 kubectl version --client
 ```
 
-```yaml
-# deployment.yaml - Desired state
+```bash
+# Write desired state, then apply it
+cat <<'EOF' > deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -287,19 +302,17 @@ spec:
       containers:
       - name: nginx
         image: nginx:1.27
-```
+EOF
 
-```bash
-# Apply desired state
 kubectl apply -f deployment.yaml
 
 # Kubernetes reconciles actual state to match desired state
 # This is IaC in action.
 ```
 
-Notice what the manifest does not say. It does not tell Kubernetes which node should run each pod, which exact ReplicaSet name to create, or which internal sequence of API updates should happen first. It states that the desired world contains a Deployment named `web` with 3 replicas of `nginx:1.27`, and Kubernetes calculates the work needed to make the cluster match.
+Notice what the manifest does not say. It does not tell Kubernetes which node should run each pod, which exact ReplicaSet name to create, or which internal sequence of API updates should happen first. It states that the desired world contains a Deployment named `web` with 3 replicas of `nginx:1.27`, and Kubernetes calculates the work needed to make the cluster match. That separation is the same reason Terraform plans are useful: the author declares outcomes, and the control plane figures out the steps. When you later adopt GitOps, the Git commit becomes the reviewed declaration, the controller becomes the reconciler, and drift detection becomes a comparison between Git and the API rather than between a laptop command and memory.
 
-That distinction becomes useful during failure. If a node dies, the desired state still says 3 replicas should exist, so Kubernetes schedules replacement pods. If someone deletes a pod by hand, the controller creates another one because the Deployment still demands it. If you apply the same manifest again, Kubernetes sees that the desired and actual states already match, so the command becomes a safe confirmation rather than a duplicate deployment.
+That distinction becomes useful during failure. If a node dies, the desired state still says 3 replicas should exist, so Kubernetes schedules replacement pods. If someone deletes a pod by hand, the controller creates another one because the Deployment still demands it. If you apply the same manifest again, Kubernetes sees that the desired and actual states already match, so the command becomes a safe confirmation rather than a duplicate deployment. Hypothetical scenario: a team scales a Deployment with `kubectl scale` during an incident but never updates the manifest in Git; the cluster temporarily matches operational need, yet the repository still declares the old replica count. The next GitOps sync or a repeated `kubectl apply` from the file would scale back down unless the team backports the emergency change into code, which is exactly the drift discipline this module keeps emphasizing.
 
 Kubernetes can still be used in a non-IaC way. Commands such as `kubectl run`, `kubectl edit`, and direct console changes can be appropriate for learning or emergency diagnosis, but they are dangerous as the normal path to production. The object may exist in the cluster, yet the repository does not explain it. The mature workflow is to convert discoveries into manifests, review those manifests, and let automation apply them consistently.
 
@@ -311,7 +324,7 @@ Kubernetes also teaches the difference between the declared object and the gener
 
 A useful IaC repository is more than a dumping ground for YAML and HCL. It needs to help readers answer three questions quickly: what resources exist, which environment they belong to, and which shared components they reuse. If the layout makes those questions hard, engineers will copy files, patch production directly, or invent local conventions because the official structure feels slower than the console.
 
-```bash
+```text
 infrastructure/
 ├── terraform/
 │   ├── main.tf
@@ -326,7 +339,7 @@ infrastructure/
 
 The first baseline is simple: everything that defines infrastructure should be in Git unless there is a deliberate exception with a clear owner. That includes cloud resources, Kubernetes manifests, machine configuration, policy definitions, and the scripts that glue deployment steps together. Secrets should not be committed as plaintext, but the reference to the secret manager, secret name, or sealed secret mechanism should still be represented in code.
 
-Reusable modules solve the next problem, which is duplication disguised as clarity. If every environment has a full copy of every resource definition, staging and production will eventually diverge in accidental ways. A better pattern is to keep shared behavior in modules or bases, then let each environment supply the values that genuinely differ, such as size, replica count, region, or feature flags.
+Reusable modules solve the next problem, which is duplication disguised as clarity. If every environment has a full copy of every resource definition, staging and production will eventually diverge in accidental ways. A better pattern is to keep shared behavior in modules or bases, then let each environment supply the values that genuinely differ, such as size, replica count, region, or feature flags. Composition beats copy-paste because a bug fix or security hardening change propagates through the shared module instead of requiring an engineer to remember three nearly identical folders. The trade-off is abstraction cost: a module that hides too much becomes harder to review, so good module design exposes the inputs that actually change risk—instance size, exposure, encryption, backup retention—while keeping boilerplate invisible.
 
 ```hcl
 # Don't repeat yourself
@@ -345,7 +358,7 @@ module "api_server" {
 }
 ```
 
-```bash
+```text
 environments/
 ├── dev/
 │   └── main.tf      # Small instances, single replica
