@@ -26,7 +26,7 @@ sidebar:
 
 ## Why This Module Matters
 
-The payment gateway went down at 2:00 PM on the busiest shopping day of the year. Dashboards turned red across the operations room while the checkout API returned HTTP 503 responses to thousands of customers per minute. The first symptom looked ordinary: the `payment-processing` Deployment lacked an environment variable needed to authenticate with a newly provisioned database cluster. The confusing part was that every deployment job had succeeded, the infrastructure repository already contained the variable, and the live pods still did not.
+Hypothetical scenario: the payment gateway went down at 2:00 PM on the busiest shopping day of the year. Dashboards turned red across the operations room while the checkout API returned HTTP 503 responses to thousands of customers per minute. The first symptom looked ordinary: the `payment-processing` Deployment lacked an environment variable needed to authenticate with a newly provisioned database cluster. The confusing part was that every deployment job had succeeded, the infrastructure repository already contained the variable, and the live pods still did not.
 
 The team reconstructed the incident and found the uncomfortable cause. Three days earlier, an engineer had been chasing a production resource exhaustion problem under intense time pressure. They opened a terminal, edited the live Deployment directly, and accidentally replaced part of the pending database configuration while testing a quick change. They intended to follow up in Git, then moved to the next incident thread and forgot. Because the old push pipeline only touched the cluster after a new commit triggered it, the cluster quietly drifted away from the repository until the legacy database was decommissioned and the missing variable became a customer-facing outage.
 
@@ -250,9 +250,9 @@ Commit signing is the first part of identity. A normal Git author line is easy t
 
 ```bash
 # Configuring Git to sign commits using an SSH key
-git config --global gpg.format ssh
-git config --global user.signingkey ~/.ssh/id_ed25519.pub
-git config --global commit.gpgsign true
+git config --local gpg.format ssh
+git config --local user.signingkey ~/.ssh/id_ed25519.pub
+git config --local commit.gpgsign true
 
 # Creating a signed commit (Git automatically uses the configured key)
 git commit -S -m "feat: enforce network policies in production"
@@ -291,9 +291,9 @@ The operational differences are stark when you compare the two models across com
 
 | Security Vector | Traditional CI/CD (Push) | Zero-Trust GitOps (Pull) |
 | :--- | :--- | :--- |
-| **Cluster Credentials** | Stored externally in CI servers; high risk of exfiltration. | Stored exclusively inside the cluster; never leave the boundary. |
-| **Auditability** | Difficult; requires cross-referencing CI logs, Git history, and cluster audit logs. | Absolute; `git log` provides a mathematically proven, exact history of all cluster states. |
-| **Drift Prevention** | Weak; manual cluster changes can persist indefinitely until overwritten. | Strong; operator continuously overwrites manual changes with Git truth within minutes. |
+| **Cluster Credentials** | Stored externally in CI servers; high risk of exfiltration. | Routine production mutation credentials stay in-cluster; CI no longer needs a cluster-admin kubeconfig for deploys (GitOps controllers still use outbound credentials to pull Git). |
+| **Auditability** | Difficult; requires cross-referencing CI logs, Git history, and cluster audit logs. | Strong; Git provides an immutable, cryptographically linked audit trail of declared desired-state changes (commit-object integrity, not live cluster state). |
+| **Drift Prevention** | Weak; manual cluster changes can persist indefinitely until overwritten. | Strong when automated sync and self-heal are enabled; the operator can overwrite manual changes with Git truth within minutes. |
 | **Authorization** | Relies on complex CI system permissions mapping to Kubernetes RBAC. | Relies entirely on Git repository permissions and branch protection rules. |
 
 Secrets require special treatment because "everything in Git" is not the same as "everything in plaintext Git." Kubernetes Secret manifests are only base64-encoded, not encrypted, and Git history preserves mistakes long after a file is removed. GitOps teams usually choose one of two patterns: encrypted secrets in Git using a tool such as SOPS, or secret references in Git using an operator that fetches values from a managed secret store at runtime. Both patterns keep the deployment declarative without turning the repository into a password archive.
@@ -308,7 +308,7 @@ State drift means the live cluster differs from the desired state in Git. Drift 
 
 A disciplined investigation follows the path of intent. First, confirm which repository revision the operator is watching and whether that revision contains the expected change. Second, render or inspect the overlay that should produce the final object. Third, inspect the GitOps application status and events. Fourth, compare the live object only after you know what the operator believes it should apply. This order prevents a common mistake where engineers stare at the live Deployment for ten minutes while the real error is a broken Kustomize path.
 
-For an Argo CD managed application, the first useful command is a description of the Application resource. The output can show whether the app is synced, out of sync, healthy, degraded, or blocked by a rendering error. In a real investigation, you might run `kubectl describe application frontend-production -n gitops-system`, then inspect events with `kubectl get events -n gitops-system --field-selector involvedObject.name=frontend-production`, and finally read controller logs with `kubectl logs -n gitops-system deployment/argocd-application-controller`.
+For an Argo CD managed application, the first useful command is a description of the Application resource. The output can show whether the app is synced, out of sync, healthy, degraded, or blocked by a rendering error. In a real investigation, you might run `kubectl describe application frontend-production -n gitops-system`, then inspect events with `kubectl get events -n gitops-system --field-selector involvedObject.name=frontend-production`, and finally read controller logs with `kubectl logs -n gitops-system statefulset/argocd-application-controller`.
 
 Flux exposes similar information through its custom resources and controller logs. A Flux `Kustomization` reports the last attempted revision, conditions, and reconciliation failures. The exact object names differ from Argo CD, but the thinking is the same: inspect the controller resource, inspect its events, and inspect its logs before assuming the cluster object itself is the root cause.
 
@@ -437,7 +437,7 @@ git init
 
 ### Task 1: Establish the Base Architecture
 
-Create the directory structure for a `catalog-api` application with a base configuration and two environment overlays: `staging` and `production`. This first step is intentionally small because the directory layout is the design contract that all later patches depend on.
+Create the directory structure for a `catalog-api` application with a base configuration and two environment overlays: `staging` and `prod`. This first step is intentionally small because the directory layout is the design contract that all later patches depend on.
 
 <details>
 <summary>Solution</summary>

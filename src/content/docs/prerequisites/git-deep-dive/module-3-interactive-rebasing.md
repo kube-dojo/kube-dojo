@@ -350,7 +350,7 @@ When the decision involves sensitive data, add one more question: has the value 
 
 ## Did You Know?
 
-- Git 1.7.0, released in 2010, added autosquash support with `--fixup` and `--squash` workflows that later became central to fast interactive cleanup.
+- The Git 1.7 series (early 1.7-era releases around 2010) introduced `--fixup` and `--squash` commit options; autosquash in interactive rebase matured across that same 1.7 line and later became central to fast interactive cleanup.
 - Git stores rewritten commits as new objects, and the default reflog expiration policy often keeps reachable reflog entries for 90 days, giving you a recovery window after many local mistakes.
 - The Linux kernel workflow strongly favors linear, reviewable patch series from contributors, which is one reason rebasing and patch cleanup are treated as everyday engineering skills in that ecosystem.
 - `git rebase --exec` can run a command after each replayed commit, so a fast manifest check can catch the exact commit that first breaks a Kubernetes 1.35+ deployment example.

@@ -131,7 +131,7 @@ Here is a small practice workflow that focuses on the untracked-file trap. It us
 
 ```bash
 mkdir stash-practice && cd stash-practice
-git init
+git init -b main
 ```
 
 Create an initial commit so the repository has a clean baseline. Git stash depends on a repository with commits because it needs a `HEAD` commit as the reference point for the saved changes. In a brand-new repository with no commit, many normal history operations do not yet have a stable anchor.
@@ -166,6 +166,12 @@ Finally, restore with `apply` rather than `pop`. The working tree gets the chang
 
 ```bash
 git stash apply stash@{0}
+```
+
+When you are finished experimenting, remove the throwaway directory:
+
+```bash
+cd ../.. && rm -r stash-practice
 ```
 
 ## The Power of Git Worktrees
@@ -385,7 +391,7 @@ Start in a temporary directory so the practice repository can be deleted when yo
 
 ```bash
 mkdir k8s-fleet-manager && cd k8s-fleet-manager
-git init
+git init -b main
 ```
 
 Create the stable base state. This manifest is intentionally minimal so the difference between production and unfinished feature work is easy to see. Commit it before starting the feature branch because the hotfix worktree needs a real `main` commit as its starting point.

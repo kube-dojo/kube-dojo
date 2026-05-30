@@ -89,19 +89,16 @@ The critical implementation detail is that a commit records the staging area, no
 Begin by inspecting the local hooks directory. Git creates sample hook files in `.git/hooks`, but their `.sample` suffix means Git will not run them. The active hook must be named exactly after the hook phase, with no extension, and the file must be executable according to the operating system.
 
 ```bash
-# Navigate to the hidden hooks directory
-cd .git/hooks
-
-# Inspect the default samples provided by Git
-ls -l
+# Inspect the default sample hooks Git ships (inactive until copied to exact names)
+ls -l .git/hooks
 ```
 
 Before running this, predict what you expect to see in a new repository. You should see sample files such as `pre-commit.sample`, `commit-msg.sample`, and `pre-push.sample`, but Git ignores them until you create files with the exact active names. That naming rule matters because a hook called `pre-commit.py` can be perfectly executable and still never run.
 
 ```bash
 # Create the file and grant it execute permissions
-touch pre-commit
-chmod +x pre-commit
+touch .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
 ```
 
 The hook below implements two phases. First it identifies staged files that were added, copied, or modified, then it lints staged YAML content by streaming the index version through `git show ":$FILE"`. Second it scans staged blobs for simple credential-shaped markers. The credential pattern is intentionally basic for teaching; production teams should use a maintained scanner such as Gitleaks, TruffleHog, or a hosted secret-scanning service in addition to any local hook.
@@ -149,8 +146,8 @@ while IFS= read -r -d '' FILE; do
     # Search the staged blob content for a regex of forbidden, high-risk keywords.
     # Note: This is a simplistic regex for educational illustration. Real-world
     # production setups should utilize dedicated engines like TruffleHog or Gitleaks.
-    if git show ":$FILE" | grep -iE 'password\s*[:=]|secret\s*[:=]|api_key|aws_access_key_id'; then
-        echo "FATAL: Potential hardcoded secret identified within -> $FILE"
+    if git show ":$FILE" | grep -qiE 'password\s*[:=]|secret\s*[:=]|api_key|aws_access_key_id'; then
+        echo "blocked: potential secret in $FILE"
         ERROR_FOUND=1
     fi
 done < <(git diff --cached --name-only --diff-filter=ACM -z)
@@ -241,8 +238,8 @@ The following hook reads the commit message from the file path supplied as the f
 #!/bin/bash
 # .git/hooks/commit-msg
 
-# The first argument ($1) passed to this specific script by Git is the absolute path
-# to a temporary hidden file containing the exact commit message the user just typed.
+# The first argument ($1) passed to this specific script by Git is the name/path of the
+# commit message file Git passes for this hook invocation.
 MESSAGE_FILE=$1
 MESSAGE=$(cat "$MESSAGE_FILE")
 
@@ -379,6 +376,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 The phrase `Recorded preimage` means rerere has captured the conflict side of the mapping. It has not yet learned the answer. You teach it the answer by editing the file to the correct resolved state, staging that result, and completing the merge or rebase step. Only then can Git record the postimage and reuse that resolution later.
 
 ```bash
+printf 'version: "2.0-beta"\n' > app-config.yaml
+git diff app-config.yaml   # confirm no <<<<<<< conflict markers remain
 git add app-config.yaml
 git commit -m "Merge feature branch"
 ```
@@ -434,10 +433,6 @@ The aliases below are intentionally practical for DevOps and SRE work. The log a
     # Perfect for when you forgot to add a critical file or made a typo in the message.
     undo = reset --soft HEAD~1
     
-    # Hard "Nuke" of your current working directory back to a completely clean slate.
-    # WARNING: Irreversibly destroys all uncommitted tracked and untracked changes.
-    nuke = !git clean -fd && git reset --hard && git checkout .
-    
     # Rapidly check which branches currently contain a specific commit hash
     contains = branch --contains
     
@@ -445,7 +440,7 @@ The aliases below are intentionally practical for DevOps and SRE work. The log a
     pub = push -u origin HEAD
 ```
 
-The `nuke` alias is included because it appears in many real-world dotfiles, but it deserves caution. It deletes untracked files and resets tracked changes, so it is appropriate only when the repository is disposable or when you have verified that no useful work remains. Powerful aliases should be named in a way that makes their danger obvious, and teams should avoid normalizing destructive shortcuts for beginners.
+**Anti-pattern — do not add a `nuke` alias to beginner dotfiles.** A common destructive shortcut is `nuke = !git clean -fd && git reset --hard && git checkout .`, which permanently deletes untracked files and discards local changes. If you must inspect what would be removed, run `git clean -nd` first (dry-run), verify the listed paths, and only then decide whether a destructive reset is justified.
 
 Global configuration changes can also shift default Git behavior. Setting `pull.rebase` to `true` makes `git pull` fetch and rebase instead of fetch and merge, which helps teams that prefer linear local history. Setting `push.default` to `current` lets `git push` publish the current branch to a remote branch with the same name. These defaults save time, but they also encode workflow choices, so document them when onboarding a team.
 
@@ -589,7 +584,7 @@ Hooks may run with a different PATH or shell environment than an interactive ter
 
 ## Hands-On Exercise
 
-In this exercise, you will set up a local Git template directory, build a reusable `pre-commit` hook, test it against staged content, and extend the workflow with a `commit-msg` hook. Use a throwaway workspace so every command is safe to experiment with. The exercise deliberately changes global Git configuration, so record the original `init.templatedir` value before starting if you already use one.
+In this exercise, you will set up a local Git template directory, build a reusable `pre-commit` hook, test it against staged content, and extend the workflow with a `commit-msg` hook. Use a throwaway workspace so every command is safe to experiment with. The exercise deliberately changes global Git configuration, so save your previous value first with `OLD_TEMPLATEDIR=$(git config --global --get init.templatedir || true)` and restore it when finished: run `git config --global init.templatedir "$OLD_TEMPLATEDIR"` if `OLD_TEMPLATEDIR` is non-empty, or `git config --global --unset init.templatedir` if it was unset.
 
 ```bash
 mkdir -p ~/git-hooks-lab
@@ -606,6 +601,7 @@ Create a template directory at `~/.git-templates/hooks`, configure Git to use it
 <summary><strong>Solution: Task 1</strong></summary>
 
 ```bash
+OLD_TEMPLATEDIR=$(git config --global --get init.templatedir || true)
 mkdir -p ~/.git-templates/hooks
 git config --global init.templatedir '~/.git-templates'
 ```
@@ -670,7 +666,7 @@ Create a completely new repository so Git copies the template hook into `.git/ho
 
 ```bash
 cd ~/git-hooks-lab
-git init k8s-manifests-repo
+git init -b main k8s-manifests-repo
 cd k8s-manifests-repo
 cat .git/hooks/pre-commit # You should clearly see your injected script logic!
 ```
@@ -683,6 +679,8 @@ git add aws-credentials.sh
 git commit -m "chore: add local aws credentials script"
 # Expected Output: FATAL: Hardcoded AWS secret string identified...
 # Followed by: COMMIT ABORTED: Quality gates failed.
+git restore --staged aws-credentials.sh
+rm -f aws-credentials.sh
 ```
 
 **Step 4: Test Strict File Size Limitation**
@@ -692,6 +690,8 @@ dd if=/dev/urandom of=massive_binary.bin bs=1M count=2
 git add massive_binary.bin
 git commit -m "chore: add massive database dump binary"
 # Expected Output: FATAL: File massive_binary.bin violates size constraints...
+git restore --staged massive_binary.bin
+rm -f massive_binary.bin
 ```
 
 **Step 5: Test Clean, Valid Commit Execution**
@@ -735,7 +735,15 @@ fi
 exit 0
 ```
 
-Test the implementation in your repository:
+Install the hook in the repository you already created (template changes do not retrofit existing repos):
+
+```bash
+cp ~/.git-templates/hooks/commit-msg k8s-manifests-repo/.git/hooks/commit-msg
+chmod +x k8s-manifests-repo/.git/hooks/commit-msg
+cd k8s-manifests-repo
+```
+
+Test the implementation:
 
 ```bash
 git commit -m "update readme" --allow-empty
@@ -766,6 +774,16 @@ Break the hook in one controlled way, such as removing execute permissions or re
 <summary><strong>Solution: Task 6</strong></summary>
 
 Run `mv .git/hooks/pre-commit .git/hooks/pre-commit.sh` and try a commit that should fail. Git will ignore the renamed file because it does not match the hook phase name. Move it back with `mv .git/hooks/pre-commit.sh .git/hooks/pre-commit`, then run `chmod +x .git/hooks/pre-commit`. If a hook still behaves unexpectedly, temporarily add `pwd`, `echo "$PATH"`, and `command -v yamllint` diagnostics near the top.
+
+Restore your previous template directory setting:
+
+```bash
+if [ -n "$OLD_TEMPLATEDIR" ]; then
+  git config --global init.templatedir "$OLD_TEMPLATEDIR"
+else
+  git config --global --unset init.templatedir
+fi
+```
 
 </details>
 

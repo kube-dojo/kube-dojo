@@ -250,6 +250,7 @@ A subtree makes the opposite trade-off. It brings external files into a director
 git remote add shared-crds https://git.example.com/shared-crds.git
 
 # Pull the shared repo into a specific directory using the subtree strategy
+# (`git subtree` is a contrib script shipped with Git; `man git-subtree` may be absent on minimal installs)
 git subtree add --prefix=manifests/crds shared-crds main --squash
 ```
 
@@ -328,7 +329,7 @@ A good rollout plan starts with one repository and one workflow rather than a si
 
 ## Did You Know?
 
-* **The Linux Kernel Repo:** The Linux kernel repository contains more than 1.2 million commits and roughly 80,000 tracked files, yet a properly optimized local clone can still make common status checks feel interactive on modern hardware.
+* **The Linux Kernel Repo:** The Linux kernel repository contains more than 1.2 million commits and roughly 90,000 tracked files, yet a properly optimized local clone can still make common status checks feel interactive on modern hardware.
 * **Git LFS Origins:** Git LFS was announced by GitHub in 2015 because teams working with games, media, and machine learning datasets needed Git workflows without storing every large binary revision in the normal object database.
 * **The 2GB Limit:** Very large single files have historically exposed memory and tooling limits in Git clients and surrounding libraries, which is one reason large payloads should move to LFS or an artifact system before they become routine.
 * **Zero-Byte Commits:** `git commit --allow-empty` creates a commit with no working tree changes, and platform engineers often use it to trigger CI/CD flows without inventing a meaningless file edit.
@@ -498,7 +499,7 @@ Committing `.gitattributes` makes the LFS policy part of the repository contract
 - [Git LFS documentation](https://git-lfs.com/)
 - [Git LFS specification](https://github.com/git-lfs/git-lfs/blob/main/docs/spec.md)
 - [Git submodule documentation](https://git-scm.com/docs/git-submodule)
-- [Git subtree documentation](https://git-scm.com/docs/git-subtree)
+- [Git subtree contrib documentation](https://github.com/git/git/blob/master/contrib/subtree/git-subtree.txt)
 - [Git garbage collection documentation](https://git-scm.com/docs/git-gc)
 - [Git commit-graph documentation](https://git-scm.com/docs/git-commit-graph)
 - [Git maintenance documentation](https://git-scm.com/docs/git-maintenance)
