@@ -11,7 +11,6 @@ lab:
   difficulty: "intermediate"
   environment: "ubuntu"
 ---
-# Module 1.2: Processes & systemd
 
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 30-35 min with a hands-on process, signal, boot, and systemd service lab.
 

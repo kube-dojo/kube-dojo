@@ -11,7 +11,6 @@ lab:
   difficulty: "advanced"
   environment: "ubuntu"
 ---
-# Module 3.4: iptables & netfilter
 
 Complexity: `[COMPLEX]` | Time: 65-75 min | Track: Linux Foundations networking. This module assumes you already know TCP/IP packet structure, DNS resolution, and Linux network namespaces well enough to recognize when a packet is local, forwarded, or leaving through a host interface.
 

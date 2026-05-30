@@ -11,7 +11,6 @@ lab:
   difficulty: "advanced"
   environment: "ubuntu"
 ---
-# Module 4.4: seccomp Profiles
 
 > **Linux Security** | Complexity: `[MEDIUM]` | Time: 25-30 min
 

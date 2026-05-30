@@ -12,8 +12,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 0.2: Environment & Permissions (Who You Are & Where You Are)
-
 > **Everyday Use** | Complexity: `[QUICK]` | Time: 45 min | This practical lesson focuses on diagnosing the identity, lookup, inheritance, and permission failures that make everyday Linux work feel unpredictable.
 
 ## Prerequisites

@@ -11,7 +11,6 @@ lab:
   difficulty: "advanced"
   environment: "centos"
 ---
-# Module 4.3: SELinux Contexts
 
 > **Linux Security** | Complexity: `[COMPLEX]` | Time: 35-40 min. This is an advanced hardening module focused on practical diagnosis, durable repair, and container-aware SELinux operations.
 

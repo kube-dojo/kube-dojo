@@ -12,8 +12,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 0.1: The CLI Power User (Search & Streams)
-
 **Complexity:** [QUICK]. **Time to Complete:** 45 minutes. **Prerequisites:** Zero to Terminal (Module 0.8). This module assumes you can open a shell, move through directories, and run basic commands, then shows how those small skills become repeatable investigation workflows.
 
 ## Learning Outcomes

@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 8.2: Network Administration
-
 > **Operations - LFCS** | Complexity: `[COMPLEX]` | Time: 45-55 min for administrators who already know basic TCP/IP and now need durable host-level operations.
 
 ## Prerequisites

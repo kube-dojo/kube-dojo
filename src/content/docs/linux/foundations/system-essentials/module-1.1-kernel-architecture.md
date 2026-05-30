@@ -13,8 +13,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 1.1: Kernel & Architecture
-
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 35-45 min
 
 ## Prerequisites

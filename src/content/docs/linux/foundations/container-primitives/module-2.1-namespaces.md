@@ -7,8 +7,6 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 2.1: Linux Namespaces
-
 This Linux Foundations module is a `[MEDIUM]` lesson designed for a 35-45 minute study session, with lab time focused on inspecting real namespace boundaries instead of memorizing container vocabulary.
 
 ## Prerequisites

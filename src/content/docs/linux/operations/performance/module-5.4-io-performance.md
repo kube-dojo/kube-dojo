@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 5.4: I/O Performance
-
 > **Linux Performance** | Complexity: `[MEDIUM]` | Time: 25-30 min. This module assumes you can move around a Linux shell, read command output carefully, and pause long enough to connect symptoms to the layer that produced them.
 
 ## Prerequisites

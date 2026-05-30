@@ -5,7 +5,6 @@ slug: linux/foundations/container-primitives/module-2.4-union-filesystems
 sidebar:
   order: 5
 ---
-# Module 2.4: Union Filesystems
 
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 45-60 min
 

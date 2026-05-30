@@ -12,8 +12,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 1.3: Filesystem Hierarchy
-
 **Complexity**: Intermediate<br>
 **Time to complete**: 45 minutes<br>
 **Prerequisites**: [Module 1.1: Kernel & Architecture](../module-1.1-kernel-architecture/) and [Module 1.2: Processes & systemd](../module-1.2-processes-systemd/)

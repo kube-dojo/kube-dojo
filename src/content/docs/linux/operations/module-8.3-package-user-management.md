@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 8.3: Package Management & User Administration
-
 > **Operations - LFCS** | Complexity: `[MEDIUM]` | Time: 40-50 min for administrators who need package state, user identity, and sudo delegation to be explainable under pressure.
 
 ## Prerequisites

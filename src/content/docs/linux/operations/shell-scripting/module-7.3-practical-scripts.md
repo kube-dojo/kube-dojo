@@ -11,7 +11,6 @@ lab:
   difficulty: intermediate
   environment: ubuntu
 ---
-# Module 7.3: Practical Scripts
 
 > **Shell Scripting** | Complexity: `[MEDIUM]` | Time: 25-30 min. This module treats scripts as operational tools that need clear contracts, repeatable behavior, and evidence when something fails.
 

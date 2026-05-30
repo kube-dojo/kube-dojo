@@ -11,7 +11,6 @@ lab:
   difficulty: "intermediate"
   environment: "ubuntu"
 ---
-# Module 0.3: Process & Resource Survival Guide
 
 > **Everyday Use** | Complexity: `[QUICK]` | Time: 40 min. This quick module is still written as a full operational lesson because process and resource triage becomes useful only when the commands fit into a repeatable diagnostic sequence.
 

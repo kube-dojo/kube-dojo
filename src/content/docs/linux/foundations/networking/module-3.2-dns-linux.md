@@ -12,8 +12,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 3.2: DNS in Linux
-
 > **Linux Foundations** | Complexity: `[HIGH]` | Time: 45-60 min
 
 ## Prerequisites

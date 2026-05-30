@@ -12,8 +12,6 @@ lab:
   environment: ubuntu
 ---
 
-# Module 8.1: Storage Management
-
 > **Operations - LFCS** | Complexity: `[COMPLEX]` | Time: 45-55 min. This module treats storage as a production responsibility, so every command is connected to verification, reboot safety, and failure diagnosis.
 
 ## Prerequisites
