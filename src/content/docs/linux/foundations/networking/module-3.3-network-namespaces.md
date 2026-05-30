@@ -282,7 +282,7 @@ On Ubuntu 24.04, `ip netns identify` can be run from a process context to learn 
 # From inside an ip netns exec shell, learn the namespace name
 ip netns identify
 
-# From the host, see which namespace a PID uses (if linked to a named handle)
+# From the host, read the network-namespace inode a PID is in (e.g. net:[...]); use 'ip netns identify <pid>' to map it to a named handle.
 readlink /proc/self/ns/net
 ```
 

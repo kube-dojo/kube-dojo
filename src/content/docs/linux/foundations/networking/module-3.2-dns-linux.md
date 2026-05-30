@@ -31,7 +31,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-The Facebook 2021 BGP outage (see *Route 53*) <!-- incident-xref: facebook-2021-bgp --> showed how DNS and routing failures can appear as separate symptoms while actually forming part of one incident, and why troubleshooting should trace failures from resolver behavior through routing topology.
+The Facebook 2021 BGP outage <!-- incident-xref: facebook-2021-bgp --> showed how DNS and routing failures can appear as separate symptoms while actually forming part of one incident, and why troubleshooting should trace failures from resolver behavior through routing topology.
 
 The same pattern appears at smaller scale inside Linux fleets and Kubernetes clusters. A database migration succeeds, the new service IP is healthy, and the application still connects to the old address because a local cache ignored the intended TTL. A pod can reach `8.8.8.8` by IP, yet it fails every request to `api.partner.example` because the resolver burns time trying cluster search suffixes first. A developer proves that `dig` returns the right answer, but the application keeps using a stale `/etc/hosts` override because applications do not necessarily resolve names the same way diagnostic DNS tools do.
 
@@ -150,13 +150,13 @@ Query: "api.example.com" (2 dots < 5)
   Try: api.example.com.cluster.local
   Try: api.example.com  <- What we wanted
 
-Query: "a.b.c.d.example.com" (4 dots < 5)
-  Still tries search domains first! (need 5+ dots)
+Query: "a.b.c.example.com" (4 dots < 5)
+  Still tries search domains first! (need ≥5 dots to skip search expansion)
 ```
 
 The trailing dot is the clean escape hatch when you mean "this name is already complete." In DNS notation, `api.example.com.` is absolute, while `api.example.com` may still be treated as a candidate for search expansion depending on resolver settings. That final dot looks odd in application configuration, but it can remove several failed queries per outbound request in clusters that use `ndots:5`. The tradeoff is readability and compatibility; some application libraries accept absolute names cleanly, while a few configuration validators reject the trailing dot.
 
-Kubernetes uses this behavior deliberately. A pod in the `default` namespace can connect to a Service named `payments` by using the short name `payments`, because the pod search list expands it into `payments.default.svc.cluster.local`, then broader service and cluster domains. This is ergonomic for internal calls, but the same ergonomics can punish external calls such as `api.external-partner.com`, which contains fewer dots than the Kubernetes default threshold and may trigger cluster-suffix attempts before the external query.
+Kubernetes uses this behavior deliberately. A pod in the `default` namespace can connect to a Service named `payments` by using the short name `payments`, because the pod search list expands it into `payments.default.svc.cluster.local`, then broader service and cluster domains. This is ergonomic for internal calls, but the same ergonomics can punish external calls such as `api.external-partner.com`, which contains fewer dots than the Kubernetes default threshold and may trigger cluster-suffix attempts before the external query. With `ndots:5`, a name needs five or more dots before the resolver tries it as absolute first; a four-dot name like `a.b.c.example.com` still goes through search expansion.
 
 ```bash
 # In a Kubernetes pod
@@ -318,6 +318,9 @@ graph TD
 The fully qualified Service name encodes four useful facts: service name, namespace, record type marker, and cluster domain. The short name `my-service` only works when the resolver search list expands it to the namespace you intended. That is convenient inside a single namespace and risky across namespace boundaries. A production incident often begins with a service moved from `default` to `payments`, while clients still use a short name that now expands inside the wrong namespace first.
 
 ```bash
+# examples below use the kubectl shortcut
+alias k=kubectl
+
 # Run a temporary busybox pod to test DNS resolution
 k run dnstest --image=busybox --rm -it --restart=Never -- sh
 
@@ -390,17 +393,17 @@ TTL planning is a deployment skill. If a service is going to move next week, low
 Pause and predict: a database record changes from an old IP to a new IP, the authoritative record now has a TTL of 60 seconds, and five minutes later one Ubuntu web server still connects to the old IP while `dig db.internal` returns the new one. Which layer is most suspicious, and what evidence would you collect before restarting application processes?
 
 ```bash
-# Check the current status of systemd-resolved
-systemd-resolve --status
+# Check resolver status (Ubuntu 22.04/24.04 canonical tool)
+resolvectl status
 
 # Flush the DNS cache maintained by systemd-resolved
-systemd-resolve --flush-caches
+sudo resolvectl flush-caches
 
 # Display statistics about systemd-resolved operations
-systemd-resolve --statistics
+resolvectl statistics
 ```
 
-Many modern Linux distributions use `systemd-resolved` as a local resolver and cache. Depending on distribution version and configuration, applications may send queries to a local stub address, and `/etc/resolv.conf` may be a generated file that points at that stub rather than directly at upstream DNS servers. In that model, editing `/etc/resolv.conf` by hand is often the wrong fix because the file is regenerated by the network stack. Use the owning tool to change configuration, and use resolver-specific commands to inspect and flush cache state.
+Many modern Linux distributions use `systemd-resolved` as a local resolver and cache. On Ubuntu 22.04 and 24.04, `resolvectl` is the supported interface; legacy `systemd-resolve` commands may still exist but are deprecated. Depending on distribution version and configuration, applications may send queries to a local stub address, and `/etc/resolv.conf` may be a generated file that points at that stub rather than directly at upstream DNS servers. In that model, editing `/etc/resolv.conf` by hand is often the wrong fix because the file is regenerated by the network stack. Use the owning tool to change configuration, and use resolver-specific commands to inspect and flush cache state.
 
 ```bash
 # Check if systemd-resolved is active
@@ -416,20 +419,19 @@ sudo resolvectl flush-caches
 resolvectl status
 ```
 
-`resolvectl status` is a better modern habit than only reading the symlink target of `/etc/resolv.conf`. It shows per-link DNS servers and routing domains, which matters on laptops, VPN-connected hosts, and servers with multiple interfaces. A host can send corporate domains to one resolver and public domains to another. If the wrong link owns the domain route, DNS symptoms may appear only for a subset of names.
+`resolvectl status` is a better modern habit than only reading the symlink target of `/etc/resolv.conf`. It shows per-link DNS servers and routing domains, which matters on laptops, VPN-connected hosts, and servers with multiple interfaces. A host can send corporate domains to one resolver and public domains to another. If the wrong link owns the domain route, DNS symptoms may appear only for a subset of names. The `DNS Domain` and `DNS Servers` lines are scoped per link (for example `eth0` versus `wlan0`), so a name can resolve on one interface and fail on another even when `/etc/resolv.conf` lists a single stub address.
 
 ```bash
 # Symptom: An application connects to an old IP address for a domain, even after DNS records have been updated.
 
 # Solutions:
 # 1. Flush the local DNS cache (if systemd-resolved is in use)
-sudo systemd-resolve --flush-caches
-# Or using resolvectl
 sudo resolvectl flush-caches
+# Legacy: systemd-resolve --flush-caches (deprecated on Ubuntu 22.04/24.04)
 
 # 2. Check the Time To Live (TTL) of the DNS record to understand how long it's designed to be cached
 dig example.com | grep -E "^example.*IN.*A"
-# The number after 'IN' in the ANSWER SECTION is the TTL in seconds. A low TTL means changes propagate faster.
+# The TTL is the number BEFORE 'IN' in the answer section (e.g. 3600 = cached for 1 hour).
 
 # 3. In Kubernetes, if CoreDNS is caching stale external records, you might need to restart its pods to force a refresh
 k rollout restart deployment coredns -n kube-system
@@ -441,17 +443,25 @@ Restarting CoreDNS is a blunt instrument and should not be the first move for ev
 
 A repeatable DNS workflow starts with the failing name, the failing environment, and the expected destination. Those three facts sound basic, but many incidents skip one of them and drift into vague claims. A short Service name inside a pod, a public FQDN from a node, and a corporate split-DNS name from a VPN-connected host are different cases. Write the exact name and the exact place where it failed before collecting commands, because the rest of the evidence only has meaning in that context.
 
+### Symptom Triage
+
 The second step is to decide whether the symptom is name resolution or post-resolution connectivity. If a log says `connection refused`, the name may have resolved correctly and the remote service may be rejecting connections. If a log says `temporary failure in name resolution`, the resolver path is still suspicious. If a TLS client rejects a certificate, DNS may have sent the client to an unexpected endpoint, but the immediate evidence lives in certificate identity and connection destination. Good DNS debugging does not absorb every network symptom; it proves or clears the name-to-address step.
 
 Raw IP tests are useful when you already know the expected address, but they must be interpreted carefully. Reaching an IP address does not prove DNS is healthy, and failing to reach an IP address does not prove DNS is broken. The value is separation. If `curl http://10.96.45.123` reaches a Service while `curl http://payments` does not, the name path deserves attention. If both fail, DNS may still be wrong, but service routing, endpoints, network policy, or application health are at least as likely.
 
+### Layer Separation
+
 After that separation, compare direct DNS with application-style resolution. A direct query to the configured resolver answers "what does this DNS server say?" while `getent hosts` answers "what does this Linux resolver path return?" If those two results differ, you have a local policy problem, not a generic DNS outage. If they agree, the next question is whether the application runtime uses that same resolver path or maintains its own cache and connection behavior.
+
+### Evidence Collection
 
 On hosts, collect `/etc/nsswitch.conf`, `/etc/hosts`, `/etc/resolv.conf`, and resolver service status together. Reading only one file can mislead you because generated resolver files often point at local stubs, and local stubs may route different domains to different upstream servers. A useful incident note says, "NSS is `files dns`; no hosts override exists; resolved routes this suffix to resolver X; `getent` returns address Y." That sentence gives the next engineer a coherent model instead of a pile of commands.
 
 On Kubernetes, collect the pod namespace, pod DNS policy, pod `/etc/resolv.conf`, CoreDNS Service ClusterIP, CoreDNS pod status, and a lookup from the affected context. These facts let you distinguish a missing Service record from a broken DNS service path. A short name failing while the fully qualified name works points toward search domains or namespace assumptions. Both names failing while external names work points toward Kubernetes record generation or service existence. Everything failing points toward CoreDNS health, service routing, or network reachability to the DNS service.
 
 When external names are slow inside Kubernetes, inspect query shape before scaling DNS. A workload that calls `api.partner.example` without a trailing dot may force the resolver to try several cluster-suffixed names first. CoreDNS metrics may show high QPS, but the root cause can be client-side expansion. Scaling CoreDNS may reduce immediate pain, yet it leaves wasted queries in place. The better fix might be an absolute FQDN, a pod-specific DNS option, or application connection reuse that reduces lookup frequency.
+
+### Cache Ownership
 
 When DNS answers are correct but applications still use old addresses, shift from record correctness to cache ownership. The stale answer may live in `systemd-resolved`, CoreDNS, a recursive resolver, a browser, a JVM, a Go process, or a connection pool. Each owner has different visibility and different clearing behavior. Restarting every component is tempting, but it destroys evidence and broadens impact. Start with the narrowest cache you can prove, then widen only if before-and-after checks show the stale answer remains.
 
@@ -571,7 +581,7 @@ First inspect the pod's `/etc/resolv.conf` to confirm the nameserver points at t
 
 <details><summary>A database DNS record moved to a new IP with a 60-second TTL, but one Ubuntu web server still uses the old IP five minutes later while `dig` returns the new IP. What is the probable layer and response?</summary>
 
-The probable layer is a local resolver cache, application DNS cache, or stale local override rather than authoritative DNS. Compare `getent hosts db.internal` with `dig db.internal`, inspect `resolvectl statistics`, and check `/etc/hosts` before restarting services. If `systemd-resolved` is serving stale data, `sudo resolvectl flush-caches` is the targeted fix. If the application maintains its own DNS cache or long-lived connections, you may need an application reload after collecting evidence.
+The probable layer is a local resolver cache, application DNS cache, or stale local override rather than authoritative DNS. Compare `getent hosts db.internal` with `dig db.internal`, inspect `resolvectl statistics` (cache hits and misses), and check `/etc/hosts` before restarting services. If `systemd-resolved` is serving stale data, `sudo resolvectl flush-caches` is the targeted fix. If the application maintains its own DNS cache or long-lived connections, you may need an application reload after collecting evidence.
 
 </details>
 
