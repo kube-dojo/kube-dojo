@@ -1215,12 +1215,15 @@ def anti_leak_metrics(text: str) -> dict[str, object]:
 
 def runnable_shell_metrics(text: str) -> dict[str, object]:
     _, body = _strip_frontmatter(text)
+    runnable_blocks = [
+        code for info, code in _fenced_code_blocks(body) if _fence_language(info) in RUNNABLE_SHELL_LANGS
+    ]
+    alias_defined = any(KUBECTL_ALIAS_RE.search(code) for code in runnable_blocks)
+    if alias_defined:
+        return {"kubectl_alias_violations": []}
+
     violations: list[str] = []
-    for info, code in _fenced_code_blocks(body):
-        if _fence_language(info) not in RUNNABLE_SHELL_LANGS:
-            continue
-        if KUBECTL_ALIAS_RE.search(code):
-            violations.append("alias k=kubectl")
+    for code in runnable_blocks:
         for match in KUBECTL_SHORTHAND_RE.finditer(code):
             violations.append(match.group(0).strip())
     return {"kubectl_alias_violations": violations}
