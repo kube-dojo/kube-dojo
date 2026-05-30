@@ -34,7 +34,7 @@ After this module, you will be able to make evidence-based SELinux decisions ins
 
 ## Why This Module Matters
 
-At a payment processor, a routine operating-system migration moved a fleet of web nodes from an Ubuntu image to a RHEL-derived image because the security team wanted vendor-supported FIPS and SELinux controls. The application had passed staging, the file permissions on its static assets were world-readable, and the same Nginx container image had served traffic for months. When the first production slice received traffic, customers saw 403 errors for hosted receipts while synthetic checks reported that the pods were healthy, the service endpoints were ready, and the filesystem mode bits looked harmlessly permissive.
+**Hypothetical scenario:** At a payment processor, a routine operating-system migration moved a fleet of web nodes from an Ubuntu image to a RHEL-derived image because the security team wanted vendor-supported FIPS and SELinux controls. The application had passed staging, the file permissions on its static assets were world-readable, and the same Nginx container image had served traffic for months. When the first production slice received traffic, customers saw 403 errors for hosted receipts while synthetic checks reported that the pods were healthy, the service endpoints were ready, and the filesystem mode bits looked harmlessly permissive.
 
 The outage did not come from a broken web server. It came from a hidden second authorization system that the team had not modeled: SELinux mandatory access control. Discretionary access control said the Nginx worker could read the mounted files, but SELinux saw a process domain that was not permitted to read the target file type and blocked the request anyway. The emergency rollback cost the team an evening of incident work, but the larger cost was confidence, because every subsequent "permission denied" error on RHEL now carried the suspicion that the visible permissions were only half the story.
 
@@ -765,9 +765,9 @@ Next, read [Module 4.4: seccomp Profiles](./module-4.4-seccomp/) to learn how sy
 ## Sources
 
 - [Red Hat SELinux Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/)
-- [SELinux Project Wiki](https://selinuxproject.org/page/Main_Page)
+- [SELinux Project Wiki](https://github.com/SELinuxProject/selinux/wiki)
 - [Fedora SELinux Guide](https://docs.fedoraproject.org/en-US/quick-docs/selinux-getting-started/)
-- [Container SELinux](https://www.redhat.com/en/blog/container-security-and-selinux)
+- [container-selinux project](https://github.com/containers/container-selinux)
 - [Red Hat Enterprise Linux 9: Using SELinux](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/using_selinux/)
 - [Fedora Quick Docs: Changing SELinux States and Modes](https://docs.fedoraproject.org/en-US/quick-docs/selinux-changing-states-and-modes/)
 - [Fedora Quick Docs: Troubleshooting SELinux](https://docs.fedoraproject.org/en-US/quick-docs/selinux-troubleshooting/)
