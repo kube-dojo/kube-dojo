@@ -542,7 +542,7 @@ The framework also tells you when YAML is not the real problem. If server-side d
 
 In this exercise, you will build a small multi-resource application manifest, intentionally encounter structural failures, and use the module's debugging workflow to repair them. The exercise assumes access to a Kubernetes 1.35-compatible cluster such as kind, minikube, or a shared development namespace. If you do not have a cluster, you can still read the dry-run commands and compare the expected diagnostics, but the server-side validation step requires an API server.
 
-Use a scratch directory outside your source repository for the lab file so you do not accidentally commit exercise artifacts. Define the alias before you start, then create a file named `dojo-app.yaml`. The first version is intentionally broken in several ways: the API version is wrong for a Deployment, a numeric field is quoted as a string, and the container list is missing its sequence structure.
+Use a scratch directory outside your source repository for the lab file so you do not accidentally commit exercise artifacts. Create a file named `dojo-app.yaml`. The first version is intentionally broken in several ways: the API version is wrong for a Deployment, a numeric field is quoted as a string, and the container list is missing its sequence structure.
 
 ### Task 1: The Broken Foundation
 

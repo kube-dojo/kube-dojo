@@ -25,7 +25,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At 2:00 AM on a Friday, a platform engineer at a busy online retailer is paged because checkout latency has crossed the customer-facing error budget and internal APIs are timing out. The first suspect is the payment service, but the real cause is quieter: a load-testing job was launched in the same shared Kubernetes cluster as production, without a dedicated namespace budget, without default resource limits, and without a label scheme that made ownership obvious. The job was meant to run against a staging endpoint, but it landed in `default`, consumed most allocatable CPU on several nodes, and forced the team to burn precious minutes asking a basic question: whose workload is this?
+Imagine a 2 a.m. page: checkout latency crosses the customer-facing error budget and internal APIs start timing out. The first suspect is the payment service, but the real cause is quieter: a load-testing job was launched in the same shared Kubernetes cluster as production, without a dedicated namespace budget, without default resource limits, and without a label scheme that made ownership obvious. The job was meant to run against a staging endpoint, but it landed in `default`, consumed most allocatable CPU on several nodes, and forced the team to burn precious minutes asking a basic question: whose workload is this?
 
 The outage is not really about one careless command. It is about a cluster that has grown past the point where memory, discipline, and naming conventions can protect it. A single physical Kubernetes cluster is attractive because it centralizes capacity, networking, observability, and operational skill, but that same centralization creates a shared fate unless the cluster is divided into understandable operating zones. Without namespaces, teams collide over names and permissions; without labels, controllers and humans cannot reliably find the objects they mean to affect; without quotas and defaults, one tenant can unintentionally starve another.
 
@@ -108,7 +108,7 @@ Constantly typing `-n team-frontend` is useful for clarity in scripts, but it is
 
 ```bash
 # View your current context configuration to see your active namespace
-kubectl config view --minify | grep namespace:
+kubectl config view --minify -o jsonpath='{..namespace}'
 
 # Set the default namespace for your current context to 'team-frontend'
 kubectl config set-context --current --namespace=team-frontend
@@ -538,7 +538,7 @@ kubectl create namespace alpha-team
 kubectl config set-context --current --namespace=alpha-team
 
 # Verify you are in the new namespace
-kubectl config view --minify | grep namespace:
+kubectl config view --minify -o jsonpath='{..namespace}'
 ```
 </details>
 
