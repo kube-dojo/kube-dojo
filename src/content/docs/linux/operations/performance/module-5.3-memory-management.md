@@ -34,9 +34,9 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-At 03:12 on a payments platform, a senior engineer saw a familiar alert: "free memory below threshold." The host showed only a tiny amount of free RAM, but checkout latency was steady, the database was answering queries, and the kernel had not logged an OOM. The team spent an hour draining traffic, restarting services, and paging the database owner before someone checked `MemAvailable` and realized Linux had simply filled unused RAM with file cache that could be reclaimed on demand.
+**Hypothetical scenario:** At 03:12 on a payments platform, a senior engineer saw a familiar alert: "free memory below threshold." The host showed only a tiny amount of free RAM, but checkout latency was steady, the database was answering queries, and the kernel had not logged an OOM. The team spent an hour draining traffic, restarting services, and paging the database owner before someone checked `MemAvailable` and realized Linux had simply filled unused RAM with file cache that could be reclaimed on demand.
 
-Two weeks later, a different incident looked almost identical at first glance but ended very differently. A recommendation service deployed into Kubernetes began reading a larger model file during startup, pushed its cgroup past the memory limit, and restarted repeatedly with `OOMKilled`. The node still had memory available, neighboring pods were fine, and CPU throttling charts were quiet because the failure was not node exhaustion; it was a local memory boundary enforced by the kernel.
+Consider a contrasting hypothetical: a recommendation service deployed into Kubernetes begins reading a larger model file during startup, pushes its cgroup past the memory limit, and restarts repeatedly with `OOMKilled`. The node still has memory available, neighboring pods are fine, and CPU throttling charts are quiet because the failure is not node exhaustion; it is a local memory boundary enforced by the kernel.
 
 Those two incidents teach the same lesson from opposite directions. Linux memory management is not a simple "used versus free" ledger, and Kubernetes memory limits are not gentle controls. To operate modern systems well, you need to know which memory is anonymous application state, which memory is reclaimable file cache, when swap turns pressure into latency, and why an application can die even when the node looks healthy.
 
@@ -749,7 +749,7 @@ Finish by observing cgroup limits directly. This step helps you implement a repe
 
 ```bash
 # 1. Run container with memory limit
-docker run -d --name mem-test --memory=100m nginx sleep 3600
+docker run -d --name mem-test --memory=100m busybox sleep 3600
 
 # 2. Check cgroup limit (cgroup v2 paths)
 docker exec mem-test cat /sys/fs/cgroup/memory.max
