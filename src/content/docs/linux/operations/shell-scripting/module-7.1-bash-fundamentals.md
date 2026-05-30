@@ -32,7 +32,7 @@ After this module, you will be able to write Bash scripts that are safe for unat
 
 ## Why This Module Matters
 
-In 2021, a payments platform running a routine maintenance window lost several hours of transaction processing because a shell script treated an empty environment variable as a valid target directory. The cleanup job was intended to rotate temporary export files before a database migration, but one missing value changed the semantics of the command line so that it operated on a directory the engineers never intended to touch. They recovered from backups and internal queues, but the incident still consumed an overnight response bridge, delayed settlement processing, and cost more in remediation effort than the original migration project had budgeted.
+**Hypothetical scenario:** In a payments platform running a routine maintenance window, several hours of transaction processing were lost because a shell script treated an empty environment variable as a valid target directory. The cleanup job was intended to rotate temporary export files before a database migration, but one missing value changed the semantics of the command line so it operated on a directory the engineers never intended to touch. They recovered from backups and internal queues, but the incident still consumed an overnight response bridge, delayed settlement processing, and cost more in remediation effort than the original migration project had budgeted.
 
 That story is not dramatic because Bash is exotic; it is dramatic because Bash is ordinary. The shell sits between humans and the operating system, between CI pipelines and package managers, between Kubernetes clients and production automation on every major Linux distribution. A small script that validates its assumptions, quotes its expansions, and reports failures honestly can be the safest tool in the room. The same script, when it relies on unquoted variables, ignores pipeline failures, or keeps running after a `cd` fails silently, becomes a production risk that no quantity of monitoring can fully mitigate.
 
@@ -84,8 +84,8 @@ Before Bash executes any command, it performs a sequence of expansions on the co
 3. **Parameter expansion** — `${variable}` and its many forms replace the expression with the variable's value. This is the stage where `${var:-default}`, `${var#pattern}`, `${var%pattern}`, `${#var}`, and substring slicing operate.
 4. **Command substitution** — `$(command)` or backtick syntax runs the command and replaces the substitution with its standard output, with trailing newlines removed.
 5. **Arithmetic expansion** — `$((expression))` evaluates the integer arithmetic expression and replaces it with the result.
-6. **Process substitution** — `<(command)` and `>(command)` are expanded when the shell evaluates substitutions in systems that support process redirections.
-7. **Word splitting** — the result of unquoted parameter expansions, command substitutions, process substitutions, and arithmetic expansions is split into words on characters in the `IFS` variable (space, tab, newline by default). Quoted expansions are exempt from word splitting, which is the single most important reason to quote your variables.
+6. **Process substitution** — `<(command)` and `>(command)` are expanded in the same substitution phase as parameter, command, and arithmetic substitutions in systems that support process substitutions.
+7. **Word splitting** — the result of unquoted parameter expansions, command substitutions, arithmetic expansions, and process substitutions is split into words on characters in the `IFS` variable (space, tab, newline by default). Quoted expansions are exempt from word splitting, which is the single most important reason to quote your variables.
 8. **Pathname expansion** — unquoted `*`, `?`, and `[` characters are treated as glob patterns and expanded to matching filenames. This stage is also disabled by quoting.
 
 The expansion order is not just a checklist — it shapes every line of Bash you write. Because word splitting happens after parameter expansion, an unquoted variable containing spaces will be split into multiple arguments after its value is substituted. Because pathname expansion happens last, an unquoted variable containing `*` will be expanded to the list of files in the current directory. These behaviours are deterministic once you know the order, and knowing the order is what separates operators who debug by guessing from operators who predict what their script will produce before it runs.
@@ -96,9 +96,10 @@ flowchart LR
     B --> C[Tilde Expansion]
     C --> D[Parameter Expansion]
     D --> E[Command Substitution]
-    E --> F[Arithmetic Expansion]
-    F --> P[Process Substitution]
-    P --> G{Quoted?}
+    E --> S[Substitution]
+    F[Arithmetic Expansion] --> S
+    P[Process Substitution] --> S
+    S --> G{Quoted?}
     G -->|Yes| H[Skip Splitting]
     G -->|No| I[Word Splitting on IFS]
     H --> J[Pathname Expansion]
@@ -110,6 +111,8 @@ flowchart LR
 Brace expansion is the first stage, and it operates on literal commas and ranges before any variable is expanded. `mkdir -p project/{src,tests,docs}` creates three directories in one command. Tilde expansion follows immediately, translating `~` and `~user` only at word boundaries. These two stages are safe because they operate on literal text rather than on substituted values.
 
 The real danger zone begins at stage three with parameter expansion, then compounds through command substitution, arithmetic expansion, and process substitution. Each of these stages substitutes runtime values into the command line. After substitution, the shell proceeds to word splitting on unquoted results, which is why `$file` with a value of "my documents" becomes two words. The shell then performs pathname expansion, turning `*` and `?` characters into matching filenames. Both of these destructive stages are disabled by double quotes. Understanding this sequence means you can look at any Bash command and predict its word boundaries without running it.
+
+For day-to-day reliability, use this practical quoting decision pattern: quote all substitutions by default, then remove quotes only when you intentionally want word splitting. For comparisons and tests in Bash, `[[ ... ]]` avoids many legacy `[` pitfalls and is generally safer when variables might be empty. For file names, paths, service identifiers, and URLs, prefer `"$var"` so spaces or special characters stay intact. For command templates and option lists, use arrays instead of a single string (`args=("$@")`) so each argument is passed exactly once. This small discipline is often the difference between a script that scales safely and one that fails silently during the first edge case. It also keeps your scripts readable under pressure, because the data flow is explicit: either the shell receives an atomic value, or you explicitly asked it to split.
 
 Parameter expansion deserves special attention because it provides the mechanisms for default values, alternate values, and string manipulation that make Bash scripts resilient in the face of missing inputs. `${var:-default}` substitutes `default` only when `var` is unset or empty, leaving the original variable unchanged. `${var:=default}` assigns the default value back to the variable as a side effect, which can be useful for enforcing configuration at the point of first use. `${var:?message}` prints the message to standard error and exits the script if the variable is unset or empty — a compact way to assert that required inputs are present. `${var:+alternate}` substitutes `alternate` only when `var` is set and non-empty, which is less commonly used but invaluable for optional flags. Substring extraction with `${var:offset:length}` and pattern-based trimming with `${var#pattern}` and `${var%pattern}` complete the toolkit. The [Bash manual section on Shell Parameter Expansion](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html) documents every variant in detail, and you should consult it when building validation logic rather than guessing at the syntax.
 
@@ -211,7 +214,7 @@ if ! kubectl get namespace "$ns" &>/dev/null; then
 fi
 ```
 
-Loops in Bash iterate over words, which means the shell's word-splitting behaviour directly affects what a `for` loop sees. A safe pattern for iterating over filenames or arguments is `for item in "$@"; do ...; done`, which quotes the expansion so each argument retains its boundaries. For file globbing, `for file in *.log; do` works when you control the directory contents and know that filenames do not contain spaces, but `find ... -print0 | while IFS= read -r -d '' file; do` is the robust alternative for arbitrary filenames. When iterating over command output, prefer `while IFS= read -r line` over `for line in $(command)` because the `for` version splits on all whitespace, including spaces inside values, while the `while read` version preserves each logical line. The [Greg's Wiki article on Bash loops](https://mywiki.wooledge.org/BashFAQ/001) walks through every iteration pattern and explains why naive `for line in $(cat file)` constructs are unreliable in the presence of spaces or special characters.
+Loops in Bash iterate over words, which means the shell's word-splitting behaviour directly affects what a `for` loop sees. A safe pattern for iterating over filenames or arguments is `for item in "$@"; do ...; done`, which quotes the expansion so each argument retains its boundaries. For file globbing, `for file in *.log; do` has three common failure modes: unmatched globs that produce literal `*.log`, hidden log files that are skipped by default, and broken paths when `"$file"` is not quoted. The resilient alternative for arbitrary names is `find ... -print0 | while IFS= read -r -d '' file; do`. When iterating over command output, prefer `while IFS= read -r line` over `for line in $(command)` because the `for` version splits on all whitespace, including spaces inside values, while the `while read` version preserves each logical line. The [Greg's Wiki article on Bash loops](https://mywiki.wooledge.org/BashFAQ/001) walks through every iteration pattern and explains why naive `for line in $(cat file)` constructs are unreliable in the presence of spaces or special characters.
 
 ```bash
 # Case statement — cleaner than chains of if/elif for value matching
@@ -411,10 +414,13 @@ IFS=$'\n\t'
 # ── Trap for cleanup ───────────────────────────────────
 cleanup() {
     local exit_code=$?
-    rm -f "${TEMP_DIR:-/tmp/unknown}"/*
+    if [[ -n "${temp_dir:-}" && "$temp_dir" == /tmp/* ]]; then
+        rm -rf -- "$temp_dir"
+    fi
     echo "Cleanup complete (exit code: $exit_code)" >&2
     exit "$exit_code"
 }
+temp_dir=$(mktemp -d)
 trap cleanup EXIT
 
 # ── Trap for line-level error reporting ─────────────────
@@ -446,10 +452,10 @@ Integrating ShellCheck into a CI pipeline requires two decisions: when to run it
 find . -type f \( -name '*.sh' -o -name '*.bash' \) -exec shellcheck {} +
 
 # Run on scripts identified by shebang
-grep -rl '^#!/bin/\(bash\|sh\)' . | xargs shellcheck
+grep -rlZ '^#!/bin/\(bash\|sh\)' . | xargs -0 shellcheck
 
 # CI integration with severity control
-shellcheck --severity=warning scripts/*.sh || {
+    find . -type f -name '*.sh' -exec shellcheck --severity=warning {} + || {
     echo "ShellCheck found issues — review https://www.shellcheck.net/wiki/ for guidance" >&2
     exit 1
 }
@@ -460,7 +466,7 @@ shellcheck --severity=warning scripts/*.sh || {
 # (Requires shellcheck installed; available in ubuntu-latest runner)
 - name: Lint shell scripts
   run: |
-    shellcheck --severity=warning $(find . -type f -name '*.sh')
+    find . -type f -name '*.sh' -exec shellcheck --severity=warning {} +
 ```
 
 Beyond CI, ShellCheck is available as an editor integration for VS Code, Vim, Emacs, and most other editors, providing real-time feedback as you write. The faster you see a warning about an unquoted variable or a missing `local` declaration, the less likely those patterns are to survive into committed code. The [ShellCheck GitHub repository](https://github.com/koalaman/shellcheck) and the [ShellCheck wiki index of rules](https://www.shellcheck.net/wiki/) are the authoritative references for understanding and configuring the tool.
@@ -475,8 +481,8 @@ The most common Kubernetes scripting patterns revolve around waiting for conditi
 #!/bin/bash
 set -euo pipefail
 
-NAMESPACE="${1:-default}"
-DEPLOYMENT="${2:?Usage: $0 <namespace> <deployment>}"
+DEPLOYMENT="${1:?Usage: $0 <deployment> [namespace]}"
+NAMESPACE="${2:-default}"
 
 # Wait for rollout with explicit timeout
 echo "Waiting for $DEPLOYMENT rollout in namespace $NAMESPACE..."
@@ -512,7 +518,12 @@ kubectl create deployment nginx --image=nginx:1.27 --dry-run=client -o yaml | \
     kubectl apply -f -
 
 # Rollout restart with label selector verification first
-if kubectl get pods -l app=payment-processor -o name | grep -q .; then
+pods=$(kubectl get pods -l app=payment-processor -o name 2>/dev/null) || {
+    echo "kubectl failed to list pods for app=payment-processor" >&2
+    exit 1
+}
+
+if [[ -n "$pods" ]]; then
     kubectl rollout restart deployment -l app=payment-processor
 else
     echo "No pods found for app=payment-processor" >&2
@@ -525,7 +536,7 @@ fi
 - **Bash dates to 1989**: Brian Fox released the Bourne Again Shell for the GNU Project as a free software replacement for the Bourne shell. It incorporated features from the Korn shell (`ksh`) and the C shell (`csh`) while remaining broadly compatible with Bourne shell scripts, and it has been the default interactive shell on most GNU/Linux distributions for over two decades.
 - **Exit code 0 means success in Unix**: Unlike most programming languages where `true` evaluates to a non-zero value, Unix commands report success with exit code 0 and failure with any non-zero status. This is why Bash predicate functions return 0 when a condition is true — they follow command semantics, not boolean semantics. The convention originates from the limited error-reporting channels available in early Unix: a single exit code byte could encode multiple failure modes when non-zero, while zero was the unambiguous success signal.
 - **`/bin/sh` is not always Bash**: On Debian and Ubuntu, `/bin/sh` is `dash`, a minimal POSIX shell optimised for fast script execution. On Alpine Linux, it is `ash` from BusyBox. On macOS, it has historically been Bash, though `zsh` is the default interactive shell since macOS Catalina. Scripts that need Bash features such as arrays, `[[ ]]`, or process substitution must use `#!/bin/bash` explicitly.
-- **Word splitting is the number one source of shell bugs**: The ShellCheck project reports that unquoted variable expansions — which the shell subjects to word splitting and pathname expansion — are the single most common defect class across millions of analysed scripts. Quoting every expansion is a simple habit that eliminates an entire category of silent argument-reshaping bugs, and it costs exactly two extra characters per variable reference.
+- **Word splitting is a major source of shell bugs**: SC2086 flags unquoted expansions as a common defect class across real-world Bash scripts. Quoting every expansion is a simple habit that eliminates an entire category of silent argument-reshaping bugs, and it often costs exactly two extra characters per variable reference.
 
 ## Common Mistakes
 
@@ -544,7 +555,7 @@ fi
 
 <details><summary>Question 1: Your script uses `name = "John"` and the shell prints `name: command not found`. Why does this happen, and how do you fix it?</summary>
 
-Bash parses `name` as the command to execute because assignment syntax forbids spaces around `=`. The tokens `=` and `"John"` are passed as arguments to the non-existent `name` command. The fix is `name="John"` — no spaces — which the shell recognises as a variable assignment rather than a command invocation. This distinction between assignment syntax and comparison syntax (`[ "$name" = "John" ]`) is fundamental to reading any Bash script, and the ShellCheck rule [SC1068](https://www.shellcheck.net/wiki/SC1068) specifically warns about spaces around `=` in assignments.
+Bash parses `name` as the command to execute because assignment syntax forbids spaces around `=`. The tokens `=` and `"John"` are passed as arguments to the non-existent `name` command. The fix is `name="John"` — no spaces — which the shell recognises as a variable assignment rather than a command invocation. This distinction between assignment syntax and comparison syntax (`[ "$name" = "John" ]`) is fundamental to reading any Bash script, and the ShellCheck rule [SC1068](https://www.shellcheck.net/wiki/SC1068) (archived in newer ShellCheck versions) documents the spaces-around-assignment error.
 
 </details>
 
@@ -770,11 +781,12 @@ chmod +x expand-demo.sh
 11. [Bash Reference Manual: Bourne Shell Builtins](https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html) — Built-in commands including `command`, `type`, `readonly`, and `local`, with their POSIX and Bash-specific behaviours.
 12. [POSIX Shell Command Language — The Open Group](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html) — The formal specification for the POSIX shell grammar, used in this module for the `#!/bin/sh` portability discussion.
 13. [POSIX test specification — The Open Group](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/test.html) — The formal semantics of the `[ ]` (test) command, applicable when targeting POSIX-compatible shells instead of Bash-specific `[[ ]]`.
-14. [ShellCheck — Static analysis for shell scripts](https://www.shellcheck.net/) — The online ShellCheck tool and rule index. Specific rules cited: SC1068 (spaces around `=` in assignments), SC2143 (grep -q patterns), SC2155 (declare and assign separately where command substitutions can mask return values), SC2230 (`command -v` over `which`), and SC2292 (`[[ ]]` vs `[ ]`).
+14. [ShellCheck — Static analysis for shell scripts](https://www.shellcheck.net/) — The online ShellCheck tool and rule index. Specific rules cited: SC1068 (archival reference for spaces around `=` in assignments), SC2143 (grep -q patterns), SC2155 (declare and assign separately where command substitutions can mask return values), SC2230 (`command -v` over `which`), and SC3014 (`[[ ]]` vs `[ ]` portability).
 15. [ShellCheck wiki: SC1068](https://www.shellcheck.net/wiki/SC1068) — Rule documentation for the spaces-around-equals-in-assignment error.
 16. [ShellCheck wiki: SC2143](https://www.shellcheck.net/wiki/SC2143) — Rule documentation for using `grep -q` patterns correctly.
 17. [ShellCheck wiki: SC2155](https://www.shellcheck.net/wiki/SC2155) — Rule documentation for declaring and assigning separately to avoid masking return values.
-18. [ShellCheck GitHub Repository](https://github.com/koalaman/shellcheck) — Source repository and installation instructions for ShellCheck.
+18. [ShellCheck wiki: SC3014](https://www.shellcheck.net/wiki/SC3014) — Rule documentation for `[[ ]]` vs `[ ]` portability and compatibility differences.
+19. [ShellCheck GitHub Repository](https://github.com/koalaman/shellcheck) — Source repository and installation instructions for ShellCheck.
 19. [Greg's Wiki — BashGuide](https://mywiki.wooledge.org/BashGuide) — A community-maintained guide to Bash scripting widely referenced in the shell-scripting community, cited in this module for quoting rules, argument safety with arrays, and function structure.
 20. [Greg's Wiki — BashFAQ/001](https://mywiki.wooledge.org/BashFAQ/001) — The canonical reference for safe file-reading loops, explaining why `for line in $(cat file)` is unreliable and `while IFS= read -r line` is the correct alternative.
 21. [Greg's Wiki — Quotes](https://mywiki.wooledge.org/Quotes) — A focused guide on when and how to use single quotes, double quotes, and backslashes in Bash.
