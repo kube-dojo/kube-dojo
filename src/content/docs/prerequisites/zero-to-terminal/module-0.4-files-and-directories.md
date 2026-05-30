@@ -123,6 +123,8 @@ drwxr-xr-x  3 yourname yourname 4096 Mar 23 09:45 Documents
 
 The third navigation command is `cd`, which changes your working directory. You give it a destination, and the shell moves your session there if the destination exists and you have permission to enter it. Unlike opening a folder in a graphical interface, `cd` does not print a success message by default. That silence is normal, which is why many learners pair `cd` with `pwd` while building confidence.
 
+From your home directory (when a `Documents` folder exists there):
+
 ```bash
 cd Documents
 pwd
@@ -189,11 +191,10 @@ pwd
 /home/yourname
 ```
 
-```bash
-cd /home/yourname/Documents
-```
+Example paths — adjust `yourname` and directory names to match your machine:
 
-```bash
+```text
+cd /home/yourname/Documents
 cd Documents
 ```
 
@@ -208,7 +209,9 @@ The `.` symbol often appears when running scripts from the current directory, as
 
 The `..` symbol is the cleanest way to move to a sibling location. If you are in `/home/user/projects/app/src` and need `/home/user/projects/app/README.md`, the relative path `../README.md` says "go to the parent directory, then read README." That is shorter than the absolute path and still precise because you know your current location.
 
-```bash
+Example relative path (run only when your current directory is a child of the folder that contains `README.md`):
+
+```text
 cat ../README.md
 ```
 
@@ -228,7 +231,9 @@ Once you can point to a file, the next skill is choosing how to read it. The beg
 
 `cat` displays the whole file. Its name comes from "concatenate" because it can join files together, but learners usually meet it first as a way to print a file to the terminal. It is excellent for small files where seeing the entire content is useful, such as a short note, a one-screen configuration snippet, or a tiny example manifest.
 
-```bash
+Example (create `notes.txt` first, or use any small file you already have):
+
+```text
 cat notes.txt
 ```
 
@@ -241,21 +246,15 @@ The tradeoff is that `cat` does not protect you from enormous output. If a log f
 
 `head` shows the beginning of a file, ten lines by default. It is useful when the top of a file contains headers, metadata, comments, or the first entries in a report. You can change the number of lines with `-n`, which makes the command predictable and gentle even when the file is large.
 
-```bash
+```text
 head long-file.txt
-```
-
-```bash
 head -n 5 long-file.txt
 ```
 
 `tail` shows the end of a file, also ten lines by default. This is one of the most important log-reading habits because many logs append new entries at the bottom. If a service crashed recently, the newest error is more likely near the end than near the top.
 
-```bash
+```text
 tail log-file.txt
-```
-
-```bash
 tail -n 20 log-file.txt
 ```
 
@@ -274,10 +273,10 @@ tail -n 20 /var/log/syslog
 ```
 
 ```bash
-head -n 10 ~/.kube/config
+ls -l ~/.kube/config
 ```
 
-The second command is intentionally only a demonstration of path syntax, not a recommendation to print credentials casually. Many configuration files contain tokens, certificates, usernames, or cluster endpoints. When the file may include secrets, prefer reading only the part you need, avoid pasting output into chat systems, and consider whether a safer inspection command exists.
+The second command checks that the file exists and shows its permissions without printing tokens or certificates. Many configuration files contain tokens, certificates, usernames, or cluster endpoints. When the file may include secrets, prefer reading only the part you need, avoid pasting output into chat systems, and consider whether a safer inspection command exists.
 
 ## Creating Directories, Files, and Hidden Configuration
 
@@ -415,7 +414,9 @@ pwd
 /home/yourname/kubedojo-practice
 ```
 
-```bash
+Example relative path (run after creating the practice tree in the hands-on exercise, or when that file already exists):
+
+```text
 cat recipes/appetizers/bruschetta.txt
 ```
 
@@ -423,7 +424,9 @@ That command reads cleanly once you translate it: from the current project direc
 
 Now compare that with the absolute version. An absolute path is longer, but the shell does not need your current working directory to interpret it. The command below points to one concrete location from the root of the filesystem tree, so it can work from your home directory, the project directory, or a log directory, provided the file exists and permissions allow access.
 
-```bash
+Example absolute path — adjust `yourname` to match your account:
+
+```text
 cat /home/yourname/kubedojo-practice/recipes/appetizers/bruschetta.txt
 ```
 
