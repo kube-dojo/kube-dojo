@@ -20,9 +20,7 @@ Before starting this module, make sure you can already read Linux file ownership
 
 - **Required**: [Module 1.4: Users & Permissions](/linux/foundations/system-essentials/module-1.4-users-permissions/) for UID/GID fundamentals and file ownership
 - **Required**: [Module 1.2: Processes & systemd](/linux/foundations/system-essentials/module-1.2-processes-systemd/) for understanding services and system state
-- **Helpful**: [Module 4.1: Kernel Hardening](/linux/security/hardening/module-4.1-kernel-hardening/) for security context
-
-For later KubeDojo labs that touch clusters, assume Kubernetes 1.35+ and define the standard shortcut with `alias k=kubectl` before running any `kubectl` command. This module itself stays on Linux host administration, because a reliable cluster node starts with boring, disciplined package and account management before any workload ever lands on it.
+- **Helpful**: [Module 4.1: Kernel Hardening](/linux/security/hardening/module-4.1-kernel-hardening/) for security context and patch-discipline framing
 
 ## Learning Outcomes
 
@@ -37,8 +35,8 @@ After this module, you will be able to perform these operational tasks in a way 
 ## Why This Module Matters
 
 This module is the package-and-account hygiene playbook for emergency response: package inventory, patch posture, and least-privilege operations become operationally critical when incidents arrive.
-For a real-world analysis of these failure modes, see [Docker Fundamentals](../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/).
-<!-- incident-xref: equifax-2017 -->
+
+**Hypothetical scenario:** A security team discovers that a critical web-application dependency was patched upstream months ago, but the operations team never promoted the fix through their package workflow. The vulnerable library remains on production hosts because nobody tracked which servers installed it from a third-party repository, and contractor accounts still have broad sudo access from an earlier migration. The breach never makes headlines, but the root cause is familiar: delayed patching combined with weak account hygiene.
 
 A similar pattern appears in smaller incidents that never make headlines. A team inherits an Ubuntu host where `nginx` was installed from a vendor repository, a contractor still has password login months after leaving, and the only deployment user has broad passwordless sudo because nobody wanted to debug a narrow rule. Nothing looks broken during normal operations, but the first security advisory or failed deploy reveals that the server has no clear owner, no reversible change trail, and no dependable way to explain what changed.
 
@@ -182,7 +180,7 @@ dpkg -L nginx-core
 
 File ownership queries are one of the most valuable troubleshooting skills in this module. If a binary is owned by a package, you can inspect its version, verify its files, reinstall it, or trace it to a repository. If no package owns it, you are dealing with a manual install, a generated file, a copied artifact, or something more suspicious. That distinction changes the investigation immediately.
 
-Third-party repositories solve a real problem: distributions cannot ship every vendor's latest release on every schedule. They also expand your trust boundary, because you are allowing another signing key and repository policy into the system's update path. Modern Debian-family practice is to store a repository-specific keyring and reference it with `signed-by`, instead of using a global key that can authenticate unrelated packages.
+Third-party repositories solve a real problem: distributions cannot ship every vendor's latest release on every schedule. They also expand your trust boundary, because you are allowing another signing key and repository policy into the system's update path. Modern Debian-family practice is to store a repository-specific keyring and reference it with `signed-by`, instead of using a global key that can authenticate unrelated packages. How signature trust and verification work in practice is covered in [Trust, Signatures, and Package Security](#trust-signatures-and-package-security) below.
 
 ```bash
 # Add a PPA (Ubuntu-specific shortcut)
@@ -356,7 +354,7 @@ Never treat a signature warning as a cosmetic problem. It may mean the repositor
 
 Security auditing also includes knowing what is unnecessary. Every installed package can add files, services, dependencies, and vulnerability surface, so production hosts should not accumulate tools just because someone needed them once. A build host may need compilers and debuggers; a runtime host usually should not. Package inventory gives you the evidence to make that distinction without relying on memory.
 
-A war story from a platform team makes the point. Their image build job installed `curl`, `jq`, and a debugging shell tool into every server image during a migration. Months later, a vulnerability scanner flagged the debugging tool across hundreds of instances even though no application used it. The fix was not heroic security engineering; it was disciplined package ownership, a smaller base image, and a rule that temporary diagnostic packages must be removed before publishing an image.
+**Hypothetical scenario:** Consider a platform team whose image build job installed `curl`, `jq`, and a debugging shell tool into every server image during a migration. Months later, a vulnerability scanner flagged the debugging tool across hundreds of instances even though no application used it. The fix was not heroic security engineering; it was disciplined package ownership, a smaller base image, and a rule that temporary diagnostic packages must be removed before publishing an image.
 
 When evaluating a package change, ask three questions before typing the command. First, which repository and signing key authorize this package? Second, which files and services will the package add or change? Third, how will you prove later that the installed state matches your intent? Those questions turn a one-line install into an auditable operational decision.
 
@@ -729,7 +727,7 @@ Evaluate the final state with an audit question: "Could another administrator ex
 - **Debian's package archive contains over 60,000 packages** - making it one of the largest curated software collections in the world. Every single one is maintained through a formal process, and `apt` relies on repository metadata to manage the dependency graph automatically.
 - **The `/etc/shadow` file exists because `/etc/passwd` was historically world-readable.** Early Unix systems stored password hashes in a file that normal users could read, which made offline cracking far easier. Moving hashes into a root-only database dramatically improved the security model while preserving readable account metadata.
 - **`visudo` protects against two failure classes at once.** It validates sudoers syntax before saving, and it locks the policy file so two administrators do not race each other with overlapping edits. That is why it is still the standard tool even though the file is plain text.
-- **RPM was created by Red Hat in 1997** and originally stood for "Red Hat Package Manager." The format and tooling still underpin RHEL, Fedora, SUSE-family systems, and many enterprise package workflows.
+- **RPM was created in the mid-1990s, with its 1.0 release around 1997**, and originally stood for "Red Hat Package Manager." The format and tooling still underpin RHEL, Fedora, SUSE-family systems, and many enterprise package workflows.
 
 ## Common Mistakes
 
@@ -847,8 +845,8 @@ id testdev
 grep testdev /etc/passwd
 # testdev:x:2000:2000:Test Developer:/home/testdev:/bin/bash
 
-# Set a password
-echo "testdev:TempPass123!" | sudo chpasswd
+# Set a password interactively (avoids putting credentials in shell history)
+sudo passwd testdev
 
 # Verify shadow entry exists
 sudo grep testdev /etc/shadow | cut -d: -f1-3
@@ -889,8 +887,8 @@ sudo visudo -f /etc/sudoers.d/webteam
 ls -la /etc/sudoers.d/webteam
 # -r--r----- 1 root root ... /etc/sudoers.d/webteam
 
-# Test: switch to testdev and try allowed vs denied commands
-sudo -u testdev sudo -l
+# Test: list privileges granted to testdev
+sudo -l -U testdev
 # (root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl status nginx
 ```
 
@@ -966,6 +964,7 @@ Continue with [Module 8.4: Service Configuration & Scheduling](../module-8.4-sch
 - [Debian manpage: sources.list](https://manpages.debian.org/bookworm/apt/sources.list.5.en.html)
 - [Fedora Docs: DNF Command Reference](https://docs.fedoraproject.org/en-US/quick-docs/dnf/)
 - [RPM documentation](https://rpm.org/documentation.html)
+- [RPM project: About](https://rpm.org/about.html)
 - [Linux man-pages: passwd file format](https://man7.org/linux/man-pages/man5/passwd.5.html)
 - [Linux man-pages: shadow file format](https://man7.org/linux/man-pages/man5/shadow.5.html)
 - [Linux man-pages: group file format](https://man7.org/linux/man-pages/man5/group.5.html)
