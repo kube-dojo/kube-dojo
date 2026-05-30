@@ -125,8 +125,8 @@ The diagram shows why startup time and density differ. A VM boots a guest OS bef
 | Startup | Minutes | Seconds |
 | OS | Full guest OS per VM | Shared host kernel |
 | Isolation | Hardware virtualization | Process isolation |
-| Portability | VM image formats vary | Universal container images |
-| Density | ~10-20 VMs per server | ~100s of containers per server |
+| Portability | VM image formats vary | Often portable across hosts with the same OS kernel family and CPU architecture |
+| Density | Typically fewer VMs per host | Often many more containers per host because they share one kernel |
 
 The table should not be read as a scoreboard where every smaller number wins. Hardware virtualization is the right tool when a workload requires a different operating system kernel, custom kernel modules, or a stronger isolation boundary between tenants. A legacy Windows Server application does not become Linux-compatible because it is packaged in a Linux container. If it needs Windows kernel behavior, it needs a Windows environment, usually a VM or a Windows container on a Windows host.
 
@@ -235,7 +235,7 @@ flowchart LR
     subgraph Cloud [Cloud Registries]
         direction TB
         AWS[AWS ECR: *.dkr.ecr.*.amazonaws.com]
-        GCP[Google GCR: gcr.io]
+        GCP[Google Artifact Registry: LOCATION-docker.pkg.dev]
         AZ[Azure ACR: *.azurecr.io]
     end
 ```
@@ -244,7 +244,12 @@ Pulling an image downloads the referenced layers and metadata to a machine that 
 
 ```bash
 docker pull nginx              # From Docker Hub
-docker pull gcr.io/project/app # From Google
+```
+
+Google Artifact Registry uses a different hostname than Docker Hub. Private repositories require authentication, so the pull syntax is shown here as a reference rather than a copy-paste lab command:
+
+```text
+docker pull us-docker.pkg.dev/my-project/my-repo/my-app:latest
 ```
 
 Image references carry a specific structure. The registry portion is optional because Docker Hub is the default in many tools. A namespace or organization may be present. The repository identifies the image name, and the tag identifies a named version or channel. The danger is that tags are not guaranteed to be immutable unless your registry policy enforces it. A tag is a pointer, and pointers can move.
@@ -254,9 +259,10 @@ Image references carry a specific structure. The registry portion is optional be
 
 Examples:
 nginx                           # Docker Hub, library/nginx:latest
-nginx:1.25                      # Docker Hub, specific version
+nginx:1.31.1                    # Docker Hub, specific version
 mycompany/myapp:v1.0.0         # Docker Hub, custom namespace
-gcr.io/myproject/myapp:latest  # Google Container Registry
+us-docker.pkg.dev/my-project/my-repo/my-app:latest  # Google Artifact Registry
+gcr.io/myproject/myapp:latest  # Legacy Google Container Registry (read-only; migrated to Artifact Registry)
 ghcr.io/username/app:sha-abc123 # GitHub Container Registry
 ```
 
@@ -264,15 +270,15 @@ Production deployments should avoid mutable tags like `latest` because they hide
 
 ```text
 nginx:latest     # Whatever is newest (unpredictable!)
-nginx:1.25       # Specific version (better)
-nginx:1.25.3     # Exact version (best for production)
+nginx:1.31       # Specific version line (better)
+nginx:1.31.1     # Exact patch version (best for production)
 
 Rule: Never use :latest in production
 ```
 
 Hypothetical scenario: a team runs `postgres:latest` for months because the first demo worked and nobody revisits the image reference. The container starts cleanly after each routine restart until a host reboot pulls a newer major image with incompatible expectations for the data directory. The database refuses to start, recovery requires downgrading and careful data handling, and the team loses most of a night to a deployment choice that had looked harmless. Pinning tags is not bureaucracy; it is how you make time behave when automation repeats a deployment after humans have stopped watching the registry.
 
-Before running this in your own environment, what output would you expect if you pulled `nginx:1.25` twice in a row? The second pull should reuse layers already present locally unless the registry metadata has changed. That small observation previews a major operational benefit: layered images make repeated deployments cheaper because unchanged content does not need to move again.
+Before running this in your own environment, what output would you expect if you pulled `nginx:1.31.1` twice in a row? The second pull should reuse layers already present locally unless the registry metadata has changed. That small observation previews a major operational benefit: layered images make repeated deployments cheaper because unchanged content does not need to move again.
 
 Image naming also becomes a supply-chain control. A registry path can tell you who owns the artifact, a tag can tell you the intended release channel, and a digest can tell you the exact content. Mature teams use all three pieces deliberately. They avoid ambiguous image names, restrict who can push production repositories, scan images before promotion, and record the image reference used in each deployment so an incident can be traced to a precise artifact.
 
@@ -353,7 +359,7 @@ The same vocabulary check helps during reviews of learning labs. A command that 
 
 ## Did You Know?
 
-- **Containers are older than Docker.** Unix had chroot in 1979, FreeBSD Jails arrived in 2000, Linux Containers appeared in 2008, and Docker made the workflow approachable in 2013.
+- **Containers are older than Docker.** The ideas trace back through Unix chroot, BSD jails, and Linux container features, which Docker made approachable for everyday use in 2013.
 - **Alpine Linux is tiny by design.** A minimal Alpine base image is commonly only a few megabytes, while a general Ubuntu base is much larger and a full VM image can be measured in gigabytes.
 - **Container images are intended to be immutable release artifacts.** Once an image is built and identified by digest, changing behavior should mean building a new image rather than editing a running container by hand.
 - **The Docker whale is named Moby Dock.** The mascot works because the metaphor connects software containers to standardized shipping containers carried across different transport systems.
