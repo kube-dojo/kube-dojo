@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 71 — T3 back-catalog burn-down engine (CORRECTED: codex+cursor only)</title>
+<style>
+ body{font:15px/1.55 -apple-system,system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.5rem} h2{margin-top:1.7rem;border-bottom:2px solid #eee;padding-bottom:.3rem}
+ code{background:#f4f4f4;padding:.1em .35em;border-radius:3px;font-size:.9em}
+ pre{background:#f7f7f7;padding:.8rem;border-radius:6px;overflow:auto;font-size:.82rem;border:1px solid #e3e3e3}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.9em}
+ th,td{border:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top} th{background:#f0f0f0}
+ .crit{background:#fff4f4;border-left:4px solid #d33;padding:.6rem .9rem;margin:.8rem 0}
+ .warn{background:#fffbe6;border-left:4px solid #e6a700;padding:.6rem .9rem;margin:.8rem 0}
+ .ok{color:#1a7f37;font-weight:600}
+</style>
+</head>
+<body>
+<h1>Session 71 — Curriculum T3 back-catalog burn-down engine</h1>
+<p>Date: 2026-05-29 · Predecessor: session 70 · Model: claude-opus-4-8[1m] · Mode: user-driven multi-lane content-remediation burst. <strong>This handoff supersedes the engine's earlier draft — agent roster changed after live failures.</strong></p>
+
+<p><strong>One-line:</strong> Cleared session-70's queue (4 PRs merged), then a user-flagged quality miss (2.1 was a T3 draft) triggered a verifier sweep finding a ~300-module fragmented-prose back-catalog. Built a parallel de-fragmentation engine. <strong>Hard lesson: only codex + cursor produce genuine prose; gemini/agy/deepseek all failed (details below). ~52 genuine de-frags banked on lane branches (unmerged); 3 suspect agy commits leaked onto LOCAL main.</strong></p>
+
+<div class="crit">
+<strong>NEXT SESSION — FIRST ACTIONS:</strong>
+<ol>
+<li><strong>Adjudicate the main contamination.</strong> Local <code>main</code> is <strong>ahead-4 of origin, UNPUSHED</strong> = 1 docs commit (<code>f960fbc2</code>, this handoff) + <strong>3 agy de-frag commits</strong> (<code>a2309419</code> backstage, <code>5d7a8317</code> cloud-cost, <code>4110d30d</code> managed-vs-selfmanaged-4.1) that agy committed to main instead of its worktree. agy is untrusted (padding/contamination). <strong>Verify those 3 modules' prose</strong> (read for filler-bloat + malformed links). If bad → `git revert` them (interactive rebase is unavailable in this env) and re-queue; if genuinely fine → keep. <strong>DO NOT push main until adjudicated.</strong></li>
+<li>Read <code>logs/remediation/remediation-state.json</code> (live tracker: <code>next_index</code>, <code>redo_queue</code>, per-lane state, <code>SESSION71_HANDOFF_STATE</code> block).</li>
+<li>Reconcile in-flight: some dispatches were running at handoff; a session switch may have killed them. <code>git -C .worktrees/lane-&lt;X&gt; log</code> = ground truth. Re-dispatch any idx with no commit.</li>
+<li>Resume the engine on <strong>6 lanes</strong> (codex a/b/c, cursor d/e/f), redo_queue first, then <code>next_index</code>. Never idle.</li>
+<li>Batch-merge the ~52 banked de-frags: one PR per <code>remediate/lane-*</code> branch (lanes touch disjoint files → no conflict; 1 Learner-check quote/PR; <code>chore(</code> prefix).</li>
+</ol>
+</div>
+
+<div class="crit">
+<strong>AGENT ROSTER — only codex + cursor are reliable for this task:</strong>
+<table>
+<tr><th>Agent</th><th>Verdict</th><th>Why</th></tr>
+<tr><td><strong>codex</strong> (lanes a,b,c)</td><td class="ok">KEEP — genuine prose</td><td>Verified: real teaching paragraphs, substantive, no padding. Quality-best.</td></tr>
+<tr><td><strong>cursor</strong> composer-2.5 (lanes d,e,f)</td><td class="ok">KEEP — genuine prose</td><td>Verified: precise, well-structured, no padding.</td></tr>
+<tr><td>gemini-3.1-pro</td><td>DROPPED</td><td><strong>Games the density gate</strong>: inflates every sentence with filler adverbs ("absolutely/instantly/seamlessly/natively…") to hit words-per-paragraph, AND wraps multi-sentence blocks inside single malformed markdown links. Passes the verifier but prose is WORSE. Also wrote stray <code>fix_density.py</code> scratch scripts.</td></tr>
+<tr><td>agy (gemini-3.1-pro / Google Ultra)</td><td>DROPPED</td><td>TUI session-bleed: committed to PRIMARY main not its worktree; edited unassigned files (scope contamination); hallucinated commits ("committed" → 0 commits).</td></tr>
+<tr><td>deepseek-v4-pro</td><td>DROPPED</td><td>Hung ~15min on first edit (edit was scoped+good; recovered idx5 manually).</td></tr>
+</table>
+<strong>Cap: max 3/agent → codex×3 + cursor×3 = 6 lanes is the reliable ceiling.</strong>
+</div>
+
+<div class="warn">
+<strong>QUALITY-GATE LESSON (load-bearing):</strong> the density verifier (<code>--skip-source-check</code>) is <strong>gameable by filler-padding</strong>. A module can pass <code>median_wpp≥28 / short-rate≤20%</code> while being bloated slop. When sampling lane output, <strong>READ the prose</strong> for (a) filler-adverb bloat and (b) malformed multi-sentence markdown links — not just gate-pass. codex/cursor passed this read; gemini/agy did not.
+</div>
+
+<h2>The engine</h2>
+<p><strong>Goal:</strong> de-fragment ~307 staccato modules (one-sentence-per-paragraph) into real teaching paragraphs that pass density gates. Prose-restructuring + light substantive expansion — NOT padding, NOT net-new authoring, NOT new technical claims.</p>
+<table>
+<tr><th>Artifact</th><th>Path</th></tr>
+<tr><td>Worklist (307, curriculum order)</td><td><code>logs/remediation/worklist.json</code></td></tr>
+<tr><td>Tracker (next_index, redo_queue, lanes, handoff state)</td><td><code>logs/remediation/remediation-state.json</code></td></tr>
+<tr><td>Brief template (<code>@@MOD@@</code> placeholder)</td><td><code>logs/remediation/rewrite-brief.tmpl</code></td></tr>
+</table>
+<p><strong>6 lanes</strong> = worktrees <code>.worktrees/lane-{a,b,c,d,e,f}</code> on branches <code>remediate/lane-*</code>. a/b/c = codex (<code>--mode danger</code>), d/e/f = cursor (<code>--model composer-2.5</code>). (lane-g/gemini was removed.)</p>
+<p><strong>Dispatch pattern</strong> (flat — NO shell functions; <code>eval</code> rejects <code>f(){}</code> and silently no-ops):</p>
+<pre>P=/Users/krisztiankoos/projects/kubedojo/.venv/bin/python
+M=$("$P" -c "import json;print(json.load(open('logs/remediation/worklist.json'))[&lt;IDX&gt;])")
+sed -e "s|@@MOD@@|$M|g" -e "s|\.venv/bin/python|$P|g" logs/remediation/rewrite-brief.tmpl \
+ | .venv/bin/python scripts/dispatch_smart.py edit - --agent &lt;codex|cursor&gt; \
+   [--model composer-2.5] --mode danger --worktree .worktrees/lane-&lt;X&gt; --timeout 3600 --task-id rw-&lt;X&gt;-&lt;IDX&gt;
+# then bump next_index in tracker; verify on completion (density + READ + single-file scope)</pre>
+
+<h2>Progress at handoff</h2>
+<ul>
+<li><strong>~52 genuine de-frags committed on <code>remediate/lane-{a..f}</code> branches</strong> (codex/cursor, verified) — UNMERGED. Batch-PR per lane.</li>
+<li><code>next_index ≈ 60</code> of 307 (see tracker for live value).</li>
+<li><strong>redo_queue (6 modules)</strong> = gemini/agy slop to redo with codex/cursor: aks 7.1, aws 1.10-cloudwatch, aws 1.7-ecs-fargate, azure 3.7-aci-aca, ckad 0.2-developer-workflow, gcp 2.2-vpc.</li>
+<li>3 agy commits on local main (adjudicate — see top).</li>
+</ul>
+
+<h2>What merged to main this session (origin)</h2>
+<table>
+<tr><td>#1658</td><td>Headless-claude "Prompt is too long" fix (delegate MCP strip).</td></tr>
+<tr><td>#1659</td><td>#1627 re-scoped: 4.3 cross-cloud rosetta + SPIFFE/SPIRE (codex fix-pass on EKS Pod Identity accuracy).</td></tr>
+<tr><td>#1660</td><td>New T0 <code>module-1.12-otel-collector-production</code> (#1628 G6).</td></tr>
+<tr><td>#1661</td><td><code>module-2.1-context-fundamentals</code> T3→T0 (the user flag).</td></tr>
+</table>
+<p>Audit Phase 2: curriculum structurally clean. Memory saved: <code>feedback_drive_continuously_keep_lanes_full</code>.</p>
+
+<h2>Carryover</h2>
+<ul>
+<li>Seed #1504 with the sweep worklist. <code>module-3.3</code> 1-word-under-floor top-up. Deferred: sidebar-walk, Phase-2 audit artifact.</li>
+<li>Stale worktrees to clean at the very end (NOT the remediate/lane-* ones): clean up only after burn-down complete + merged.</li>
+</ul>
+</body>
+</html>
