@@ -373,7 +373,7 @@ Keep this decision framework in your notes as a small checklist, not as a script
 
 ## Did You Know?
 
-1. **DNS replaced a hand-maintained host list.** Before DNS became the standard in 1983, early internet hosts relied on centrally maintained host tables, and RFC 1034 explains why that approach stopped scaling as the network grew.
+1. **DNS replaced a hand-maintained host list.** Before DNS became standard in 1983, early internet hosts relied on a centrally distributed `HOSTS.TXT` file; as the network grew, that single-file approach stopped scaling. DNS was introduced in 1983, and the familiar hierarchical design most systems use today was documented in 1987 (RFC 1034).
 2. **IPv4 has about 4.3 billion possible addresses.** That once sounded enormous, but the public internet, mobile devices, cloud platforms, and always-connected systems made address sharing and IPv6 adoption necessary.
 3. **Ports have a standardized registry.** RFC 6335 describes how service names and port numbers are managed, which is why familiar services such as HTTP, HTTPS, DNS, and SSH have widely recognized default ports.
 4. **Kubernetes has its own default API port.** The Kubernetes API server commonly uses secure port 6443, so beginner port reasoning applies directly when `kubectl` cannot reach a cluster.

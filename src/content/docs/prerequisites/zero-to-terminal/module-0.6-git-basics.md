@@ -92,12 +92,14 @@ git version 2.39.2
 
 Before creating commits, configure the identity Git will place into commit metadata. This is not the same thing as authenticating to GitHub during a push. The name and email configured here answer the question, "Who authored this snapshot?" Remote authentication answers a different question: "Is this person allowed to upload to that server?" Keeping those concepts separate prevents confusion when a commit succeeds locally but a push later asks for credentials.
 
+Replace the placeholder name and email below with your own real values before you run the commands.
+
 ```bash
 # Set your name (use your real name, this appears in the history)
-git config --global user.name "Alex Chen"
+git config --global user.name "Your Name"
 
 # Set your email address
-git config --global user.email "alex.chen@example.com"
+git config --global user.email "you@example.com"
 ```
 
 The `--global` flag writes to configuration associated with your user account on this computer, usually in `~/.gitconfig`. You can also set repository-specific configuration without `--global`, which is useful when one laptop contributes to both personal and work repositories. For now, a global beginner setup is enough, and you can inspect it with a command that prints the settings Git sees.
@@ -114,7 +116,7 @@ mkdir k8s-webapp
 cd k8s-webapp
 
 # Tell Git to start tracking this directory
-git init
+git init --initial-branch=main
 ```
 
 Expected output should confirm that Git created an empty repository database in a hidden `.git` directory.
@@ -306,13 +308,13 @@ The output should show the most recent commit first, followed by the earlier roo
 
 ```text
 commit 9f8e7d6c5b4a39281716151413121110abcdef12 (HEAD -> main)
-Author: Alex Chen <alex.chen@example.com>
+Author: Your Name <you@example.com>
 Date:   Wed Oct 12 10:45:12 2023 -0400
 
     chore: add environment label to namespace
 
 commit a1b2c3d4e5f60718293a4b5c6d7e8f9012345678
-Author: Alex Chen <alex.chen@example.com>
+Author: Your Name <you@example.com>
 Date:   Wed Oct 12 10:15:30 2023 -0400
 
     feat: add production namespace definition
@@ -540,7 +542,7 @@ Create a new directory named `dojo-k8s-project`, navigate into it, and initializ
 ```bash
 mkdir dojo-k8s-project
 cd dojo-k8s-project
-git init
+git init --initial-branch=main
 git status
 ```
 
@@ -646,7 +648,7 @@ git commit -m "fix: set deployment replicas to 3"
 
 ### Task 5: Reviewing the Timeline
 
-Run a command to view your complete commit history in a compact, single-line format. Verify that all three of your commits are present in chronological order. If a commit is missing, use `git status` to determine whether the change is still unstaged, staged, or never created.
+Run a command to view your complete commit history in a compact, single-line format. Verify that all three of your commits are present with the most recent first (the default for `git log --oneline`). If a commit is missing, use `git status` to determine whether the change is still unstaged, staged, or never created.
 
 - [ ] History command executed.
 - [ ] Three distinct commits visible in the output.
