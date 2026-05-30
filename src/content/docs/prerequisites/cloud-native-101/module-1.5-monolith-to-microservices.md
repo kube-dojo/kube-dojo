@@ -26,7 +26,7 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2001, Amazon's retail platform was straining under the weight of a huge C++ and Perl application called Obidos. Engineers could still ship features, but each change required coordination across teams that shared the same deployment unit, the same assumptions, and often the same failure modes. The famous 2002 API mandate did not happen because network calls were fashionable; it happened because the organization needed stronger boundaries before its own software architecture became the bottleneck for every business decision.
+Amazon's retail platform famously outgrew a large monolithic application. Engineers could still ship features, but each change required coordination across teams that shared the same deployment unit, the same assumptions, and often the same failure modes. According to widely recounted accounts from Amazon's early 2000s, an internal mandate to communicate only through service interfaces forced stronger boundaries—not because network calls were fashionable, but because the organization needed decoupling before its own software architecture became the bottleneck for every business decision.
 
 That story is useful because it cuts through the simplistic version of microservices: "split the app and everything gets better." Amazon paid for the split with new operational complexity, stricter interface design, and a culture where teams owned services in production. The benefit was not smaller repositories by themselves; the benefit was that a payment team, catalog team, or fulfillment team could move without waiting for every other part of the company to agree on one giant release.
 
@@ -73,7 +73,7 @@ The shared database is the most important hidden boundary in many monoliths. It 
 
 The user module slows down because the shared dependency is saturated. This is the heart of architectural coupling: the failure did not need to cross a function call boundary or a source-code import to hurt another feature. The database was the shared resource, so the blast radius followed that resource instead of following the application package structure.
 
-A good monolith is not a bad architecture waiting to be rescued. Shopify's long-running "majestic monolith" framing is a useful reminder that a carefully maintained monolith can serve very large businesses when teams invest in modularity, testing, observability, and disciplined ownership. The trap is not the monolith itself; the trap is allowing "single deployable unit" to become "single tangled unit."
+A good monolith is not a bad architecture waiting to be rescued. Shopify's long-running "modular monolith" framing is a useful reminder that a carefully maintained monolith can serve very large businesses when teams invest in modularity, testing, observability, and disciplined ownership. The trap is not the monolith itself; the trap is allowing "single deployable unit" to become "single tangled unit."
 
 For Kubernetes learners, a monolith also teaches a useful baseline. You can run a monolith in a container, deploy it with a Deployment, expose it with a Service, configure it with ConfigMaps and Secrets, and restart it with probes. Kubernetes does not require microservices; it manages containers and desired state, which can be useful before an application is decomposed.
 
@@ -362,7 +362,7 @@ The original misconceptions are worth preserving because they are still the trap
 | Misconception | Reality |
 |---------------|---------|
 | "Microservices are always better" | They add massive operational complexity. Often a disastrous choice for startups or small teams searching for product-market fit. |
-| "Monoliths don't scale" | They do! Shopify handles massive global e-commerce traffic with a monolithic Ruby on Rails application. Stack Overflow runs on a minimal monolithic architecture. |
+| "Monoliths don't scale" | They do! Shopify handles massive global e-commerce traffic with a monolithic Ruby on Rails application. |
 | "Microservices fix bad code" | They actually amplify it. Distributed bad code across network boundaries is much harder to debug, trace, and fix than bad code contained within a single monolithic process. |
 | "Smaller = micro" | Size isn't the point, bounded context is. A service should be exactly as big as its domain requires. Splitting services purely by lines of code creates tightly coupled, chatty networks. |
 | "You need a service mesh from day 1" | Service meshes like Istio add immense cognitive and operational load. Start with basic Kubernetes networking and only adopt a mesh when advanced observability or strict mTLS mandates require it. |
@@ -422,7 +422,7 @@ That habit also prepares you for Kubernetes work. Every manifest you write later
 
 ## Did You Know?
 
-- **Amazon's 2002 Mandate**: Jeff Bezos required teams to communicate through service interfaces, a move that forced decoupling and later influenced the operating model behind AWS.
+- **Amazon's early-2000s API mandate (widely recounted)**: According to widely recounted accounts, Amazon required teams to communicate through service interfaces—a move that forced decoupling and shaped how many organizations think about service boundaries.
 - **Segment's U-Turn**: In 2018, Segment described moving away from hundreds of small services because operational overhead and duplicated work were hurting engineering velocity.
 - **The Term "Microservices"**: The architectural style was discussed at a software architects workshop near Venice in May 2011 and was later popularized by James Lewis and Martin Fowler in their March 25, 2014 article.
 - **Conway's Law**: Melvin Conway's 1968 observation still matters because systems often mirror the communication patterns of the organizations that build them.
