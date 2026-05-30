@@ -26,7 +26,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-On June 21, 2022, a routine BGP community update at Cloudflare reordered policy terms inside its automated tooling, placing a global rejection rule ahead of every site-local advertisement term. Within minutes, nineteen data centers handling roughly half of Cloudflare's global traffic withdrew their routes and became unreachable. The outage lasted about seventy-five minutes. The change was reviewable in principle — it was source-controlled, written by a human, deployable by a tool — but it was not reviewed before it shipped, and there was no live controller comparing intended state with actual state. A configuration change that looks reviewable in a pull request is also reviewable before it ships when Git serves as the operational contract; one-off commands leave neither audit trail nor a controller to detect divergence between intended and actual cluster state. GitOps makes that audit trail and that controller the default, not the exception.
+On June 21, 2022, a routine BGP community update at Cloudflare reordered policy terms inside its automated tooling, placing a global rejection rule ahead of every site-local advertisement term. Within minutes, nineteen data centers handling roughly half of Cloudflare's global traffic withdrew their routes and became unreachable. The outage lasted about seventy-five minutes. The change was reviewable in principle — it was source-controlled, written by a human, deployable by a tool — but its staggered rollout was not granular enough to catch the MCP-specific failure before the final step reached every busy data center, and there was no live controller comparing intended state with actual state. A configuration change that looks reviewable in a pull request is also reviewable before it ships when Git serves as the operational contract; one-off commands leave neither audit trail nor a controller to detect divergence between intended and actual cluster state. GitOps makes that audit trail and that controller the default, not the exception.
 
 Kubernetes solves part of that problem by giving teams declarative APIs, controllers, health checks, and rollout mechanics, but Kubernetes does not automatically make a team disciplined. An engineer can still run an urgent command against the wrong namespace, a CI job can still hold broad cluster credentials, and a production fix can still live only in terminal history. GitOps addresses the gap by making Git the operational contract for the cluster. The repository describes the intended state, peer review controls how that state changes, and a controller inside the cluster continuously reconciles reality toward that contract.
 
@@ -86,12 +86,12 @@ Declarative configuration is powerful because Kubernetes controllers already wor
 ```bash
 git log --oneline manifests/
 a1b2c3d Scale web to 5 replicas
-d4e5f6g Add redis cache
-g7h8i9j Initial deployment
+d4e5f6a Add redis cache
+b7c8d9e Initial deployment
 
 # Every change is:
 # - Versioned (commit hash)
-# - Immutable (can't change history)
+# - Immutable (commit objects don't change; protected branches prevent history rewrites)
 # - Attributed (who made it)
 # - Reviewable (PR history)
 ```
@@ -165,6 +165,21 @@ flowchart TD
 The Application below preserves the essential production pattern. The controller runs in the `argocd` namespace, reads a configuration repository, targets the in-cluster Kubernetes API, and deploys only into the application namespace. The `prune` option lets Argo CD delete resources that were removed from Git, while `selfHeal` lets it repair drift without waiting for a new commit. Those two flags are powerful enough that teams normally pair them with branch protection, project boundaries, and careful namespace RBAC.
 
 ```yaml
+# Production apps should run under a restricted AppProject, never the permissive
+# built-in `default` project (which allows any repo, cluster, and resource kind).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: frontend-prod
+  namespace: argocd
+spec:
+  sourceRepos:
+    - 'https://github.com/myorg/gitops-config.git'
+  destinations:
+    - namespace: 'frontend-prod'
+      server: 'https://kubernetes.default.svc'
+  clusterResourceWhitelist: []
+---
 # A worked ArgoCD Application example
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -172,7 +187,7 @@ metadata:
   name: frontend-prod
   namespace: argocd
 spec:
-  project: default
+  project: frontend-prod
   source:
     repoURL: 'https://github.com/myorg/gitops-config.git'
     path: clusters/production/frontend
@@ -379,20 +394,19 @@ A useful incident question is "which layer disagrees with which other layer?" If
 ```bash
 # Production has a bug!
 
-# Option 1: Revert the commit
+# Normal GitOps rollback: revert the bad commit in Git
 git revert abc123
 git push
 
 # GitOps agent syncs: old version restored
 # Time to rollback: < 5 minutes
 
-# Option 2: Use Argo CD UI
-# Click "Rollback" on the application
-# Argo reverts to previous sync state
+# Emergency only: Argo CD UI "Rollback" reverts to a previous sync state
+# (blocked when automated sync is enabled; does not create a Git commit).
+# Follow any UI rollback with a matching git revert so Git stays authoritative.
 
-# All rollbacks are tracked in Git history
 git log --oneline
-def456 Revert "Deploy v1.2.3"  # Rollback recorded
+def456 Revert "Deploy v1.2.3"  # Rollback recorded in Git
 abc123 Deploy v1.2.3           # Bad deployment
 ```
 
@@ -408,7 +422,7 @@ metadata:
     argocd-image-updater.argoproj.io/myapp.update-strategy: semver
 
 # Flux Image Automation
-apiVersion: image.toolkit.fluxcd.io/v1beta1
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageUpdateAutomation
 metadata:
   name: flux-system
@@ -425,7 +439,7 @@ spec:
       author:
         email: fluxcdbot@users.noreply.github.com
         name: fluxcdbot
-      messageTemplate: 'Update image to {{.NewTag}}'
+      messageTemplate: 'Update image to {{range .Changed.Changes}}{{println .NewValue}}{{end}}'
     push:
       branch: main
 ```
@@ -502,7 +516,7 @@ The framework should lead to an explicit operating decision. A platform team mig
 ## Did You Know?
 
 - **The term "GitOps" was coined by Weaveworks** in August 2017 when the company described how it operated Kubernetes by using Git as the control surface for cluster state.
-- **The OpenGitOps working group published version 1.0.0 of the GitOps principles** on October 21, 2021, formalizing the declarative, versioned, pulled, and reconciled model.
+- **The OpenGitOps working group published version 1.0.0 of the GitOps principles** in 2021, formalizing the declarative, versioned, pulled, and reconciled model.
 - **Argo CD began at Intuit in 2018** and later became a CNCF graduated project, which is one reason many enterprise teams recognize its application-centered workflow.
 - **Flux reached CNCF graduated status in 2022** and is organized as a set of Kubernetes controllers, which explains why many platform teams describe it as strongly Kubernetes-native.
 
@@ -566,13 +580,17 @@ It is safer when tags are immutable, artifacts are scanned and signed, tests cov
 
 In this exercise, you will manually simulate the exact behavior of a GitOps agent. Instead of installing Argo CD or Flux, you will act as the continuous reconciliation controller to understand the underlying mechanics of drift detection and correction. The lab uses a local directory as the Git source of truth and a Kubernetes cluster as the live environment, so it works best on a disposable local cluster where you can safely create and delete a Deployment.
 
-Before starting, make sure `kubectl` is configured for a disposable Kubernetes cluster where you are comfortable creating and deleting a small Deployment. The command examples below use the full `kubectl` binary name so they remain copy-paste-safe in scripts and terminals. If you are on macOS, the included `sed -i ''` command works as written; on GNU/Linux, use `sed -i 's/nginx:1.27/nginx:1.28/' manifests/deployment.yaml` instead.
+Before starting, make sure `kubectl` is configured for a disposable Kubernetes cluster where you are comfortable creating and deleting a small Deployment. The command examples below use the full `kubectl` binary name so they remain copy-paste-safe in scripts and terminals.
 
 Below is the complete simulation script for reference.
 
 ```bash
 # This simulates GitOps behavior manually
 # In real GitOps, an agent does this automatically
+
+# Confirm cluster context and use a dedicated lab namespace
+kubectl config current-context
+kubectl create namespace gitops-demo
 
 # 1. Create a "Git repo" (directory)
 mkdir -p ~/gitops-demo/manifests
@@ -600,35 +618,37 @@ spec:
 EOF
 
 # 3. Apply (simulate GitOps sync)
-kubectl apply -f manifests/
+kubectl apply -n gitops-demo -f manifests/
 
 # 4. Verify
-kubectl get deployment gitops-demo
+kubectl get deployment gitops-demo -n gitops-demo
 
 # 5. Simulate drift (manual change)
-kubectl scale deployment gitops-demo --replicas=5
+kubectl scale deployment gitops-demo -n gitops-demo --replicas=5
 
 # 6. Check drift
-kubectl get deployment gitops-demo
+kubectl get deployment gitops-demo -n gitops-demo
 # Shows 5 replicas
 
 # 7. Reconcile (simulate GitOps correction)
-kubectl apply -f manifests/
+kubectl apply -n gitops-demo -f manifests/
 # Back to 2 replicas!
 
 # 8. Make a "Git change"
-sed -i '' 's/nginx:1.27/nginx:1.28/' manifests/deployment.yaml
+sed 's/nginx:1.27/nginx:1.28/' manifests/deployment.yaml > manifests/deployment.yaml.tmp
+mv manifests/deployment.yaml.tmp manifests/deployment.yaml
 
 # 9. Apply new state (simulate GitOps sync)
-kubectl apply -f manifests/
+kubectl apply -n gitops-demo -f manifests/
 
 # 10. Verify update
-kubectl get deployment gitops-demo -o jsonpath='{.spec.template.spec.containers[0].image}'
+kubectl get deployment gitops-demo -n gitops-demo -o jsonpath='{.spec.template.spec.containers[0].image}'
 # Shows nginx:1.28
 
 # 11. Cleanup
-kubectl delete -f manifests/
-rm -rf ~/gitops-demo
+kubectl delete -n gitops-demo -f manifests/
+DEMO_DIR="$HOME/gitops-demo"
+rm -r "$DEMO_DIR"
 ```
 
 ### Progressive Tasks
@@ -694,6 +714,7 @@ Execute steps 8, 9, 10, and 11. By using `sed` or a text editor, you update the 
 
 ## Sources
 
+- [Cloudflare outage on June 21, 2022](https://blog.cloudflare.com/cloudflare-outage-on-june-21-2022/)
 - [OpenGitOps Principles](https://opengitops.dev/)
 - [CNCF GitOps microsurvey and project landscape](https://www.cncf.io/blog/2022/02/17/cncf-gitops-microsurvey/)
 - [Argo CD documentation](https://argo-cd.readthedocs.io/en/stable/)

@@ -127,7 +127,7 @@ metadata:
   annotations:
     github.com/project-slug: acme-corp/payment-routing-service
     pagerduty.com/integration-key: "xyz123abc_critical_alerts"
-    prometheus.io/rule: "payment-service-high-latency-alerts"
+    custom-org/prometheus-alert-rule: "payment-service-high-latency-alerts"
     snyk.io/org-id: "security-org-123-finance"
     backstage.io/techdocs-ref: dir:.
 spec:
@@ -168,6 +168,7 @@ The same declaration can be cheap in development and resilient in production. Lo
 Kratix takes a Kubernetes-native path by letting platform teams define "Promises" that developers request as custom resources. A Promise can represent a database, message broker, cache, environment, or higher-level capability. This approach fits organizations that already trust GitOps and Kubernetes control loops because the platform interface itself becomes declarative. Developers request a capability, and the platform pipeline produces the resources needed to honor it.
 
 ```yaml
+# Illustrative example — the exact API group, version, and fields vary by Promise.
 # Example: Developer requesting a Kratix Promise
 apiVersion: postgres.marketplace.kratix.io/v1alpha1
 kind: PostgreSQL
@@ -347,7 +348,7 @@ metadata:
     
     # Observability Integration
     datadoghq.com/dashboard-url: "https://app.datadoghq.com/dashboard/auth-service-prod"
-    prometheus.io/rule: "auth-team-critical-alerts"
+    custom-org/prometheus-alert-rule: "auth-team-critical-alerts"
     
     # Incident Management
     pagerduty.com/integration-key: "auth-team-critical-alerts"
@@ -425,6 +426,7 @@ The platform team should shadow product developers during real service creation 
 
 ## Sources
 
+- [Gartner: 80% of large software engineering organizations will establish platform engineering teams by 2026 (2023)](https://www.gartner.com/en/newsroom/press-releases/2023-09-06-gartner-says-80-percent-of-large-software-engineering-organizations-will-establish-platform-engineering-teams-by-2026)
 - [CNCF Platforms White Paper](https://tag-app-delivery.cncf.io/whitepapers/platforms/)
 - [CNCF Platform Engineering Maturity Model](https://tag-app-delivery.cncf.io/whitepapers/platform-eng-maturity-model/)
 - [Backstage Documentation](https://backstage.io/docs/overview/what-is-backstage/)

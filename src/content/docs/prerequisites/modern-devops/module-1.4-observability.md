@@ -479,7 +479,7 @@ This framework is intentionally operational. It does not ask which vendor you bo
 - **GitHub published a public availability report** for its August 2021 MySQL incident, naming the secondary-incident root cause (a service-discovery misconfiguration during GitHub Actions setup) — the kind of separately-failing dependency that observability is supposed to surface before users do.
 - **The term "observability"** comes from control theory and is associated with Rudolf E. Kalman's 1960 work on dynamic systems.
 - **Prometheus graduated from the CNCF** on August 9, 2018, becoming one of the foundation's earliest graduated cloud-native projects after Kubernetes.
-- **W3C Trace Context reached Recommendation status** in 2021, giving distributed tracing tools a standard way to propagate trace identifiers across services.
+- **W3C Trace Context reached Recommendation status** in 2020, giving distributed tracing tools a standard way to propagate trace identifiers across services.
 
 ## Common Mistakes
 
@@ -562,7 +562,8 @@ kubectl patch deployment metrics-server -n kube-system --type=json \
 # Wait for metrics-server to become ready:
 kubectl rollout status deployment/metrics-server -n kube-system
 
-# Note: It may take an additional 30-60 seconds for metrics to propagate to the API.
+# Note: metrics-server needs a scrape cycle before top reports values.
+sleep 60
 kubectl top pods
 kubectl top nodes
 ```
@@ -587,7 +588,7 @@ kubectl get events --sort-by='.lastTimestamp'
 ```bash
 # 5. Restore application and view pod status
 kubectl scale deployment web --replicas=1
-kubectl wait --for=condition=ready pod -l app=web --timeout=60s
+kubectl wait --for=condition=available deployment/web --timeout=60s
 kubectl get pods -o wide
 kubectl describe pod -l app=web
 ```
