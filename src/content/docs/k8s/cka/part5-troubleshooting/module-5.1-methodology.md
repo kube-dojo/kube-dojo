@@ -8,7 +8,7 @@ sidebar:
 lab:
   id: cka-5.1-methodology
   url: https://killercoda.com/kubedojo/scenario/cka-5.1-methodology
-  duration: "30 min"
+  duration: "60 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -350,7 +350,7 @@ A strong operator reads `describe` from both top and bottom. The top tells you t
 
 ### 3.3 Logs and Previous Logs
 
-Logs answer what the container process wrote to stdout and stderr. For a pod that has restarted, [current logs may show only the new container instance, which can hide the actual crash. Use `--previous` when the restart count is greater than zero or when the Events section says the container terminated.](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/)
+[Logs answer what the container process wrote to stdout and stderr](https://kubernetes.io/docs/concepts/cluster-administration/logging/) — the default application logging path Kubernetes expects. For a pod that has restarted, [current logs may show only the new container instance, which can hide the actual crash. Use `--previous` when the restart count is greater than zero or when the Events section says the container terminated.](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/)
 
 ```bash
 kubectl logs <pod-name> -n <namespace>
@@ -512,7 +512,7 @@ Now inspect Kubernetes evidence. The Events section will show the container star
 kubectl describe pod crash-demo -n method-demo
 ```
 
-Move to previous logs because the current container may already have restarted. [The `--previous` flag asks for logs from the last terminated instance](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), which is exactly where the crash message lives.
+Move to previous logs because the current container may already have restarted. [The `--previous` flag asks for logs from the last terminated instance](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), which is exactly where the crash message lives. On fast clusters, wait a few seconds after the first restart before running `--previous`; the kubelet may not have flushed the prior instance's log buffer yet.
 
 ```bash
 kubectl logs crash-demo -n method-demo --previous
@@ -581,6 +581,8 @@ kubectl describe pod <pod-name> -n <namespace> | sed -n '/Readiness/,/Environmen
 kubectl get endpointslices -n <namespace> -l kubernetes.io/service-name=<service-name>
 ```
 
+The `sed` range above assumes a fixed section order in `describe` output; section order can vary by Kubernetes version, so fall back to reading the full description when the range returns nothing useful.
+
 When a service has no endpoints and pods are `Running`, compare readiness and labels before debugging DNS. DNS resolution can succeed even when the endpoint set is empty. The service virtual IP may exist, but kube-proxy or the service dataplane has no ready backend addresses to send traffic to.
 
 ---
@@ -589,7 +591,7 @@ When a service has no endpoints and pods are `Running`, compare readiness and la
 
 Workload troubleshooting often expands into service, network, or storage because Kubernetes composes many objects into one application path. A deployment may be correct while its service selector is wrong. A pod may be ready while a NetworkPolicy blocks the calling namespace. A database pod may be stuck because the PVC cannot bind. The method stays the same: observe, isolate, inspect, repair, validate.
 
-### 5.1 Service Path Debugging
+### Service Path Debugging
 
 Service debugging starts by separating name resolution from endpoint selection and port routing. [DNS can resolve a service name even when the service has no endpoints. Endpoints can exist while the service targets the wrong port. The application can listen on one port while the service `targetPort` points to another.](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/)
 
@@ -632,7 +634,7 @@ kubectl get svc <service-name> -n <namespace> -o jsonpath='{.spec.ports[*].port}
 kubectl exec -n <namespace> <client-pod> -- wget -qO- http://<service-name>:<port>/healthz
 ```
 
-### 5.2 DNS Triage
+### DNS Triage
 
 DNS problems should be tested from inside the cluster. The first question is whether the client pod can resolve the name. The second is whether it can connect to the resolved service. The third is whether CoreDNS itself is healthy if multiple pods and namespaces have lookup failures.
 
@@ -645,7 +647,7 @@ kubectl -n kube-system logs -l k8s-app=kube-dns --tail=100
 
 Do not confuse DNS failure with HTTP failure. `nslookup` only proves name resolution. If DNS succeeds but HTTP fails, move to service endpoints, target ports, readiness, application listener configuration, and NetworkPolicy. If DNS fails for every service name from multiple pods, CoreDNS or cluster DNS configuration becomes more plausible.
 
-### 5.3 NetworkPolicy Triage
+### NetworkPolicy Triage
 
 NetworkPolicy failures are policy and label problems first, packet problems second. [A policy selects pods, then defines allowed ingress or egress.](https://kubernetes.io/docs/concepts/services-networking/network-policies/) [If a pod is selected by a restrictive policy and no rule allows the traffic, traffic is denied](https://kubernetes.io/docs/concepts/services-networking/network-policies/) even when services, endpoints, and DNS are otherwise correct.
 
@@ -658,7 +660,7 @@ kubectl exec -n <namespace> <client-pod> -- wget -qO- http://<service-name>:<por
 
 When troubleshooting policy, compare four label sets: the policy's pod selector, the source pod labels, the source namespace labels, and the destination pod labels. Many failures come from a policy selecting more pods than intended or from a namespace selector that no longer matches after namespace labels changed.
 
-### 5.4 Storage Triage
+### Storage Triage
 
 Storage failures often appear as pods stuck in `Pending` or `ContainerCreating`, but the underlying evidence may live on PVCs, PVs, StorageClasses, or CSI driver pods. [A pod cannot start if its required volume cannot bind, attach, or mount.](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) The pod event usually points to the storage object that needs deeper inspection.
 
@@ -683,7 +685,9 @@ The key distinction is bind versus mount. [A PVC stuck `Pending` usually means i
 
 ---
 
-## Patterns & Anti-Patterns
+## Part 6: Exam & Production Patterns
+
+### Patterns & Anti-Patterns
 
 The CKA rewards correct fixes under time pressure, while production rewards correct fixes with evidence and low blast radius. The methods overlap. Both require you to avoid random changes, read the highest-value evidence first, and validate the outcome. The difference is how much documentation and collaboration surround the work.
 
@@ -960,7 +964,7 @@ A data-processing pod restarts repeatedly after a new release. `kubectl describe
 <details>
 <summary>Answer</summary>
 
-First confirm the termination evidence in `kubectl describe pod`, then inspect the container's requests and limits with `kubectl get pod <pod> -o yaml` and recent usage if metrics are available through `k top pod <pod> --containers`. Doubling the limit may be appropriate if legitimate workload demand increased and the node has capacity, but it may hide a memory leak or poor request sizing. Also inspect whether the pod has an unrealistically low limit, whether multiple restarts began after a specific image version, and whether node memory pressure contributed. The repair should address the diagnosed cause, not just remove the visible limit.
+First confirm the termination evidence in `kubectl describe pod`, then inspect the container's requests and limits with `kubectl get pod <pod> -o yaml` and recent usage if metrics are available through `kubectl top pod <pod> -n <namespace> --containers`. Doubling the limit may be appropriate if legitimate workload demand increased and the node has capacity, but it may hide a memory leak or poor request sizing. Also inspect whether the pod has an unrealistically low limit, whether multiple restarts began after a specific image version, and whether node memory pressure contributed. The repair should address the diagnosed cause, not just remove the visible limit.
 
 </details>
 
@@ -1231,6 +1235,14 @@ After cleanup, write a brief troubleshooting note for yourself. It should includ
 - [ ] Designed a short exam-time troubleshooting plan that preserves evidence, protects time, and proves the fix before moving to the next task.
 - [ ] Validated the service path, not only pod status.
 - [ ] Cleaned up all exercise resources.
+
+---
+
+## Learner check
+
+> This module writes every runnable example with the full `kubectl` command because copied shell blocks should work in non-interactive terminals, scripts, and exam environments without relying on local aliases.
+
+You are evaluating an OOMKilled pod before raising its memory limit. Which command shows per-container CPU and memory usage from the metrics API, and why should you run it after reading `kubectl describe pod` rather than before?
 
 ---
 
