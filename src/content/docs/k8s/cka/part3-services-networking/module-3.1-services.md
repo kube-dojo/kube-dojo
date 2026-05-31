@@ -651,7 +651,7 @@ spec:
 
 | Value | Behavior |
 |-------|----------|
-| `PreferSameNode` | [Strictly prefer endpoints on the same node, fall back to remote (GA in 1.35)](https://kubernetes.io/docs/concepts/services-networking/service/) |
+| `PreferSameNode` | [Prefer endpoints on the same node, fall back to remote (GA in 1.35)](https://kubernetes.io/docs/concepts/services-networking/service/) |
 | `PreferSameZone` | Prefer endpoints topologically close — same zone when using topology-aware routing |
 
 Pause and predict: if you set `externalTrafficPolicy: Local` for a NodePort Service and send traffic to a node with no local backend Pod, what should you check before blaming DNS? The DNS name may be resolving correctly, and the NodePort may be open, but the policy intentionally refuses to forward to remote endpoints. The right evidence is node placement, EndpointSlice hints, Service policy fields, and whether the receiving node has a local ready endpoint.
@@ -1263,7 +1263,13 @@ kubectl delete svc external-api
 ```
 
 ```bash
-# YOUR TASK: Complete in under 5 minutes
+# YOUR TASK (complete in under 5 minutes):
+# 1. Create a deployment 'challenge-app' (nginx, 3 replicas)
+# 2. Expose it as a ClusterIP Service on port 80
+# 3. Verify it has 3 endpoints
+# 4. Scale to 5 replicas and re-check endpoints
+# 5. Switch the Service to NodePort and read the assigned nodePort
+# 6. Clean up the deployment and Service
 ```
 
 <details>
@@ -1314,7 +1320,6 @@ kubectl delete svc challenge-app
 - [Virtual IPs and Service proxies](https://kubernetes.io/docs/reference/networking/virtual-ips)
 - [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
 - [kube-proxy command reference](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/)
-- [Service reference page](https://kubernetes.io/docs/concepts/services-networking/service/index.html)
 - [Service v1 API reference](https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/)
 - [Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/)
 - [EndpointSlices concept documentation](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
