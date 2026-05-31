@@ -129,11 +129,13 @@ Score begins only after at least one node survives Filter. Each scoring plugin g
 | Score Plugin | What It Favors |
 |---|---|
 | `NodeResourcesBalancedAllocation` | Nodes where CPU and memory usage ratios are similar (balanced utilization) |
-| `NodeResourcesLeastAllocated` | Nodes with the most available resources (spread workloads) |
+| `NodeResourcesFit` (LeastAllocated strategy) | Nodes with the most available resources (spread workloads) |
 | `ImageLocality` | Nodes that already have the container image cached |
 | `InterPodAffinity` | Nodes matching `preferredDuringSchedulingIgnoredDuringExecution` |
-| `TaintToleration` | Nodes with fewer tolerations needed (prefer "cleaner" nodes) |
+| `TaintToleration` | Nodes whose taints the pod tolerates, preferring fewer un-tolerated or surplus taints |
 | `PodTopologySpread` | Nodes that improve topology balance |
+
+The resource scoring strategy is configured through `KubeSchedulerConfiguration.pluginConfig` for `NodeResourcesFit`, using `scoringStrategy.type: LeastAllocated`, `MostAllocated`, or `RequestedToCapacityRatio`.
 
 Ties are intentionally not a placement contract. If two feasible nodes receive the same total score, the scheduler may break the tie randomly to avoid concentrating otherwise identical work on one node. If you require exact placement, use a hard mechanism such as node affinity, a node selector, taints and tolerations, or explicit `spec.nodeName` for special cases; do not reverse-engineer a scoring tie and depend on it.
 
@@ -456,11 +458,12 @@ sequenceDiagram
     participant C as Container (PID 1)
     
     A->>A: 1. Pod marked for deletion (deletionTimestamp set)
+    Note over A,K: Grace period countdown begins (terminationGracePeriodSeconds)
     A->>E: Remove pod from Service endpoints
     A->>K: Terminate Pod process initiates
     Note over K,C: 2. PreStop hook executes (if defined)
     K->>C: 3. SIGTERM sent to PID 1
-    Note over K,C: 4. Grace period countdown starts (includes PreStop)
+    Note over K,C: PreStop and SIGTERM consume the already-running budget
     K->>C: 5. SIGKILL sent if containers still running
     K->>A: 6. Pod removed from API server, Volumes detached
 ```
@@ -569,7 +572,8 @@ Pause and predict: a three-replica Deployment has a PDB with `minAvailable: 3`, 
 
 | Type | Examples | Honors PDB? |
 |---|---|---|
-| **Voluntary** | `kubectl drain`, cluster upgrade, autoscaler scale-down, preemption | Yes |
+| **Voluntary** | `kubectl drain`, cluster upgrade, autoscaler scale-down | Yes |
+| **Scheduler preemption** | Higher-priority pod displaces lower-priority victims | Attempted (soft) |
 | **Involuntary** | Node crash, OOM kill, kubelet hard eviction, hardware failure | No |
 
 This voluntary versus involuntary distinction should shape how you design availability. PDBs help maintenance workflows proceed safely, but replicas, topology spread, resource requests, probes, and adequate spare capacity are what make unexpected failures survivable. In scheduling lifecycle troubleshooting, always ask whether the disruption was planned through the API or forced by node reality.
