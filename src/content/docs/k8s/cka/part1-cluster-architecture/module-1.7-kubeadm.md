@@ -160,20 +160,23 @@ export KUBECONFIG=/etc/kubernetes/admin.conf
 
 The next step is CNI installation. Without a CNI plugin, kubelet can run the static control-plane pods, but ordinary pods cannot receive routable pod IPs, and CoreDNS commonly remains pending or not ready. That distinction is important: a kubeadm cluster can look partially alive before networking is installed. The API server may answer requests, yet workloads remain unable to communicate because the networking layer has not fulfilled its part of the cluster contract.
 
+Before running any CNI install command, choose exactly one CNI and verify the current vendor documentation first. The Kubernetes version, kernel prerequisites, kube-proxy mode, pod CIDR, and installation method can all change across plugin releases, so stale one-line manifests are a poor teaching pattern for a Kubernetes 1.35 cluster. Use the commands from the current docs for the plugin you actually chose, and record the version or release channel in your lab notes so later troubleshooting has a factual starting point.
+
 ```bash
 # Without CNI, pods won't get IPs and CoreDNS won't start
 
-# Calico
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.0/manifests/calico.yaml
-
-# Flannel
-kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
-
-# Cilium
-cilium install
+# Calico: read current Kubernetes support and install steps first.
+# https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements
+# https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart
+#
+# Flannel: use the current release or Helm path from the upstream project.
+# https://github.com/flannel-io/flannel
+#
+# Cilium: install the Cilium CLI first, then follow the current install docs.
+# https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/
 ```
 
-Those CNI examples are lab-oriented examples, not a recommendation to pin production networking to an old manifest URL without reading the vendor's current installation guide. The protected lesson is the sequence: initialize the control plane, configure `kubectl`, install one CNI that matches the pod network choice, and then verify system pods. Mixing multiple CNIs because "more networking should help" creates conflicting agents that fight over pod networking and makes diagnosis harder.
+Those CNI pointers are lab-oriented guardrails, not a recommendation to copy a command without reading the chosen vendor's current installation guide. The protected lesson is the sequence: initialize the control plane, configure `kubectl`, install one CNI that matches the pod network choice, and then verify system pods. Mixing multiple CNIs because "more networking should help" creates conflicting agents that fight over pod networking and makes diagnosis harder.
 
 ```bash
 # Check nodes
@@ -302,9 +305,14 @@ The API server shows mirror pods for visibility, but it does not own the source 
 └────────────────────────────────────────────────────────────────┘
 ```
 
-Editing static pod manifests is powerful and risky because kubelet applies the result automatically. A valid edit restarts the component with the new flags; an invalid edit can stop the API server, scheduler, controller manager, or etcd. The safest habit is to make a timestamped copy, change one thing, keep a root shell open on the control-plane node, and use local logs if the API disappears. For exam practice, the key distinction is simple: `kubectl` can show a static pod, but the manifest file controls it.
+Editing static pod manifests is powerful and risky because kubelet applies the result automatically. A valid edit restarts the component with the new flags; an invalid edit can stop the API server, scheduler, controller manager, or etcd. The safest habit is to make a timestamped copy outside `/etc/kubernetes/manifests/`, change one thing, keep a root shell open on the control-plane node, and use local logs if the API disappears. Do not leave `kube-apiserver.yaml.bak` or any other backup file inside the watched manifest directory, because kubelet treats non-dot files there as candidate static pod manifests rather than harmless notes. For exam practice, the key distinction is simple: `kubectl` can show a static pod, but the manifest file controls it.
 
 ```bash
+# Make a safe backup OUTSIDE the watched manifest directory
+sudo mkdir -p /etc/kubernetes/backup
+sudo cp /etc/kubernetes/manifests/kube-apiserver.yaml \
+  /etc/kubernetes/backup/kube-apiserver.yaml.$(date -u +%Y%m%dT%H%M%SZ)
+
 # View static pod manifests
 sudo cat /etc/kubernetes/manifests/kube-apiserver.yaml
 
@@ -386,11 +394,11 @@ sudo ETCDCTL_API=3 etcdctl \
 sudo ETCDCTL_API=3 etcdctl snapshot status /var/backups/etcd-snapshot.db --write-out=table
 ```
 
-Restoring etcd is a disruptive recovery action, not a casual maintenance command. In a single-node stacked etcd lab, the restore pattern is to stop the control plane, restore the snapshot to a new data directory, update the etcd static pod manifest to point at that directory if needed, and then let kubelet restart etcd and the API server. In a multi-member etcd topology, the procedure must respect quorum and member identity, so do not generalize a single-node lab recipe into a production runbook.
+Restoring etcd is a disruptive recovery action, not a casual maintenance command. In a single-node stacked etcd lab, the restore pattern is to stop the control plane, restore the snapshot to a new data directory with `etcdutl`, update the etcd static pod manifest to point at that directory if needed, and then let kubelet restart etcd and the API server. The older `etcdctl snapshot restore` form is legacy guidance; current Kubernetes and etcd recovery docs use `etcdutl` for restore while `etcdctl` remains common for saving live snapshots. In a multi-member etcd topology, the procedure must respect quorum and member identity, so do not generalize a single-node lab recipe into a production runbook.
 
 ```bash
 # Example lab restore target; plan production restores from the official etcd guidance
-sudo ETCDCTL_API=3 etcdctl snapshot restore /var/backups/etcd-snapshot.db \
+sudo etcdutl snapshot restore /var/backups/etcd-snapshot.db \
   --data-dir=/var/lib/etcd-from-backup
 ```
 
@@ -475,32 +483,35 @@ kubectl delete node <node-name>
 # 3. On the node itself, reset kubeadm
 sudo kubeadm reset
 
-# 4. Clean up
-sudo rm -rf /etc/kubernetes/
-sudo rm -rf /var/lib/kubelet/
-sudo rm -rf /var/lib/etcd/
+# 4. Optional post-reset cleanup after preserving evidence
+sudo rm -rf /etc/cni/net.d/
+rm -rf $HOME/.kube
+# Clean kube-proxy rules with the documented kube-proxy --cleanup method.
 ```
 
-Removing a node is more final than draining it. Deleting the Node object tells the cluster to stop tracking that host, while `kubeadm reset` cleans local kubeadm state on the host. The cleanup commands are intentionally destructive, so they belong in a lab, a decommissioning runbook, or a controlled rebuild, not in a casual troubleshooting loop. If you only need to restart kubelet or fix a CNI config file, resetting the node throws away useful evidence and creates extra work.
+Removing a node is more final than draining it. Deleting the Node object tells the cluster to stop tracking that host, while `kubeadm reset` performs best-effort local cleanup on the host. The cleanup commands are intentionally destructive, so they belong in a lab, a decommissioning runbook, or a controlled rebuild, not in a casual troubleshooting loop. If you only need to restart kubelet or fix a CNI config file, resetting the node throws away useful evidence and creates extra work.
 
 ```bash
 # On the node to reset
 sudo kubeadm reset
 
-# This does:
-# 1. Stops kubelet
-# 2. Removes /etc/kubernetes/
-# 3. Removes cluster state from etcd (if control plane)
-# 4. Removes certificates
-# 5. Cleans up iptables rules
+# kubeadm reset is best-effort LOCAL cleanup:
+# 1. Removes kubeadm-managed local files and certificates.
+# 2. Removes this node's local stacked etcd member data when applicable.
+# 3. Does not remove generic cluster state from a surviving etcd cluster.
+# 4. Does not clean CNI config, $HOME/.kube, or kube-proxy rules.
 
-# Additional cleanup you should do:
+# Additional cleanup kubeadm reset does NOT do automatically:
 sudo rm -rf /etc/cni/net.d/
-sudo rm -rf $HOME/.kube/config
-sudo iptables -F && sudo iptables -t nat -F
+rm -rf $HOME/.kube
+
+# For kube-proxy network rules, follow the kubeadm reset reference:
+# run kube-proxy --cleanup from the same kube-proxy image version/runtime
+# your cluster used. Do not assume an iptables flush is complete, because
+# kube-proxy may have programmed iptables, IPVS, or nftables state.
 ```
 
-Reset also has an exam trap: it does not magically erase every possible networking or runtime artifact in every environment. CNI configuration files, iptables rules, IPVS state, container images, and runtime data may need separate cleanup depending on how the node was prepared. That is why the kubeadm reset output tells you what it did and what you may still need to clean. Read the output instead of assuming reset means "factory new."
+Reset also has an exam trap: it does not magically erase every possible networking, credential, or runtime artifact in every environment. CNI configuration files, `$HOME/.kube`, kube-proxy traffic rules, IPVS or nftables state, container images, and runtime data may need separate cleanup depending on how the node was prepared. That is why the kubeadm reset output and reference page tell you what it did and what you may still need to clean. Read the output instead of assuming reset means "factory new."
 
 ---
 
@@ -1080,7 +1091,7 @@ kubectl delete deployment maint-test
 
 - [ ] Design a kubeadm bootstrap sequence that includes preflight checks, `kubeadm init`, kubeconfig setup, CNI installation, and worker join tokens.
 - [ ] Diagnose static pod and kubelet failures with `/etc/kubernetes/manifests/`, `journalctl`, `crictl`, and local control-plane logs.
-- [ ] Evaluate certificate and etcd maintenance risk by checking expiry, saving an etcd snapshot, and planning component restarts.
+- [ ] Evaluate certificate and etcd maintenance risk by checking expiry, explaining when and how to save an etcd snapshot, and planning component restarts.
 - [ ] Implement safe node maintenance with `kubectl cordon`, `kubectl drain`, `kubectl uncordon`, and a clear cleanup step.
 - [ ] Explain when `kubeadm reset` is appropriate and why it should not be the first response to every kubeadm problem.
 
@@ -1099,6 +1110,11 @@ kubectl delete deployment maint-test
 - [Safely drain a node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
 - [Static Pods](https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/)
 - [Operating etcd clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/)
+- [etcd disaster recovery](https://etcd.io/docs/v3.6/op-guide/recovery/)
+- [Calico Kubernetes requirements](https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements)
+- [Calico quickstart guide](https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart)
+- [flannel project documentation](https://github.com/flannel-io/flannel)
+- [Cilium quick installation](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
 
 ---
 
