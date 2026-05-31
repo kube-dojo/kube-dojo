@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: ckad-4.5-serviceaccounts
   url: https://killercoda.com/kubedojo/scenario/ckad-4.5-serviceaccounts
-  duration: "30 min"
+  duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -16,7 +16,7 @@ lab:
 >
 > **Time to Complete**: 40-55 minutes
 >
-> **Prerequisites**: Module 4.4 (SecurityContexts), basic Pod manifests, and RBAC vocabulary
+> **Prerequisites**: [Module 4.4: SecurityContexts](../module-4.4-securitycontext/), basic Pod manifests, and RBAC vocabulary
 
 ---
 
@@ -46,16 +46,22 @@ That distinction matters because a Pod is not a person, even when a human create
 Every namespace receives a ServiceAccount named `default` when the namespace is created. If you create a Pod without specifying `spec.serviceAccountName`, the ServiceAccount admission controller mutates the Pod and assigns that namespace default. The default identity usually has no useful RBAC permissions beyond baseline API discovery, but it is still an authenticated identity, and it may still receive a mounted token unless automounting is disabled. That is why "no explicit ServiceAccount" is not the same as "no identity."
 
 ```bash
-# View default ServiceAccount
+# View default ServiceAccount (Kubernetes 1.35 — NAME and AGE only)
 kubectl get serviceaccount
-# NAME      SECRETS   AGE
-# default   0         10d
+# NAME      AGE
+# default   10d
 
-# Describe it
+# Describe shows no legacy token Secret — Pods still get projected tokens
 kubectl describe sa default
+# Name:                default
+# Namespace:           default
+# Tokens:              <none>
+
+# Or inspect the object directly
+kubectl get sa default -o yaml
 ```
 
-The `SECRETS` column commonly surprises engineers who learned Kubernetes before the modern token model. In current Kubernetes releases, including 1.35, the default ServiceAccount normally shows zero automatically generated token Secrets. That does not mean Pods receive no credentials. It means Kubernetes now uses bound, projected ServiceAccount tokens instead of creating a long-lived Secret object for every ServiceAccount.
+Engineers who learned Kubernetes before 1.24 often expect a `SECRETS` column on `kubectl get serviceaccount`. That column was removed in Kubernetes 1.24+, so current clusters—including 1.35—list only `NAME` and `AGE`. `kubectl describe sa default` may show `Tokens: <none>` even while admitted Pods still receive bound, projected tokens under `/var/run/secrets/kubernetes.io/serviceaccount/`. The absence of a legacy token Secret on the ServiceAccount object does not mean the workload has no API credential; it means Kubernetes no longer auto-creates long-lived `kubernetes.io/service-account-token` Secrets for every ServiceAccount.
 
 When a Pod exists, you can confirm which identity it received by reading the Pod spec or by using `kubectl describe`. This is often the fastest first check during an exam troubleshooting question because it tells you whether you are debugging the intended identity or the namespace default. A manifest can look correct in Git while an older ReplicaSet, a stale Pod, or a hand-created debugging Pod is actually running with something different.
 
@@ -273,14 +279,26 @@ spec:
 
 This projected volume is different from the default mount path, so an application must be configured to read the token from the custom location. That is useful when a sidecar or helper process needs a token for a particular audience while the main application should not use the default client-library path. The more specific the mount, audience, and lifetime are, the smaller the blast radius if that particular file is exposed.
 
-Historically, before Kubernetes 1.24 stopped automatically creating ServiceAccount token Secrets, clusters often contained long-lived token Secrets for each ServiceAccount. Those tokens were convenient but risky because a copied Secret could remain valid until someone deleted it or rotated signing keys. In current clusters, `kubectl create token` creates a short-lived token through TokenRequest rather than reviving the old automatic Secret pattern.
+Historically, before Kubernetes 1.24 stopped automatically creating ServiceAccount token Secrets, clusters often contained long-lived token Secrets for each ServiceAccount. Those tokens were convenient but risky because a copied Secret could remain valid until someone deleted it or rotated signing keys. In Kubernetes 1.35 you should not recreate that legacy Secret pattern for new workloads.
 
-```bash
-# Old way (deprecated) - DO NOT use for persistent credential distribution
-kubectl create token my-app-sa    # Creates short-lived token instead
+```text
+# Legacy credential model (deprecated — do not use in 1.35)
+# Pre-1.24 clusters auto-created Secrets of type:
+#   kubernetes.io/service-account-token
+# Manually creating that Secret type revives long-lived bearer credentials.
 ```
 
-The comment in that block matters: the command is not deprecated, but using it as a replacement for old persistent token Secrets is the bad habit. It is a debugging and integration tool, not a reason to paste bearer tokens into configuration repositories. If a human asks for a ServiceAccount token that never expires, your design review should pause and ask what system is going to store, rotate, scope, and audit that credential.
+For workstation debugging, `kubectl create token` is the current approach. It calls the TokenRequest API and returns a short-lived bearer token. It is not a substitute for designing external identity, but it is the right tool when you need to reproduce an authorization problem with `curl` from outside the Pod.
+
+```bash
+# Current debugging approach (TokenRequest API — short-lived token)
+kubectl create token my-app-sa
+
+# Optional expiration for manual tests
+kubectl create token my-app-sa --duration=1h
+```
+
+Using `kubectl create token` as a replacement for old persistent token Secrets is the bad habit—not the command itself. It is a debugging and integration tool, not a reason to paste bearer tokens into configuration repositories. If a human asks for a ServiceAccount token that never expires, your design review should pause and ask what system is going to store, rotate, scope, and audit that credential.
 
 Which approach would you choose here and why: a batch Job needs to list ConfigMaps in its own namespace for two minutes at startup, while a web frontend in the same namespace never calls the API? A strong answer creates a custom ServiceAccount for the Job, binds only the required read permission, and disables token automounting for the frontend. Sharing `default` between them solves the YAML quickly and creates a broader identity than either workload needs.
 
@@ -416,7 +434,7 @@ For CKAD exam speed, memorize a compact path: ServiceAccount object, Pod templat
 
 ## Did You Know?
 
-- Kubernetes 1.24 stopped automatically creating long-lived ServiceAccount token Secrets, which is why modern ServiceAccounts commonly show `SECRETS` as zero even though Pods still receive projected tokens.
+- Kubernetes 1.24 stopped automatically creating long-lived ServiceAccount token Secrets and removed the `SECRETS` column from `kubectl get serviceaccount`, so `Tokens: <none>` on describe does not mean Pods receive no projected tokens.
 - A ServiceAccount username is formatted as `system:serviceaccount:<namespace>:<name>`, and that exact subject string is what you often see in authorization errors and audit events.
 - Bound ServiceAccount tokens became the default projection model before Kubernetes 1.35, so current clusters expect token rotation and expiration rather than static token files that live forever.
 - The TokenRequest API supports audiences, which lets one ServiceAccount request a token meant for the Kubernetes API and a separate token meant for a different trusted recipient.
@@ -514,6 +532,12 @@ Success criteria:
 - [ ] Debug an in-cluster API failure by separating token projection from RBAC authorization.
 - [ ] Design a least-privilege Role and RoleBinding that grant only namespace-scoped Pod reads.
 - [ ] Diagnose token exposure risk by proving that an API-free Pod has no automatic ServiceAccount token mount.
+
+## Learner check
+
+> Engineers who learned Kubernetes before 1.24 often expect a `SECRETS` column on `kubectl get serviceaccount`. That column was removed in Kubernetes 1.24+, so current clusters—including 1.35—list only `NAME` and `AGE`.
+
+Before you move on, explain why `kubectl describe sa default` can show `Tokens: <none>` while a Pod using that ServiceAccount still has a bearer token under `/var/run/secrets/kubernetes.io/serviceaccount/token`. A solid answer separates the ServiceAccount object (no legacy auto-created token Secret) from Pod admission and kubelet token projection (bound, short-lived JWT mounted at runtime).
 
 ## Sources
 
