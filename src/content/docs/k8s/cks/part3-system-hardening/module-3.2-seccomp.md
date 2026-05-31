@@ -237,6 +237,7 @@ spec:
         type: RuntimeDefault
   - name: sidecar
     image: busybox
+    command: ["sleep", "3600"]
     securityContext:
       seccompProfile:
         type: Localhost
@@ -367,10 +368,9 @@ Understanding how to structure custom profiles is essential for strict security 
 
 ### Profile That Blocks ptrace
 
-If your environment defaults to allowing most syscalls, you might want to create a denylist profile that specifically blocks known dangerous system calls like `ptrace`.
+If your environment defaults to allowing most syscalls, you might want to create a denylist profile that specifically blocks known dangerous system calls like `ptrace`. Save this profile as `/var/lib/kubelet/seccomp/profiles/deny-ptrace.json`:
 
 ```json
-// /var/lib/kubelet/seccomp/profiles/deny-ptrace.json
 {
   "defaultAction": "SCMP_ACT_ALLOW",
   "syscalls": [
@@ -387,10 +387,9 @@ This profile is intentionally narrow. It does not try to describe the whole appl
 
 ### Profile That Only Allows Specific Syscalls
 
-This is a strict allowlist approach. The `defaultAction` is `SCMP_ACT_ERRNO`, meaning anything not explicitly listed in the `syscalls` array will be blocked. This is highly secure but brittle.
+This is a strict allowlist approach. The `defaultAction` is `SCMP_ACT_ERRNO`, meaning anything not explicitly listed in the `syscalls` array will be blocked. This is highly secure but brittle. Save this profile as `/var/lib/kubelet/seccomp/profiles/minimal.json`:
 
 ```json
-// /var/lib/kubelet/seccomp/profiles/minimal.json
 {
   "defaultAction": "SCMP_ACT_ERRNO",
   "architectures": ["SCMP_ARCH_X86_64"],
@@ -411,10 +410,9 @@ This minimal profile is educational rather than a ready-made production profile.
 
 ### Profile That Logs Suspicious Calls
 
-This is an excellent pattern for debugging and auditing. Instead of blocking the calls and potentially crashing the application, this profile allows them but triggers an audit log entry. This lets security teams observe behavior before enforcing a block.
+This is an excellent pattern for debugging and auditing. Instead of blocking the calls and potentially crashing the application, this profile allows them but triggers an audit log entry. This lets security teams observe behavior before enforcing a block. Save this profile as `/var/lib/kubelet/seccomp/profiles/audit.json`:
 
 ```json
-// /var/lib/kubelet/seccomp/profiles/audit.json
 {
   "defaultAction": "SCMP_ACT_ALLOW",
   "syscalls": [
@@ -752,29 +750,44 @@ spec:
       localhostProfile: profiles/no-ptrace.json
   containers:
   - name: app
-    image: busybox
-    command: ["sleep", "3600"]
+    image: alpine
+    command: ["sh", "-c", "apk add --no-cache strace && sleep 3600"]
 EOF
 
 # Step 5: Wait for pod
-kubectl wait --for=condition=Ready pod/no-ptrace-pod --timeout=60s
+kubectl wait --for=condition=Ready pod/no-ptrace-pod --timeout=120s
 
 # Step 6: Verify seccomp is applied
 kubectl get pod no-ptrace-pod -o jsonpath='{.spec.securityContext.seccompProfile}' | jq .
 
 # Step 7: Test that ptrace would be blocked
-# (strace uses ptrace internally)
-kubectl exec no-ptrace-pod -- strace -f echo test 2>&1 || echo "strace blocked (expected)"
+# (strace uses ptrace internally — alpine installs strace at startup)
+kubectl exec no-ptrace-pod -- sh -c "strace -f echo test" 2>&1 || echo "strace blocked (expected)"
 
-# Step 8: Create comparison pod without seccomp restriction
-kubectl run allowed-pod --image=busybox --rm -it --restart=Never -- \
-  sh -c "ls /proc/self/status && echo 'No seccomp issues'"
+# Step 8: Create comparison pod with explicit Unconfined seccomp
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: allowed-pod
+spec:
+  securityContext:
+    seccompProfile:
+      type: Unconfined
+  containers:
+  - name: app
+    image: alpine
+    command: ["sh", "-c", "apk add --no-cache strace && sleep 3600"]
+EOF
+
+kubectl wait --for=condition=Ready pod/allowed-pod --timeout=120s
+kubectl exec allowed-pod -- sh -c "strace echo test"
 
 # Cleanup
-kubectl delete pod no-ptrace-pod
+kubectl delete pod no-ptrace-pod allowed-pod
 ```
 
-If your chosen image does not include `strace`, keep the profile and Pod pattern but use a lab image that includes tracing tools, or test another blocked syscall with a command available in the image. The security claim you are validating is not tied to BusyBox specifically. You are checking that `Localhost` resolves to the expected node file and that the runtime enforces the configured syscall action.
+The alpine image installs `strace` at container startup so Step 7 exercises a real `ptrace` denial instead of a missing-binary error. Step 8 sets `seccompProfile.type: Unconfined` explicitly so the comparison pod is not constrained by kubelet or runtime defaults on Kubernetes 1.35+. You should see `strace` succeed in `allowed-pod` and fail in `no-ptrace-pod`, proving the profile blocks the syscall rather than the tool.
 
 ### Progressive Tasks
 
@@ -797,23 +810,27 @@ Create the profile under `/var/lib/kubelet/seccomp/profiles/no-ptrace.json`, the
 - [ ] Directory `/var/lib/kubelet/seccomp/profiles/` exists on the node.
 - [ ] JSON profile `no-ptrace.json` is syntactically valid and saved to the correct location.
 - [ ] The Pod `no-ptrace-pod` is created without a `CreateContainerError`.
-- [ ] Running `strace` inside `no-ptrace-pod` results in an "Operation not permitted" error when the image includes `strace`.
-- [ ] The comparison workload executes normally, demonstrating the specific impact of the profile.
+- [ ] Running `strace` inside `no-ptrace-pod` results in an "Operation not permitted" error.
+- [ ] Running `strace echo test` inside `allowed-pod` succeeds, demonstrating allowed-vs-blocked behavior under explicit `Unconfined`.
 - [ ] You can explain why this lab proves profile loading and one enforcement rule, not complete application compatibility.
+
+## Learner check
+
+> A seccomp lab only proves enforcement when the test command actually invokes the blocked syscall: install `strace` in the container, run it under the restrictive profile and confirm denial, then repeat under explicit `Unconfined` and confirm success.
 
 ## Sources
 
-- https://kubernetes.io/docs/tutorials/security/seccomp/
-- https://kubernetes.io/docs/reference/node/seccomp/
-- https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-- https://kubernetes.io/docs/concepts/security/pod-security-standards/
-- https://kubernetes.io/docs/concepts/security/pod-security-admission/
-- https://github.com/moby/moby/blob/master/profiles/seccomp/default.json
-- https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#seccomp
-- https://docs.kernel.org/userspace-api/seccomp_filter.html
-- https://man7.org/linux/man-pages/man2/seccomp.2.html
-- https://man7.org/linux/man-pages/man2/syscalls.2.html
-- https://github.com/kubernetes-sigs/security-profiles-operator
+- <https://kubernetes.io/docs/tutorials/security/seccomp/>
+- <https://kubernetes.io/docs/reference/node/seccomp/>
+- <https://kubernetes.io/docs/tasks/configure-pod-container/security-context/>
+- <https://kubernetes.io/docs/concepts/security/pod-security-standards/>
+- <https://kubernetes.io/docs/concepts/security/pod-security-admission/>
+- <https://github.com/moby/moby/blob/master/profiles/seccomp/default.json>
+- <https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#seccomp>
+- <https://docs.kernel.org/userspace-api/seccomp_filter.html>
+- <https://man7.org/linux/man-pages/man2/seccomp.2.html>
+- <https://man7.org/linux/man-pages/man2/syscalls.2.html>
+- <https://github.com/kubernetes-sigs/security-profiles-operator>
 
 ## Next Module
 
