@@ -547,8 +547,8 @@ kubectl get pod <pod> -o yaml | grep -A 10 "livenessProbe\|readinessProbe"
 # Check for probe failures in events
 kubectl describe pod <pod> | grep -i "unhealthy\|probe"
 
-# Test probe manually
-kubectl exec <pod> -- wget -qO- http://127.0.0.1:8080/health
+# Test probe manually (nginx images ship curl, not wget)
+kubectl exec <pod> -- curl -sf http://127.0.0.1:8080/health
 kubectl exec <pod> -- cat /tmp/healthy
 ```
 
@@ -678,6 +678,12 @@ If the service is at risk and the old revision is known good, `kubectl rollout u
 Use a startup probe to protect the warmup period, readiness to keep traffic away until the service can answer real requests, and liveness only after startup has completed. The current liveness probe is acting too early, so Kubernetes interrupts normal initialization and creates a CrashLoopBackOff. An `initialDelaySeconds` can help, but startup probes express the intent more clearly for slow-starting containers. Readiness alone would not restart the container, and liveness alone cannot distinguish warmup from a dead process.
 </details>
 
+<details>
+<summary>Question 8: A Pod named `checkout` runs two containers — `app` and `log-shipper`. The Pod shows CrashLoopBackOff, `kubectl logs checkout` prints healthy sidecar startup lines, and `kubectl get pod checkout -o jsonpath='{range .status.containerStatuses[*]}{.name}{"\t"}{.restartCount}{"\n"}{end}'` shows `app` with restart count 4 and `log-shipper` with 0. What command finds the application crash message?</summary>
+
+Identify the failing container first, then read its logs with `-c`. Run `kubectl describe pod checkout | grep -A5 "Last State"` to confirm which container owns the restarts, then `kubectl logs checkout -c app --previous` for the crash output. Without `-c app`, you may read the sidecar's healthy logs while the application container beside it keeps failing. If `--previous` returns no logs because the container exits instantly, rely on `describe` and the jsonpath exit code before retrying `--previous`.
+</details>
+
 ## Hands-On Exercise: Application Failure Scenarios
 
 Exercise scenario: you will create a small namespace with four intentionally broken workloads, diagnose each failure, and apply the smallest correction that proves the root cause. The scenarios are deliberately simple, but the path mirrors real troubleshooting: describe the Pod, read Events, choose the relevant logs or state field, and then fix the object or missing dependency. Run these commands in a disposable cluster or lab environment because several examples intentionally create failing Pods.
@@ -714,13 +720,16 @@ EOF
 <summary>Solution</summary>
 
 ```bash
-kubectl logs crash-app -n app-debug-lab --previous
+kubectl describe pod crash-app -n app-debug-lab | grep -A5 "Last State"
 kubectl get pod crash-app -n app-debug-lab -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'
 # Exit code 1 - the command explicitly exits with error
 
+# If kubelet retained logs from the prior instance, follow up with:
+kubectl logs crash-app -n app-debug-lab --previous
+
 # Fix: update the command to sleep instead of exit
 kubectl get pod crash-app -n app-debug-lab -o yaml > crash.yaml
-sed -i 's/exit 1/sleep 3600/g' crash.yaml
+sed -i.bak 's/exit 1/sleep 3600/g' crash.yaml && rm crash.yaml.bak
 kubectl replace --force -f crash.yaml
 
 # Verify
@@ -825,7 +834,8 @@ metadata:
 spec:
   containers:
   - name: app
-    image: progrium/stress
+    image: polinux/stress
+    command: ["stress"]
     args: ['--vm', '1', '--vm-bytes', '500M']
     resources:
       limits:
@@ -847,7 +857,7 @@ kubectl get pod oom-app -n app-debug-lab -o jsonpath='{.status.containerStatuses
 # The container tries to use 500MB but only has 100Mi limit
 # Fix: increase memory limit by replacing the pod
 kubectl get pod oom-app -n app-debug-lab -o yaml > oom.yaml
-sed -i 's/100Mi/600Mi/g' oom.yaml
+sed -i.bak 's/100Mi/600Mi/g' oom.yaml && rm oom.yaml.bak
 kubectl replace --force -f oom.yaml
 
 # Verify
@@ -934,6 +944,14 @@ kubectl rollout status deployment/<name>
 kubectl get pod <pod> -o yaml | grep -A 15 livenessProbe
 kubectl get pod <pod> -o yaml | grep -A 15 readinessProbe
 ```
+
+## Learner check
+
+> `image: polinux/stress` with `command: ["stress"]` and `args: ['--vm', '1', '--vm-bytes', '500M']` replaces the schema-v1 `progrium/stress` image so the OOM lab runs on Kubernetes 1.35.
+
+You applied Scenario 4 with a 100Mi memory limit and the stress container requesting 500M. What termination reason should `kubectl get pod oom-app -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}'` return before you raise the limit?
+
+---
 
 ## Sources
 
