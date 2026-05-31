@@ -311,7 +311,7 @@ helm upgrade falco falcosecurity/falco \
   -f falco-custom-rules.yaml \
   --wait
 
-# Method 2: ConfigMap (alternative — also persists)
+# Method 2: ConfigMap mounted via Helm (alternative — also persists)
 kubectl create configmap falco-custom-rules \
   --namespace falco \
   --from-literal=custom-rules.yaml='
@@ -326,9 +326,30 @@ kubectl create configmap falco-custom-rules \
   priority: WARNING
 '
 
-# Then reference the ConfigMap in Helm values or mount it manually
-# Restart Falco pods to pick up changes
-kubectl rollout restart daemonset/falco -n falco
+# Mount the ConfigMap and list it in rules_files — a restart alone does not load the rule
+cat <<EOF > falco-configmap-mount.yaml
+extraVolumes:
+  - name: falco-custom-rules
+    configMap:
+      name: falco-custom-rules
+extraVolumeMounts:
+  - name: falco-custom-rules
+    mountPath: /etc/falco/rules.d/custom-rules.yaml
+    subPath: custom-rules.yaml
+    readOnly: true
+falco:
+  rules_files:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/falco_rules.local.yaml
+    - /etc/falco/rules.d/custom-rules.yaml
+EOF
+
+helm upgrade falco falcosecurity/falco \
+  --namespace falco \
+  --reuse-values \
+  -f falco-configmap-mount.yaml \
+  --wait
+
 kubectl rollout status daemonset/falco -n falco --timeout=120s
 ```
 
@@ -415,13 +436,15 @@ The remediation text is helpful, but it is not a substitute for understanding th
 
 ### Common CIS Failures and Fixes
 
+The check IDs below match kube-bench's **cis-1.12** profile (the profile used for Kubernetes 1.35 practice clusters in this module). IDs are not interchangeable across benchmark versions — always read the check title in kube-bench output before editing a static pod or kubelet file.
+
 | Check | Issue | Remediation |
 |-------|-------|-------------|
-| 1.2.1 | Anonymous auth enabled | `--anonymous-auth=false` on API server |
-| 1.2.6 | No audit logging | Configure audit policy and log path |
-| 1.2.16 | No admission plugins | Enable PodSecurity admission |
-| 4.2.1 | kubelet anonymous auth | `--anonymous-auth=false` on kubelet |
-| 4.2.6 | TLS not enforced | Configure kubelet TLS certs |
+| 1.2.1 | API server anonymous auth enabled | `--anonymous-auth=false` on API server static pod |
+| 1.2.6 | API server `--authorization-mode` includes AlwaysAllow | Set `--authorization-mode` to modes that include Node and RBAC (not AlwaysAllow alone) |
+| 1.2.16 | API server audit logging not configured | Set `--audit-log-path` and mount an audit policy file on the API server |
+| 4.2.1 | kubelet anonymous auth enabled | `--anonymous-auth=false` on kubelet |
+| 4.2.9 | kubelet TLS cert/key not configured | Set `tlsCertFile` and `tlsPrivateKeyFile` in kubelet config (or matching CLI flags) |
 
 ```bash
 # Fix API server anonymous auth
@@ -724,6 +747,10 @@ The kubesec scan should flag the privileged container as a critical manifest iss
 - [ ] Explain which finding would block deployment and which findings would become follow-up work.
 
 ---
+
+## Learner check
+
+> In kube-bench **cis-1.12**, check **1.2.6** validates API server authorization mode (not audit logging), and **1.2.16** validates `--audit-log-path`. Under exam pressure, swapping those IDs sends you to the wrong static pod flags.
 
 ## Sources
 
