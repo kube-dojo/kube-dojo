@@ -123,7 +123,7 @@ The loopback interface adds another subtle boundary. A service bound to `127.0.0
 
 Before you can write a firewall rule, you need to know whether a port is required, optional, local-only, or obsolete. Kubernetes documents standard ports for the control plane and worker nodes, but those tables are starting points rather than final policy. A secure rule set adds source restrictions, because the question is not only "Should port 10250 exist?" but "Which systems should ever be able to reach 10250?"
 
-Control-plane nodes usually expose the API server on 6443, etcd client traffic on 2379, etcd peer traffic on 2380, and kubelet on 10250. Scheduler and controller-manager secure endpoints are commonly bound for local or controlled access, and managed distributions may differ in placement. Worker nodes usually expose kubelet on 10250 and may expose NodePort sockets in the service range, which defaults to 30000-32767 unless the cluster is configured otherwise.
+Control-plane nodes usually expose the API server on 6443, etcd client traffic on 2379, etcd peer traffic on 2380, and kubelet on 10250. Scheduler and controller-manager secure endpoints are commonly bound for local or controlled access, and managed distributions may differ in placement. Worker nodes usually expose kubelet on 10250, kube-proxy health and metrics on 10256/tcp, and may expose NodePort sockets in the service range, which defaults to 30000-32767 unless the cluster is configured otherwise.
 
 ```mermaid
 flowchart LR
@@ -169,6 +169,7 @@ The static port map below is intentionally conservative. It treats 10255 and 808
 |  Worker Nodes:                                              |
 |  ---------------------------------------------------------  |
 |  10250  - Kubelet API (authenticated)                       |
+|  10256  - kube-proxy health/metrics (TCP)                   |
 |  30000-32767 - NodePort services (if used)                  |
 |                                                             |
 |  Should be DISABLED:                                        |
@@ -188,6 +189,7 @@ Trust zones should be defined by routes and identity, not by vague labels like "
 | 22/tcp | SSH | Bastion or privileged admin subnet | Restrict tightly and log access attempts |
 | 6443/tcp | API server | Admin networks, CI/CD, control integrations | Never leave broadly public without strong compensating controls |
 | 10250/tcp | Kubelet API | Control-plane nodes and authenticated operational tools | Block direct user and internet access |
+| 10256/tcp | kube-proxy health/metrics | Control plane and monitoring subnets | Restrict like kubelet; do not expose cluster-wide |
 | 2379/tcp | etcd client | API server only | Treat as critical cluster state access |
 | 2380/tcp | etcd peer | Other etcd members only | Allow exact peer addresses in stacked or external etcd |
 | 30000-32767/tcp | NodePort services | Service-specific client networks | Prefer ingress or load balancer when possible |
@@ -217,7 +219,7 @@ sudo netstat -tlnp
 ss -tlnp | grep -E '6443|10250|2379'
 
 # Check for insecure ports
-ss -tlnp | grep -E '10255|8080'
+ss -tlnp | grep -E ':10255|:8080'
 
 # Using nmap from external host
 nmap -p 6443,10250,10255,2379 <node-ip>
@@ -242,6 +244,8 @@ Remote scans should be run from meaningful locations. A scan from the node itsel
 Host firewalls protect the Linux `INPUT` path: traffic destined for the node itself. They are not a replacement for cloud security groups, physical firewalls, Kubernetes NetworkPolicy, or service mesh policy, but they add a local enforcement point that travels with the node. A useful host firewall rule is explicit about protocol, destination port, source network, and fallback behavior.
 
 The main operational hazard is that Kubernetes also uses Linux packet filtering and forwarding machinery. Kube-proxy, CNIs, and container runtimes can create iptables or nftables state for service routing, masquerade, connection tracking, overlay encapsulation, and health checks. A host firewall that blocks the wrong node-to-node protocol may "harden" the host by cutting the pod network apart, which is why the audit and trust-zone model must come first.
+
+Before you apply a default `INPUT DROP` on worker nodes, verify your CNI's documented node-to-node ports and protocols. Overlay plugins often need UDP encapsulation (for example VXLAN on 4789/udp or Geneve on 6081/udp), BGP-based CNIs may require TCP 179 between nodes, and some implementations use additional control ports for IPAM or tunnel health. Segmenting etcd, kubelet, and SSH on the host does not replace allowing the overlay control plane; it complements it. If you are unsure, read the CNI install guide for your distribution, allow those paths explicitly, then retest DNS, Service routing, and cross-node pod traffic after every host rule change.
 
 ### Using iptables
 
@@ -343,12 +347,12 @@ ss -tlnp | grep 10255  # Should return nothing
 The old insecure API server port belongs in the same category of historical risk. Kubernetes 1.35+ clusters should not rely on an unauthenticated API endpoint, and older references to `--insecure-port=0` should be read as historical hardening guidance. Your operational check is straightforward: nothing should be listening on 8080 as an insecure API server endpoint.
 
 ```bash
-# The insecure port (8080) is removed in Kubernetes v1.35+ (historical reference)
-# For older versions, ensure it's disabled:
+# The insecure API port (8080) was removed in releases before 1.35; it is absent on 1.35+ clusters.
+# On legacy clusters only, ensure it stays disabled:
 # --insecure-port=0 in API server flags
 
 # Verify no insecure port
-ss -tlnp | grep 8080
+ss -tlnp | grep ':8080'
 ```
 
 The second removal category is less obvious because the listener can be created by a workload. A pod with `hostNetwork: true` joins the node network namespace and can bind host ports, access node-local services, and bypass ordinary pod network isolation. This setting is legitimate for some system agents, CNIs, proxies, and security tools, but it is rarely appropriate for application workloads.
@@ -374,7 +378,7 @@ spec:
 
 What would happen if a pod is deployed with `hostNetwork: true` in a namespace that has strict default-deny NetworkPolicy? The policy may still exist, but the pod is no longer using the normal pod network namespace that the CNI policy is designed to govern. That is why admission control belongs in the design, not just runtime network policy.
 
-Pod Security Admission gives you a native namespace-level control for this boundary. The `restricted` profile disallows host networking for ordinary workloads, while privileged system namespaces can be handled as deliberate exceptions. The important operational point is not to label every namespace the same way; it is to keep application namespaces restrictive and make any privileged namespace small, named, reviewed, and auditable.
+Pod Security Admission gives you a native namespace-level control for this boundary. The `restricted` and `baseline` profiles both disallow `hostNetwork` for ordinary workloads, while privileged system namespaces can be handled as deliberate exceptions. The important operational point is not to label every namespace the same way; it is to keep application namespaces restrictive and make any privileged namespace small, named, reviewed, and auditable.
 
 ```yaml
 # Use Pod Security Admission to block
@@ -530,17 +534,17 @@ This scenario is about classification. Port 10256 might be kube-proxy health che
 ### Scenario 3: Configure Firewall
 
 ```bash
-# Block external access to kubelet
-sudo iptables -A INPUT -p tcp --dport 10250 ! -s 10.0.0.0/8 -j DROP
+# Allow only the control-plane kubelet client, then drop every other source on 10250
+sudo iptables -I INPUT -p tcp --dport 10250 -s 10.0.0.10/32 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 10250 -j DROP
 
-# Allow only control plane to access kubelet
-sudo iptables -I INPUT -p tcp --dport 10250 -s 10.0.0.10 -j ACCEPT
-
-# Verify
+# Verify: allowed CP IP succeeds; another internal IP (e.g. 10.0.0.20) is denied
 sudo iptables -L INPUT -n | grep 10250
+# From 10.0.0.10: curl -k https://<node-ip>:10250/healthz  # should work
+# From 10.0.0.20: same curl should fail (timeout/refused) — not merely non-CP subnets
 ```
 
-The rule pair demonstrates a useful pattern: insert the allowed control-plane source before a broader drop. Rule order matters because the first matching rule wins in a traditional chain. After applying rules, verify kubelet health from the control plane and verify denial from a non-control-plane source, because either failure tells you a different part of the boundary is wrong.
+The rule pair demonstrates a useful pattern: insert the allowed control-plane `/32` first, then append an unconditional drop for the same port. A rule like `! -s 10.0.0.0/8 -j DROP` still permits any other address inside `10.0.0.0/8`, which is weaker than "only the control plane." Rule order matters because the first matching rule wins in a traditional chain. After applying rules, verify kubelet health from the control-plane IP and verify denial from another internal IP such as `10.0.0.20`, because either failure tells you a different part of the boundary is wrong.
 
 ### Securing etcd Network Access
 
@@ -616,7 +620,7 @@ The decision framework also helps you avoid false confidence from "secure by def
 
 - Kubernetes documents 6443/tcp as the default secure API server port and 10250/tcp as the kubelet API port, which is why both appear repeatedly in CKS network-hardening tasks.
 - The default NodePort service range is 30000-32767, so exposing one NodePort feature can create a broad scan surface unless external network controls narrow the reachable paths.
-- The Pod Security Standards `restricted` profile disallows `hostNetwork`, `hostPID`, and `hostIPC`, making it a native way to block several host-namespace escape hatches for application namespaces.
+- The Pod Security Standards `restricted` and `baseline` profiles both disallow `hostNetwork` (along with other host-namespace fields in `restricted`), making PSA a native way to block host-network pods in application namespaces.
 - Etcd uses 2379/tcp for client traffic and 2380/tcp for peer traffic, so a multi-member etcd topology needs different allow rules for API server clients and etcd-to-etcd replication.
 
 ---
@@ -732,7 +736,7 @@ sudo iptables -L INPUT -n --line-numbers 2>/dev/null | head -20 || echo "Check i
 
 # Step 6: Check for pods with hostNetwork
 echo "=== Pods with hostNetwork ==="
-kubectl get pods -A -o json | jq -r '.items[] | select(.spec.hostNetwork==true) | "\(.metadata.namespace)/\(.metadata.name)"'
+kubectl get pods -A -o jsonpath='{range .items[?(@.spec.hostNetwork==true)]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'
 
 # Success criteria:
 # - No insecure ports open
@@ -755,6 +759,12 @@ Success criteria for your finished review:
 - [ ] Application namespaces enforce Pod Security settings that block `hostNetwork: true`.
 - [ ] Firewall changes are verified from both allowed and denied source locations.
 - [ ] Sysctl hardening values are persistent and do not break required Kubernetes networking.
+
+---
+
+## Learner check
+
+> Host firewall rules for kubelet must allow a specific control-plane `/32` and then unconditionally drop all other sources on port 10250; a broad `10.0.0.0/8` exception still leaves kubelet reachable from other internal addresses such as `10.0.0.20`.
 
 ---
 
