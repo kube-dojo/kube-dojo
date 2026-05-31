@@ -703,13 +703,16 @@ kubectl create namespace exercise
 kubectl label namespace exercise name=exercise
 
 kubectl run web --image=curlimages/curl -n exercise --labels="tier=web" --command -- sleep 3600
-kubectl run api --image=curlimages/curl -n exercise --labels="tier=api" --command -- sleep 3600
-kubectl run db --image=nginx -n exercise --labels="tier=db" --port=80
+kubectl run api --image=nginx -n exercise --labels="tier=api" --expose --port=80
+kubectl run api-client --image=curlimages/curl -n exercise --labels="tier=api" --command -- sleep 3600
+kubectl run db --image=nginx -n exercise --labels="tier=db" --expose --port=80
 
 kubectl wait --for=condition=Ready pod --all -n exercise
 ```
 
-Before you apply any policy, test a few paths so you have a baseline. In most clusters, `web` can reach `api`, `api` can reach `db`, and `web` can reach `db` because the namespace starts open. If your cluster already has admission automation that injects default-deny policies, note that difference and continue by inspecting the existing policies before creating the lab manifests.
+The `api` and `db` pods run nginx and are created with `--expose` so their pod names resolve through cluster DNS and port 80 accepts HTTP connections. The `web`, `api-client`, and `metrics` pods stay as curl clients that initiate connections only. Use `api-client` when you need to test outbound traffic from the `tier=api` label set, because the `api` nginx pod listens rather than curls.
+
+Before you apply any policy, test a few paths so you have a baseline. In most clusters, `web` can reach `api`, `api-client` can reach `db`, and `web` can reach `db` because the namespace starts open. If your cluster already has admission automation that injects default-deny policies, note that difference and continue by inspecting the existing policies before creating the lab manifests.
 
 ### Task 1: Establish a Baseline
 
@@ -731,10 +734,10 @@ spec:
 ```
 </details>
 
-Verify that the `api` pod can no longer reach the `db` pod:
+Verify that a pod labeled `tier=api` can no longer reach the `db` pod:
 
 ```bash
-kubectl exec -n exercise api -- curl -s --connect-timeout 2 db || echo "Blocked (expected)"
+kubectl exec -n exercise api-client -- curl -s --connect-timeout 2 db || echo "Blocked (expected)"
 ```
 
 This failure is the desired baseline. If the connection still works, do not continue adding allow rules yet. Check whether the CNI enforces NetworkPolicies, whether the policy exists in the `exercise` namespace, and whether the pods are actually in that namespace. Debugging a failed deny is much easier before you add more policies that can obscure the result.
@@ -803,7 +806,7 @@ Verify your policies:
 
 ```bash
 kubectl exec -n exercise web -- curl -s --connect-timeout 2 api  # Should work
-kubectl exec -n exercise api -- curl -s --connect-timeout 2 db   # Should work
+kubectl exec -n exercise api-client -- curl -s --connect-timeout 2 db   # Should work
 kubectl exec -n exercise web -- curl -s --connect-timeout 2 db   # Should fail
 ```
 
@@ -883,10 +886,10 @@ kubectl exec -n exercise metrics -- curl -s --connect-timeout 2 db  # Should wor
 
 ### Success Criteria
 
-- [ ] The `exercise` namespace exists and contains `web`, `api`, `db`, and `metrics` pods with the intended tier labels.
+- [ ] The `exercise` namespace exists and contains `web`, `api`, `api-client`, `db`, and `metrics` pods with the intended tier labels.
 - [ ] A default-deny ingress policy selects all pods in the `exercise` namespace.
 - [ ] `web` can reach `api` on port 80 after the allow policy is applied.
-- [ ] `api` can reach `db` on port 80 after the allow policy is applied.
+- [ ] A pod labeled `tier=api` can reach `db` on port 80 after the allow policy is applied.
 - [ ] `web` cannot reach `db` directly, proving the chained design blocks tier skipping.
 - [ ] The corrected metrics policy selects `tier=db` as the target and allows `tier=metrics` as the source.
 
@@ -900,6 +903,14 @@ kubectl delete namespace exercise
 
 ---
 
+## Learner check
+
+> The `api` and `db` pods run nginx and are created with `--expose` so their pod names resolve through cluster DNS and port 80 accepts HTTP connections.
+
+Before you continue, explain why a curl client pod cannot substitute for an nginx target pod in this lab. A useful answer names both missing pieces: without a listener on port 80 the connection is refused, and without `--expose` the short DNS names `api` and `db` do not resolve for other pods in the namespace.
+
+---
+
 ## Sources
 
 - https://kubernetes.io/docs/concepts/services-networking/network-policies/
@@ -909,7 +920,7 @@ kubectl delete namespace exercise
 - https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
 - https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
 - https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/
-- https://docs.tigera.io/calico/latest/network-policy/get-started/kubernetes-policy/kubernetes-policy
+- https://docs.tigera.io/calico/latest/network-policy/get-started/kubernetes-policy
 - https://docs.cilium.io/en/stable/network/kubernetes/policy/
 - https://docs.cilium.io/en/stable/security/network/encryption/
 - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
