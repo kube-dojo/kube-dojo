@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 79 — CKA Phase-1 review→done, waves 1–4 (15 modules)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 79 — CKA Phase-1 review→done, waves 1–4</h1>
+<p class="meta">2026-05-31. Standalone orchestrator session continuing the review-first progression into the <code>k8s</code> track. <b>15 CKA modules finalized to <code>done</code></b> across 9 merged PRs (#1696–#1704); CKA section 8→<b>23/41 done</b>, board total <code>done</code> 309→<b>324</b>. Also did git hygiene per user request (2 worktrees + 2 stale stashes removed). The proven loop held: every ground-checked finding was real except <b>two agy false-positives caught and rejected</b>, plus one codex <code>etcdutl</code> flag-order error I corrected against the etcd docs.</p>
+
+<h2>Headline — PRs (all merged)</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Modules</th><th>Reviewer → fixer</th></tr>
+<tr><td>#1696</td><td><span class="pill merged">MERGED</span></td><td>cka 0.2-shell-mastery, 0.4-k8s-docs, 1.2-extension-interfaces</td><td>cursor/claude/agy → orchestrator inline</td></tr>
+<tr><td>#1697</td><td><span class="pill merged">MERGED</span></td><td>cka 1.3-helm (Helm 4 install/upgrade/dry-run accuracy)</td><td>codex → codex (truncated) + orchestrator completion</td></tr>
+<tr><td>#1698</td><td><span class="pill merged">MERGED</span></td><td>cka 1.6-rbac, 2.1-pods</td><td>claude/agy → orchestrator inline</td></tr>
+<tr><td>#1699</td><td><span class="pill merged">MERGED</span></td><td>cka 1.7-kubeadm (reset/etcdutl/static-pod/CNI)</td><td>codex → codex + orchestrator (etcdutl flag order)</td></tr>
+<tr><td>#1700</td><td><span class="pill merged">MERGED</span></td><td>cka 2.2-deployments, 2.3-daemonsets-statefulsets</td><td>claude/cursor → cursor</td></tr>
+<tr><td>#1701</td><td><span class="pill merged">MERGED</span></td><td>cka 2.5-resource-management</td><td>agy → codex</td></tr>
+<tr><td>#1702</td><td><span class="pill merged">MERGED</span></td><td>cka 2.4-jobs-cronjobs</td><td>codex → cursor</td></tr>
+<tr><td>#1703</td><td><span class="pill merged">MERGED</span></td><td>cka 2.9-autoscaling, 3.1-services</td><td>cursor/agy → cursor</td></tr>
+<tr><td>#1704</td><td><span class="pill merged">MERGED</span></td><td>cka 2.8-scheduler-lifecycle-theory</td><td>claude → codex</td></tr>
+</table>
+<p>1.5-crds-operators was a clean APPROVE (cursor, ran the CRD labs live) — finalized on the review axis with no content change, no PR.</p>
+
+<h2>What changed / how the loop ran</h2>
+<p>Same proven session-78 loop: 4-pool cross-family review (codex + cursor + claude-sonnet + 1 ground-checked gemini-via-agy, one module per pool) → ground-check every finding → fix (codex heavy / cursor rest / orchestrator inline for trivial) → self-verify with <code>verify_module.py</code> → integration branch + <b>build in PRIMARY</b> (checkout files into primary tree, <code>npm run build</code>, restore) → PR (<code>chore(content):</code> + <code>## Learner check</code>) → CI → rebase-merge → finalize (<code>.pipeline/reviews/&lt;key__&gt;.md</code> APPROVE record + <code>reset-stage COMMITTED</code>).</p>
+<p><b>~88% NEEDS_CHANGES rate held</b> (only 1.5 was a clean APPROVE of 16 reviewed). Reviews are cheap; fixes are the spend. Inline orchestrator fixes used only for trivial/typo-class findings (wave 1); substantive/version-sensitive fixes dispatched to codex/cursor.</p>
+
+<h3>Real defects caught + fixed this session</h3>
+<ul>
+<li><b>1.3-helm</b>: dead Debian apt repo (<code>apt.kubernetes.io/kubernetes-xenial</code> → current Buildkite-hosted Helm repo + <code>get-helm-4</code>); wrong <code>--reuse-values</code> semantics; "Helm 3 (current)"; all bare <code>--dry-run</code> → <code>--dry-run=client</code> (Helm 4 deprecation). codex live-verified vs Helm v4.2.0; the dispatch was SIGKILLed mid-run (stale lock) and I completed it after source-verifying against helm.sh.</li>
+<li><b>1.7-kubeadm</b>: incorrect <code>kubeadm reset</code> cleanup semantics; <code>etcdctl</code>→<code>etcdutl</code> restore (and I corrected codex's <code>--data-dir</code> flag order — cobra requires it after the subcommand, per etcd v3.6 docs); static-pod backup must be outside <code>/etc/kubernetes/manifests/</code>; stale CNI one-liners → current doc pointers.</li>
+<li><b>1.6-rbac</b>: k8s v1.8 = Sept (not Oct) 2017; node-auth "v1.34" → stable-since-1.8 + AuthorizeNodeWithSelectors GA 1.33; <b>pods/exec get-vs-create reframed per PR #134577</b> (get-only worked only on the WebSocket path pre-1.35; SPDY always required create; v1.35 requires create for both).</li>
+<li><b>2.1-pods</b>: <code>kubectl set resources pod</code> fails on a running bare pod (immutable) → set at creation via <code>--overrides</code>; <code>exec /bin/bash</code> → <code>/bin/sh</code> (verifier <code>lab_image_binary_match</code>).</li>
+<li><b>2.2-deployments</b>: paused-rollout block falsely claimed the spec still shows the old image (<code>set image</code> writes the spec immediately; pause only defers the new ReplicaSet); all deprecated <code>--record</code> → <code>kubernetes.io/change-cause</code> annotation.</li>
+<li><b>2.3-daemonsets</b>: invalid <code>image: fluentd:v1.35</code> (k8s version mistaken for fluentd tag) → <code>fluent/fluentd:v1.18-debian-1</code>; cordon is NOT a valid cause for a missing DS pod (DS pods tolerate <code>unschedulable:NoSchedule</code>); <code>kubectl wait pod/web-0 pod/web-1</code> race → <code>rollout status sts/web</code>.</li>
+<li><b>2.4-jobs-cronjobs</b>: CronJob-before-manual-Job cleanup order cascaded → <code>NotFound</code> (×2); fragile <code>describe|grep</code> → jsonpath status query.</li>
+<li><b>2.5-resource-management</b>: "BestEffort pods exceeding request" (they set no requests); ResourceQuota pod-count off-by-one (pre-existing <code>test-defaults</code> pod); Drill-4 pods lacked <code>limits</code> under a limits-quota with no LimitRange → admission rejection.</li>
+<li><b>2.8-scheduler</b>: <code>NodeResourcesLeastAllocated</code> removed in 1.26 → <code>NodeResourcesFit</code> + scoringStrategy; termination-diagram grace-period note misplaced (timer starts at deletionTimestamp).</li>
+<li><b>2.9-autoscaling</b>: legacy VPA <code>updateMode: "Auto"</code> → <code>Off</code> + current modes; three blocking <code>kubectl get hpa -w</code> watches split out of paste-blocks.</li>
+<li><b>3.1-services</b>: empty challenge task block filled with objectives; <code>PreferSameNode</code> "Strictly prefer" → "Prefer"; duplicate <code>/service/index.html</code> source removed.</li>
+</ul>
+
+<h3>False positives caught + rejected (ground-checking earns its keep)</h3>
+<ul>
+<li><b>agy on 1.2</b>: hallucinated a "leaked H1 at line 15" — line 15 is a <code>&gt; **Complexity**</code> blockquote; <code>verify_module</code> confirmed no <code>gate_no_source_h1</code> failure. Rejected.</li>
+<li><b>agy on 3.1</b>: claimed the manual Endpoints YAML had an indentation bug — validated it parses fine (subsets[0] = addresses + ports). Rejected.</li>
+<li><b>codex on 1.7</b>: produced <code>etcdutl --data-dir=… snapshot restore …</code> (flag before subcommand) — corrected to flag-after-subcommand per etcd docs.</li>
+</ul>
+
+<h2>Roster notes / agent reliability</h2>
+<ul>
+<li><b>gemini-cli quota EXHAUSTED</b> early (first 1.2 review failed: "exhausted your capacity … reset after ~12h"). Effective reliable pools this session: <b>codex + cursor + claude-sonnet</b>, with <b>agy as a heavily-ground-checked 4th</b>.</li>
+<li><b>agy mixed</b>: hallucinated on 1.2 + 3.1 (rejected), but produced genuinely strong, correct quota-admission reasoning on 2.5 (all 3 findings real). Keep using it but ground-check 100%.</li>
+<li><b>codex edit-class SIGKILL recurred</b> on 1.3 (spark, ~85s, left a stale <code>index.lock</code>). <code>draft</code>-class + <code>--model gpt-5.5</code> + <code>--timeout 3600</code> on 1.7/2.5/2.8 all committed cleanly. Use draft-class for codex fixes.</li>
+<li>claude-sonnet review reliable (no MCP bloat on read-only review); did thorough, well-verified reviews of 0.4, 1.6, 2.2, 2.8.</li>
+</ul>
+
+<h2>Headline data (board, session end)</h2>
+<ul>
+<li>Board total <code>done</code>: <b>324</b> (was 309). shipped_unreviewed 230→224, needs_review 92→83.</li>
+<li><b>CKA section: 23/41 done</b> (8 shipped_unreviewed + 9 needs_review + 1 needs_rewrite remain).</li>
+<li>k8s track overall: ~38/195 done. Remaining CKA in curriculum order: 3.2-endpoints, 3.3-dns, 3.4-ingress, 3.5-gateway-api, 3.6-network-policies, 3.7-cni, 4.1–4.5, 5.2–5.7.</li>
+</ul>
+
+<h2>What's next</h2>
+<ul>
+<li><b>Continue CKA Phase-1</b> — next wave 5: <code>3.2-endpoints</code>, <code>3.3-dns</code>, <code>3.4-ingress</code>, <code>3.5-gateway-api</code> (then 3.6/3.7, part 4, part 5). Same loop; reusable review prompts already generated at <code>logs/remediation/briefs/session79/review-cka-*.md</code> (all 32 CKA modules).</li>
+<li>After CKA: ckad (24), cks (30), kcna (28), kcsa (26), extending, then tool certs — then cloud (85) → ai-ml-eng → on-prem → platform.</li>
+<li>If gemini-cli quota is back (~12h after ~10:00 today), restore the 4-pool mix; otherwise codex+cursor+claude+agy(ground-checked).</li>
+</ul>
+
+<h2>Reusable artifacts</h2>
+<ul>
+<li><code>logs/remediation/briefs/session79/review-cka-&lt;mod&gt;.md</code> — all 32 CKA review prompts (filled from session78 <code>review-template.md</code>).</li>
+<li><code>logs/remediation/briefs/session79/cka-manifest.json</code> — CKA worklist (name/path/status).</li>
+<li>Finalize pattern: write <code>.pipeline/reviews/&lt;key__&gt;.md</code> with a trailing <code>## &lt;ts&gt; — `REVIEW` — `APPROVE`</code> then <code>python -m scripts.quality.pipeline reset-stage &lt;slug&gt; COMMITTED</code>.</li>
+</ul>
+
+<h2>Git hygiene (user-requested)</h2>
+<ul>
+<li>Removed 2 unused worktrees (<code>lane-e</code>, <code>lane-f</code> = held wave-2 de-frags) — branches <code>remediate2/lane-{e,f}</code> + SHAs in <code>wave2-held.json</code> preserved (same pattern as a–d).</li>
+<li>Dropped 2 stale stashes (verified first): a regressive <code>inject-codex-danger-mode.sh</code> drift that removed the load-bearing <code>|| true</code>, and superseded STATUS.md build artifacts.</li>
+<li>Pruned a stale <code>gd-fixes</code> worktree admin entry.</li>
+</ul>
+
+</body></html>
