@@ -1,4 +1,4 @@
-# Session 85 — CKS track STARTED with wide parallel fan-out (part0/part1 reviewed; batch 1 PR open)
+# Session 85 — CKS track STARTED with wide parallel fan-out (8/30 done; part0 4/4 + part1 4/5; batches 1+2 merged)
 
 **Date:** 2026-05-31 · **Predecessor:** [session 84](2026-05-31-session-84-ckad-complete.md)
 
@@ -25,16 +25,13 @@ beating the per-OAuth burst limit by spreading across pools, not serializing.
 | 1.5-gui-security | NC 3/5 | **P1** `ingress: []` also drops apiserver-routed `kubectl proxy` (comment wrong) → use `port-forward` | gemini |
 | 2.1 / 2.2 | NC | (part2; briefed) 2.1 RBAC Task-2 comment contradicts lab; 2.2 references SAs/pods never created → NotFound | cursor |
 
-### Merged/in-flight
-- **PR #1727 OPEN** (CI running at handoff): **0.1, 1.1, 1.5** fixed + verified T0. **Merge + finalize
-  these 3 first next session** (`reset-stage <slug> COMMITTED` + review record, per
-  `feedback_review_to_done_mechanism`).
-- **1.2 fix (codex draft) was RUNNING at handoff** in `.worktrees/cks-fix-1.2` — recover from the
-  worktree (verify edit complete, commit, it likely exits-1 with the stale-branch advisory = not a failure).
-- **0.2 fix is INDETERMINATE** — I dispatched it via a shell `&` (untracked, no harness notification);
-  its worktree diff vanished mid-run. **Re-fire 0.2 cleanly** with `run_in_background: true` from
-  `logs/remediation/briefs/session85/fix-cks-0.2.md`.
-- **0.3, 0.4, 1.3 fixes NOT yet fired** — briefs ready (`fix-cks-0.3/0.4/1.3.md`).
+### Merged + finalized (8 CKS modules → `done`; board 363→371)
+- **PR #1727 (batch 1) MERGED + finalized:** 0.1, 1.1, 1.5.
+- **PR #1728 (batch 2) MERGED + finalized:** 0.2, 0.3, 0.4, 1.2, 1.3 (1.3 folded in after codex recovery).
+- **part0 = 4/4 done; part1 = 4/5 done** (only 1.4 remains — see below). All verified T0, CI green, worktrees pruned.
+- Recovery notes that worked: the untracked `&` 0.2 dispatch DID eventually commit (don't repeat the `&`
+  pattern though); codex 1.2 + 1.3 both exited-1 (stale-branch advisory) but had committed cleanly —
+  recovered from the worktree. cursor `edit` fixes needed a manual `git add -A && commit`.
 
 ## needs_rewrite triage (density-checked the LIVE files — IMPORTANT, differs from CKA/prereqs)
 - **1.4-node-metadata = GENUINE rewrite/expansion** — live file is only **1358 body_words** (T3, fails
@@ -56,11 +53,16 @@ beating the per-OAuth burst limit by spreading across pools, not serializing.
 - gemini-cli IS reset (was exhausted session 84). codex draft fixes still exit-1 = stale-branch advisory.
 
 ## IMMEDIATE NEXT STEPS (next session — keep WIDE per the capacity rule)
-1. Merge PR #1727; finalize 0.1/1.1/1.5 to `done`.
-2. Recover 1.2 (codex worktree), re-fire 0.2 cleanly, fire 0.3/0.4/1.3 fixes — all briefs ready in
-   `logs/remediation/briefs/session85/`. Consolidate part0/part1 into one more PR; finalize.
-3. Expand 1.4-node-metadata to T0 (genuine rewrite, ~5000 words) via curriculum-writer.
-4. Review parts 2-6 (2.1/2.2 already briefed; 2.3 needs re-review — agy timed out; 2.4/2.5, 3.x, 4.x,
-   5.x, 6.x to go). Generator: `logs/remediation/briefs/session85/gen-review-prompt.sh`.
-5. **Fan out wide** (cursor + codex + gemini, ≤2/OAuth, 6+ concurrent); ground-check every verdict
-   (gemini line numbers + the false density P2); per-wave consolidated PRs.
+**CKS state: 8/30 done. Remaining 22 = 17 shipped_unreviewed + 2 needs_review + 3 needs_rewrite (1.4
+genuine; 5.4/6.1 stale).**
+1. **Expand 1.4-node-metadata to T0** (genuine rewrite, currently 1358 body_words → ~5000) via
+   curriculum-writer (codex/cursor T0 author + cross-family review). This is the only part0/part1 gap.
+2. **Review + fix parts 2-6** in curriculum order. **2.1 + 2.2 briefs already written**
+   (`logs/remediation/briefs/session85/fix-cks-2.1.md`, `fix-cks-2.2.md`) — fire those fixes first.
+   **2.3-api-server-security needs a fresh review** (agy timed out on it). Then 2.4, 2.5, part3 (3.1-3.4),
+   part4 (4.1-4.4), part5 (5.1-5.3; 5.4 stale-T0), part6 (6.1 stale-T0, 6.2-6.4). All 30 review prompts
+   pre-generated in `logs/remediation/briefs/session85/review-cks-*.md`.
+3. **Fan out WIDE** (cursor + codex + gemini, ≤2/OAuth, 6+ concurrent — agy DROPPED); per-wave
+   consolidated PRs (cherry-pick single-file commits onto `cks-batchN`). **cursor `edit` may not
+   auto-commit → commit the worktree yourself.** Ground-check every verdict (gemini line numbers are
+   often off; reject its false "8+ activities/12+ items density" P2).
