@@ -156,7 +156,7 @@ helm install my-release bitnami/nginx \
   --set service.type=NodePort
 
 # Dry-run (see what would be created)
-helm install my-release bitnami/nginx --dry-run
+helm install my-release bitnami/nginx --dry-run=client
 
 # Generate name automatically
 helm install bitnami/nginx --generate-name
@@ -213,7 +213,7 @@ helm get manifest my-release
 helm history my-release
 ```
 
-Before running this, what output do you expect from `helm show values bitnami/nginx` compared with `helm get values my-release` after you install with `--set replicaCount=3`? The first command should show the chart's default configuration, while the second should show values stored for the release. If you need every computed value, including defaults, use the appropriate Helm flag for all values rather than assuming user-supplied values are the whole picture.
+Before running this, what output do you expect from `helm show values bitnami/nginx` compared with `helm get values my-release` after you install with `--set replicaCount=3`? The first command should show the chart's default configuration, while the second should show values stored for the release. If you need every computed value, including defaults, use `helm get values <release> -a` (or `--all`) rather than assuming user-supplied values are the whole picture.
 
 Namespace targeting is also why Helm and `kubectl` verification commands should be paired. If you install `my-release` into `web`, verify the release with `helm list -n web` and verify the workload with `kubectl get pods -n web`. Keeping the namespace flag consistent makes your transcript easy to audit and prevents you from chasing objects in the wrong place.
 
@@ -249,7 +249,8 @@ image:
 
 service:
   type: NodePort
-  port: 80
+  ports:
+    http: 80
 
 resources:
   limits:
@@ -402,7 +403,7 @@ helm list -n web
 helm get values my-nginx -n web
 
 # Upgrade
-helm upgrade my-nginx bitnami/nginx --set replicaCount=3 -n web
+helm upgrade my-nginx bitnami/nginx --reuse-values --set replicaCount=3 -n web
 
 # Verify upgrade
 helm history my-nginx -n web
@@ -415,7 +416,7 @@ helm rollback my-nginx 1 -n web
 helm list -n web
 ```
 
-This second scenario is intentionally narrow: only replica count changes. In a real environment, you would usually prefer a values file or `--reuse-values` so the upgrade does not depend on remembering every previous override. In an exam, the important habit is to check values and history before taking recovery action, because rolling back to the wrong revision wastes time and may hide the actual mistake.
+This second scenario is intentionally narrow: only replica count changes because `--reuse-values` carries forward the prior `service.type=ClusterIP` override. Omitting `--reuse-values` on an upgrade that passes only `--set replicaCount=3` re-applies chart defaults for every value not listed on that command line (for example, `service.type` can revert to `LoadBalancer`). In a real environment, you would usually prefer a values file or `--reuse-values` so the upgrade does not depend on remembering every previous override. In an exam, the important habit is to check values and history before taking recovery action, because rolling back to the wrong revision wastes time and may hide the actual mistake.
 
 ### Scenario 3: Inspect Before Install
 
@@ -424,7 +425,7 @@ This second scenario is intentionally narrow: only replica count changes. In a r
 helm show values bitnami/nginx | head -50
 
 # Dry run to see generated manifests
-helm install test bitnami/nginx --dry-run | head -n 50
+helm install test bitnami/nginx --dry-run=client | head -n 50
 
 # Then install
 helm install test-nginx bitnami/nginx
@@ -483,13 +484,13 @@ Rendered-manifest debugging should stay connected to ownership. If you hand-edit
 helm template my-release bitnami/nginx > rendered.yaml
 
 # Validate without installing
-helm install my-release bitnami/nginx --dry-run --debug
+helm install my-release bitnami/nginx --dry-run=client --debug
 
 # Get notes (post-install instructions)
 helm get notes my-release
 ```
 
-`helm template` renders locally and is excellent for understanding how values turn into YAML. `helm install --dry-run --debug` simulates the install path and prints diagnostic context. `helm get notes` is easy to ignore, but many charts include post-install instructions there, including service discovery hints or default credentials placeholders that explain how to test the application safely.
+`helm template` renders locally and is excellent for understanding how values turn into YAML. `helm install --dry-run=client --debug` simulates the install path and prints diagnostic context. `helm get notes` is easy to ignore, but many charts include post-install instructions there, including service discovery hints or default credentials placeholders that explain how to test the application safely.
 
 A practical debugging sequence for CKAD work is: list the release, get status, get values, get manifest, inspect Kubernetes objects by label, then read events from a failing Pod. Do not start by changing values blindly. The fastest fix is usually the one that proves whether the failure is chart selection, namespace scope, values precedence, rendered YAML, or runtime behavior.
 
@@ -625,6 +626,7 @@ helm install web bitnami/nginx \
 
 # Verify installation
 helm list
+kubectl version --short
 kubectl get pods -l app.kubernetes.io/instance=web
 ```
 
@@ -810,7 +812,7 @@ resources:
 EOF
 
 # 2. Dry-run first
-helm install prod-web bitnami/nginx -f /tmp/prod-values.yaml --dry-run
+helm install prod-web bitnami/nginx -f /tmp/prod-values.yaml --dry-run=client
 
 # 3. Install
 helm install prod-web bitnami/nginx -f /tmp/prod-values.yaml
@@ -836,12 +838,17 @@ helm uninstall prod-web
 
 ### Success Criteria
 
+- [ ] Your cluster reports Kubernetes 1.35+ (`kubectl version` shows a compatible server version).
 - [ ] You can add and update the Bitnami repository without relying on a preconfigured environment.
 - [ ] You can deploy a named Helm release with custom values and verify it with both Helm and `kubectl`.
 - [ ] You can explain which value wins when defaults, values files, and `--set` all define the same key.
 - [ ] You can upgrade a release while preserving previous values intentionally.
 - [ ] You can inspect release history and roll back to a specific revision.
 - [ ] You can clean up releases and namespaces without leaving stale lab resources.
+
+## Learner check
+
+> Omitting `--reuse-values` on an upgrade that passes only `--set replicaCount=3` re-applies chart defaults for every value not listed on that command line (for example, `service.type` can revert to `LoadBalancer`).
 
 ## Sources
 
