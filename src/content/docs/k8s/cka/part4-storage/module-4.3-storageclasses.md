@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 35-45 minutes
 >
-> **Prerequisites**: Module 4.2 (PV & PVC), Module 1.2 (CSI)
+> **Prerequisites**: [Module 4.2 (PV & PVC)](../module-4.2-pv-pvc/), [Module 1.2 (CSI)](../../part1-cluster-architecture/module-1.2-extension-interfaces/)
 
 ---
 
@@ -86,7 +86,7 @@ reclaimPolicy: Delete                  # What happens when PVC deleted
 volumeBindingMode: WaitForFirstConsumer  # When to provision
 allowVolumeExpansion: true             # Can resize later?
 mountOptions:                          # Mount options for volumes
-  - debug
+  - discard
 ```
 
 Each field has a different blast radius. `parameters` affect how the backend disk or share is created. `reclaimPolicy` becomes the deletion behavior of the PV, which can mean the difference between test cleanup and accidental production data loss. `volumeBindingMode` affects scheduling, especially when the storage can only attach to nodes in a particular zone. `allowVolumeExpansion` affects future recovery options, because a PVC can be expanded only when its class and driver support expansion.
@@ -128,7 +128,7 @@ reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 ```
 
-For AWS EBS, the CSI driver provisioner is `ebs.csi.aws.com`. EBS volumes are zonal, so `WaitForFirstConsumer` is usually the safer binding mode because it lets the scheduler choose a node before the disk is created. The example uses `Retain` to protect data, but that choice is not universally correct. It is sensible for production databases and risky for throwaway environments because deleted PVCs can leave billable disks behind.
+For AWS EBS, the CSI driver provisioner is `ebs.csi.aws.com`. EBS volumes are zonal, so `WaitForFirstConsumer` is usually the safer binding mode because it lets the scheduler choose a node before the disk is created. The CSI example below uses `Retain` to protect data, but that choice is not universally correct. It is sensible for production databases and risky for throwaway environments because deleted PVCs can leave billable disks behind.
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -172,8 +172,8 @@ metadata:
   name: managed-premium
 provisioner: disk.csi.azure.com
 parameters:
-  storageaccounttype: Premium_LRS
-  kind: Managed
+  skuName: Premium_LRS          # Standard_LRS, Premium_LRS, StandardSSD_LRS
+  kind: managed                 # managed, dedicated, shared
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
@@ -430,8 +430,8 @@ parameters:
 
 ```yaml
 parameters:
-  storageaccounttype: Premium_LRS   # Standard_LRS, Premium_LRS, StandardSSD_LRS
-  kind: Managed                      # Managed, Dedicated, Shared
+  skuName: Premium_LRS               # Standard_LRS, Premium_LRS, StandardSSD_LRS
+  kind: managed                      # managed, dedicated, shared
   cachingMode: ReadOnly
   fsType: ext4
 ```
@@ -445,7 +445,7 @@ metadata:
   name: with-mount-options
 provisioner: kubernetes.io/aws-ebs
 mountOptions:
-  - debug
+  - discard
   - noatime
   - nodiratime
 parameters:
@@ -652,7 +652,7 @@ The framework also helps during failure analysis. If a PVC is pending, classify 
 
 ## Did You Know?
 
-- Kubernetes has supported the `storage.k8s.io/v1` StorageClass API as the stable API for years, which is why modern examples should not use the old beta API group.
+- Kubernetes has supported the `storage.k8s.io/v1` StorageClass API as the stable API for years, which is why modern examples should not use the old beta API group. The in-tree `kubernetes.io/aws-ebs` provisioner was removed in Kubernetes 1.27, so new clusters should use the EBS CSI driver (`ebs.csi.aws.com`) instead.
 - The `storageclass.kubernetes.io/is-default-class` annotation can exist on more than one class, and Kubernetes chooses the most recently created default for a PVC that omits `storageClassName`.
 - `WaitForFirstConsumer` became a stable StorageClass behavior so topology-aware provisioning could wait for a pod scheduling decision instead of guessing a zone too early.
 - PVC expansion can increase requested storage, but Kubernetes does not support shrinking a PVC, so a mistaken oversized request needs a migration plan rather than a reverse patch.
@@ -765,6 +765,8 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 EOF
 ```
+
+Volume expansion is primarily a cloud-CSI feature; on `rancher.io/local-path` installs the field may be accepted but silently ignored.
 
 <details>
 <summary>Solution guidance</summary>
@@ -933,7 +935,14 @@ kubectl get storageclass
 
 ```bash
 # Drill 2: Create StorageClass "slow" with provisioner rancher.io/local-path
-# reclaimPolicy: Retain
+cat <<EOF | kubectl apply -f -
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: slow
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+EOF
 ```
 
 ```bash
@@ -983,6 +992,12 @@ kubectl get storageclass standard -o jsonpath='{.volumeBindingMode}{"\n"}'
 - https://learn.microsoft.com/en-us/azure/aks/azure-disk-csi
 - https://minikube.sigs.k8s.io/docs/handbook/persistent_volumes/
 - https://github.com/rancher/local-path-provisioner
+
+## Learner check
+
+> Volume expansion is primarily a cloud-CSI feature; on `rancher.io/local-path` installs the field may be accepted but silently ignored.
+
+Why should you verify expansion behavior on your cluster instead of trusting `allowVolumeExpansion: true` alone?
 
 ## Next Module
 
