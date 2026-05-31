@@ -366,15 +366,15 @@ The quick reference below preserves the original module's command inventory with
 
 ```bash
 # Create Ingress imperatively (limited)
-kubectl create ingress my-ingress \
+kubectl create ingress my-ingress --class=nginx \
   --rule="host.example.com/path=service:port"
 
 # View Ingress
 kubectl get ingress
 kubectl describe ingress NAME
 
-# Get Ingress address
-kubectl get ingress NAME -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Get Ingress address (ip and/or hostname — kind/minikube often use hostname)
+kubectl get ingress NAME -o jsonpath='{.status.loadBalancer.ingress[0].ip}{"\n"}{.status.loadBalancer.ingress[0].hostname}'
 
 # Check IngressClass
 kubectl get ingressclass
@@ -570,9 +570,8 @@ kubectl create deployment api --image=nginx
 kubectl expose deployment web --port=80
 kubectl expose deployment api --port=80
 
-# Wait for pods
-kubectl wait --for=condition=Ready pod -l app=web --timeout=60s
-kubectl wait --for=condition=Ready pod -l app=api --timeout=60s
+# Wait for Deployments (avoids racing pod scheduling)
+kubectl wait --for=condition=Available deployment/web deployment/api --timeout=60s
 ```
 
 ### Part 1: Simple Ingress
@@ -928,6 +927,12 @@ rm /tmp/tls.key /tmp/tls.crt
 - [ ] You can describe when `Prefix` and `Exact` path matching should be used.
 - [ ] You can configure a TLS Secret reference and identify namespace or hostname mismatches.
 - [ ] You can debug a failing route by walking from controller ownership to Service endpoints.
+
+## Learner check
+
+> On kind/minikube and many cloud load balancers, `status.loadBalancer.ingress` may populate `hostname` instead of `ip`, so a jsonpath that only reads `.ip` can look empty even when the Ingress is healthy.
+
+Before you move on, explain why the hands-on exercise waits on `deployment/web` and `deployment/api` with `condition=Available` instead of `kubectl wait` on `pod -l app=web` or `app=api`. A solid answer mentions ReplicaSet rollout, pod scheduling races, and why Deployment availability is the stable readiness signal before creating Ingress backends.
 
 ## Sources
 
