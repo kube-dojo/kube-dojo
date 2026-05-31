@@ -187,6 +187,8 @@ kubectl proxy
 
 Port-forwarding is also narrow, but it targets one service port instead of using the API server proxy path. It is useful when a lab or troubleshooting workflow expects HTTPS directly on a local port. The tradeoff is that operators must manage certificates and browser warnings more often, and a careless bind address can expose the local forward beyond the workstation. Keep the binding local unless you have a deliberate reason and a compensating control.
 
+`kubectl port-forward` tunnels through the kubelet on the node, so it can reach dashboard pods even when a CNI-enforced NetworkPolicy sets `ingress: []` — unlike `kubectl proxy`, which routes traffic from the API server as a client on the pod network and is blocked by that same deny-all policy. That distinction matters in labs and audits where you harden dashboard pods with deny-all ingress and then wonder why the proxy URL times out.
+
 For exam thinking, classify proxy and port-forwarding as temporary access paths rather than deployment architectures. They are initiated by an authenticated user, they end when the process exits, and they do not create a standing external endpoint. That makes them excellent defaults for emergency inspection. Their weakness is operational friction: non-technical users may struggle to start them, and teams sometimes work around that friction by publishing the dashboard permanently.
 
 ```bash
@@ -362,6 +364,8 @@ kubectl patch deployment kubernetes-dashboard -n kubernetes-dashboard \
   --type='json' \
   -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--enable-skip-login=false"}]'
 ```
+
+Dashboard v2.0.0+ disables skip login by default; the patch above is defense-in-depth against legacy manifests that explicitly set `--enable-skip-login=true`.
 
 Ingress is the one exposure method that can be acceptable in tightly controlled environments, but only when it is treated as a privileged administrative endpoint. TLS protects data in transit, but TLS alone does not prove that the client should see the login page. Mutual TLS, VPN restrictions, identity-aware proxies, and controller-level allowlists reduce who can reach the dashboard before token authentication is even evaluated.
 
@@ -686,11 +690,11 @@ TLS protects transport confidentiality, but it does not restrict who can reach t
 
 ## Hands-On Exercise
 
-In this exercise you will harden a Kubernetes Dashboard deployment using the same sequence you would use during a review: install the application, create a constrained identity, disable anonymous entry, restrict network reachability, generate a short-lived token, and access the UI through a local proxy. The commands are intentionally compact so you can focus on the security decisions behind each object rather than on typing a long manifest from memory.
+In this exercise you will harden a Kubernetes Dashboard deployment using the same sequence you would use during a review: install the application, create a constrained identity, disable anonymous entry, restrict network reachability, generate a short-lived token, and access the UI through a local port-forward. The commands are intentionally compact so you can focus on the security decisions behind each object rather than on typing a long manifest from memory.
 
 - [ ] Diagnose the current Dashboard attack path by identifying the Service, ServiceAccount, and any binding that could grant privilege escalation.
 - [ ] Implement read-only RBAC, short-lived ServiceAccount token access, and NetworkPolicy controls for the Dashboard namespace.
-- [ ] Compare the resulting local proxy access with NodePort exposure and explain why the proxy has a smaller network attack surface.
+- [ ] Compare the resulting local port-forward access with NodePort exposure and explain why the port-forward has a smaller network attack surface.
 - [ ] Design a rollback and incident response note that lists which binding, token, Service, and deployment setting you would change during compromise.
 - [ ] Evaluate whether the native Dashboard should remain installed after the lab or be replaced by client-side alternatives for routine inspection.
 
@@ -732,7 +736,8 @@ subjects:
   namespace: kubernetes-dashboard
 EOF
 
-# Step 4: Disable skip button
+# Step 4: Disable skip button (defense-in-depth — Dashboard v2.0.0+ disables it by default,
+# but legacy manifests may set --enable-skip-login=true explicitly)
 kubectl patch deployment kubernetes-dashboard -n kubernetes-dashboard \
   --type='json' \
   -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--enable-skip-login=false"}]'
@@ -750,15 +755,15 @@ spec:
       k8s-app: kubernetes-dashboard
   policyTypes:
   - Ingress
-  ingress: []  # Deny all ingress - only kubectl proxy works
+  ingress: []  # Deny all pod ingress — blocks apiserver proxy; port-forward via kubelet still works
 EOF
 
 # Step 6: Get token for readonly user
 kubectl create token dashboard-readonly -n kubernetes-dashboard
 
-# Step 7: Access via proxy
-kubectl proxy &
-echo "Access dashboard at: http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
+# Step 7: Access via port-forward (kubelet tunnel bypasses pod ingress NetworkPolicy)
+kubectl port-forward -n kubernetes-dashboard svc/kubernetes-dashboard 8443:443 &
+echo "Access dashboard at https://localhost:8443 (paste the token from Step 6)"
 
 # Cleanup
 kubectl delete namespace kubernetes-dashboard
@@ -771,18 +776,24 @@ Start with the Service because it tells you whether the dashboard is reachable t
 
 <details>
 <summary>Solution guidance for the hardening task</summary>
-The restricted ClusterRole should allow only the resource types needed for viewing and should avoid mutation verbs. The token should come from `kubectl create token` rather than a long-lived Secret unless the lab specifically asks you to audit the old behavior. The NetworkPolicy should select the dashboard pods and deny or narrowly allow ingress, depending on whether you are using proxy-only access or a controlled administrative source.
+The restricted ClusterRole should allow only the resource types needed for viewing and should avoid mutation verbs. The token should come from `kubectl create token` rather than a long-lived Secret unless the lab specifically asks you to audit the old behavior. The NetworkPolicy should select the dashboard pods and deny or narrowly allow ingress; when ingress is fully denied, verify access with `kubectl port-forward` rather than `kubectl proxy`.
 </details>
 
 <details>
 <summary>Solution guidance for the exposure comparison task</summary>
-A local proxy requires a user with kubeconfig access to initiate the path, while NodePort opens a service port on every node. That difference changes who can even try to reach the login page. Your explanation should mention that RBAC still matters after login, but the proxy greatly reduces unauthenticated network probing compared with a routable NodePort.
+A local port-forward requires a user with kubeconfig access to initiate the path, while NodePort opens a service port on every node. That difference changes who can even try to reach the login page. Your explanation should mention that RBAC still matters after login, but the port-forward greatly reduces unauthenticated network probing compared with a routable NodePort, and that deny-all ingress NetworkPolicy blocks `kubectl proxy` but not kubelet-based port-forwarding.
 </details>
 
 <details>
 <summary>Success criteria</summary>
 The dashboard deployment becomes available, anonymous login is not accepted, a short-lived read-only token is used for access, direct ingress to the dashboard pods is denied or tightly scoped, and your notes identify the exact objects to change during an incident. You should also be able to explain why deleting the dashboard entirely may be the best final state for a production cluster.
 </details>
+
+## Learner check
+
+> `kubectl port-forward` tunnels through the kubelet on the node, so it can reach dashboard pods even when a CNI-enforced NetworkPolicy sets `ingress: []` — unlike `kubectl proxy`, which routes traffic from the API server as a client on the pod network and is blocked by that same deny-all policy.
+
+Before you move on, explain why Step 7 uses port-forward after Step 5 applies deny-all ingress. A solid answer names the kubelet tunnel path, contrasts it with the API server proxy path, and states that both still require kubeconfig access and token login before the dashboard can act on your behalf.
 
 ## Sources
 
