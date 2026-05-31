@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: cks-0.2-security-lab
   url: https://killercoda.com/kubedojo/scenario/cks-0.2-security-lab
-  duration: "35 min"
+  duration: "45-60 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -165,6 +165,30 @@ EOF
 
 # Create the cluster
 kind create cluster --name cks-lab --config kind-cks.yaml
+
+# Prove audit logging before installing security tools
+kubectl wait --for=condition=Ready node --all --timeout=120s
+
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: audit-test
+  namespace: default
+spec:
+  containers:
+  - name: pause
+    image: registry.k8s.io/pause:3.10
+EOF
+
+kubectl wait --for=condition=Ready pod/audit-test --timeout=60s
+sleep 2
+
+# Host-mounted audit log (kind maps /var/log/kubernetes inside the node to ./audit-logs)
+grep '"resource":"pods"' audit-logs/audit.log | tail -5
+grep '"verb":"create"' audit-logs/audit.log | grep audit-test | tail -3
+
+kubectl delete pod audit-test --wait=false
 ```
 
 The audit policy is intentionally small because this is a lab, not an enterprise logging architecture. It records metadata for Secrets and ConfigMaps, request bodies for Pods, suppresses noisy kube-proxy watch traffic, and drops the earliest stage to reduce duplicate records. That gives you enough signal to practice reading audit output without filling the host directory with every watch event produced by normal cluster operation.
@@ -249,8 +273,8 @@ Scanner setup has two separate success conditions. The binary must run, and the 
 # Install Trivy CLI
 # On Ubuntu/Debian
 sudo apt-get install wget apt-transport-https gnupg lsb-release -y
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
 sudo apt-get update
 sudo apt-get install trivy -y
 
@@ -318,9 +342,8 @@ kubectl wait --for=condition=complete job/kube-bench --timeout=120s
 # View results
 kubectl logs job/kube-bench
 
-# For detailed output, run interactively on control plane node
-# Download and run kube-bench directly
-curl -L https://github.com/aquasecurity/kube-bench/releases/download/v0.7.0/kube-bench_0.7.0_linux_amd64.tar.gz -o kube-bench.tar.gz
+# For detailed output on a kubeadm control-plane node (Linux amd64 shell — not a macOS laptop)
+curl -L https://github.com/aquasecurity/kube-bench/releases/download/v0.15.5/kube-bench_0.15.5_linux_amd64.tar.gz -o kube-bench.tar.gz
 tar -xvf kube-bench.tar.gz
 ./kube-bench run --targets=master
 ```
@@ -332,17 +355,8 @@ kubesec gives you a lightweight static analysis pass over manifests. It does not
 kubesec is also useful as a teaching mirror. When it flags a risky field, open the manifest and ask which Kubernetes control would prevent or mitigate that risk. A privileged container might be blocked by Pod Security Admission, a root process might be changed with `runAsNonRoot`, and missing resource settings might be addressed with LimitRange defaults or review policy. This turns one static finding into a map of possible controls.
 
 ```bash
-# Install kubesec
-# Binary installation
-wget https://github.com/controlplaneio/kubesec/releases/download/v2.14.0/kubesec_linux_amd64.tar.gz
-tar -xvf kubesec_linux_amd64.tar.gz
-sudo mv kubesec /usr/local/bin/
-
-# Or use Docker
-# docker run -i kubesec/kubesec scan /dev/stdin < deployment.yaml
-
-# Test kubesec
-cat <<EOF | kubesec scan /dev/stdin
+# Scan a manifest with Docker (primary on macOS/arm64 and when no local binary is installed)
+docker run --rm -i kubesec/kubesec:v2.14.0 scan /dev/stdin <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -354,6 +368,25 @@ spec:
     securityContext:
       runAsUser: 0
 EOF
+
+# Optional binary install — match host OS and architecture (uname -m)
+ARCH=$(uname -m)
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "${OS}-${ARCH}" in
+  linux-x86_64|linux-amd64)
+    KUBESEC_URL=https://github.com/controlplaneio/kubesec/releases/download/v2.14.0/kubesec_linux_amd64.tar.gz ;;
+  linux-aarch64|linux-arm64)
+    KUBESEC_URL=https://github.com/controlplaneio/kubesec/releases/download/v2.14.0/kubesec_linux_arm64.tar.gz ;;
+  darwin-x86_64|darwin-amd64)
+    KUBESEC_URL=https://github.com/controlplaneio/kubesec/releases/download/v2.14.0/kubesec_darwin_amd64.tar.gz ;;
+  darwin-arm64|darwin-aarch64)
+    KUBESEC_URL=https://github.com/controlplaneio/kubesec/releases/download/v2.14.0/kubesec_darwin_arm64.tar.gz ;;
+  *)
+    echo "No binary for ${OS}-${ARCH}; use the Docker one-liner above" >&2; exit 1 ;;
+esac
+curl -L "$KUBESEC_URL" -o kubesec.tar.gz
+tar -xvf kubesec.tar.gz kubesec
+sudo mv kubesec /usr/local/bin/
 ```
 
 Static analysis is not a substitute for admission policy or runtime monitoring. It sees the document you give it, not every mutation that might occur before a pod is admitted, and not the behavior that happens after the container starts. Use kubesec to train your eyes, use admission and policy controls to block bad manifests, and use runtime tools to catch behavior that was not obvious from YAML alone.
@@ -366,16 +399,20 @@ The four tools now form a layered feedback loop. Trivy checks software supply ri
 
 AppArmor and seccomp are node-level mechanisms, so a Kubernetes API check alone is not enough. The API can accept a pod spec that references a profile, but the kubelet and container runtime still need the relevant support on the node where the pod lands. That scheduling detail matters: a custom profile on one node does not magically exist on every other node unless you place it there or automate distribution.
 
+On a kind cluster hosted from macOS or Windows, node paths such as `/sys/module/apparmor` and `/boot/config-$(uname -r)` live inside the kind node container, not on your laptop kernel. Run the checks below with `docker exec` against a kind node, or SSH to a kubeadm/Linux node and run the kubeadm branch there.
+
 ```bash
-# Check if AppArmor is enabled (on nodes)
-cat /sys/module/apparmor/parameters/enabled
-# Should output: Y
-
-# List loaded profiles
-sudo aa-status
-
-# Check if container runtime supports AppArmor
-# For containerd, it's enabled by default
+# kind: check AppArmor inside the control-plane node (not on the macOS host)
+CP_NODE=$(kind get nodes --name cks-lab 2>/dev/null | head -1)
+if [ -n "$CP_NODE" ]; then
+  docker exec "$CP_NODE" cat /sys/module/apparmor/parameters/enabled   # Should output: Y
+  docker exec "$CP_NODE" aa-status 2>/dev/null | head -20 || true
+else
+  # kubeadm/Linux node shell only
+  cat /sys/module/apparmor/parameters/enabled
+  sudo aa-status
+fi
+# containerd enables AppArmor support by default when the node kernel provides it
 ```
 
 AppArmor is easiest to understand as a named rule set loaded into the Linux kernel and then attached to a process. Kubernetes lets you request AppArmor behavior for a container, but the node must have the profile loaded before the workload can use it. In a lab, that means you should verify support on the node itself, then run a small pod experiment after you know the operating system layer is ready.
@@ -387,15 +424,17 @@ Seccomp is similar in spirit but different in what it restricts. Instead of nami
 The `RuntimeDefault` profile is a useful baseline because it gives you a safer default without managing a custom JSON file for every exercise. Custom profiles are still worth practicing because they teach the locality rule and the failure mode when a profile cannot be found. Start with `RuntimeDefault` when the learning goal is general hardening, then use a localhost profile when the learning goal is path placement and node-specific troubleshooting.
 
 ```bash
-# Check kernel seccomp support
-grep CONFIG_SECCOMP /boot/config-$(uname -r)
-# Should see: CONFIG_SECCOMP=y
-
-# Kubernetes default seccomp profile location
-ls /var/lib/kubelet/seccomp/
-
-# Create a test seccomp profile directory
-sudo mkdir -p /var/lib/kubelet/seccomp/profiles
+# kind: check seccomp support inside the node (host /boot/config on macOS is the wrong kernel)
+CP_NODE=$(kind get nodes --name cks-lab 2>/dev/null | head -1)
+if [ -n "$CP_NODE" ]; then
+  docker exec "$CP_NODE" sh -c 'grep CONFIG_SECCOMP /boot/config-$(uname -r) 2>/dev/null || zgrep CONFIG_SECCOMP /proc/config.gz 2>/dev/null'
+  docker exec "$CP_NODE" ls /var/lib/kubelet/seccomp/ 2>/dev/null || true
+else
+  # kubeadm/Linux node shell only
+  grep CONFIG_SECCOMP /boot/config-$(uname -r)   # Should see: CONFIG_SECCOMP=y
+  ls /var/lib/kubelet/seccomp/
+  sudo mkdir -p /var/lib/kubelet/seccomp/profiles
+fi
 ```
 
 Pause and predict: you create `profiles/audit-only.json` on the control-plane node, then schedule a pod onto a worker that references `localhost/profiles/audit-only.json`. What error path do you expect, and where would you look first? The useful answer is not just "the pod fails"; it is that the kubelet on the selected worker asks the runtime for a local profile path that does not exist on that worker.
@@ -519,16 +558,27 @@ echo ""
 
 # Check AppArmor
 echo "5. AppArmor:"
-if [ -f /sys/module/apparmor/parameters/enabled ]; then
+CP_NODE=$(kind get nodes --name cks-lab 2>/dev/null | head -1)
+if [ -n "$CP_NODE" ] && docker exec "$CP_NODE" test -f /sys/module/apparmor/parameters/enabled 2>/dev/null; then
+    docker exec "$CP_NODE" cat /sys/module/apparmor/parameters/enabled
+elif [ -f /sys/module/apparmor/parameters/enabled ]; then
     cat /sys/module/apparmor/parameters/enabled
 else
-    echo "   Check on cluster nodes"
+    echo "   Check inside cluster nodes (kind: docker exec; kubeadm: SSH to node)"
 fi
 echo ""
 
 # Check Audit Logging
 echo "6. Audit Logging:"
-kubectl get pods -n kube-system -l component=kube-apiserver -o yaml 2>/dev/null | grep -q "audit-log-path" && echo "   Enabled" || echo "   Check API server config"
+if kubectl get pods -n kube-system -l component=kube-apiserver -o yaml 2>/dev/null | grep -q "audit-log-path"; then
+    echo "   API server flags: Enabled"
+    if [ -f audit-logs/audit.log ]; then
+        echo "   Host log lines: $(wc -l < audit-logs/audit.log)"
+        grep '"resource":"pods"' audit-logs/audit.log | tail -1 || echo "   No pod events yet — create a test pod"
+    fi
+else
+    echo "   Check API server config"
+fi
 echo ""
 
 echo "=== Validation Complete ==="
@@ -591,11 +641,11 @@ The decision framework should also account for time. Before a timed practice ses
 
 These facts are worth remembering because they explain why the lab has several tools instead of one universal scanner.
 
-- **Falco was originally created in 2016** and later became a Cloud Native Computing Foundation project focused on runtime threat detection for cloud-native workloads.
+- **Falco was originally created in 2016** ([Sysdig release announcement, May 2016](https://sysdig.com/blog/sysdig-falco)) and later became a [CNCF](https://www.cncf.io/projects/falco/) project focused on runtime threat detection for cloud-native workloads.
 
 - **Trivy scans more than container images**; it can inspect filesystems, repositories, Kubernetes resources, and infrastructure-as-code inputs, which makes it useful before and after deployment.
 
-- **The CIS Kubernetes Benchmark includes more than 200 checks** across control-plane, etcd, node, policy, and managed-service areas, so kube-bench output needs triage rather than blind score chasing.
+- **The [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes) includes more than 200 checks** across control-plane, etcd, node, policy, and managed-service areas ([kube-bench implements these checks](https://github.com/aquasecurity/kube-bench)), so kube-bench output needs triage rather than blind score chasing.
 
 - **AppArmor and SELinux solve a similar containment problem differently**; Ubuntu-family systems commonly use AppArmor, while RHEL-family systems commonly use SELinux, and CKS practice often emphasizes AppArmor mechanics.
 
@@ -675,22 +725,52 @@ Do the exercise with a timer only after you have completed it slowly once. The f
 # 1. Verify cluster is running
 kubectl get nodes
 
-# 2. Install Trivy and scan an image
+# 2. Prove audit logging records pod events (kind: host-mounted ./audit-logs)
+kubectl wait --for=condition=Ready node --all --timeout=120s
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: audit-test
+  namespace: default
+spec:
+  containers:
+  - name: pause
+    image: registry.k8s.io/pause:3.10
+EOF
+kubectl wait --for=condition=Ready pod/audit-test --timeout=60s
+sleep 2
+grep '"verb":"create"' audit-logs/audit.log | grep audit-test | tail -3
+kubectl delete pod audit-test --wait=false
+
+# 3. Install Trivy and scan an image
 trivy image nginx:latest | head -50
 
-# 3. Check Falco is running (if installed)
+# 4. Check Falco is running (if installed)
 kubectl get pods -n falco
 
-# 4. Run kube-bench
+# 5. Run kube-bench
 kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml
 kubectl wait --for=condition=complete job/kube-bench --timeout=120s
 kubectl logs job/kube-bench | head -100
 
-# 5. Create a test pod and scan it
-kubectl run test-pod --image=nginx:1.25
+# 6. Create a test pod and scan the image (apply avoids default SA race on fresh kind 1.35)
+until kubectl get sa default -n default >/dev/null 2>&1; do sleep 1; done
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: default
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25
+EOF
+kubectl wait --for=condition=Ready pod/test-pod --timeout=60s
 trivy image nginx:1.25
 
-# 6. Cleanup
+# 7. Cleanup
 kubectl delete pod test-pod
 kubectl delete job kube-bench
 ```
@@ -747,6 +827,14 @@ Success criteria:
 
 ---
 
+## Learner check
+
+> Host-mounted audit log (kind maps /var/log/kubernetes inside the node to ./audit-logs)
+
+Before you move on, explain why `grep audit-logs/audit.log` on your workstation can show pod create events even though the API server process runs inside the kind control-plane container. A solid answer connects the API server `--audit-log-path` flag, the in-node `/var/log/kubernetes` directory, and the kind `extraMounts` mapping that exposes that directory as `./audit-logs` on the host.
+
+---
+
 ## Sources
 
 - [Kubernetes audit logging](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
@@ -764,7 +852,9 @@ Success criteria:
 - [Falco Helm charts](https://falcosecurity.github.io/charts)
 - [kube-bench repository](https://github.com/aquasecurity/kube-bench)
 - [kube-bench Kubernetes Job manifest](https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml)
-- [kube-bench v0.7.0 release archive](https://github.com/aquasecurity/kube-bench/releases/download/v0.7.0/kube-bench_0.7.0_linux_amd64.tar.gz)
+- [kube-bench v0.15.5 release archive](https://github.com/aquasecurity/kube-bench/releases/download/v0.15.5/kube-bench_0.15.5_linux_amd64.tar.gz)
+- [Sysdig Falco release announcement (May 2016)](https://sysdig.com/blog/sysdig-falco)
+- [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes)
 - [kubesec repository](https://github.com/controlplaneio/kubesec)
 - [kubesec v2.14.0 release archive](https://github.com/controlplaneio/kubesec/releases/download/v2.14.0/kubesec_linux_amd64.tar.gz)
 - [KubeDojo CKS lab scenario](https://killercoda.com/kubedojo/scenario/cks-0.2-security-lab)
