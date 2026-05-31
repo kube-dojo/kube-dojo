@@ -131,6 +131,7 @@ Controller choice also affects how quickly status becomes useful. A controller t
 istioctl install --set profile=minimal
 
 # Or for quick testing with kind/minikube, use Contour.
+# unversioned — pin to a Contour release tag for reproducible labs; GatewayClass name may differ
 kubectl apply -f https://projectcontour.io/quickstart/contour-gateway.yaml
 ```
 
@@ -428,7 +429,7 @@ spec:
   parentRefs:
   - name: example-gateway
   rules:
-    - matches:
+  - matches:
     - path:
         type: PathPrefix
         value: /old-path
@@ -502,7 +503,7 @@ Pause and predict: an HTTPRoute in namespace `team-a` references a Service in na
 
 ```yaml
 # In the target namespace (where the service lives)
-apiVersion: gateway.networking.k8s.io/v1
+apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
   name: allow-routes-from-default
@@ -544,7 +545,7 @@ ReferenceGrant is intentionally narrow. It does not grant broad namespace-to-nam
 
 Gateway listeners can terminate TLS or pass encrypted traffic through depending on the protocol and route type. In termination mode, the Gateway presents a certificate, decrypts the connection, and forwards HTTP traffic to a backend. In passthrough-style designs, the Gateway uses TLS details such as SNI to select a backend while the backend terminates the encrypted connection. Those choices affect certificate ownership, observability, and where policy can inspect traffic.
 
-In Gateway API v1.5.0, several capabilities achieved Standard status, including Gateway client certificate validation, certificate selection for TLS origination, `ListenerSet` support, and `TLSRoute` `v1`, while older `TLSRoute` alpha forms remained strictly experimental. Notably, TLSRoute CEL validation requires a cluster running Kubernetes 1.31 or higher, so a Kubernetes 1.35 cluster is an appropriate baseline for studying the current behavior.
+In Gateway API v1.5.0, several capabilities achieved Standard status, including Gateway client certificate validation, certificate selection for TLS origination, `ListenerSet` support, and `TLSRoute` `v1`, while older `TLSRoute` alpha forms remained strictly experimental. Notably, TLSRoute CEL validation depends on CRD CEL validation support in the cluster (Kubernetes 1.25+), so a Kubernetes 1.35 cluster is an appropriate baseline for studying the current behavior.
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -884,6 +885,7 @@ Because `example.io/gateway-controller` and `drill.io/controller` are non-functi
 
 ```bash
 # 1. Install Contour Gateway Controller.
+# unversioned — pin to a Contour release tag for reproducible labs; GatewayClass name may differ
 kubectl apply -f https://projectcontour.io/quickstart/contour-gateway.yaml
 
 # 2. Wait for the Contour GatewayClass to be accepted.
@@ -1387,7 +1389,11 @@ kubectl delete svc frontend backend admin
 - [Gateway API v1.5.0 release notes](https://github.com/kubernetes-sigs/gateway-api/releases/tag/v1.5.0)
 - [Gateway API v1.5.1 release](https://github.com/kubernetes-sigs/gateway-api/releases/tag/v1.5.1)
 - [Gateway API v1.5 announcement on Kubernetes Blog](https://kubernetes.io/blog/2026/04/21/gateway-api-v1-5/)
-- https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+- [Gateway API v1.0.0 standard install manifest](https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml)
+
+## Learner check
+
+> Gateway API exists because Kubernetes networking needed a stronger contract than "put every advanced behavior into an annotation and hope the controller interprets it the same way."
 
 ## Next Module
 

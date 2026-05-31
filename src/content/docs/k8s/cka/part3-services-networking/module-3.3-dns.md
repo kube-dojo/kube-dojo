@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: cka-3.3-dns
   url: https://killercoda.com/kubedojo/scenario/cka-3.3-dns
-  duration: "35 min"
+  duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -231,6 +231,7 @@ SRV records add port information to the DNS answer, which is useful when clients
 
 ```bash
 # Query an SRV record for a named Service port.
+# From a netshoot (or other dig-equipped) pod:
 dig SRV _http._tcp.web-svc.default.svc.cluster.local
 
 # Typical answer shape:
@@ -397,7 +398,7 @@ DNS debugging should start from a real client Pod or from a temporary Pod in the
 DNS Issue?
     │
     ├── Step 1: Test from inside a Pod
-    │   kubectl run test --rm -it --image=busybox:1.36 -- nslookup <service>
+    │   kubectl run test --rm -it --image=busybox:1.36 --restart=Never -- nslookup <service>
     │       │
     │       ├── Works? -> DNS is fine, issue is elsewhere
     │       │
@@ -419,7 +420,7 @@ DNS Issue?
     │       └── Wrong nameserver? -> Check kubelet and Pod DNS policy
     │
     └── Step 5: Test external DNS
-        kubectl run test --rm -it --image=busybox:1.36 -- nslookup example.com
+        kubectl run test --rm -it --image=busybox:1.36 --restart=Never -- nslookup example.com
             │
             └── Fails? -> Check forward config and upstream reachability
 ```
@@ -437,10 +438,10 @@ kubectl run dns-test --rm -it --image=busybox:1.36 --restart=Never -- \
 
 # Test with the DNS Service IP explicitly.
 kubectl run dns-test --rm -it --image=busybox:1.36 --restart=Never -- \
-  nslookup web-svc 10.96.0.10
+  nslookup web-svc "$(kubectl get svc kube-dns -n kube-system -o jsonpath='{.spec.clusterIP}')"
 ```
 
-Those three tests answer different questions. The first asks whether the default resolver path in the temporary Pod can resolve a known cluster Service. The second removes namespace ambiguity by using the full Service name. The third bypasses the Pod's `nameserver` setting and sends the query to the DNS Service IP you provide, which helps identify whether `/etc/resolv.conf` is wrong or CoreDNS itself is not answering correctly.
+Those three tests answer different questions. The first asks whether the default resolver path in the temporary Pod can resolve a known cluster Service. The second removes namespace ambiguity by using the full Service name. The third bypasses the Pod's `nameserver` setting and sends the query to the current DNS Service IP, which helps identify whether `/etc/resolv.conf` is wrong or CoreDNS itself is not answering correctly.
 
 ```bash
 # Check resolver configuration in an existing Pod.
@@ -588,6 +589,7 @@ spec:
 ```bash
 # SRV record format:
 # _<port-name>._<protocol>.<service>.<namespace>.svc.cluster.local
+# From a netshoot (or other dig-equipped) pod:
 dig SRV _http._tcp.web-svc.default.svc.cluster.local
 ```
 
@@ -764,6 +766,8 @@ Use a headless Service with the StatefulSet so each Pod receives a predictable D
 
 Exercise scenario: you are the on-call engineer for a training cluster, and a developer says Service names are unreliable. Your task is to prove the normal DNS path, create Services that show same-namespace and cross-namespace behavior, inspect CoreDNS, and then clean up without leaving test resources behind. Run the commands from a shell where `kubectl` already points at a disposable Kubernetes 1.35 or newer cluster.
 
+> **Note:** Kubernetes DNS search domains can expand `service.namespace` to `service.namespace.svc.cluster.local`, but BusyBox `nslookup` in `busybox:1.36` does not apply that two-label expansion and may print `NXDOMAIN` for names like `web.default`. BusyBox `nslookup` also exits non-zero even when it printed a useful `Name:` and `Address:` answer for the intended record, so judge its success by the displayed record rather than only the Pod exit code. For namespace-qualified verification, use `wget -qO- --timeout=2 http://<name>.<ns>/`, query the full FQDN with `nslookup`, or run a netshoot pod with `host` or `dig`.
+
 ### Task 1: Verify the Cluster DNS Baseline
 
 Start by checking the shared DNS components before creating workload resources. This gives you a baseline for later failures and teaches you which objects are involved in the DNS path. If your environment uses different labels for CoreDNS, adapt the selector after inspecting Pods in `kube-system`.
@@ -797,7 +801,7 @@ kubectl run test1 --rm -it --image=busybox:1.36 --restart=Never -- \
   nslookup web
 
 kubectl run test2 --rm -it --image=busybox:1.36 --restart=Never -- \
-  nslookup web.default
+  wget -qO- --timeout=2 http://web.default/
 
 kubectl run test3 --rm -it --image=busybox:1.36 --restart=Never -- \
   nslookup web.default.svc.cluster.local
@@ -806,7 +810,7 @@ kubectl run test3 --rm -it --image=busybox:1.36 --restart=Never -- \
 <details>
 <summary>Solution notes</summary>
 
-All three forms should resolve from the `default` namespace because the short name expands through the Pod search domains. Compare the returned address with `kubectl get svc web` and confirm it matches the Service ClusterIP for a normal ClusterIP Service. If only the full FQDN works, inspect the temporary Pod's resolver search list.
+The short-name and full-FQDN `nslookup` commands should print the Service ClusterIP for a normal ClusterIP Service, and the `wget` command verifies that the namespace-qualified `web.default` form works through a resolver-backed client. The Kubernetes DNS spec expands `service.namespace`, but BusyBox `nslookup` reports `NXDOMAIN` for that two-label form, so verify it with a libc-style resolver such as `wget`, a full-FQDN `nslookup`, or a netshoot `host` or `dig` command before blaming CoreDNS. If only the full FQDN works, inspect the temporary Pod's resolver search list.
 
 </details>
 
@@ -839,13 +843,13 @@ kubectl get svc db -n other
 
 ```bash
 kubectl run test4 --rm -it --image=busybox:1.36 --restart=Never -- \
-  nslookup db.other
+  wget -qO- --timeout=2 http://db.other/
 ```
 
 <details>
 <summary>Solution notes</summary>
 
-The query should resolve because `db.other` can expand to `db.other.svc.cluster.local`. If `nslookup db` from `default` fails or reaches a different Service, that is expected search-domain behavior. The fix for real applications is explicit naming, not a CoreDNS patch.
+The namespace-qualified query should resolve because the Kubernetes DNS spec allows `db.other` to expand to `db.other.svc.cluster.local`, and the `wget` command verifies that behavior with an application-style lookup. BusyBox `nslookup db.other` will report `NXDOMAIN` for this two-label form, so use a libc-style resolver such as `wget`, the full FQDN, or a netshoot Pod when you need to prove namespace-qualified resolution. If `nslookup db` from `default` fails or reaches a different Service, that is expected search-domain behavior. The fix for real applications is explicit naming, not a CoreDNS patch.
 
 </details>
 
@@ -974,7 +978,7 @@ These drills are optional, but they preserve the fast command practice from the 
 kubectl create deployment dns-test --image=nginx
 kubectl expose deployment dns-test --port=80
 kubectl run test --rm -it --image=busybox:1.36 --restart=Never -- \
-  sh -c 'nslookup dns-test && nslookup dns-test.default && nslookup dns-test.default.svc.cluster.local'
+  sh -c 'nslookup dns-test; wget -qO- --timeout=2 http://dns-test.default/; nslookup dns-test.default.svc.cluster.local'
 kubectl delete deployment dns-test
 kubectl delete svc dns-test
 ```
@@ -996,9 +1000,9 @@ kubectl create deployment app2 -n ns2 --image=nginx
 kubectl expose deployment app1 -n ns1 --port=80
 kubectl expose deployment app2 -n ns2 --port=80
 kubectl run test -n ns1 --rm -it --image=busybox:1.36 --restart=Never -- \
-  nslookup app2.ns2
+  wget -qO- --timeout=2 http://app2.ns2/
 kubectl run test -n ns2 --rm -it --image=busybox:1.36 --restart=Never -- \
-  nslookup app1.ns1
+  wget -qO- --timeout=2 http://app1.ns1/
 kubectl delete namespace ns1 ns2
 ```
 
@@ -1038,16 +1042,16 @@ kubectl get pods -n kube-system -l k8s-app=kube-dns
 kubectl create deployment challenge --image=nginx
 kubectl expose deployment challenge --port=80
 kubectl run test --rm -it --image=busybox:1.36 --restart=Never -- \
-  sh -c 'nslookup challenge; nslookup challenge.default; nslookup challenge.default.svc.cluster.local'
-kubectl create namespace test
-kubectl create deployment challenge -n test --image=nginx
-kubectl expose deployment challenge -n test --port=80
+  sh -c 'nslookup challenge; wget -qO- --timeout=2 http://challenge.default/; nslookup challenge.default.svc.cluster.local'
+kubectl create namespace dns-demo
+kubectl create deployment challenge -n dns-demo --image=nginx
+kubectl expose deployment challenge -n dns-demo --port=80
 kubectl run test --rm -it --image=busybox:1.36 --restart=Never -- \
-  nslookup challenge.test
+  wget -qO- --timeout=2 http://challenge.dns-demo/
 kubectl logs -n kube-system -l k8s-app=kube-dns --tail=10
 kubectl delete deployment challenge
 kubectl delete svc challenge
-kubectl delete namespace test
+kubectl delete namespace dns-demo
 ```
 
 ---
@@ -1067,9 +1071,16 @@ kubectl delete namespace test
 - [CoreDNS forward plugin](https://coredns.io/plugins/forward/)
 - [CoreDNS cache plugin](https://coredns.io/plugins/cache/)
 - [CoreDNS hosts plugin](https://coredns.io/plugins/hosts/)
+- [BusyBox Bug 14671: nslookup not working in Kubernetes](https://lists.busybox.net/pipermail/busybox-cvs/2022-March/041133.html)
 
 ---
 
 ## Next Module
 
 [Module 3.4: Ingress](../module-3.4-ingress/) - HTTP routing and external access to services.
+
+---
+
+## Learner check
+
+> DNS debugging should start from a real client Pod or from a temporary Pod in the same namespace.

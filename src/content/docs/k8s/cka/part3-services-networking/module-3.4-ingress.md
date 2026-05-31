@@ -114,6 +114,7 @@ For exam practice and local labs, you will still see NGINX-shaped examples becau
 
 ```bash
 # For kind
+# retired controller — lab/learning use only; see Sources for maintained alternatives
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
 
 # For minikube
@@ -226,7 +227,7 @@ spec:
 
 `Prefix` is usually the CKA-friendly choice because it covers both the base path and child paths. `Exact` is valuable when one endpoint must be isolated from nearby paths, such as `/healthz` or a callback route that should not match `/healthz/debug`. `ImplementationSpecific` can unlock controller-specific behavior, including regex-like matches in some controllers, but it trades portability for power and should be used only when you know which controller will process the resource.
 
-Pause and predict: you have two Ingress path rules, `/api` with `pathType: Prefix` and `/api/v1` with `pathType: Exact`. A request arrives for `/api/v1/users`, and a second request arrives for `/api/v1`; which rule handles each request? The longer exact path handles only `/api/v1`, while `/api/v1/users` falls back to the `/api` prefix unless another matching prefix exists.
+Pause and predict: you have two Ingress path rules, `/api` with `pathType: Prefix` and `/api/v1` with `pathType: Exact`. A request arrives for `/api/v1/users`, and a second request arrives for `/api/v1`; which rule handles each request? The longer exact path handles only `/api/v1`, while `/api/v1/users` falls back to the `/api` prefix, which is the only prefix that matches `/api/v1/users` in this example.
 
 Host-based routing, also called virtual hosting, uses the HTTP `Host` header to choose a backend. This is the same idea that lets one web server host several websites on one IP address. In Kubernetes, it lets one controller Service accept traffic for `api.example.com` and `web.example.com` while sending each hostname to a different internal Service.
 
@@ -318,17 +319,13 @@ TLS termination is the point where encrypted HTTPS traffic becomes decrypted HTT
 
 ```bash
 # Generate self-signed certificate (for testing)
+# self-signed, no SAN — modern curl needs --insecure (lab/testing only)
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout tls.key -out tls.crt \
   -subj "/CN=example.com"
 
 # Create secret
 kubectl create secret tls example-tls --cert=tls.crt --key=tls.key
-
-# Or using kubectl
-kubectl create secret tls example-tls \
-  --cert=path/to/tls.crt \
-  --key=path/to/tls.key
 ```
 
 That Secret must live in the same namespace as the Ingress. This namespace rule is not a controller quirk; it is part of how the Ingress API references Secrets. If you create `example-tls` in `default` and the Ingress in `production`, the controller cannot use that Secret through the Ingress reference, and you may see a default certificate or a TLS error depending on the controller.
@@ -800,7 +797,8 @@ INGRESS_IP=$(kubectl get ingress multi-path-ingress -o jsonpath='{.status.loadBa
 [ -z "$INGRESS_IP" ] && INGRESS_IP="localhost"
 
 # Test paths directly from the host node (since INGRESS_IP might be localhost)
-curl -s -H "Host: example.com" http://$INGRESS_IP/api
+curl -s http://$INGRESS_IP/api
+curl -s http://$INGRESS_IP/
 ```
 
 <details>
@@ -862,6 +860,7 @@ The describe output should show two host rules, each with a `/` prefix and a dif
 Create a self-signed certificate for practice and store it as a Kubernetes TLS Secret. Self-signed certificates are not production material, but they are good for learning because they let you practice the object shape without relying on an external certificate issuer.
 
 ```bash
+# self-signed, no SAN — modern curl needs --insecure (lab/testing only)
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout tls.key -out tls.crt \
   -subj "/CN=example.com"
@@ -1074,6 +1073,7 @@ kubectl create deployment secure-app --image=nginx
 kubectl expose deployment secure-app --port=80
 
 # Generate certificate
+# self-signed, no SAN — modern curl needs --insecure (lab/testing only)
 openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
   -keyout tls.key -out tls.crt -subj "/CN=secure.local"
 
@@ -1126,7 +1126,7 @@ kubectl get ingressclass
 kubectl describe ingressclass nginx
 
 # Check which is default
-kubectl get ingressclass -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.ingressclass\.kubernetes\.io/is-default-class}{"\n"}{end}'
+kubectl get ingressclass -o jsonpath="{range .items[*]}{.metadata.name}{\"\\t\"}{.metadata.annotations['ingressclass\\.kubernetes\\.io/is-default-class']}{\"\\n\"}{end}"
 ```
 
 #### Drill 6: Ingress with Annotations
@@ -1260,6 +1260,7 @@ spec:
 EOF
 
 # 4. Add TLS
+# self-signed, no SAN — modern curl needs --insecure (lab/testing only)
 openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
   -keyout tls.key -out tls.crt -subj "/CN=myapp.local"
 kubectl create secret tls myapp-tls --cert=tls.crt --key=tls.key
@@ -1318,12 +1319,16 @@ rm tls.key tls.crt
 - [Services, Load Balancing, and Networking | Kubernetes](https://kubernetes.io/docs/concepts/services-networking/)
 - [Service | Kubernetes](https://kubernetes.io/docs/concepts/services-networking/service/)
 - [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/)
-- [Migrating from Ingress | Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/)
+- [Migrating from Ingress | Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/guides/migrating-from-ingress/)
 - [Ingress NGINX Retirement: What You Need to Know | Kubernetes Blog](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/)
 - [Ingress NGINX Statement | Kubernetes Blog](https://kubernetes.io/blog/2026/01/29/ingress-nginx-statement/)
 - [ingress2gateway | Kubernetes SIGs](https://github.com/kubernetes-sigs/ingress2gateway)
-- [ingress-nginx kind deployment manifest](https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml)
+- [ingress-nginx kind deployment manifest](https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml) — retired controller; lab/learning use only; see maintained alternatives above
 
 ## Next Module
 
 [Module 3.5: Gateway API](../module-3.5-gateway-api/) - The next generation of Kubernetes ingress, with richer route resources and cleaner platform ownership boundaries.
+
+## Learner check
+
+> If you remember only one debugging sentence, make it this: no address points toward controller or class reconciliation, 404 points toward host and path matching, and 503 points toward matched routes with unavailable backends.

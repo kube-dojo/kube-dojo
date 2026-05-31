@@ -144,7 +144,7 @@ One useful habit is to treat endpoint generation as a reconciliation chain rathe
 
 ### 1.3 Viewing Endpoints
 
-You can inspect the legacy Endpoints API using standard `kubectl` commands. Even though EndpointSlices are the modern source for service proxies in current Kubernetes, legacy Endpoints output remains useful because many humans, scripts, and older controllers still expose it during troubleshooting. Use it as a quick compatibility view, then confirm anything scale-sensitive or condition-sensitive with EndpointSlices.
+You can inspect the legacy Endpoints API using standard `kubectl` commands. The legacy Endpoints API is deprecated since Kubernetes v1.33 (still served); EndpointSlices are the replacement. Even though EndpointSlices are the modern source for service proxies in current Kubernetes, legacy Endpoints output remains useful because many humans, scripts, and older controllers still expose it during troubleshooting. Use it as a quick compatibility view, then confirm anything scale-sensitive or condition-sensitive with EndpointSlices.
 
 ```bash
 # List all endpoints
@@ -320,7 +320,7 @@ EndpointSlices have their own resource names and generated object names, so the 
 ```bash
 # List all EndpointSlices
 kubectl get endpointslices
-kubectl get eps                   # Short form (might conflict with endpoints)
+# EndpointSlices have no short alias — type the resource name in full.
 
 # Get EndpointSlices for a service
 kubectl get endpointslices -l kubernetes.io/service-name=web-svc
@@ -345,7 +345,7 @@ Before running a describe command, first list the slices and copy the generated 
 | Dual-stack support | Limited | Full IPv4/IPv6 |
 | Topology hints | No | Yes |
 
-This comparison is useful, but it needs one correction in your mental model: "unlimited" in the legacy Endpoints row does not mean safe at any size. Kubernetes documents that the legacy Endpoints API truncates over-capacity backend sets at 1,000 endpoints and marks the object with the `endpoints.kubernetes.io/over-capacity: truncated` annotation. If a tool reads only the legacy object, it can miss backends that EndpointSlices still represent.
+This comparison is useful, but it needs one correction in your mental model: "unlimited" in the legacy Endpoints row does not mean safe at any size. As of current Kubernetes versions, the legacy Endpoints API truncates over-capacity backend sets at 1,000 endpoints and marks the object with the `endpoints.kubernetes.io/over-capacity: truncated` annotation. If a tool reads only the legacy object, it can miss backends that EndpointSlices still represent.
 
 For exam and production work, treat EndpointSlices as the authoritative modern view while still knowing how to interpret Endpoints. You will often inspect both because old commands are fast and familiar, but your conclusion should account for which API has the fidelity needed for the situation. Large Services, dual-stack clusters, terminating endpoint behavior, and topology-aware routing all push you toward EndpointSlices.
 
@@ -436,7 +436,7 @@ kubectl describe endpoints web-svc
 
 Pods listed in `NotReadyAddresses` are actively shielded from receiving normal traffic. In the modern `EndpointSlice` API, routing is driven by endpoint conditions: `ready`, `serving`, and `terminating`. The `serving` condition maps directly to pod readiness for pod-backed endpoints, while `terminating` indicates the endpoint is currently shutting down.
 
-For pod-backed endpoints, nil values in `ready` or `serving` are safely interpreted as `true`, while nil in `terminating` is interpreted as `false`. Service proxies normally ignore terminating endpoints, but they may route to endpoints marked as both `serving` and `terminating` if all available endpoints are terminating. That fallback helps avoid an immediate total outage during aggressive rollouts, but you should still fix the rollout shape so healthy replacements exist before old Pods disappear.
+For pod-backed endpoints only, nil values in `ready` or `serving` are interpreted as `true`, and nil in `terminating` as `false`; that defaulting applies to endpoints the controller derives from Pods, not to manually authored EndpointSlice entries without a `targetRef`. Service proxies normally ignore terminating endpoints, but they may route to endpoints marked as both `serving` and `terminating` if all available endpoints are terminating. That fallback helps avoid an immediate total outage during aggressive rollouts, but you should still fix the rollout shape so healthy replacements exist before old Pods disappear.
 
 When diagnosing a readiness-related outage, keep the human explanation tied to the condition. Say "the Pods are Running but excluded because readiness is false" instead of "Kubernetes lost the Pods." That phrasing prevents the team from deleting random resources and points them toward probe paths, dependency checks, application startup time, or resource pressure. It also maps cleanly to the CKA troubleshooting style, where you need to identify the broken link and correct it directly.
 
@@ -626,6 +626,8 @@ kubectl run test --rm -i --image=busybox:1.36 --restart=Never -- \
 # Address: 10.244.1.12
 ```
 
+BusyBox `nslookup` exit code is unreliable — judge success by the printed `Address:` lines for the intended record, not the pod exit code; use a netshoot pod for `host`/`dig` if you need a clean exit.
+
 DNS tests are most meaningful when run from inside the cluster because cluster DNS names and search paths are meant for Pods. If you test from your laptop, you may be querying a completely different resolver that knows nothing about `svc.cluster.local`. A CKA troubleshooting answer should be precise about vantage point: inspect Kubernetes objects with `kubectl`, then test in-cluster name resolution with a temporary Pod.
 
 ---
@@ -715,7 +717,7 @@ Use that framework during troubleshooting as well as design. If a Service has a 
 ## Did You Know?
 
 - **EndpointSlices became stable in Kubernetes 1.21:** The discovery API is not experimental in modern clusters; it is the scalable replacement for watching one giant legacy Endpoints object.
-- **Legacy Endpoints truncate over-capacity backends at 1,000 addresses:** Kubernetes marks the object with `endpoints.kubernetes.io/over-capacity: truncated`, which is a warning that legacy readers may see only part of the backend set.
+- **Legacy Endpoints truncate over-capacity backends at 1,000 addresses (as of current Kubernetes versions):** Kubernetes marks the object with `endpoints.kubernetes.io/over-capacity: truncated`, which is a warning that legacy readers may see only part of the backend set.
 - **EndpointSlices are normally split around 100 endpoints each:** The controller creates additional slices as Services grow, reducing the update payload when one Pod changes.
 - **EndpointSlice conditions distinguish readiness from termination:** `ready`, `serving`, and `terminating` let service proxies reason about rollout edge cases that the legacy object cannot describe as clearly.
 
@@ -771,13 +773,13 @@ Use that framework during troubleshooting as well as design. If a Service has a 
 6. **You are reviewing the YAML of an EndpointSlice for a legacy application. Under one of the endpoints, the `ready` and `serving` conditions are missing entirely (`nil`). A junior engineer worries that kube-proxy will drop traffic to this endpoint because it is not explicitly marked ready. Are they correct, and why?**
    <details>
    <summary>Answer</summary>
-   They are not correct for pod-backed endpoints. Kubernetes interprets nil `ready` or `serving` values as true for compatibility, while nil `terminating` is interpreted as false. That does not mean missing conditions are ideal for clarity, but it does mean the endpoint is not automatically dropped only because those fields are absent. You should still evaluate the broader EndpointSlice, Pod readiness, and rollout state before concluding the proxy behavior is wrong.
+   They are not correct for pod-backed endpoints. For pod-backed endpoints only, Kubernetes interprets nil `ready` or `serving` as true and nil `terminating` as false; manual endpoints without a Pod `targetRef` do not get those defaults. That does not mean missing conditions are ideal for clarity, but it does mean the endpoint is not automatically dropped only because those fields are absent on a controller-managed slice. You should still evaluate the broader EndpointSlice, Pod readiness, and rollout state before concluding the proxy behavior is wrong.
    </details>
 
 7. **During a traffic spike, your application auto-scales to 1,200 pods. Metrics show that 200 of the newest pods receive zero traffic while the older 1,000 pods are overloaded. You inspect the `Endpoints` object and notice an `endpoints.kubernetes.io/over-capacity: truncated` annotation. What is the architectural root cause, and how do you route traffic to the stranded pods?**
    <details>
    <summary>Answer</summary>
-   The root cause is reliance on the legacy Endpoints API after the backend set exceeded its documented truncation behavior. The annotation tells you the old object is not representing every backend, so any component reading only that object can make incomplete routing decisions. EndpointSlices are designed to represent the full backend set in smaller objects, so use EndpointSlice-aware service routing and diagnostics. The stranded pods are not necessarily unhealthy; they are invisible to legacy readers that cannot represent the whole set.
+   The root cause is reliance on the legacy Endpoints API after the backend set exceeded its documented truncation limit (1,000 addresses as of current Kubernetes versions). The annotation tells you the old object is not representing every backend, so any component reading only that object can make incomplete routing decisions. EndpointSlices are designed to represent the full backend set in smaller objects, so use EndpointSlice-aware service routing and diagnostics. The stranded pods are not necessarily unhealthy; they are invisible to legacy readers that cannot represent the whole set.
    </details>
 
 8. **During an aggressive rolling update of a critical microservice, you observe a brief window where all available pods are terminating. To your surprise, `kube-proxy` is still routing active traffic to these pods instead of dropping it immediately. The endpoints show both `serving: true` and `terminating: true`. Is this a bug in the proxy or intended behavior?**
@@ -963,8 +965,8 @@ spec:
   - port: 80
 EOF
 
-# Check - no endpoints yet
-kubectl get endpoints external-svc
+# Check - no endpoints yet (none exist until the manual Endpoints object is created)
+kubectl get endpoints external-svc --ignore-not-found
 
 # Create manual endpoints
 cat << 'EOF' | kubectl apply -f -
@@ -985,8 +987,8 @@ kubectl get endpoints external-svc
 kubectl describe endpoints external-svc
 
 # Cleanup
+kubectl delete endpoints external-svc --ignore-not-found=true
 kubectl delete svc external-svc
-kubectl delete endpoints external-svc
 ```
 
 ### Drill 4: Headless Service (Target: 3 minutes)
@@ -1216,7 +1218,7 @@ kubectl get endpoints manual-svc
 # 8. Cleanup
 kubectl delete deployment ep-challenge
 kubectl delete svc fixed-svc headless-challenge manual-svc
-kubectl delete endpoints manual-svc
+kubectl delete endpoints manual-svc --ignore-not-found=true
 ```
 
 </details>
@@ -1235,10 +1237,14 @@ If one of the drills behaves differently in your cluster, treat that as useful s
 - [Topology Aware Routing](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) — Explains zone-aware routing behavior and EndpointSlice hints.
 - [Service Internal Traffic Policy](https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/) — Covers how Service routing policy can narrow eligible endpoints.
 - [EndpointSlice API reference](https://kubernetes.io/docs/reference/kubernetes-api/service-resources/endpoint-slice-v1/) — Defines EndpointSlice fields, conditions, address types, ports, and topology fields.
-- [Endpoints API reference](https://kubernetes.io/docs/reference/kubernetes-api/service-resources/endpoints-v1/) — Defines the legacy Endpoints object shape used in compatibility examples.
+- [Endpoints API reference](https://kubernetes.io/docs/reference/kubernetes-api/service-resources/endpoints-v1/) (deprecated since v1.33) — Defines the legacy Endpoints object shape used in compatibility examples.
 - [Debug Services](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/) — Kubernetes task guide for tracing Service selector and endpoint failures.
 - [StatefulSet Basics](https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/) — Demonstrates stable network identity and headless Service usage for StatefulSets.
 - [Virtual IPs and Service Proxies](https://kubernetes.io/docs/reference/networking/virtual-ips/) — Explains how Kubernetes service proxying uses Service and endpoint data.
+
+## Learner check
+
+> Kubernetes 1.35 uses EndpointSlices as the scalable discovery API behind Services, while the older Endpoints API remains visible mostly for compatibility and troubleshooting.
 
 ## Next Module
 
