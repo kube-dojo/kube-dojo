@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 80 — CKA Wave 5 (3.2–3.5 services-networking) → done</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:62rem;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a;background:#fafafa}
+  h1{font-size:1.6rem;border-bottom:3px solid #326ce5;padding-bottom:.3rem}
+  h2{font-size:1.2rem;margin-top:2rem;color:#243b53;border-bottom:1px solid #d9e2ec;padding-bottom:.2rem}
+  code{background:#eef2f7;padding:.1rem .35rem;border-radius:3px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.92rem}
+  th,td{border:1px solid #d9e2ec;padding:.4rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f4f8}
+  .ok{color:#0a7d33;font-weight:600}
+  .warn{color:#b45309;font-weight:600}
+  .tldr{background:#eef6ff;border-left:4px solid #326ce5;padding:.8rem 1rem;border-radius:4px}
+  ul{margin:.4rem 0}
+  small{color:#627d98}
+</style>
+</head>
+<body>
+<h1>Session 80 — CKA Wave 5: 3.2–3.5 services-networking → <span class="ok">done</span></h1>
+<p><small>2026-05-31 · standalone orchestrator · continues session-79 review-first progression into the <code>k8s</code> track (CKA).</small></p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Drained <strong>CKA wave 5</strong> = <code>3.2-endpoints / 3.3-dns / 3.4-ingress / 3.5-gateway-api</code>
+through the full proven loop in one PR. 4-pool cross-family review surfaced <strong>real findings on all four</strong>
+(every reviewer earned its keep); fixed, self-verified each diff, built green, <strong>PR #1706 merged</strong>
+(main <code>1d67c3a5</code>), all four finalized to <code>done</code>. <strong>CKA done 28→32</strong>; board total done 324→328.
+No fabrication; targeted edits only. Tool-result delivery was badly lagged all session (see Caveats).
+</div>
+
+<h2>What shipped — PR #1706 (one <code>chore(content):</code> commit, +72/−44)</h2>
+<table>
+<tr><th>Module</th><th>Reviewer (family)</th><th>R1 verdict</th><th>Real fixes applied (ground-checked)</th></tr>
+<tr><td>3.2-endpoints</td><td>codex gpt-5.5</td><td>NEEDS_CHANGES</td><td>removed invalid <code>kubectl get eps</code> alias (no such shortname); BusyBox <code>nslookup</code> exit-code note; <code>--ignore-not-found</code> on Drill-3 check + manual-svc cleanup; Endpoints-API v1.33 deprecation note; over-capacity 1,000 hedge; pod-backed nil-condition scoping</td></tr>
+<tr><td>3.3-dns</td><td>composer-2.5 (cursor)</td><td>NEEDS_CHANGES</td><td><strong>BusyBox <code>nslookup</code> returns NXDOMAIN for <code>service.namespace</code></strong> (verified on live v1.33) → <code>wget</code> verification + solution-note rewrites; bare <code>dig</code> → netshoot note; hardcoded <code>10.96.0.10</code> → <code>$(kubectl get svc kube-dns …)</code>; duration 35→45m; drill ns <code>test</code>→<code>dns-demo</code>; busybox-bug citation</td></tr>
+<tr><td>3.4-ingress</td><td>Claude Sonnet</td><td>APPROVE_WITH_NITS</td><td>removed duplicate <code>kubectl create secret tls</code> block (placeholder paths, "already exists"); retired ingress-nginx URL caveat; curl host-header no-op fix + <code>/</code> test; openssl SAN notes; jsonpath bracket form; migration URL path fix</td></tr>
+<tr><td>3.5-gateway-api</td><td>Claude Sonnet</td><td>NEEDS_CHANGES</td><td><strong>fixed malformed <code>redirect-route</code> YAML</strong> (mis-indented <code>- matches:</code> → <code>path</code> never attached → silent no-match); <code>ReferenceGrant</code> <code>v1</code>→<code>v1beta1</code>; CEL claim "1.31"→"1.25+"; Contour URL caveats; bare source-URL label</td></tr>
+</table>
+<p>Each module gained a <code>## Learner check</code> verbatim blockquote; all four pass <code>verify_module.py</code> (tier T0, density green). CI on #1706: all 7 checks green (CodeQL, gemini-3.1-pro Review, Incident-dedup gate, Site-health link check, Analyze ×3).</p>
+
+<h2>The loop (held end-to-end)</h2>
+<p>4-pool review (1 module/pool, distinct OAuth pools) → ground-check every finding → fix (cursor + codex; orchestrator inline for the 2 trivial <code>--ignore-not-found</code> items a speculative brief missed) → self-verify each diff vs its review → assemble one <code>chore(content):</code> integration branch → <strong>build in PRIMARY</strong> (copy-in → npm build → restore; worktree builds fail on Homepage.astro) → PR → CI → rebase-merge → <code>finalize-w5.sh</code> (review record + <code>reset-stage COMMITTED</code> → flips review axis to <code>done</code>).</p>
+
+<h2>Roster notes (carry forward)</h2>
+<ul>
+<li><strong>gemini-cli exhausted</strong> from session start (~12h reset). 4th pool fell back to <strong>agy</strong>, which <strong>timed out at 900s/0-bytes</strong> on 3.5 (OAuth-hang signature) → re-routed to <strong>deepseek</strong>, which the wrapper rejected (<code>review --agent deepseek</code> + <code>--mode workspace-write</code> needs <code>--worktree</code>) → finally <strong>claude read-only</strong> reviewed 3.5 cleanly. Net 4th-pool order that worked: <code>codex + cursor + claude + claude</code> (sequential, no burst).</li>
+<li><strong>Write fix briefs FROM the verdict, not ahead of it.</strong> The 3.2 brief was drafted before reading codex's review and missed two real items (Drill-3 NotFound, cleanup-order) — patched inline. Process fix: never pre-write a fix brief on a prediction.</li>
+<li>codex content fixes via <code>draft</code>-class + gpt-5.5 + timeout 3600 committed cleanly (no SIGKILL this session).</li>
+</ul>
+
+<h2>Caveats / environment</h2>
+<ul>
+<li class="warn">Severe tool-result delivery lag the entire session: foreground reads returned empty and only flushed when a background-task completion notification fired, re-delivering large buffers many times. It inflated token use heavily but did <strong>not</strong> affect correctness (every state was re-derived from ground truth before acting). Mitigation used: route reads through background tasks; re-derive state with fresh <code>git</code>/<code>gh</code>/API queries rather than trusting a single read.</li>
+</ul>
+
+<h2>State after this session</h2>
+<ul>
+<li><strong>Review axis (<code>/quality</code>): board done 324→328.</strong> CKA done 28→32 (this wave). prerequisites 44/44 + linux 37/37 + ai = done; k8s/CKA in progress.</li>
+<li>main <code>1d67c3a5</code>, clean, == origin. Branch <code>content/cka-wave5-part3</code> merged + deleted.</li>
+<li>Reusable: <code>logs/remediation/briefs/session80/</code> (fix-3.2…3.5 briefs, wave5-pr-body.md, finalize-w5.sh); session-79 review prompts at <code>session79/review-cka-*.md</code> cover 3.6/3.7/4.x/5.x.</li>
+</ul>
+
+<h2>NEXT — CKA wave 6</h2>
+<p><code>3.6-network-policies</code> + <code>3.7-cni</code> (finish part3), then part4 <code>4.1-volumes…4.5-troubleshooting</code>, then part5 <code>5.2…5.7</code>. Same loop. Review prompts already generated: <code>logs/remediation/briefs/session79/review-cka-3.6-network-policies.md</code>, <code>…3.7-cni.md</code>, <code>…4.*</code>, <code>…5.*</code>. Roster: codex + cursor(<code>--model auto</code>) + claude(sonnet, read-only) + 4th pool (gemini-cli if reset past ~22:00, else a 2nd ground-checked claude/codex; agy unreliable — OAuth hangs). <strong>Incident-dedup CI gate</strong>: if briefing a real named incident, grep it isn't already cited elsewhere. After CKA: ckad → cks → kcna → kcsa → extending → tool certs → cloud → ai-ml-eng → on-prem → platform (curriculum order).</p>
+
+</body>
+</html>
