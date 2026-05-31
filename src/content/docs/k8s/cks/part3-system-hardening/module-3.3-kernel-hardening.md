@@ -161,12 +161,14 @@ Automatic updates require a policy, not just a package. On pets-style servers, u
 
 SSH hardening belongs in the same baseline because emergency shell access is powerful and often forgotten. If SSH exists, root login should be disabled, password authentication should be disabled, allowed users should be narrow, and access should be logged. If the platform supports a no-SSH model, prefer a controlled break-glass workflow and Kubernetes-native debugging for routine application investigation.
 
-```bash
+```text
 # /etc/ssh/sshd_config
 PermitRootLogin no
 PasswordAuthentication no
 AllowUsers admin
+```
 
+```bash
 # Restart SSH
 sudo systemctl restart sshd
 ```
@@ -205,10 +207,12 @@ The first group reduces network abuse that should not be needed on a worker node
 ```bash
 # View current settings
 sysctl -a | grep -E "net.ipv4|kernel" | head -20
+```
 
-# Recommended security settings
-# Add to /etc/sysctl.d/99-kubernetes-security.conf
+Add the hardened values to a managed sysctl file rather than pasting the configuration lines directly into a shell prompt.
 
+```ini
+# /etc/sysctl.d/99-kubernetes-security.conf
 # Disable IP forwarding if not needed (kubelets need it!)
 # net.ipv4.ip_forward = 0  # Don't disable on K8s nodes!
 
@@ -237,7 +241,9 @@ kernel.dmesg_restrict = 1
 
 # Restrict kernel pointers
 kernel.kptr_restrict = 1
+```
 
+```bash
 # Apply settings
 sudo sysctl -p /etc/sysctl.d/99-kubernetes-security.conf
 ```
@@ -246,7 +252,7 @@ The kernel settings in that file do not all protect the same phase of an attack.
 
 Network sysctls need special attention because Kubernetes networking uses forwarding deliberately. Pod traffic may cross veth pairs, bridges, overlay interfaces, and the node's primary interface, depending on the CNI. If a generic compliance rule says every Linux host must disable forwarding, applying it blindly can break cross-node Pod communication and Service routing even though the node looks more secure to the scanner.
 
-```bash
+```ini
 # /etc/sysctl.d/99-kubernetes.conf
 
 # Required for Kubernetes networking
@@ -315,7 +321,7 @@ When you set `kernel.kptr_restrict = 2`, you are choosing a stricter posture tha
 
 The Linux kernel exposes enormous amounts of system information through pseudo-filesystems such as `/proc` and `/sys`. That visibility is useful for administrators and monitoring agents, but it can also help attackers enumerate processes, kernel modules, command lines, device information, and runtime state. Host hardening therefore includes both what ordinary users can see on the node and what containers are allowed to see through their mounts.
 
-```bash
+```text
 # Restrict access to process information
 # In /etc/fstab or mount options:
 proc    /proc    proc    defaults,hidepid=2    0    0
@@ -359,7 +365,7 @@ ls -la /var/lib/kubelet/config.yaml
 
 Filesystem mount options add another layer of defense after a process gains some write access. `nodev` prevents device files from being interpreted on that filesystem, `nosuid` prevents setuid bits from granting privilege, and `noexec` prevents direct execution from paths that should only store data or logs. These controls are not perfect bypass-proof walls, but they force attackers to work harder and remove common shortcuts.
 
-```bash
+```text
 # /etc/fstab entries with security options
 
 # Separate partitions for:
@@ -382,7 +388,7 @@ Mount choices must respect workload reality. Applying `noexec` to `/tmp` on the 
 
 Read-only root filesystems are the strongest version of this idea. In immutable infrastructure, the node image is replaced instead of modified, writable state is isolated, and configuration comes from a controlled pipeline. This model sharply reduces drift, but it requires good operational tooling because the old habit of "SSH in and edit a file" no longer works.
 
-```bash
+```text
 # For immutable infrastructure:
 # Mount root as read-only, use overlay for writes
 
@@ -419,20 +425,19 @@ Container runtime hardening is where host controls meet Pod controls. The runtim
       runtime_type = "io.containerd.runc.v2"
 
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-        # Enable seccomp
+        # Use systemd cgroups
         SystemdCgroup = true
 ```
 
-This containerd snippet preserves the common `runc` path while showing where runtime choices live. `SystemdCgroup = true` aligns the runtime with systemd-managed cgroups, which is the expected posture for many Kubernetes distributions. Seccomp defaults are normally controlled through the runtime and Pod security context together, so verify both the node default and the workload declarations before assuming syscall filtering is active.
+This containerd snippet preserves the common `runc` path while showing where runtime choices live. `SystemdCgroup = true` aligns the runtime with systemd-managed cgroups, which is the expected posture for many Kubernetes distributions. It is not a seccomp switch. Teach seccomp at the Pod layer with `securityContext.seccompProfile.type: RuntimeDefault`, and on clusters that deliberately default every workload, verify kubelet `--seccomp-default` behavior instead of assuming the cgroup setting filtered syscalls.
 
-Some environments still use Docker Engine as the node runtime layer or for adjacent build hosts, so the same hardening ideas appear in Docker configuration. User namespace remapping can make container root map to a less privileged host identity, `no-new-privileges` blocks privilege escalation across exec, and seccomp profiles constrain syscall access. Inter-container communication and live restore settings then become additional operational decisions.
+Some environments still use Docker Engine for adjacent build hosts, so the same hardening ideas appear in Docker configuration even when Kubernetes nodes run containerd. User namespace remapping can make container root map to a less privileged host identity, `no-new-privileges` blocks privilege escalation across exec, and seccomp profiles constrain syscall access. Inter-container communication and live restore settings then become additional operational decisions.
 
-```bash
-# /etc/docker/daemon.json
+```json
 {
   "userns-remap": "default",
   "no-new-privileges": true,
-  "seccomp-profile": "/etc/docker/seccomp.json",
+  "seccomp-profile": "/path/to/seccomp-profile.json",
   "icc": false,
   "live-restore": true
 }
@@ -442,29 +447,32 @@ Runtime isolation is also visible from Kubernetes manifests. A Pod that runs as 
 
 The old habit of leaving debugging tools permanently installed on the node conflicts with runtime hardening. Kubernetes gives you better tools now, including ephemeral debug containers and node debugging workflows, so you can investigate without keeping compilers, scanners, and shell utilities on every worker forever. That distinction matters because a tool that helps an administrator after login can also help an attacker after escape.
 
-Audit evidence closes the loop. Hardening without audit gives you a desired state but little proof that it stayed true, while audit without hardening gives you detailed records of preventable exposure. The useful middle ground is to monitor high-value runtime binaries, configuration directories, container storage paths, kubelet configuration, and Kubernetes certificate locations for changes that should be rare.
+Audit evidence closes the loop. Hardening without audit gives you a desired state but little proof that it stayed true, while audit without hardening gives you detailed records of preventable exposure. The useful middle ground is to monitor high-value runtime binaries, configuration directories, container storage paths, kubelet configuration, and Kubernetes certificate locations for changes that should be rare. Start with the paths that exist on the node; for example, kind nodes running containerd expose the runtime binary at `/usr/local/bin/containerd`, so do not assume a distribution-specific binary location.
 
 ```bash
 # Install auditd
 sudo apt install -y auditd
 
-# Configure audit rules for container security
-# /etc/audit/rules.d/docker.rules
+# Configure containerd-first audit rules
+sudo install -m 0640 /dev/null /etc/audit/rules.d/container-runtime.rules
+for rule in \
+  "containerd:/usr/local/bin/containerd" \
+  "containerd-storage:/var/lib/containerd" \
+  "containerd-config:/etc/containerd" \
+  "kubernetes:/etc/kubernetes" \
+  "kubelet:/var/lib/kubelet"
+do
+  key="${rule%%:*}"
+  path="${rule#*:}"
+  if sudo test -e "$path"; then
+    printf -- "-w %s -p wa -k %s\n" "$path" "$key" | sudo tee -a /etc/audit/rules.d/container-runtime.rules >/dev/null
+  else
+    echo "Skipping missing audit path: $path"
+  fi
+done
 
-# Monitor Docker daemon
--w /usr/bin/dockerd -k docker
--w /usr/bin/containerd -k containerd
-
-# Monitor Docker config
--w /etc/docker -k docker-config
-
-# Monitor container directories
--w /var/lib/docker -k docker-storage
--w /var/lib/containerd -k containerd-storage
-
-# Monitor Kubernetes files
--w /etc/kubernetes -k kubernetes
--w /var/lib/kubelet -k kubelet
+# Legacy Docker Engine watches belong only on nodes where these paths exist.
+# Add dockerd, Docker config, and Docker storage watches after test -e confirms them.
 
 # Apply rules
 sudo augenrules --load
@@ -613,13 +621,21 @@ Focus audit rules on high-value paths where change should be rare: runtime binar
 
 ---
 
+## Learner check
+
+> A hardening lab is only useful when you can name the exact kernel boundary it proved and the boundary it merely inspected.
+
+Before you trust a command as evidence, ask whether it tests the control named in the lesson. A failed read of `/etc/shadow` from a non-root container proves ordinary file permissions and user identity, not `allowPrivilegeEscalation: false`. For that control, inspect the Linux `NoNewPrivs` flag or run a deliberately scoped setuid demonstration in a disposable lab.
+
+---
+
 ## Hands-On Exercise
 
 This exercise uses Kubernetes security contexts to demonstrate host-hardening concepts safely. You will compare an insecure Pod with a hardened Pod, then map each observed difference back to the kernel or OS control it resembles. If you are working on a real cluster, use a disposable namespace and avoid running privileged experiments on production nodes.
 
 ### Setup
 
-Run the preserved lab script below in a test cluster where you can create and delete a namespace. The script deploys two BusyBox Pods, compares identity, filesystem, process, `/proc`, and security context behavior, then prints host sysctl checks you would run on the actual node. It intentionally uses full `kubectl` commands so the block works in non-interactive shells.
+Run the preserved lab script below in a test cluster where you can create and delete a namespace. The script deploys two BusyBox Pods, compares identity, filesystem, default Pod PID namespace, `/proc`, `NoNewPrivs`, and security context behavior, then prints host sysctl checks you would run on the actual node. It intentionally uses full `kubectl` commands so the block works in non-interactive shells.
 
 ### Tasks
 
@@ -650,7 +666,7 @@ Check that kubelet configuration and kubeconfigs are root-owned and restrictive,
 <details>
 <summary>Solution guide for task 4</summary>
 
-Evaluate runtime isolation by asking what the workload can ask the kernel to do after compromise. `RuntimeDefault` seccomp removes many unnecessary syscall paths, dropping capabilities reduces privileged kernel operations, `allowPrivilegeEscalation: false` blocks common escalation paths, and a read-only root filesystem removes easy persistence locations. These controls are strongest when paired with host patching, sysctl restrictions, minimal packages, and focused audit evidence.
+Evaluate runtime isolation by asking what the workload can ask the kernel to do after compromise. `RuntimeDefault` seccomp removes many unnecessary syscall paths, dropping capabilities reduces privileged kernel operations, `allowPrivilegeEscalation: false` maps to the Linux `NoNewPrivs` flag, and a read-only root filesystem removes easy persistence locations. These controls are strongest when paired with host patching, sysctl restrictions, minimal packages, and focused audit evidence.
 </details>
 
 <details>
@@ -728,12 +744,13 @@ kubectl exec -n kernel-test insecure-pod -- sh -c "echo 'test' > /tmp/test.txt &
 echo "=== Secure Pod: Can write to /tmp? (should fail - readOnlyRootFilesystem) ==="
 kubectl exec -n kernel-test secure-pod -- sh -c "echo 'test' > /tmp/test.txt && echo 'Write succeeded' || echo 'Write blocked!'"
 
-# Step 6: Test process visibility (demonstrates hidepid concept)
-echo "=== Insecure Pod: Process list ==="
+# Step 6: Observe default Pod PID namespace visibility
+echo "=== Insecure Pod: Process list inside its Pod PID namespace ==="
 kubectl exec -n kernel-test insecure-pod -- ps aux | head -5
 
-echo "=== Secure Pod: Process list (limited view) ==="
+echo "=== Secure Pod: Process list inside its Pod PID namespace ==="
 kubectl exec -n kernel-test secure-pod -- ps aux | head -5
+echo "Both Pods use normal isolated Pod PID namespaces; host hidepid must be checked on the node."
 
 # Step 7: Check proc access
 echo "=== Checking /proc access in secure pod ==="
@@ -746,12 +763,18 @@ kubectl get pod insecure-pod -n kernel-test -o jsonpath='{.spec.securityContext}
 echo "Secure pod security context:"
 kubectl get pod secure-pod -n kernel-test -o jsonpath='{.spec.securityContext}' && echo ""
 
-# Step 9: Test privilege escalation (critical kernel hardening)
-echo "=== Testing Privilege Escalation Prevention ==="
-# Secure pod should block this
-kubectl exec -n kernel-test secure-pod -- sh -c "cat /etc/shadow 2>&1" || echo "Access denied (expected)"
+# Step 9: Verify allowPrivilegeEscalation through no_new_privs
+echo "=== no_new_privs flag (allowPrivilegeEscalation=false) ==="
+echo "Insecure pod:"
+kubectl exec -n kernel-test insecure-pod -- sh -c "grep NoNewPrivs /proc/self/status"
+echo "Secure pod:"
+kubectl exec -n kernel-test secure-pod -- sh -c "grep NoNewPrivs /proc/self/status"
 
-# Step 10: Check host sysctl (if running on actual node)
+# Step 10: Check non-root permissions without confusing them for no_new_privs
+echo "=== Non-root file permission check ==="
+kubectl exec -n kernel-test secure-pod -- sh -c "cat /etc/shadow 2>&1" || echo "Root-only file blocked for non-root user (expected)"
+
+# Step 11: Check host sysctl (if running on actual node)
 echo ""
 echo "=== Host Kernel Checks (run on actual node) ==="
 echo "To check on your actual cluster nodes:"
@@ -759,6 +782,7 @@ echo "  sysctl kernel.randomize_va_space    # Should be 2"
 echo "  sysctl kernel.dmesg_restrict        # Should be 1"
 echo "  sysctl kernel.kptr_restrict         # Should be 1 or 2"
 echo "  sysctl net.ipv4.conf.all.accept_redirects  # Should be 0"
+echo "  findmnt -no OPTIONS /proc           # Check host hidepid options on the node"
 
 # Cleanup
 echo ""
@@ -771,8 +795,9 @@ echo "Key learnings demonstrated:"
 echo "1. ✓ runAsNonRoot prevents root execution"
 echo "2. ✓ readOnlyRootFilesystem blocks writes"
 echo "3. ✓ Dropping capabilities limits syscalls"
-echo "4. ✓ allowPrivilegeEscalation=false prevents escalation"
+echo "4. ✓ allowPrivilegeEscalation=false maps to NoNewPrivs"
 echo "5. ✓ seccompProfile applies syscall filtering"
+echo "6. ✓ default Pod PID namespaces are not the same as host hidepid"
 ```
 
 ### Success Criteria
