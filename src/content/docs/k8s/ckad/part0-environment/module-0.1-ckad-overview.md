@@ -120,7 +120,7 @@ Services and Networking carries twenty percent. CKAD expects you to expose appli
 
 Design your study plan from both weight and weakness. If you already passed CKA, allocate less time to plain Pod creation and more time to the developer-specific variations that CKA did not force into muscle memory. If you have written Deployments at work but never created CronJobs or init containers by hand, do not let workplace familiarity fool you into skipping those topics. Exam readiness is not the same as production exposure because the exam removes your IDE, your teammate, and your slow review loop.
 
-A useful two-week plan uses the weights as guardrails rather than a rigid calendar. Spend the first block confirming that your CKA basics are fast enough: Pods, Deployments, Services, ConfigMaps, Secrets, and namespace context. Spend the second block on the largest domain, especially resource requirements, SecurityContexts, ServiceAccounts, and configuration injection. Use the third block for Jobs, CronJobs, probes, multi-container patterns, and debugging. Use the final block for timed mixed drills where you decide what to skip, what to finish, and what to return to later.
+A useful four-block plan over two weeks uses the weights as guardrails rather than a rigid calendar. Spend the first block confirming that your CKA basics are fast enough: Pods, Deployments, Services, ConfigMaps, Secrets, and namespace context. Spend the second block on the largest domain, especially resource requirements, SecurityContexts, ServiceAccounts, and configuration injection. Use the third block for Jobs, CronJobs, probes, multi-container patterns, and debugging. Use the final block for timed mixed drills where you decide what to skip, what to finish, and what to return to later.
 
 ## Practice Environment and Command Workflow
 
@@ -167,7 +167,7 @@ kubectl exec -it pod-name -c container-name -- sh
 kubectl debug pod-name --image=busybox --target=container-name
 
 # Quick testing
-kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://service
+kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://service  # replace 'service' with your Service name
 ```
 
 Probe syntax deserves a separate memory slot because it is common, precise, and easy to mistype. A liveness probe answers whether Kubernetes should restart the container. A readiness probe answers whether the Pod should receive Service traffic. A startup probe gives slow-starting applications time before liveness checks begin. Mixing those purposes is one of the fastest ways to create a workload that looks managed but behaves badly.
@@ -251,7 +251,7 @@ The speed tips from the original module remain correct once the commands use ful
 # These should be muscle memory
 kubectl run nginx --image=nginx
 kubectl create deployment web --image=nginx --replicas=3
-kubectl expose deployment web --port=80 --target-port=8080
+kubectl expose deployment web --port=80 --target-port=80
 kubectl create job backup --image=busybox -- /bin/sh -c "echo done"
 kubectl create cronjob cleanup --image=busybox --schedule="*/5 * * * *" -- /bin/sh -c "echo cleanup"
 ```
@@ -461,7 +461,7 @@ The decision rule is simple: use this module to decide what to practice and how 
 
 ## Did You Know?
 
-- **CKA came first in 2016, and CKAD followed in May 2018.** CKAD was created for developers who design, build, configure, and expose applications on Kubernetes without necessarily managing the cluster itself.
+- **CKA launched in 2017, and CKAD followed in May 2018.** CKAD was created for developers who design, build, configure, and expose applications on Kubernetes without necessarily managing the cluster itself.
 - **The current CNCF CKAD page lists five domains with weights of 20%, 20%, 15%, 25%, and 20%.** Those numbers are a planning tool because the largest domain is environment, configuration, and security.
 - **The CKAD exam is performance-based and runs for approximately two hours.** That format rewards command-line execution and verification, not just knowing resource definitions in theory.
 - **CNCF states that quarterly exam updates are planned to match Kubernetes releases.** For this curriculum, practice with Kubernetes 1.35 or newer so your commands and API versions stay current.
@@ -574,11 +574,15 @@ Now expand the same workflow with progressive tasks. Each task should produce ob
 Start by creating the kind cluster if it does not already exist, then run `kubectl config current-context` and confirm it points to `kind-ckad-prep`. Create the Deployment and Service with the baseline commands, then inspect `kubectl get pods --show-labels`, `kubectl get service ckad-test`, and `kubectl get endpoints ckad-test` so you see the label-selector relationship. Generate YAML files with `--dry-run=client -o yaml` and read the first lines before applying any generated object. For the Job and CronJob, use the preserved speed-drill commands and verify with `kubectl get job,cronjob`. For the probed Pod, apply the manifest from the drill and use `kubectl describe pod probed-app` to inspect probe sections. Clean up by deleting each named resource and confirm with a final `kubectl get pod,deploy,svc,job,cronjob,cm,secret`.
 </details>
 
+## Learner check
+
+> kubectl expose deployment web --port=80 --target-port=80
+
 ## Sources
 
 - https://www.cncf.io/training/certification/ckad/
-- https://github.com/cncf/curriculum/blob/master/CKAD_Curriculum.md
-- https://docs.linuxfoundation.org/tc-docs/certification/lf-candidate-handbook
+- https://github.com/cncf/curriculum/blob/master/CKAD_Curriculum_v1.35.pdf
+- https://docs.linuxfoundation.org/tc-docs/certification/lf-handbook2
 - https://docs.linuxfoundation.org/tc-docs/certification/tips-cka-and-ckad
 - https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/
 - https://v1-35.docs.kubernetes.io/docs/concepts/workloads/controllers/deployment/
