@@ -701,8 +701,8 @@ kubectl get jobs
 kubectl wait --for=condition=complete job/backup-now --timeout=60s
 kubectl logs job/backup-now
 
-kubectl delete cronjob backup
 kubectl delete job backup-now
+kubectl delete cronjob backup
 ```
 
 <details>
@@ -818,7 +818,7 @@ sleep 15
 kill %1 2>/dev/null
 
 # Check status
-kubectl describe job timeout-test | grep -A3 "Conditions"
+kubectl get job timeout-test -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}'
 
 # Cleanup
 kubectl delete job timeout-test
@@ -854,8 +854,8 @@ kubectl wait --for=condition=complete job/daily-manual-run --timeout=60s
 kubectl logs job/daily-manual-run
 
 # Cleanup
-kubectl delete cronjob daily
 kubectl delete job daily-manual-run
+kubectl delete cronjob daily
 ```
 
 ```bash
