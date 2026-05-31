@@ -32,7 +32,7 @@ After completing this module, you will be able to connect runtime choices to con
 
 In early 2019, the cloud-native infrastructure world was shaken by the disclosure of CVE-2019-5736, a devastating critical vulnerability discovered in the `runc` container runtime. Because `runc` serves as the underlying engine for Docker and almost all standard Kubernetes environments, the impact was ubiquitous. This vulnerability allowed a malicious process executed inside a seemingly isolated container to break out and systematically overwrite the host's native `runc` binary. By simply executing a carefully crafted payload, an attacker could instantaneously gain full root execution capabilities on the host node. Once an attacker breaches the host layer, they can pivot laterally to any other container running on that machine, siphon highly sensitive authentication secrets directly from the local kubelet, and orchestrate a complete compromise of the entire Kubernetes cluster.
 
-For a massive, globally scaled e-commerce platform like Shopify—which relies heavily on multitenant Kubernetes architectures to execute and isolate thousands of independent merchant workloads—a container escape vulnerability of this magnitude represents an existential business risk. If a malicious actor could escape their designated container boundary and access a competitor's proprietary data, manipulate transaction flows, or intercept customer payment information, the financial impact would be catastrophic. The resulting regulatory fines, irreparable reputational damage, and direct lost revenue could easily scale into hundreds of millions of dollars. This incident brutally highlighted a fundamental engineering truth: standard Linux containers, which inherently share a single monolithic host kernel, are fundamentally not impenetrable security boundaries. They are merely namespaces and control groups providing an illusion of isolation. 
+Any large multitenant platform running thousands of independent workloads on shared kernels faces an existential risk from a container-escape CVE of this magnitude. When tenants share nodes, one compromised boundary can expose neighboring workloads, node-local credentials, and cluster-wide control paths. That is why CVE-2019-5736 is often cited as the wake-up call for runtime sandboxing: standard Linux containers share a single host kernel, and namespaces with cgroups are policy boundaries inside that kernel—not separate kernel boundaries. Runtime sandboxing adds an additional isolation layer for workloads where shared-kernel exposure is unacceptable. 
 
 This is precisely where runtime sandboxing becomes an essential, non-negotiable layer of defense-in-depth architecture. By inserting a robust, hardware-backed or proxy-based isolation boundary—such as a user-space kernel proxy like gVisor or a lightweight micro-VM like Kata Containers—between the containerized application and the underlying host operating system, platform engineers can effectively neutralize entire classes of kernel-level zero-day exploits. In this comprehensive module, you will learn how to architect, configure, and seamlessly schedule these advanced sandboxing techniques to protect your most sensitive and untrusted workloads. Mastering these runtime isolation concepts is not only a critical capability for hardening enterprise production clusters, but it is also a heavily tested cornerstone of the CKS certification exam.
 
@@ -288,11 +288,11 @@ kubectl get pod gvisor-test -o jsonpath='{.spec.runtimeClassName}'
 
 # Inside the container, check kernel version
 kubectl exec gvisor-test -- uname -a
-# Output shows "gVisor" instead of host kernel version
+# Output shows an emulated Linux kernel release (e.g. 4.4.0), not the host kernel — gVisor presents its own kernel
 
 # Check dmesg (gVisor intercepts this)
 kubectl exec gvisor-test -- dmesg 2>&1 | head -5
-# Output shows gVisor's simulated kernel messages
+# Output shows emulated kernel log messages, not the host dmesg buffer
 ```
 
 ### Scheduling Considerations and NodeSelectors
@@ -509,7 +509,7 @@ The 200 runc pods are vulnerable because their syscalls go directly to the host 
 
 <details>
 <summary>2. **Your team wants to sandbox CI/CD runner pods that execute untrusted customer code. They test with gVisor but the runners fail because they need to build Docker images (which requires `mount` syscalls and `overlayfs`). What alternative sandboxing approach would work for this use case?**</summary>
-Kata Containers would be a better fit. Kata runs each pod in a lightweight VM with its own kernel, providing hardware-level isolation while supporting the full Linux syscall interface (including `mount`). gVisor doesn't support all syscalls needed for container-in-container builds. Alternatively, use rootless BuildKit or Kaniko for image building inside gVisor (they don't need privileged syscalls). Another option is dedicating specific nodes with Kata runtime for CI/CD workloads and using RuntimeClass (`spec.runtimeClassName: kata`) to schedule them appropriately.
+Kata Containers would be a better fit for runners that must build images inside the sandbox. Kata runs each pod in a lightweight VM with its own kernel, providing hardware-level isolation while supporting the full Linux syscall interface (including `mount`). gVisor does not support the user namespaces, mount, and overlay operations that rootless BuildKit and Kaniko rely on, so those tools typically fail inside a gVisor-sandboxed pod even though they are rootless on a standard host. For image builds, schedule rootless BuildKit or Kaniko on dedicated `runc` nodes with hardened seccomp and AppArmor profiles, using RuntimeClass and node selectors to isolate untrusted build workloads from the rest of the fleet—not inside gVisor. Another option is dedicating specific nodes with the Kata runtime for CI/CD workloads and using RuntimeClass (`spec.runtimeClassName: kata`) to schedule them appropriately.
 </details>
 
 <details>
@@ -732,6 +732,10 @@ kind delete cluster --name cks-gvisor
 - You confirmed placement depends on a gVisor-capable node label.
 - You collected node-level evidence that `runsc` participated in the sandboxed Pod.
 - You can explain why RuntimeClass is not a substitute for installing and configuring the runtime on each capable node.
+
+## Learner check
+
+> Silent fallback is one of the most dangerous runtime-sandboxing mistakes because it converts a security requirement into a best-effort hint.
 
 ## Sources
 
