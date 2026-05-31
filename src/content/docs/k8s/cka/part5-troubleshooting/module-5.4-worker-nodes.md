@@ -7,7 +7,7 @@ revision_pending: false
 lab:
   id: cka-5.4-worker-nodes
   url: https://killercoda.com/kubedojo/scenario/cka-5.4-worker-nodes
-  duration: "40 min"
+  duration: "45-55 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -176,7 +176,7 @@ sudo journalctl -u kubelet --since "10 minutes ago" | grep -i error
 | Wrong config | Fails to start | Error in logs | Fix `/var/lib/kubelet/config.yaml` |
 | API unreachable | NotReady | Network timeout in logs | Check network, firewall |
 | Certificate issues | TLS errors | Cert errors in logs | Renew certs |
-| Container runtime down | Fails to create pods | Runtime errors | Fix containerd/docker |
+| Container runtime down | Fails to create pods | Runtime errors | Fix the configured CRI runtime (containerd, CRI-O, or cri-dockerd-backed Docker Engine) |
 
 If kubelet is simply stopped, starting it is reasonable, but verify that the service is enabled for the next boot and that the node returns to a healthy state. If it immediately fails again, stop treating the restart as the fix and move back to logs and configuration. Many kubelet failures are deterministic: a bad flag, missing file, wrong CRI endpoint, invalid certificate, or unreachable API server will reproduce every time.
 
@@ -320,8 +320,8 @@ cat /proc/meminfo | grep -E "MemTotal|MemFree|MemAvailable"
 
 # Check disk
 df -h
-du -sh /var/lib/containerd/*  # Container storage
-du -sh /var/log/*             # Log storage
+sudo du -sh /var/lib/containerd/*  # Container storage
+sudo du -sh /var/log/*             # Log storage
 
 # Check PIDs
 cat /proc/sys/kernel/pid_max
@@ -330,12 +330,15 @@ ps aux | wc -l
 
 Default hard eviction thresholds cover low available memory, low node filesystem capacity, low image filesystem capacity, and inode exhaustion. The exact values are kubelet configuration, not magic constants embedded in your applications. You should inspect the local kubelet config when the behavior does not match your expectations. Customizing thresholds can be valid for specialized nodes, but tuning them during an outage is risky unless you understand whether the host is truly near failure.
 
+When you override `evictionHard`, specifying any hard threshold zeroes the unspecified defaults unless you provide **all** default thresholds or enable `MergeDefaultEvictionSettings` (Kubernetes 1.35+). A partial override can silently remove protections you assumed still applied.
+
 ```yaml
 evictionHard:
   memory.available: "100Mi"
   nodefs.available: "10%"
   nodefs.inodesFree: "5%"
   imagefs.available: "15%"
+  imagefs.inodesFree: "5%"
 ```
 
 When a threshold is crossed, the kubelet sets the relevant node condition, the scheduler avoids assigning new pods to the node, and the kubelet chooses pods to evict based on quality of service, priority, and resource usage relative to requests. `BestEffort` pods are usually most exposed because they have no requests. Overcommitted `Burstable` pods can also be evicted before `Guaranteed` pods. This is why resource requests are not just scheduling hints; they become evidence during node survival decisions.
@@ -374,7 +377,7 @@ sudo crictl rmi --prune
 sudo journalctl --vacuum-time=3d
 
 # Clean up unused containers
-sudo crictl rm $(sudo crictl ps -a -q --state exited)
+sudo crictl ps -a -q --state exited | xargs -r sudo crictl rm
 ```
 
 PID pressure is less visible than memory or disk pressure, but it can be just as severe. Linux needs a free process ID to start a shell, run a probe, fork a helper, or create a new application process. A fork-heavy bug can make a node look haunted because even simple commands fail intermittently. Check the actual `pid_max`, count processes, and identify the user or container family generating most of them before raising limits. Raising the limit buys time; it does not correct runaway process creation.
@@ -433,20 +436,30 @@ ip route
 
 | Issue | Symptom | Diagnosis | Fix |
 |-------|---------|-----------|-----|
-| Firewall blocking | API unreachable | `telnet api-server 6443` | Open firewall ports |
+| Firewall blocking | API unreachable | `nc -vz <api-server> 6443` or `curl -vk https://<api-server>:6443/readyz` | Open firewall ports |
 | DNS failure | Name resolution fails | `nslookup` | Fix /etc/resolv.conf |
 | IP address change | Node NotReady | Check IP in node spec | Reconfigure or rejoin |
 | CNI plugin issues | Pod networking fails | Check CNI pods | Restart CNI, fix config |
 | MTU mismatch | Intermittent failures | Check MTU settings | Align MTU values |
 
+**Worker node ports** (services listening on or exposed by the node):
+
+| Port | Protocol | Component | Purpose |
+|------|----------|-----------|---------|
+| 10250 | TCP | kubelet | kubelet API |
+| 10256 | TCP | kube-proxy | Health check metrics |
+| 30000-32767 | TCP | NodePort | Service NodePorts |
+
+Workers connect **to** the control plane on port 6443 (API server). That endpoint is not a listener on the worker itself.
+
+**Control plane reference** (for reachability checks from worker nodes):
+
 | Port | Protocol | Component | Purpose |
 |------|----------|-----------|---------|
 | 6443 | TCP | API Server | Kubernetes API |
-| 10250 | TCP | kubelet | kubelet API |
 | 10259 | TCP | kube-scheduler | Scheduler metrics |
 | 10257 | TCP | kube-controller-manager | Controller metrics |
 | 2379-2380 | TCP | etcd | Client and peer |
-| 30000-32767 | TCP | NodePort | Service NodePorts |
 
 Recovery begins once you know whether the node is reachable, whether kubelet can run, and whether the workload should be moved. If the node is healthy enough to participate, cordon first to stop new assignments, drain when you need to clear existing workloads, perform maintenance, and then uncordon after validation. If the node is not reachable, you may need infrastructure console access, forced power recovery, out-of-service taints for storage detachment behavior, or eventual node deletion.
 
@@ -865,17 +878,22 @@ kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
 ```bash
 # Task: Check disk usage on node
 df -h
-du -sh /var/lib/containerd/
+sudo du -sh /var/lib/containerd/
 ```
 
 ### Cleanup
 
 Ensure the node is uncordoned, the test pod is deleted, and any temporary notes clearly distinguish observation from action. In a shared lab, verify that no node remains in `SchedulingDisabled` state unless the exercise environment explicitly expects it.
 
+## Learner check
+
+> Workers connect **to** the control plane on port 6443 (API server). That endpoint is not a listener on the worker itself.
+
+You are SSH'd onto a worker and need to confirm outbound API reachability before blaming kubelet. Which port and command pair tests the path the kubelet uses, and why is checking 10259 on the worker misleading?
+
 ## Sources
 
 - [kubernetes.io: taint and toleration](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
-- [Node Status](https://kubernetes.io/docs/reference/node/node-status)
 - [kubernetes.io: nodes](https://kubernetes.io/docs/concepts/architecture/nodes/)
 - [kubernetes.io: kubernetes 1 29 taint eviction controller](https://kubernetes.io/blog/2023/12/19/kubernetes-1-29-taint-eviction-controller/)
 - [Certificate Management with kubeadm](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/)
@@ -884,6 +902,7 @@ Ensure the node is uncordoned, the test pod is deleted, and any temporary notes 
 - [kubernetes.io: kubectl drain](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_drain/)
 - [Node Status Reference](https://kubernetes.io/docs/reference/node/node-status/)
 - [Debugging Kubernetes nodes with crictl](https://kubernetes.io/docs/tasks/debug/debug-cluster/crictl/)
+- [Ports and Protocols](https://kubernetes.io/docs/reference/networking/ports-and-protocols/)
 
 ## Next Module
 
