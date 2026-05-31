@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: ckad-2.1-deployments
   url: https://killercoda.com/kubedojo/scenario/ckad-2.1-deployments
-  duration: "30 min"
+  duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -552,9 +552,9 @@ For production, add a time dimension to the same framework. A safe rollout is no
 ## Did You Know?
 
 - `kubectl rollout restart` works by changing the Pod template annotations, so it creates a normal rolling update even when the image tag stays the same.
-- Deployments keep old ReplicaSets scaled to zero for rollback, and `revisionHistoryLimit` controls how many old templates remain available.
-- The default Deployment strategy is `RollingUpdate`, and `Recreate` is a deliberate downtime tradeoff rather than a safer default.
-- Kubernetes 1.35 still uses the Deployment, ReplicaSet, and Pod controller chain for stateless rollouts; Pods are never patched in place during an image update.
+- Deployments keep old ReplicaSets scaled to zero for rollback. The default `revisionHistoryLimit` is **10** old ReplicaSets retained — set it explicitly in production so rollback depth matches your release policy.
+- The default Deployment strategy is `RollingUpdate` with `maxSurge: 25%` and `maxUnavailable: 25%`; `Recreate` is a deliberate downtime tradeoff rather than a safer default.
+- Kubernetes 1.35 still uses the Deployment, ReplicaSet, and Pod controller chain for stateless rollouts; if a rollout makes no progress for **600** seconds (`progressDeadlineSeconds` default), the controller marks it failed but does not auto-rollback.
 
 ## Common Mistakes
 
@@ -713,7 +713,26 @@ kubectl rollout status deployment/webapp
 Pausing lets you collect template changes before the Deployment starts a new ReplicaSet. After resume, Kubernetes reconciles the final template state. If you forget to resume, later changes can appear confusing because the Deployment remains paused. Check `.spec.paused` when rollout behavior does not match your expectations.
 </details>
 
-### Task 5: Cleanup
+### Task 5: Rolling Restart
+
+```bash
+# Restart pods without changing the image
+kubectl rollout restart deployment/webapp
+
+# Verify the rolling restart completes
+kubectl rollout status deployment/webapp
+
+# Confirm new pods were created (AGE should reset)
+kubectl get pods -l app=webapp
+```
+
+<details>
+<summary>Solution notes for Task 5</summary>
+
+`kubectl rollout restart` triggers a rolling update by changing the Pod template annotation, not the container image. The Deployment keeps the same image tag but replaces every Pod so processes pick up mounted ConfigMap changes or other runtime state. Watch rollout status because restart still needs scheduling capacity and readiness, just like an image update.
+</details>
+
+### Task 6: Cleanup
 
 ```bash
 kubectl delete deployment webapp
@@ -721,7 +740,7 @@ kubectl delete namespace ckad-deployments
 ```
 
 <details>
-<summary>Solution notes for Task 5</summary>
+<summary>Solution notes for Task 6</summary>
 
 Deleting the Deployment removes the controller and its managed ReplicaSets and Pods. Deleting the namespace is a convenient cleanup step for a disposable lab, but do not delete a shared namespace unless you created it for the exercise. If namespace deletion is blocked, inspect remaining resources in that namespace before retrying.
 </details>
@@ -896,6 +915,12 @@ kubectl delete service production
 - [ ] Diagnose a stalled rollout by reading Deployment conditions, ReplicaSets, Pod status, and events.
 - [ ] Evaluate whether pause, resume, rollback, restart, or recreate is the right release action for a given situation.
 - [ ] Clean up the Deployment, Service, and namespace resources created during the exercise.
+
+## Learner check
+
+> Rollout restart is different from rollback. Restart keeps the same image and template fields but changes the Pod template annotation so the Deployment creates fresh Pods.
+
+After Task 5, explain why `kubectl rollout restart deployment/webapp` creates a new ReplicaSet even though the nginx image tag did not change, and what you would check if the restart stalled halfway.
 
 ## Sources
 
