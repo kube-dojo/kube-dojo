@@ -101,9 +101,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: ui
-          image: nginx:1.27
-          ports:
-            - containerPort: 80
+          image: registry.k8s.io/e2e-test-images/agnhost:2.54
+          args: ["pause"]
 ```
 
 Pause and predict: if you apply that deployment and then open a shell in a running pod, what should happen when you list `/var/run/secrets/kubernetes.io/serviceaccount`? The directory should not contain the usual token material because the pod explicitly opted out. If the directory still appears, inspect the rendered pod spec with `kubectl get pod -o yaml`; many debugging mistakes come from looking at the Deployment template while a different ReplicaSet is still running older pods.
@@ -115,7 +114,7 @@ kubectl -n reports get pods -l app=reports-ui
 kubectl -n reports exec deploy/reports-ui -- ls -la /var/run/secrets/kubernetes.io/serviceaccount
 ```
 
-The command may fail if the image has no `ls` binary, which is normal for minimal containers. In that case, inspect the pod's rendered volumes and mounts rather than changing the workload image just for verification. The security point is the same: a missing token volume is a deliberate hardening control, and a present token volume needs an explicit justification that appears in reviewable YAML.
+The agnhost image includes standard shell utilities, so the `ls` check should succeed when token automounting is disabled. If the directory still appears, inspect the pod's rendered volumes and mounts rather than assuming the Deployment template matches the running pod. The security point is the same: a missing token volume is a deliberate hardening control, and a present token volume needs an explicit justification that appears in reviewable YAML.
 
 ```bash
 kubectl -n reports get pod -l app=reports-ui -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{.spec.volumes}{"\n"}{end}'
@@ -242,7 +241,7 @@ For mature platforms, the ServiceAccount name becomes part of the workload contr
 
 ## Bound Tokens, Audiences, and Legacy Token Secrets
 
-Modern Kubernetes ServiceAccount credentials are delivered through the TokenRequest API and projected volumes. The kubelet requests a time-bound token for the pod, writes it into a projected volume, and refreshes it before it expires. The default projected credential is bound to the pod and intended for the Kubernetes API server audience. When the pod is deleted, the API credentials are revoked after the deletion lifecycle rather than remaining useful forever.
+Modern Kubernetes ServiceAccount credentials are delivered through the TokenRequest API and projected volumes. The kubelet requests a time-bound token for the pod, writes it into a projected volume, and refreshes it before it expires. The default projected credential is bound to the pod and intended for the Kubernetes API server audience. When the pod is deleted, bound tokens expire as part of the pod lifecycle or when they reach their configured `expirationSeconds`, rather than remaining useful forever.
 
 This behavior replaced the older automatic creation of Secret-based ServiceAccount tokens. In clusters before the modern defaults, the control plane created long-lived `kubernetes.io/service-account-token` Secrets for ServiceAccounts. Those Secrets did not expire, and they were easy to copy into CI systems, scripts, and forgotten notebooks. Kubernetes still supports manually created token Secrets for compatibility, but the safer default is short-lived TokenRequest credentials.
 
@@ -269,7 +268,16 @@ sequenceDiagram
 
 A projected `serviceAccountToken` source lets you request a token for a specific audience and lifetime. Use this when a workload needs to present a Kubernetes-issued identity to a relying party other than the Kubernetes API server, such as an internal identity broker that validates TokenReview responses. The audience field is critical because a recipient should reject tokens not intended for it, reducing the value of a token replayed to the wrong service.
 
+Create the ServiceAccount before applying the Pod or running `kubectl create token`. Kubernetes does not create a named ServiceAccount automatically from a Pod spec alone.
+
 ```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reports-broker-client
+  namespace: reports
+automountServiceAccountToken: false
+---
 apiVersion: v1
 kind: Pod
 metadata:
@@ -305,6 +313,10 @@ Kubernetes requires projected ServiceAccount token lifetimes to meet API server 
 Audience design is where many otherwise careful implementations become vague. A token with a broad or default audience may be accepted by more recipients than the workload owner intended. A token with a specific audience forces the relying service to declare itself, and it gives incident responders a clear question: which services should accept this stolen credential? If the answer is unclear, the audience boundary is not doing enough work.
 
 ```bash
+kubectl create namespace reports --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n reports create sa reports-broker-client
+kubectl apply -f reports-broker-client.yaml
+
 kubectl -n reports create token reports-broker-client \
   --audience reports-broker \
   --duration 1h
@@ -333,7 +345,7 @@ kubectl get pods --all-namespaces \
   -o custom-columns='NAMESPACE:.metadata.namespace,POD:.metadata.name,SERVICEACCOUNT:.spec.serviceAccountName,AUTOMOUNT:.spec.automountServiceAccountToken'
 
 kubectl get rolebindings,clusterrolebindings --all-namespaces \
-  -o custom-columns='KIND:.kind,NAMESPACE:.metadata.namespace,NAME:.metadata.name,SUBJECTS:.subjects[*].name,ROLE:.roleRef.name'
+  -o custom-columns='KIND:.kind,NAMESPACE:.metadata.namespace,NAME:.metadata.name,SUBJECT_KIND:.subjects[*].kind,SUBJECTS:.subjects[*].name,ROLE:.roleRef.name'
 ```
 
 The first command can show blank ServiceAccount fields because the API default may not be visible the way you expect in custom columns for every object shape. When precision matters, inspect full YAML or JSON and remember that an omitted `serviceAccountName` means the pod uses `default`. A practical audit report should normalize blank values to `default`, then flag any pod where both the effective identity and automount decision are not documented.
@@ -385,9 +397,12 @@ kubectl -n reports auth can-i update configmaps \
 
 For a pod-level view, inspect events and the rendered pod spec. Failed mounts, missing ServiceAccounts, and invalid references often show up before the application even starts. Kubernetes does not let you change `serviceAccountName` on an existing pod; you update the controller template and recreate pods through rollout. That immutability is useful because identity changes should be visible as a deployment change, not as a silent mutation of a running process.
 
+Apply the `reports-config-watcher` manifests from the least-privilege section above, then inspect the pod the Deployment creates. Because `serviceAccountName` is immutable on a running Pod, restart the Deployment when you change identity fields in the template.
+
 ```bash
-kubectl -n reports describe pod reports-config-watcher-example
-kubectl -n reports get pod reports-config-watcher-example -o yaml
+kubectl apply -f reports-config-watcher.yaml
+kubectl -n reports describe pod -l app=reports-config-watcher
+kubectl -n reports get pod -l app=reports-config-watcher -o yaml
 kubectl -n reports rollout restart deployment/reports-config-watcher
 ```
 
@@ -774,6 +789,16 @@ If the UI pod still has a `kube-api-access` projected volume, inspect the pod te
 - [ ] Any remaining exception has an owner, a reason, and a planned review date in your own notes.
 
 When you finish, keep the verification commands as your personal runbook. The exact namespace and account names will change, but the questions stay stable: who is the pod, does it have a token, what can that identity do, and which old grants still exist? That runbook is the practical bridge between CKS exam tasks and production hardening work.
+
+---
+
+## Learner check
+
+> A Pod with `serviceAccountName: reports-broker-client` and `kubectl create token reports-broker-client` both require the ServiceAccount object to exist in the `reports` namespace first — create or apply the ServiceAccount before the Pod or token command, or admission fails with `serviceaccount ... not found`.
+
+Before you continue, explain why diagnosing a 403 with `kubectl auth can-i` is the wrong first step when the application reports 401 Unauthorized from a projected token with audience `reports-broker`. A solid answer names the authentication boundary, states that audience mismatch fails before RBAC, and describes what you would inspect on the mounted token path instead of editing RoleBindings.
+
+---
 
 ## Sources
 
