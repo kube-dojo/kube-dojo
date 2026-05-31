@@ -7,13 +7,13 @@ sidebar:
 lab:
   id: ckad-3.5-api-deprecations
   url: https://killercoda.com/kubedojo/scenario/ckad-3.5-api-deprecations
-  duration: "30 min"
+  duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
 ---
 > **Complexity**: `[QUICK]` - Conceptual understanding with practical commands
 >
-> **Time to Complete**: 35-40 minutes
+> **Time to Complete**: 40 minutes
 >
 > **Prerequisites**: Understanding of Kubernetes API versioning
 
@@ -99,24 +99,34 @@ kubectl api-resources --sort-by=name
 The output of `api-resources` can feel wide at first, but it answers a practical question: "Can this cluster serve the thing I am about to apply?" If the resource kind is not listed, the manifest is not going to work without installing the missing API or changing the object. If the resource is listed under a different group than the manifest uses, the manifest may be old, copied from a different Kubernetes era, or meant for a CRD that is not installed in this cluster.
 
 ```bash
-# Get API version for a resource
+# Get API group and version for a resource
 kubectl explain deployment
-# Output shows: VERSION: apps/v1
+# GROUP:      apps
+# KIND:       Deployment
+# VERSION:    v1
 
 kubectl explain ingress
-# Output shows: VERSION: networking.k8s.io/v1
+# GROUP:      networking.k8s.io
+# KIND:       Ingress
+# VERSION:    v1
 
 kubectl explain cronjob
-# Output shows: VERSION: batch/v1
+# GROUP:      batch
+# KIND:       CronJob
+# VERSION:    v1
 ```
 
-`kubectl explain` is the command to reach for when you need field-level confidence. The top of its output shows the current version for the resource, and deeper paths show the fields Kubernetes expects. For example, `kubectl explain ingress.spec.rules.http.paths` shows the current Ingress path structure, which is exactly where many old examples fail because `serviceName` and `servicePort` moved under `backend.service`.
+`kubectl explain` is the command to reach for when you need field-level confidence. The top of its output shows the current group and version separately, and deeper paths show the fields Kubernetes expects. For a named API group, combine `GROUP` and `VERSION` to form the manifest's `apiVersion`: `apps/v1`, `networking.k8s.io/v1`, or `batch/v1`. Core resources such as Pods and Services have no group prefix, so their manifest value stays just `v1`.
 
 ```bash
-# See what version existing objects use
+# See what version existing objects use.
+# If this Deployment is absent, create it first or skip this optional check.
+# kubectl create deployment nginx --image=nginx
 kubectl get deployment nginx -o yaml | head -5
 # apiVersion: apps/v1
 # kind: Deployment
+# If you created the disposable Deployment, clean it up afterward:
+# kubectl delete deployment nginx
 ```
 
 Looking at an existing object can help when the cluster already has a similar resource. Kubernetes stores and serves objects through preferred versions, so the first lines of `kubectl get ... -o yaml` usually show the version the API server returns now. That output should not be treated as a conversion guide by itself, but it gives you a concrete reference for the group and version in the same cluster.
@@ -142,6 +152,7 @@ The CKAD exam uses recent Kubernetes versions, and this module assumes Kubernete
 
 ```bash
 # Convert old manifest to new API
+# requires the kubectl-convert plugin (not in default kubectl)
 kubectl convert -f old-deployment.yaml --output-version apps/v1
 ```
 
@@ -465,8 +476,14 @@ The next task builds a small lookup table for resources you commonly use. This i
 ```bash
 # Find the current version for every resource you commonly use
 for res in pod service deployment statefulset daemonset job cronjob ingress networkpolicy; do
-  version=$(kubectl explain "$res" 2>/dev/null | grep "VERSION:" | awk '{print $2}')
-  echo "$res: $version"
+  header=$(kubectl explain "$res" 2>/dev/null)
+  group=$(printf '%s\n' "$header" | awk '/^GROUP:/ {print $2}')
+  version=$(printf '%s\n' "$header" | awk '/^VERSION:/ {print $2}')
+  if [ -n "$version" ]; then
+    echo "$res: ${group:+$group/}$version"
+  else
+    echo "$res: unavailable"
+  fi
 done
 ```
 
@@ -539,8 +556,14 @@ Drill 5 combines several common resources into one lookup loop. This is the same
 
 # Quick lookup
 for res in deployment service ingress configmap secret networkpolicy; do
-  echo -n "$res: "
-  kubectl explain "$res" 2>/dev/null | grep "VERSION:" | awk '{print $2}'
+  header=$(kubectl explain "$res" 2>/dev/null)
+  group=$(printf '%s\n' "$header" | awk '/^GROUP:/ {print $2}')
+  version=$(printf '%s\n' "$header" | awk '/^VERSION:/ {print $2}')
+  if [ -n "$version" ]; then
+    echo "$res: ${group:+$group/}$version"
+  else
+    echo "$res: unavailable"
+  fi
 done
 ```
 
@@ -557,6 +580,12 @@ done
 Part 3 covered the maintenance skills that keep applications observable and repairable after they are deployed. Probes tell Kubernetes when a container is alive and ready, logs expose application output, debugging commands let you move from symptoms to evidence, metrics show current resource pressure, and API deprecation checks keep manifests compatible with the cluster. The unifying habit is the same across the section: read what Kubernetes already knows before making a change.
 
 API deprecations fit naturally at the end because they connect day-two maintenance with cluster lifecycle. A manifest is not a timeless artifact; it is a request written against a moving API surface. When you treat API versions as contracts that can age, warnings become useful early signals instead of noisy log lines, and removed APIs become straightforward repair tasks rather than mysterious deployment failures.
+
+## Learner check
+
+> For a named API group, combine `GROUP` and `VERSION` to form the manifest's `apiVersion`: `apps/v1`, `networking.k8s.io/v1`, or `batch/v1`.
+
+Before you move on, explain why this quote matters for `kubectl explain deployment`. A solid answer says that modern `kubectl explain` prints `GROUP: apps` and `VERSION: v1` separately, while the YAML manifest needs the combined value `apiVersion: apps/v1`.
 
 ## Sources
 
