@@ -138,7 +138,7 @@ spec:
 Sometimes you need an explicit allow-all policy, usually during a controlled rollback or a short diagnostic window. The important point is that the wildcard lives inside the `ingress` or `egress` list, not in the root selector. A root `podSelector: {}` chooses all pods in the namespace; an item `- {}` inside a rule list allows all peers and ports for that direction. Those two empty objects look similar, but they answer different questions.
 
 ```yaml
-# Explicitly allow all ingress (useful to override deny policies)
+# Explicitly allow all ingress (opens traffic additively even if deny-all remains present)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -274,6 +274,8 @@ spec:
 ```
 
 Pause and predict: if the policy above changed `from` to an empty `from: []`, would it allow HTTP from every pod, no pod, or the same namespace only? Then compare that answer with `from: - podSelector: {}`. This is the kind of tiny YAML difference that shows up in real reviews because both versions look short and both seem plausible at a glance.
+
+The reveal: `from: []` (an empty list) means allow from **any** source — any namespace and external IPs (`kubectl describe` shows `From: <any>`). By contrast, `from: - podSelector: {}` allows only pods in the **policy's own namespace**. The CKA trap is the cross-namespace gap: an empty list is a wildcard, while an empty pod selector is same-namespace only.
 
 ## AND, OR, and Multi-Rule Evaluation
 
@@ -457,7 +459,7 @@ Network policy handling is also asynchronous. Creating, deleting, or changing po
 ```mermaid
 flowchart TD
     A[Network Policy Issue?] --> B{Does CNI support NetworkPolicy?}
-    B -->|No| C[Flannel = Policies Ignored]
+    B -->|No| C[Default Flannel CNI ignores policies; Canal/Calico overlays may still enforce]
     B -->|Yes| D[kubectl get networkpolicy -n namespace]
     D --> E[kubectl describe networkpolicy name]
     E --> F[Check pod labels match]
@@ -495,7 +497,7 @@ kubectl exec <pod> -- curl -s --max-time 1 http://target-service
 | All traffic blocked | Empty podSelector in deny | Create allow rules for needed traffic |
 | Pods can still communicate | Labels don't match | Verify podSelector matches pod labels |
 
-Several edge cases are worth remembering because they explain confusing test results. NetworkPolicy behavior for pods using `hostNetwork: true` is implementation-defined, and many CNIs treat those workloads as node-network traffic rather than normal pod traffic. The standard API does not express explicit deny actions, Service-name targets, node identity restrictions, TLS requirements, or HTTP path rules. The `endPort` field is stable for port ranges, but support can still depend on the policy implementation behind the API.
+Several edge cases are worth remembering because they explain confusing test results. Traffic from a pod's own node is always permitted even when the pod is ingress-isolated, so a failed readiness probe is usually a missing allow rule for the probe's source path, not a kubelet bypass. NetworkPolicy behavior for pods using `hostNetwork: true` is implementation-defined, and many CNIs treat those workloads as node-network traffic rather than normal pod traffic. The standard API does not express explicit deny actions, Service-name targets, node identity restrictions, TLS requirements, or HTTP path rules. The `endPort` field is stable for port ranges, but support can still depend on the policy implementation behind the API.
 
 Kubernetes 1.35 continues to use `networking.k8s.io/v1` for NetworkPolicy. Older manifests using `extensions/v1beta1` should be updated instead of carried forward, and the basic schema for ordinary policies is usually recognizable after that API group change. The practical lesson is that NetworkPolicy knowledge stays useful across supported releases, but you must still check CNI capability and API version compatibility before assuming a manifest will both apply and enforce.
 
@@ -529,7 +531,7 @@ spec:
 
 Notice what this policy does not say. It does not grant backend pods permission to egress anywhere, and it does not protect a database pod if the database label is missing or different. It also does not mention a Service, because the standard API selects pods and peers, not Service names. In a cluster with an egress lockdown, the backend tier still needs an egress rule to the database and likely a DNS rule if it connects by Service name. Treat ingress and egress as two halves of the same request path.
 
-For a three-tier application, write the policies in the same order you would draw the architecture: traffic enters the web tier, the web tier calls the app tier, and the app tier calls the database tier. This is easier to review than one giant policy because each object has a single protected destination. Smaller policy objects also make additive behavior less surprising. When a future reviewer asks why the database accepts traffic, they can inspect the database policy instead of scanning an all-purpose manifest with many unrelated rules.
+For a three-tier application, write the policies in the same order you would draw the architecture: traffic enters the web tier, the web tier calls the app tier, and the app tier calls the database tier. The theory examples below use `tier: web/app/db`; the hands-on lab uses `tier: frontend/backend/database` — the selector logic is identical, only the label values differ. This is easier to review than one giant policy because each object has a single protected destination. Smaller policy objects also make additive behavior less surprising. When a future reviewer asks why the database accepts traffic, they can inspect the database policy instead of scanning an all-purpose manifest with many unrelated rules.
 
 ```yaml
 # Web tier - only from ingress controller
@@ -545,7 +547,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: ingress-nginx
+          kubernetes.io/metadata.name: ingress-nginx
   policyTypes:
   - Ingress
 ```
@@ -620,6 +622,8 @@ spec:
     ports:
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP
 ```
 
 This policy is compact, but it deserves careful review. The ingress and first egress rules use `podSelector: {}`, which means any pod in the same namespace. The DNS rule uses `namespaceSelector: {}`, which means any namespace, but it narrows the port to 53. In a production cluster you may prefer to target the DNS namespace more precisely with `kubernetes.io/metadata.name: kube-system` and include TCP 53 as well as UDP 53. The broader example remains useful because it exposes the selector mechanics.
@@ -1226,7 +1230,7 @@ kubectl delete namespace restricted
 
 #### Drill 8: Challenge - Complete Network Isolation
 
-Without looking at the solution, create a namespace named `secure`, label it with `zone=secure`, run two pods named `app` and `db`, deny all ingress, allow the app pod to receive cluster traffic, allow the database to receive only app traffic on 5432, verify with `kubectl describe`, and clean up everything. The challenge is not speed alone; the goal is to keep the selector logic explainable while you type. If you cannot say which pod is selected by the root `podSelector`, pause before applying.
+Without looking at the solution, create a namespace named `secure`, run two pods named `app` and `db`, deny all ingress, allow the app pod to receive cluster traffic, allow the database to receive only app traffic on 5432, verify with `kubectl describe`, and clean up everything. The challenge is not speed alone; the goal is to keep the selector logic explainable while you type. If you cannot say which pod is selected by the root `podSelector`, pause before applying.
 
 ```bash
 # YOUR TASK: Complete in under 7 minutes
@@ -1238,7 +1242,6 @@ Without looking at the solution, create a namespace named `secure`, label it wit
 ```bash
 # 1. Create namespace
 kubectl create namespace secure
-kubectl label namespace secure zone=secure
 
 # 2. Create pods
 kubectl run app -n secure --image=nginx --labels="tier=app"
@@ -1306,6 +1309,10 @@ kubectl delete namespace secure
 ```
 
 </details>
+
+## Learner check
+
+> Read "additive" literally. Kubernetes NetworkPolicy does not have an explicit deny rule that wins over an allow rule, and there is no rule ordering like you may have seen in perimeter firewalls.
 
 ## Sources
 
