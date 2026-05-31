@@ -7,15 +7,15 @@ sidebar:
 lab:
   id: ckad-4.2-secrets
   url: https://killercoda.com/kubedojo/scenario/ckad-4.2-secrets
-  duration: "30 min"
+  duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Similar to ConfigMaps but with security considerations
 >
-> **Time to Complete**: 40-50 minutes
+> **Time to Complete**: 45 minutes
 >
-> **Prerequisites**: Module 4.1 (ConfigMaps), understanding of base64 encoding
+> **Prerequisites**: [Module 4.1: ConfigMaps](../module-4.1-configmaps/), understanding of base64 encoding
 
 ---
 
@@ -367,12 +367,13 @@ Rotation adds one more operational layer. Updating a Secret object does not nece
 
 ```bash
 kubectl create secret generic db-secret \
+  -n secret-lab \
   --from-literal=username=admin \
   --from-literal=password='rotated-example-password' \
   --dry-run=client \
-  -o yaml | kubectl apply -f -
+  -o yaml | kubectl apply -n secret-lab -f -
 
-kubectl rollout restart deployment/app
+kubectl rollout restart deployment/app -n secret-lab
 ```
 
 The quick reference below keeps the original module's command coverage but removes shorthand that only works in an interactive shell. Read it as a set of diagnostic verbs: create the object, view the encoded representation, decode a specific key, edit only when appropriate, and delete lab resources when finished. In real teams, prefer declarative or secret-manager-driven rotation over manual edits for long-lived credentials.
@@ -505,17 +506,30 @@ Immutable Secrets are a good fit when the name includes a version and the worklo
 
 They are a poor fit when many teams expect to patch the same Secret name in place. If the Secret is immutable, a normal `kubectl apply` with changed data will fail, and deleting the object can break existing Pod startup while you recreate it. The key is not whether immutable is good or bad; it is whether your rotation workflow expects replacement by name or mutation under a stable name.
 
+The default CKAD rotation path is kubelet-native: change the Secret reference in the Pod template so the Deployment template hash changes and new Pods roll out. Patch `secretKeyRef.name`, a volume `secretName`, or an `imagePullSecrets` entry — not a generic `kubectl set env` unless the application reads that variable and fetches the Secret itself.
+
+```yaml
+# Default mechanism: update the Pod template reference, then apply
+env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: db-secret-v2   # was db-secret-v1
+      key: password
+```
+
 ```bash
 kubectl create secret generic db-secret-v2 \
   -n secret-lab \
   --from-literal=username=admin \
   --from-literal=password='rotated-example-password'
 
+# application-side only: this works ONLY if the app reads $DB_SECRET_NAME and fetches the secret itself
 kubectl set env deployment/app -n secret-lab DB_SECRET_NAME=db-secret-v2
 kubectl rollout status deployment/app -n secret-lab
 ```
 
-The previous command illustrates a common application-level indirection, but it is not the only option. Some workloads reference the Secret name directly in the Pod template, so rotation means changing `secretKeyRef.name`, a volume `secretName`, or an `imagePullSecrets` entry. Any of those Pod template changes should trigger new Pods in a Deployment because the template hash changes.
+The `kubectl set env` command above illustrates application-level indirection — a pattern some custom controllers use, but not the kubelet's built-in Secret delivery path. Most CKAD workloads reference the Secret name directly in the Pod template, so rotation means changing `secretKeyRef.name`, a volume `secretName`, or an `imagePullSecrets` entry. Any of those Pod template changes trigger new Pods in a Deployment because the template hash changes.
 
 For mounted volumes, rotation has two timelines: Kubernetes updating the projected files and the application noticing the file content. The kubelet can refresh Secret volume data after the API object changes, but an application that reads the file once at startup will still use the old in-memory value. If the application does not reload credentials, the correct operational action is still a Pod restart.
 
@@ -749,7 +763,7 @@ Create a second Pod that mounts the same Secret as files under `/secrets`, with 
 
 - [ ] Pod `secret-vol` becomes Ready.
 - [ ] `/secrets` contains files named after the Secret keys.
-- [ ] The volume mount is read-only and the Secret volume uses `defaultMode: 0400`.
+- [ ] The volume mount is read-only and the Secret volume uses `defaultMode: 0400`. (`ls -la /secrets` shows symlinks with `lrwxrwxrwx`; check file modes under `/secrets/..data/` instead.)
 
 <details>
 <summary>Solution</summary>
@@ -778,6 +792,7 @@ EOF
 
 kubectl wait --for=condition=Ready pod/secret-vol -n secret-lab --timeout=60s
 kubectl logs secret-vol -n secret-lab
+# Symlinks under /secrets show lrwxrwxrwx; verify defaultMode on real files: ls -la /secrets/..data/
 ```
 
 </details>
@@ -869,6 +884,14 @@ Delete the namespace to remove every object created in the lab. In a shared clus
 ```bash
 kubectl delete namespace secret-lab
 ```
+
+---
+
+## Learner check
+
+> The default CKAD rotation path is kubelet-native: change the Secret reference in the Pod template so the Deployment template hash changes and new Pods roll out.
+
+Before you move on, explain why `kubectl set env deployment/app DB_SECRET_NAME=db-secret-v2` is not a generic Secret rotation fix, and which Pod template fields you would patch instead for a workload that uses `secretKeyRef` or a Secret volume.
 
 ---
 
