@@ -141,7 +141,7 @@ Before running this, what output do you expect from a healthy pre-upgrade assess
 
 ```bash
 # 1. Check current version vulnerabilities
-kubectl version --short 2>/dev/null || kubectl version
+kubectl version
 # Research CVEs for your version
 
 # 2. Review release notes for security fixes
@@ -151,11 +151,13 @@ kubectl version --short 2>/dev/null || kubectl version
 kubectl get all -A -o yaml > cluster-backup.yaml
 ETCDCTL_API=3 etcdctl snapshot save backup.db
 
-# 4. Check deprecation warnings
-kubectl api-resources --verbs=list -o name | xargs -n 1 kubectl get --show-labels -A 2>&1 | grep -i deprecated
+# 4. Check deprecated APIs in use (cluster-wide request traffic)
+kubectl get --raw /metrics | grep apiserver_requested_deprecated
+# Optional manifest spot-check for critical workloads:
+kubectl get pod -n <namespace> <name> -o yaml | grep apiVersion
 ```
 
-That checklist is intentionally conservative. The all-namespaces YAML export is not a complete disaster-recovery backup, but it captures enough workload intent to compare before and after state. The etcd snapshot is the high-value control-plane artifact in a self-managed cluster, because kubeadm cannot simply unwind every control-plane state change if the API server or datastore becomes unhealthy. The deprecated API scan is noisy, yet useful, because a security upgrade can fail for reasons that are not themselves security vulnerabilities.
+That checklist is intentionally conservative. The all-namespaces YAML export is not a complete disaster-recovery backup, but it captures enough workload intent to compare before and after state. The etcd snapshot is the high-value control-plane artifact in a self-managed cluster, because kubeadm cannot simply unwind every control-plane state change if the API server or datastore becomes unhealthy. The `apiserver_requested_deprecated` metric shows actual deprecated API traffic, not kubectl client warnings, because a security upgrade can fail for reasons that are not themselves security vulnerabilities.
 
 When choosing between fixed releases, evaluate both exposure and blast radius. A same-minor patch usually has the smallest behavioral surface, while a minor upgrade may include API removals, feature-gate changes, default changes, and new benchmark expectations. The security answer is not always "latest immediately"; the security answer is "fixed, supported, compatible, and verifiable within the shortest responsible window."
 
@@ -259,7 +261,7 @@ Version skew is the formal boundary around this compatibility work. The API serv
 |  +-- Same minor as API server or one minor older             |
 |                                                             |
 |  kubelet:                                                   |
-|  +-- Same minor, one minor older, or two minors older        |
+|  +-- Up to three minors older (kubelet 1.25+)                |
 |  +-- Never newer than the API server                         |
 |                                                             |
 |  kubectl:                                                   |
@@ -272,6 +274,8 @@ Version skew is the formal boundary around this compatibility work. The API serv
 |                                                             |
 +-------------------------------------------------------------+
 ```
+
+For kubelet 1.25 and later, the API server at 1.35 may pair with kubelets as old as 1.32 (three minor versions behind). Before kubelet 1.25, the limit was two minor versions older. See the [Kubernetes version skew policy](https://kubernetes.io/releases/version-skew-policy/).
 
 Pause and predict: what happens if you correctly upgrade the API server to 1.35, but a worker node's kubelet is upgraded before the controller-manager, which still runs 1.33? The kubelet may still be legal if it is not newer than the API server, but the controller-manager relationship may violate skew once the API server is two minors ahead, so the cluster can enter a state that is partially functional yet unsupported.
 
@@ -296,7 +300,7 @@ Finally, decide who signs off on the upgraded security posture. Platform enginee
 # https://kubernetes.io/docs/reference/issues-security/security/
 
 # Check specific component for CVEs
-trivy image registry.k8s.io/kube-apiserver:v1.30.0
+trivy image registry.k8s.io/kube-apiserver:v1.35.0
 
 # Check node OS for security updates
 apt list --upgradable 2>/dev/null | grep -i security
@@ -362,30 +366,79 @@ The `apiserver_requested_deprecated` metric is a useful clue because it shows re
 
 ```bash
 # After upgrade, verify security settings
-# 1. Check API server is running
+# 1. Check API server is running — expect at least one Running apiserver pod
 kubectl get pods -n kube-system | grep apiserver
 
-# 2. Verify RBAC is working
-kubectl auth can-i create pods --as=developer
+# 2. Verify RBAC allow + deny with a lab ServiceAccount and RoleBinding
+kubectl create namespace upgrade-test --dry-run=client -o yaml | kubectl apply -f -
+kubectl create serviceaccount probe-sa -n upgrade-test --dry-run=client -o yaml | kubectl apply -f -
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-lister
+  namespace: upgrade-test
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-lister-binding
+  namespace: upgrade-test
+subjects:
+- kind: ServiceAccount
+  name: probe-sa
+  namespace: upgrade-test
+roleRef:
+  kind: Role
+  name: pod-lister
+  apiGroup: rbac.authorization.k8s.io
+EOF
+kubectl auth can-i list pods -n upgrade-test --as=system:serviceaccount:upgrade-test:probe-sa
+# Expect: yes
+kubectl auth can-i create pods -n upgrade-test --as=system:serviceaccount:upgrade-test:probe-sa
+# Expect: no
 
-# 3. Check admission controllers
-kubectl get pods -n kube-system -o yaml | grep admission
+# 3. Confirm admission webhook configurations are registered — expect resource names (may be empty on minimal clusters)
+kubectl get validatingwebhookconfiguration,mutatingwebhookconfiguration
 
-# 4. Run kube-bench
+# 4. Negative Pod Security Admission test — expect Admission denied for privileged pod
+kubectl label namespace upgrade-test pod-security.kubernetes.io/enforce=restricted --overwrite
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: psa-probe
+  namespace: upgrade-test
+spec:
+  containers:
+  - name: probe
+    image: busybox
+    command: ["sleep", "60"]
+    securityContext:
+      privileged: true
+EOF
+# Expect: error contains "violates PodSecurity"
+kubectl delete pod psa-probe -n upgrade-test --ignore-not-found
+
+# 5. Run kube-bench
 kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml
 kubectl logs job/kube-bench
 ```
 
-The RBAC check should include both allowed and denied expectations. A single `can-i` result can be misleading if you ask only for a permission the user is supposed to have. For security validation, test a representative normal action and a representative forbidden action, because an upgrade that accidentally broadens permissions can be more dangerous than one that blocks too much.
+The RBAC check should include both allowed and denied expectations. A single `can-i` result can be misleading if you ask only for a permission the user is supposed to have. For security validation, test a representative normal action and a representative forbidden action with a ServiceAccount you created in the lab, because an upgrade that accidentally broadens permissions can be more dangerous than one that blocks too much.
 
-Admission validation should also include a negative test. If the cluster is expected to deny privileged pods in restricted namespaces, attempt a clearly unsafe test object in a disposable namespace and confirm that admission rejects it. Do not run destructive probes against production workloads, but do prove that the policy path still exists. A successful upgrade should preserve both the ability to run valid workloads and the ability to block invalid ones.
+Admission validation should also include a negative test. Listing webhook configurations confirms the admission path is registered, and a Pod Security Admission probe in a restricted namespace confirms enforcement still rejects unsafe workloads. Do not run destructive probes against production workloads, but do prove that the policy path still exists. A successful upgrade should preserve both the ability to run valid workloads and the ability to block invalid ones.
 
 ```bash
 # Question: "Upgrade cluster to version that fixes CVE-2024-XXXX"
 
 # 1. Research CVE (exam may provide info)
 # 2. Find fixed version
-kubectl version --short 2>/dev/null || kubectl version
+kubectl version
 
 # 3. Plan upgrade
 sudo kubeadm upgrade plan | grep -E "v1\.[0-9]+\.[0-9]+"
@@ -504,6 +557,12 @@ Security upgrade failures usually come from missing evidence rather than missing
 | Trusting benchmark failures without triage | New benchmark versions can add or reinterpret checks. | Compare old and new benchmark profiles, then classify each finding. |
 | Assuming managed service upgrades finish the job | Provider-owned and customer-owned responsibilities blur during incidents. | Verify node pools, add-ons, workloads, policies, and identity bindings separately. |
 
+## Learner check
+
+> Version skew is the formal boundary around this compatibility work. The API server should be the newest Kubernetes component in the cluster; controller-manager and scheduler follow tightly; kubelets may lag within the documented policy, but they must not lead the API server.
+
+Before you continue, explain why a kubelet at 1.32 can remain legal on an API server at 1.35 while a controller-manager at 1.33 cannot. A strong answer names the separate skew rules for kubelets versus control-plane components and cites the three-minor kubelet allowance for kubelet 1.25+.
+
 ## Quiz
 
 <details><summary>Question 1: Your security team receives a CVE advisory for a container escape vulnerability affecting Kubernetes 1.33 through 1.34.3. Production runs 1.34.1, and the advisory says the fix is in 1.34.4 and 1.35.0. What do you recommend during a short change freeze?</summary>
@@ -561,6 +620,8 @@ kind: Pod
 metadata:
   name: security-test
   namespace: upgrade-test
+  labels:
+    app: security-test
 spec:
   securityContext:
     runAsNonRoot: true
@@ -587,7 +648,7 @@ Audit the current versions of your cluster components. You need to know exactly 
 
 ```bash
 echo "=== Current Versions ==="
-kubectl version --short 2>/dev/null || kubectl version
+kubectl version
 
 echo "=== Node Versions ==="
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}: {.status.nodeInfo.kubeletVersion}{"\n"}{end}'
@@ -607,7 +668,36 @@ After the upgrade or simulated validation point, verify that Role-Based Access C
 
 ```bash
 echo "=== RBAC Verification ==="
-kubectl auth can-i list pods -n upgrade-test --as=system:serviceaccount:upgrade-test:default
+kubectl create serviceaccount probe-sa -n upgrade-test --dry-run=client -o yaml | kubectl apply -f -
+cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-lister
+  namespace: upgrade-test
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-lister-binding
+  namespace: upgrade-test
+subjects:
+- kind: ServiceAccount
+  name: probe-sa
+  namespace: upgrade-test
+roleRef:
+  kind: Role
+  name: pod-lister
+  apiGroup: rbac.authorization.k8s.io
+EOF
+kubectl auth can-i list pods -n upgrade-test --as=system:serviceaccount:upgrade-test:probe-sa
+# Expect: yes
+kubectl auth can-i create pods -n upgrade-test --as=system:serviceaccount:upgrade-test:probe-sa
+# Expect: no
 ```
 
 Confirm that the security contexts applied to your workload are still present. This does not prove every runtime control is enforced, but it catches accidental manifest drift and gives you a starting point for admission and runtime policy checks.
@@ -633,7 +723,7 @@ echo "On control plane, would run: ./kube-bench run --targets=master"
 echo "On worker nodes, would run: ./kube-bench run --targets=node"
 ```
 
-Verify that NetworkPolicy resources are still accepted by the API server. Remember that API acceptance is not the same as enforcement, so a real production validation should also test traffic behavior through the CNI.
+Verify that NetworkPolicy resources are still accepted by the API server and select the rehearsal pod. Remember that API acceptance is not the same as enforcement, so a real production validation should also test traffic behavior through the CNI.
 
 ```bash
 echo "=== Testing NetworkPolicy Support ==="
@@ -652,7 +742,8 @@ spec:
   - Egress
 EOF
 
-kubectl get networkpolicy -n upgrade-test
+kubectl get networkpolicy test-policy -n upgrade-test -o jsonpath='{.spec.podSelector.matchLabels.app}{"\n"}'
+# Expect: security-test (policy selects the rehearsal pod)
 ```
 
 Finally, clean up the testing environment. The cleanup should remove both cluster objects and local evidence files that are no longer needed.
