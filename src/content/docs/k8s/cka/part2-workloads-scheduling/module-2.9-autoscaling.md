@@ -239,14 +239,22 @@ kubectl autoscale deployment web --min=1 --max=5 --cpu-percent=50
 # Generate load.
 kubectl run load-generator --image=busybox --restart=Never -- \
   /bin/sh -c "while true; do wget -q -O- http://web; done"
+```
 
+```bash
 # Watch HPA respond.
+# Press Ctrl-C after observing a few scaling events
 kubectl get hpa web -w
+```
 
+```bash
 # Stop load.
 kubectl delete pod load-generator
+```
 
+```bash
 # Watch HPA scale back down after stabilization.
+# Press Ctrl-C after observing a few scaling events
 kubectl get hpa web -w
 ```
 
@@ -281,7 +289,7 @@ spec:
     kind: Deployment
     name: web
   updatePolicy:
-    updateMode: "Auto"  # Options: Off, Initial, Recreate, Auto
+    updateMode: "Off"  # Options: Off, Initial, Recreate, InPlaceOrRecreate
 ```
 
 The example above is intentionally small because VPA details vary by installation and policy. The key fields are `targetRef`, which tells VPA which workload to analyze, and `updatePolicy`, which controls whether recommendations are merely reported or applied. In cautious environments, `Off` is a strong first choice because it produces evidence before it changes workload behavior.
@@ -529,14 +537,26 @@ kubectl get hpa challenge-web
 # 5. Generate load.
 kubectl run load --image=busybox --restart=Never -- \
   /bin/sh -c "while true; do wget -q -O- http://challenge-web; done"
+```
 
+```bash
 # 6. Watch scaling happen.
+# Press Ctrl-C after observing a few scaling events
 kubectl get hpa challenge-web -w
+```
 
-# 7. Stop load and watch scale-down.
+```bash
+# 7. Stop load.
 kubectl delete pod load
-kubectl get hpa challenge-web -w
+```
 
+```bash
+# Watch scale-down after stabilization.
+# Press Ctrl-C after observing a few scaling events
+kubectl get hpa challenge-web -w
+```
+
+```bash
 # 8. Cleanup.
 kubectl delete deployment challenge-web
 kubectl delete svc challenge-web
