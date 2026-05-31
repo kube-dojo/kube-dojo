@@ -7,7 +7,7 @@ revision_pending: false
 lab:
   id: ckad-1.3-multi-container-pods
   url: https://killercoda.com/kubedojo/scenario/ckad-1.3-multi-container-pods
-  duration: "30 min"
+  duration: "55 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -101,6 +101,14 @@ The key design benefit is image separation. Your application image can stay smal
 
 Failure behavior is strict by design. If a regular init container exits non-zero and the Pod restart policy allows retries, the kubelet retries that init container until it succeeds. The main containers do not start, because Kubernetes treats incomplete initialization as a reason the Pod is not ready to run the workload. This is exactly what you want for required setup, but it is a bad fit for optional background work or long-running watchers.
 
+> **Note:** Busybox `nslookup` does not expand the `search` path in `/etc/resolv.conf` the way glibc or netshoot does, so short-name lookups often return `NXDOMAIN` on Kubernetes 1.35 even when cluster DNS is healthy — and the command may exit non-zero even when it printed a useful `Address:` line. Prefer FQDNs such as `myservice.default.svc.cluster.local` in init wait loops, or guard on output with `nslookup ... 2>&1 | grep -q 'Address:'`.
+
+Create the prerequisite Service before applying the Pod below; without it, `init-wait` has nothing to resolve and the Pod stays in an init state.
+
+```bash
+kubectl create svc clusterip myservice --tcp=80:80
+```
+
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -110,7 +118,7 @@ spec:
   initContainers:
   - name: init-wait
     image: busybox
-    command: ['sh', '-c', 'until nslookup myservice; do echo waiting; sleep 2; done']
+    command: ['sh', '-c', 'until nslookup myservice.default.svc.cluster.local; do echo waiting; sleep 2; done']
   - name: init-setup
     image: busybox
     command: ['sh', '-c', 'echo "Setup complete" > /data/ready']
@@ -138,7 +146,7 @@ Regular init containers also have different API rules from app containers. They 
 | Failure | Pod restarts if any init container fails |
 | Restart policy | Always rerun from first init on pod restart |
 | Resources | Can have different resource limits than app containers |
-| Probes | No liveness/readiness probes (they just need to exit 0) |
+| Probes | No probes on *regular* init containers (native sidecars with `restartPolicy: Always` support probes) |
 
 The table is worth reading as an operational checklist. "Sequential" means a later init container never races an earlier one. "Failure" means a bad setup command can hold the entire Pod in an init state. "Resources" means an init container can request enough CPU or memory for a heavy startup task without forcing the application container to keep those same requests for its whole lifetime. The CKAD exam can test any of these properties through status output or a broken YAML snippet.
 
@@ -191,6 +199,35 @@ spec:
 ```
 
 This classic sidecar example uses a shared `emptyDir` volume as the contract between nginx and the log shipper. Nginx writes access logs under `/var/log/nginx`, and the busybox helper tails the same path. The main image does not need a log forwarding binary, credentials, or a second process supervisor. The sidecar owns the log stream, and the application owns serving HTTP content.
+
+`tail -F access.log` stays silent until nginx writes a line — generate traffic with `kubectl exec sidecar-demo -c main -- curl -s localhost` if the sidecar logs look empty right after the Pod becomes Ready.
+
+When the helper must start before the app and support probes, use a native sidecar in v1.35: an init container with `restartPolicy: Always`. It starts before ordinary app containers, keeps running, and shuts down after them.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: native-sidecar-demo
+spec:
+  initContainers:
+  - name: log-shipper
+    image: busybox
+    restartPolicy: Always
+    command: ['sh', '-c', 'tail -F /var/log/nginx/access.log']
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+  containers:
+  - name: main
+    image: nginx
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+  volumes:
+  - name: logs
+    emptyDir: {}
+```
 
 That separation has a cost. The Pod readiness view includes multiple containers, so a broken sidecar can keep the whole Pod from becoming Ready even if the main process is healthy. That is often desirable when the sidecar is required for safe service, such as a proxy or security agent, but it can surprise teams that treat log shipping as optional. You need to decide whether the helper is part of the serving contract or merely part of observability, then set readiness behavior accordingly.
 
@@ -361,7 +398,7 @@ JSONPath is a useful CKAD tool because it gives quick answers without scrolling 
 | Symptom | Cause | Solution |
 |---------|-------|----------|
 | Pod stuck in `Init:0/1` | Init container not completing | Check init container logs |
-| One container `CrashLoopBackOff` | Container command exits | Fix command or add `sleep` |
+| One container `CrashLoopBackOff` | Container command exits | Fix the crashing command; use a foreground/keepalive loop only for sidecar scaffolding, never in init containers (they must exit 0) |
 | Containers can't share data | No shared volume | Add `emptyDir` volume |
 | Main can't reach sidecar | Network misconfiguration | Use `localhost:port` |
 
@@ -543,6 +580,9 @@ kubectl get pod full-pattern
 # Wait for ready
 kubectl wait --for=condition=Ready pod/full-pattern --timeout=60s
 
+# Check init container wrote the configuration
+kubectl logs full-pattern -c config-init
+
 # Check init completed
 kubectl describe pod full-pattern | grep -A5 "Init Containers"
 
@@ -689,7 +729,7 @@ spec:
   initContainers:
   - name: wait
     image: busybox
-    command: ['sh', '-c', 'until nslookup wait-svc; do echo waiting; sleep 2; done']
+    command: ['sh', '-c', 'until nslookup wait-svc.default.svc.cluster.local; do echo waiting; sleep 2; done']
   containers:
   - name: main
     image: nginx
@@ -784,6 +824,14 @@ kubectl delete pod app-complete
 </details>
 
 ---
+
+## Learner check
+
+Before moving on, confirm you can explain these remediation points in your own words:
+
+> Busybox `nslookup` does not expand the `search` path in `/etc/resolv.conf` the way glibc or netshoot does, so short-name lookups often return `NXDOMAIN` on Kubernetes 1.35 even when cluster DNS is healthy — and the command may exit non-zero even when it printed a useful `Address:` line.
+
+> No probes on *regular* init containers (native sidecars with `restartPolicy: Always` support probes).
 
 ## Sources
 
