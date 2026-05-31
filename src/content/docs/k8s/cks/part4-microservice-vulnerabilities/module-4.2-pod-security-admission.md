@@ -81,16 +81,16 @@ The useful comparison is not "which profile is more secure?" because restricted 
 |---|---|---|---|
 | Privileged containers | Allowed | Disallowed | Disallowed |
 | Host namespaces | Allowed | Disallowed for hostPID, hostIPC, and hostNetwork | Disallowed |
-| HostPath volumes | Allowed | Not restricted | Disallowed |
+| HostPath volumes | Allowed | Disallowed | Disallowed |
 | Linux capabilities | Unrestricted | Blocks dangerous additions beyond the baseline allowlist | Must drop `ALL`; only `NET_BIND_SERVICE` may be added |
 | Running as root | Allowed | Allowed | Must not run as UID 0; `runAsNonRoot` and nonzero user settings matter |
 | Privilege escalation | Allowed | Not comprehensively blocked | Must set `allowPrivilegeEscalation: false` for Linux containers |
 | Seccomp | Unrestricted | Must not explicitly use `Unconfined` | Must explicitly use `RuntimeDefault` or `Localhost` |
-| Volume types | Unrestricted | Broadly compatible | Limited to safe volume sources such as ConfigMap, Secret, PVC, projected, downwardAPI, CSI, emptyDir, and ephemeral |
+| Volume types | Unrestricted | Broadly compatible except for `hostPath` | Limited to safe volume sources such as ConfigMap, Secret, PVC, projected, downwardAPI, CSI, emptyDir, and ephemeral |
 
-Baseline is the profile you use when you need compatibility but still want to stop obviously risky pod specs. It blocks privileged containers and host namespaces, restricts host ports and dangerous capability additions, and prevents several direct escapes from the container boundary. It does not require non-root execution, does not require dropping all capabilities, and does not require read-only root filesystems. That makes baseline a reasonable default for development namespaces or legacy application namespaces during the first migration phase.
+Baseline is the profile you use when you need compatibility but still want to stop obviously risky pod specs. It blocks privileged containers, host namespaces, and HostPath volumes, restricts host ports and dangerous capability additions, and prevents several direct escapes from the container boundary. It does not require non-root execution, does not require dropping all capabilities, and does not require read-only root filesystems. That makes baseline a reasonable default for development namespaces or legacy application namespaces during the first migration phase.
 
-Restricted is the profile you use when application teams can own their manifests and images. It requires the pod spec to close the usual privilege paths: no privilege escalation, no broad capability set, no root execution, and an explicit seccomp profile. It also narrows volume choices because a restricted workload should not mount arbitrary host paths. Restricted still does not enforce every hardening control a security team may want. For example, it does not require `readOnlyRootFilesystem`, resource limits, signed images, network policies, or approved registries.
+Restricted is the profile you use when application teams can own their manifests and images. It requires the pod spec to close the usual privilege paths: no privilege escalation, no broad capability set, no root execution, and an explicit seccomp profile. Baseline also forbids HostPath volumes; restricted inherits that baseline rule and then narrows the remaining allowed volume sources. Restricted still does not enforce every hardening control a security team may want. For example, it does not require `readOnlyRootFilesystem`, resource limits, signed images, network policies, or approved registries.
 
 The last point is a frequent exam trap. `readOnlyRootFilesystem: true` is a strong application hardening choice, and many organizations require it for production services, but it is not required by the upstream restricted Pod Security Standard. If a question asks for PSA compliance only, focus on the fields PSA actually checks. If a question asks for a hardened workload beyond PSA, then adding a read-only root filesystem and explicit writable volumes is a sensible extra defense.
 
@@ -141,7 +141,7 @@ spec:
         add: ["NET_ADMIN"]
 ```
 
-This is a logical map of baseline's policy gates, not a runnable pod manifest — each line references the field path where the relevant policy applies (e.g., `privileged` lives in `spec.containers[].securityContext.privileged`).
+This is an intentionally noncompliant example, not a lab step. The YAML is syntactically valid in a permissive namespace; each line references the field path where the relevant policy applies (e.g., `privileged` lives in `spec.containers[].securityContext.privileged`).
 
 Before running this, what output do you expect if the namespace has `enforce: baseline`, `warn: restricted`, and `audit: restricted`? The pod should be rejected because it violates the enforced baseline profile, so the warning mode is not the reason it fails. If you remove the baseline violations but leave restricted-only gaps, the pod can be admitted while the API server warns the caller and records audit annotations for the restricted profile.
 
@@ -225,7 +225,7 @@ metadata:
 spec:
   securityContext:
     runAsNonRoot: true
-    runAsUser: 1000  # UID for the nginx user in alpine images
+    runAsUser: 101  # UID for the nginx user in nginx:1.27-alpine
     seccompProfile:
       type: RuntimeDefault
   containers:
@@ -237,7 +237,7 @@ spec:
         drop: ["ALL"]
 ```
 
-Note: nginx requires root by default, so this pod passes PSA admission but may CrashLoopBackOff at runtime — PSA admission and runtime health are independent concerns, covered later in this module.
+Note: the default nginx startup path assumes root-oriented ports and writable paths, so this pod passes PSA admission but may CrashLoopBackOff at runtime — PSA admission and runtime health are independent concerns, covered later in this module.
 
 Warnings look similar, but they do not stop the request. When a namespace has `warn: restricted`, `kubectl apply` may print lines beginning with `Warning:` that name the profile and the violating fields. Those warnings are easy to ignore during a busy rollout, which is why warn mode should feed a ticket, report, or CI quality gate. A warning-only rollout that nobody reads is just delayed enforcement without a repair plan.
 
@@ -271,7 +271,7 @@ kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.names
 kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.containers[*]}{.name}{":"}{.securityContext.privileged}{" "}{end}{"\n"}{end}'
 ```
 
-Day one is audit and warn. The team labels application namespaces with `audit: restricted` and `warn: restricted`, then labels obvious node-agent namespaces with `enforce: privileged` only when the workload class truly needs it. For ordinary application namespaces, `enforce: baseline` is a good first safety net because it blocks privileged containers and host namespaces while leaving root-running legacy images enough room to keep serving traffic. The team pins labels to `v1.35` so policy behavior is not silently changed by the next control-plane upgrade.
+Day one is audit and warn. The team labels application namespaces with `audit: restricted` and `warn: restricted`, then labels obvious node-agent namespaces with `enforce: privileged` only when the workload class truly needs it. For ordinary application namespaces, `enforce: baseline` is a good first safety net because it blocks privileged containers, host namespaces, and HostPath volumes while leaving root-running legacy images enough room to keep serving traffic. The team pins labels to `v1.35` so policy behavior is not silently changed by the next control-plane upgrade.
 
 Day two is remediation of the noisy failures. The top causes are usually missing `allowPrivilegeEscalation: false`, missing `capabilities.drop: ["ALL"]`, missing seccomp profile, and containers that run as UID 0. These are not all equal in difficulty. Adding seccomp and dropping capabilities is often a Helm values change. Moving away from root may require image rebuilds, file-permission fixes, or volume mount changes. That difference drives the rollout order: fix manifest-only gaps first, schedule image rebuilds second, and document real exceptions third.
 
@@ -326,7 +326,7 @@ The version fields in AdmissionConfiguration have the same production tradeoff a
 
 Pinning should be consistent across modes, not only on the enforced label. If `enforce-version` is pinned but `warn-version` is left to default behavior, the cluster may enforce one policy version while warning against another after an upgrade. That can produce confusing migration reports because developers see warnings that do not match the current enforcement boundary. In production runbooks, treat the six namespace labels as a documented unit: three mode labels and three version labels, reviewed together during cluster upgrades.
 
-In the exam, do not overuse cluster-wide configuration. If the task says "configure namespace `secure` to enforce restricted," labels are the direct answer. If the task says "set default pod security behavior for unlabeled namespaces" or shows an API server admission config file, then ClusterPodSecurityConfig is in scope. The fastest diagnostic cue is whether the requested policy is namespace-specific or should apply before a namespace owner adds any labels.
+In the exam, do not overuse cluster-wide configuration. If the task says "configure namespace `secure` to enforce restricted," labels are the direct answer. If the task says "set default pod security behavior for unlabeled namespaces" or shows an API server admission config file, then AdmissionConfiguration with a nested PodSecurityConfiguration is in scope. The fastest diagnostic cue is whether the requested policy is namespace-specific or should apply before a namespace owner adds any labels.
 
 ---
 
@@ -374,7 +374,7 @@ spec:
         drop: ["ALL"]
 ```
 
-Pause and classify: if a question asks you to "make the pod pass restricted" and the pod currently has `hostPath`, `privileged: true`, UID 0, and missing seccomp, which fixes are mandatory for PSA and which are separate production hardening choices? Mandatory PSA fixes include removing privileged mode, removing hostPath for restricted, ensuring non-root execution, setting seccomp, blocking privilege escalation, and dropping capabilities. Separate hardening choices might include read-only root filesystems, approved image registries, or NetworkPolicy.
+Pause and classify: if a question asks you to "make the pod pass restricted" and the pod currently has `hostPath`, `privileged: true`, UID 0, and missing seccomp, which fixes are mandatory for PSA and which are separate production hardening choices? Mandatory PSA fixes include removing privileged mode, removing `hostPath` because baseline and restricted both forbid it, ensuring non-root execution, setting seccomp, blocking privilege escalation, and dropping capabilities. Separate hardening choices might include read-only root filesystems, approved image registries, or NetworkPolicy.
 
 The fifth step is to validate with server-side dry-run when the cluster allows it. Dry-run sends the request through admission without storing the object, which is exactly the behavior you need when testing a policy fix. It also avoids leaving failed experiment objects in the namespace. If dry-run is unavailable for the object or environment, use a temporary namespace with equivalent labels and delete the object immediately after testing.
 
@@ -659,6 +659,14 @@ kubectl delete namespace psa-lab
 - [ ] You can use server-side dry-run before tightening namespace enforcement.
 - [ ] You can describe when namespace labels are enough and when AdmissionConfiguration is needed.
 - [ ] You can state one example rule that requires Kyverno or Gatekeeper rather than PSA.
+
+---
+
+## Learner check
+
+> Baseline also forbids HostPath volumes; restricted inherits that baseline rule and then narrows the remaining allowed volume sources.
+
+Before moving on, confirm you can explain why a pod with `spec.volumes[].hostPath` fails in a namespace that enforces `baseline:v1.35`, even if it does not request privileged mode or host namespaces.
 
 ---
 
