@@ -665,6 +665,8 @@ kubectl create secret generic app-secret --from-literal=password=demo-password $
 kubectl apply -f pod.yaml --dry-run=client
 kubectl apply -f deploy.yaml --dry-run=client
 kubectl apply -f svc.yaml --dry-run=client
+kubectl apply -f cm.yaml --dry-run=client
+kubectl apply -f secret.yaml --dry-run=client
 ```
 
 <details><summary>Solution</summary>
@@ -748,6 +750,7 @@ After cleanup, `ls *.yaml` should either show no files or only files unrelated t
 - https://www.gnu.org/software/bash/manual/bash.html
 - https://github.com/tmux/tmux/wiki
 - https://starship.rs/config/#kubernetes
+- https://support.apple.com/en-us/102360
 
 ## Next Module
 

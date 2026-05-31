@@ -340,9 +340,9 @@ The primary pattern is "Task for skeleton, Reference for precision, dry run for 
 
 Another strong pattern is version-first reading. Before copying any manifest from an unfamiliar page, look at the Kubernetes version, the page section, and the `apiVersion` in the snippet. This is especially important for Ingress, Gateway API, beta resources, and examples discovered through search rather than direct navigation. Version-first reading is not slow once it becomes automatic. It is a small up-front cost that prevents a much larger debugging cost.
 
-A fourth pattern is "copy less than you understand, then validate more than you trust." Copying a complete example is acceptable when the example is official and close to the task, but you should still know which lines are essential and which lines are sample-specific. Names, labels, hosts, ports, storage classes, and namespaces often need prompt-specific edits. Validation then becomes more meaningful because you are not merely asking whether the YAML parses; you are checking whether the adapted object still expresses the requested behavior.
+A third pattern is "copy less than you understand, then validate more than you trust." Copying a complete example is acceptable when the example is official and close to the task, but you should still know which lines are essential and which lines are sample-specific. Names, labels, hosts, ports, storage classes, and namespaces often need prompt-specific edits. Validation then becomes more meaningful because you are not merely asking whether the YAML parses; you are checking whether the adapted object still expresses the requested behavior.
 
-A third pattern is controlled tab usage. Keep the main task page, the API reference or cheat sheet, and any vendor-specific docs in predictable places. Avoid opening a new tab for every search result because that changes the problem from "find the field" to "find the tab that had the field." In a real terminal workflow, the equivalent pattern is keeping a manifest file, a validation command, and a schema lookup command close together instead of scattering partial attempts across many files.
+A fourth pattern is controlled tab usage. Keep the main task page, the API reference or cheat sheet, and any vendor-specific docs in predictable places. Avoid opening a new tab for every search result because that changes the problem from "find the field" to "find the tab that had the field." In a real terminal workflow, the equivalent pattern is keeping a manifest file, a validation command, and a schema lookup command close together instead of scattering partial attempts across many files.
 
 The last pattern is deliberate recovery from wrong turns. During practice, intentionally click one plausible but wrong result, then time how quickly you can recognize the mismatch and move to the right section. This trains an important exam behavior: a wrong click should cost seconds, not minutes. The clue is usually in the page type, heading, or absence of a runnable example. If the page is explaining background and you need an object, recover toward Tasks. If the page gives a command but you need nested schema, recover toward Reference or `kubectl explain`.
 
@@ -506,7 +506,7 @@ kubectl get cm,secret,netpol
 
 # Cleanup
 kubectl delete cm --all
-kubectl delete secret --all  # careful: leaves default secrets
+kubectl delete secret --all  # careful: deletes service account tokens too; run in a disposable namespace only
 kubectl delete netpol --all
 ```
 
