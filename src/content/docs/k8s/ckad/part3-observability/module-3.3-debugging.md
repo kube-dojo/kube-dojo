@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: ckad-3.3-debugging
   url: https://killercoda.com/kubedojo/scenario/ckad-3.3-debugging
-  duration: "40 min"
+  duration: "45 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 45-55 minutes
 >
-> **Prerequisites**: Module 3.1 (Probes), Module 3.2 (Logging)
+> **Prerequisites**: [Module 3.1 (Probes)](../module-3.1-probes/), [Module 3.2 (Logging)](../module-3.2-logging/)
 
 ---
 
@@ -107,12 +107,16 @@ Logs are most useful after you know a container actually started. A running cont
 
 Log output should be treated as application testimony rather than as a complete source of truth. The process may report a missing file, but Kubernetes tells you whether the volume was mounted; the process may report a port bind failure, but the pod spec tells you which command and environment variables were supplied. Strong debugging combines the two views, using logs to reveal the application complaint and `describe` to verify whether the platform delivered the inputs the application expected.
 
+On kind and other containerd-backed clusters, `kubectl logs --previous` can return `unable to retrieve container logs` during very fast crash loops because the terminated instance has not been retained yet. When that happens, read Last State and terminationMessage from `kubectl describe pod` instead, and wait for one more restart cycle if the evidence is still empty.
+
 ```bash
 # Current logs
 kubectl logs POD
 
 # Previous instance (after crash)
 kubectl logs POD --previous
+# Fallback when --previous is empty (fast crash loops on kind/containerd):
+kubectl describe pod POD | grep -A5 "Last State"
 
 # Specific container
 kubectl logs POD -c CONTAINER
@@ -217,9 +221,11 @@ Separate process exits from probe-driven restarts before you change application 
 ```bash
 # Check logs from crashed instance
 kubectl logs POD --previous
+# Fallback when --previous is empty (fast crash loops):
+kubectl describe pod POD | grep -A5 "Last State"
 
-# Check exit code
-kubectl describe pod POD | grep "Last State"
+# Check exit code and termination message
+kubectl describe pod POD | grep -A5 "Last State"
 
 # Common causes:
 # 1. Application error (check logs)
@@ -268,12 +274,12 @@ kubectl exec -it POD -- sh
 # Check processes
 kubectl exec POD -- ps aux
 
-# Check network
+# Check network (busybox has netstat, not ss)
 kubectl exec POD -- netstat -tlnp
-kubectl exec POD -- ss -tlnp
+# ss -tlnp requires a full image (netshoot/debian); busybox → use netstat
 
-# Check DNS
-kubectl exec POD -- nslookup kubernetes
+# Check DNS (prefer FQDN — see note below)
+kubectl exec POD -- nslookup kubernetes.default.svc.cluster.local
 kubectl exec POD -- cat /etc/resolv.conf
 
 # Check connectivity
@@ -286,6 +292,8 @@ kubectl exec POD -- cat /etc/config/file
 ```
 
 These commands deliberately test different classes of assumptions. Process commands tell you whether the expected process is alive, socket commands tell you whether anything is listening, DNS commands tell you whether the pod resolver can translate service names, and file commands tell you whether volumes and projected configuration appeared where the application expects them. If a command is missing, that is evidence about the image, not a reason to abandon the investigation.
+
+> **Note:** Busybox `nslookup` does not expand the `search` path in `/etc/resolv.conf` the way glibc or netshoot does, so short-name lookups often return `NXDOMAIN` on Kubernetes 1.35 even when cluster DNS is healthy — and the command may exit non-zero even when it printed a useful `Address:` line. Prefer FQDNs such as `SERVICE.NAMESPACE.svc.cluster.local` (for example `kubernetes.default.svc.cluster.local`), or use netshoot `dig` when you need short-name resolution behavior.
 
 ### When Shell Isn't Available
 
@@ -335,12 +343,16 @@ kubectl debug POD -it --image=nicolaka/netshoot --target=app
 kubectl debug POD -it --image=busybox --target=app
 # Then: ls, cat, find
 
-# Process debugging
-kubectl debug POD -it --image=busybox --target=app --share-processes
+# Process debugging (--target shares the target container's process namespace)
+kubectl debug POD -it --image=busybox --target=app
 # Then: ps aux
+
+# Copy-based alternative (--share-processes requires --copy-to)
+kubectl debug POD --copy-to=debug-copy --share-processes --set-image='*=busybox' -- sleep 3600
+# Then: kubectl exec debug-copy -- ps aux
 ```
 
-Ephemeral debug containers are powerful precisely because they reduce pressure to mutate the broken workload. Instead of adding tools to the production image, you temporarily place tools beside it. Instead of restarting a pod that is still serving partial traffic, you inspect from the same network context. That separation matters in exams and in real clusters because observation should not create more drift than the original failure.
+The `--target` flag attaches the debug container to an existing container and shares that target's process namespace, which is why `ps aux` can see application processes. The `--share-processes` flag applies only with `--copy-to`; it is a no-op on a plain `--target` debug attach. Ephemeral debug containers are powerful precisely because they reduce pressure to mutate the broken workload. Instead of adding tools to the production image, you temporarily place tools beside it. Instead of restarting a pod that is still serving partial traffic, you inspect from the same network context. That separation matters in exams and in real clusters because observation should not create more drift than the original failure.
 
 ## Trace Services from Selector to Endpoint to DNS
 
@@ -358,6 +370,7 @@ kubectl get svc SERVICE
 
 # Check endpoints (should list pod IPs)
 kubectl get endpoints SERVICE
+# On Kubernetes 1.35+, kubectl may warn that EndpointSlice is preferred; the address list is still valid.
 
 # If no endpoints:
 # - Check pod labels match service selector
@@ -375,12 +388,11 @@ DNS tests are useful only after you know what name the client should resolve. A 
 Name scope is a frequent source of false negatives. A debugging pod in a different namespace may fail to resolve the short name even though the real client in the Service namespace would succeed. Conversely, a full cluster DNS name can resolve from a diagnostic pod while the original client still fails because policy or port mapping differs. Match the test location to the failing client whenever the task gives you that context.
 
 ```bash
-# From inside a pod
-kubectl exec POD -- nslookup SERVICE
+# From inside a pod (prefer FQDN — busybox nslookup ignores search domains)
 kubectl exec POD -- nslookup SERVICE.NAMESPACE.svc.cluster.local
 
 # Create test pod for debugging
-kubectl run test --image=busybox --rm -it -- nslookup SERVICE
+kubectl run test --image=busybox --rm -it -- nslookup SERVICE.NAMESPACE.svc.cluster.local
 ```
 
 ### Test Service Connectivity
@@ -430,9 +442,11 @@ kubectl get pod crashing-pod
 
 # Step 2: Check previous logs
 kubectl logs crashing-pod --previous
+# Fallback when --previous is empty (fast crash loops):
+kubectl describe pod crashing-pod | grep -A5 "Last State"
 
-# Step 3: Check exit code
-kubectl describe pod crashing-pod | grep -A3 "Last State"
+# Step 3: Check exit code and termination message
+kubectl describe pod crashing-pod | grep -A5 "Last State"
 
 # Step 4: Check liveness probe
 kubectl describe pod crashing-pod | grep -A5 Liveness
@@ -495,7 +509,7 @@ Use time pressure as a reason to narrow the question, not as a reason to skip th
 
 - **Exit code 137 is commonly interpreted as 128 plus signal 9**, so it often points toward SIGKILL; in Kubernetes descriptions, pair it with the termination reason to confirm whether OOMKilled is involved.
 
-- **`kubectl logs --previous` reads the terminated container instance**, which is why it is often more useful than current logs during CrashLoopBackOff investigations.
+- **`kubectl logs --previous` reads the terminated container instance**, which is why it is often more useful than current logs during CrashLoopBackOff investigations. When `--previous` is empty on fast crash loops, read Last State from `kubectl describe pod` instead.
 
 - **A Service with zero endpoints can still have a valid ClusterIP**, because endpoint membership is controlled by selector matches and readiness, not by whether the Service object itself exists.
 
@@ -505,7 +519,7 @@ Use time pressure as a reason to narrow the question, not as a reason to skip th
 |---------|----------------|---------------|
 | Random guessing | A broken pod exposes many symptoms, so it feels faster to try edits than to classify the layer. | Follow the workflow: status, describe, logs, exec or debug, then events for wider context. |
 | Skipping `describe` | Learners assume application logs contain every cause, even when the container never started. | Read conditions, container states, and Events before looking for process output. |
-| Not checking `--previous` | CrashLoopBackOff creates a fresh container, so current logs can hide the failed instance. | Use `kubectl logs POD --previous` and compare it with Last State in `describe`. |
+| Not checking `--previous` | CrashLoopBackOff creates a fresh container, so current logs can hide the failed instance. | Use `kubectl logs POD --previous`; if empty, read Last State with `kubectl describe pod POD \| grep -A5 "Last State"`. |
 | Ignoring exit codes | The same visible crash loop can come from application exit, OOMKilled, or signal termination. | Read termination reason, exit code, resource limits, and probe events together. |
 | Forgetting readiness | Running containers look healthy even when readiness removes every backend from traffic. | Check the `READY` column, readiness events, and Service endpoints. |
 | Debugging Service traffic before checking selectors | Network tests feel concrete, but a Service with no endpoints has no backend to route toward. | Compare `kubectl describe svc` selector output with `kubectl get pods --show-labels`. |
@@ -523,7 +537,7 @@ Start with scheduling evidence, not logs, because the container has not started.
 <details>
 <summary>Question 2: A pod named `api-server` is in CrashLoopBackOff. Current logs show only a new startup line, but the restart count is increasing. How do you find the real failure?</summary>
 
-Use `kubectl logs api-server --previous` because the previous container instance is the one that exited. Then inspect `kubectl describe pod api-server` for Last State, termination reason, exit code, and liveness probe events. Current logs can be incomplete during a crash loop because they belong to the newest attempt. The fix depends on what the evidence says: application error, missing config, OOMKilled, wrong command, or an aggressive probe.
+Use `kubectl logs api-server --previous` because the previous container instance is the one that exited. If `--previous` returns no logs during a fast crash loop, fall back to `kubectl describe pod api-server | grep -A5 "Last State"` for termination reason, exit code, and terminationMessage. Then inspect liveness probe events in the same describe output. Current logs can be incomplete during a crash loop because they belong to the newest attempt. The fix depends on what the evidence says: application error, missing config, OOMKilled, wrong command, or an aggressive probe.
 
 </details>
 
@@ -551,7 +565,7 @@ Use an ephemeral debug container with a toolbox image, or create a debug copy if
 <details>
 <summary>Question 6: You have ten minutes left in an exam task. The Deployment exists, the pod restarts repeatedly, and the Service has no usable backend. How do you implement a repeatable debugging workflow without chasing every symptom?</summary>
 
-First classify the pod state with `kubectl get pod -o wide`, then use `kubectl describe pod` to read container state, Last State, events, and probes. Because restarts are present, get `kubectl logs --previous` before relying on current logs. Once the pod is stable and Ready, check Service selector and endpoints to confirm it can receive traffic. This sequence separates the crash root cause from the Service symptom and prevents you from patching networking before the backend is eligible.
+First classify the pod state with `kubectl get pod -o wide`, then use `kubectl describe pod` to read container state, Last State, events, and probes. Because restarts are present, get `kubectl logs --previous` before relying on current logs; if previous logs are unavailable, use `kubectl describe pod | grep -A5 "Last State"`. Once the pod is stable and Ready, check Service selector and endpoints to confirm it can receive traffic. This sequence separates the crash root cause from the Service symptom and prevents you from patching networking before the backend is eligible.
 
 </details>
 
@@ -625,6 +639,8 @@ kubectl get pod broken2
 # Wait for crashloop to trigger a restart (minimum 10s backoff)
 sleep 20
 kubectl logs broken2 --previous
+# Fallback when --previous is empty (fast crash loops):
+kubectl describe pod broken2 | grep -A5 "Last State"
 # Fix: Provide correct config by replacing the pod
 kubectl delete pod broken2
 cat << 'EOF' | kubectl apply -f -
@@ -732,6 +748,8 @@ kubectl get pod drill3
 
 # Get logs from previous
 kubectl logs drill3 --previous
+# Fallback when --previous is empty:
+kubectl describe pod drill3 | grep -A5 "Last State"
 
 # Cleanup
 kubectl delete pod drill3
@@ -872,11 +890,21 @@ Drill 5 is a selector problem, so empty endpoints should lead you to compare the
 ### Success Criteria
 
 - [ ] Diagnose pod failures by recording status, events, logs, and describe output before editing.
-- [ ] Debug CrashLoopBackOff with `kubectl logs --previous` and Last State evidence.
+- [ ] Debug CrashLoopBackOff with `kubectl logs --previous`, falling back to Last State in `describe` when previous logs are unavailable.
 - [ ] Debug ImagePullBackOff by reading image pull events and fixing only the image reference.
 - [ ] Diagnose Pending by reading scheduling or resource events before looking for logs.
 - [ ] Troubleshoot service and pod networking by comparing selectors, labels, readiness, endpoints, and DNS.
 - [ ] Implement the repeatable debugging workflow without using shell aliases or manual in-container repairs.
+
+## Learner check
+
+Before moving on, confirm you can explain these remediation points in your own words:
+
+> Busybox `nslookup` does not expand the `search` path in `/etc/resolv.conf` the way glibc or netshoot does, so short-name lookups often return `NXDOMAIN` on Kubernetes 1.35 even when cluster DNS is healthy — and the command may exit non-zero even when it printed a useful `Address:` line.
+
+> The `--target` flag attaches the debug container to an existing container and shares that target's process namespace, which is why `ps aux` can see application processes. The `--share-processes` flag applies only with `--copy-to`; it is a no-op on a plain `--target` debug attach.
+
+> On kind and other containerd-backed clusters, `kubectl logs --previous` can return `unable to retrieve container logs` during very fast crash loops because the terminated instance has not been retained yet.
 
 ## Sources
 
