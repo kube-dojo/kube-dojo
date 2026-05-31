@@ -1,6 +1,6 @@
 ---
 citations_verified: true
-revision_pending: true
+revision_pending: false
 title: "Module 1.4: Node Metadata Protection"
 slug: k8s/cks/part1-cluster-setup/module-1.4-node-metadata
 sidebar:
