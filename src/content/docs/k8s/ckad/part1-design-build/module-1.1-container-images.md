@@ -7,16 +7,16 @@ sidebar:
 lab:
   id: ckad-1.1-container-images
   url: https://killercoda.com/kubedojo/scenario/ckad-1.1-container-images
-  duration: "30 min"
+  duration: "75 min"
   difficulty: intermediate
   environment: kubernetes
 ---
 
 > **Complexity**: `[MEDIUM]` - Requires understanding of Dockerfile behavior, image references, registry access, and Kubernetes Pod startup diagnostics
 >
-> **Time to Complete**: 60-75 minutes
+> **Time to Complete**: 75 minutes
 >
-> **Prerequisites**: Module 0.2 (Developer Workflow), basic container knowledge, and comfort reading Pod events
+> **Prerequisites**: [Module 0.2 (Developer Workflow)](../part0-environment/module-0.2-developer-workflow/), basic container knowledge, and comfort reading Pod events
 
 ---
 
@@ -216,7 +216,7 @@ docker tag myapp:v1.0.0 myregistry.com/team/myapp:v1.0.0
 docker push myregistry.com/team/myapp:v1.0.0
 
 # Push all tags
-docker push myregistry.com/team/myapp --all-tags
+docker push --all-tags myregistry.com/team/myapp
 ```
 
 Multi-stage builds, introduced in Docker Engine 17.05, are the usual way to separate build-time tools from runtime contents. Compile in one stage, copy the final artifact into a smaller image, and leave compilers, package caches, and test fixtures behind. Even when you do not write the full Dockerfile during CKAD practice, recognizing the pattern helps you evaluate image size and attack surface.
@@ -479,9 +479,9 @@ When you are unsure, choose the option that leaves a future investigator with fe
 
 ## Did You Know?
 
-- **OCI image-spec 1.1.0 was the first minor release after the 1.0.0 line from July 2017.** That long interval is one reason image format details tend to be stable across tools even while builders and registries evolve quickly.
-- **Docker Engine 23.0 made BuildKit the default builder on Linux in February 2023.** BuildKit's parallel execution and cache model are why modern Dockerfile ordering has a direct effect on build time.
-- **Unauthenticated Docker Hub pulls have historically been capped at 100 pulls per 6-hour window.** That number is large for one laptop and small for an autoscaling cluster that repeatedly pulls common base images.
+- **OCI image-spec 1.1.0 was the first minor release after the 1.0.0 line from July 2017.** That long interval is one reason image format details tend to be stable across tools even while builders and registries evolve quickly. Source: [OCI Image Spec v1.1.0 release](https://github.com/opencontainers/image-spec/releases/tag/v1.1.0).
+- **Docker Engine 23.0 made BuildKit the default builder on Linux in February 2023.** BuildKit's parallel execution and cache model are why modern Dockerfile ordering has a direct effect on build time. Source: [Docker Engine 23.0 release notes](https://docs.docker.com/engine/release-notes/23.0/).
+- **Unauthenticated Docker Hub pulls have historically been capped at 100 pulls per 6-hour window.** That number is large for one laptop and small for an autoscaling cluster that repeatedly pulls common base images. Source: [Docker Hub pull usage limits](https://docs.docker.com/docker-hub/usage/pulls/).
 - **The `latest` tag has no chronological meaning.** It is only the default tag string used when you omit a tag, so `image: nginx` means `image: nginx:latest` rather than "newest verified release."
 
 ## Common Mistakes
@@ -554,7 +554,7 @@ kubectl create deploy broken-app --image=nginx:nonexistent
 
 **Task 2: Diagnose the failure**
 
-Observe the state of the deployment to identify the exact cause of the crash. The key skill is not merely seeing `ImagePullBackOff`; it is reading Events until you can explain which part of the image reference failed and what change would let the node pull successfully.
+Observe the state of the deployment to identify the exact cause of the image pull failure. The key skill is not merely seeing `ImagePullBackOff`; it is reading Events until you can explain which part of the image reference failed and what change would let the node pull successfully.
 
 ```bash
 # Check pod status
@@ -657,32 +657,47 @@ kubectl delete secret myregistry
 
 **Task 6: Override command and args**
 
-Use this task to confirm the `ENTRYPOINT` and `CMD` mapping in a live Pod spec. The BusyBox image is convenient because it can run a shell command and exit quickly, which makes it easy to inspect logs and the stored fields without a larger application.
+Use this task to confirm the Dockerfile `ENTRYPOINT`/`CMD` to Kubernetes `command`/`args` mapping in live Pod specs. BusyBox ships with default `CMD ["sh"]` and no fixed `ENTRYPOINT`, so an `args`-only Pod replaces just the default command while leaving the image entrypoint unset. A second Pod sets both fields to show when you fully replace the image process launcher.
 
 ```bash
-# Create pod that overrides CMD
+# Part A: args-only override — Kubernetes `args` maps to Dockerfile `CMD`
+# Leave `command` unset so the image entrypoint (if any) stays in place.
 cat << EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
-  name: custom-cmd
+  name: args-only-cmd
+spec:
+  containers:
+  - name: busybox
+    image: busybox
+    args: ["echo", "Args-only override replaces image CMD"]
+EOF
+
+kubectl logs args-only-cmd
+kubectl get pod args-only-cmd -o jsonpath='{.spec.containers[0].command}{"\n"}'
+kubectl get pod args-only-cmd -o jsonpath='{.spec.containers[0].args}{"\n"}'
+
+# Part B: command+args — replaces Dockerfile ENTRYPOINT and CMD
+cat << EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: command-and-args
 spec:
   containers:
   - name: busybox
     image: busybox
     command: ["sh", "-c"]
-    args: ["echo 'Custom command' && sleep 10"]
+    args: ["echo 'command replaces ENTRYPOINT; args replace CMD' && sleep 5"]
 EOF
 
-# Check logs
-kubectl logs custom-cmd
-
-# Verify the command
-kubectl get pod custom-cmd -o jsonpath='{.spec.containers[0].command}'
-kubectl get pod custom-cmd -o jsonpath='{.spec.containers[0].args}'
+kubectl logs command-and-args
+kubectl get pod command-and-args -o jsonpath='{.spec.containers[0].command}{"\n"}'
+kubectl get pod command-and-args -o jsonpath='{.spec.containers[0].args}{"\n"}'
 
 # Cleanup
-kubectl delete pod custom-cmd
+kubectl delete pod args-only-cmd command-and-args
 ```
 
 **Task 7: Compare pull policies**
@@ -792,8 +807,12 @@ CMD ["node", "index.js"]
 
 <details>
   <summary>Solution notes</summary>
-  A successful run shows the broken Deployment or Pod entering `ImagePullBackOff`, Events explaining that the requested tag does not exist, and a corrected workload reaching `Running` after the image is changed. The private registry task may still fail to pull because the registry is illustrative, but the Pod spec should show the Secret reference. The command override task should print `Custom command`, and the JSONPath checks should show the command and args arrays you applied.
+  A successful run shows the broken Deployment or Pod entering `ImagePullBackOff`, Events explaining that the requested tag does not exist, and a corrected workload reaching `Running` after the image is changed. The private registry task may still fail to pull because the registry is illustrative, but the Pod spec should show the Secret reference. The args-only task should print `Args-only override replaces image CMD` with an empty `command` field in JSONPath output, while the command-and-args task should print the shell message and show both arrays populated.
 </details>
+
+## Learner check
+
+> Observe the state of the deployment to identify the exact cause of the image pull failure. The key skill is not merely seeing `ImagePullBackOff`; it is reading Events until you can explain which part of the image reference failed and what change would let the node pull successfully.
 
 ## Sources
 
@@ -801,6 +820,7 @@ CMD ["node", "index.js"]
 - https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 - https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/
 - https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+- https://github.com/opencontainers/image-spec/releases/tag/v1.1.0
 - https://github.com/opencontainers/image-spec/blob/v1.1.1/spec.md
 - https://github.com/opencontainers/image-spec/blob/v1.1.1/media-types.md
 - https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md
@@ -808,6 +828,8 @@ CMD ["node", "index.js"]
 - https://docs.docker.com/reference/dockerfile/
 - https://docs.docker.com/build/building/multi-stage/
 - https://docs.docker.com/build/buildkit/
+- https://docs.docker.com/engine/release-notes/23.0/
+- https://docs.docker.com/docker-hub/usage/pulls/
 - https://docs.docker.com/engine/storage/containerd/
 - https://docs.sigstore.dev/cosign/
 - https://www.alpinelinux.org/releases/
