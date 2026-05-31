@@ -863,8 +863,8 @@ Verify CNI behavior across nodes when your cluster has more than one worker. On 
 ```bash
 # Create pods on different nodes
 NODE1=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-NODE2=$(kubectl get nodes -o jsonpath='{.items[1].metadata.name}')
-NODE2=${NODE2:-$NODE1}
+NODE2=$(kubectl get nodes -o jsonpath='{.items[1].metadata.name}' 2>/dev/null)
+NODE2=${NODE2:-$NODE1}  # single-node clusters fall back to NODE1
 kubectl run net-test-1 --image=nginx:alpine --overrides='{"spec":{"nodeName":"'"$NODE1"'"}}'
 kubectl run net-test-2 --image=nginx:alpine --overrides='{"spec":{"nodeName":"'"$NODE2"'"}}'
 
