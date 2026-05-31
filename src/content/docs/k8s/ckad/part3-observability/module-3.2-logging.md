@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 25-30 minutes
 >
-> **Prerequisites**: Module 1.1 (Pods), basic understanding of stdout/stderr
+> **Prerequisites**: [Module 1.1 (Pods)](../part1-design-build/module-1.3-multi-container-pods/), basic understanding of stdout/stderr
 
 ---
 
@@ -113,7 +113,7 @@ kubectl logs --since=30m pod-name
 kubectl logs --since=10s pod-name
 
 # Logs since specific time
-kubectl logs --since-time=2024-01-15T10:00:00Z pod-name
+kubectl logs --since-time=2024-01-15T10:00:00Z pod-name  # replace with a recent RFC3339 time
 
 # Show timestamps
 kubectl logs --timestamps pod-name
@@ -553,15 +553,15 @@ spec:
     command: ['sh', '-c', 'echo "Starting..."; echo "About to crash!"; exit 1']
 EOF
 
-# Wait for restart, then check previous logs
-sleep 15
+# Wait until the container has restarted at least once, then check previous logs
+until [ "$(kubectl get pod crasher -o jsonpath='{.status.containerStatuses[0].restartCount}')" -ge 1 ]; do sleep 2; done
 kubectl get pod crasher
 kubectl logs crasher --previous
 ```
 
 <details><summary>Solution notes for Task 3</summary>
 
-After the restart, the pod should show evidence of failure or repeated starts, depending on timing. The previous logs should include "Starting..." and "About to crash!" from the terminated instance. If you run the command too early, the previous instance may not exist yet; wait a little longer and check the pod state again. This is the same habit you need for CrashLoopBackOff triage.
+After the restart, the pod should show evidence of failure or repeated starts, depending on timing. The previous logs should include "Starting..." and "About to crash!" from the terminated instance. If you run `--previous` before `restartCount` reaches 1, Kubernetes 1.35 returns an empty or error response; poll restart count instead of relying on a fixed sleep. This is the same habit you need for CrashLoopBackOff triage.
 
 </details>
 
@@ -667,7 +667,7 @@ kubectl delete pod -l app=drill4
 
 ### Drill 5: Previous Instance (Target: 3 minutes)
 
-This drill reinforces the previous-instance muscle memory. The container prints a line, sleeps briefly, and exits with failure. Wait for the restart, inspect the pod, and then read the previous logs rather than the current fresh attempt.
+This drill reinforces the previous-instance muscle memory. The container prints a line, sleeps briefly, and exits with failure. Poll until `restartCount` is at least 1, inspect the pod, and then read the previous logs rather than the current fresh attempt. If `--previous` is unavailable on a very fast crash, fall back to `kubectl logs drill5` (current) before the next restart erases the evidence.
 
 ```bash
 # Create crashing pod
@@ -683,8 +683,8 @@ spec:
     command: ['sh', '-c', 'echo "Run at $(date)"; sleep 5; exit 1']
 EOF
 
-# Watch it crash
-sleep 15
+# Wait until the container has restarted at least once
+until [ "$(kubectl get pod drill5 -o jsonpath='{.status.containerStatuses[0].restartCount}')" -ge 1 ]; do sleep 2; done
 kubectl get pod drill5
 
 # After restart, get previous logs
@@ -732,6 +732,7 @@ kubectl logs -l app=drill6 --tail=10
 
 # Get previous instance logs
 POD=$(kubectl get pods -l app=drill6 -o jsonpath='{.items[0].metadata.name}')
+until [ "$(kubectl get pod "$POD" -o jsonpath='{.status.containerStatuses[0].restartCount}')" -ge 1 ]; do sleep 2; done
 kubectl logs "$POD" --previous
 
 # Cleanup
@@ -746,6 +747,12 @@ Your success criteria are practical. You should be able to run each command, exp
 - [ ] I can retrieve previous logs from a restarted container before deleting the pod.
 - [ ] I can use a label selector to inspect logs across related pods.
 - [ ] I can explain when a central logging backend is required instead of relying on local `kubectl logs`.
+
+## Learner check
+
+> If you run `--previous` before `restartCount` reaches 1, Kubernetes 1.35 returns an empty or error response; poll restart count instead of relying on a fixed sleep.
+
+Before you move on, explain why the restart-count poll is more reliable than `sleep 15` when a pod is in `CrashLoopBackOff`, and when you would read current-instance logs instead of waiting for `--previous`.
 
 ## Sources
 
