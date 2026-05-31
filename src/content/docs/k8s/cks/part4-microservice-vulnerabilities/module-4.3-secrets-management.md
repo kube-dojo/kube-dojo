@@ -6,7 +6,7 @@ sidebar:
 lab:
   id: cks-4.3-secrets-management
   url: https://killercoda.com/kubedojo/scenario/cks-4.3-secrets-management
-  duration: "40 min"
+  duration: "45-50 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -135,7 +135,7 @@ resources:
       - identity: {}
 ```
 
-The local providers have different tradeoffs. `aescbc` is the common local provider for clusters that cannot integrate with an external KMS yet, and it requires a base64-encoded 32-byte key. `aesgcm` is faster than `aescbc` because GCM authentication and decryption are accelerated on modern x86_64 chips, but it imposes a hard upper bound on writes per key. With a random 96-bit nonce, the birthday-bound for collisions starts to matter at roughly 2^32 (~4 billion) writes per key, after which an attacker observing collisions could derive plaintext. The Kubernetes documentation recommends `secretbox` over `aesgcm` for new clusters because secretbox's XSalsa20-Poly1305 construction uses a 192-bit nonce and dodges this constraint entirely. `secretbox` uses a NaCl secretbox construction and also requires a 32-byte key. `identity` performs no encryption and should normally appear only as a temporary fallback for reading old plaintext values during migration, because placing it first means new writes stay unencrypted.
+The local providers have different tradeoffs. `aescbc` is the common local provider for clusters that cannot integrate with an external KMS yet, and it requires a base64-encoded 32-byte key. `aesgcm` is faster than `aescbc` because GCM authentication and decryption are accelerated on modern x86_64 chips, but it imposes strict write limits per key. The official provider table requires rotating an `aesgcm` key every **200,000 writes** — that is the operational answer on the exam and in production runbooks. A separate cryptographic bound applies too: with a random 96-bit nonce, the birthday-bound for collisions starts to matter at roughly 2^32 (~4 billion) writes per key, after which an attacker observing collisions could derive plaintext. The Kubernetes documentation recommends `secretbox` over `aesgcm` for new clusters because secretbox's XSalsa20-Poly1305 construction uses a 192-bit nonce, avoids the 200,000-write rotation requirement, and dodges the nonce-collision constraint entirely. `secretbox` uses a NaCl secretbox construction and also requires a 32-byte key. `identity` performs no encryption and should normally appear only as a temporary fallback for reading old plaintext values during migration, because placing it first means new writes stay unencrypted.
 
 ```yaml
 apiVersion: apiserver.config.k8s.io/v1
@@ -177,7 +177,11 @@ Edit `/etc/kubernetes/manifests/kube-apiserver.yaml` on the control plane node s
     type: DirectoryOrCreate
 ```
 
-All three pieces — the flag, mount, and volume — must be present; if one is missing, the API server does not load the config and falls back to identity (plaintext) writes silently.
+All three pieces — the flag, mount, and volume — must be present when you intend to enable encryption. Distinguish three failure modes on the exam:
+
+- **`--encryption-provider-config` absent** — the API server never loads a provider file; new writes stay plaintext. This is easy to miss in an audit because the cluster keeps running normally.
+- **Flag present but the mount path is wrong or the config file is invalid** — the API server fails to start and crash-loops (NOT a silent fallback to identity).
+- **Config loaded with `identity` listed first** — encryption is effectively disabled for new writes even though the flag is set.
 
 ```bash
 kubectl get secrets --all-namespaces -o json | kubectl replace -f -
@@ -220,7 +224,7 @@ resources:
       - identity: {}
 ```
 
-KMS v2 became stable in Kubernetes 1.29 and is preferred over the older KMS v1 provider. The v2 protocol improves health reporting, observability, key version handling, and performance characteristics so the API server can tell whether the plugin is ready and which key version protected a value. That does not remove operational responsibility. If the plugin is slow, unavailable, or misconfigured during writes and decrypts, the API server path that handles encrypted resources can become slow or fail. Treat the KMS plugin as a control-plane dependency, monitor its latency and error rate, and test what happens when the external KMS throttles or rotates keys.
+KMS v2 is GA/stable since Kubernetes 1.29 and is preferred over KMS v1, which is deprecated since 1.28 and disabled by default since 1.29 (enable only with `--feature-gates=KMSv1=true` for legacy migration). The v2 protocol improves health reporting, observability, key version handling, and performance characteristics so the API server can tell whether the plugin is ready and which key version protected a value. That does not remove operational responsibility. If the plugin is slow, unavailable, or misconfigured during writes and decrypts, the API server path that handles encrypted resources can become slow or fail. Treat the KMS plugin as a control-plane dependency, monitor its latency and error rate, and test what happens when the external KMS throttles or rotates keys.
 
 The KMS plugin identity is part of the trust boundary. On a cloud platform, the plugin or control-plane integration needs permission to use a specific key, and that permission should be narrower than general secret-manager administration. On self-managed clusters, the socket file path and plugin process need filesystem protection because the API server depends on that local endpoint for encryption operations. A compromised plugin host or overpowered cloud identity can undermine the benefit of moving the root key out of etcd.
 
@@ -269,10 +273,10 @@ spec:
     name: payment-db
     creationPolicy: Owner
   data:
-      - secretKey: password
-        remoteRef:
-          key: payments/database
-          property: password
+    - secretKey: password
+      remoteRef:
+        key: payments/database
+        property: password
 ```
 
 Note: ExternalSecret moved from `external-secrets.io/v1beta1` to `external-secrets.io/v1` in ESO 0.10. Clusters running ESO 0.9.x still use `v1beta1` — replace the `apiVersion` field accordingly.
@@ -546,7 +550,7 @@ The cost decision follows the same path. Native Secrets add little direct cloud 
 
 ## Did You Know?
 
-- **KMS v2 became stable in Kubernetes 1.29.** KMS v1 is marked deprecated as of Kubernetes 1.28 but remains functional and configurable through 1.30+. KMS v2 (GA in 1.29) is strongly preferred for new deployments because the v1 plugin protocol's gRPC-streaming design has known performance and partition-failure issues that v2's request/response model resolves.
+- **KMS v2 is GA/stable since Kubernetes 1.29** and is the preferred provider for new deployments. KMS v1 is deprecated since 1.28 and disabled by default since 1.29; enabling it requires `--feature-gates=KMSv1=true` for legacy or migration contexts only. The v1 plugin protocol's gRPC-streaming design has known performance and partition-failure issues that v2's request/response model resolves.
 - **Immutable Secrets became stable in Kubernetes 1.21.** They are not just a security guardrail; they also reduce kubelet watch load for clusters with many mounted Secret and ConfigMap objects.
 - **A ServiceAccount token can be requested for a specific audience and expiration.** That is the modern alternative to treating a long-lived token Secret as a reusable password for every internal service.
 - **A Secret read logged at `RequestResponse` level can expose the payload in the audit backend.** For most Secret access monitoring, `Metadata` level gives the actor, verb, resource, namespace, and timestamp without copying the sensitive value.
@@ -668,8 +672,9 @@ sudo cp /tmp/cks-4-3/encryption-config.yaml /etc/kubernetes/enc/encryption-confi
 
 # Edit /etc/kubernetes/manifests/kube-apiserver.yaml to mount and pass the new config:
 # --encryption-provider-config, matching volumeMount, and volume entries.
-# Then verify the static Pod has restarted.
+# Then verify the static Pod has restarted and is healthy before rewriting Secrets.
 
+# Only run after the apiserver flag, mount, and volume are verified healthy:
 kubectl get secrets --all-namespaces -o json | kubectl replace -f -
 
 ETCDCTL_API=3 etcdctl \
@@ -803,6 +808,12 @@ This policy captures who read or watched Secret resources without logging respon
 - [ ] Your RBAC check allows named `get` on one Secret and denies namespace-wide `list`.
 - [ ] Your runtime example mounts the Secret as a file and uses an image that contains the executed binary.
 - [ ] Your audit policy logs Secret access at `Metadata` level rather than copying payloads into logs.
+
+## Learner check
+
+> RBAC protects API reads; at-rest encryption protects the storage layer; neither replaces the other.
+
+Before you move on, explain what happens when `--encryption-provider-config` is missing versus when the flag is set but the mount path is wrong. A solid answer names plaintext new writes, API server crash-loops, and the case where `identity` is listed first in the provider list.
 
 ## Sources
 
