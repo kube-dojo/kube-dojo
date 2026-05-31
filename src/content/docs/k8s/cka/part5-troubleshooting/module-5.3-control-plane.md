@@ -7,7 +7,7 @@ revision_pending: false
 lab:
   id: cka-5.3-control-plane
   url: https://killercoda.com/kubedojo/scenario/cka-5.3-control-plane
-  duration: "45 min"
+  duration: "50-60 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -16,7 +16,7 @@ lab:
 >
 > **Time to Complete**: 50-60 minutes
 >
-> **Prerequisites**: Module 5.1 (Methodology), Module 1.1 (Control Plane Deep-Dive)
+> **Prerequisites**: [Module 5.1 (Methodology)](../module-5.1-methodology/), [Module 1.1 (Control Plane Deep-Dive)](../../part1-cluster-architecture/module-1.1-control-plane/)
 
 ---
 
@@ -129,7 +129,7 @@ Before you dig through logs, establish a baseline with the least invasive checks
 Baseline checks are most valuable when you write down both the command and the interpretation. "API timeout from my laptop" could mean a local kubeconfig issue, a firewall problem, a load balancer problem, or a dead API server. "API timeout from a control plane node, no API server container in `crictl ps`, kubelet log shows bad certificate path" is a diagnosis. The second statement is slower by a minute, but it is dramatically safer because it identifies the component boundary and the first broken dependency.
 
 ```bash
-# Quick legacy health check; deprecated and not sufficient by itself
+# Quick legacy health check; deprecated, may be unavailable on newer clusters, and is not sufficient by itself.
 kubectl get componentstatuses
 
 # Check control plane pods through the API when the API is reachable
@@ -189,7 +189,9 @@ When the pod exists, inspect logs through the most reliable path for the current
 kubectl -n kube-system logs kube-apiserver-<node>
 
 # If the API is down, use the container runtime directly.
-sudo crictl logs "$(sudo crictl ps -a | grep apiserver | awk 'NR==1 {print $1}')"
+# In this lab output, the last matching ID is the newest stopped attempt.
+latest_apiserver_id="$(sudo crictl ps -a --name kube-apiserver -q | tail -1)"
+sudo crictl logs "$latest_apiserver_id"
 
 # Check kubelet's view of why the static pod is not starting.
 sudo journalctl -u kubelet --since "20 minutes ago" | grep -i apiserver
@@ -224,7 +226,31 @@ sudo kubeadm certs check-expiration
 # Renew kubeadm-managed certificates when expiration is the verified fault.
 sudo kubeadm certs renew all
 
-# kubelet restarts static pods when their manifests are touched or components restart.
+# Restart static pods so renewed certificate files are loaded by running containers.
+for manifest in kube-apiserver.yaml kube-controller-manager.yaml kube-scheduler.yaml etcd.yaml; do
+  if [ -f "/etc/kubernetes/manifests/${manifest}" ]; then
+    sudo mv "/etc/kubernetes/manifests/${manifest}" "/tmp/${manifest}.cert-renew-hold"
+  fi
+done
+
+# Give kubelet time to stop the old containers before returning the manifests.
+sleep 20
+
+# Bring local stacked etcd back first if this control plane node runs it.
+if [ -f /tmp/etcd.yaml.cert-renew-hold ]; then
+  sudo mv /tmp/etcd.yaml.cert-renew-hold /etc/kubernetes/manifests/etcd.yaml
+  sleep 20
+fi
+
+# Return API server and peer component manifests so kubelet recreates them.
+for manifest in kube-apiserver.yaml kube-controller-manager.yaml kube-scheduler.yaml; do
+  if [ -f "/tmp/${manifest}.cert-renew-hold" ]; then
+    sudo mv "/tmp/${manifest}.cert-renew-hold" "/etc/kubernetes/manifests/${manifest}"
+  fi
+done
+
+# Confirm the renewed static pods report through the API after restart.
+kubectl -n kube-system get pods | grep -E 'etcd|api|controller|scheduler'
 ```
 
 Manifest damage is the other common API server failure class. A human may edit the wrong flag, break a volume mount, point `--etcd-servers` at a dead endpoint, or leave a command line in a state that the binary rejects. Static pod manifests are ordinary YAML files, so your correction path is local and fast, but you should still make a timestamped copy before editing because the broken version is evidence.
@@ -382,6 +408,7 @@ kubectl -n kube-system logs kube-controller-manager-<node> | grep -i error
 # Verify a reconciliation loop after API and scheduler health are known.
 kubectl create deployment test --image=nginx
 kubectl get rs | grep test
+kubectl delete deployment test --ignore-not-found
 ```
 
 | Issue | Symptom | Fix |
@@ -537,14 +564,37 @@ Restore workflows are version-sensitive, so verify whether your environment expe
 The hardest part of restore is often deciding that restore is actually required. Disk pressure, certificate expiration, and peer network failure can all make etcd look unhealthy without requiring data replacement. A snapshot restore is appropriate when the data directory is lost, corrupt, or intentionally being rolled back under a controlled recovery plan. If the failure is a bad certificate or broken disk mount, restore may add risk without addressing the root cause. Evaluate reversible fixes before crossing into state replacement.
 
 ```bash
-# Stop API server first by moving its static pod manifest away.
+# Step 1: stop API server first so no new Kubernetes writes reach etcd.
 sudo mv /etc/kubernetes/manifests/kube-apiserver.yaml /tmp/kube-apiserver.yaml.restore-hold
+while sudo crictl ps --name kube-apiserver -q | grep -q .; do
+  sleep 2
+done
 
-# Restore snapshot into a fresh data directory.
+# Step 2: stop the local etcd static pod before replacing its host data directory.
+sudo mv /etc/kubernetes/manifests/etcd.yaml /tmp/etcd.yaml.restore-hold
+while sudo crictl ps --name etcd -q | grep -q .; do
+  sleep 2
+done
+
+# Step 3: restore the snapshot into a fresh host data directory.
+sudo rm -rf /var/lib/etcd-restored
 sudo etcdutl snapshot restore /tmp/etcd-backup.db \
   --data-dir=/var/lib/etcd-restored
 
-# Update etcd manifest to use the new data dir, then return the API server manifest.
+# Step 4: point etcd at the restored host data directory before restarting it.
+# kubeadm mounts hostPath.path into the container at /var/lib/etcd; update the hostPath, not the container path.
+sudo sed -i.bak 's#path: /var/lib/etcd#path: /var/lib/etcd-restored#' /tmp/etcd.yaml.restore-hold
+
+# Step 5: return etcd first, wait for kubelet, and verify storage health before API writes resume.
+sudo mv /tmp/etcd.yaml.restore-hold /etc/kubernetes/manifests/etcd.yaml
+sleep 30
+sudo ETCDCTL_API=3 etcdctl endpoint health \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key
+
+# Step 6: bring the API server back only after restored etcd answers.
 sudo mv /tmp/kube-apiserver.yaml.restore-hold /etc/kubernetes/manifests/kube-apiserver.yaml
 ```
 
@@ -962,6 +1012,12 @@ curl -k https://localhost:6443/livez
 - [ ] Implement certificate inspection with `kubeadm certs check-expiration` and direct `openssl` validation.
 - [ ] Evaluate etcd quorum and member health using explicit authenticated `etcdctl` commands.
 - [ ] Design recovery workflows by simulating scheduler failure and restoring the manifest safely.
+
+## Learner check
+
+> `sudo sed -i.bak 's#path: /var/lib/etcd#path: /var/lib/etcd-restored#' /tmp/etcd.yaml.restore-hold`
+
+Before you restore control plane service, explain why this command changes the host data directory that kubeadm mounts into etcd rather than changing the container's internal `/var/lib/etcd` path.
 
 ## Sources
 
