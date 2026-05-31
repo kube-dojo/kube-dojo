@@ -274,7 +274,24 @@ The restore claim still has ordinary PVC requirements. It needs a compatible Sto
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Cross-namespace restore is more subtle than same-namespace restore. The `VolumeSnapshot` object is namespaced, and the `VolumeSnapshotContent` is cluster-scoped, so advanced restore patterns can reference a snapshot from another namespace through `dataSourceRef` when the cluster supports cross-namespace data sources and the source namespace grants that reference. In Kubernetes 1.35-era clusters, treat this as a policy-controlled feature, not a permission bypass. The source namespace owner should intentionally allow the restore path.
+Cross-namespace restore is more subtle than same-namespace restore. The `VolumeSnapshot` object is namespaced, and the `VolumeSnapshotContent` is cluster-scoped, so advanced restore patterns can reference a snapshot from another namespace through `dataSourceRef` when the cluster supports cross-namespace data sources and the source namespace grants that reference. Cross-namespace restore requires the `CrossNamespaceVolumeDataSource` feature gate (alpha since v1.26) plus the Gateway API `ReferenceGrant` CRDs. In Kubernetes 1.35-era clusters, treat this as a policy-controlled feature, not a permission bypass. The source namespace owner should intentionally allow the restore path.
+
+```yaml
+# In namespace "production" — grant dr-test permission to reference the snapshot
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-dr-restore
+  namespace: production
+spec:
+  from:
+    - group: ""
+      kind: PersistentVolumeClaim
+      namespace: dr-test
+  to:
+    - group: snapshot.storage.k8s.io
+      kind: VolumeSnapshot
+```
 
 ```yaml
 # In namespace "dr-test"
@@ -352,7 +369,7 @@ Stop and think: you need to create a test environment with a copy of production 
 Snapshots and clones also differ in backup strategy. A clone may be useful before a risky change, but it is not a retention plan because it does not preserve a catalog of recovery points. A scheduled snapshot creates an inventory that can be restored repeatedly, inspected, and managed with deletion policy. A backup system built on snapshots should record which PVC was protected, when the snapshot became ready, whether the application was quiesced, and whether a restore test succeeded.
 
 ```yaml
-# Create snapshots on schedule using CronJob or external tool
+# Illustrative VolumeSnapshot shape — a real schedule wraps this spec in a CronJob or external backup tool
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshot
 metadata:
@@ -378,32 +395,38 @@ kubectl get volumesnapshot -l backup-type=daily --sort-by=.metadata.creationTime
 
 Application consistency is the part Kubernetes does not infer for you. If you snapshot a MySQL PVC while the database is actively processing transactions, the storage backend may produce a crash-consistent image, similar to what the database would see after sudden power loss. Many databases can recover from that state, but "can recover" is not the same as "meets the business recovery objective." For important data, coordinate with the application before taking the snapshot.
 
-```bash
-# Example: MySQL flush before snapshot
-kubectl exec mysql-pod -- mysql -e "FLUSH TABLES WITH READ LOCK;"
-# Create snapshot here
-kubectl exec mysql-pod -- mysql -e "UNLOCK TABLES;"
+```text
+# Conceptual sequence — one long-lived session holds the lock while the snapshot runs
+mysql> FLUSH TABLES WITH READ LOCK;
+# (same session stays open; create VolumeSnapshot and wait for readyToUse here)
+mysql> UNLOCK TABLES;
 ```
 
-The safer pattern is to pause or drain writes, flush buffers to disk, take the snapshot quickly, and then resume writes. Some teams automate this with backup tools that run pre-snapshot and post-snapshot hooks. Others take snapshots from a replica that can be paused without affecting live traffic. The exact mechanism varies by workload, but the principle is stable: the application must help define a meaningful point in time.
+For real MySQL consistency, prefer `mysqldump --single-transaction`, Percona XtraBackup, or CSI pre/post-snapshot hooks rather than a hand-held global read lock. The safer pattern is to pause or drain writes, flush buffers to disk, take the snapshot quickly, and then resume writes. Some teams automate this with backup tools that run pre-snapshot and post-snapshot hooks. Others take snapshots from a replica that can be paused without affecting live traffic. The exact mechanism varies by workload, but the principle is stable: the application must help define a meaningful point in time.
 
 Designing a useful snapshot-based backup strategy starts with the restore question, not the snapshot command. Ask what data state the workload must recover to, how much data loss is acceptable, how quickly the application must return, and who is allowed to approve a restore. Those answers become the recovery point objective, recovery time objective, validation procedure, and access policy. Without those decisions, the team may create snapshots on a schedule while still lacking a dependable recovery path.
+
+### Validation jobs
 
 For stateful workloads, validation is the difference between a storage artifact and a recovery plan. A validation job can restore the newest snapshot into a temporary PVC, mount it in a small pod, and run workload-specific checks such as file presence, database startup, schema version, or checksum comparison. The job should record the snapshot name, restore claim, validation result, and cleanup status. That record tells operators which recovery point was last proven rather than merely which object exists.
 
 Labeling is part of the strategy because operators need to find recovery points quickly during stress. A snapshot created by automation should include the source PVC, application name, namespace, backup type, schedule, and owner. Labels should be stable enough for cleanup and reporting, while annotations can hold richer details such as validation run identifiers or a link to a runbook. The goal is to make every snapshot answer three questions: what does it protect, why does it exist, and when should it be removed.
 
+A restore rehearsal should avoid the production write path until validation succeeds. Restore into a separate namespace or isolated claim, mount the data read-only when possible, and run checks that would catch the failure mode you care about. For a database, a basic file listing is too weak; the service should start, open the data directory, and answer a meaningful query. For a file workload, checksums or known sentinel files may be enough. Match the test to the workload's actual recovery promise.
+
+Capacity planning is part of restore design. The source PVC size, snapshot restore size, destination StorageClass quotas, and namespace ResourceQuota all affect whether a restore can bind during an incident. A team that stores `100Gi` database volumes but gives the recovery namespace only `20Gi` of storage quota has built a restore path that fails when invoked. Validation jobs should run in the same quota and class conditions that an emergency restore would use.
+
+### Retention and deletion policy
+
 Retention should be tested against deletion policy before it matters. If the class uses `Delete`, a cleanup job that removes old `VolumeSnapshot` objects may also remove backend snapshots, which is correct for disposable backups but dangerous for protected archives. If the class uses `Retain`, deleting the request object may leave backend data behind, which protects recovery points but creates inventory and cost obligations. Choose the policy intentionally, then rehearse both cleanup and emergency restore.
 
 Backup timing should match application behavior. A nightly snapshot may be adequate for a content repository that changes slowly, while a busy transactional database may need frequent logical backups plus storage snapshots before risky operations. Snapshot frequency also interacts with backend limits and costs. More frequent snapshots can reduce data loss, but they may increase storage usage, snapshot chain complexity, or API rate pressure. Good strategy explains why the schedule exists, not only when it runs.
 
-A restore rehearsal should avoid the production write path until validation succeeds. Restore into a separate namespace or isolated claim, mount the data read-only when possible, and run checks that would catch the failure mode you care about. For a database, a basic file listing is too weak; the service should start, open the data directory, and answer a meaningful query. For a file workload, checksums or known sentinel files may be enough. Match the test to the workload's actual recovery promise.
+Operationally, snapshot automation should surface failures before humans need the backup. Alert on snapshots that fail to become ready, validation restores that remain pending, unexpected changes in restore size, and cleanup failures for retained content. Also alert on an empty schedule, because no failed objects may appear when the CronJob or backup controller stopped running. Silent absence is one of the easiest ways for a backup system to decay unnoticed.
+
+### Security boundaries
 
 Security boundaries matter because snapshots may contain the same sensitive data as the original PVC. Cross-namespace restore can be useful for disaster recovery drills, but it also creates a path for data movement between tenants or teams. Require explicit grants, restrict who can create restore PVCs from protected snapshots, and audit restore activity. A backup system that protects availability while bypassing data governance creates a different incident.
-
-Capacity planning is part of restore design. The source PVC size, snapshot restore size, destination StorageClass quotas, and namespace ResourceQuota all affect whether a restore can bind during an incident. A team that stores `100Gi` database volumes but gives the recovery namespace only `20Gi` of storage quota has built a restore path that fails when invoked. Validation jobs should run in the same quota and class conditions that an emergency restore would use.
-
-Operationally, snapshot automation should surface failures before humans need the backup. Alert on snapshots that fail to become ready, validation restores that remain pending, unexpected changes in restore size, and cleanup failures for retained content. Also alert on an empty schedule, because no failed objects may appear when the CronJob or backup controller stopped running. Silent absence is one of the easiest ways for a backup system to decay unnoticed.
 
 The most mature pattern combines storage snapshots with application-native backup where each covers the other's weaknesses. Storage snapshots are fast and integrate with PVC restore, which makes them excellent for pre-change recovery and quick rollback testing. Application-native backups understand logical state, transactions, and cross-volume consistency better, which makes them important for databases and distributed systems. Kubernetes gives you the storage primitive; the workload architecture decides whether that primitive is sufficient by itself.
 
@@ -497,10 +520,10 @@ Treat the result as a plan you can test. A chosen snapshot class should be exerc
 
 ## Did You Know?
 
-- The snapshot APIs use `snapshot.storage.k8s.io/v1`, and the Kubernetes project documents the snapshot controller separately from the CSI driver sidecar because both are required parts of the workflow.
+- Volume snapshot APIs reached GA in Kubernetes 1.20 (December 2020); the stable group is `snapshot.storage.k8s.io/v1`, and the snapshot controller is documented separately from the CSI driver sidecar because both are required.
 - A `VolumeSnapshotClass` can be marked as the default with `snapshot.storage.kubernetes.io/is-default-class: "true"`, but the selected class must still match the CSI driver behind the source PVC.
 - `dataSource` for a restore PVC can reference a `VolumeSnapshot`, while `dataSource` for a clone references a `PersistentVolumeClaim`; the kind value is the fastest way to tell which workflow the YAML requests.
-- Kubernetes v1.35-era clusters can use `dataSourceRef` for richer data source references, but cross-namespace use must be deliberately authorized rather than treated as a normal same-namespace clone.
+- Cross-namespace `dataSourceRef.namespace` is alpha (v1.26+); requires the `CrossNamespaceVolumeDataSource` gate and a `ReferenceGrant` in the source namespace.
 
 ---
 
@@ -859,6 +882,7 @@ kubectl get volumesnapshot <name> -o jsonpath='{.status.readyToUse}'
 ```bash
 # Task: Create PVC from snapshot "backup-snap"
 # Key: dataSource with kind: VolumeSnapshot
+# Add -n <namespace> and a storageClassName for your cluster
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -880,6 +904,7 @@ EOF
 ```bash
 # Task: Clone PVC "source-pvc" to "clone-pvc"
 # Key: dataSource with kind: PersistentVolumeClaim
+# Add -n <namespace> and a storageClassName for your cluster
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -906,6 +931,14 @@ kubectl get volumesnapshot <name> -o jsonpath='{.status.restoreSize}'
 # Task: Find the VolumeSnapshotContent for a VolumeSnapshot
 kubectl get volumesnapshot <name> -o jsonpath='{.status.boundVolumeSnapshotContentName}'
 ```
+
+---
+
+## Learner check
+
+> Cross-namespace restore requires the `CrossNamespaceVolumeDataSource` feature gate (alpha since v1.26) plus the Gateway API `ReferenceGrant` CRDs.
+
+Before restoring a snapshot into another namespace, what object must exist in the source namespace, and which feature gate must be enabled?
 
 ---
 
