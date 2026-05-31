@@ -13,7 +13,7 @@ lab:
 ---
 > **Complexity**: `[MEDIUM]` - Linux security essential
 >
-> **Time to Complete**: 45-50 minutes
+> **Time to Complete**: 40 minutes
 >
 > **Prerequisites**: Linux basics, container runtime knowledge
 
@@ -108,14 +108,14 @@ Complain mode is where many successful profiles begin. You place the profile aro
 
 Pause and predict: if a new profile denies writes under `/etc/**`, what do you expect from an image that generates configuration files in `/etc/nginx/conf.d/` before launching nginx? The important answer is not just "it might fail." The important answer is that the failure will surface at the application layer first, while the reason you trust is in the kernel log where AppArmor records the blocked write.
 
-You can inspect a node before you touch a pod. The first command checks whether the kernel module is enabled. The second asks the AppArmor tooling for a summary. The third verifies that the container runtime advertises AppArmor support. In a CKS-style environment, these checks also keep you from debugging a Kubernetes manifest when the real problem is that the node cannot enforce the profile.
+You can inspect a node before you touch a pod. The first command checks whether the kernel module is enabled. The second asks the AppArmor tooling for a summary. The third confirms that the kernel has loaded profiles registered for enforcement. In a CKS-style environment, these checks also keep you from debugging a Kubernetes manifest when the real problem is that the node cannot enforce the profile. CKS and kind lab nodes are containerd-first; `docker` is often absent, so do not rely on `docker info` for AppArmor support.
 
 ```bash
-# Check if AppArmor is enabled
+# Check if AppArmor is enabled (kernel module)
 cat /sys/module/apparmor/parameters/enabled
 # Output: Y (enabled) or N (disabled)
 
-# Check AppArmor status
+# Check AppArmor status (loaded profiles and modes)
 sudo aa-status
 
 # Output example:
@@ -131,9 +131,11 @@ sudo aa-status
 # List loaded profiles
 sudo aa-status --profiles
 
-# Check if container runtime supports AppArmor
-docker info | grep -i apparmor
-# Output: Security Options: apparmor
+# containerd / CRI nodes: confirm profiles are visible to the kernel
+# (no docker CLI required)
+sudo grep -E '^profile ' /sys/kernel/security/apparmor/profiles | head
+# Or list profile names from aa-status
+sudo aa-status --profiles
 ```
 
 The container runtime's default profile is a baseline, not a workload policy. Docker historically called its default profile `docker-default`, and containerd installations often expose a runtime default profile through Kubernetes as `RuntimeDefault`. These profiles usually block dangerous operations such as mounting filesystems, writing to sensitive `/proc` paths, and using raw network features, while allowing enough behavior for normal containers to start.
@@ -346,7 +348,7 @@ What would happen if you create an AppArmor profile and load it on `node-1`, but
 
 That behavior creates an operational rule: custom profiles are cluster rollout artifacts, not one-off files. If every worker node may run the pod, every worker node needs the profile loaded before the manifest is applied. If only a subset of nodes has the profile, label those nodes and constrain the workload there. Without that discipline, a reschedule event can turn a successful security change into an availability incident.
 
-AppArmor also interacts with Pod Security Admission. The restricted policy expects workloads to avoid unconfined profiles, and the baseline policy prevents several unsafe profile combinations. That means AppArmor configuration is not just a node concern; it can also be an admission concern. A manifest that asks for `Unconfined` may be rejected before it reaches kubelet, while a manifest that asks for a missing `Localhost` profile may pass admission but fail at the node.
+AppArmor also interacts with Pod Security Admission. Under Pod Security **Baseline** (and therefore Restricted), `Unconfined` AppArmor profiles are rejected at admission; `Localhost` profiles missing on the node still fail at the kubelet. That means AppArmor configuration is not just a node concern; admission can block unsafe profile types before scheduling, while node-local profile loading remains your responsibility for `Localhost` references.
 
 Auditing a running container should include the kernel's view, not only the YAML you submitted. The reliable check is to read `/proc/1/attr/current` inside the container. If the output says `k8s-deny-write (enforce)`, the root process is running under that profile. If it says a runtime default profile, an unexpected profile, or `unconfined`, your manifest, node state, or runtime configuration does not match your intent.
 
@@ -555,8 +557,33 @@ EOF
 # Load profile
 sudo apparmor_parser -r /etc/apparmor.d/k8s-deny-etc-write
 
-# Legacy annotation example for older clusters
+# Kubernetes 1.35+ — apply with securityContext.appArmorProfile
 cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secured-nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    securityContext:
+      appArmorProfile:
+        type: Localhost
+        localhostProfile: k8s-deny-etc-write
+EOF
+
+# Wait for pod to be ready
+kubectl wait --for=condition=Ready pod/secured-nginx --timeout=60s
+
+# Verify
+kubectl exec secured-nginx -- touch /etc/test
+# Should fail due to AppArmor
+```
+
+Legacy recognition only (deprecated since v1.30; emits a warning on v1.35 — do not use in new manifests):
+
+```yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -567,14 +594,6 @@ spec:
   containers:
   - name: nginx
     image: nginx
-EOF
-
-# Wait for pod to be ready
-kubectl wait --for=condition=Ready pod/secured-nginx --timeout=60s
-
-# Verify
-kubectl exec secured-nginx -- touch /etc/test
-# Should fail due to AppArmor
 ```
 
 Debugging AppArmor issues is a layered process. Pod events tell you whether Kubernetes or kubelet rejected the profile reference. Node commands tell you whether the profile exists and whether AppArmor is enabled. Kernel logs tell you which exact operation, profile, process, path, and requested mask caused a denial. You need all three layers because any one layer by itself can point you in the wrong direction.
@@ -759,6 +778,8 @@ The YAML shows the requested configuration, but it does not prove kubelet admitt
 
 ## Hands-On Exercise
 
+**Prerequisite:** This lab requires an AppArmor-enabled Linux worker (typical CKS/killercoda Ubuntu). If `cat /sys/module/apparmor/parameters/enabled` does not return `Y`, run the node-side profile steps on a supported host before applying pods.
+
 In this exercise you will create a custom AppArmor profile that denies network access, load it on a node, apply it to a pod with the Kubernetes 1.35+ security context field, and verify both the intended failure and a control case. The original lab command sequence is preserved in spirit, but the manifest uses `appArmorProfile` instead of the legacy annotation. Run the node commands on the worker that will host the pod, or use a single-node lab cluster where the control plane node also runs workloads.
 
 - [ ] Confirm that AppArmor is enabled on the node and that `aa-status` can report loaded profiles.
@@ -827,7 +848,7 @@ kubectl run network-allowed --image=curlimages/curl --rm -i --restart=Never -- \
 # Should succeed (200)
 
 # Cleanup
-kubectl delete pod no-network-pod --force --grace-period=0
+kubectl delete pod no-network-pod --grace-period=0
 sudo apparmor_parser -R /etc/apparmor.d/k8s-deny-network
 ```
 
@@ -853,6 +874,14 @@ Deleting the pod removes the workload, but it does not remove the host profile. 
 </details>
 
 The success criteria are deliberately evidence-based. You should be able to show that the node has the profile, the container runs with that profile, the denied operation fails, the control operation succeeds outside the profile, and the cleanup step leaves no temporary pod behind. If any one of those claims is unsupported, continue debugging until the observed state and the intended policy match.
+
+---
+
+## Learner check
+
+> AppArmor profiles are node-local kernel assets: Kubernetes 1.35+ references them with `securityContext.appArmorProfile`, but every worker that may run the pod must load the profile before kubelet can enforce `type: Localhost`.
+
+Before you move on, explain why a pod can pass admission yet fail on a drained node, and which three checks prove enforcement (node profile state, pod events, and `/proc/1/attr/current`). A solid answer names Pod Security Admission limits on `Unconfined`, distinguishes missing `Localhost` profiles at the kubelet from admission rejection, and cites at least one kernel denial log path.
 
 ---
 
