@@ -436,7 +436,7 @@ Verification must read from etcd rather than merely checking that the API server
 kubectl create secret generic test-secret --from-literal=key=value
 
 # Check etcd directly (should be encrypted)
-ETCDCTL_API=3 etcdctl \
+sudo ETCDCTL_API=3 etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
@@ -513,7 +513,7 @@ The third scenario checks authorization mode directly from the running static po
 
 ```bash
 # Verify authorization mode
-kubectl get pods -n kube-system kube-apiserver-* -o yaml | grep authorization-mode
+kubectl get pods -n kube-system -l component=kube-apiserver -o yaml | grep authorization-mode
 
 # Should see: --authorization-mode=Node,RBAC
 # Should NOT see: AlwaysAllow
@@ -764,6 +764,12 @@ Success criteria:
 - [ ] `NodeRestriction` remains enabled alongside required admission plugins.
 - [ ] Audit logging has a valid policy, writable log path, rotation flags, and required mounts.
 - [ ] The manifest contains no removed insecure serving flags before a Kubernetes v1.35 upgrade.
+
+## Learner check
+
+> Before editing this file, ask yourself what will keep working if the API server does not come back. `kubectl get pods -n kube-system` depends on the API server, so it is not your first recovery tool when the process is down. The safer workflow is to keep one root shell on the control plane node, use `crictl` to inspect static pod containers, and be prepared to revert a single line in the manifest.
+
+Before moving on, explain why verifying encryption at rest requires reading raw etcd output rather than checking only that `--encryption-provider-config` appears in the kube-apiserver manifest. A solid answer names the difference between configured intent and stored bytes, mentions rewriting existing Secrets, and describes what encrypted provider output looks like in an etcd read.
 
 ## Sources
 
