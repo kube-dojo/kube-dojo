@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 35-40 minutes
 >
-> **Prerequisites**: Module 2.3 (API Server Security), networking basics
+> **Prerequisites**: [Module 2.3: API Server Security](../module-2.3-api-server-security/), networking basics
 
 ---
 
@@ -171,10 +171,11 @@ spec:
   containers:
   - command:
     - kube-apiserver
-    # Bind only to specific interface
-    - --bind-address=10.0.0.10  # Internal IP only
-    # Or bind to all (less secure)
-    - --bind-address=0.0.0.0
+    # Secure alternative: bind only to the internal control-plane interface.
+    - --bind-address=10.0.0.10
+
+    # Insecure alternative to avoid: this listens on every host interface.
+    # - --bind-address=0.0.0.0
 ```
 
 The CKS-relevant detail is that kubeadm places the API server manifest under `/etc/kubernetes/manifests/kube-apiserver.yaml`, and the static pod restarts when the manifest changes. That restart can interrupt access, so you should have console access or a known recovery path before changing bind addresses on a live control plane. A careful operator checks the node interface addresses first, edits the manifest once, then watches the static pod return to readiness.
@@ -197,10 +198,11 @@ Anonymous authentication is the first setting to verify because it creates an id
 
 # Verification
 curl -k "https://api-server.local:6443/api/v1/namespaces"
-# Should return 401 Unauthorized
+# 401 means anonymous auth is disabled; 403 mentioning system:anonymous means
+# anonymous auth is enabled but RBAC denies the request.
 ```
 
-The expected result depends on where you run the test. From an untrusted network, the ideal result may be no route or a firewall block before HTTP appears. From a trusted diagnostic host, a request without credentials should return `401 Unauthorized`, not a namespace list and not a partial discovery response that implies anonymous access was granted. Those two tests answer different questions, so do not collapse them into one checkbox.
+The expected result depends on where you run the test. From an untrusted network, the ideal result may be a timeout, no route, or a firewall block before HTTP appears. From a trusted diagnostic host, a request without credentials should return `401 Unauthorized` when anonymous authentication is disabled, or `403 Forbidden` mentioning `system:anonymous` when anonymous authentication is enabled but RBAC denies the request. Resource data in the response is the real misconfiguration because it means an anonymous identity has been granted useful permissions.
 
 Client certificate authentication is common for control-plane components and administrative users in kubeadm-style clusters. The API server trusts certificates signed by the configured client CA, then derives the username and groups from certificate subject fields. This is strong cryptographic authentication, but it has a lifecycle problem: revoking a single long-lived client certificate is awkward unless you have added a separate authorizer or rotated the issuing CA.
 
@@ -342,7 +344,7 @@ metadata:
   name: batch-jobs-low-priority
 spec:
   priorityLevelConfiguration:
-    name: low-priority
+    name: workload-low
   matchingPrecedence: 1000
   rules:
   - subjects:
@@ -352,11 +354,12 @@ spec:
         namespace: batch
     resourceRules:
     - apiGroups: ["batch"]
+      namespaces: ["batch"]
       resources: ["jobs"]
       verbs: ["*"]
 ```
 
-The example lowers priority for a known batch service account, but the decision rule is broader. Identify request sources that are useful but not urgent, then keep them from consuming the same concurrency budget as kubelets, controllers, and emergency operator actions. APF does not excuse poorly designed clients; it gives the API server a way to remain usable while you fix those clients.
+The example lowers priority for a known batch service account by referencing the built-in `workload-low` PriorityLevelConfiguration and scoping the namespaced resource rule to `batch`. A FlowSchema and its referenced PriorityLevelConfiguration must both exist for the apply to succeed. The decision rule is broader: identify request sources that are useful but not urgent, then keep them from consuming the same concurrency budget as kubelets, controllers, and emergency operator actions. APF does not excuse poorly designed clients; it gives the API server a way to remain usable while you fix those clients.
 
 APF also changes how you diagnose API slowness. Without fairness, one noisy actor can make every client look slow, and logs may show only broad request latency. With APF, you can inspect flow schemas, priority levels, rejected requests, queued requests, and seat usage to determine which class is under pressure. That evidence helps you distinguish a malicious flood, a broken controller, and a legitimate workload spike.
 
@@ -370,21 +373,21 @@ Client-side throttling still matters even when APF is configured well. Many Kube
 
 Visibility is the layer that tells you whether the previous layers are doing what you intended. A private endpoint that no one tests can drift back to public exposure. Anonymous authentication that appears disabled can be reintroduced during a control-plane rebuild. A webhook cache that looks harmless can hide a revocation delay. Audit logs and metrics turn those assumptions into evidence.
 
-Kubernetes audit policy controls which requests are recorded and at what level. Logging every request body at `RequestResponse` sounds thorough, but it can create high storage costs and may capture sensitive data. Logging only metadata is cheaper, but it may not preserve enough detail for some investigations. The policy below keeps the original example by capturing authentication activity and failed requests while omitting the noisy `RequestReceived` stage.
+Kubernetes audit policy controls which requests are recorded and at what level. The [Kubernetes auditing documentation](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) defines `Metadata` as metadata only, while `RequestResponse` includes both request and response bodies. That body capture can be justified for narrow investigations, but it can also create high storage costs and capture sensitive data, so the safer default policy below records authentication API metadata plus catch-all metadata while omitting the noisy `RequestReceived` stage.
 
 ```yaml
 # Audit policy to log all API access attempts
 apiVersion: audit.k8s.io/v1
 kind: Policy
 rules:
-# Log all authentication attempts
-- level: RequestResponse
+# Log authentication API metadata without request or response bodies
+- level: Metadata
   omitStages:
   - RequestReceived
   resources:
   - group: "authentication.k8s.io"
 
-# Log failed requests
+# Catch-all metadata for remaining requests; filter 401/403 downstream in SIEM
 - level: Metadata
   omitStages:
   - RequestReceived
@@ -434,17 +437,19 @@ sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
 # API server will restart automatically
 ```
 
-Anonymous access verification is the next common scenario. The important detail is to interpret the response based on the network path. If you are testing from a trusted host that can route to the API, an unauthenticated request should receive an unauthorized status. If you are testing from an untrusted host, you ideally should not reach the Kubernetes API response path at all.
+Anonymous access verification is the next common scenario. The important detail is to interpret the response based on the network path. If you are testing from an untrusted host, you ideally should not reach the Kubernetes API response path at all — a timeout or no route means the network boundary is doing its job. From a trusted host that can route to the API, read the HTTP status carefully: `401 Unauthorized` means anonymous authentication is disabled; `403 Forbidden` mentioning `system:anonymous` means anonymous authentication is enabled but RBAC denies the request; resource data in the body means anonymous RBAC is misconfigured.
 
 ```bash
 # Test anonymous access
 curl -k "https://api-server.local:6443/api/v1/namespaces"
 
-# If anonymous is disabled, should get:
+# If anonymous is disabled, expect 401:
 # {"kind":"Status","apiVersion":"v1","status":"Failure","message":"Unauthorized",...}
 
-# If anonymous is enabled, may get namespace list or partial data
-# Fix by adding --anonymous-auth=false to API server
+# If anonymous is enabled but RBAC denies, expect 403 mentioning system:anonymous
+
+# If anonymous is enabled and RBAC grants access, may get namespace list or partial data
+# Fix by adding --anonymous-auth=false to API server and reviewing anonymous bindings
 ```
 
 Kubeconfig construction is another place where access restrictions become concrete. A kubeconfig does not just name a user; it names a cluster endpoint and credentials. If the endpoint is public, a stolen file can be replayed from anywhere that can reach the public route. If the endpoint is internal and the credential is least-privileged or short-lived, the same theft has a smaller blast radius.
@@ -545,7 +550,7 @@ These mistakes are common because each one looks like a small shortcut during de
 |---------|----------------|---------------|
 | Public API endpoint | Teams rely on strong credentials and forget that reachability enables scanning and resource pressure | Implement private endpoints where possible, or restrict ingress to known administrative CIDRs |
 | No firewall rules | Self-managed clusters inherit broad host or perimeter access during bootstrap | Add explicit allow rules for trusted ranges and a final drop rule for port 6443 |
-| Anonymous auth enabled | Default assumptions or legacy manifests leave `system:anonymous` reachable | Set `--anonymous-auth=false` and verify unauthenticated requests return `401` from a trusted test path |
+| Anonymous auth enabled | Default assumptions or legacy manifests leave `system:anonymous` reachable | Prefer `--anonymous-auth=false`; if a lab keeps anonymous auth enabled, verify RBAC returns only `403` for `system:anonymous` and never resource data |
 | No rate limiting | Operators assume authentication protects availability as well as identity | Use APF for request fairness and EventRateLimit for noisy Event producers |
 | Not monitoring access | Teams configure controls once and never check whether they drift | Enable audit logging, collect API metrics, and alert on unusual authentication or flow-control changes |
 | Long-lived client certs | Certificates are easy to create and hard to revoke individually | Prefer OIDC for humans, short-lived tokens where possible, and narrow RBAC for all identities |
@@ -611,10 +616,14 @@ In this exercise, you will audit the API access posture of a running cluster or 
 echo "=== API Server Config ==="
 kubectl get pods -n kube-system -l component=kube-apiserver -o yaml | grep -E "bind-address|anonymous-auth|authorization-mode"
 
-# Step 2: Test anonymous access (from within cluster) to verify internal isolation
+# Step 2: Test anonymous access from a trusted in-cluster route
 echo "=== Anonymous Access Test ==="
-kubectl run curlpod --image=curlimages/curl --rm -it --restart=Never -- \
-  curl -sk "https://kubernetes.default.svc.cluster.local/api/v1/namespaces" 2>&1 | head -5
+kubectl run curlpod --image=curlimages/curl --restart=Never --command -- \
+  curl -sk -w "\nHTTP %{http_code}\n" \
+  "https://kubernetes.default.svc.cluster.local/api/v1/namespaces"
+kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/curlpod --timeout=60s || true
+kubectl logs curlpod | head -20
+kubectl delete pod curlpod --ignore-not-found
 
 # Step 3: Check if API is accessible externally (Network Boundary Check)
 echo "=== External Access Check ==="
@@ -622,7 +631,7 @@ API_IP=$(kubectl get svc kubernetes -o jsonpath='{.spec.clusterIP}')
 echo "API Server internal IP: $API_IP"
 # In production, also resolve the external DNS/IP and attempt an external nmap or curl
 
-# Step 4: Review authentication methods for multiple identity providers
+# Step 4: Document the authentication methods configured in this cluster
 echo "=== Authentication Config ==="
 kubectl get pods -n kube-system -l component=kube-apiserver -o yaml | grep -E "client-ca|oidc|token|webhook"
 
@@ -636,15 +645,16 @@ kubectl get flowschemas --no-headers | head -5
 
 # Success criteria:
 # - Identified bind-address and verified it is properly scoped
-# - Anonymous access is actively denied (HTTP 401)
-# - Multiple robust auth methods (OIDC/x509) configured
+# - Anonymous access denied: timeout/no route (network block), 401 (anonymous disabled),
+#   or 403 mentioning system:anonymous (anonymous enabled but RBAC denies) — not resource data
+# - Document configured auth methods (client CA / bootstrap token minimum; OIDC/webhook if present)
 # - Rate limiting or APF FlowSchemas are actively routing traffic
 ```
 
 Complete the tasks in order, and write down both the observed output and the control you think it proves. If a command returns no matching flag, do not assume the setting is safe; check the API server documentation for defaults and inspect the full static pod manifest when you have node access.
 
 - [ ] Record the API server bind address, public endpoint status, and the network path that administrators are expected to use.
-- [ ] Test unauthenticated API access from a trusted diagnostic path and confirm whether the response is `401 Unauthorized`.
+- [ ] Test unauthenticated API access from a trusted diagnostic path and confirm the response is `401 Unauthorized`, `403 Forbidden` mentioning `system:anonymous`, or blocked before HTTP — not resource data.
 - [ ] Identify which authentication methods are configured, including client CA, service account issuer, OIDC, or webhook settings.
 - [ ] Inspect APF FlowSchemas and PriorityLevelConfigurations, then identify at least one low-priority or catch-all request class.
 - [ ] Review whether ordinary application namespaces can reach `kubernetes.default.svc` and whether their service accounts need that access.
@@ -658,7 +668,7 @@ Start with the provider or firewall view, then confirm the API server listener. 
 
 <details><summary>Solution guidance for anonymous and identity checks</summary>
 
-Run the unauthenticated `curl` only from a place that is supposed to reach the API. If you receive `401 Unauthorized`, anonymous access is being rejected for that route. If you receive resource data, inspect `--anonymous-auth` and any bindings for `system:anonymous` or `system:unauthenticated`. For identity, look for `--client-ca-file`, service account issuer flags, OIDC flags, and webhook authentication configuration. Then connect each identity method to its revocation story.
+Run the unauthenticated `curl` only from a place that is supposed to reach the API. A timeout or no route means the network boundary blocked the probe. `401 Unauthorized` means anonymous authentication is disabled. `403 Forbidden` mentioning `system:anonymous` means anonymous authentication is enabled but RBAC denies the request — common on kind and kubeadm labs with default RBAC. Resource data in the response is the real misconfiguration: inspect `--anonymous-auth` and any bindings for `system:anonymous` or `system:unauthenticated`. For identity, look for `--client-ca-file`, service account issuer flags, OIDC flags, and webhook authentication configuration — kind labs often show client CA only. Then connect each configured identity method to its revocation story.
 
 </details>
 
@@ -669,6 +679,14 @@ For workload egress, choose an ordinary application namespace and determine whet
 </details>
 
 The final deliverable for the exercise is a short access review note. It should name the current exposure path, the authentication methods, the weakest remaining route, the highest-risk credential type, and one metric or audit query that would show suspicious activity. That note is more useful than a screenshot because it connects the observed configuration to an operational decision.
+
+---
+
+## Learner check
+
+> The lesson is not that network controls replace identity controls. The correct model is layered: restrict the route, verify the client, authorize the request, limit the request rate, and record enough evidence to investigate suspicious access.
+
+Before you move on, explain what an unauthenticated `curl` to `/api/v1/namespaces` tells you when the response is `401`, when it is `403` mentioning `system:anonymous`, and when namespace data is returned. A solid answer names the network, authentication, and RBAC layers separately and states which misconfiguration each outcome reveals.
 
 ---
 
