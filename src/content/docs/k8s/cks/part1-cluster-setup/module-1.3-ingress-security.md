@@ -91,8 +91,10 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout tls.key -out tls.crt \
   -subj "/CN=myapp.example.com"
 
-# Create a Kubernetes TLS Secret named 'myapp-tls' in the 'production' namespace
+# Create the namespace used by the lab objects, then create the TLS Secret there.
 # This secret will hold the certificate and key, allowing Ingress to use them.
+kubectl create namespace production
+
 kubectl create secret tls myapp-tls \
   --cert=tls.crt \
   --key=tls.key \
@@ -243,6 +245,8 @@ sequenceDiagram
 The trust anchor for mTLS is a CA certificate, not every individual client certificate. The controller receives a client certificate during the handshake, verifies that certificate against the trusted CA bundle, checks the chain depth, and only then forwards the request. This means a single Secret containing the CA public certificate can authorize many clients, but it also means compromise of the issuing CA is a much larger event than compromise of one client key.
 
 ```bash
+# The TLS setup above creates the production namespace. If you run only this
+# mTLS block in a fresh lab, create that namespace before creating the Secret.
 # Assume 'ca.crt' is the public CA certificate that signed your client certificates.
 # This secret tells the Ingress controller which CA to trust for client authentication.
 kubectl create secret generic ca-secret \
@@ -307,24 +311,23 @@ metadata:
   name: hardened-ingress
   annotations:
     # The configuration-snippet allows injecting arbitrary NGINX configuration.
-    # Here, we add several crucial security headers.
+    # Here, we add security headers that still matter in modern browsers.
     nginx.ingress.kubernetes.io/configuration-snippet: |
       add_header X-Frame-Options "SAMEORIGIN" always; # Prevents clickjacking by controlling iframe usage
       add_header X-Content-Type-Options "nosniff" always; # Prevents MIME-type sniffing, enforcing declared content types
-      add_header X-XSS-Protection "1; mode=block" always; # Enables browser's built-in XSS filter
       add_header Referrer-Policy "strict-origin-when-cross-origin" always; # Controls how much referrer information is sent
       add_header Content-Security-Policy "default-src 'self'" always; # Restricts resource loading to trusted sources (e.g., same origin)
 spec:
   # ... rest of Ingress specification ...
 ```
 
-Each header answers a different browser question. `X-Frame-Options` tells the browser whether another site may frame the page, which affects clickjacking. `X-Content-Type-Options` tells the browser not to reinterpret content as a different type, which matters when uploads or static assets are involved. Content Security Policy is broader and more delicate because it can block legitimate scripts if the policy does not match the application.
+Each header answers a different browser question. `X-Frame-Options` tells the browser whether another site may frame the page, which affects clickjacking. `X-Content-Type-Options` tells the browser not to reinterpret content as a different type, which matters when uploads or static assets are involved. Content Security Policy is broader and more delicate because it can block legitimate scripts if the policy does not match the application. Do not treat `X-XSS-Protection` as a modern baseline: it is deprecated and non-standard, so CSP and application-side output handling are the controls to design around.
 
 ```mermaid
 graph TD
     H1["X-Frame-Options: SAMEORIGIN"] --> H1D["Prevents clickjacking attacks by controlling iframes"]
     H2["X-Content-Type-Options: nosniff"] --> H2D["Prevents MIME type sniffing, enforcing declared content types"]
-    H3["X-XSS-Protection: 1; mode=block"] --> H3D["Enables browser's built-in XSS filtering"]
+    H3["X-XSS-Protection"] --> H3D["Deprecated legacy filter; prefer CSP"]
     H4["Referrer-Policy: strict-origin-when-cross-origin"] --> H4D["Controls referrer information leakage to third parties"]
     H5["Content-Security-Policy: default-src 'self'"] --> H5D["Restricts resource loading to trusted sources, mitigating XSS"]
     H6["Strict-Transport-Security (HSTS)"] --> H6D["Forces HTTPS for specified duration, preventing protocol downgrade attacks"]
@@ -379,8 +382,7 @@ metadata:
     # This regex matches '/admin', '/metrics', '/health', or '/debug'.
     nginx.ingress.kubernetes.io/server-snippet: |
       location ~ ^/(admin|metrics|health|debug) {
-        deny all; # Block access from all IP addresses
-        return 403; # Return Forbidden status
+        return 403; # Block matching paths with Forbidden status
       }
 
     # Alternatively, require external authentication for a path or service.
@@ -432,7 +434,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: ingress-nginx # Selects the namespace where the ingress controller runs
+          kubernetes.io/metadata.name: ingress-nginx # Selects the ingress controller namespace by its standard label
       podSelector:
         matchLabels:
           app.kubernetes.io/name: ingress-nginx # Selects the ingress controller pods
@@ -449,11 +451,19 @@ metadata:
   name: ingress-nginx-controller
   namespace: ingress-nginx
 spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/component: controller
   template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingress-nginx
+        app.kubernetes.io/component: controller
     spec:
       containers:
       - name: controller
-        image: registry.k8s.sio/ingress-nginx/controller:v1.9.0 # Use a specific, well-vetted image version
+        image: registry.k8s.io/ingress-nginx/controller:v1.9.0 # Use a specific, well-vetted image version
         securityContext:
           runAsNonRoot: true # Ensure the container does not run as root
           runAsUser: 101 # Run as an arbitrary non-root user (e.g., 101, common for nginx)
@@ -644,6 +654,12 @@ Match the NetworkPolicy selectors to real labels on the backend pods, ingress na
 Separate failures by layer. Certificate warnings point to host, chain, Secret, or SNI issues; 403 responses point to path or authentication rules; 429 responses point to limits; missing application logs during mTLS failure point to controller-side rejection. Compare controller access logs with application logs to detect bypasses. A request visible in the app but absent from controller logs likely did not follow the intended edge path.
 </details>
 
+## Learner check
+
+> A secure Ingress is only secure on the path that actually reaches the controller: the namespace must exist before namespaced Secrets are created, selectors must match real namespace and pod labels, and the controller Deployment must include the selector/template label contract Kubernetes validates.
+
+Before moving on, explain why a TLS Secret, an mTLS annotation, and strict browser headers do not protect a backend Service that accepts traffic from arbitrary in-cluster pods. A solid answer names the bypass path, the NetworkPolicy that forces traffic through the controller, and the Deployment labels that make the controller manifest valid on Kubernetes 1.35.
+
 ## Sources
 
 - https://kubernetes.io/docs/concepts/services-networking/ingress/
@@ -656,6 +672,7 @@ Separate failures by layer. Certificate warnings point to host, chain, Secret, o
 - https://cert-manager.io/docs/usage/ingress/
 - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
 - https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+- https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-XSS-Protection
 - https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html
 - https://hstspreload.org/
 - https://www.pcisecuritystandards.org/document_library?category=pcidss&document=pci_dss
