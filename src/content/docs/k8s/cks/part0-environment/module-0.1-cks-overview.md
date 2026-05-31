@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: cks-0.1-cks-overview
   url: https://killercoda.com/kubedojo/scenario/cks-0.1-cks-overview
-  duration: "30 min"
+  duration: "25 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -95,13 +95,13 @@ The CKS exam is performance-based, delivered online, and solved on the command l
 |--------|---------|
 | **Duration** | 2 hours (120 minutes) |
 | **Format** | Performance-based (CLI tasks) |
-| **Questions** | 15-20 tasks |
+| **Questions** | ~17 tasks (per current LF/Killer.sh simulator; verify LF Important Instructions before booking) |
 | **Passing Score** | 67% |
 | **Prerequisite** | CKA certification (passed before attempting CKS) |
 | **Environment** | Linux command line, Kubernetes clusters, current LF-published version |
 | **Validity** | 2 years |
 
-The table is more than trivia because every row implies a behavior. A two-hour window for roughly 15-20 tasks means you must budget time, record skipped work, and avoid turning one hard problem into the reason you lose several easier ones. A 67% passing score means partial progress matters; if you can fix the RBAC part of a question but not the audit policy part, you should still do the fix you can prove.
+The table is more than trivia because every row implies a behavior. A two-hour window for roughly seventeen performance tasks means you must budget time, record skipped work, and avoid turning one hard problem into the reason you lose several easier ones. Task counts can shift when the Linux Foundation updates the simulator, so treat the Important Instructions page as the source of truth close to your exam date. A 67% passing score means partial progress matters; if you can fix the RBAC part of a question but not the audit policy part, you should still do the fix you can prove.
 
 The prerequisite row should also shape your readiness test. The Linux Foundation states that CKS candidates must have taken and passed CKA before attempting CKS, and the CKS certification is designed for accomplished Kubernetes practitioners. That wording does not mean you must be a full-time security engineer, but it does mean the exam assumes CKA-level command speed while it evaluates security-specific tasks.
 
@@ -267,14 +267,14 @@ The three-pass strategy below is a time-management model, not a rigid exam scrip
 │  ├── Create NetworkPolicy                                  │
 │  ├── Apply existing AppArmor profile                       │
 │  ├── Fix obvious RBAC issue                                │
-│  ├── Set runAsNonRoot: true                                │
-│  └── Enable audit logging                                  │
+│  └── Set runAsNonRoot: true                                │
 │                                                             │
 │  PASS 2: Tool-Based Tasks (4-6 min each)                   │
 │  ├── Scan image with Trivy, fix vulnerabilities            │
 │  ├── Create seccomp profile                                │
 │  ├── Configure Pod Security Admission                       │
-│  └── Run kube-bench, fix findings                          │
+│  ├── Run kube-bench, fix findings                          │
+│  └── Configure audit policy (when task supplies manifest)  │
 │                                                             │
 │  PASS 3: Complex Scenarios (7+ min each)                   │
 │  ├── Write custom Falco rule                               │
@@ -355,7 +355,7 @@ The decision rule is therefore straightforward: choose the path that matches the
 
 ## Did You Know?
 
-- **CKS was announced as generally available on November 17, 2020.** The Linux Foundation and CNCF created it to validate practical Kubernetes security skills after the ecosystem already had administrator and application-developer exams.
+- **CKS was announced as generally available on November 17, 2020.** The [CNCF GA announcement](https://www.cncf.io/announcements/2020/11/17/kubernetes-security-specialist-certification-now-available/) describes the launch as a performance-based exam for securing container workloads and Kubernetes platforms across build, deployment, and runtime.
 
 - **The CKS passing score is 67%, and the certification is valid for 2 years.** That combination means the exam expects practical competence, but it also expects candidates to refresh because Kubernetes security tooling and exam environments change over time.
 
@@ -459,13 +459,13 @@ if [ "$NETPOL_COUNT" -eq 0 ]; then
   echo "No NetworkPolicies found. Pods may communicate freely unless another control enforces policy."
 fi
 
-# Step 3: Check for pods running as root
+# Step 3: Check Pod-level runAsNonRoot (container-level fields are covered in later modules)
 echo "=== Pods Running as Root ==="
 kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}: runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}{end}' | head -10
 
-# Step 4: Check for privileged containers
+# Step 4: List privileged containers with namespace/Pod/container context (positives only)
 echo "=== Privileged Containers ==="
-kubectl get pods -A -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.name}: privileged={.securityContext.privileged}{"\n"}{end}{end}' 2>/dev/null | grep -v "privileged=$" | head -10
+kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}/{range .spec.containers[*]}{.name}: privileged={.securityContext.privileged}{"\n"}{end}{end}' | grep 'privileged=true'
 
 # Step 5: Check Pod Security Admission labels
 echo "=== Pod Security Standards ==="
@@ -487,7 +487,7 @@ The NetworkPolicy count is a starting point, not a complete policy audit. A clus
 
 The `runAsNonRoot` query checks the Pod-level security context, which is only one place the setting can appear. Container-level security context may override or complement Pod-level settings, and Pod Security Admission may enforce restrictions even when a manifest omits explicit fields. The point of this first pass is to notice unset posture, then learn the deeper rules in workload-hardening modules.
 
-The privileged-container query is deliberately narrow because privileged mode is one of the clearest escalation signals. If output appears, your next step is to inspect the full Pod manifest and determine whether host namespaces, host paths, capabilities, or ServiceAccount permissions make the risk worse. If output is empty, you still need other controls, because "not privileged" is not the same as "least privilege."
+The privileged-container query prints `namespace/pod/container: privileged=true` lines only, so you can record the exact context a CKS task would ask you to inspect next. If output appears, inspect the full Pod manifest and determine whether host namespaces, host paths, capabilities, or ServiceAccount permissions make the risk worse. If output is empty, you still need other controls, because "not privileged" is not the same as "least privilege."
 
 The Pod Security Admission label check tells you whether namespaces advertise an enforcement level such as `baseline` or `restricted`. Missing labels are common in practice clusters, and they give you a concrete improvement path for later modules. The labels are also a reminder that CKS often tests namespace-level policy and workload-level fields together.
 
@@ -515,8 +515,13 @@ Success criteria:
 
 ---
 
+## Learner check
+
+> A two-hour window for roughly seventeen performance tasks means you must budget time, record skipped work, and avoid turning one hard problem into the reason you lose several easier ones. Task counts can shift when the Linux Foundation updates the simulator, so treat the Important Instructions page as the source of truth close to your exam date.
+
 ## Sources
 
+- https://www.cncf.io/announcements/2020/11/17/kubernetes-security-specialist-certification-now-available/
 - https://training.linuxfoundation.org/certification/certified-kubernetes-security-specialist/
 - https://docs.linuxfoundation.org/tc-docs/certification/faq-cka-ckad-cks
 - https://docs.linuxfoundation.org/tc-docs/certification/important-instructions-cks
