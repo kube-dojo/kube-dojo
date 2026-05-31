@@ -561,6 +561,60 @@ kubectl get configmap web-config -o yaml
 
 This setup creates a short ConfigMap that is naturally shaped like environment variables. The verification step matters because it confirms the exact key names before a Pod tries to consume them. If you see `APP_COLOUR` in the object but `APP_COLOR` in the Pod, Kubernetes will not guess the spelling you intended.
 
+### Setup: Create from a Directory
+
+Each regular file in the directory becomes one ConfigMap key. This matches the directory workflow shown earlier in the theory section and is useful when you already have a small folder of configuration files on disk.
+
+```bash
+mkdir -p ./config-dir
+echo "database.host=db.example.com" > ./config-dir/app.properties
+echo "log.level=debug" > ./config-dir/logging.properties
+
+kubectl create configmap web-config-dir --from-file=./config-dir/
+kubectl get configmap web-config-dir -o yaml
+
+kubectl delete cm web-config-dir
+rm -rf ./config-dir
+```
+
+<details>
+<summary>Solution notes</summary>
+
+The resulting ConfigMap should contain two keys named after the filenames: `app.properties` and `logging.properties`. If extra files appear, check the directory for editor backups or temporary files before creating the object.
+
+</details>
+
+### Setup: Create from Declarative YAML
+
+Declarative YAML is the form you should prefer for reviewable changes and Git-based delivery. Apply the manifest below, inspect the keys under `data`, then delete the object.
+
+```bash
+cat << 'EOF' > /tmp/app-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-yaml
+data:
+  APP_ENV: production
+  LOG_LEVEL: info
+  app.properties: |
+    database.host=db.example.com
+    database.port=5432
+    database.name=myapp
+EOF
+
+kubectl apply -f /tmp/app-config.yaml
+kubectl get configmap app-config-yaml -o yaml
+kubectl delete cm app-config-yaml
+```
+
+<details>
+<summary>Solution notes</summary>
+
+Literal-style keys such as `APP_ENV` appear as plain strings under `data`, while `app.properties` preserves line breaks through the YAML block scalar. This is the same shape you will wire into Pods through environment variables or volume mounts in the next parts.
+
+</details>
+
 ### Part 1: Environment Variables
 
 ```bash
@@ -689,7 +743,7 @@ EOF
 
 kubectl wait --for=condition=Ready pod/drill3 --timeout=30s
 kubectl logs drill3
-kubectl delete pod drill3 cm drill3
+kubectl delete pod/drill3 cm/drill3
 ```
 
 <details>
@@ -725,7 +779,7 @@ EOF
 
 kubectl wait --for=condition=Ready pod/drill4 --timeout=30s
 kubectl logs drill4
-kubectl delete pod drill4 cm drill4
+kubectl delete pod/drill4 cm/drill4
 ```
 
 <details>
@@ -766,7 +820,7 @@ EOF
 
 kubectl wait --for=condition=Ready pod/drill5 --timeout=30s
 kubectl logs drill5
-kubectl delete pod drill5 cm drill5
+kubectl delete pod/drill5 cm/drill5
 ```
 
 <details>
@@ -817,7 +871,7 @@ EOF
 kubectl wait --for=condition=Ready pod/drill6 --timeout=30s
 kubectl exec drill6 -- nginx -T 2>&1 | grep -F "Custom Config Works!"
 
-kubectl delete pod drill6 cm drill6-nginx
+kubectl delete pod/drill6 cm/drill6-nginx
 ```
 
 <details>
@@ -826,6 +880,10 @@ kubectl delete pod drill6 cm drill6-nginx
 The `nginx -T` command dumps the effective nginx configuration, and the `grep` match should print the `Custom Config Works!` response rule from the mounted file. The `subPath` mount places one ConfigMap key at the file path nginx expects while preserving the rest of the directory. If you change `/tmp/nginx.conf` and recreate the ConfigMap, replace the Pod as well because the `subPath` file does not live-update.
 
 </details>
+
+## Learner check
+
+> When you delete mixed resource types in one `kubectl delete` command, use slash notation such as `kubectl delete pod/drill3 cm/drill3` so each argument names both the resource type and the object.
 
 ## Sources
 
