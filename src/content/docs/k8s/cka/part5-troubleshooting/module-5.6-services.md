@@ -7,15 +7,15 @@ sidebar:
 lab:
   id: cka-5.6-services
   url: https://killercoda.com/kubedojo/scenario/cka-5.6-services
-  duration: "35 min"
+  duration: "45 min"
   difficulty: intermediate
   environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Critical for application access
 >
-> **Time to Complete**: 45-55 minutes
+> **Time to Complete**: 45 minutes
 >
-> **Prerequisites**: Module 5.5 (Network Troubleshooting), Module 3.1-3.4 (Services)
+> **Prerequisites**: [Module 5.5 (Network Troubleshooting)](../module-5.5-networking/), [Module 3.1 (Services)](../../part3-services-networking/module-3.1-services/), [Module 3.2 (Endpoints)](../../part3-services-networking/module-3.2-endpoints/), [Module 3.3 (DNS)](../../part3-services-networking/module-3.3-dns/), [Module 3.4 (Ingress)](../../part3-services-networking/module-3.4-ingress/)
 
 ---
 
@@ -127,7 +127,10 @@ An empty endpoint list is not a mysterious networking failure. It usually means 
 kubectl get svc my-service
 kubectl describe svc my-service
 
-# 2. Check endpoints (CRITICAL)
+# 2. Check EndpointSlices (CRITICAL — preferred on 1.35)
+kubectl get endpointslices -l kubernetes.io/service-name=my-service
+kubectl get endpointslices -l kubernetes.io/service-name=my-service -o yaml
+# Legacy shorthand (still works on 1.35 but may show deprecation warnings):
 kubectl get endpoints my-service
 # No endpoints = problem with selector or pod readiness
 
@@ -141,21 +144,22 @@ kubectl get pods -l <selector>
 # All should show Ready (e.g., 1/1)
 
 # 5. Verify pod is listening on port
-kubectl exec <pod> -- netstat -tlnp
-# Or: kubectl exec <pod> -- ss -tlnp
+# Many minimal images (including nginx:1.25) lack netstat and ss — prefer a client-side probe:
+kubectl exec <client-pod> -- wget -qO- --timeout=2 http://<pod-ip>:<container-port>
+# On fuller images only: kubectl exec <pod> -- netstat -tlnp  or  ss -tlnp
 
-# 6. Test directly to pod IP
-kubectl exec <client-pod> -- wget -qO- http://<pod-ip>:<container-port>
+# 6. Test directly to pod IP (same client probe — works on any image)
+kubectl exec <client-pod> -- wget -qO- --timeout=2 http://<pod-ip>:<container-port>
 ```
 
 The selector check deserves more care than many learners give it. A Service selector is a map of exact label key-value pairs, not a fuzzy search. `app: backend` does not match `app.kubernetes.io/name: backend`, `app: backend-api`, or `tier: backend`. When you compare selectors to pod labels, compare the actual keys as well as the values, because modern manifests often use the recommended `app.kubernetes.io/*` labels while older examples use short labels such as `app`.
 
 | Issue | Symptom | Check | Fix |
 |-------|---------|-------|-----|
-| No endpoints | Connection refused | `kubectl get endpoints` | Fix selector or pod labels |
+| No endpoints | Connection refused | `kubectl get endpointslices -l kubernetes.io/service-name=<svc>` | Fix selector or pod labels |
 | Wrong targetPort | Timeout/refused | Compare port to container | Fix targetPort |
 | Pod not Ready | Missing endpoints | `kubectl get pods` | Fix readiness probe |
-| App not listening | Direct pod access fails | `netstat` in container | Fix application |
+| App not listening | Direct pod access fails | Client probe to pod IP:port | Fix application |
 | kube-proxy down | All services fail | kube-proxy pods | Restart kube-proxy |
 
 Port mapping is the next common failure because Service ports use two different concepts. `port` is what clients use when they talk to the Service. `targetPort` is where kube-proxy sends the connection on the selected pod. A named target port adds another lookup step: Kubernetes resolves the name against the container ports on each backend pod, which can be helpful during migrations but confusing when the name is misspelled.
@@ -179,8 +183,9 @@ spec:
 # Verify the mapping
 kubectl get svc my-service -o yaml | grep -A 5 ports:
 
-# Check container is listening on targetPort
-kubectl exec <pod> -- sh -c 'netstat -tlnp 2>/dev/null || ss -tlnp'
+# Check container is listening on targetPort (client probe — works when netstat/ss are absent)
+kubectl exec <client-pod> -- wget -qO- --timeout=2 http://<pod-ip>:<targetPort>
+# Fuller images only: kubectl exec <pod> -- sh -c 'netstat -tlnp 2>/dev/null || ss -tlnp'
 ```
 
 Before running the direct pod test, what output do you expect if the Service selector is correct but the `targetPort` points to a closed port? The endpoint list should not be empty, because endpoint publication depends on pod selection and readiness rather than whether your application listens on the chosen target port. The direct test to the pod IP and target port should fail, while the direct test to the actual listening port should work, which is the evidence you need before changing the Service port mapping.
@@ -192,6 +197,11 @@ A useful worked example is the Service that has endpoints but still cannot serve
 The reverse example is just as important because it prevents false confidence. If the endpoint list is empty, a successful direct pod IP test does not prove the Service is healthy. It proves only that at least one pod can serve traffic when addressed directly. The Service still has no backend addresses to choose from, which means ordinary clients using the Service name will fail until the selector and readiness chain is repaired. In other words, direct pod access is a targeted diagnostic tool, not a replacement for endpoint publication.
 
 EndpointSlices add one more practical detail for real clusters. The legacy Endpoints object is easy to read, but large Services can exceed the old object model, and EndpointSlices are the modern representation Kubernetes uses to scale endpoint tracking. When a quick `kubectl get endpoints` result looks surprising, inspect EndpointSlices with the Service name label and compare the addresses, ports, and readiness conditions. That extra check is especially useful when you are debugging a Service with many replicas or when a controller creates endpoints without a selector.
+
+```bash
+kubectl get endpointslices -l kubernetes.io/service-name=my-service
+kubectl get endpointslices -l kubernetes.io/service-name=my-service -o yaml
+```
 
 ## Part 3: Debug NodePort and External Traffic Policy
 
@@ -240,7 +250,7 @@ The word "outside" is not precise enough during NodePort debugging. A client in 
 | Firewall blocking | Timeout from external | `iptables -L -n` | Open port in firewall |
 | Cloud SG blocking | Timeout from external | Cloud console | Add security group rule |
 | Wrong node IP | Connection refused | `kubectl get nodes -o wide` | Use correct IP (internal vs external) |
-| Port conflict | Service create fails | `netstat -tlnp` on node | Use different nodePort |
+| Port conflict | Service create fails | `ss -tlnp` or `netstat -tlnp` on node (host shell, not pod) | Use different nodePort |
 | externalTrafficPolicy | Only some nodes work | Check policy | Set to Cluster or fix endpoints |
 
 The `externalTrafficPolicy` setting is a deliberate tradeoff, not a magic performance option. `Cluster` maximizes reachability because all nodes can receive the traffic and forward it to a backend somewhere in the cluster. `Local` is useful when you need to preserve source IP or avoid a second hop, but it requires the external load balancer or client to avoid nodes that have no local endpoint. That makes it a common source of intermittent failures when pods are rescheduled unevenly.
@@ -328,8 +338,9 @@ aws elb describe-load-balancers
 kubectl describe svc my-service
 gcloud compute forwarding-rules list
 
-# Check cloud controller manager logs
+# Check cloud controller manager logs (cloud clusters only — kind/minikube have no CCM)
 kubectl -n kube-system logs -l component=cloud-controller-manager
+# Portable alternative on any cluster: kubectl -n kube-system get pods | grep cloud-controller
 ```
 
 Which approach would you choose here and why: changing the Service type back to ClusterIP, opening a cloud security rule, or inspecting Service events first? In a pending-address case, Service events are the lowest-risk first move because they tell you whether Kubernetes asked for a load balancer and whether the controller rejected the request. In an assigned-address case with healthy endpoints, the security rule may be the right next hypothesis, but you should still prove which layer is failing before editing infrastructure.
@@ -556,7 +567,7 @@ flowchart TD
 | Starting Symptom | First Check | If It Passes | If It Fails |
 |------------------|-------------|--------------|-------------|
 | Service DNS name fails inside cluster | Resolve name and inspect Service | Test ClusterIP and endpoints | Check CoreDNS, namespace, and Service existence |
-| ClusterIP connection refused or times out | `kubectl get endpoints` and EndpointSlices | Test targetPort directly | Fix selector, labels, readiness, or endpoint publication |
+| ClusterIP connection refused or times out | `kubectl get endpointslices -l kubernetes.io/service-name=<svc>` (legacy: `kubectl get endpoints`) | Test targetPort directly | Fix selector, labels, readiness, or endpoint publication |
 | NodePort works from pod but not laptop | External route and firewall path | Check source IP and policy details | Open the right security group, ACL, route, or host firewall |
 | LoadBalancer is pending | Service events and controller | Validate assigned address and listener | Fix controller, credentials, quota, annotation, or address pool |
 | Ingress returns `404` | Host, path, and class | Inspect backend Service and controller logs | Correct host/path rule or `ingressClassName` |
@@ -587,7 +598,7 @@ That explanation matters because Service incidents often cross team boundaries. 
 
 | Mistake | Why It Happens | How to Fix It |
 |---------|----------------|---------------|
-| Not checking endpoints first | The Service object exists, so the operator assumes Kubernetes has backends to route to | Start with `kubectl get endpoints` or EndpointSlices, then compare selectors, pod labels, and readiness |
+| Not checking endpoints first | The Service object exists, so the operator assumes Kubernetes has backends to route to | Start with `kubectl get endpointslices -l kubernetes.io/service-name=<svc>` (legacy: `kubectl get endpoints`), then compare selectors, pod labels, and readiness |
 | Confusing `port` and `targetPort` | The manifest has two port fields with similar names, and both may contain valid-looking numbers | Treat `port` as the client-facing Service port and `targetPort` as the container-facing destination |
 | Testing NodePort from the wrong IP | Node objects may show internal, external, and provider-specific addresses | Use `kubectl get nodes -o wide`, pick the address reachable from your source network, and verify firewall rules |
 | Missing the Ingress controller | An Ingress resource is created, but no controller is watching it | Confirm controller pods and `IngressClass` before debugging host and path rules |
@@ -601,12 +612,13 @@ That explanation matters because Service incidents often cross team boundaries. 
 <details>
 <summary>Question 1: The empty endpoints list</summary>
 
-Your team deploys a backend API and creates a ClusterIP Service for it. The Service has a ClusterIP, but `kubectl get endpoints backend-api` returns no addresses and frontend pods fail to connect. The most likely causes are a selector that does not exactly match pod labels, pods that match but are not Ready, or a manifest mistake that points the Service at the wrong workload. You should compare `kubectl get svc backend-api -o jsonpath='{.spec.selector}'` with `kubectl get pods --show-labels`, then inspect readiness and pod events. Changing kube-proxy or cloud firewall settings would be premature because Kubernetes has not published any backend destinations for the Service.
+Your team deploys a backend API and creates a ClusterIP Service for it. The Service has a ClusterIP, but `kubectl get endpointslices -l kubernetes.io/service-name=backend-api` returns no ready addresses and frontend pods fail to connect. The most likely causes are a selector that does not exactly match pod labels, pods that match but are not Ready, or a manifest mistake that points the Service at the wrong workload. You should compare `kubectl get svc backend-api -o jsonpath='{.spec.selector}'` with `kubectl get pods --show-labels`, then inspect readiness and pod events. Changing kube-proxy or cloud firewall settings would be premature because Kubernetes has not published any backend destinations for the Service.
 
 ```bash
 kubectl get svc backend-api -o jsonpath='{.spec.selector}'
 kubectl get pods --show-labels
-kubectl get endpoints backend-api
+kubectl get endpointslices -l kubernetes.io/service-name=backend-api
+# Legacy: kubectl get endpoints backend-api
 ```
 
 </details>
@@ -654,11 +666,12 @@ A pod runs NGINX on container port `80`, but the Service has `port: 80` and `tar
 <details>
 <summary>Question 6: The node-scoped ClusterIP failure</summary>
 
-Two client pods run the same curl command against a ClusterIP Service. The pod on `node-a` succeeds, while the pod on `node-b` times out, and several unrelated Services show the same pattern from `node-b`. This points away from a single Service selector problem and toward node-local routing, kube-proxy, CNI, firewall, or conntrack behavior on `node-b`. Check the kube-proxy pod for that node, inspect recent kube-proxy logs, and compare Service rules or IPVS entries from the affected node. Do not edit all affected Services when the shared failing dimension is the client node.
+Two client pods run the same curl command against a ClusterIP Service. The pod on `node-a` succeeds, while the pod on `node-b` times out, and several unrelated Services show the same pattern from `node-b`. This points away from a single Service selector problem and toward node-local routing, kube-proxy, CNI, firewall, or conntrack behavior on `node-b`. Check the kube-proxy pod for that node, inspect recent kube-proxy logs, and compare iptables NAT rules on the affected node. Use `sudo ipvsadm -Ln` only when kube-proxy runs in IPVS mode — iptables is still the common default on many 1.35 clusters. Do not edit all affected Services when the shared failing dimension is the client node.
 
 ```bash
 kubectl -n kube-system get configmap kube-proxy -o yaml | grep mode
 kubectl -n kube-system logs -l k8s-app=kube-proxy | grep "Using"
+# IPVS mode only (iptables is still the common default on many 1.35 clusters):
 sudo ipvsadm -Ln
 ```
 
@@ -728,7 +741,9 @@ kubectl -n service-lab wait --for=condition=Ready pod/client --timeout=60s
 # Test connectivity
 kubectl -n service-lab exec client -- wget -qO- http://web
 
-# Check endpoints
+# Check EndpointSlices (primary on 1.35)
+kubectl -n service-lab get endpointslices -l kubernetes.io/service-name=web
+# Legacy shorthand (still works on 1.35 but may show deprecation warnings):
 kubectl -n service-lab get endpoints web
 ```
 
@@ -750,8 +765,9 @@ kubectl -n service-lab patch svc web -p '{"spec":{"selector":{"app":"broken"}}}'
 # Test (should fail)
 kubectl -n service-lab exec client -- wget -qO- --timeout=2 http://web
 
-# Check endpoints (should be empty)
-kubectl -n service-lab get endpoints web
+# Check EndpointSlices (should be empty)
+kubectl -n service-lab get endpointslices -l kubernetes.io/service-name=web
+# Legacy: kubectl -n service-lab get endpoints web
 
 # Diagnose
 kubectl -n service-lab get svc web -o jsonpath='{.spec.selector}'
@@ -761,7 +777,8 @@ kubectl -n service-lab get pods --show-labels
 kubectl -n service-lab patch svc web -p '{"spec":{"selector":{"app":"web"}}}'
 
 # Verify
-kubectl -n service-lab get endpoints web
+kubectl -n service-lab get endpointslices -l kubernetes.io/service-name=web
+# Legacy: kubectl -n service-lab get endpoints web
 kubectl -n service-lab exec client -- wget -qO- --timeout=2 http://web
 ```
 
@@ -774,7 +791,7 @@ The empty endpoint list is the key evidence. The Service selector asks for `app=
 
 ### Task 3: Create and Test a NodePort Service
 
-Create a NodePort Service and identify the allocated port. The inside-cluster test proves the NodePort path reaches kube-proxy and the backend from within the cluster network, but it does not prove that a laptop or external network can reach the same port. If your lab environment does not expose node IPs to your browser network, treat the external test as a reasoning exercise and document which firewall or route you would check.
+Create a NodePort Service and identify the allocated port. The inside-cluster test proves the NodePort path reaches kube-proxy and the backend from within the cluster network, but it does not prove that a laptop or external network can reach the same port. On kind/minikube, pod → node-IP:NodePort may fail even when the Service is healthy. If ClusterIP works but this test fails, treat it as a local-cluster networking limitation and rely on endpoint/ClusterIP evidence. If your lab environment does not expose node IPs to your browser network, treat the external test as a reasoning exercise and document which firewall or route you would check.
 
 ```bash
 # Create NodePort service
@@ -793,7 +810,7 @@ kubectl -n service-lab exec client -- wget -qO- --timeout=2 http://<node-ip>:<no
 <details>
 <summary>Solution notes for Task 3</summary>
 
-The Service output shows the allocated node port, and the node list shows candidate node addresses. Choose an address reachable from the client you are using. If the internal pod test succeeds but an external test times out, the likely remaining layer is outside Kubernetes: cloud security rules, host firewall rules, routes, or the lab environment boundary. If both tests fail, return to endpoints and ClusterIP before changing external settings.
+The Service output shows the allocated node port, and the node list shows candidate node addresses. Choose an address reachable from the client you are using. On kind/minikube, pod → node-IP:NodePort may fail even when ClusterIP and EndpointSlices look healthy — treat that as a local-cluster limitation and rely on ClusterIP evidence. If the internal pod test succeeds but an external test times out, the likely remaining layer is outside Kubernetes: cloud security rules, host firewall rules, routes, or the lab environment boundary. If both ClusterIP and EndpointSlice checks fail, return to selectors and readiness before changing external settings.
 
 </details>
 
@@ -821,7 +838,8 @@ EOF
 kubectl -n service-lab exec client -- wget -qO- --timeout=2 http://wrong-port
 
 # Diagnose
-kubectl -n service-lab get endpoints wrong-port  # Has endpoints
+kubectl -n service-lab get endpointslices -l kubernetes.io/service-name=wrong-port  # Has endpoints
+# Legacy: kubectl -n service-lab get endpoints wrong-port
 kubectl -n service-lab exec client -- wget -qO- --timeout=2 http://<pod-ip>:80  # Works
 kubectl -n service-lab exec client -- wget -qO- --timeout=2 http://<pod-ip>:8080  # Fails
 
@@ -849,8 +867,9 @@ kubectl get svc <service> -o yaml
 ```
 
 ```bash
-# Task: List endpoints for a service
-kubectl get endpoints <service>
+# Task: List EndpointSlices for a service (primary on 1.35)
+kubectl get endpointslices -l kubernetes.io/service-name=<service>
+# Legacy shorthand: kubectl get endpoints <service>
 kubectl describe endpoints <service>
 ```
 
@@ -888,7 +907,7 @@ curl -H "Host: <hostname>" http://<ingress-ip>
 
 ### Success Criteria
 
-- [ ] Created and tested a ClusterIP Service by name and endpoint list.
+- [ ] Created and tested a ClusterIP Service by name and EndpointSlice list.
 - [ ] Identified and fixed a selector mismatch by comparing Service selectors to pod labels.
 - [ ] Created and reasoned through a NodePort Service using node IP and node port evidence.
 - [ ] Diagnosed and fixed a wrong `targetPort` while endpoints were still populated.
@@ -899,6 +918,14 @@ curl -H "Host: <hostname>" http://<ingress-ip>
 ```bash
 kubectl delete ns service-lab
 ```
+
+## Learner check
+
+> `kubectl get endpointslices -l kubernetes.io/service-name=my-service`
+
+A ClusterIP Service resolves by DNS but connections time out. EndpointSlices for that Service show two ready backends on port 80, and a client-pod probe to each pod IP on port 80 succeeds. What layer should you inspect next before changing pod labels or restarting the deployment?
+
+---
 
 ## Sources
 
