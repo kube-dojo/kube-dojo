@@ -273,9 +273,14 @@ kubectl get crd myresource.example.com
 `kubectl explain` works for CRDs when the CRD publishes a structural schema. That makes it a fast exam tool because it can tell you accepted field paths without opening documentation in another window. If `kubectl explain database.spec` returns useful field information, the CRD author has exposed enough schema for the client to navigate the custom object shape.
 
 ```bash
-# Works for CRDs too (if installed)
+# Works for installed CRDs too, after discovery refreshes
+until kubectl explain database >/dev/null 2>&1; do sleep 1; done
 kubectl explain database
+
+until kubectl explain database.spec >/dev/null 2>&1; do sleep 1; done
 kubectl explain database.spec
+
+until kubectl explain certificate.spec.secretName >/dev/null 2>&1; do sleep 1; done
 kubectl explain certificate.spec.secretName
 ```
 
@@ -488,13 +493,14 @@ kubectl get ws my-blog -o yaml
 kubectl patch website my-blog --type=merge -p '{"spec":{"replicas":2}}'
 ```
 
-Finally, confirm discovery and schema visibility. `kubectl api-resources` shows the new resource group, namespaced status, kind, and short names. `kubectl explain` reads the published schema and helps you navigate the custom object fields without leaving the terminal.
+Finally, confirm discovery and schema visibility. `kubectl api-resources` shows the new resource group, namespaced status, kind, and short names. The safest discovery habit is to wait for the CRD to become established, then retry `kubectl explain` until discovery can resolve the custom resource. `kubectl explain` reads the published schema and helps you navigate the custom object fields without leaving the terminal.
 
 ```bash
 # Check API resources
 kubectl api-resources | grep example.com
 
 # Use explain
+until kubectl explain website >/dev/null 2>&1; do sleep 1; done
 kubectl explain website
 ```
 
@@ -688,6 +694,7 @@ EOF
 
 kubectl wait --for condition=established --timeout=60s crd/websites.example.com
 kubectl api-resources | grep example.com
+until kubectl explain website.spec >/dev/null 2>&1; do sleep 1; done
 kubectl explain website.spec
 ```
 </details>
@@ -732,7 +739,7 @@ kubectl get ws my-blog -o yaml
 
 - [ ] List every CRD installed in the cluster and count them.
 - [ ] Describe `certificates.cert-manager.io` if cert-manager is installed, otherwise describe the first available CRD.
-- [ ] Filter API resources for CRD-backed groups and note which ones are namespaced.
+- [ ] List CRD definitions with their groups, kinds, and scopes, then filter API resources for one known extension group.
 
 <details>
 <summary>Solution</summary>
@@ -757,11 +764,14 @@ kubectl get crd -o name | head -1 | xargs kubectl describe
 # List all API resources
 kubectl api-resources
 
-# Filter for a specific group
-kubectl api-resources | grep networking
+# Filter for a specific built-in API group
+kubectl api-resources --api-group=networking.k8s.io
 
-# Show only CRD-backed resources (custom)
-kubectl api-resources | grep -v "^NAME" | grep "\."
+# Show only CRD definitions with CRD-specific metadata
+kubectl get crd -o custom-columns=NAME:.metadata.name,GROUP:.spec.group,KIND:.spec.names.kind,SCOPE:.spec.scope
+
+# Show resources from the extension group created earlier in the lab
+kubectl api-resources --api-group=example.com
 ```
 </details>
 
@@ -897,7 +907,9 @@ EOF
 kubectl wait --for condition=established --timeout=60s crd/configs.drill.example.com
 
 # Use explain
+until kubectl explain config >/dev/null 2>&1; do sleep 1; done
 kubectl explain config
+until kubectl explain config.spec >/dev/null 2>&1; do sleep 1; done
 kubectl explain config.spec
 
 # Cleanup
@@ -949,7 +961,7 @@ EOF
 # Verify CRD is established
 kubectl wait --for condition=established --timeout=60s crd/caches.drill.example.com
 
-# 2. Try to apply an invalid CR (memoryLimit is a string instead of integer, and too small)
+# 2. Try to apply an invalid CR (memoryLimit is a string instead of an integer)
 cat << 'EOF' | kubectl apply -f -
 apiVersion: drill.example.com/v1
 kind: Cache
@@ -988,6 +1000,12 @@ kubectl delete crd caches.drill.example.com
 - [ ] You can create and remove the drill CRDs without leaving custom resources behind.
 - [ ] You can describe when a CRD is unnecessary because a ConfigMap, Secret, or built-in Kubernetes resource is simpler.
 
+## Learner check
+
+> The safest discovery habit is to wait for the CRD to become established, then retry `kubectl explain` until discovery can resolve the custom resource.
+
+Before moving on, explain why the CRD's Established condition and client-side discovery refresh are related but separate readiness checks. Your answer should mention what the API server has accepted, what `kubectl explain` still needs to discover, and how a retry avoids a misleading failure immediately after CRD creation.
+
 ## Sources
 
 - https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
@@ -1001,7 +1019,7 @@ kubectl delete crd caches.drill.example.com
 - https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/
 - https://kubernetes.io/docs/concepts/architecture/controller/
 - https://cert-manager.io/docs/concepts/certificate/
-- https://gateway-api.sigs.k8s.io/concepts/api-overview/
+- https://gateway-api.sigs.k8s.io/docs/concepts/api-overview/
 - https://prometheus-operator.dev/docs/getting-started/introduction/
 
 ## Next Module
