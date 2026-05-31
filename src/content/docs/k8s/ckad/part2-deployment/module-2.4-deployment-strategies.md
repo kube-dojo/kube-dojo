@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 40-50 minutes
 >
-> **Prerequisites**: Module 2.1 (Deployments), understanding of Services
+> **Prerequisites**: [Module 2.1 (Deployments)](../module-2.1-deployments/), understanding of Services
 
 ---
 
@@ -282,7 +282,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: myapp:1.0
+        image: nginx:1.25
 ```
 
 ### Step 2: Create Service (Points to Blue)
@@ -323,7 +323,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: myapp:2.0
+        image: nginx:1.26
 ```
 
 ### Step 4: Switch Traffic
@@ -358,7 +358,8 @@ kubectl apply -f green-deployment.yaml
 # Test green directly (port-forward or separate service)
 kubectl port-forward deploy/app-green 8080:80 &
 sleep 2
-curl localhost:8080
+curl 127.0.0.1:8080
+kill %1
 
 # Switch traffic to green
 kubectl patch svc myapp -p '{"spec":{"selector":{"version":"green"}}}'
@@ -375,9 +376,9 @@ Exercise scenario: you have blue serving `nginx:1.25` and green serving `nginx:1
 ```bash
 # Create blue deployment
 kubectl create deploy app-blue --image=nginx:1.25 --replicas=3
-kubectl label deploy app-blue version=blue
 
-# Add version label to pod template
+# NOTE: labeling the Deployment object does NOT change pod labels or Service endpoints.
+# Add the version label to the pod template instead.
 kubectl patch deploy app-blue -p '{"spec":{"template":{"metadata":{"labels":{"version":"blue"}}}}}'
 
 # Create service
@@ -428,7 +429,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: myapp:1.0
+        image: nginx:1.25
 ```
 
 ### Canary Deployment (10% traffic)
@@ -452,7 +453,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: myapp:2.0
+        image: nginx:1.26
 ```
 
 Stop and think: in the canary setup below, the Service selector uses `app: myapp`, which matches both the stable and canary pods. How does Kubernetes distribute traffic between them, and what would happen if the canary pod is not Ready? The useful answer is that only ready endpoints receive traffic, so a one-pod canary that fails readiness effectively receives no Service traffic even though its Deployment exists.
@@ -487,7 +488,7 @@ kubectl scale deploy app-canary --replicas=5
 kubectl scale deploy app-stable --replicas=5
 
 # Full rollout (update stable to new version)
-kubectl set image deploy/app-stable app=myapp:2.0
+kubectl set image deploy/app-stable app=nginx:1.26
 kubectl rollout status deploy/app-stable
 
 # Cleanup: remove canary
@@ -509,6 +510,8 @@ Readiness is what prevents a deployment strategy from becoming a polite way to s
 Without readiness probes, Kubernetes may treat a container as ready as soon as it is running. That default can be acceptable for very simple containers, but it is unsafe for applications with meaningful startup work. A rolling update with `maxUnavailable: 0` can still cause user-visible errors if the new pod enters the Service endpoint set before the application can serve real requests.
 
 Good readiness probes are specific enough to protect users but cheap enough to run frequently. A probe that only checks whether the process exists may pass while the application cannot answer real requests. A probe that performs a slow, fragile dependency check can flap and remove healthy pods from traffic. For CKAD examples, an HTTP check against a lightweight readiness endpoint is usually the clearest pattern.
+
+The next fragment is display-only because it focuses on readiness fields rather than a complete runnable Deployment. Replace `myapp` and the `/ready` path with your real container image and readiness endpoint before applying the pattern in a cluster.
 
 ```yaml
 spec:
@@ -721,7 +724,7 @@ Before starting, decide how you will observe each task. For rolling update, obse
 
 ### Task 1: Rolling Update with Conservative Parameters
 
-Create a Deployment that allows one surge pod and zero unavailable pods, then update the image and observe the rollout. The important observation is the maximum pod count during the transition: with four desired replicas and `maxSurge: 1`, you should not see more than five pods for this Deployment. If the fifth pod cannot schedule, the old four pods should remain because the controller is not allowed to make any desired pod unavailable.
+Create a Deployment that allows one surge pod and zero unavailable pods, then update the image and observe the rollout. The important observation is controller-budget language: with four desired replicas and `maxSurge: 1`, the Deployment budget allows at most five scheduled pods for the active rollout, but terminating pods from the old ReplicaSet may briefly inflate the `kubectl get pods` count. If the fifth active pod cannot schedule, the old four pods should remain because the controller is not allowed to make any desired pod unavailable.
 
 ```bash
 # Create deployment with custom rolling update
@@ -932,8 +935,9 @@ spec:
 EOF
 
 # Gradually increase canary
-kubectl scale deploy canary --replicas=3  # approximately 30% if stable is 7
+kubectl scale deploy canary --replicas=3
 kubectl scale deploy stable --replicas=7
+# approximately 30% after stable is scaled down
 kubectl get endpoints canary-svc
 
 # Full rollout
@@ -1097,6 +1101,14 @@ After `kubectl set selector svc production release=production`, the Service shou
 - [ ] You observed or reasoned through how `Recreate` avoids mixed versions by accepting downtime.
 - [ ] You added readiness-aware rollout reasoning and connected probe behavior to Service endpoint selection.
 - [ ] You cleaned up all Deployments and Services created during the exercise.
+
+---
+
+## Learner check
+
+> With four desired replicas and `maxSurge: 1`, the Deployment budget allows at most five scheduled pods for the active rollout, but terminating pods from the old ReplicaSet may briefly inflate the `kubectl get pods` count.
+
+Before you move on, explain why the quote uses controller-budget language rather than a raw pod-count ceiling. A solid answer mentions `maxSurge`, terminating pods, and the difference between the controller's active rollout budget and what a momentary `kubectl get pods` listing may show.
 
 ---
 
