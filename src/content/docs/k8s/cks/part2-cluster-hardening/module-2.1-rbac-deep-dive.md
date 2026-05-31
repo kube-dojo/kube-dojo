@@ -13,7 +13,7 @@ lab:
 ---
 > **Complexity**: `[MEDIUM]` - Core security skill
 >
-> **Time to Complete**: 45-50 minutes
+> **Time to Complete**: 40-45 minutes
 >
 > **Prerequisites**: CKA RBAC knowledge, ServiceAccounts basics
 
@@ -142,9 +142,9 @@ rules:
   verbs: ["create", "update", "patch"]
 
 # WHY IT'S BAD:
-# - Can grant themselves cluster-admin
-# - Privilege escalation attack
-# - Only admins should modify RBAC
+# - Can mutate RBAC objects cluster-wide
+# - Dangerous combined with bind/escalate or existing broad grants
+# - Only tightly controlled admins should modify RBAC
 ```
 
 The subtle version of this mistake is giving namespace administrators too much RBAC write access because the cluster uses shared namespaces poorly. A namespace Role that can update Roles and RoleBindings is still powerful inside that namespace, especially when privileged ServiceAccounts already exist there. Before granting RBAC write rights, check whether the subject can bind to existing roles, whether admission policy restricts the ServiceAccounts they can use, and whether the namespace contains credentials for workloads outside the requester's responsibility.
@@ -163,10 +163,10 @@ rules:
   verbs: ["create"]
 
 # WHY IT'S BAD:
-# - Can create privileged pods
-# - Can mount service account tokens
-# - Can escape container to node
-# - Needs Pod Security to be safe
+# - Can create pods that request privileged settings or stronger ServiceAccounts
+# - Can mount service account tokens into the workload
+# - Node-level escape depends on admission controls (Pod Security Admission, etc.)
+# - RBAC alone does not evaluate whether the pod spec is safe
 ```
 
 Stop and think: a developer has a Role that allows `create` on `pods` but nothing else, and they claim they cannot do anything dangerous. If the namespace contains a more powerful ServiceAccount and admission allows the pod to use it, the developer may create a pod that runs with that ServiceAccount token. The RBAC grant looked narrow on paper, but the workload object became a bridge to another identity.
@@ -434,10 +434,10 @@ Escalation prevention is about blocking paths, not only blocking obvious admin r
 │  Direct Escalation:                                        │
 │  ─────────────────────────────────────────────────────────  │
 │  1. Create/update ClusterRoleBindings                      │
-│     → Bind self to cluster-admin                           │
+│     → Attach powerful roles (bind guardrail applies)       │
 │                                                             │
-│  2. Create/update ClusterRoles                             │
-│     → Add * permissions                                    │
+│  2. bind / escalate on RBAC resources                      │
+│     → Expand permissions beyond current grants             │
 │                                                             │
 │  Indirect Escalation:                                      │
 │  ─────────────────────────────────────────────────────────  │
@@ -571,7 +571,7 @@ The final decision rule is ownership. A platform team can own ClusterRoles, name
 
 - **Kubernetes RBAC became stable in the `rbac.authorization.k8s.io/v1` API during the 1.8 release line.** That stability is why the same core Role and RoleBinding structure still appears in Kubernetes 1.35 training and production audits.
 
-- **The `system:masters` group bypasses ordinary RBAC policy through the built-in cluster-admin relationship.** Treat membership in that group as emergency-level authority because removing RoleBindings will not narrow a certificate or identity that still belongs to it.
+- **The `system:masters` group is treated as a static superuser identity, not a permission you grant through a RoleBinding.** The API server authorizer grants cluster-admin-equivalent access to this group directly, so removing RBAC bindings will not narrow a client certificate or identity that still belongs to it.
 
 - **Aggregated ClusterRoles extend built-in roles through labels such as `rbac.authorization.k8s.io/aggregate-to-view`.** This lets custom resources add read rules to `view`, but it also means built-in role behavior can change when new labeled ClusterRoles are installed.
 
@@ -676,7 +676,7 @@ EOF
 # Task 1: Audit the permissions
 kubectl auth can-i --list --as=system:serviceaccount:rbac-test:admin-app
 
-# Task 2: Check if it can read secrets (it shouldn't!)
+# Task 2: Confirm it can read secrets (expected with the wildcard grant)
 kubectl auth can-i get secrets --as=system:serviceaccount:rbac-test:admin-app
 
 # Task 3: Create a restricted role (only pods in namespace)
@@ -750,6 +750,14 @@ For a read-only workload, remove `create` and `delete` from the `pods` rule and 
 </details>
 
 Success is not just a passing command. A secure answer has evidence that the ServiceAccount kept the intended namespace pod capability, lost cluster-wide reach, lost Secret access, and no longer depends on wildcard permissions. That evidence is what you would put in a pull request, incident note, or exam answer to show that the repair is controlled rather than lucky.
+
+---
+
+## Learner check
+
+> A wildcard ClusterRole bound through a ClusterRoleBinding lets a namespace ServiceAccount read Secrets cluster-wide; the hands-on exercise proves that over-broad baseline with `kubectl auth can-i` before you replace the binding with a namespace-scoped RoleBinding.
+
+Before you move on, explain why mutating ClusterRoleBindings is not automatically equivalent to granting yourself `cluster-admin`, and which RBAC verbs make that difference explicit. A solid answer names the `bind` and `escalate` guardrails, contrasts direct RBAC mutation with indirect pod-based escalation, and includes at least one negative `kubectl auth can-i` check after your repair.
 
 ---
 
