@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: ckad-1.2-jobs-cronjobs
   url: https://killercoda.com/kubedojo/scenario/ckad-1.2-jobs-cronjobs
-  duration: "30 min"
+  duration: "45-50 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -37,7 +37,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2017, GitLab published a detailed incident report after a production database maintenance operation went badly wrong and left the company restoring data under intense customer pressure. The failure was not a Kubernetes Job failure, but the lesson is directly relevant: operational work that feels like "just a script" can become a business incident when retries, scheduling, ownership, and cleanup are vague. A backup, migration, report, or cleanup task is not safer because it is short-lived; it is safer only when the platform knows when it should start, when it should stop, how many times it may retry, and what evidence it should leave behind for diagnosis.
+Hypothetical scenario: a production database maintenance operation goes badly wrong and leaves the team restoring data under intense customer pressure. The lesson is directly relevant: operational work that feels like "just a script" can become a business incident when retries, scheduling, ownership, and cleanup are vague. A backup, migration, report, or cleanup task is not safer because it is short-lived; it is safer only when the platform knows when it should start, when it should stop, how many times it may retry, and what evidence it should leave behind for diagnosis.
 
 Kubernetes separates this kind of work from Deployments because the desired end state is different. A Deployment tries to keep a number of Pods running indefinitely, while a Job tries to reach a number of successful completions and then stop creating Pods. A CronJob adds time to that model: it creates Jobs on a schedule, applies overlap rules when a previous run is still active, and retains a bounded amount of history so teams can inspect recent successes and failures without letting old Pods fill the namespace.
 
@@ -145,6 +145,7 @@ metadata:
 spec:
   completions: 5        # Run 5 times
   parallelism: 1        # One at a time
+  completionMode: Indexed  # Exposes JOB_COMPLETION_INDEX
   template:
     spec:
       containers:
@@ -415,7 +416,7 @@ k get cronjob my-cronjob -o jsonpath='{.spec.suspend}'
 k patch cronjob my-cronjob -p '{"spec":{"suspend":false}}'
 ```
 
-A practical war story makes the difference concrete. A platform team once scheduled a nightly report generator as a CronJob with the default `Allow` policy because the YAML looked smaller and the first few runs finished quickly. At month end, each run took longer, the next schedule created another Job, and several Pods competed for the same database read replica until dashboard latency spiked. The fix was not exotic: they set `concurrencyPolicy: Forbid`, added a runtime deadline, tuned resource requests, and created an alert when a run was skipped because the previous one was still active.
+Hypothetical scenario: a platform team schedules a nightly report generator as a CronJob with the default `Allow` policy because the YAML looks smaller and the first few runs finish quickly. At month end, each run takes longer, the next schedule creates another Job, and several Pods compete for the same database read replica until dashboard latency spikes. The fix is not exotic: set `concurrencyPolicy: Forbid`, add a runtime deadline, tune resource requests, and create an alert when a run is skipped because the previous one is still active.
 
 ## Patterns & Anti-Patterns
 
@@ -477,7 +478,7 @@ For production speed, make the template readable enough that the next engineer c
 
 ## Did You Know?
 
-- **Jobs track completions with a completion index.** In indexed completion mode, each Pod can know its index through `JOB_COMPLETION_INDEX`, which is useful when you shard data and want each Pod to process a different partition.
+- **Indexed Jobs expose a completion index.** In indexed completion mode, each Pod can know its index through `JOB_COMPLETION_INDEX`, which is useful when you shard data and want each Pod to process a different partition.
 - **CronJobs support time zones in modern Kubernetes.** The `spec.timeZone` field lets you say that a business schedule should run in a named time zone instead of relying on the controller's local clock behavior.
 - **The `activeDeadlineSeconds` field limits the whole Job runtime.** If the deadline expires, Kubernetes terminates active Pods for that Job even if some individual attempts were still making progress.
 - **CronJob history limits and Job TTL solve different cleanup problems.** History limits decide how many Jobs a CronJob keeps, while `ttlSecondsAfterFinished` lets the TTL controller remove finished Jobs after a configured delay.
@@ -579,13 +580,14 @@ This is the workflow many teams use before enabling a new schedule. They create 
 k create cronjob hourly-cleanup \
   --image=busybox \
   --schedule="0 * * * *" \
-  -- sh -c "echo 'Cleanup at $(date)'"
+  -- sh -c 'echo "Cleanup at $(date)"'
 
 # Manually trigger for testing
 k create job manual-cleanup --from=cronjob/hourly-cleanup
 
 # Check results
 k get jobs
+k wait --for=condition=complete job/manual-cleanup --timeout=60s
 k logs job/manual-cleanup
 ```
 
@@ -611,6 +613,7 @@ metadata:
 spec:
   completions: 6
   parallelism: 2
+  completionMode: Indexed
   template:
     spec:
       containers:
@@ -622,6 +625,8 @@ EOF
 
 k apply -f parallel-job.yaml
 k get pods -l job-name=parallel-process
+k wait --for=condition=complete job/parallel-process --timeout=60s
+k get job parallel-process
 ```
 
 <details><summary>Solution notes for Task 3</summary>
@@ -645,6 +650,7 @@ The retry drill is especially useful because it creates a controlled failure. A 
 k create job hello-job --image=busybox -- echo "Hello from job"
 
 # Verify completion
+k wait --for=condition=complete job/hello-job --timeout=60s
 k get job hello-job
 
 # Check logs
@@ -665,9 +671,12 @@ k create cronjob every-minute --image=busybox --schedule="* * * * *" -- date
 # Wait 1 minute and check
 sleep 65
 k get jobs
+EVERY_MINUTE_JOB=$(k get jobs --sort-by=.metadata.creationTimestamp -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep '^every-minute-' | tail -n 1)
+test -n "$EVERY_MINUTE_JOB"
 
 # Check logs of triggered job
-k logs job/$(k get jobs -o jsonpath='{.items[0].metadata.name}')
+k wait --for=condition=complete "job/${EVERY_MINUTE_JOB}" --timeout=60s
+k logs "job/${EVERY_MINUTE_JOB}"
 
 # Cleanup
 k delete cronjob every-minute
@@ -691,8 +700,8 @@ spec:
       restartPolicy: Never
 EOF
 
-# Verify retries
-sleep 5
+# Wait for the retry policy to finish
+k wait --for=condition=failed job/retry-job --timeout=120s
 k get pods -l job-name=retry-job
 
 # Check job status
@@ -721,11 +730,9 @@ spec:
       restartPolicy: Never
 EOF
 
-# Verify parallel execution
-sleep 5
+# Observe active Pods, then wait for all completions
 k get pods -l job-name=parallel
-
-# Verify all completed
+k wait --for=condition=complete job/parallel --timeout=60s
 k get job parallel
 
 # Cleanup
@@ -756,9 +763,11 @@ EOF
 # Check policy
 k get cronjob no-overlap -o jsonpath='{.spec.concurrencyPolicy}'
 
-# Wait 2 minutes and verify only 1 job runs
+# Wait 2 minutes and verify at most one CronJob-owned Job is active
 sleep 120
-k get jobs | grep no-overlap
+k get jobs --sort-by=.metadata.creationTimestamp -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="no-overlap")]}{.metadata.name}{" active="}{.status.active}{"\n"}{end}'
+ACTIVE_COUNT=$(k get jobs -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].name=="no-overlap")]}{.status.active}{"\n"}{end}' | awk '$1 == 1 {count++} END {print count+0}')
+test "$ACTIVE_COUNT" -le 1
 
 # Cleanup
 k delete cronjob no-overlap
@@ -821,14 +830,15 @@ EOF
 k create job test-backup --from=cronjob/backup-system
 
 # 4. Check logs
+k wait --for=condition=complete job/test-backup --timeout=60s
 k logs job/test-backup
 
 # 5. Verify history limits
 k get cronjob backup-system -o jsonpath='{.spec.successfulJobsHistoryLimit}'
 
 # Cleanup
-k delete cronjob backup-system
 k delete job test-backup
+k delete cronjob backup-system
 k delete configmap backup-script
 ```
 
@@ -846,6 +856,12 @@ The manual trigger should create `test-backup`, run the script from the ConfigMa
 - [ ] You can diagnose a failing Job by checking Job status, labeled Pods, events, logs, and retry limits.
 - [ ] You can configure a CronJob with overlap protection, history limits, and finished-Job cleanup.
 - [ ] You can clean up every Job, CronJob, and ConfigMap created during the exercise.
+
+## Learner check
+
+> **Indexed Jobs expose a completion index.**
+
+When you use `JOB_COMPLETION_INDEX`, which Job spec field must be present, and what symptom would you expect if the Job ran in the default non-indexed mode?
 
 ## Sources
 
