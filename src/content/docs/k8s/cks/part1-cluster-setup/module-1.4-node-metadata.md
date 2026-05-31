@@ -24,16 +24,16 @@ lab:
 
 After completing this module, you will be able to:
 
+1. **Create** NetworkPolicies that block pod access to cloud metadata endpoints
+2. **Audit** cluster workloads for metadata service exposure risks
+3. **Implement** IMDS v2 enforcement and metadata service restrictions on cloud providers
+4. **Trace** privilege escalation paths from metadata credentials to cloud resource access
+
 That means you should be able to apply concrete controls in a real cluster, verify them under failure conditions, and reason about how metadata access can become a privilege-escalation route when policy is incomplete.
 
 You should also be able to explain the limits of each control. A correct answer on this topic is not just "block `169.254.169.254`." A correct answer names the workload namespace, the CNI enforcement requirement, the provider feature that reduces credential exposure, and the verification command that proves the chosen pod can no longer reach the metadata service.
 
 For the CKS, this is a practical skill rather than a memorized cloud trivia topic. You may be asked to write the policy, but the scenario usually tests whether you understand why the policy works and where it stops. The best answers combine fast YAML execution with a short explanation of enforcement, verification, and identity scope.
-
-1. **Create** NetworkPolicies that block pod access to cloud metadata endpoints
-2. **Audit** cluster workloads for metadata service exposure risks
-3. **Implement** IMDS v2 enforcement and metadata service restrictions on cloud providers
-4. **Trace** privilege escalation paths from metadata credentials to cloud resource access
 
 ---
 
@@ -229,10 +229,9 @@ spec:
         app: metadata-blocker
     spec:
       hostNetwork: true
-      hostPID: true
       containers:
       - name: blocker
-        image: alpine
+        image: alpine:3.20
         command:
         - /bin/sh
         - -c
@@ -289,18 +288,21 @@ For EKS, pair IMDSv2 with identity isolation for workloads. [IAM Roles for Servi
 
 There is a nuance that exam answers often miss. AWS documents that pods using `hostNetwork: true` will always have IMDS access, although SDKs should use IRSA or Pod Identity credentials when configured. That means IMDS blocking and workload identity are complementary. Workload identity gives the application the right credentials; metadata blocking prevents the same application from falling back to the broader node role.
 
-### GCP Metadata Concealment
+### GKE Workload Metadata Mode
 
-If workloads move across providers, this is your equivalent to IMDS controls on GCP: configure metadata behavior at node-pool level so workloads cannot assume unrestricted metadata exposure by default. In many environments this starts as a "one flag in pool config" change and becomes a reliable baseline safeguard for all new nodes.
+If workloads move across providers, this is your equivalent to IMDS controls on GCP: configure metadata behavior at the node-pool level so workloads do not assume unrestricted metadata exposure by default. In many environments this starts as a "one flag in pool config" change and becomes a reliable baseline safeguard for all new nodes.
 
 GCP requests need the `Metadata-Flavor: Google` header, and a recursive query can list a tree of metadata under `/computeMetadata/v1/`. That header requirement prevents some accidental reads, but it does not protect against a controlled pod process. A compromised container can add the header as easily as it can run any other HTTP request.
 
 ```bash
-# Enable metadata concealment on GKE node pool
+# Enable the GKE Metadata Server for Workload Identity on the node pool
+# (requires Workload Identity enabled on the cluster)
 gcloud container node-pools update POOL_NAME \
   --cluster=CLUSTER_NAME \
   --workload-metadata=GKE_METADATA
 ```
+
+The older `--workload-metadata=SECURE` mode implemented legacy metadata concealment; GKE has deprecated that path in favor of Workload Identity Federation and the `GKE_METADATA` server mode. See [GKE cluster metadata protection](https://cloud.google.com/kubernetes-engine/docs/how-to/protecting-cluster-metadata) for the current posture.
 
 Current GKE guidance favors [Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) for application access to Google Cloud APIs. The design is the same principle as IRSA: bind cloud access to a Kubernetes service account and avoid exposing broad node credentials to arbitrary pods. Node service accounts should also be least privilege, because a metadata protection bypass is far less damaging when the node identity cannot read sensitive project resources.
 
@@ -311,10 +313,12 @@ Azure requires specific headers, and the endpoint accepts only calls that includ
 In a Kubernetes threat model, this means your defenses should still assume a determined attacker may test multiple metadata flavors and chains, because headers can be learned but not always trusted if the pod is already running with privileged network access.
 
 ```bash
-# Azure IMDS requires Metadata header
+# Azure IMDS requires Metadata header; instance probe omits resource=
 curl -H "Metadata:true" \
-  "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01"
+  "http://169.254.169.254/metadata/instance?api-version=2021-02-01"
 ```
+
+A managed-identity token URL without `resource=` may return HTTP 400 even when IMDS is reachable. Use that token path only when you need a real credential test, not as a simple reachability probe.
 
 On AKS, prefer [Microsoft Entra Workload ID](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) for application pods that need Azure resources. It uses Kubernetes service account tokens and OIDC federation so the workload can exchange its projected identity for Azure credentials. That is safer than giving every pod a path to the node's managed identity and then hoping application bugs never reach IMDS.
 
@@ -617,7 +621,7 @@ The final layer is documentation for exceptions. Every namespace or workload tha
 ### Prerequisites
 
 - [ ] You have a Kubernetes v1.35 kind cluster available, and you can create disposable namespaces without affecting any shared environment.
-- [ ] Your kind cluster uses a NetworkPolicy-enforcing CNI, because default kind networking accepts NetworkPolicy objects but does not enforce them.
+- [ ] Ensure your kind cluster enforces NetworkPolicy (default kind v0.24+ kindnet does; older clusters may need Calico/Cilium).
 - [ ] `kubectl` points at the test cluster, and `kubectl config current-context` shows the disposable context you intend to use.
 - [ ] You understand that kind has no real cloud IMDS, so the before probe may fail because the endpoint is absent.
 
