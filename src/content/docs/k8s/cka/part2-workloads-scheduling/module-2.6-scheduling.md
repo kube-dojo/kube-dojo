@@ -164,6 +164,8 @@ spec:
     image: nginx
 ```
 
+In this example, `zone` is a custom node label you apply in the lab (for example `kubectl label node ... zone=us-west-1a`). On cloud clusters, prefer the well-known `topology.kubernetes.io/zone` key instead — nodes must expose zone labels for either key to contribute to preferred-affinity scoring.
+
 Think of required affinity as a locked door and preferred affinity as a recommendation from the seating host. A locked door keeps a pod out even when the room has empty chairs. A recommendation can influence where the pod lands, but other scoring factors may still win. This distinction matters when you debug, because a pod that violates a preference can still be Running, while a pod that violates a requirement cannot be bound at all.
 
 Node affinity operators make the rule expressive enough for real scheduling contracts. `In` and `NotIn` compare label values against a set. `Exists` and `DoesNotExist` care only about whether the key is present. `Gt` and `Lt` perform integer comparisons, which can be helpful for numeric labels but are less common in exam tasks. The scheduler evaluates the labels on the node, not data inside the container image or application.
@@ -492,8 +494,8 @@ kubectl describe node <node> | grep Taints
 # Check node resources
 kubectl describe node <node> | grep -A10 "Allocated resources"
 
-# Simulate scheduling
-kubectl get pods -o wide  # See where pods landed
+# Verify where pods landed
+kubectl get pods -o wide
 ```
 
 A disciplined troubleshooting loop starts with the pod event, then checks the pod spec, then checks node reality. If the event mentions node affinity, inspect the affinity block and the node labels. If it mentions taints, inspect node taints and pod tolerations. If it mentions insufficient resources, compare requests against allocatable capacity and existing allocations. If it mentions topology spread or anti-affinity, count matching pods by topology domain instead of staring only at CPU and memory.
@@ -744,6 +746,7 @@ kubectl delete deployment spread-deploy
 - [ ] Implement a taint and a matching toleration, then remove both cleanly.
 - [ ] Compare allowed placement with required placement by explaining why toleration alone is not attraction.
 - [ ] Evaluate pod anti-affinity behavior by checking whether replicas spread across nodes.
+- [ ] Evaluate topology spread constraints by verifying replica placement across labeled zones.
 - [ ] Diagnose at least one Pending pod from scheduler events rather than guessing from the manifest alone.
 
 ### Practice Drills
@@ -758,10 +761,7 @@ NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 # Label node
 kubectl label node $NODE env=production
 
-# Create pod with nodeSelector
-kubectl run selector-test --image=nginx --overrides='{"spec":{"nodeSelector":{"env":"production"}}}'
-
-# Or simpler - just use YAML
+# Create pod with nodeSelector (YAML matches exam-style manifests)
 cat << 'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: Pod
@@ -991,11 +991,69 @@ kubectl taint nodes $NODE frontend-
 
 </details>
 
+### Drill 7: Topology Spread (Target: 5 minutes)
+
+Apply the topology spread constraint from the theory section and verify that `app: web` replicas distribute across labeled zones. This drill works best on a multi-node lab (minikube with `--nodes 3`, kind, or a cloud cluster); on a single-node cluster, pods still schedule but zone skew is not meaningful.
+
+```bash
+# Label nodes with zone topology (adjust node count to your lab)
+NODE1=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+NODE2=$(kubectl get nodes -o jsonpath='{.items[1].metadata.name}')
+kubectl label node $NODE1 topology.kubernetes.io/zone=zone-a --overwrite
+kubectl label node $NODE2 topology.kubernetes.io/zone=zone-b --overwrite
+
+# Deploy replicas with topology spread (same labels/key as the theory example)
+cat << 'EOF' | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-spread
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: web
+      containers:
+      - name: nginx
+        image: nginx
+EOF
+
+# Verify spread — check NODE column and zone labels on those nodes
+kubectl get pods -l app=web -o wide
+kubectl get nodes -L topology.kubernetes.io/zone
+
+# Expected: when two zones have eligible nodes, no zone should hold more
+# than one extra replica compared to the least-populated zone (maxSkew: 1)
+
+# Cleanup
+kubectl delete deployment web-spread
+kubectl label node $NODE1 topology.kubernetes.io/zone-
+kubectl label node $NODE2 topology.kubernetes.io/zone-
+```
+
+## Learner check
+
+Before moving on, confirm you can explain why a pod with preferred node affinity can land outside its preferred zone, and why topology spread with `maxSkew: 1` differs from required pod anti-affinity.
+
+> In this example, `zone` is a custom node label you apply in the lab (for example `kubectl label node ... zone=us-west-1a`). On cloud clusters, prefer the well-known `topology.kubernetes.io/zone` key instead — nodes must expose zone labels for either key to contribute to preferred-affinity scoring.
+
 ## Sources
 
 - [Assign Pods to Nodes](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
 - [Taints and Tolerations](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
-- [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/)
+- [Pod Topology Spread Constraints](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/)
 - [Kubernetes Scheduler](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/)
 - [Well-Known Labels, Annotations, and Taints](https://v1-35.docs.kubernetes.io/docs/reference/labels-annotations-taints/)
 - [Nodes](https://v1-35.docs.kubernetes.io/docs/concepts/architecture/nodes/)
