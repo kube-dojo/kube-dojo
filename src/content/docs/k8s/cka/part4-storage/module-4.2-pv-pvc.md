@@ -77,6 +77,7 @@ The diagram shows the main responsibility boundary. Administrators care about wh
 
 The resource chain is easiest to debug when you keep the objects in order. A StorageClass describes how dynamic storage should be created. A PV represents actual capacity. A PVC requests capacity. A Pod references the PVC by name. If the Pod cannot mount storage, you should not start by editing the container image; first inspect whether the PVC is bound, which PV it selected, and whether the selected backend can be attached to the node where the Pod landed.
 
+```text
 +-------------------+      +-------------------+      +-------------------+
 | StorageClass      | ---> | PersistentVolume  | ---> | Backend storage   |
 | policy + driver   |      | capacity + mode   |      | disk, NFS, local  |
@@ -87,6 +88,7 @@ The resource chain is easiest to debug when you keep the objects in order. A Sto
 | PersistentVolume  | ---> | Pod volume mount  |
 | Claim request     |      | container path    |
 +-------------------+      +-------------------+
+```
 
 Pause and predict: if a PVC is created in the `frontend` namespace and a Pod in the `backend` namespace uses the same claim name, what object lookup does the kubelet attempt? The PV is cluster-scoped, but the Pod never mounts a PV directly. It references a PVC in its own namespace, so the namespace boundary remains part of the storage contract even after a cluster-scoped PV has been bound.
 
@@ -287,11 +289,38 @@ EOF
 
 After creating a claim, inspect it from both directions. The PVC status tells you whether the claim is bound, and the PV `CLAIM` column tells you which namespace and claim consumed the volume. If you only inspect the Pod, you may miss that the Pod is waiting on a claim that never bound. If you only inspect the PV, you may miss that the Pod is in the wrong namespace for the PVC it references.
 
+On kind and many Kubernetes 1.35 clusters, the default `standard` StorageClass sets `volumeBindingMode: WaitForFirstConsumer`, so a new PVC often stays `Pending` until a Pod references the claim. That is normal controller behavior, not a failed provision attempt.
+
 ```bash
-# List PVCs
+# List PVCs right after creating the claim
+kubectl get pvc
+# NAME       STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+# my-claim   Pending                                      standard       5s
+
+# Consumer Pod triggers binding/provisioning for WaitForFirstConsumer classes
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-claim-consumer
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ['sleep', '3600']
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: my-claim
+EOF
+
+# After the Pod is scheduled, the claim should bind
 kubectl get pvc
 # NAME       STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS
-# my-claim   Bound    pv-001   10Gi       RWO            standard
+# my-claim   Bound    pv-xxx   10Gi       RWO            standard
 
 # Detailed view
 kubectl describe pvc my-claim
@@ -874,6 +903,12 @@ Use these short drills to build speed after you complete the full lab. They are 
 # Task: Create a local PV that only works on node "worker-1".
 # Include the required nodeAffinity section.
 ```
+
+## Learner check
+
+> On kind and many Kubernetes 1.35 clusters, the default `standard` StorageClass sets `volumeBindingMode: WaitForFirstConsumer`, so a new PVC often stays `Pending` until a Pod references the claim.
+
+Before you delete a `Pending` PVC on a lab cluster, what two objects should you verify exist (or create) so `WaitForFirstConsumer` can finish binding?
 
 ## Sources
 
