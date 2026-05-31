@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: cka-5.5-networking
   url: https://killercoda.com/kubedojo/scenario/cka-5.5-networking
-  duration: "45 min"
+  duration: "50-60 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -105,7 +105,8 @@ kubectl exec <source-pod> -- nc -zv <target-pod-ip> <port>
 
 # Capture packets using an ephemeral debug container.
 # This is useful when target pods run distroless or minimal images.
-kubectl debug <target-pod> -it --image=nicolaka/netshoot -- tcpdump -nni eth0 -c 10 port <port>
+# --target and --share-processes attach to the workload container's network namespace.
+kubectl debug <target-pod> -n <ns> -it --image=nicolaka/netshoot --target=<container> --share-processes -- tcpdump -nni eth0 -c 10 port <port>
 ```
 
 When pod-to-pod traffic fails, read the shape of the failure before changing anything. If no pods can reach any other pods, the CNI plugin or node networking is suspicious. If same-node traffic works but cross-node traffic fails, local Linux bridges may be fine while overlay encapsulation, routing, or firewall rules between nodes are broken. If ICMP works but TCP fails on one port, the pod network may be healthy and the problem may be NetworkPolicy, the listening process, or the wrong port.
@@ -169,21 +170,24 @@ flowchart TD
     D --> F
 ```
 
-Test DNS from the same source pod that experiences the failure. Testing from your laptop, from a node, or from a different namespace changes the resolver configuration and NetworkPolicy context. Use short names and fully qualified names because a failure in one form may reveal search-path or namespace assumptions. If cluster names resolve but external names fail, CoreDNS may be healthy for Kubernetes zones while upstream forwarding, node DNS, or egress policy remains broken.
+Test DNS from the same source pod that experiences the failure. Testing from your laptop, from a node, or from a different namespace changes the resolver configuration and NetworkPolicy context. Prefer fully qualified names when validating cluster DNS from minimal images; a failure on a short name but success on the FQDN may reveal search-path assumptions rather than a broken CoreDNS zone. If cluster names resolve but external names fail, CoreDNS may be healthy for Kubernetes zones while upstream forwarding, node DNS, or egress policy remains broken.
+
+Busybox `nslookup` does not expand the `search` path in `/etc/resolv.conf` the way glibc or netshoot does, so short-name lookups often return `NXDOMAIN` on Kubernetes 1.35 even when cluster DNS is healthy. Prefer FQDNs such as `kubernetes.default.svc.cluster.local`, or run checks from a netshoot debug pod when you need short-name behavior.
 
 ```bash
 # Check the pod's DNS config.
 kubectl exec <pod> -- cat /etc/resolv.conf
 
-# Test cluster DNS.
-kubectl exec <pod> -- nslookup kubernetes
-kubectl exec <pod> -- nslookup kubernetes.default
+# Test cluster DNS (FQDN first — reliable from busybox and glibc clients).
 kubectl exec <pod> -- nslookup kubernetes.default.svc.cluster.local
+# Short names work with glibc/netshoot; busybox may need the FQDN above.
+kubectl exec <pod> -- nslookup kubernetes.default
+kubectl exec <pod> -- nslookup kubernetes
 
-# Test service DNS.
-kubectl exec <pod> -- nslookup <service-name>
-kubectl exec <pod> -- nslookup <service-name>.<namespace>
+# Test service DNS (FQDN form is the reliable check from busybox).
 kubectl exec <pod> -- nslookup <service-name>.<namespace>.svc.cluster.local
+kubectl exec <pod> -- nslookup <service-name>.<namespace>
+kubectl exec <pod> -- nslookup <service-name>
 
 # Test external DNS.
 kubectl exec <pod> -- nslookup google.com
@@ -202,7 +206,7 @@ kubectl -n kube-system get svc kube-dns
 # Check the CoreDNS configmap.
 kubectl -n kube-system get configmap coredns -o yaml
 
-# Verify endpoints.
+# Verify endpoints (deprecated view; prefer EndpointSlices on 1.33+).
 kubectl -n kube-system get endpoints kube-dns
 ```
 
@@ -290,7 +294,7 @@ Endpoints are the most important Service clue because an empty endpoint list tel
 kubectl get svc <service-name>
 kubectl describe svc <service-name>
 
-# Critical: check endpoints.
+# Critical: check endpoints (deprecated view; prefer EndpointSlices on 1.33+).
 kubectl get endpoints <service-name>
 # Empty endpoints means the Service cannot find Ready pods.
 
@@ -304,7 +308,7 @@ kubectl get pods -l <selector> -o wide
 
 | Issue | Symptom | Diagnosis | Fix |
 |-------|---------|-----------|-----|
-| No endpoints | Connection refused or timeout | `kubectl get endpoints` is empty | Fix selector, pod labels, or workload availability |
+| No endpoints | Connection refused or timeout | `kubectl get endpoints` is empty (deprecated view; prefer EndpointSlices on 1.33+) | Fix selector, pod labels, or workload availability |
 | Wrong selector | Endpoints empty | Compare Service selector and pod labels | Patch the Service selector or relabel pods |
 | Wrong port | Connection refused | Check Service `port` versus `targetPort` | Align Service mapping with container listener |
 | Pods not Ready | Missing or partial endpoints | Check readiness probes and pod status | Fix readiness probe or application health |
@@ -353,7 +357,7 @@ kubectl exec <pod> -- ss -tlnp
 kubectl patch svc my-service -p '{"spec":{"ports":[{"port":80,"targetPort":8080}]}}'
 ```
 
-NetworkPolicy adds another decision layer because it changes what traffic is allowed after pods are selected by policy. Policies are additive, so traffic is allowed if any applicable policy allows it, but a pod becomes isolated for a direction only when a policy selecting that pod applies to ingress or egress for that direction. This is the source of many surprises: adding an ingress-only policy does not automatically restrict egress, while adding `Egress` with no egress rules can block DNS, package repositories, APIs, and other dependencies.
+NetworkPolicy adds another decision layer because it changes what traffic is allowed after pods are selected by policy. Policies are additive within a single direction for one pod: traffic is allowed for that direction if any applicable policy allows it, but a pod becomes isolated for a direction only when a policy selecting that pod applies to ingress or egress for that direction. A connection is allowed only when applicable egress rules on the source pod and ingress rules on the destination pod BOTH permit it; the additive union applies separately within each direction. This is the source of many surprises: adding an ingress-only policy does not automatically restrict egress, while adding `Egress` with no egress rules can block DNS, package repositories, APIs, and other dependencies.
 
 ```mermaid
 flowchart TD
@@ -368,6 +372,8 @@ flowchart TD
     
     I["Policies are additive: If ANY policy allows, it is allowed"]
 ```
+
+*Diagram caption: the additive union above applies to multiple policies for ONE pod and ONE direction (ingress or egress), not the full bidirectional check between two pods.*
 
 Policy debugging must use the real source and destination pods because labels, namespaces, and directions all matter. A test from a privileged debug namespace may bypass the exact rule that blocks the application. Always list policies in the relevant namespace, inspect pod selectors, and read both `policyTypes` and rule bodies. Remember that Kubernetes defines the API semantics, while the CNI plugin must implement enforcement; a cluster without NetworkPolicy enforcement will accept objects without actually filtering traffic.
 
@@ -569,8 +575,8 @@ flowchart TD
 
 | Symptom | First Command | Likely Branch | Do Not Do Yet |
 |---------|---------------|---------------|---------------|
-| DNS name times out | `kubectl exec <pod> -- nslookup <service>` | DNS or DNS egress | Do not patch Service ports |
-| DNS resolves but endpoints are empty | `kubectl get endpoints <service>` | Selector, labels, readiness | Do not restart CoreDNS |
+| DNS name times out | `kubectl exec <pod> -- nslookup <service>.<namespace>.svc.cluster.local` | DNS or DNS egress | Do not patch Service ports |
+| DNS resolves but endpoints are empty | `kubectl get endpoints <service>` (deprecated view; prefer EndpointSlices on 1.33+) | Selector, labels, readiness | Do not restart CoreDNS |
 | Pod IP works but Service fails | `kubectl describe svc <service>` | Service ports, endpoints, kube-proxy | Do not rebuild the application image |
 | Same namespace works, other namespace fails | `kubectl get networkpolicy -A` | NetworkPolicy selectors | Do not delete policies cluster-wide |
 | Internal works, external fails | `kubectl get ingress,svc` | Ingress, LoadBalancer, NodePort, firewall | Do not change pod labels first |
@@ -581,14 +587,14 @@ Apply the framework with a strict bias toward reversible observations. Reads are
 
 - Kubernetes Services are virtual abstractions; kube-proxy commonly programs iptables or nftables rules, while IPVS mode is deprecated for the Kubernetes 1.35 target used by this curriculum.
 - DNS for Services is normally exposed through a Service named `kube-dns`, even when the backing implementation is CoreDNS pods running in the `kube-system` namespace.
-- NetworkPolicies are additive: if any applicable policy allows a flow, the flow is allowed, but ingress and egress isolation are evaluated separately.
+- NetworkPolicies are additive within each direction for one pod, but a cross-pod connection requires BOTH matching egress on the source and ingress on the destination.
 - EndpointSlices were introduced to scale endpoint tracking beyond the older Endpoints object, but many troubleshooting commands and exam habits still begin with `kubectl get endpoints`.
 
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
 |---------|----------------|---------------|
-| Not checking endpoints | The Service object exists, so it feels like routing must be configured | Always check `kubectl get endpoints` or EndpointSlices before changing DNS or CNI |
+| Not checking endpoints | The Service object exists, so it feels like routing must be configured | Always check `kubectl get endpoints` (deprecated view; prefer EndpointSlices on 1.33+) or EndpointSlices before changing DNS or CNI |
 | Forgetting DNS in NetworkPolicy | Egress deny rules block UDP and TCP port 53 along with application traffic | Add a narrow egress allow to the cluster DNS Service or its pods |
 | Testing from the wrong pod | Debug pods in another namespace have different labels and policy context | Test from the actual source pod or intentionally mirror its namespace and labels |
 | Ignoring pod readiness | Running pods can be excluded from Service endpoints until probes pass | Check readiness probes, pod conditions, and endpoint membership together |
@@ -681,9 +687,9 @@ kubectl -n network-lab get svc,pods -o wide
 # Test from client to service.
 kubectl -n network-lab exec client -- wget -qO- --timeout=2 http://web
 
-# Test DNS resolution.
-kubectl -n network-lab exec client -- nslookup web
+# Test DNS resolution (busybox client — use FQDN; short names may NXDOMAIN).
 kubectl -n network-lab exec client -- nslookup web.network-lab.svc.cluster.local
+kubectl -n network-lab exec client -- nslookup web
 ```
 
 <details>
@@ -698,7 +704,7 @@ The Service name should resolve inside the namespace, and `wget` should return n
 Endpoints connect the Service abstraction to real backend pod addresses. In this task, compare the Service selector with pod labels and confirm that the selected pods are Ready. This is the habit that prevents wasted time on DNS or CNI when a simple label mismatch is the actual fault.
 
 ```bash
-# Verify endpoints exist.
+# Verify endpoints exist (deprecated view; prefer EndpointSlices on 1.33+).
 kubectl -n network-lab get endpoints web
 
 # Should show IPs of web pods.
@@ -722,7 +728,8 @@ Now deliberately break the Service by changing its selector to a label that no p
 # Break the service by changing selector.
 kubectl -n network-lab patch svc web -p '{"spec":{"selector":{"app":"wrong"}}}'
 
-# Try to connect. This should fail.
+# Try to connect. This should fail (connection refused is common for a few seconds
+# while kube-proxy/endpoints update; timeout can appear if you retry immediately).
 kubectl -n network-lab exec client -- wget -qO- --timeout=2 http://web
 
 # Check endpoints. This should be empty.
@@ -787,12 +794,12 @@ If your cluster enforces NetworkPolicy, the deny-all policy should block traffic
 Use these short drills until the command sequence feels automatic. They deliberately repeat the protected troubleshooting assets from the lesson in compact form, but you should still interpret each result rather than treating the commands as a checklist. The CKA exam rewards fast diagnosis, and speed comes from knowing what each observation proves.
 
 ```bash
-# Drill 1: Test DNS from a pod.
-kubectl exec <pod> -- nslookup kubernetes
+# Drill 1: Test cluster DNS from a pod (FQDN — reliable from busybox).
+kubectl exec <pod> -- nslookup kubernetes.default.svc.cluster.local
 ```
 
 ```bash
-# Drill 2: View service endpoints.
+# Drill 2: View service endpoints (deprecated view; prefer EndpointSlices on 1.33+).
 kubectl get endpoints <service>
 ```
 
@@ -824,9 +831,9 @@ kubectl -n kube-system get pods | grep -E "calico|flannel|weave|cilium"
 
 ```bash
 # Drill 8: Full connectivity debug.
-kubectl exec <pod> -- nslookup <service>     # DNS
+kubectl exec <pod> -- nslookup <service>.<namespace>.svc.cluster.local  # DNS (FQDN)
 kubectl exec <pod> -- nc -zv <service> 80    # TCP
-kubectl get endpoints <service>              # Endpoints
+kubectl get endpoints <service>              # Endpoints (deprecated view; prefer EndpointSlices on 1.33+)
 ```
 
 ### Success Criteria
@@ -843,6 +850,14 @@ kubectl get endpoints <service>              # Endpoints
 ```bash
 kubectl delete ns network-lab
 ```
+
+## Learner check
+
+Before moving on, confirm you can explain these remediation points in your own words:
+
+> Busybox `nslookup` does not expand the `search` path in `/etc/resolv.conf` the way glibc or netshoot does, so short-name lookups often return `NXDOMAIN` on Kubernetes 1.35 even when cluster DNS is healthy.
+
+> A connection is allowed only when applicable egress rules on the source pod and ingress rules on the destination pod BOTH permit it; the additive union applies separately within each direction.
 
 ## Sources
 
