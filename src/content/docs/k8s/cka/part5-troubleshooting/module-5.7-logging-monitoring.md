@@ -136,7 +136,7 @@ spec:
       mountPath: /var/log
   - name: log-tailer
     image: busybox:1.36
-    command: ["/bin/sh", "-c", "tail -f /var/log/app.log"]
+    command: ["/bin/sh", "-c", "touch /var/log/app.log 2>/dev/null; tail -n+1 -F /var/log/app.log"]
     volumeMounts:
     - name: shared-logs
       mountPath: /var/log
@@ -147,14 +147,14 @@ spec:
 
 You can then view the logs by querying the sidecar with `kubectl logs legacy-app -c log-tailer`. This pattern is useful when you cannot change the application quickly, but it has tradeoffs: the sidecar consumes resources, the shared `emptyDir` is node-local and ephemeral, and a naive `tail -f` can miss rotation behavior unless the application and tailer agree on file handling. Treat it as a compatibility pattern, not as an excuse to ignore modern `stdout` and structured logging practices.
 
-Label and controller log selection help when the failing behavior exists across replicas. `kubectl logs deployment/<name>` follows the controller relationship, while `kubectl logs -l app=nginx` selects pods by labels, which is useful when a Deployment, StatefulSet, or Job created several pods that share the same symptom. These commands are convenient, but they can also produce interleaved output, so combine them with timestamps, container names, and a small `--tail` when you are trying to reconstruct timing.
+Label and controller log selection help when the failing behavior exists across replicas. Bare `kubectl logs deployment/<name>` follows the controller relationship but streams logs from only one representative pod in that Deployment; add `--all-pods=true` when you need every replica. `kubectl logs -l app=nginx` selects pods by labels, which is useful when a Deployment, StatefulSet, or Job created several pods that share the same symptom. These commands are convenient, but they can also produce interleaved output, so combine them with timestamps, container names, and a small `--tail` when you are trying to reconstruct timing.
 
 ```bash
 # Logs from all pods with a label
 kubectl logs -l app=nginx
 
-# Logs from all pods in a deployment
-kubectl logs deployment/my-deployment
+# Logs from all pods in a deployment (--all-pods=true required)
+kubectl logs deployment/my-deployment --all-pods=true
 
 # Follow logs from all matching pods
 kubectl logs -l app=nginx -f
@@ -188,7 +188,7 @@ Events are Kubernetes objects that record notable state changes and operational 
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The most important limitation is retention. The default API server event TTL is one hour, which means events are designed for near-real-time diagnosis rather than weekend forensics. If a batch job failed two days ago and no event export pipeline exists, `kubectl get events` may truthfully return nothing even though Kubernetes emitted useful warnings at the time. That is why production observability stacks often ship events into a log platform or event-specific collector before the API server garbage-collects them.
+The most important limitation is retention. The default API server event TTL is one hour (`--event-ttl` on kube-apiserver), which means events are designed for near-real-time diagnosis rather than weekend forensics. If a batch job failed two days ago and no event export pipeline exists, `kubectl get events` may truthfully return nothing even though Kubernetes emitted useful warnings at the time. That is why production observability stacks often ship events into a log platform or event-specific collector before the API server garbage-collects them.
 
 ```bash
 # All events in current namespace
@@ -312,23 +312,24 @@ kubectl top pod <pod-name>
 The units in `kubectl top` are compact but precise. CPU is usually shown in millicores, where `100m` is one tenth of a core and `1000m` is one full core. Memory is often shown in binary units such as `Mi` and `Gi`. The measurement becomes meaningful only when you compare it with requests, limits, node allocatable capacity, and the symptom you are investigating.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                   METRIC INTERPRETATION                       │
-│                                                               │
-│   NAME         CPU(cores)   MEMORY(bytes)                    │
-│   my-pod       100m         256Mi                            │
-│                                                               │
-│   CPU: 100m = 100 millicores = 0.1 CPU core                 │
-│        1000m = 1 core                                        │
-│                                                               │
-│   Memory: Mi = mebibytes (1024 * 1024 bytes)                │
-│           Gi = gibibytes                                     │
-│                                                               │
-│   Compare against requests/limits:                           │
-│   If usage >> requests: might get OOMKilled                 │
-│   If usage >> limit: will get OOMKilled or CPU throttled    │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────┐
+│                   METRIC INTERPRETATION                                                    │
+│                                                                                            │
+│   NAME         CPU(cores)   MEMORY(bytes)                                                  │
+│   my-pod       100m         256Mi                                                          │
+│                                                                                            │
+│   CPU: 100m = 100 millicores = 0.1 CPU core                                                │
+│        1000m = 1 core                                                                      │
+│                                                                                            │
+│   Memory: Mi = mebibytes (1024 * 1024 bytes)                                               │
+│           Gi = gibibytes                                                                   │
+│                                                                                            │
+│   Compare against requests/limits:                                                         │
+│   usage above requests: under-requested; scheduling/QoS + eviction risk under node pressure│
+│   memory near/above limit: OOMKilled                                                       │
+│   CPU at limit: throttled (not killed)                                                     │
+│                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Before running this, what output do you expect when a pod uses more CPU than its request but less than its limit? CPU requests influence scheduling, while CPU limits influence throttling, so a pod can legitimately use more than its request after it starts if spare CPU is available. Memory behaves differently because exceeding the memory limit can terminate the container, which is why memory spikes often need correlation with restart counts, `OOMKilled` status, and previous logs.
@@ -475,8 +476,8 @@ kubectl logs <pod> | grep -c error
 Multi-pod analysis is a correlation problem, not just a larger text stream. When several replicas fail, you want to know whether all pods fail the same way, whether only one node is affected, whether one version or label set is involved, and whether sidecars report a different sequence than application containers. Use controller and label selection for breadth, then narrow to a representative pod for precise timestamps and previous logs.
 
 ```bash
-# Logs from all pods in deployment
-kubectl logs deployment/<name> --all-containers
+# Logs from all pods in deployment (--all-pods=true required)
+kubectl logs deployment/<name> --all-pods=true --all-containers=true
 
 # Aggregate logs from multiple pods with labels
 kubectl logs -l app=frontend --all-containers
@@ -545,7 +546,7 @@ kubectl run debug --image=nicolaka/netshoot --rm -it --restart=Never -- bash
 kubectl run debug --image=busybox:1.36 --rm -it --restart=Never -- sh
 
 # Debug with specific service account
-kubectl run debug --image=busybox:1.36 --rm -it --restart=Never --serviceaccount=<sa> -- sh
+kubectl run debug --image=busybox:1.36 --rm -it --restart=Never --overrides='{"spec":{"serviceAccountName":"<sa>"}}' -- sh
 
 # Debug in specific namespace
 kubectl run debug -n <namespace> --image=busybox:1.36 --rm -it --restart=Never -- sh
@@ -930,7 +931,7 @@ spec:
       mountPath: /var/log
   - name: log-tailer
     image: busybox:1.36
-    command: ["sh", "-c", "tail -f /var/log/app.log"]
+    command: ["sh", "-c", "touch /var/log/app.log 2>/dev/null; tail -n+1 -F /var/log/app.log"]
     volumeMounts:
     - name: shared-logs
       mountPath: /var/log
@@ -1019,6 +1020,10 @@ kubectl top pods -A --sort-by=memory | head
 kubectl delete ns logging-lab
 ```
 
+## Learner check
+
+> Bare `kubectl logs deployment/<name>` follows the controller relationship but streams logs from only one representative pod in that Deployment; add `--all-pods=true` when you need every replica. `kubectl logs deployment/my-deployment --all-pods=true` — `usage above requests: under-requested; scheduling/QoS + eviction risk under node pressure` — `memory near/above limit: OOMKilled` — `CPU at limit: throttled (not killed)`.
+
 ## Sources
 
 - [Logging Architecture](https://kubernetes.io/docs/concepts/cluster-administration/logging/)
@@ -1031,6 +1036,7 @@ kubectl delete ns logging-lab
 - [Debug Running Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/)
 - [Sidecar Containers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/)
 - [Event API](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/event-v1/)
+- [kube-apiserver](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/) (`--event-ttl`)
 - [Kubelet Configuration](https://kubernetes.io/docs/tasks/administer-cluster/kubelet-config-file/)
 - [Metrics Server](https://github.com/kubernetes-sigs/metrics-server)
 
