@@ -46,7 +46,7 @@ The physical badge analogy is useful as long as you keep the scope clear. A Role
 
 Every Kubernetes API request enters the API server with a set of attributes: the authenticated user, optional groups, requested verb, API group, resource, namespace, resource name, and sometimes a non-resource URL such as `/metrics`. Authorization begins only after authentication has identified the caller, so RBAC is not a login system. It is the policy layer that answers whether an already identified subject can perform one requested action.
 
-The API server can run several authorizers, and their order matters. The traditional flag is `--authorization-mode`, with values such as `Node`, `RBAC`, `Webhook`, `ABAC`, `AlwaysAllow`, and `AlwaysDeny`; modern clusters can also use an authorization configuration file. Each authorizer returns allow, deny, or no opinion, and the API server stops once an authorizer gives a definitive answer.
+The API server can run several authorizers, and their order matters. The traditional flag is `--authorization-mode`, with values such as `Node`, `RBAC`, `Webhook`, `ABAC` (deprecated and absent from CKA exam clusters), `AlwaysAllow`, and `AlwaysDeny`; modern clusters can also use an authorization configuration file. Each authorizer returns allow, deny, or no opinion, and the API server stops once an authorizer gives a definitive answer.
 
 RBAC permissions are additive, which means there is no deny rule you can place in a Role to cancel a permission granted somewhere else. If Alice has one binding that grants `get` on pods and another binding that grants `delete` on pods, Alice has both powers. This additive model keeps evaluation predictable, but it also means least privilege must be designed by granting less, not by granting broadly and trying to subtract later.
 
@@ -516,16 +516,18 @@ Kubernetes 1.35 and newer deserve special attention for streaming subresources u
 The safest way to update those streaming permissions is to treat them as interactive access, not as ordinary viewing. A user who can exec into a container may read environment variables, inspect mounted files, and run commands with the container's Linux permissions. Granting `pods/exec` should therefore be closer to granting shell access than granting `pods/log`, and it deserves a separate role when only a subset of responders need it.
 
 ```yaml
-# OLD (broken in 1.35+):
+# FRAGILE (worked for kubectl's WebSocket path before v1.35):
 - apiGroups: [""]
   resources: ["pods/exec"]
   verbs: ["get"]
 
-# FIXED:
+# CORRECT (required for SPDY and WebSocket, enforced everywhere in v1.35+):
 - apiGroups: [""]
   resources: ["pods/exec", "pods/attach", "pods/portforward"]
   verbs: ["get", "create"]
 ```
+
+The streaming subresources have always *intended* `create` to be the authorizing verb: the legacy SPDY transport always required it. The WebSocket upgrade path, which `kubectl` defaults to in recent versions, historically only checked `get` — an inconsistency that let a `get`-only role exec into pods. Kubernetes v1.35 closes that gap (feature gate `AuthorizePodWebsocketUpgradeCreatePermission`, beta and on by default), so grant `create` on these subresources rather than relying on `get`.
 
 Exam scenarios usually combine scope and subject mistakes rather than exotic authorizer behavior. Work through the target action first: who is calling, what verb is requested, which API group and resource are involved, and whether the resource is namespaced. Once you can say that sentence clearly, the required Role, ClusterRole, RoleBinding, or ClusterRoleBinding often becomes obvious.
 
@@ -644,10 +646,10 @@ When an existing built-in role looks close, inspect it before binding it. The `v
 
 ## Did You Know?
 
-1. RBAC entered beta in Kubernetes v1.6 and reached general availability in Kubernetes v1.8, released in October 2017.
+1. RBAC entered beta in Kubernetes v1.6 and reached general availability in Kubernetes v1.8, released in September 2017.
 2. The RBAC API uses four object kinds: Role, ClusterRole, RoleBinding, and ClusterRoleBinding.
 3. ServiceAccount token behavior changed significantly after Kubernetes v1.24, with short-lived projected tokens replacing automatic long-lived Secret tokens for ordinary pods.
-4. Node authorization is a special-purpose kubelet authorizer, and the Kubernetes documentation marks it stable as of Kubernetes v1.34.
+4. Node authorization is a special-purpose kubelet authorizer that has been stable since Kubernetes v1.8; a later refinement, `AuthorizeNodeWithSelectors`, reached GA in Kubernetes v1.33 and tightens each kubelet's access to only the nodes and pods relevant to it.
 
 ## Common Mistakes
 
@@ -949,6 +951,9 @@ EOF
 
 # The built-in 'view' ClusterRole automatically includes rules from
 # any ClusterRole with label aggregate-to-view: "true"
+# Note: 'view' already grants get/list/watch on configmaps, so this example
+# proves the mechanism rather than adding new access; to see a brand-new rule
+# appear, aggregate a resource 'view' lacks by default (e.g. a CRD).
 
 # Check what 'view' includes
 kubectl get clusterrole view -o yaml | grep -A20 "rules:"

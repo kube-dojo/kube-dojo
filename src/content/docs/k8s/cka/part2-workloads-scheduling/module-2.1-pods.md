@@ -114,8 +114,9 @@ kubectl run nginx --image=nginx --labels="app=web,env=prod"
 # Create pod with environment variables
 kubectl run nginx --image=nginx --env="ENV=production"
 
-# Set resource requests and limits on an existing pod
-kubectl set resources pod nginx --requests="cpu=100m,memory=128Mi" --limits="cpu=200m,memory=256Mi"
+# Resource requests/limits cannot be patched onto a running bare pod — its
+# resources are immutable. Set them in the pod spec at creation time (see the
+# YAML workflow below).
 
 # Generate YAML without creating (essential for exam!)
 kubectl run nginx --image=nginx --dry-run=client -o yaml > pod.yaml
@@ -381,9 +382,8 @@ kubectl logs nginx --previous
 # Run a command
 kubectl exec nginx -- ls /
 
-# Interactive shell
-kubectl exec -it nginx -- /bin/bash
-kubectl exec -it nginx -- /bin/sh   # If bash not available
+# Interactive shell (/bin/sh works on minimal images; many images lack bash)
+kubectl exec -it nginx -- /bin/sh
 
 # Specific container in multi-container pod
 kubectl exec -it nginx -c sidecar -- /bin/sh
@@ -951,9 +951,9 @@ kubectl run webserver --image=nginx --port=80
 # 4. Pod with environment variables
 kubectl run envpod --image=nginx --env="ENV=production" --env="DEBUG=false"
 
-# 5. Pod with resource requests
-kubectl run limited --image=nginx
-kubectl set resources pod limited --requests="cpu=100m,memory=128Mi" --limits="cpu=200m,memory=256Mi"
+# 5. Pod with resource requests (set at creation via --overrides; a running
+#    bare pod's resources are immutable, so they cannot be patched in afterward)
+kubectl run limited --image=nginx --overrides='{"spec":{"containers":[{"name":"limited","image":"nginx","resources":{"requests":{"cpu":"100m","memory":"128Mi"},"limits":{"cpu":"200m","memory":"256Mi"}}}]}}'
 
 # Verify all pods
 kubectl get pods
