@@ -1,7 +1,7 @@
 ---
 name: dispatch-router
 description: Pick the right KubeDojo agent for a task. Maps task class -> agent -> model -> dispatch command. Snapshot of 2026-05-24 roster (codex, composer-2.5, deepseek-v4-pro, agy, gemini, claude headless). Use before any dispatch. Triggers on "which agent", "dispatch", "route to", "who should do this".
-last_calibrated: 2026-05-24
+last_calibrated: 2026-05-31
 ---
 
 # Dispatch Router Skill
@@ -10,7 +10,9 @@ Pick the right agent + model + tier for a task before firing a dispatch. This sk
 
 **Always cross-check memory keys** below before relying on an agent — caps and prices rotate weekly.
 
-## Roster — 2026-05-24
+## Roster — 2026-05-24 (Cursor → Pro+ 3× update 2026-05-31)
+
+> **2026-05-31 — Cursor upgraded to Pro+ (3× quota).** Cursor is now the cheapest marginal capacity and the **high-volume workhorse**: default it for bug-fixes, cross-family review of codex/claude-authored, edits/sweeps, and **co-primary T0 authoring** (paired with codex R1). Reserve codex's scarce weekly cap for quality-critical first-pass authoring + reviewing cursor-authored work. **Stop routing to metered deepseek** (was 13 dispatches/7d) — move that load to cursor. Subscription-priority: **cursor(3×) > codex > agy > gemini-cli > claude**; AVOID metered hermes/opencode/qwen/deepseek when a flat-rate sub fits (hermes only for x.com fetch). Use `cursor --model auto`, NOT composer-2.5 ([[feedback_cursor_model_auto_not_composer]], [[feedback_cursor_proplus_3x_roster]]).
 
 | Agent | Access path | Strength | Constraint | Memory key |
 |---|---|---|---|---|

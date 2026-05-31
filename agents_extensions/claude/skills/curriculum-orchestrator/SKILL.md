@@ -71,6 +71,8 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 ## Agent roster — 2026-05-24 snapshot
 
+> **2026-05-31 — Cursor upgraded to Pro+ (3×).** Cursor is now the cheapest marginal capacity → make it the high-volume workhorse (bug-fix, cross-family review of codex/claude-authored, edits, **co-primary T0 author** paired with codex R1). Reserve codex's weekly cap for quality-critical authoring + reviewing cursor-authored work. **Stop routing to metered deepseek** — move it to cursor. Subscription-priority: cursor(3×) > codex > agy > gemini-cli > claude; avoid metered hermes/opencode/qwen/deepseek unless only they fit (hermes = x.com fetch only). `cursor --model auto`. See [[feedback_cursor_proplus_3x_roster]].
+
 | Role | Primary | Fallback | Notes |
 |---|---|---|---|
 | T0 content author (codex cap healthy) | **codex gpt-5.5** | composer-2.5 (cursor), deepseek-v4-pro | Quality-best lane: codex stronger on factual/version/runnability accuracy. Session 52 cursor-authored tooling/api/docs cohort measured 4/7 (57%) first-pass NEEDS_CHANGES — proxy signal, not curriculum-T0 sample. See [[curriculum-writer]]. |
