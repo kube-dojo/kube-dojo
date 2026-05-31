@@ -59,10 +59,12 @@ flowchart TD
     HelmCLI -- "Values (customization)<br>--set replicas=3<br>-f myvalues.yaml" --> Secret["Release stored as Secret in cluster<br>(tracks version, values, manifests for rollback)"]
 ```
 
-Helm 3 removed Tiller, the in-cluster server component used by Helm 2. That architectural change is more than trivia: Helm now talks directly to the Kubernetes API using your kubeconfig and your RBAC permissions, so an install fails if your identity cannot create the target resources. On an exam, this helps you separate Helm problems from authorization problems; if rendering works locally but the API rejects the install, inspect permissions and target namespace instead of blaming the chart.
+Helm 3 and later removed Tiller, the in-cluster server component used by Helm 2. That architectural change is more than trivia: Helm now talks directly to the Kubernetes API using your kubeconfig and your RBAC permissions, so an install fails if your identity cannot create the target resources. On an exam, this helps you separate Helm problems from authorization problems; if rendering works locally but the API rejects the install, inspect permissions and target namespace instead of blaming the chart.
+
+Helm 4 remains current and keeps the same client-only model, with additional behavior updates in upgrade and rendering paths.
 
 ```bash
-# Helm 3 (current) - no Tiller needed
+# Helm 3+ client model (no Tiller)
 helm install myapp ./mychart
 
 # Helm 2 (deprecated) - required Tiller
@@ -81,13 +83,15 @@ The installation commands below preserve the common options you will see across 
 # macOS
 brew install helm
 
-# Linux (script)
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+# Linux (script, currently aligned with Helm docs)
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+chmod 700 get_helm.sh
+./get_helm.sh
 
-# Linux (package manager)
-# Debian/Ubuntu
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+# Linux (package manager) - Debian/Ubuntu, current Helm apt repo (Buildkite-hosted)
+sudo apt-get install curl gpg apt-transport-https --yes
+curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
 sudo apt-get update
 sudo apt-get install helm
 
@@ -112,7 +116,7 @@ helm repo update
 helm repo list
 ```
 
-Bitnami now recommends OCI chart references for new automation, but this legacy index URL still resolves and redirects to Broadcom's hosted index so the repository-qualified `bitnami/nginx` examples remain runnable after the 2025 OCI migration.
+Bitnami now recommends OCI chart references for new automation, but this legacy index URL can shift over time. `bitnami/nginx` examples are still useful for exam labs, but for production workflows use version pinning and review the migration notice: [Bitnami OCI migration](https://github.com/bitnami/charts/issues/35164). Some charts/images reference moving tags and the warning around Bitnami Secure Images applies to current defaults.
 
 Repository configuration is local to your machine, which explains a frequent "works on my laptop" problem. If one terminal can search `bitnami/nginx` and another cannot, the difference may be repository configuration or an out-of-date index rather than a Kubernetes cluster issue. Before blaming the cluster, run `helm repo list`, refresh with `helm repo update`, and confirm that the chart name includes the repository prefix you intended.
 
@@ -157,8 +161,8 @@ helm install my-nginx bitnami/nginx -f myvalues.yaml
 # Install specific version
 helm install my-nginx bitnami/nginx --version 15.0.0
 
-# Dry-run (see what would be created)
-helm install my-nginx bitnami/nginx --dry-run
+# Dry-run=client (see what would be created)
+helm install my-nginx bitnami/nginx --dry-run=client
 
 # Generate manifests only (don't install)
 helm template my-nginx bitnami/nginx > manifests.yaml
@@ -166,7 +170,7 @@ helm template my-nginx bitnami/nginx > manifests.yaml
 
 The safest workflow is to inspect before you install and render before you trust. A dry run asks Helm to process the chart and show the planned result, while `helm template` emits manifests without creating cluster resources. Those outputs are not busywork; they reveal names, labels, namespaces, resource requests, Service types, and Secrets before the API server accepts anything.
 
-Before running this, what output do you expect from `helm template my-nginx bitnami/nginx` compared with `helm install my-nginx bitnami/nginx --dry-run`? The first is manifest-focused and easy to redirect into a file, while the second follows the install path and includes release-oriented information useful for debugging the install operation itself.
+Before running this, what output do you expect from `helm template my-nginx bitnami/nginx` compared with `helm install my-nginx bitnami/nginx --dry-run=client`? The first is manifest-focused and easy to redirect into a file, while the second follows the install path and includes release-oriented information useful for debugging the install operation itself.
 
 Once a release exists, inspection shifts from the chart artifact to the installed release. Helm stores release state as Kubernetes Secrets named with the `sh.helm.release.v1.<release-name>.v<revision>` pattern, usually in the namespace where the release was installed. If `helm list` seems empty but application resources exist, do not assume the resources are unmanaged until you have checked all namespaces and looked for Helm-owned Secrets.
 
@@ -278,7 +282,7 @@ Which approach would you choose here and why: one long `helm upgrade` command wi
 
 Upgrades are where Helm starts to feel different from plain `kubectl apply`. Helm does not merely submit a new set of manifests; it records a new release revision that includes chart metadata, values, and rendered manifests. That revision history is why you can ask Helm for a timeline and roll back to a known earlier state without manually reconstructing every object from old YAML files.
 
-Stop and think: You run `helm upgrade my-app bitnami/nginx` without `--reuse-values` and without specifying any values. What happens to all the custom values you set during the original install? Helm prepares the upgrade from the chart defaults plus values supplied to this upgrade command, so previous custom values are not automatically reused unless you specify `--reuse-values` or provide the full desired values again.
+Stop and think: You run `helm upgrade my-app bitnami/nginx` with no new `--set`/`-f` values. Helm starts from the previous release values, then applies the chart upgrade context and any options you provide. If you add new `--set`/`-f` values without `--reuse-values`, omitted custom values can fall back to chart defaults.
 
 ```bash
 # Upgrade with new values
@@ -320,7 +324,7 @@ helm rollback my-nginx
 helm rollback my-nginx 1
 
 # Dry-run rollback
-helm rollback my-nginx 1 --dry-run
+helm rollback my-nginx 1 --dry-run=client
 ```
 
 A rollback creates another revision rather than erasing history. That can surprise learners who expect revision numbers to move backward, but it is a useful audit property: the cluster records that you performed a rollback action and what revision became active afterward. When diagnosing later, `helm history` should show both the failed upgrade and the rollback that restored service.
@@ -377,14 +381,14 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
 ```
 
-Render before you install when the problem might be templating. `helm template` shows the YAML that Helm would generate, and `--debug --dry-run` adds context around the install path. If the rendered YAML is wrong, fix values or chart templates; if the rendered YAML is right but the install fails, investigate Kubernetes validation, admission policies, quotas, and RBAC.
+Render before you install when the problem might be templating. `helm template` shows the YAML that Helm would generate, and `--debug --dry-run=client` adds context around the install path. If the rendered YAML is wrong, fix values or chart templates; if the rendered YAML is right but the install fails, investigate Kubernetes validation, admission policies, quotas, and RBAC.
 
 ```bash
 # See what YAML would be generated
 helm template my-nginx bitnami/nginx -f myvalues.yaml
 
 # Install with debug info
-helm install my-nginx bitnami/nginx --debug --dry-run
+helm install my-nginx bitnami/nginx --debug --dry-run=client
 ```
 
 ## Part 7: Exam-Ready Workflows and Operational Checks
@@ -499,7 +503,7 @@ Patterns and anti-patterns help you choose a Helm habit before the incident star
 |---------|-------------|--------------|-----------------------|
 | Versioned values files | Shared environments, reviewed production changes, and repeatable lab setups | The desired configuration lives in source control and can be reviewed before `helm upgrade` | Keep files small by overriding only meaningful differences from chart defaults |
 | `helm upgrade --install` | CI/CD jobs that should create or update the same release idempotently | One command handles first deployment and later upgrades without branchy shell logic | Always pass namespace, chart version, and values explicitly so different runners behave the same way |
-| Render-before-change checks | Complex charts, risky overrides, and exam tasks with unfamiliar values | `helm template` and `--dry-run` reveal generated manifests before live resources are touched | Add manifest diffing or policy checks in mature pipelines so rendering catches more than syntax |
+| Render-before-change checks | Complex charts, risky overrides, and exam tasks with unfamiliar values | `helm template` and `--dry-run=client` reveal generated manifests before live resources are touched | Add manifest diffing or policy checks in mature pipelines so rendering catches more than syntax |
 | Namespace-aware release inspection | Clusters with many teams or repeated release names | `helm list -A` and explicit `-n` flags prevent false "release not found" conclusions | Standardize release naming and labels so ownership remains visible across namespaces |
 
 The opposite behaviors usually come from understandable pressure: a chart must be installed quickly, a value name is not obvious, or a failed release seems easier to delete manually than debug. Those shortcuts create future ambiguity. When in doubt, preserve Helm's release history and use Helm commands to manage releases instead of editing around Helm behind its back.
@@ -577,7 +581,7 @@ The same decision can be expressed as a simple flow. If the release does not exi
 | Forgetting `-n namespace` | Helm releases are namespace-scoped, so the default namespace may not contain the release you want | Use `helm list -A` to find the release, then repeat status, upgrade, rollback, or uninstall with the explicit namespace |
 | Not using `--reuse-values` during a narrow upgrade | Operators expect Helm to remember previous custom values automatically | Use `--reuse-values` for additive changes, or provide a complete values file for fully declared upgrades |
 | Using the wrong repository URL or stale index | Local repo configuration is separate from the cluster and may differ between terminals | Check `helm repo list`, run `helm repo update`, and use the repository-qualified chart name |
-| Skipping dry-run and template output | The chart renders resources you did not expect, such as a different Service type or resource name | Run `helm template` or `helm install --debug --dry-run` before complex installs and risky upgrades |
+| Skipping dry-run and template output | The chart renders resources you did not expect, such as a different Service type or resource name | Run `helm template` or `helm install --debug --dry-run=client` before complex installs and risky upgrades |
 | Treating Helm success as workload readiness | Helm can create Kubernetes objects before Pods are scheduled, ready, or serving traffic | Follow `helm status` with `kubectl get pods`, rollout status, events, and Service checks |
 | Manually deleting Helm release Secrets | It appears to clean up metadata, but it removes Helm's ability to manage history and rollback | Use `helm uninstall` for removal and inspect `owner=helm` Secrets only for diagnosis |
 | Hardcoding passwords in values files | Values files are often committed to Git and release Secrets can expose rendered configuration | Use external secret management patterns and placeholder examples, never real credentials |
@@ -612,7 +616,7 @@ Make the command explicit by including the namespace, creating it if appropriate
 <details>
 <summary>5. A chart install fails before creating resources, and the error mentions invalid YAML near a templated field. What is your first debugging move, and what are you trying to separate?</summary>
 
-Render the chart locally with `helm template <release> <chart> -f <values-file>` and, if needed, retry with `helm install --debug --dry-run` to see Helm's rendered output and debug context. You are separating template or values problems from Kubernetes API problems. If the rendered YAML is malformed, the issue is in the chart templates or supplied values; if the YAML renders cleanly but the API rejects it, then validation, admission, quota, or RBAC becomes more likely. This is why rendering is a safe first move before repeating a live install.
+Render the chart locally with `helm template <release> <chart> -f <values-file>` and, if needed, retry with `helm install --debug --dry-run=client` to see Helm's rendered output and debug context. You are separating template or values problems from Kubernetes API problems. If the rendered YAML is malformed, the issue is in the chart templates or supplied values; if the YAML renders cleanly but the API rejects it, then validation, admission, quota, or RBAC becomes more likely. This is why rendering is a safe first move before repeating a live install.
 </details>
 
 <details>
@@ -629,7 +633,7 @@ Explain that those Secrets are Helm's release records, so deleting them can brea
 
 ## Hands-On Exercise
 
-Exercise scenario: you are preparing a repeatable Helm workflow for an nginx release in a Kubernetes 1.35+ practice cluster. The goal is not only to install the chart, but also to prove that you can inspect chart values, render manifests before applying them, upgrade with controlled values, diagnose release history, and roll back safely. Use a disposable namespace so the exercise does not interfere with other modules.
+Exercise scenario: you are preparing a repeatable Helm workflow for an nginx release in a Kubernetes 1.35+ practice cluster. The goal is not only to install the chart, but also to prove that you can inspect chart values, render manifests before applying them, upgrade with controlled values, diagnose release history, and roll back safely. Pin the chart version (`--version <x.y.z>`) so the workflow is genuinely repeatable rather than tracking whatever the upstream "latest" happens to be on exam day. Use a disposable namespace so the exercise does not interfere with other modules.
 
 ### Setup
 
@@ -718,4 +722,4 @@ kubectl get deployment,svc,pods -n helm-lab
 
 ## Next Module
 
-*Next module coming soon.*
+[Module 1.4: Kustomize](../module-1.4-kustomize/) - Template-free configuration management with overlays, and how it compares to Helm's templating approach.
