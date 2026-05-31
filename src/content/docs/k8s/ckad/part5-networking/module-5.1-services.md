@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: ckad-5.1-services
   url: https://killercoda.com/kubedojo/scenario/ckad-5.1-services
-  duration: "30 min"
+  duration: "45-55 min"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 45-55 minutes
 >
-> **Prerequisites**: Module 1.1 (Pods), Module 2.1 (Deployments), understanding of basic networking
+> **Prerequisites**: [Module 1.1 (Pods)](../part1-design-build/module-1.3-multi-container-pods/), [Module 2.1 (Deployments)](../part2-deployment/module-2.1-deployments/), understanding of basic networking
 
 ---
 
@@ -67,8 +67,8 @@ The imperative form is useful during the CKAD exam because `kubectl expose deplo
 ClusterIP Services can also be affected by cluster-level address family choices. On clusters configured for dual-stack networking, a Service may have IPv4 and IPv6 families according to its `ipFamilyPolicy` and related fields. You do not need to master dual-stack policy for this module, but you should know that the Service API owns those stable addresses and that clients should still use the Service name instead of hard-coding whichever IP family they happen to see first.
 
 ```bash
-# Create imperatively
-kubectl expose deployment my-app --port=80 --target-port=8080
+# Create imperatively (--name overrides the default Service name my-app)
+kubectl expose deployment my-app --name=my-service --port=80 --target-port=8080
 
 # Access from within cluster
 curl http://my-service:80
@@ -97,8 +97,8 @@ NodePort is often misunderstood because it exposes every node, not only the node
 The default NodePort behavior also affects source IP visibility. When traffic can hop from the receiving node to an endpoint on another node, the backend may see a translated source address depending on the data plane and traffic policy. `externalTrafficPolicy: Local` is sometimes used when preserving the original client source IP is more important than accepting traffic on every node, but it changes failure behavior because nodes without local ready endpoints should not receive traffic successfully. That is an operations choice, not just a YAML decoration.
 
 ```bash
-# Create imperatively
-kubectl expose deployment my-app --type=NodePort --port=80 --target-port=8080
+# Create imperatively (--node-port pins the port shown in the YAML above)
+kubectl expose deployment my-app --name=my-nodeport --type=NodePort --port=80 --target-port=8080 --node-port=30080
 
 # Access from outside cluster
 curl http://<node-ip>:30080
@@ -128,7 +128,7 @@ LoadBalancer is also not a promise that every cloud provider behaves identically
 
 ```bash
 # Create imperatively
-kubectl expose deployment my-app --type=LoadBalancer --port=80 --target-port=8080
+kubectl expose deployment my-app --name=my-loadbalancer --type=LoadBalancer --port=80 --target-port=8080
 
 # Get external IP
 kubectl get svc my-loadbalancer
@@ -692,6 +692,7 @@ spec:
         image: nginx
 EOF
 
+# Endpoints list both ports; nginx listens on 80 only — port 9090 appears before traffic succeeds
 kubectl get svc drill4
 kubectl get ep drill4
 kubectl delete deploy drill4 svc drill4
@@ -739,6 +740,10 @@ kubectl run test --image=busybox --rm -i --restart=Never -- wget -qO- drill6-app
 
 kubectl delete ns drill6
 ```
+
+## Learner check
+
+> The imperative form is useful during the CKAD exam because `kubectl expose deployment` copies the Deployment selector into the Service. That helps you avoid hand-typing selector labels under time pressure, but you should still inspect the result because copied labels only help when the Deployment's pod template labels are already correct.
 
 ## Sources
 
