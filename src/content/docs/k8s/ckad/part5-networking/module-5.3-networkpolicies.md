@@ -225,6 +225,8 @@ DNS deserves its own carve-out because almost every Kubernetes workload relies o
 
 The DNS policy itself should be checked against the labels in your cluster. Many clusters label CoreDNS pods with `k8s-app: kube-dns`, but distributions can add their own labels or run DNS through a different add-on shape. The habit to build is not memorizing one label forever; the habit is inspecting the DNS pods and writing a policy that selects the actual DNS implementation in front of you.
 
+The example below keeps that least-privilege shape: it selects DNS pods in the `kube-system` namespace through the stable namespace-name label, keeps the `k8s-app: kube-dns` pod label, and allows both UDP and TCP on port 53. UDP handles the common query path, while TCP is part of DNS behavior for larger responses, retries, and implementations that choose a stream transport.
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -236,12 +238,16 @@ spec:
   - Egress
   egress:
   - to:
-    - namespaceSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
       podSelector:
         matchLabels:
           k8s-app: kube-dns
     ports:
     - protocol: UDP
+      port: 53
+    - protocol: TCP
       port: 53
 ```
 
@@ -447,8 +453,8 @@ kubectl get netpol
 # Describe policy to see translated rules
 kubectl describe netpol NAME
 
-# Test connectivity aggressively using netshoot or wget
-kubectl exec pod1 -- wget -qO- --timeout=2 pod2-svc:80
+# Test connectivity using netshoot or wget with a short bounded timeout
+kubectl exec pod1 -- wget -qO- --timeout=5 pod2-svc:80
 
 # Check if CNI supports NetworkPolicies (look for calico, cilium)
 kubectl get pods -n kube-system | grep -E 'calico|cilium|weave'
@@ -535,6 +541,12 @@ When the framework produces a policy that feels repetitive, resist the urge to g
 | NetworkPolicy treated as encryption | Allowed traffic still moves as normal network traffic unless another layer encrypts it. | Use NetworkPolicy for reachability control and use TLS, mTLS, or a service mesh when encryption is required. |
 | Ingress controller namespace forgotten | External traffic arrives from controller pods, not magically from the internet into the application pod. | Allow the controller namespace and pod labels, or model the exact ingress path your controller uses. |
 
+## Learner check
+
+> Baseline connectivity must wait for ready pods and populated endpoints before it interprets a timeout as a NetworkPolicy signal.
+
+Before you continue, explain why this sentence changes how you read a failed `wget` result in the lab. A useful answer separates infrastructure readiness from policy enforcement: first prove pods and endpoints exist, then decide whether a later timeout demonstrates isolation.
+
 ## Quiz
 
 <details>
@@ -619,13 +631,37 @@ The namespace should contain three ready pods and three Services. If a pod does 
 
 Before adding policy, prove the starting state. The database reaching the frontend is intentionally undesirable, but it demonstrates the default behavior that NetworkPolicy will change. Record which calls succeed so you can compare them against the isolated state after applying the baseline.
 
-This baseline step is not optional. If the default connection fails, you do not yet have a NetworkPolicy problem; you have a pod, Service, endpoint, DNS, or image problem. Fixing that first prevents you from blaming a policy that has not been applied and keeps the later timeout signals meaningful.
+This baseline step is not optional. Baseline connectivity must wait for ready pods and populated endpoints before it interprets a timeout as a NetworkPolicy signal. If the default connection fails, you do not yet have a NetworkPolicy problem; you have a pod, Service, endpoint, DNS, or image problem. Fixing that first prevents you from blaming a policy that has not been applied and keeps the later timeout signals meaningful.
 
 ```bash
-# All pods can reach all pods
-kubectl exec -n netpol-demo frontend -- wget -qO- --timeout=2 backend:80
-kubectl exec -n netpol-demo backend -- wget -qO- --timeout=2 database:80
-kubectl exec -n netpol-demo database -- wget -qO- --timeout=2 frontend:80
+wait_for_service_endpoint() {
+  service="$1"
+  kubectl wait --for=condition=Ready pod -l "tier=$service" -n netpol-demo --timeout=60s
+  until kubectl get endpoints "$service" -n netpol-demo -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; do
+    sleep 2
+  done
+}
+
+expect_success() {
+  pod="$1"
+  target="$2"
+  for attempt in 1 2 3 4 5; do
+    if kubectl exec -n netpol-demo "$pod" -- wget -qO- --timeout=5 "$target"; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: $pod could not reach $target after endpoints were ready" >&2
+  return 1
+}
+
+for service in frontend backend database; do
+  wait_for_service_endpoint "$service"
+done
+
+expect_success frontend backend:80
+expect_success backend database:80
+expect_success database frontend:80
 # All should succeed
 ```
 
@@ -655,7 +691,32 @@ spec:
 EOF
 
 # Now test - all should fail (if CNI supports NetworkPolicies)
-kubectl exec -n netpol-demo frontend -- wget -qO- --timeout=2 backend:80
+wait_for_service_endpoint() {
+  service="$1"
+  kubectl wait --for=condition=Ready pod -l "tier=$service" -n netpol-demo --timeout=60s
+  until kubectl get endpoints "$service" -n netpol-demo -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; do
+    sleep 2
+  done
+}
+
+expect_blocked() {
+  pod="$1"
+  target="$2"
+  for attempt in 1 2 3 4 5; do
+    if kubectl exec -n netpol-demo "$pod" -- wget -qO- --timeout=5 "$target"; then
+      echo "attempt $attempt: still reachable; waiting for policy propagation"
+      sleep 2
+    else
+      echo "blocked as expected"
+      return 0
+    fi
+  done
+  echo "ERROR: $pod still reached $target after policy propagation window" >&2
+  return 1
+}
+
+wait_for_service_endpoint backend
+expect_blocked frontend backend:80
 # Should timeout
 ```
 
@@ -694,10 +755,48 @@ spec:
 EOF
 
 # Test
-kubectl exec -n netpol-demo frontend -- wget -qO- --timeout=2 backend:80
+wait_for_service_endpoint() {
+  service="$1"
+  kubectl wait --for=condition=Ready pod -l "tier=$service" -n netpol-demo --timeout=60s
+  until kubectl get endpoints "$service" -n netpol-demo -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; do
+    sleep 2
+  done
+}
+
+expect_success() {
+  pod="$1"
+  target="$2"
+  for attempt in 1 2 3 4 5; do
+    if kubectl exec -n netpol-demo "$pod" -- wget -qO- --timeout=5 "$target"; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: $pod could not reach $target after policy propagation window" >&2
+  return 1
+}
+
+expect_blocked() {
+  pod="$1"
+  target="$2"
+  for attempt in 1 2 3 4 5; do
+    if kubectl exec -n netpol-demo "$pod" -- wget -qO- --timeout=5 "$target"; then
+      echo "attempt $attempt: still reachable; waiting for policy propagation"
+      sleep 2
+    else
+      echo "blocked as expected"
+      return 0
+    fi
+  done
+  echo "ERROR: $pod still reached $target after policy propagation window" >&2
+  return 1
+}
+
+wait_for_service_endpoint backend
+expect_success frontend backend:80
 # Should succeed
 
-kubectl exec -n netpol-demo database -- wget -qO- --timeout=2 backend:80
+expect_blocked database backend:80
 # Should fail
 ```
 
