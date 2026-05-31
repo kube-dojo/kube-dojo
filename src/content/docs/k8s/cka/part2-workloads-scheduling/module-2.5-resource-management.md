@@ -322,9 +322,9 @@ spec:
 
 ```text
 Eviction Order (first to last):
-1. BestEffort pods exceeding request
-2. Burstable pods exceeding request
-3. Burstable pods below request
+1. BestEffort pods (no requests set - evicted first)
+2. Burstable pods using more than their requests
+3. Burstable pods using less than their requests
 4. Guaranteed pods (last resort)
 ```
 
@@ -760,7 +760,7 @@ kubectl get pod test-defaults -n limits-test -o yaml | grep -A8 resources
 
 ### Task 5: Test ResourceQuota admission
 
-Add a pod-count quota and create pods until the namespace budget is exhausted. The third pod should fail because the quota already accounts for the pods created in this namespace.
+Add a pod-count quota and create pods until the namespace budget is exhausted. `test-defaults` from Task 4 already consumes one of the two allowed pod slots, so `pod1` brings the namespace to `2/2` and the second new pod is rejected.
 
 ```bash
 cat << 'EOF' | kubectl apply -f -
@@ -776,8 +776,7 @@ EOF
 
 # Create pods until quota exceeded
 kubectl run pod1 --image=nginx -n limits-test
-kubectl run pod2 --image=nginx -n limits-test
-kubectl run pod3 --image=nginx -n limits-test  # Should fail
+kubectl run pod2 --image=nginx -n limits-test  # Should fail: test-defaults + pod1 already reach 2/2
 
 kubectl describe resourcequota pod-quota -n limits-test
 ```
@@ -950,6 +949,9 @@ spec:
       requests:
         cpu: "200m"
         memory: "256Mi"
+      limits:
+        cpu: "400m"
+        memory: "512Mi"
 ---
 apiVersion: v1
 kind: Pod
@@ -964,6 +966,9 @@ spec:
       requests:
         cpu: "200m"
         memory: "256Mi"
+      limits:
+        cpu: "400m"
+        memory: "512Mi"
 ---
 apiVersion: v1
 kind: Pod
@@ -978,6 +983,9 @@ spec:
       requests:
         cpu: "200m"
         memory: "256Mi"
+      limits:
+        cpu: "400m"
+        memory: "512Mi"
 EOF
 
 cat << 'EOF' | kubectl apply -f -
@@ -994,6 +1002,9 @@ spec:
       requests:
         cpu: "200m"
         memory: "256Mi"
+      limits:
+        cpu: "400m"
+        memory: "512Mi"
 EOF
 
 kubectl describe resourcequota compute-quota -n quota-test
