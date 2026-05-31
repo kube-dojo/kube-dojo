@@ -576,6 +576,8 @@ Start by creating the kind cluster if it does not already exist, then run `kubec
 
 ## Learner check
 
+Before moving on, make sure you can explain why this drill command now works as written — specifically why `--target-port` must match the container's listening port (nginx serves on 80), or the Service ends up with zero ready endpoints:
+
 > kubectl expose deployment web --port=80 --target-port=80
 
 ## Sources
