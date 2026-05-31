@@ -10,7 +10,7 @@ revision_pending: false
 >
 > **Time to Complete**: 35-45 minutes
 >
-> **Prerequisites**: Module 2.1 (Pods), Module 2.7 (ConfigMaps & Secrets)
+> **Prerequisites**: [Module 2.1 (Pods)](../part2-workloads-scheduling/module-2.1-pods/), [Module 2.7 (ConfigMaps & Secrets)](../part2-workloads-scheduling/module-2.7-configmaps-secrets/)
 
 ## What You'll Be Able to Do
 
@@ -89,7 +89,7 @@ The table is also a reminder that two volumes can look identical inside a contai
 
 This tracing habit is useful because volume bugs often masquerade as application bugs. A process that says "file not found" may be missing a ConfigMap key, but it may also be reading a path hidden by a directory mount. A process that says "permission denied" may be running as a non-root user against a Secret file mode that only root can read. A process that starts correctly and later becomes stale may have a reload problem rather than a Kubernetes mount problem. The CKA exam expects you to separate those layers quickly instead of changing YAML blindly.
 
-The `image` volume type is worth calling out because it changes how some teams distribute read-only assets. Instead of baking a model file, rules bundle, or static asset tree into the main application image, a pod can mount an OCI image or artifact as a read-only volume. That keeps application images smaller and makes large read-only content independently versioned. As of the Kubernetes 1.35 target for this curriculum, you should treat this as a modern volume option that is useful for immutable content, not as a replacement for writable application storage.
+The `image` volume type is worth calling out because it changes how some teams distribute read-only assets. Instead of baking a model file, rules bundle, or static asset tree into the main application image, a pod can mount an OCI image or artifact as a read-only volume. That keeps application images smaller and makes large read-only content independently versioned. As of the Kubernetes 1.35 target for this curriculum, you should treat this as a modern volume option that is useful for immutable content, not as a replacement for writable application storage. GA in 1.36; beta in 1.35 — confirm the feature gate / cluster version before relying on it in production.
 
 ```yaml
 volumes:
@@ -113,13 +113,13 @@ metadata:
 spec:
   containers:
   - name: writer
-    image: busybox:latest
+    image: busybox:1.36
     command: ['sh', '-c', 'echo "Hello from writer" > /data/message; sleep 3600']
     volumeMounts:
     - name: shared-storage
       mountPath: /data
   - name: reader
-    image: busybox:latest
+    image: busybox:1.36
     command: ['sh', '-c', 'sleep 5; cat /data/message; sleep 3600']
     volumeMounts:
     - name: shared-storage
@@ -143,7 +143,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:latest
+    image: busybox:1.36
     command: ['sh', '-c', 'sleep 3600']
     volumeMounts:
     - name: tmpfs-volume
@@ -203,7 +203,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:latest
+    image: busybox:1.36
     command: ['sh', '-c', 'ls -la /host-data; sleep 3600']
     volumeMounts:
     - name: host-volume
@@ -262,24 +262,26 @@ spec:
     spec:
       containers:
       - name: collector
-        image: fluentd:latest
+        image: fluent/fluentd:v1.16-debian-1  # Image choice is environment-specific
         volumeMounts:
         - name: varlog
           mountPath: /var/log
           readOnly: true          # Read-only for safety
-        - name: containers
-          mountPath: /var/lib/docker/containers
+        - name: containerlogs
+          mountPath: /var/log/containers
           readOnly: true
       volumes:
       - name: varlog
         hostPath:
           path: /var/log
           type: Directory
-      - name: containers
+      - name: containerlogs
         hostPath:
-          path: /var/lib/docker/containers
+          path: /var/log/containers
           type: Directory
 ```
+
+Container log paths depend on the CRI: `/var/log/containers` on containerd (the default since Kubernetes 1.24 and what kind/minikube use) versus legacy Docker paths such as `/var/lib/docker/containers`. Confirm the layout on your nodes before copying a collector manifest.
 
 Stop and think before approving a `hostPath` pull request: does this pod truly need node files, or is it using the node as a shortcut around proper storage and permissions? If a developer proposes mounting a container runtime socket into a CI pod, the risk is not merely "the build can read some files." The pod may be able to control the runtime, start privileged containers, or access host resources indirectly. Safer alternatives include rootless builders, purpose-built build services, remote builders, or tightly scoped platform-owned build nodes.
 
@@ -320,8 +322,11 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:latest
+    image: busybox:1.36
     command: ['sh', '-c', 'ls -la /etc/config; sleep 3600']
+    resources:
+      limits:
+        cpu: "500m"
     volumeMounts:
     - name: all-config
       mountPath: /etc/config
@@ -365,7 +370,7 @@ spec:
   serviceAccountName: my-service-account
   containers:
   - name: app
-    image: myapp:latest
+    image: myapp:1.0
     volumeMounts:
     - name: token
       mountPath: /var/run/secrets/tokens
@@ -779,7 +784,7 @@ The host IP tells you which node currently owns the pod-scoped volume. The path 
 - [ ] Pod is currently running with both containers active and healthy.
 - [ ] Writer is successfully creating log entries every 5 seconds.
 - [ ] Reader can clearly see logs written by the writer container.
-- [ ] Data persists across a writer container restart, such as `kubectl exec -n volume-lab log-processor -c writer -- kill 1`, while the pod remains the same.
+- [ ] Data persists across a writer container restart, such as `kubectl exec -n volume-lab log-processor -c writer -- kill 1`, while the pod remains the same. The container restarts automatically under the pod's default restart policy (`Always`), so the `emptyDir` volume stays attached to the same pod instance.
 
 ### Bonus Challenge
 
@@ -855,6 +860,12 @@ Use these drills to build speed after you understand the lifecycle rules. They a
 # Task: Identify if it is a volume mount issue
 # Commands: kubectl describe pod, check Events section
 ```
+
+## Learner check
+
+> Container log paths depend on the CRI: `/var/log/containers` on containerd (the default since Kubernetes 1.24 and what kind/minikube use) versus legacy Docker paths such as `/var/lib/docker/containers`.
+
+On a kind cluster using containerd, which hostPath directory should a log collector mount to read container log symlinks without a `FailedMount` type check error?
 
 ## Sources
 
