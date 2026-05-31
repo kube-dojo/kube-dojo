@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 35-45 minutes
 >
-> **Prerequisites**: Modules 4.1-4.4 (all previous storage modules)
+> **Prerequisites**: [Module 4.1](../module-4.1-volumes/), [Module 4.2](../module-4.2-pv-pvc/), [Module 4.3](../module-4.3-storageclasses/), and [Module 4.4](../module-4.4-snapshots/)
 
 ---
 
@@ -198,14 +198,30 @@ Events:
   Warning  ProvisioningFailed  storageclass.storage.k8s.io "fast-ssd" not found
 ```
 
-The quick correction is to list the available classes and recreate or patch the PVC according to what the cluster supports. Be careful with patching because some PVC fields are immutable after creation, and an already-bound claim should not be casually edited. For an unbound practice claim, deletion and recreation with the correct class is usually the cleanest exam move.
+The quick correction is to list the available classes, delete the Pending claim, and recreate it with a valid `storageClassName`. After creation, PVC field changes are intentionally narrow: resize requests may be changed when expansion is allowed, but changing the storage class requires a new claim. Do not mutate or casually edit an already-bound claim; for an unbound practice claim, deletion and recreation with the correct class is usually the cleanest exam move.
 
 ```bash
 kubectl get sc
 ```
 
 ```bash
-kubectl patch pvc my-pvc -p '{"spec":{"storageClassName":"standard"}}'
+kubectl delete pvc my-pvc
+```
+
+```bash
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+EOF
 ```
 
 Dynamic provisioning failures are different because the StorageClass exists, but the external provisioner cannot create the volume. The PVC event may say that it is waiting for the external provisioner, or it may contain a backend-specific error returned by the driver. This is the point where CSI controller logs become appropriate because the provisioner sidecar owns the create request.
@@ -303,10 +319,10 @@ kubectl get pods
 
 ```text
 NAME     READY   STATUS              RESTARTS   AGE
-my-pod   0/1     ContainerCreating   0          5m
+my-pod   0/1     Pending             0          5m
 ```
 
-The first debug command is still the pod describe, not the node log. The event stream connects the pod to the volume operation Kubernetes attempted, and it normally includes the claim name, volume name, node, or driver error. If the event names a missing PVC, the kubelet is not failing to mount storage; the pod specification is pointing at an object that does not exist in that namespace.
+The first debug command is still the pod describe, not the node log. The event stream connects the pod to the volume operation Kubernetes attempted, and it normally includes the claim name, volume name, node, or driver error. If the event names a missing PVC, the pod specification is pointing at an object that does not exist in that namespace; current clusters often report that as a scheduler-side `FailedScheduling` event before the pod ever reaches node-side mounting.
 
 ```bash
 kubectl describe pod my-pod
@@ -314,11 +330,11 @@ kubectl describe pod my-pod
 
 ```text
 Events:
-  Warning  FailedMount  Unable to attach or mount volumes:
+  Warning  FailedScheduling  0/3 nodes are available:
   persistentvolumeclaim "my-pvc" not found
 ```
 
-PVC references are namespace-local. A claim named `my-pvc` in `default` does not satisfy a pod in `payments`, and a typo in the claim name is enough to hold the pod in `ContainerCreating`. This is why you should always include the namespace in your checks when the pod is not in the default namespace.
+PVC references are namespace-local. A claim named `my-pvc` in `default` does not satisfy a pod in `payments`, and a typo in the claim name is enough to hold the pod before scheduling. This is why you should always include the namespace in your checks when the pod is not in the default namespace.
 
 ```bash
 kubectl get pvc my-pvc -n <namespace>
@@ -591,12 +607,13 @@ Pause and predict: a CSI controller pod is in `CrashLoopBackOff`, and logs say i
 
 ## Build a Quick Reference Without Skipping the Diagnosis
 
-Quick references are useful only when they preserve the reasoning path. The table below keeps the original module's error-message cheatsheet, but each row should be read as a starting hypothesis rather than a final answer. A `FailedMount` message can come from a missing claim, a driver timeout, a node path problem, or a permission problem, so always pair the message with the object and layer that produced it.
+Quick references are useful only when they preserve the reasoning path. The table below keeps the original module's error-message cheatsheet, but each row should be read as a starting hypothesis rather than a final answer. A missing claim often appears as `FailedScheduling`, while `FailedMount` can point to a driver timeout, a node path problem, or a permission problem, so always pair the message with the object and layer that produced it.
 
 | Error Message | Likely Cause | Quick Fix |
 |---------------|--------------|-----------|
+| `persistentvolumeclaim "..." not found` | Pod references a missing claim, often reported as `FailedScheduling` before mount | Correct the pod `claimName` or create the named claim in the pod namespace |
 | `no persistent volumes available` | No matching PV for static provisioning | Create or repair a matching PV |
-| `storageclass not found` | Wrong StorageClass name | Check available classes and recreate or patch the PVC safely |
+| `storageclass not found` | Wrong StorageClass name | Check available classes and delete + recreate the PVC with a valid class |
 | `waiting for first consumer` | `WaitForFirstConsumer` binding mode | Create or inspect the pod using the PVC |
 | `Multi-Attach error` | RWO volume requested on multiple nodes | Verify old writer, then delete old pod or adjust scheduling |
 | `permission denied` | Filesystem ownership or security context mismatch | Set `fsGroup`, `runAsUser`, and verify ownership |
@@ -684,7 +701,7 @@ Use this decision matrix when you need to choose a fix under time pressure. It d
 
 | Evidence | Primary Layer | Read-Only Checks | Candidate Fix |
 |----------|---------------|------------------|---------------|
-| PVC event says class not found | StorageClass selection | `kubectl get sc`, `kubectl describe pvc` | Recreate or patch unbound PVC with an existing class |
+| PVC event says class not found | StorageClass selection | `kubectl get sc`, `kubectl describe pvc` | Delete + recreate the unbound PVC with an existing class |
 | PVC event says waiting for first consumer | Scheduler and topology | `kubectl get sc -o yaml`, inspect consuming pod | Create the pod or fix scheduling constraints |
 | Existing PV will not bind | PV/PVC contract | Compare capacity, access modes, class, selectors, and claimRef | Align claim or create a compatible PV |
 | Pod event says claim not found | Pod volume reference | Inspect pod namespace and `claimName` | Correct pod spec or create the named claim in the namespace |
@@ -711,6 +728,14 @@ For permission denied, the evidence order prevents a security regression. A runn
 For capacity, separate requested capacity from used capacity. A bound 20Gi PVC can still be full from the application's perspective, and a Pending 20Gi PVC can fail before any filesystem exists because quota or backend capacity blocks provisioning. The fix for the first case might be expansion or cleanup; the fix for the second might be quota adjustment, smaller requests, topology changes, or provider-side capacity. The command output should tell you which world you are in before you choose.
 
 This worked example is the habit you want on exam day: read the closest event, identify the owner of the next decision, and avoid destructive mutations until the evidence supports them. Storage troubleshooting feels large because the system has many layers, but most incidents become small once you can say, "the pod reference failed," "the claim did not bind," "the driver could not provision," "the node could not attach," or "the process cannot write." That sentence is the bridge between diagnosis and a safe fix.
+
+---
+
+## Learner check
+
+> After creation, PVC field changes are intentionally narrow: resize requests may be changed when expansion is allowed, but changing the storage class requires a new claim.
+
+Your PVC is still `Pending`, its event says `storageclass.storage.k8s.io "fast-ssd" not found`, and `kubectl get sc` shows only `standard`. What action changes the class safely without trying an immutable-field patch?
 
 ---
 
@@ -855,6 +880,8 @@ spec:
   storageClassName: standard
 EOF
 ```
+
+If the class uses `WaitForFirstConsumer`, the PVC staying `Pending` with no error events is expected until a pod references the claim.
 
 <details>
 <summary>Scenario 1 solution notes</summary>
