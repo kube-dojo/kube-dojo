@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: cks-4.1-security-contexts
   url: https://killercoda.com/kubedojo/scenario/cks-4.1-security-contexts
-  duration: "35 min"
+  duration: "45-50 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -76,7 +76,7 @@ The first practical distinction is scope. `spec.securityContext` applies default
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The diagram is deliberately split into pod-level and container-level fields because that is how you should read every workload. Start with pod defaults, then check each container for overrides, then check pod fields outside `securityContext` that still affect isolation. A spec can look hardened at the top while one container quietly opts back into a dangerous identity or namespace. The final effective behavior is the combination, not the prettiest block of YAML.
+The diagram is deliberately split into pod-level and container-level fields because that is how you should read every workload. Start with pod defaults, then check each container for overrides, then check pod fields outside `securityContext` that still affect isolation. A spec can look hardened at the top while one container quietly opts back into a dangerous identity or namespace. The final effective behavior is the combination, not the prettiest block of YAML. SELinux and AppArmor profile configuration (`seLinuxOptions`, annotations) are out of scope for this module; focus here on UID/GID, capabilities, filesystem, and seccomp fields.
 
 Security contexts do not replace admission policy. If a user can create pods in a namespace, that user can also write an unsafe security context unless something validates the request before it is stored. Pod Security Admission, covered in the next module, is the cluster-side guardrail that rejects pods violating the baseline or restricted policy. This module focuses on the workload authoring skill: writing, auditing, and debugging the fields that admission policy will later enforce.
 
@@ -96,9 +96,24 @@ spec:
     securityContext:
       runAsUser: 1000  # Must specify non-root UID
       runAsGroup: 1000
+    volumeMounts:
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 
 # If image tries to run as root (UID 0), pod fails to start:
 # Error: container has runAsNonRoot and image will run as root
+# Stock nginx as UID 1000 also needs writable cache/runtime paths (emptyDir above).
 ```
 
 Pause and predict: if you remove `runAsUser: 1000` from this manifest but leave `runAsNonRoot: true`, what should happen when the selected image declares or implies UID 0? The useful mental model is that `runAsNonRoot` is a guard, not a repair tool. It blocks a root process from starting, but it does not edit the image, create a user, or fix file permissions inside the image.
@@ -264,7 +279,7 @@ spec:
           - NET_BIND_SERVICE  # Only add what's needed
 ```
 
-Pause and predict: you set `capabilities.drop: ["ALL"]` on a container that binds to port 80 and the process exits with `permission denied`. The smallest capability to add back is `NET_BIND_SERVICE`, but the better long-term question is whether the application should listen on 8080 instead. Changing the application port removes the capability need entirely, while adding the capability keeps a narrow exception that you must review later.
+Pause and predict: you set `capabilities.drop: ["ALL"]` on a container that binds to port 80 and the process exits with `permission denied`. Diagnose the failure mode before adding capabilities. If logs show `mkdir() "/var/cache/nginx/client_temp" failed (13: Permission denied)`, the process never reached port binding — fix writable cache/runtime paths with `emptyDir` mounts, `fsGroup`, or image ownership first. If nginx starts cleanly but cannot bind port 80, the bind failure is separate: non-root processes need `NET_BIND_SERVICE` (or a high port such as 8080). The smallest capability to add back for a low-port bind is `NET_BIND_SERVICE`, but the better long-term question is whether the application should listen on 8080 instead. Changing the application port removes the capability need entirely, while adding the capability keeps a narrow exception that you must review later.
 
 `allowPrivilegeEscalation: false` should travel with capability reduction. Dropping capabilities removes permissions from the process, while blocking privilege escalation prevents common paths for gaining them back through setuid binaries or related mechanisms. Kubernetes documentation notes that privilege escalation is always true for privileged containers and for containers with `CAP_SYS_ADMIN`, so `allowPrivilegeEscalation: false` is not a universal override. If you grant broad power, the runtime cannot pretend the process is tightly confined.
 
@@ -287,7 +302,8 @@ spec:
 # - Access to all host devices
 # - Can load kernel modules
 # - Can modify iptables
-# - Can escape container entirely
+# - Dramatically increases node-compromise blast radius; may enable
+#   container breakout depending on kernel/runtime bugs and host config
 # - ONLY use for system-level daemons (CNI, CSI drivers)
 ```
 
@@ -371,7 +387,7 @@ spec:
   - name: app
     image: nginx
 
-# After (secure)
+# After (secure) — exam-minimum identity fields only
 apiVersion: v1
 kind: Pod
 metadata:
@@ -387,9 +403,9 @@ spec:
       allowPrivilegeEscalation: false
 ```
 
-This example is intentionally incomplete for real production nginx because image defaults and writable paths matter. On an exam, the prompt may only require the security context change. In a production review, you would also validate whether UID 1000 can read the configured content, whether nginx needs writable cache or runtime directories, and whether the service can use a high port so no low-port capability is needed.
+The manifest above shows the smallest exam-style identity fix. It is display-only for stock nginx: without writable cache/runtime paths, UID 1000 fails on `mkdir()` under `/var/cache/nginx` before any capability question arises. The runnable hardened lab manifest later in this module adds the required `emptyDir` mounts. On an exam, the prompt may only require the security context change. In a production review, you would also validate whether UID 1000 can read the configured content, whether nginx needs writable cache or runtime directories, and whether the service can use a high port so no low-port capability is needed.
 
-The second scenario handles a workload that needs to bind to port 80 without running as root. This is the classic capability exception. The manifest drops every capability first, then adds `NET_BIND_SERVICE` back. It also keeps `allowPrivilegeEscalation: false`, because adding one capability should not turn into a general privilege path. The exception is visible, narrow, and tied to a specific application requirement.
+The second scenario handles a workload that needs to bind to port 80 without running as root. This is the classic capability exception. The manifest drops every capability first, then adds `NET_BIND_SERVICE` back. It also keeps `allowPrivilegeEscalation: false`, because adding one capability should not turn into a general privilege path. The exception is visible, narrow, and tied to a specific application requirement. Stock nginx as UID 1000 needs writable runtime paths before port binding can even be reached — the `emptyDir` mounts below satisfy cache and PID/socket directories nginx creates at startup.
 
 ```bash
 # Pod needs to bind to port 80 but shouldn't run as root
@@ -412,7 +428,24 @@ spec:
         add:
           - NET_BIND_SERVICE  # Allow binding to port 80
       allowPrivilegeEscalation: false
+    volumeMounts:
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 EOF
+
+kubectl wait --for=condition=Ready pod/web-server --timeout=60s
+kubectl exec web-server -- sh -c 'grep -q ":0050" /proc/net/tcp && echo "nginx listening on port 80"'
 ```
 
 Which approach would you choose here and why: keep port 80 with `NET_BIND_SERVICE`, or change the application to listen on 8080 and let the Service expose port 80? The second option usually wins when you own the application because it removes the capability exception. The first option can be acceptable when a legacy binary cannot change its listen port and the exception is documented.
@@ -445,7 +478,7 @@ spec:
 EOF
 ```
 
-The fastest debugging commands are the ones that show the effective spec and the events. `kubectl get -o yaml` shows what was stored. JSONPath helps inspect one field quickly. `kubectl describe` shows start failures, admission messages, and event text. You are not looking for every possible detail; you are looking for the first boundary that explains the observed failure.
+The fastest debugging commands are the ones that show the effective spec and the events. `kubectl get -o yaml` shows what was stored. JSONPath helps inspect one field quickly. `kubectl describe` shows start failures, admission messages, and event text. You are not looking for every possible detail; you are looking for the first boundary that explains the observed failure. Replace `mypod` with your pod name in the snippets below.
 
 ```bash
 # Check pod's effective security context
@@ -649,11 +682,11 @@ No. The storage agent may have a defensible system-level reason for host access,
 
 In this exercise you will create an insecure pod, replace it with a hardened pod, and verify that the hardened settings behave the way the manifest claims. The commands assume you have a Kubernetes 1.35+ cluster and a working `kubectl` context. The exercise uses nginx because it is familiar, but the same workflow applies to internal services after you account for their write paths and image ownership.
 
-Exercise scenario: you are reviewing a service before it can move into a namespace that enforces a restricted policy. The current pod has no explicit security context. Your job is to create a hardened version that runs as non-root, blocks privilege escalation, drops capabilities except for the low-port bind capability, uses a read-only root filesystem, and provides writable volumes only where nginx needs them for this test.
+Exercise scenario: you are reviewing a service before it can move into a namespace that enforces a restricted policy. The current pod has no explicit security context. Your job is to create a hardened version that runs as non-root, blocks privilege escalation, drops all capabilities then adds back `NET_BIND_SERVICE` so nginx can bind port 80, uses a read-only root filesystem, and provides writable volumes only where nginx needs them for this test.
 
 - [ ] Task 1: Create the insecure pod and inspect whether it declares any pod or container security context.
-- [ ] Task 2: Apply the hardened pod manifest with non-root identity, `RuntimeDefault` seccomp, dropped capabilities, and writable runtime directories.
-- [ ] Task 3: Verify the stored pod-level and container-level security context fields with `kubectl`.
+- [ ] Task 2: Apply the hardened pod manifest with non-root identity, `RuntimeDefault` seccomp, dropped capabilities with `NET_BIND_SERVICE` added back, and writable runtime directories.
+- [ ] Task 3: Verify the stored pod-level and container-level security context fields with `kubectl`, and confirm nginx is listening on port 80.
 - [ ] Task 4: Prove that writing to the image filesystem fails while writing to `/tmp` succeeds.
 - [ ] Task 5: Clean up both pods and record which security context field explained each observed behavior.
 
@@ -694,7 +727,6 @@ spec:
   containers:
   - name: app
     image: nginx
-    command: ["sleep", "3600"]  # Override entrypoint so pod stays running for exec tests without crashing
     securityContext:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
@@ -732,8 +764,11 @@ kubectl exec hardened -- touch /etc/test 2>&1 || echo "Write blocked (expected)"
 # Step 7: Test that writable volume works
 kubectl exec hardened -- touch /tmp/test && echo "Write to /tmp succeeded"
 
+# Step 8: Verify nginx bound port 80 with NET_BIND_SERVICE (capability lesson)
+kubectl exec hardened -- sh -c 'grep -q ":0050" /proc/net/tcp && echo "nginx listening on port 80"'
+
 # Cleanup
-kubectl delete pod insecure hardened --force
+kubectl delete pod insecure hardened
 ```
 
 </details>
@@ -741,10 +776,16 @@ kubectl delete pod insecure hardened --force
 <details>
 <summary>What success looks like</summary>
 
-The hardened pod should store pod-level `runAsNonRoot`, numeric UID and GID settings, `fsGroup`, and `seccompProfile.type: RuntimeDefault`. Its container security context should show `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, and a capability set that drops `ALL` while adding only `NET_BIND_SERVICE`. The write to `/etc/test` should fail because the image filesystem is read-only, and the write to `/tmp/test` should succeed because `/tmp` is backed by an `emptyDir` volume.
+The hardened pod should store pod-level `runAsNonRoot`, numeric UID and GID settings, `fsGroup`, and `seccompProfile.type: RuntimeDefault`. Its container security context should show `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, and a capability set that drops `ALL` while adding only `NET_BIND_SERVICE`. Nginx should reach Ready and listen on port 80 — proving the capability exception works once writable cache/runtime paths exist. The write to `/etc/test` should fail because the image filesystem is read-only, and the write to `/tmp/test` should succeed because `/tmp` is backed by an `emptyDir` volume.
 </details>
 
-The most valuable part of the lab is the explanation you can give afterward. `runAsNonRoot` and `runAsUser` control process identity. `readOnlyRootFilesystem` controls writes to image layers. `emptyDir` restores writes only where the application needs runtime data. Capability dropping removes ambient Linux privileges, while `NET_BIND_SERVICE` is the single exception for a low port. `RuntimeDefault` adds a syscall boundary that does not depend on the application UID.
+The most valuable part of the lab is the explanation you can give afterward. `runAsNonRoot` and `runAsUser` control process identity. `readOnlyRootFilesystem` controls writes to image layers. `emptyDir` restores writes only where the application needs runtime data. Capability dropping removes ambient Linux privileges, while `NET_BIND_SERVICE` is the single exception for a low port — verified when `/proc/net/tcp` shows a listener on port 80 (`:0050`). `RuntimeDefault` adds a syscall boundary that does not depend on the application UID.
+
+---
+
+## Learner check
+
+> Security contexts are where you turn a vague instruction like "run this workload safely" into concrete controls: which UID should execute the process, which group should own mounted files, whether privilege escalation is blocked, which Linux capabilities remain, and whether the root filesystem is writable.
 
 ---
 
