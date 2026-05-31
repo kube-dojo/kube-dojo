@@ -73,7 +73,7 @@ If the Metrics Server deployment exists but `kubectl top` still fails, the failu
 
 ## Reading Node, Pod, and Container Metrics
 
-Start monitoring at the widest level that can answer your immediate question. Node metrics help you decide whether the cluster has broad capacity pressure, while pod metrics help you identify the workload consuming resources in a namespace. Container metrics are the next layer when a pod has more than one container, because resource requests and limits are set on containers even though `kubectl top pods` first presents an aggregate pod view.
+Start monitoring at the widest level that can answer your immediate question. Node metrics help you decide whether the cluster has broad capacity pressure, while pod metrics help you identify the workload consuming resources in a namespace. Container metrics are the next layer when a pod has more than one container, because resource requests and limits are set on containers even though `kubectl top pods` first presents an aggregate pod view. Kubernetes 1.35 also supports optional pod-level resources via `spec.resources` when the PodLevelResources feature gate is enabled, but container-level settings remain what `kubectl top pods --containers` inspects in the common CKAD case.
 
 ```bash
 # All nodes
@@ -85,7 +85,7 @@ kubectl top nodes
 # node-2     500m         25%    2048Mi          50%
 ```
 
-Node output is useful when you suspect a scheduling or shared-capacity problem. A node at high memory usage may not have enough room for new pods, and a node with high CPU usage may be running latency-sensitive workloads that compete for time. The percentages in node output are based on node capacity, so they answer a different question than pod usage: "How busy is this machine?" rather than "How close is this container to its configured limit?"
+Node output is useful when you suspect a scheduling or shared-capacity problem. A node at high memory usage may not have enough room for new pods, and a node with high CPU usage may be running latency-sensitive workloads that compete for time. The percentages in node output are based on node allocatable by default, so they answer a different question than pod usage: "How busy is this machine?" rather than "How close is this container to its configured limit?" Pass `--show-capacity` to compare against node capacity instead.
 
 ```bash
 # All pods in current namespace
@@ -140,10 +140,10 @@ This quick health check is intentionally short because monitoring should reduce 
 
 ```bash
 # Top CPU consumers
-kubectl top pods -A --sort-by=cpu | head -10
+kubectl top pods -A --sort-by=cpu --no-headers | head -10
 
 # Top memory consumers
-kubectl top pods -A --sort-by=memory | head -10
+kubectl top pods -A --sort-by=memory --no-headers | head -10
 ```
 
 The `head` filter is a practical way to turn noisy cluster output into a shortlist. In a real incident you would pair this with ownership and namespace checks before changing anything, because the largest consumer might be expected batch work rather than a faulty service. In a CKAD exercise, it helps you quickly locate the pod the task is trying to make you notice.
@@ -185,11 +185,11 @@ NAME        CPU(cores)   CPU%     MEMORY(bytes)   MEMORY%
 my-pod      100m         10%      256Mi           12%
 ```
 
-In this output, `100m` means the pod is using 100 millicores, or roughly 10 percent of one CPU core. `256Mi` means it is currently using 256 mebibytes of memory. Percentages on node output relate to node capacity, while pod output is most useful when you compare the absolute values against the workload's requests and limits.
+In this output, `100m` means the pod is using 100 millicores, or roughly 10 percent of one CPU core. `256Mi` means it is currently using 256 mebibytes of memory. Percentages on node output relate to node allocatable by default (`--show-capacity` uses capacity), while pod output is most useful when you compare the absolute values against the workload's requests and limits.
 
 The key habit is to avoid treating every high number as the same kind of emergency. High CPU can explain slowness, queue buildup, or throttling, but it may also be expected during a short batch job. High memory near a limit can explain restarts, OOMKilled events, and sudden process death, and it often needs either more headroom or application-level memory controls.
 
-CPU percentages can be especially misleading if you forget what the percentage is relative to. Node percentages are relative to node capacity, while pod CPU values are more useful as millicores that you compare to the container's request and limit. When in doubt, trust the absolute unit first, then use percentages only as a quick capacity signal for the node view.
+CPU percentages can be especially misleading if you forget what the percentage is relative to. Node percentages are relative to node allocatable by default (or capacity with `--show-capacity`), while pod CPU values are more useful as millicores that you compare to the container's request and limit. When in doubt, trust the absolute unit first, then use percentages only as a quick capacity signal for the node view.
 
 ```yaml
 resources:
@@ -409,7 +409,7 @@ The core Kubernetes API is reachable, but the resource metrics API is not servin
 <details>
 <summary>A multi-container pod has an application container and a logging sidecar. Pod-level metrics show 200m CPU total. How do you identify the real consumer and why does it matter?</summary>
 
-Run `kubectl top pods POD_NAME --containers` or use the same command with a selector to see per-container CPU and memory. The distinction matters because resources are configured per container, not as one shared pod knob in the manifest. If the sidecar uses 180m, raising the application container's request would miss the cause. The correct fix might be sidecar configuration, image behavior, or a sidecar-specific limit.
+Run `kubectl top pods POD_NAME --containers` or use the same command with a selector to see per-container CPU and memory. The distinction matters because resources are commonly configured per container, not as one shared pod knob in the manifest—though Kubernetes 1.35 also supports optional pod-level resources via `spec.resources` when the PodLevelResources feature gate is enabled. If the sidecar uses 180m, raising the application container's request would miss the cause. The correct fix might be sidecar configuration, image behavior, or a sidecar-specific limit.
 </details>
 
 <details>
@@ -666,6 +666,14 @@ The expected workflow is selector first, sorted selector second, container break
 - [ ] You used `--containers` to separate container-level metrics in a multi-container pod.
 - [ ] You explained whether a high memory value near a limit is more urgent than a high CPU value near a limit.
 - [ ] You cleaned up all practice pods and deployments created during the exercise.
+
+---
+
+## Learner check
+
+> The percentages in node output are based on node allocatable by default, so they answer a different question than pod usage: "How busy is this machine?" rather than "How close is this container to its configured limit?" Pass `--show-capacity` to compare against node capacity instead.
+
+Before you move on, explain why node CPU% and memory% can differ from what you would calculate against total node capacity, and when you would pass `--show-capacity`.
 
 ---
 
