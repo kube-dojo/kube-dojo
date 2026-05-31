@@ -15,7 +15,7 @@ lab:
 >
 > **Time to Complete**: 40-50 minutes
 >
-> **Prerequisites**: Basic Linux user/group concepts, Module 1.1 (Pods)
+> **Prerequisites**: Basic Linux user/group concepts, [Module 1.1 (Pods)](../part1-design-build/module-1.3-multi-container-pods/)
 
 ---
 
@@ -198,6 +198,8 @@ spec:
     emptyDir: {}
 ```
 
+The official nginx image listens on port 80 by default. Ports below 1024 traditionally required the `NET_BIND_SERVICE` capability, yet this example drops all capabilities and still starts on many practice clusters because modern container runtimes may set `net.ipv4.ip_unprivileged_port_start=0`, which lets unprivileged processes bind low ports. CKAD tasks that explicitly require binding a port below 1024 still expect you to add `NET_BIND_SERVICE` rather than relying on that runtime sysctl behavior.
+
 Stop and think: if the application now fails with `permission denied` while writing `/var/log/nginx/access.log`, should you disable `readOnlyRootFilesystem`, change the UID, or add a writable mount for the log path? The best answer depends on whether the application truly needs to write there. If the write is expected runtime behavior, add a specific volume mount or reconfigure the app to log to stdout; do not remove the broader read-only root protection just to hide one missing writable path.
 
 The operational habit is to make writable paths boring and explicit. A reviewer should be able to scan the manifest and see that `/tmp` is writable because it is scratch space, `/var/run` is writable because a socket or PID file may be created there, and application data is handled by the right storage type. When those paths are not explicit, an application can pass development tests and fail only after a cluster policy enforces a read-only root.
@@ -228,7 +230,7 @@ Capabilities are powerful because they sit below Kubernetes in the Linux kernel.
 | `SYS_PTRACE` | Debug other processes |
 | `CHOWN` | Change file ownership |
 
-The table lists common capabilities you may see in examples, not a recommendation to use them casually. `NET_BIND_SERVICE` is much narrower than `NET_ADMIN`, and `SYS_TIME` is rarely appropriate for an application container. `SYS_PTRACE` can be useful for debugging tools but is risky in normal workloads. `CHOWN` can hide image-permission problems if you use it as a crutch instead of fixing ownership during the build.
+The table lists common capabilities you may see in examples, not a recommendation to use them casually. `NET_BIND_SERVICE` is much narrower than `NET_ADMIN`, and `SYS_TIME` is rarely appropriate for an application container. When a task asks you to bind a port below 1024, add `NET_BIND_SERVICE` even if your local cluster happens to allow unprivileged low ports through `ip_unprivileged_port_start`. `SYS_PTRACE` can be useful for debugging tools but is risky in normal workloads. `CHOWN` can hide image-permission problems if you use it as a crutch instead of fixing ownership during the build.
 
 ```yaml
 securityContext:
@@ -322,7 +324,7 @@ The first decision is identity. Because the task requires non-root behavior, set
 
 This example is not asking you to memorize nginx internals. It is teaching the diagnostic shape that applies to many images: after you lock down identity and the root filesystem, watch for specific paths that still need runtime writes. Mount only those paths, keep the rest of the image immutable, and leave capability additions out unless the task gives you a concrete reason.
 
-The resulting manifest is the earlier secure pod example, and it is deliberately CKAD-friendly. It uses one pod, one container, clear numeric IDs, and explicit volume mounts. During verification, you can run `kubectl logs` to confirm the process starts, `kubectl exec -- id` to confirm identity, and `kubectl exec -- touch /test` to confirm the root remains read-only. Those checks tie the YAML to observable behavior.
+The resulting manifest is the earlier secure pod example, and it is deliberately CKAD-friendly. It uses one pod, one container, clear numeric IDs, and explicit volume mounts. During verification, you can run `kubectl logs secure-pod` to confirm the process starts, `kubectl exec secure-pod -- id` to confirm identity, and `kubectl exec secure-pod -- touch /test` to confirm the root remains read-only. Those checks tie the YAML to observable behavior.
 
 The same reasoning also applies when you are repairing an existing manifest. Read the current fields, identify which requirement is missing, and make the smallest change that satisfies that requirement without weakening another one. Adding an `emptyDir` to `/tmp` is a small change. Removing `readOnlyRootFilesystem` because one path needs writes is a broad weakening, and broad weakenings are rarely the correct answer in an exam or in review.
 
@@ -414,7 +416,7 @@ For CKAD speed, memorize the decision order rather than every possible field. Id
 ## Did You Know?
 
 - Kubernetes documents SecurityContext separately for pods and containers because `PodSecurityContext` and `SecurityContext` are different API objects with overlapping but non-identical fields.
-- `NET_BIND_SERVICE` exists because Unix-like systems historically restricted binding ports below `1024` to privileged processes.
+- `NET_BIND_SERVICE` exists because Unix-like systems historically restricted binding ports below `1024` to privileged processes; some modern runtimes relax that through `ip_unprivileged_port_start`, but CKAD still expects the capability when a task requires a low port.
 - `allowPrivilegeEscalation: false` maps to the Linux `no_new_privs` idea, which prevents a process from gaining privilege through exec transitions.
 - `fsGroup` affects supported mounted volumes, not ordinary files already baked into the container image layer.
 
@@ -791,6 +793,10 @@ The logs should show UID `1000`, primary GID `1000`, and group access that inclu
 
 </details>
 
+## Learner check
+
+> CKAD tasks that explicitly require binding a port below 1024 still expect you to add `NET_BIND_SERVICE` rather than relying on that runtime sysctl behavior.
+
 ## Sources
 
 - https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -799,7 +805,6 @@ The logs should show UID `1000`, primary GID `1000`, and group access that inclu
 - https://kubernetes.io/docs/concepts/security/pod-security-standards/
 - https://kubernetes.io/docs/concepts/security/linux-kernel-security-constraints/
 - https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
-- https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/
 - https://kubernetes.io/docs/reference/kubectl/generated/kubectl_exec/
 - https://man7.org/linux/man-pages/man7/capabilities.7.html
 - https://man7.org/linux/man-pages/man2/setuid.2.html
