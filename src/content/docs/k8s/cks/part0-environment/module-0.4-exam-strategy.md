@@ -54,7 +54,7 @@ The budget below preserves the original three windows from the short version of 
 │  0:00  ─────── Pass 1 Start ───────                        │
 │  │                                                          │
 │  │     Quick wins: RBAC, basic NetworkPolicy,              │
-│  │     securityContext, AppArmor annotations               │
+│  │     securityContext, AppArmor profiles                  │
 │  │                                                          │
 │  0:50  ─────── Pass 2 Start ───────                        │
 │  │                                                          │
@@ -145,7 +145,7 @@ Quick tasks often use familiar verbs and narrow scopes. "Set runAsNonRoot" tells
 | "Set runAsNonRoot" | Add field to securityContext | 1-2 min |
 | "Create NetworkPolicy to allow..." | Single ingress/egress rule | 2-3 min |
 | "Grant permission to..." | Create Role/RoleBinding | 2-3 min |
-| "Apply AppArmor profile" | Add annotation | 1-2 min |
+| "Apply AppArmor profile" | Set `appArmorProfile` in securityContext | 1-2 min |
 | "Scan image with Trivy" | Run command, report findings | 2-3 min |
 
 The quick table is not telling you to rush blindly. It is telling you that the task shape has low uncertainty if you have practiced the pattern. You still read the prompt twice, identify the namespace, and verify the final behavior. The difference is that you do not open three documentation pages before starting, because the correct response is likely a small adaptation of a pattern you already know.
@@ -471,7 +471,7 @@ Before starting, set a visible 15-minute timer and decide how you will record sk
 
 <details><summary>Suggested solution approach for the timing drill</summary>
 
-Treat tasks 1, 2, and 3 as Pass 1 work because they are narrow object edits with direct verification. Treat task 4 as Pass 1 only if Trivy is installed and familiar; otherwise mark it as a tool availability finding and continue. Treat task 5 as Pass 1 if the AppArmor profile is already available and the prompt only asks for annotation, but move it to Pass 2 in an environment where profile loading or node inspection is required.
+Treat tasks 1, 2, and 3 as Pass 1 work because they are narrow object edits with direct verification. Treat task 4 as Pass 1 only if Trivy is installed and familiar; otherwise mark it as a tool availability finding and continue. Treat task 5 as Pass 1 if the AppArmor profile is already available and the prompt only asks for an `appArmorProfile` field, but move it to Pass 2 in an environment where profile loading or node inspection is required.
 </details>
 
 ```bash
@@ -554,25 +554,32 @@ kubectl auth can-i list pods -n secure --as=system:serviceaccount:secure:app-sa
 # (Requires Trivy installed - skip if not available)
 trivy image --severity CRITICAL nginx:1.20 2>/dev/null || echo "Trivy not installed - would scan for CVEs"
 
-# Task 5 (4 min): AppArmor
+# Task 5 (4 min): AppArmor (Kubernetes 1.35+ GA field)
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
   name: web
   namespace: secure
-  annotations:
-    container.apparmor.security.beta.kubernetes.io/web: runtime/default
 spec:
   containers:
   - name: web
     image: nginx:alpine
     securityContext:
       runAsNonRoot: false  # nginx needs root initially
+      appArmorProfile:
+        type: RuntimeDefault
 EOF
 
-# Verify:
-kubectl get pod web -n secure -o jsonpath='{.metadata.annotations}'
+# Verify the GA field is set (not the legacy annotation API):
+kubectl get pod web -n secure -o jsonpath='{.spec.containers[0].securityContext.appArmorProfile}'
+echo ""
+
+# Verify confinement is active (should not show "unconfined"):
+kubectl exec web -n secure -- cat /proc/1/attr/current
+
+# Verify enforcement: RuntimeDefault blocks mounting new filesystems
+kubectl exec web -n secure -- sh -c 'mount -t tmpfs tmpfs /mnt 2>&1' | grep -Ei 'permission denied|operation not permitted|not permitted'
 echo ""
 
 # STOP TIMER - How did you do?
@@ -590,12 +597,18 @@ If you finished at least four tasks with verification, your Pass 1 mechanics are
 
 Success criteria for this exercise are intentionally behavior-focused. You are not only checking whether the objects exist; you are checking whether your strategy survived time pressure. A clean run should leave you with completed objects, verification output, a short list of timing surprises, and one concrete adjustment to your exam-day checklist. That adjustment is the learning artifact you should carry into the next full practice exam.
 
+## Learner check
+
+> The useful mental model is a scoreboard rather than a checklist. A checklist asks, "Have I done the next item?" A scoreboard asks, "How many points have I protected, how much time remains, and which task has the best return now?"
+
+Before you continue, explain how the three-pass strategy uses that scoreboard view during the first scan. A solid answer names quick wins as protected points, treats skipping as a deliberate deferral rather than failure, and includes verification before leaving each completed task.
+
 ## Sources
 
 - https://killercoda.com/kubedojo/scenario/cks-0.4-exam-strategy
 - https://www.cncf.io/training/certification/cks/
 - https://training.linuxfoundation.org/certification/certified-kubernetes-security-specialist/
-- https://docs.linuxfoundation.org/tc-docs/certification/lf-candidate-handbook
+- https://docs.linuxfoundation.org/tc-docs/certification/lf-handbook1
 - https://kubernetes.io/docs/concepts/services-networking/network-policies/
 - https://kubernetes.io/docs/concepts/security/pod-security-standards/
 - https://kubernetes.io/docs/reference/access-authn-authz/rbac/
