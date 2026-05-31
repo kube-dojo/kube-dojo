@@ -89,6 +89,8 @@ k get pods -n kube-system
 
 Running `kube-bench` as a Kubernetes Job is convenient in lab clusters because the result is captured in pod logs and can be repeated without installing a host binary. The tradeoff is that the pod must mount host paths that contain sensitive configuration, so the job itself must be treated as privileged audit tooling. Do not leave it running forever, do not grant broader access than the audit needs, and do not copy the pattern into tenant namespaces where untrusted users can modify it.
 
+The manifest below deliberately targets a control-plane node. Without the selector and taint toleration, the scheduler can place the job on a worker where `/etc/kubernetes` or `/var/lib/etcd` are absent, producing noisy control-plane findings that describe the wrong host rather than the cluster posture.
+
 ```yaml
 apiVersion: batch/v1
 kind: Job
@@ -100,6 +102,11 @@ spec:
     spec:
       hostPID: true
       restartPolicy: Never
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
       containers:
       - name: kube-bench
         image: aquasec/kube-bench:latest
@@ -302,6 +309,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Configure cluster access
       run: ./scripts/ci/configure-kubeconfig.sh
     - name: Run kube-bench job
@@ -317,6 +326,8 @@ jobs:
         name: kube-bench-result
         path: kube-bench.txt
 ```
+
+The checkout step disables persisted credentials because later audit steps do not need a reusable `GITHUB_TOKEN` in `.git/config`. Production workflows should also pin every `uses:` action to a full commit SHA with a version comment; the tag form here keeps the teaching snippet readable while the security rule remains stricter for real workflow files.
 
 The pipeline should preserve raw output because raw evidence is easier to review than a summarized badge. At the same time, humans need a concise diff. A practical implementation parses check identifiers, compares them with the previous successful run, and prints new failures separately from known exceptions. The goal is to make a new insecure API server flag feel as urgent as a failing unit test while keeping historical provider-owned warnings from blocking unrelated work.
 
@@ -416,6 +427,12 @@ The framework is deliberately simple because complicated decision trees fail dur
 | Accepting vague exceptions | Teams need to ship quickly, so they mark a failed check as not applicable without evidence | Require owner, rationale, compensating control, expiry date, and review trigger for every exception |
 | Fixing worker nodes one at a time | Manual node edits clear the immediate result but disappear when nodes are replaced | Update node bootstrap configuration and roll through a controlled node replacement plan |
 | Failing the pipeline on historical warnings without context | Early automation produces too much noise, so engineers stop paying attention | Classify known exceptions and fail only on new required failures or expired exceptions |
+
+## Learner check
+
+> A kube-bench job that reads control-plane host paths must be scheduled onto a control-plane node, tolerate the control-plane taint, and be treated as privileged audit tooling.
+
+Before you continue, explain what false signal you might get if the same manifest lands on a worker node. A strong answer names the missing host paths, separates audit-runner placement from real cluster drift, and explains why noisy findings should not enter the remediation backlog until the runner has inspected the intended evidence source.
 
 ## Quiz
 
