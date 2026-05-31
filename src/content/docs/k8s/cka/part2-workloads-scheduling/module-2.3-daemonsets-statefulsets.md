@@ -96,7 +96,7 @@ spec:
     spec:
       containers:
       - name: fluentd
-        image: fluentd:v1.35
+        image: fluent/fluentd:v1.18-debian-1
         resources:
           limits:
             memory: 200Mi
@@ -256,7 +256,7 @@ A useful DaemonSet troubleshooting loop has three layers. First, inspect the Dae
 
 Be careful with resource requests on DaemonSets because the cost scales with node count rather than replica count. A request that looks tiny on a three-node lab cluster may become meaningful across many worker nodes, and a memory-heavy agent can reduce allocatable capacity everywhere. This does not mean node agents should omit requests; it means requests must represent the real minimum needed for stable operation. Under-requested agents can be evicted or throttled precisely when the cluster is already under pressure.
 
-The CKA often frames DaemonSet questions as "why is the pod missing from this node?" In those scenarios, resist the urge to recreate the controller first. Check whether the node has a taint the pod does not tolerate, whether a node selector excludes it, whether the node is cordoned, and whether the DaemonSet status already reports a lower desired count. Recreating the controller with the same template rarely changes the scheduling answer because the same rules are applied again.
+The CKA often frames DaemonSet questions as "why is the pod missing from this node?" In those scenarios, resist the urge to recreate the controller first. Check whether the node has a taint the DaemonSet pod does not tolerate, whether a nodeSelector or affinity rule excludes it, whether allocatable CPU or memory is insufficient, whether an image pull or admission rejection blocked the pod, and whether node-specific events explain a lower desired count. Cordoning alone does not stop DaemonSet pods—they tolerate `node.kubernetes.io/unschedulable:NoSchedule` by default. Recreating the controller with the same template rarely changes the scheduling answer because the same rules are applied again.
 
 ## StatefulSets: Identity, Storage, and Ordered Change
 
@@ -1007,7 +1007,7 @@ EOF
 ```
 
 ```bash
-kubectl wait --for=condition=ready pod/web-0 pod/web-1 --timeout=60s
+kubectl rollout status sts/web --timeout=60s
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup nginx
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup web-0.nginx
 kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup web-1.nginx

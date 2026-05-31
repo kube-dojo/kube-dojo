@@ -305,8 +305,8 @@ Any change to the Pod template can trigger a rollout. Updating an image is the o
 # Update image (triggers rolling update)
 kubectl set image deployment/nginx nginx=nginx:1.26
 
-# Update with record (saves command in history)
-kubectl set image deployment/nginx nginx=nginx:1.26 --record
+# Record change cause for rollout history (replaces deprecated --record)
+kubectl annotate deployment/nginx kubernetes.io/change-cause="Update nginx image to 1.26" --overwrite
 
 # Update environment variable
 kubectl set env deployment/nginx ENV=production
@@ -729,7 +729,8 @@ You should see five Pods after scheduling and startup complete. The current Repl
 Perform a normal image update, inspect history, then deliberately use a bad image tag so you can practice diagnosing and rolling back a stuck rollout.
 
 ```bash
-kubectl set image deployment/webapp nginx=nginx:1.25 --record
+kubectl set image deployment/webapp nginx=nginx:1.25
+kubectl annotate deployment/webapp kubernetes.io/change-cause="Update nginx image to 1.25" --overwrite
 kubectl rollout status deployment/webapp
 ```
 
@@ -739,7 +740,8 @@ kubectl get replicaset  # Notice two ReplicaSets now
 ```
 
 ```bash
-kubectl set image deployment/webapp nginx=nginx:broken --record
+kubectl set image deployment/webapp nginx=nginx:broken
+kubectl annotate deployment/webapp kubernetes.io/change-cause="Deliberately broken image for rollback drill" --overwrite
 kubectl rollout status deployment/webapp --timeout=10s || true  # Timeout prevents hanging
 kubectl get pods  # Some in ImagePullBackOff
 ```
@@ -822,11 +824,13 @@ kubectl create deployment app --image=nginx:1.24 --replicas=3
 kubectl rollout status deployment/app
 
 # Update 1
-kubectl set image deployment/app nginx=nginx:1.25 --record
+kubectl set image deployment/app nginx=nginx:1.25
+kubectl annotate deployment/app kubernetes.io/change-cause="Update 1: nginx 1.25" --overwrite
 kubectl rollout status deployment/app
 
 # Update 2 (bad version)
-kubectl set image deployment/app nginx=nginx:bad --record
+kubectl set image deployment/app nginx=nginx:bad
+kubectl annotate deployment/app kubernetes.io/change-cause="Update 2: bad image tag" --overwrite
 # Don't wait - it will fail
 
 # Check history
@@ -880,8 +884,10 @@ kubectl set image deployment/paused nginx=nginx:1.25
 kubectl set env deployment/paused ENV=production
 kubectl set resources deployment/paused -c nginx --requests=cpu=100m
 
-# Check - still old image
+# Spec already shows the NEW image (pause defers the rollout, not the spec write):
 kubectl get deployment paused -o jsonpath='{.spec.template.spec.containers[0].image}'
+# Running pods still serve the OLD image (no new ReplicaSet created yet):
+kubectl get pods -l app=paused -o jsonpath='{.items[0].spec.containers[0].image}'
 
 # Resume - single rollout
 kubectl rollout resume deployment/paused
@@ -972,14 +978,16 @@ kubectl rollout status deployment/lifecycle-test
 kubectl scale deployment lifecycle-test --replicas=5
 
 # 3. Update to 1.25
-kubectl set image deployment/lifecycle-test nginx=nginx:1.25 --record
+kubectl set image deployment/lifecycle-test nginx=nginx:1.25
+kubectl annotate deployment/lifecycle-test kubernetes.io/change-cause="Update nginx image to 1.25" --overwrite
 kubectl rollout status deployment/lifecycle-test
 
 # 4. Check history
 kubectl rollout history deployment/lifecycle-test
 
 # 5. Update to 1.26
-kubectl set image deployment/lifecycle-test nginx=nginx:1.26 --record
+kubectl set image deployment/lifecycle-test nginx=nginx:1.26
+kubectl annotate deployment/lifecycle-test kubernetes.io/change-cause="Update nginx image to 1.26" --overwrite
 kubectl rollout status deployment/lifecycle-test
 
 # 6. Rollback to revision 1
