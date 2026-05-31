@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: ckad-2.3-kustomize
   url: https://killercoda.com/kubedojo/scenario/ckad-2.3-kustomize
-  duration: "30 min"
+  duration: "40-50 minutes"
   difficulty: intermediate
   environment: kubernetes
 ---
@@ -226,15 +226,14 @@ configMapGenerator:
 
 Generating from files is useful when configuration already lives in application-like formats. Each file becomes a key in the ConfigMap unless you use a custom key mapping. This keeps large configuration blobs out of the Deployment manifest while still making the full rendered result inspectable. For CKAD practice, literals are faster to type, but file-based generation is common in real repositories because it mirrors how applications read local configuration.
 
+The same kustomization can declare multiple Secret generators in one list — literals for credentials and files for TLS material:
+
 ```yaml
 secretGenerator:
 - name: db-credentials
   literals:
   - username=admin
   - password=secret123
-
-# Or from files
-secretGenerator:
 - name: tls-certs
   files:
   - tls.crt
@@ -1165,6 +1164,12 @@ echo "=== PROD ===" && kubectl kustomize overlays/prod/
 # Cleanup
 cd /tmp && rm -rf drill6
 ```
+
+## Learner check
+
+> The same kustomization can declare multiple Secret generators in one list — literals for credentials and files for TLS material:
+
+When you render that kustomization with `kubectl kustomize`, how many Secret objects should appear, and what would happen if you used two separate top-level `secretGenerator:` keys instead?
 
 ## Sources
 
