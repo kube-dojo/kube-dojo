@@ -7,7 +7,7 @@ sidebar:
 lab:
   id: cka-3.7-cni
   url: https://killercoda.com/kubedojo/scenario/cka-3.7-cni
-  duration: "35 min"
+  duration: "40-50 min"
   difficulty: advanced
   environment: kubernetes
 ---
@@ -77,7 +77,7 @@ The model is intentionally simpler than most physical networks. Kubernetes does 
 └────────────────────────────────────────────────────────────────┘
 ```
 
-CNI provides the pod side of that promise. When kubelet creates a pod sandbox, it asks the configured CNI plugin to attach the sandbox network namespace, allocate an IP address through IPAM, create the pod-facing interface, connect that interface to the node network, and install enough routes or dataplane state for traffic to leave the node when needed. kube-proxy handles the Service virtual IP path, CoreDNS handles name resolution, and the cloud or bare-metal network handles node reachability; confusing those boundaries is the fastest way to debug the wrong layer.
+CNI provides the pod side of that promise. When kubelet creates a pod sandbox, the kubelet/runtime handoff invokes the configured CNI plugin to attach the sandbox network namespace, allocate an IP address through IPAM, create the pod-facing interface, connect that interface to the node network, and install enough routes or dataplane state for traffic to leave the node when needed. kube-proxy handles the Service virtual IP path, CoreDNS handles name resolution, and the cloud or bare-metal network handles node reachability; confusing those boundaries is the fastest way to debug the wrong layer.
 
 That division of labor is especially important during exams because the symptom often mentions the workload, not the component. "Pod cannot reach service" may mean the pod has no IP, the service has no endpoints, kube-proxy failed to program rules, CoreDNS returned no answer, or a NetworkPolicy blocks the connection. A disciplined responder asks which part of the packet path has been proven healthy. Until direct pod IP traffic works, a service or DNS test is carrying too many assumptions to be useful.
 
@@ -146,7 +146,7 @@ cat /etc/cni/net.d/10-calico.conflist
 ls /etc/cni/net.d/
 
 # Check CNI pods
-kubectl get pods -n kube-system | grep -E "calico|flannel|cilium"
+kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|canal|kindnet"
 
 # Check CNI daemonset
 kubectl get daemonset -n kube-system
@@ -154,6 +154,8 @@ kubectl get daemonset -n kube-system
 # View CNI configuration
 cat /etc/cni/net.d/*.conf* 2>/dev/null
 ```
+
+In kind labs, `kindnet` is the expected default CNI, so include it in discovery greps before assuming the CNI is missing.
 
 ---
 
@@ -182,19 +184,19 @@ The easiest mistake is to choose for the installation day instead of the operati
 │   1. Pod Created                                               │
 │      │                                                          │
 │      ▼                                                          │
-│   2. Kubelet calls CNI plugin (ADD)                            │
+│   2. Kubelet asks runtime for pod sandbox                      │
 │      │                                                          │
 │      ▼                                                          │
-│   3. CNI creates network namespace                             │
+│   3. Runtime creates pod network namespace                     │
 │      │                                                          │
 │      ▼                                                          │
-│   4. CNI assigns IP address (IPAM)                             │
+│   4. Runtime calls CNI plugin (ADD)                            │
 │      │                                                          │
 │      ▼                                                          │
-│   5. CNI sets up veth pair                                     │
+│   5. CNI assigns IP address (IPAM)                             │
 │      │                                                          │
 │      ▼                                                          │
-│   6. CNI configures routing                                    │
+│   6. CNI sets up veth pair and routes                          │
 │      │                                                          │
 │      ▼                                                          │
 │   7. Pod is network-ready                                      │
@@ -330,12 +332,12 @@ EndpointSlice is the bridge between the API abstraction and the service dataplan
 
 | Mode | Description | Performance | Use Case |
 |------|-------------|-------------|----------|
-| **nftables** | Uses nftables | Best | Default in modern clusters (k8s v1.33+) |
-| **iptables** | Uses iptables rules | Good | Legacy default, most older clusters |
+| **nftables** | Uses nftables | Best | Recommended modern mode (GA 1.33+, kernel ≥5.13); enable explicitly |
+| **iptables** | Uses iptables rules | Good | Default on Linux when mode is unspecified |
 | **IPVS** | Uses kernel IPVS | Better | High pod count (has known edge cases) |
 | **userspace** | Legacy, user-space proxy | Poor | Avoid using; deprecated |
 
-The kube-proxy mode matters most when service churn or service count becomes large. iptables mode has served Kubernetes for years, but rule updates and traversal costs can become painful at scale. nftables became the default for kube-proxy in modern Kubernetes releases and is the right baseline for Kubernetes 1.35 clusters when the node kernel supports it. IPVS is still seen in older high-scale clusters, but it has edge cases and operational differences that make nftables the preferred modern answer unless your environment has a specific reason to choose otherwise.
+The kube-proxy mode matters most when service churn or service count becomes large. iptables mode remains the Linux default when mode is not explicitly configured, which is why many clusters and lab environments still show iptables evidence. nftables is GA in Kubernetes 1.33+, is recommended as the modern mode when nodes run a supported kernel such as Linux 5.13 or newer, and should be enabled explicitly after you confirm compatibility. IPVS is still seen in older high-scale clusters, but it has edge cases and operational differences that make nftables the preferred modern answer unless your environment has a specific reason to choose otherwise.
 
 For the CKA, you are unlikely to redesign kube-proxy mode during the exam, but recognizing the mode helps you read the right evidence. iptables mode points to `iptables-save`, NAT chains, and rule ordering. IPVS points to `ipvsadm` and virtual server tables. nftables points to the nftables ruleset and kube-proxy configuration. The higher-level troubleshooting sequence remains the same, but the node commands and performance expectations change with the mode.
 
@@ -348,10 +350,11 @@ For the CKA, you are unlikely to redesign kube-proxy mode during the exam, but r
 │       │ Request to Service IP 10.96.45.123:80                  │
 │       ▼                                                         │
 │   ┌───────────────────────────────────────────────────────┐    │
-│   │                  iptables / IPVS                       │    │
+│   │             kube-proxy dataplane                       │    │
+│   │        (iptables / nftables / IPVS)                    │    │
 │   │                                                        │    │
-│   │  PREROUTING chain:                                    │    │
-│   │  10.96.45.123:80 → DNAT to pod IP (random selection)  │    │
+│   │  Virtual-IP rule/map:                                 │    │
+│   │  10.96.45.123:80 → backend pod IP selection           │    │
 │   │                                                        │    │
 │   │  Selected: 10.244.1.5:8080                            │    │
 │   └───────────────────────────────────────────────────────┘    │
@@ -360,7 +363,7 @@ For the CKA, you are unlikely to redesign kube-proxy mode during the exam, but r
 │   Backend Pod (10.244.1.5:8080)                                │
 │                                                                 │
 │   kube-proxy watches API server for Service/Endpoint changes  │
-│   and updates iptables/IPVS rules accordingly                 │
+│   and updates service dataplane rules accordingly             │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -373,8 +376,11 @@ This separation prevents a common false conclusion: "DNS is broken" whenever a U
 # Check kube-proxy pods
 kubectl get pods -n kube-system -l k8s-app=kube-proxy
 
-# Check kube-proxy mode
-kubectl logs -n kube-system -l k8s-app=kube-proxy | grep "Using"
+# Check kube-proxy mode from configuration first
+kubectl get configmap kube-proxy -n kube-system -o yaml | grep -A2 '^[[:space:]]*mode:'
+
+# Recent logs can confirm the proxier that started
+kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20 | grep -iE 'Using|Proxier|mode'
 
 # View kube-proxy configmap
 kubectl get configmap kube-proxy -n kube-system -o yaml
@@ -499,7 +505,7 @@ Pod Network Issue?
     │
     ├── Can reach services?
     │   ├── No → kube-proxy or DNS issue
-    │   │        Check: kube-proxy, CoreDNS, iptables
+    │   │        Check: kube-proxy mode (iptables/nftables/IPVS), CoreDNS
     │   │
     │   └── Yes → Network is fine, check app
     │
@@ -523,7 +529,7 @@ kubectl exec <pod> -- nc -zv <service> <port>
 kubectl exec <pod> -- wget --spider --timeout=1 http://<service>
 
 # Check CNI pods
-kubectl get pods -n kube-system | grep -E "calico|flannel|cilium"
+kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|canal|kindnet"
 kubectl logs -n kube-system <cni-pod>
 
 # Check kube-proxy
@@ -628,7 +634,7 @@ For migration decisions, add one more question: can you tolerate rebuilding node
 
 - **Flannel alone does not enforce NetworkPolicy**: NetworkPolicy is a Kubernetes API, but enforcement is delegated to the network implementation, so unsupported plugins can leave valid policy objects with no dataplane effect.
 
-- **nftables is the modern kube-proxy baseline**: Kubernetes made nftables mode the default for kube-proxy in recent releases, and Kubernetes 1.35 clusters should evaluate it before falling back to iptables or IPVS.
+- **nftables is the modern kube-proxy mode to evaluate**: iptables remains the Linux default when kube-proxy mode is unspecified, but nftables is GA and recommended for modern clusters when nodes run a supported kernel, so Kubernetes 1.35 clusters should evaluate it explicitly before choosing IPVS or staying on iptables.
 
 ---
 
@@ -702,7 +708,7 @@ Start by discovering the plugin from both the Kubernetes API and the node filesy
 
 ```bash
 # Check CNI pods
-kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|cni"
+kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|canal|kindnet|cni"
 
 # Check CNI daemonsets
 kubectl get ds -n kube-system
@@ -797,9 +803,10 @@ If pod IP connectivity works but `http://web` fails, check whether the Service h
 Finish by checking the components that are often confused with CNI. kube-proxy owns ClusterIP routing, CoreDNS owns service name resolution, and host-networked pods need explicit DNS policy when they should use cluster DNS. The host-network example also shows why bypassing normal pod networking should be a deliberate design choice.
 
 ```bash
-# Check kube-proxy pods and recent mode logs
+# Check kube-proxy pods, mode config, and recent proxier logs
 kubectl get pods -n kube-system -l k8s-app=kube-proxy
-kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=5 | grep -i mode
+kubectl get configmap kube-proxy -n kube-system -o yaml | grep -A2 '^[[:space:]]*mode:'
+kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20 | grep -iE 'Using|Proxier|mode'
 
 # Check CoreDNS
 kubectl get pods -n kube-system -l k8s-app=kube-dns
@@ -837,7 +844,7 @@ These drills preserve the same investigation moves in shorter repetitions. Use t
 
 ```bash
 # Drill: Identify CNI from kube-system pods
-kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|canal"
+kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|canal|kindnet"
 
 # Check CNI daemonsets
 kubectl get ds -n kube-system
@@ -873,8 +880,8 @@ kubectl delete pod net-test
 
 ```bash
 # Drill: kube-proxy mode
-kubectl get configmap kube-proxy -n kube-system -o yaml | grep -A5 "mode:"
-kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20 | grep -i "using"
+kubectl get configmap kube-proxy -n kube-system -o yaml | grep -A2 '^[[:space:]]*mode:'
+kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20 | grep -iE 'Using|Proxier|mode'
 kubectl get pods -n kube-system -l k8s-app=kube-proxy -o wide
 ```
 
@@ -950,7 +957,7 @@ kubectl expose pod server --port=80 --name=server-svc
 kubectl exec client -- nslookup server-svc
 kubectl exec client -- wget --spider --timeout=2 http://server-svc
 
-kubectl get pods -n kube-system | grep -E "calico|flannel|cilium"
+kubectl get pods -n kube-system | grep -E "calico|flannel|cilium|canal|kindnet"
 
 kubectl delete pod client server
 kubectl delete svc server-svc
@@ -977,6 +984,12 @@ Success criteria:
 
 ---
 
+## Learner check
+
+> CNI provides the pod side of that promise.
+
+---
+
 ## Sources
 
 - [Kubernetes Cluster Networking](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
@@ -986,6 +999,7 @@ Success criteria:
 - [Kubernetes Services](https://kubernetes.io/docs/concepts/services-networking/service/)
 - [Kubernetes Pod Hostnames and DNS Policy](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy)
 - [Kubernetes kube-proxy Configuration API](https://kubernetes.io/docs/reference/config-api/kube-proxy-config.v1alpha1/)
+- [Kubernetes Blog: NFTables mode for kube-proxy](https://kubernetes.io/blog/2025/02/28/nftables-kube-proxy/)
 - [Kubernetes kubeadm init](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/)
 - [CNI Specification](https://github.com/containernetworking/cni/blob/main/SPEC.md)
 - [Calico Kubernetes Networking Documentation](https://docs.tigera.io/calico/latest/networking/)
