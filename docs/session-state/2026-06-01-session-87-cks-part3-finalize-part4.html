@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Session 87 — CKS part3 + 1.4 finalized, part4 reviewed+fixed+merged</title>
+<title>Session 87 — CKS part3/4/5 finalized + no-codex roster findings</title>
 <style>
-  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
   h1 { font-size: 1.6rem; border-bottom: 2px solid #2a6; padding-bottom: .3rem; }
   h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #176; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
   h3 { font-size: 1.02rem; margin-top: 1.1rem; }
-  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .88em; }
   pre { background: #f7f7f7; border-left: 3px solid #2a6; padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
-  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .89em; }
   th, td { border: 1px solid #ddd; padding: .35rem .6rem; text-align: left; vertical-align: top; }
   th { background: #f0f7f4; }
   .ok { color: #2a6; font-weight: 600; }
@@ -19,55 +19,74 @@
   .bad { color: #c33; font-weight: 600; }
   .box { background: #fffbe6; border: 1px solid #e8d000; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
   .done { background: #eafbf0; border: 1px solid #2a6; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  .fix { background: #eef4ff; border: 1px solid #6699e8; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
   ul { margin: .4rem 0; }
 </style>
 </head>
 <body>
-<h1>Session 87 — CKS part3 + 1.4 finalized, part4 reviewed + fixed + merged</h1>
-<p><strong>Date:</strong> 2026-06-01 · <strong>Branch:</strong> main (clean) · <strong>Board:</strong> CKS 13 → <strong>23/30 done</strong> (+10 this session)</p>
+<h1>Session 87 — CKS part3/4/5 finalized (13→27) + no-codex roster findings</h1>
+<p><strong>Date:</strong> 2026-06-01 · <strong>Branch:</strong> main (clean) · <strong>Board:</strong> CKS 13 → <strong>27/30 done</strong> (+14). Only <strong>part6 (6.1–6.4)</strong> left.</p>
 
 <div class="done">
-<strong>Headline:</strong> Finished session-86's in-flight CKS part3 — consolidated 3.1–3.4 + the 1.4 <code>revision_pending</code> flag flip into <strong>PR #1731</strong> (merged + finalized → CKS 13→19, 1.4's stuck <code>needs_rewrite</code> cleared). Then ran the full review→ground-check→fix→PR→finalize loop on <strong>CKS part4 (4.1–4.4)</strong> via <strong>PR #1732</strong> (merged + finalized → CKS 19→23). All 10 modules cross-family reviewed, ground-checked, cluster-verified.
+<strong>Headline:</strong> Three CKS waves finalized to <code>done</code> — part3 (3.1–3.4) + 1.4 via <strong>PR #1731</strong>, part4 (4.1–4.4) via <strong>PR #1732</strong>, part5 (5.1–5.4) via <strong>PR #1733</strong>. All cross-family reviewed, ground-checked, cluster-verified. Mid-session, user pulled <strong>codex off the roster</strong> and added <strong>opus 4.8 headless</strong> + <strong>deepseek credits</strong>; gemini-cli headless diagnosed + fix found (see §4).
 </div>
 
-<h2>1. CKS part3 system-hardening (3.1–3.4) + 1.4 — PR #1731 (merged + finalized)</h2>
-<p>Session 86 left 3.1/3.2/3.4 fixed in their worktrees and 3.3 codex-draft still authoring. This session: verified 3.3 finished cleanly (commit <code>8f3c7cc2</code>, independently ground-checked <strong>T0</strong> 5215 words, cluster-verified on kind v1.35), consolidated all four fix commits onto a <strong>dedicated integration worktree</strong> (<code>cks-part3-batch</code> off <code>origin/main</code> — never branched in primary), and flipped <strong>CKS 1.4 frontmatter <code>revision_pending: true→false</code></strong> in the same branch (one swoop) to clear the stuck <code>needs_rewrite</code>.</p>
-<ul>
-<li>All 4 part3 modules verified T0 in the consolidated branch (5222 / 5074 / 5215 / 5263 words).</li>
-<li>CI all-green; CI gemini-3.1-pro cross-family review <strong>APPROVE 5/5, no findings</strong>; rebase-merged.</li>
-<li>Finalized: 4 review records + <code>reset-stage … COMMITTED</code> → board <strong>CKS 13→19</strong>; 1.4 → <code>done</code>.</li>
-</ul>
+<h2>1. Part3 (3.1–3.4) + 1.4 — PR #1731 (board 13→19)</h2>
+<p>Finished session-86's in-flight part3: verified 3.3 codex-draft landed (T0, cluster-verified), consolidated 3.1–3.4 onto a dedicated <code>cks-part3-batch</code> worktree, flipped <strong>CKS 1.4 <code>revision_pending: false</code></strong> (cleared its stuck <code>needs_rewrite</code>). CI green + gemini APPROVE 5/5; finalized.</p>
 
-<h2>2. CKS part4 microservice-vulnerabilities (4.1–4.4) — PR #1732 (merged + finalized)</h2>
-<p>All four were already T0, so this is the back-catalog <em>review</em> axis. Reviews fanned out mixed-pool (2 cursor, 1 codex-danger+worktree, 1 agy review-only); every verdict ground-checked before fixing; fixes by cursor (3) + codex draft (1, the security-critical one it cluster-verified).</p>
+<h2>2. Part4 (4.1–4.4) — PR #1732 (board 19→23)</h2>
 <table>
-<tr><th>Module</th><th>Reviewer</th><th>Verdict</th><th>Key real defect fixed (all re-verified T0)</th></tr>
-<tr><td>4.1 security-contexts</td><td>cursor</td><td class="bad">NC — 2 P1</td><td>Stock <code>nginx</code> as <code>runAsUser:1000</code> crashed on <code>/var/cache/nginx</code> perms but the prose taught it as a NET_BIND_SERVICE/port-80 lesson → added writable <code>emptyDir</code> mounts + split the two failure modes; removed <code>sleep 3600</code> override so the hardened lab actually exercises <code>NET_BIND_SERVICE</code> (cluster-verified port-80 bind). 5258w.</td></tr>
-<tr><td>4.2 pod-security-admission</td><td>codex</td><td class="bad">NC — P1 (security)</td><td>Profile table claimed Baseline <em>allows</em> HostPath volumes — K8s 1.35 Baseline <strong>forbids</strong> them (codex pasted the live-cluster rejection <code>violates PodSecurity "baseline:v1.35": hostPath volumes</code>) → Baseline col → Disallowed + prose consistent. P2: <code>runAsUser:1000→101</code> (nginx-alpine); fake <code>ClusterPodSecurityConfig</code> → <code>AdmissionConfiguration</code>/<code>PodSecurityConfiguration</code>. 5637w.</td></tr>
-<tr><td>4.3 secrets-management</td><td>cursor</td><td class="warn">NC — 3 P2</td><td>Encryption failure-mode contradiction (silent identity fallback vs crash-loop) → three explicit cases; KMS v1 outdated for 1.35 (deprecated 1.28, off-by-default 1.29, <code>--feature-gates=KMSv1=true</code>); added documented aesgcm <strong>200,000-write</strong> rotation limit. 6060w.</td></tr>
-<tr><td>4.4 runtime-sandboxing</td><td>agy + orchestrator</td><td class="warn">AWN + 1 missed</td><td>agy's 2 nits confirmed (gVisor <code>uname</code> reports an emulated kernel release, not literal "gVisor"; Kaniko/rootless-BuildKit don't run cleanly <em>inside</em> gVisor → schedule on runc nodes). <strong>Ground-check caught what agy missed:</strong> an unsourced company-specific breach hypothetical (named Shopify + invented "hundreds of millions" impact) → removed/genericized. CVE-2019-5736 kept (real + cited). 5027w.</td></tr>
+<tr><th>Module</th><th>Reviewer</th><th>Key real defect</th></tr>
+<tr><td>4.1 security-contexts</td><td>cursor</td><td><strong>P1</strong> stock nginx as <code>runAsUser:1000</code> crashed on <code>/var/cache/nginx</code> perms (taught as NET_BIND_SERVICE) → mounts + removed <code>sleep 3600</code> override</td></tr>
+<tr><td>4.2 pod-security-admission</td><td>codex (last codex wave)</td><td><strong>P1</strong> table claimed Baseline <em>allows</em> HostPath — 1.35 forbids it (cluster-verified)</td></tr>
+<tr><td>4.3 secrets-management</td><td>cursor</td><td>KMS v1/aesgcm-200k accuracy; encryption failure-mode contradiction</td></tr>
+<tr><td>4.4 runtime-sandboxing</td><td>agy + ground-check</td><td>removed unsourced Shopify breach war-story (agy MISSED it)</td></tr>
 </table>
-<p>Finalized: 4 review records + <code>reset-stage … COMMITTED</code> → board <strong>CKS 19→23</strong>.</p>
 
-<h2>3. Roster + ground-check notes (this session's evidence)</h2>
+<h2>3. Part5 (5.1–5.4) — PR #1733 (board 23→27) — first no-codex wave</h2>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Key real defect (all re-verified T0)</th></tr>
+<tr><td>5.1 image-security</td><td>cursor</td><td><strong>P1</strong> kind+local-registry hands-on didn't run (<code>registry:5000</code>→<code>kind-registry</code>, missing <code>docker network connect</code>, incomplete <code>hosts.toml</code>) — cluster-reproduced + fixed</td></tr>
+<tr><td>5.2 image-scanning</td><td>cursor</td><td><strong>P1</strong> Quiz Q8 called CVE-2024-3094 (xz backdoor) "Medium" — it's Critical 10.0; GitLab CI pushed-before-scan; <code>.trivyignore</code> modeled ignoring the backdoor</td></tr>
+<tr><td>5.3 static-analysis</td><td><strong>opus 4.8</strong> + sonnet</td><td><strong>subtle VAP/pod-inheritance defect</strong>: the VAP checked <code>runAsNonRoot</code> only per-container, but the module's hardened example sets it at pod level → policy would wrongly DENY the module's own correct pod. opus caught it; sonnet corroborated.</td></tr>
+<tr><td>5.4 admission-controllers</td><td>cursor (agy <span class="bad">fabricated</span> → discarded)</td><td>incomplete hands-on lab; Gatekeeper/VAP init-container gap; Kyverno Audit + version; cleared stale <code>revision_pending</code></td></tr>
+</table>
+<div class="box"><strong>agy fabrication (decisive):</strong> agy's 5.4 review claimed 479 body words (real 5116), "only 4 quiz / 5 mistakes rows" (verifier confirms 7 / 8), and a bogus "AdmissionConfiguration crashes the cluster" P1 — cursor cluster-verified the YAML runs fine. <strong>agy is DISCARDED as a reviewer</strong> (it fabricates metrics, line content, and findings).</div>
+
+<h2>4. No-codex roster — findings (READ BEFORE part6)</h2>
+<table>
+<tr><th>Agent</th><th>Verdict</th><th>Notes</th></tr>
+<tr><td><strong>cursor</strong> <code>--model auto</code></td><td class="ok">Backbone</td><td>review + fix + cluster-verify; reliable; the only consistently-working <em>fixer</em>. ≤2/OAuth. Edit auto-commit inconsistent → commit the worktree.</td></tr>
+<tr><td><strong>opus 4.8 headless</strong> (<code>--agent claude --model claude-opus-4-8</code>)</td><td class="ok">Strongest reviewer</td><td>caught the subtle 5.3 VAP defect. Review-class works (no MCP-bloat — that's edit-class only). <span class="warn">Caveat: can stall ~20 min / 0-output when the review skill attempts cluster ops in read-only — re-route to cursor if no output in ~10 min.</span> No effort flag exposed; opus default.</td></tr>
+<tr><td><strong>deepseek</strong></td><td class="ok">USE IT (lots of credits)</td><td>2nd fixer + reviewer (relieves the cursor-only-fixer bottleneck). <code>deepseek-v4-pro</code> (review/edit/draft) + <code>deepseek-v4-flash</code> (fast). <strong>Review needs <code>--mode workspace-write</code> + <code>--worktree</code></strong> (read-only fails fast). Hallucination-prone (fake gate names) → ground-check. Never from GH Actions (China API → 403). 6.1 review was in-flight at handoff: <code>logs/dispatch_responses/cks-rev-6.1-ds.txt</code>.</td></tr>
+<tr><td><strong>gemini-cli</strong></td><td class="warn">Needs the yolo flag</td><td>See fix box below.</td></tr>
+<tr><td><strong>agy</strong></td><td class="bad">DISCARD</td><td>fabricates reviews (§3). Not even read-only-safe.</td></tr>
+</table>
+
+<div class="fix"><strong>gemini-cli headless — DIAGNOSED + fix found (apply next session):</strong>
 <ul>
-<li><strong>REVIEW pool all accurate:</strong> cursor <code>--model auto</code> (2 part4 reviews + cluster-verified), codex gpt-5.5 danger (caught the 4.2 HostPath security P1 with a pasted live rejection), agy/Gemini-3.5-Flash review-only (caught real nits on 4.4) — but agy <strong>MISSED the 4.4 Shopify war-story</strong> and called the module a clean 5.0/5. <em>Always ground-check agy.</em></li>
-<li><strong>WRITE:</strong> cursor (3 fixes, all auto-committed this session) + codex draft (4.2 security fix, cluster-verified). codex draft exit-1 = stale-branch advisory (recover from worktree) — fix was real.</li>
-<li><strong>CI gemini-3.1-pro is a useful but fallible safety net:</strong> on #1732 it raised a falsifiable runnability nit ("4.1 lab manifest might be missing <code>/var/cache/nginx</code> + <code>/var/run</code> mounts"). Ground-checked the actual file — <strong>all three mounts are present</strong>; the nit was refuted (it only saw part of the diff). Don't merge on its word alone, but don't block on a speculative nit either — read the file.</li>
-<li>Both consolidated PRs passed the <strong>incident-dedup gate</strong> — the 4.4 Shopify removal + CVE-2019-5736 handling is clean (CVE is cross-cited in KCSA/linux as a sourced fact, not a duplicate war-story).</li>
+<li><strong>Symptom:</strong> <code>dispatch_smart review --agent gemini</code> returns empty / <code>[ERROR] Invalid stream: empty response or malformed tool call</code>. Reproduced post-rotation, so NOT OAuth.</li>
+<li><strong>Root cause:</strong> headless + the tool-heavy review skill → the 3.x preview models try to call <code>run_shell_command</code> (to run <code>verify_module.py</code>), but in <em>default</em> approval mode that tool isn't available headless → <code>Tool "run_shell_command" not found</code> → empty stream. The models work for the user <em>interactively</em>; only headless+tools breaks. (Confirmed: <code>gemini-3.1-pro-preview</code>, <code>gemini-3-flash-preview</code>, <code>gemini-2.5-pro</code> all 0-byte headless; only <code>gemini-2.5-flash</code> works in default mode — but user wants the 3.x models, do NOT downgrade.)</li>
+<li><strong>FIX (verified):</strong> <code>gemini -m gemini-3.1-pro-preview --approval-mode=yolo</code> on the review prompt produced a full <strong>3912-byte</strong> review. So add <code>--approval-mode=yolo</code> to the gemini <em>review</em> path in <code>scripts/agent_runtime/adapters/gemini.py</code> (currently yolo is only added for write modes).</li>
+<li><strong>CATCH:</strong> yolo auto-approves <em>writes</em> too — the test review accidentally edited <code>module-6.2-falco.md</code> (reverted). So the proper fix: dispatch gemini reviews with yolo <strong>inside a throwaway <code>--worktree</code></strong> (isolate accidental writes), OR test <code>--approval-mode=plan</code> (read-only mode — may block the shell tool though), OR make the gemini review prompt static (inline the module content, forbid tool calls). Recommend: yolo + throwaway worktree, then <code>git -C wt diff</code> for the verdict and discard the worktree.</li>
+<li>My uncommitted <code>dispatch_smart.py</code> 2.5-flash downgrade was <strong>reverted</strong> per user ("3.x work for me"). The model map is unchanged (gemini-3.1-pro-preview).</li>
 </ul>
+</div>
 
-<h2>4. IMMEDIATE NEXT STEPS (resume here)</h2>
+<h2>5. IMMEDIATE NEXT STEPS — finish CKS with part6 (6.1–6.4)</h2>
 <ol>
-<li><strong>CKS part5 (5.1–5.4) + part6 (6.1–6.4) = 8 modules</strong> — same proven loop. 5.1/5.2/5.3, 6.2/6.3/6.4 are <code>shipped_unreviewed</code> (review→fix). <strong>5.4 "Admission Controllers" + 6.1 "Audit Logging" show <code>needs_rewrite</code> but are flagged STALE-T0</strong> — density-check the LIVE file first (memory <code>feedback_needs_rewrite_often_stale_not_real</code>); expect review+stage-flip, not a rewrite. If a rewrite IS genuine, flip <code>revision_pending:false</code> after. Review prompts pre-generated: <code>logs/remediation/briefs/session85/review-cks-{5,6}.*.md</code>.</li>
-<li>Reuse this session's pattern exactly: mixed-pool reviews (cursor + codex + agy review-only, ≤2/OAuth) → ground-check (reject the prompt's known FPs; ground-check agy hardest) → fix (cursor workhorse, codex draft for cluster-verify/security) → self-verify (re-run <code>verify_module.py</code> + spot-check the P1 fix landed) → consolidate to a dedicated <code>cks-part5-batch</code> / <code>cks-part6-batch</code> worktree → PR (<code>chore(content):</code> + Learner check) → CI → rebase-merge → finalize (review records + <code>reset-stage … COMMITTED</code> dash-slug). Fix briefs: <code>logs/remediation/briefs/session87/</code>.</li>
-<li>After CKS part6: CKS track 30/30 (the 4 "Backstage / K8S Cba" board entries are NOT CKS — mislabeled Platform-Toolkits noise). Then curriculum order continues: <strong>kcna → kcsa → extending → tool certs → cloud (85) → ai-ml-eng → on-prem → platform.</strong></li>
+<li><strong>Check the in-flight deepseek 6.1 review:</strong> <code>logs/dispatch_responses/cks-rev-6.1-ds.txt</code> (worktree <code>.worktrees/cks-review-6.1-ds</code>). Ground-check it (deepseek hallucinates), then fix.</li>
+<li><strong>Review + fix 6.1–6.4.</strong> All four are <strong>already T0</strong> (pure review axis). 6.2/6.3/6.4 are <code>shipped_unreviewed</code>; <strong>6.1 "Audit Logging" shows <code>needs_rewrite</code> but is STALE-T0 with <code>revision_pending: true</code></strong> — flip it <code>false</code> after fixing (like 1.4 / 5.4). Review prompts: <code>logs/remediation/briefs/session85/review-cks-6.*.md</code>.</li>
+<li><strong>Roster for part6 (no codex):</strong> reviews across <strong>cursor + opus 4.8 + deepseek-v4-pro</strong> (+ gemini once the yolo fix lands); fixes across <strong>cursor + deepseek-v4-pro</strong> (2 fixer lanes now). Ground-check every verdict (deepseek + any gemini hardest). Same loop: review → ground-check → fix → self-verify (<code>verify_module.py</code> + spot-check P1) → dedicated <code>cks-part6-batch</code> worktree → PR (<code>chore(content):</code> + Learner check) → CI → rebase-merge → finalize (review records + <code>reset-stage … COMMITTED</code> dash-slug).</li>
+<li><strong>After part6 → CKS 30/30, track COMPLETE.</strong> (The 4 "Backstage / K8S Cba" board rows are NOT CKS — Platform-Toolkits noise.) Then curriculum order: <strong>kcna → kcsa → extending → tool certs → cloud → ai-ml-eng → on-prem → platform.</strong></li>
 </ol>
 
-<h2>5. Self-corrections this session</h2>
+<h2>6. Self-corrections this session</h2>
 <ul>
-<li>Initially called agy's 4.4 uname nit a false positive based on a <code>grep</code> that didn't show the comment — then <strong>read the actual lines</strong> and found line 291's inaccurate <code>"gVisor"</code> comment really was there. Lesson: ground-check by reading, not grep alone.</li>
-<li>Kept dispatch tight — mixed-pool, ≤2/OAuth, ≤3 in-flight; no watcher loops (used the <code>run_in_background</code> exit notifications); no build-log reads.</li>
+<li>Ground-checking caught agy's fully-fabricated 5.4 review (would have broken correct YAML) — agy dropped.</li>
+<li>Misjudged agy's 4.4 uname nit from a grep before reading the line — corrected by reading. (Read, don't grep, to ground-check.)</li>
+<li>Proposed downgrading gemini to 2.5-flash; user corrected (3.x work for them) → reverted, found the real yolo fix instead.</li>
+<li>opus-4.8 headless 5.4 review stalled ~20 min in read-only → re-routed to cursor rather than waiting out the 30-min timeout.</li>
 </ul>
 </body>
 </html>
