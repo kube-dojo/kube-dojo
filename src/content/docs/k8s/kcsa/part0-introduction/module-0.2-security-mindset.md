@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2023, a midsize software company discovered that an exposed Kubernetes dashboard had become the front door for a cluster compromise. The attacker did not need a cinematic zero-day or a custom exploit chain; they found a reachable interface, used excessive permissions to inspect workloads, and followed service credentials until customer data and deployment secrets were at risk. The incident response bill, emergency consulting, downtime, and customer notification work quickly turned a small configuration mistake into a seven-figure business problem.
+**Hypothetical scenario:** In 2023, a midsize software company discovers that an exposed Kubernetes dashboard has become the front door for a cluster compromise. The attacker does not need a cinematic zero-day or a custom exploit chain; they find a reachable interface, use excessive permissions to inspect workloads, and follow service credentials until customer data and deployment secrets are at risk. The incident response bill, emergency consulting, downtime, and customer notification work can quickly turn a small configuration mistake into a costly business problem.
 
 The painful part was that nearly every individual setting could be explained away in isolation. The dashboard was useful for debugging, the service account was convenient during a release crunch, the network was open because teams did not want blocked traffic during development, and the image tag was mutable because it simplified deployments. Each choice saved a little time, but together they formed a path an attacker could walk from discovery to impact without meeting a serious barrier.
 
@@ -371,7 +371,7 @@ In exam terms, this means you should not memorize slogans as absolute rules. "De
 
 - **Most serious Kubernetes incidents are chains, not single mistakes**, because an exposed workload, broad service account, permissive network, and weak runtime settings become far more dangerous together than they look separately.
 
-- **The 4 Cs model is Kubernetes-specific terminology**, but the concept is universal: infrastructure, platform, workload packaging, and application code all contribute to whether one weakness becomes a system compromise.
+- **The 4 Cs model is CNCF cloud-native security vocabulary adopted in Kubernetes security guidance**; the layered concept is universal across cloud, cluster, container, and code.
 
 ## Common Mistakes
 
@@ -407,7 +407,7 @@ Think from the attacker's next move. `hostNetwork: true` is especially dangerous
 
 <details><summary>During incident response, you discover that an attacker compromised a pod, read the service account token, and used it to list secrets. Map this to the attack chain and name defenses that could have broken it.</summary>
 
-The chain begins with initial access through the compromised pod, then moves to credential theft through the service account token, then reaches impact when secrets are listed. Defenses could break the chain at several points: prevent token mounting where it is unnecessary, narrow RBAC so the token cannot list secrets, segment network paths to the API where appropriate, and alert on unusual secret access. The lesson is that a single exploited pod should not automatically become a cluster credential. Multiple controls make each step harder and more visible.
+The chain begins with initial access through the compromised pod, then moves to credential theft through the service account token, then reaches impact when secrets are listed. Defenses could break the chain at several points: narrow RBAC so the token cannot list secrets; disable or restrict ServiceAccount token mounting where unnecessary (`automountServiceAccountToken: false`); alert on unusual Secret access; optionally restrict egress to the Kubernetes API Service where the CNI supports it. The lesson is that a single exploited pod should not automatically become a cluster credential. Multiple controls make each step harder and more visible.
 
 </details>
 
@@ -500,7 +500,7 @@ Success criteria:
 - [Kubernetes documentation: Admission Controllers](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)
 - [Kubernetes documentation: Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
 - [NIST Special Publication 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
-- [Kubernetes documentation: Cloud Native Security and Kubernetes](https://kubernetes.io/docs/concepts/security/cloud-native-security/)
+- [CNCF Cloud Native Security Whitepaper](https://www.cncf.io/reports/cloud-native-security-whitepaper/)
 
 ## Next Module
 
