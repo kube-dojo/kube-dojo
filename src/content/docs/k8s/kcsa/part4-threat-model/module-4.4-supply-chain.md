@@ -71,7 +71,7 @@ Pause and predict: if a team requires images to come from `registry.internal.exa
 
 The supply chain incidents most relevant to Kubernetes share one property: the compromised component looked normal to downstream automation. The [2020 SolarWinds trusted-update backdoor](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> is the foundational enterprise example — trusted software updates carried attacker-controlled code into ~18,000 customer environments. [3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp) showed a user-facing desktop application being trojanized and distributed through a vendor's normal channel. These cases are outside Kubernetes, but they explain why artifact provenance matters before software reaches a cluster.
 
-NotPetya is the canonical enterprise warning for trusted-update risk. In June 2017, an update delivered through M.E.Doc, a widely used Ukrainian accounting package, carried the initial payload. Attackers used that trusted update path to spread a destructive payload that behaved like ransomware but had no realistic recovery mechanism; the malicious process overwrote critical data structures in a way that made large-scale decryption infeasible even after paying ransom demands. The operational lesson is visible in the blast radius: global logistics, manufacturing, and logistics-adjacent firms, including Maersk, Merck, and FedEx, were disrupted because the malware moved with trusted enterprise update and authentication trust rather than purely by direct compromise. For Kubernetes supply-chain defense, the point is not only “don’t trust updates,” but to pair every update trust boundary with provenance checks, signed/attested immutability, and fast rollback to a known-good artifact state. [CISA Alert TA17-181A](https://www.cisa.gov/ncas/alerts/TA17-181A) documents these details from the NotPetya episode.
+NotPetya is the canonical enterprise warning for trusted-update risk. In June 2017, an update delivered through M.E.Doc, a widely used Ukrainian accounting package, carried the initial payload. Attackers used that trusted update path to spread a destructive payload that behaved like ransomware but had no realistic recovery mechanism; the malicious process overwrote critical data structures in a way that made large-scale decryption infeasible even after paying ransom demands. The operational lesson is visible in the blast radius: global shipping, pharmaceutical, and logistics firms, including Maersk, Merck, and FedEx, were disrupted because the malware moved with trusted enterprise update and authentication trust rather than purely by direct compromise. For Kubernetes supply-chain defense, the point is not only “don’t trust updates,” but to pair every update trust boundary with provenance checks, signed/attested immutability, and fast rollback to a known-good artifact state. [CISA Alert TA17-181A](https://www.cisa.gov/ncas/alerts/TA17-181A) documents these details from the NotPetya episode.
 
 The XZ Utils incident is especially useful for cloud-native learners because it separates the source repository from the release artifact. The CVE record says the malicious code appeared in upstream tarballs and modified the liblzma build process through obfuscated steps. That pattern matters for containers because an image build often starts from published release archives, package repositories, or base layers rather than from a repository that your team reviews directly. If your evidence chain begins only after the image is built, you may miss compromise that occurred before the Dockerfile ran.
 
@@ -113,16 +113,16 @@ Provenance describes how an artifact was produced. SLSA provides a framework for
 
 ```mermaid
 flowchart TD
-    l0["L0\nNo consistent build evidence"] --> l1["L1\nProvenance exists"]
-    l1 --> l2["L2\nHosted build platform\nsource and build service identified"]
-    l2 --> l3["L3\nHardened build platform\ntamper-resistant provenance"]
-    l3 --> l4["L4\nTwo-person review\nhermetic and reproducible expectations"]
+    l0["L0\nNo guarantees (lack of SLSA)"] --> l1["L1\nProvenance exists"]
+    l1 --> l2["L2\nSigned provenance on hosted build platform\nconsistent build process"]
+    l2 --> l3["L3\nHardened, tamper-resistant build platform"]
+    l3 --> l4["L4 (future / deferred)\nhermetic + reproducible"]
 
     l0 -. "manual builds\nmutable tags" .-> risk0["High investigation cost"]
     l1 -. "artifact can be traced" .-> risk1["Better incident response"]
     l2 -. "trusted builder boundary" .-> risk2["Reduced builder spoofing"]
     l3 -. "stronger tamper resistance" .-> risk3["Higher assurance"]
-    l4 -. "strict source and build controls" .-> risk4["Highest operating cost"]
+    l4 -. "deferred in SLSA v1.0" .-> risk4["Future assurance target"]
 ```
 
 The SLSA level diagram should not be read as a compliance trophy ladder. Higher levels require process discipline, platform support, and maintenance cost. A small internal service may get most of its risk reduction from digest deployment, SBOMs, signatures, and hosted build provenance. A critical platform component that runs with cluster-wide permissions may justify stricter source review, isolated builders, provenance verification, and admission that rejects images lacking the expected builder identity.
@@ -133,7 +133,7 @@ Did you catch the tradeoff? Evidence adds friction when it is introduced late, b
 
 Kubernetes admission is the main place where supply chain evidence becomes a deploy-time decision. The built-in ImagePolicyWebhook admission controller can call an HTTPS backend to approve or reject images, but it is disabled by default and requires API server configuration. ValidatingAdmissionPolicy uses CEL expressions inside the API server and can enforce simple structural rules such as requiring digests or forbidding `:latest`. Dynamic admission webhooks, Kyverno, Gatekeeper, and Sigstore Policy Controller add richer policy behavior for signatures, attestations, external lookups, and custom workflows.
 
-The simplest enforceable rule is digest pinning. A ValidatingAdmissionPolicy can reject Pod specs whose container images do not include an `@sha256:` digest. That policy does not verify who built the image, but it prevents silent tag drift and makes later evidence checks stable. It is a good first enforcement step because it changes how release manifests are written without requiring every team to adopt signing on day one.
+The simplest enforceable rule is digest pinning. A ValidatingAdmissionPolicy can reject Pod specs whose container images do not include an `@sha256:` digest. That policy does not verify who built the image, but it prevents silent tag drift and makes later evidence checks stable. It is a good first enforcement step because it changes how release manifests are written without requiring every team to adopt signing on day one. A production policy should also cover `ephemeralContainers` in addition to `containers` and `initContainers`.
 
 ```yaml
 apiVersion: admissionregistration.k8s.io/v1
@@ -149,7 +149,7 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
   validations:
-    - expression: "object.spec.containers.all(c, c.image.contains('@sha256:'))"
+    - expression: "object.spec.containers.all(c, c.image.contains('@sha256:')) && (!has(object.spec.initContainers) || object.spec.initContainers.all(c, c.image.contains('@sha256:')))"
       message: "Container images must be pinned by digest."
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -190,7 +190,6 @@ kind: ClusterPolicy
 metadata:
   name: require-scanned-image-annotation
 spec:
-  validationFailureAction: Enforce
   background: false
   rules:
     - name: require-scan-result
@@ -200,6 +199,7 @@ spec:
               kinds:
                 - Pod
       validate:
+        failureAction: Enforce
         message: "Pods must reference an image scan record before admission."
         pattern:
           metadata:
@@ -297,7 +297,7 @@ By now you should have a repeatable diagnostic question: "What evidence would co
 
 - NIST SP 800-218, the Secure Software Development Framework, was published in February 2022 and organizes secure development work into Prepare the Organization, Protect the Software, Produce Well-Secured Software, and Respond to Vulnerabilities.
 - Kubernetes has documented keyless Sigstore verification for its own release artifacts since the v1.26-era signed-artifact task, which means Kubernetes itself is a useful example of signed release evidence.
-- The GitHub Advisory Database entry for tj-actions/changed-files lists patched version 46.0.1, while CISA added CVE-2025-30066 to the Known Exploited Vulnerabilities Catalog on March 26, 2025.
+- The GitHub Advisory Database entry for tj-actions/changed-files lists patched version 46.0.1, while CISA added CVE-2025-30066 to the Known Exploited Vulnerabilities Catalog on March 18, 2025.
 - The StepSecurity actions-cool report says `actions-cool/issues-helper` had 53 tags moved to imposter commits and `actions-cool/maintain-one-comment` had 15 tags moved, which is why full-SHA pinning beats tag trust for CI actions.
 
 ## Common Mistakes
@@ -452,7 +452,6 @@ kind: ClusterPolicy
 metadata:
   name: require-trivy-scan-annotation
 spec:
-  validationFailureAction: Enforce
   background: false
   rules:
     - name: require-trivy-scan-annotation
@@ -464,6 +463,7 @@ spec:
               namespaces:
                 - supply-chain-lab
       validate:
+        failureAction: Enforce
         message: "Set security.example.com/trivy-scan to the approved scan record before deploying."
         pattern:
           metadata:
