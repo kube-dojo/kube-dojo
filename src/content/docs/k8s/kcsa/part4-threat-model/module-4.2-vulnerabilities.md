@@ -19,7 +19,7 @@ After completing this module, you will be able to perform these tasks in a real 
 
 ## Why This Module Matters
 
-In December 2018, Kubernetes disclosed CVE-2018-1002105, a critical API server vulnerability that could let any authenticated user escalate privileges through an upgraded connection to a backend API server. The frightening part was not only the CVSS 9.8 score; it was the operational shape of the bug. A user who already had ordinary credentials could potentially cross the control-plane boundary, act as cluster-admin, and leave very little evidence in older audit configurations, so the incident forced platform teams to treat patching as a control-plane emergency rather than a routine maintenance ticket.
+In December 2018, Kubernetes disclosed CVE-2018-1002105, a critical API server vulnerability that could let any authenticated user escalate privileges through an upgraded connection to a backend API server. The frightening part was not only the CVSS 9.8 score; it was the operational shape of the bug. A user who already had ordinary credentials could potentially cross the control-plane boundary, act as cluster-admin, and may have left limited signal in default audit configurations, so the incident forced platform teams to treat patching as a control-plane emergency rather than a routine maintenance ticket.
 
 Real incidents rarely arrive as neat textbook categories. A security dashboard might show a critical runtime CVE, a high-severity application dependency issue, dozens of medium image findings, a namespace full of privileged pods, and a cluster with no default-deny network policy. Leaders may ask for everything to be fixed immediately, while application teams worry about downtime, regressions, and missed release windows. The KCSA skill is not memorizing every CVE identifier; it is learning how to separate urgent exploit paths from noisy findings and then explain the tradeoff in terms an operations team can act on.
 
@@ -78,7 +78,7 @@ flowchart TB
     subgraph KUBERNETES_API_AUTHZ_CVEs["KUBERNETES API/AUTHZ CVEs"]
     direction TB
     A["<b>CVE-2018-1002105 (Privilege Escalation)</b><br/>Impact: Any user → cluster-admin<br/>Attack: Upgrade API connection to backend<br/>Severity: Critical (9.8)<br/>Fix: Kubernetes 1.10.11, 1.11.5, 1.12.3"]
-    B["<b>CVE-2020-8554 (MITM via LoadBalancer)</b><br/>Impact: Intercept traffic to external IPs<br/>Attack: Create service with ExternalIP<br/>Severity: Medium<br/>Fix: Restrict ExternalIP via admission"]
+    B["<b>CVE-2020-8554 (MITM via LoadBalancer/ExternalIPs)</b><br/>Impact: Intercept traffic to external IPs<br/>Attack: Create service with ExternalIP<br/>Severity: Medium<br/>Fix: Restrict ExternalIP via admission"]
     C["<b>CVE-2021-25741 (Symlink Attack)</b><br/>Impact: Access files outside volume<br/>Attack: Symlink in subPath mount<br/>Affected: All Kubernetes before fix<br/>Fix: Update Kubernetes"]
     end
 ```
@@ -299,7 +299,7 @@ The framework should end with an explicit decision statement. A strong statement
 
 - **A container image can report 100+ vulnerabilities even when the application uses only a fraction of the installed packages**, which is why minimal images and reachability analysis matter as much as raw scanner totals.
 
-- **Distroless and scratch-style images often reduce reported CVE volume by 50-90%** because they remove shells, package managers, and unused operating-system packages that attackers commonly abuse after gaining execution.
+- **Distroless and scratch-style images substantially reduce reported CVE volume** — many teams report large drops — because there is far less OS surface to scan; they remove shells, package managers, and unused operating-system packages that attackers commonly abuse after gaining execution.
 
 - **NetworkPolicy is not enforced by Kubernetes alone**; it requires a network plugin that implements policy, so a manifest can exist without actually reducing traffic if the cluster networking layer does not support it.
 
@@ -350,7 +350,7 @@ HIGH:     CVE-2022-22965 (Spring4Shell) in app image
 MEDIUM:   No network policies defined
 MEDIUM:   Default ServiceAccount token mounted
 LOW:      Container image using :latest tag
-LOW:      CVE-2020-0000 in unused library
+LOW:      CVE-2020-0000 in unused library (example/synthetic)
 ```
 
 Use the `k` alias when you sketch verification commands, and assume the cluster is Kubernetes 1.35 or newer. You do not need a live cluster to complete the reasoning exercise, but your answers should be operational enough that a teammate could translate them into tickets. The value is in explaining why one finding outranks another, not in claiming that every issue can be fixed instantly.
@@ -389,6 +389,8 @@ For the runtime CVE, collect node image or package evidence showing the fixed `r
 - [Kubernetes: Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
 - [NVD: CVE-2018-1002105](https://nvd.nist.gov/vuln/detail/CVE-2018-1002105)
 - [NVD: CVE-2019-5736](https://nvd.nist.gov/vuln/detail/CVE-2019-5736)
+- [NVD: CVE-2020-8554 (MITM via LoadBalancer/ExternalIPs)](https://nvd.nist.gov/vuln/detail/CVE-2020-8554)
+- [NVD: CVE-2022-22965 (Spring4Shell)](https://nvd.nist.gov/vuln/detail/CVE-2022-22965)
 - [containerd Security Advisory: CVE-2020-15257](https://github.com/containerd/containerd/security/advisories/GHSA-36xw-fx78-c5r4)
 - [CRI-O Security Advisory: CVE-2022-0811](https://github.com/cri-o/cri-o/security/advisories/GHSA-6x2m-w449-qwx7)
 - [Kubernetes Security Announcement: CVE-2021-25741](https://groups.google.com/g/kubernetes-security-announce/c/nyfdhK24H7s)

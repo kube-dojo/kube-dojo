@@ -23,7 +23,7 @@ After completing this module, you will be able to review a Pod spec like a secur
 
 ## Why This Module Matters
 
-In 2019, a cloud provider disclosed that a flaw in its hosted container service could let a customer container reach host-level credentials under certain conditions. The public write-up was careful, the technical details were controlled, and the affected platform moved quickly, but the lesson was hard to miss: the business impact of container escape is not limited to one compromised application. A single boundary failure can turn a web shell into node access, node access into credential theft, and credential theft into a cluster-wide incident that pulls engineers, legal teams, and customers into the same emergency call.
+In 2019, the runC container-breakout class of vulnerability (CVE-2019-5736) showed how a container could overwrite the host runtime binary and reach host-level credentials under certain conditions. The public write-ups were careful, the technical details were controlled, and affected platforms moved quickly, but the lesson was hard to miss: the business impact of container escape is not limited to one compromised application. A single boundary failure can turn a web shell into node access, node access into credential theft, and credential theft into a cluster-wide incident that pulls engineers, legal teams, and customers into the same emergency call.
 
 The same pattern appears in less famous incidents inside ordinary engineering teams. A vendor agent asks for `privileged: true`, a debugging Pod mounts `/`, or a CI runner receives access to the runtime socket because it makes image builds convenient. Nothing looks malicious during deployment, yet the cluster has quietly changed from "containers are isolated workloads" to "any application compromise can become host access." That is why the KCSA expects you to recognize escape-enabling configurations before you memorize exploit commands.
 
@@ -49,6 +49,7 @@ The trust boundary matters because Kubernetes schedules many workloads onto the 
 │  │  └─────────────┘ └─────────────┘ └─────────────┘   │   │
 │  └─────────────────────────────────────────────────────┘   │
 │  Containers can't see or affect host or each other         │
+│  under normal isolation                                    │
 │                                                             │
 │  CONTAINER ESCAPE:                                         │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -97,7 +98,8 @@ Privileged mode is the clearest example. A privileged container receives broad a
 │  • All Linux capabilities                                  │
 │  • Access to all host devices (/dev/*)                     │
 │  • No seccomp filtering                                    │
-│  • SELinux/AppArmor bypassed                              │
+│  • SELinux/AppArmor restrictions are typically             │
+│    relaxed or unconfined                                   │
 │                                                             │
 │  WHY IT'S DANGEROUS:                                       │
 │  An attacker inside a privileged container can mount the   │
@@ -105,7 +107,7 @@ Privileged mode is the clearest example. A privileged container receives broad a
 │  host configurations—effectively gaining full host control │
 │  with minimal effort.                                      │
 │                                                             │
-│  TRIVIAL ESCAPE - Never use privileged: true              │
+│  TRIVIAL ESCAPE - Never use in application namespaces      │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -264,7 +266,7 @@ Pod Security Standards define three policy profiles: Privileged, Baseline, and R
 │  ├── hostNetwork: true                                     │
 │  ├── hostPID: true                                         │
 │  ├── hostIPC: true                                         │
-│  └── Sensitive hostPath mounts                             │
+│  └── All hostPath volumes                                  │
 │                                                             │
 │  RESTRICTED STANDARD ADDITIONALLY:                         │
 │  ├── Requires non-root                                     │
@@ -311,11 +313,9 @@ Defense in depth is not a slogan here. It means each layer blocks a different fa
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  LAYER 1: POD SECURITY                                     │
-│  ├── Pod Security Standards (Restricted)                   │
-│  ├── No privileged containers                              │
-│  ├── No host namespace sharing                             │
-│  ├── No dangerous hostPath mounts                          │
-│  └── Drop all capabilities                                 │
+│  ├── Baseline: no privileged, host namespaces, or hostPath │
+│  ├── Restricted: non-root, seccomp, read-only root FS      │
+│  └── Restricted only: drop all capabilities                │
 │                                                             │
 │  LAYER 2: RUNTIME SECURITY                                 │
 │  ├── Seccomp profiles (RuntimeDefault minimum)             │
@@ -361,15 +361,16 @@ Sandboxed runtimes change the relationship between the container and the host ke
 │  ├── More overhead than gVisor                             │
 │  └── Good for: Maximum isolation, compliance               │
 │                                                             │
-│  USING RUNTIME CLASSES:                                    │
-│  apiVersion: node.k8s.io/v1                                │
-│  kind: RuntimeClass                                        │
-│  metadata:                                                 │
-│    name: gvisor                                            │
-│  handler: runsc                                            │
-│  ---                                                       │
-│  spec:                                                     │
-│    runtimeClassName: gvisor  # Use in pod spec            │
+│  RuntimeClass object:                                      │
+│    apiVersion: node.k8s.io/v1                              │
+│    kind: RuntimeClass                                      │
+│    metadata:                                               │
+│      name: gvisor                                          │
+│    handler: runsc                                          │
+│                                                             │
+│  Pod spec fragment:                                        │
+│    spec:                                                   │
+│      runtimeClassName: gvisor                              │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -401,7 +402,7 @@ spec:
   hostPID: true
   containers:
   - name: app
-    image: ubuntu:20.04
+    image: ubuntu:24.04
     securityContext:
       capabilities:
         add:
@@ -442,7 +443,7 @@ spec:
   # No hostPID, hostNetwork, or hostIPC
   containers:
   - name: app
-    image: ubuntu:20.04
+    image: ubuntu:24.04
     securityContext:
       runAsNonRoot: true
       runAsUser: 1000

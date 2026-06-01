@@ -138,7 +138,8 @@ The Kubernetes API server is the most powerful external surface because it is th
 │  ATTACK SCENARIOS:                                         │
 │  1. Stolen credentials → Full cluster access               │
 │  2. Anonymous auth enabled → Information disclosure        │
-│  3. API vulnerability → Remote code execution              │
+│  3. API implementation flaw or misconfiguration →          │
+│     privilege escalation or unauthorized state change      │
 │  4. RBAC misconfiguration → Privilege escalation           │
 │                                                             │
 │  MITIGATIONS:                                              │
@@ -188,7 +189,7 @@ Cloud provider APIs and registries sit at the edge of the Kubernetes trust bound
 
 External surface reduction has a political component because owners often disagree about what counts as necessary exposure. Application teams may view an unauthenticated health endpoint as harmless, while security teams see it as a fingerprinting source. Platform teams may view public managed API endpoints as normal, while compliance teams require private management paths. The best reviews avoid vague arguments by documenting the user, purpose, identity control, network control, data sensitivity, and fallback plan for each endpoint. Once those facts are visible, the decision becomes an engineering tradeoff rather than a debate over fear.
 
-War story: a platform team once removed a set of public NodePort services and celebrated the exposure reduction, only to discover that a cloud load balancer controller recreated equivalent public listeners from service annotations in another namespace. The first fix had targeted the symptom, not the workflow that produced the exposure. The durable fix was to restrict which teams could create external load balancers, add admission checks for risky annotations, and create a standard ingress path with logging and ownership. Attack surface reduction sticks when it changes the path that creates exposure.
+Hypothetical scenario: a platform team once removed a set of public NodePort services and celebrated the exposure reduction, only to discover that a cloud load balancer controller recreated equivalent public listeners from service annotations in another namespace. The first fix had targeted the symptom, not the workflow that produced the exposure. The durable fix was to restrict which teams could create external load balancers, add admission checks for risky annotations, and create a standard ingress path with logging and ownership. Attack surface reduction sticks when it changes the path that creates exposure.
 
 ## Internal Runtime Surfaces: Pods, Tokens, Kubelet, and Nodes
 
@@ -207,7 +208,8 @@ Internal attack surface analysis begins with the assumption that one workload wi
 │  ├── Container filesystem                                  │
 │  ├── Environment variables (may contain secrets)           │
 │  ├── Mounted volumes                                       │
-│  └── Network (all pods by default)                         │
+│  └── Network (cluster-wide pod networking unless           │
+│      NetworkPolicy restricts)                              │
 │                                                             │
 │  IF TOKEN MOUNTED (default):                               │
 │  ├── Kubernetes API access                                 │
@@ -246,7 +248,9 @@ Kubelet is a node agent, but its API is security-sensitive enough to treat as a 
 │  ATTACK SCENARIOS:                                         │
 │  1. Anonymous kubelet access → Execute in any container    │
 │  2. Node compromise → Kubelet credentials stolen           │
-│  3. Network access to kubelet → Bypass API server auth     │
+│  3. Reach kubelet with weak or stolen credentials →        │
+│     exec/logs/metadata without equivalent API-server       │
+│     controls and audit                                     │
 │                                                             │
 │  MITIGATIONS:                                              │
 │  • Disable anonymous auth                                  │
@@ -263,7 +267,7 @@ Node compromise is also a boundary crossing because a node hosts many workloads 
 
 Pause and predict: an attacker compromises a pod that has `automountServiceAccountToken: false`, runs as non-root, has no added capabilities, and has a read-only root filesystem. What attack surface remains? They can still use allowed network paths, read mounted data and environment variables, exploit the application process, attempt kernel or runtime escape bugs, abuse writable volumes, reach DNS, and potentially contact external endpoints if egress is open, which is why hardening one layer never replaces segmentation and observation.
 
-Etcd is often hidden from application teams, but it remains part of the internal surface because it stores Kubernetes state, including secret objects unless an external secrets pattern is used. Direct etcd access should be tightly restricted to control-plane components, protected with TLS, encrypted at rest where required, and monitored like a database that can reveal or alter cluster state. A managed service may hide those knobs, but the design principle still applies: if a component can read or mutate the source of truth, it belongs in the highest-risk part of your model.
+Etcd is often hidden from application teams, but it remains part of the internal surface because it stores Kubernetes state, including secret objects unless an external secrets pattern is used. Etcd is a control-plane / node-adjacent surface (protected by TLS, firewalling, and encryption-at-rest), not a default lateral-movement hop from a compromised workload. Direct etcd access should be tightly restricted to control-plane components, protected with TLS, encrypted at rest where required, and monitored like a database that can reveal or alter cluster state. A managed service may hide those knobs, but the design principle still applies: if a component can read or mutate the source of truth, it belongs in the highest-risk part of your model.
 
 ## Threat Actors and Blast Radius
 
@@ -305,7 +309,7 @@ For a compromised pod, the first priority changes to lateral movement and privil
 
 For a malicious insider, the surface is shaped by legitimate permissions and weak review processes. A developer with namespace-admin rights may create a privileged pod, bind a stronger role, add a secret-reading sidecar, or deploy a webhook that changes future workloads. The control priority is not only authentication; it is separation of duties, auditability, policy-as-code, admission control, and fast detection of unusual actions by otherwise valid users. Insiders also remind us that attack surface includes workflows, not only sockets.
 
-For a supply chain attacker, runtime controls may see normal-looking behavior because the malicious code arrives as a trusted artifact. The attacker may compromise a base image, dependency, build script, Helm chart, admission webhook image, or CI/CD credential. The best reductions happen before deployment through provenance, signing, software bills of materials, dependency review, immutable tags or digests, registry access controls, and admission policies that reject unknown artifacts. Runtime egress controls and DNS monitoring still matter because malicious code eventually needs to act.
+For a supply chain attacker, runtime controls may see normal-looking behavior because the malicious code arrives as a trusted artifact. The attacker may compromise a base image, dependency, build script, Helm chart, admission webhook image, or CI/CD credential. The best reductions happen before deployment through provenance (including SLSA expectations), image signing (for example with sigstore-cosign), software bills of materials, dependency review, immutable tags or digests, registry access controls, and admission policies that reject unknown artifacts. Runtime egress controls and DNS monitoring still matter because malicious code eventually needs to act.
 
 Comparing actors prevents overfitting your controls to the last incident you read about. If the most realistic actor is an external attacker, public exposure and credential resilience may deserve the first investment. If the realistic actor is a compromised workload, internal segmentation and token scoping may produce more immediate risk reduction. If the realistic actor is a trusted pipeline gone wrong, image provenance and admission policy may outrank another perimeter firewall rule. Mature programs keep all four actor views alive and rotate attention as the platform changes.
 
