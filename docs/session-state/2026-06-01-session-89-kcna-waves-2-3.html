@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 89 — KCNA waves 2 & 3 (part1 + part2 complete)</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 2px solid #2a6; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #176; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  h3 { font-size: 1.02rem; margin-top: 1.1rem; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .88em; }
+  pre { background: #f7f7f7; border-left: 3px solid #2a6; padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .89em; }
+  th, td { border: 1px solid #ddd; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f7f4; }
+  .ok { color: #2a6; font-weight: 600; }
+  .warn { color: #c60; font-weight: 600; }
+  .bad { color: #c33; font-weight: 600; }
+  .box { background: #fffbe6; border: 1px solid #e8d000; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  .done { background: #eafbf0; border: 1px solid #2a6; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  .fix { background: #eef4ff; border: 1px solid #6699e8; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  ul { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 89 — KCNA waves 2 &amp; 3 · part1 + part2 complete (17/28)</h1>
+<p><strong>Date:</strong> 2026-06-01 · <strong>Branch:</strong> main (clean) · <strong>Board:</strong> KCNA 7 → <strong>17/28 done</strong> (+10; review-axis 397 → <strong>407</strong>).</p>
+
+<div class="done">
+<strong>Headline:</strong> Drained two KCNA waves through the proven review-first loop. <strong>Wave 2 (part1: 1.3–1.8, PR #1737)</strong> and <strong>Wave 3 (part2: 2.1–2.4, PR #1738)</strong> → 10 modules finalized to <code>done</code>. <strong>KCNA part0 + part1 + part2 are now 100% complete (17/28).</strong> No-codex roster held cleanly: <strong>cursor <code>--model auto</code> (workhorse fixer + reviewer) + opus 4.8 headless (strongest reviewer) + deepseek-v4-pro + grok-build (candidate, 1/wave, ground-checked)</strong>.
+</div>
+
+<h2>1. The dominant pattern: the regex under-catches war-stories</h2>
+<p>The verifier's <code>anti_fabrication</code> regex flagged only the obvious <code>War story:</code> markers (7 of 10 modules were T3). But the cross-family reviews caught an unsourced, often <strong>fingerprinted</strong> incident in <strong>every single module</strong> — incidents the regex misses because they lack the trigger token or industry+entity+"once" shape. This is the core value of the review layer over the gate: <strong>opus and cursor repeatedly surfaced regex-missed fabricated incidents with specific dates and dollar figures.</strong></p>
+<table>
+<tr><th>Regex-missed fingerprinted incident</th><th>Module</th><th>Reviewer</th></tr>
+<tr><td>"In December 2021, a large trading platform…public outage"</td><td>1.3</td><td>opus 4.8</td></tr>
+<tr><td>"regional checkout incident at a large online retailer" + "war story comes from"</td><td>1.4</td><td>cursor</td></tr>
+<tr><td>"At 09:18…$120,000 in abandoned carts…incident report estimated"</td><td>1.6</td><td>cursor</td></tr>
+<tr><td>"In December 2020…three-hour checkout outage…fifteen million dollars"</td><td>1.7</td><td>opus 4.8</td></tr>
+<tr><td>"During a holiday release freeze, a payments team at a large online retailer"</td><td>1.8</td><td>grok-build (cand.)</td></tr>
+<tr><td>"During the 2020 holiday season, a large global retailer…about fifteen million dollars"</td><td>2.1</td><td>opus 4.8</td></tr>
+<tr><td>"In late 2023, a large online retailer…tens of millions of dollars"</td><td>2.2</td><td>deepseek</td></tr>
+</table>
+<p>Fix in all cases: reframe to <code>**Hypothetical scenario:**</code> (paragraph-start, clears the gate where it fired) and strip the false precision (date/$ figure/named entity). No fabricated <code>Source:</code> lines (deepseek's "personal communication" suggestion on 1.5 was rejected).</p>
+
+<h2>2. Wave 2 — part1 (1.3–1.8), PR #1737</h2>
+<table>
+<tr><th>Module</th><th>Reviewer (R1)</th><th>Verdict</th><th>Real fixes beyond war-story reframes</th></tr>
+<tr><td>1.3 control-plane</td><td>opus 4.8</td><td>NC 4/5</td><td>regex-missed Dec-2021 incident; diagram "Replication Controller" → "ReplicaSet Controller"; <code>componentstatuses</code> v1.19-deprecated aside.</td></tr>
+<tr><td>1.4 node-components</td><td>cursor</td><td>NC 4.2/5</td><td>2 regex-missed incidents; added <code>nftables</code> kube-proxy mode (1.35); "endpoints controller" → <strong>EndpointSlice controller</strong> + Endpoints-API-deprecated (v1.33) note; manifest-save + wording nits.</td></tr>
+<tr><td>1.5 pods</td><td>deepseek</td><td>APPROVE+nits 40/40</td><td>line-350 war-story reframe only. GitLab-2017 incident kept (real + cited).</td></tr>
+<tr><td>1.6 workload-resources</td><td>cursor</td><td>NC 4.7/5</td><td>regex-missed $120k incident; <strong>"Automatic rollback on failure" was wrong</strong> for native Deployments → manual <code>k rollout undo</code>; Replicas column clarified.</td></tr>
+<tr><td>1.7 services</td><td>opus 4.8</td><td>NC 4/5</td><td>regex-missed Dec-2020/$15M incident; IPVS v1.11 GA date <strong>July → June 2018</strong>.</td></tr>
+<tr><td>1.8 namespaces-labels</td><td>grok-build (cand.)</td><td>NC 4/5</td><td>opening payments/retail incident; grok misattributed the gate but findings correct (ground-checked).</td></tr>
+</table>
+<p>Rejected false positives: 1.4 <code>iptables -t nat -S | grep node-demo-svc</code> (kube-proxy iptables rules carry <code>-m comment --comment "ns/svc"</code> → the grep matches; cursor's premise was wrong); 1.5 GitLab incident (real+cited, kept).</p>
+
+<h2>3. Wave 3 — part2 (2.1–2.4) + part2 index, PR #1738</h2>
+<table>
+<tr><th>Module</th><th>Reviewer (R1)</th><th>Verdict</th><th>Real fixes beyond war-story reframes</th></tr>
+<tr><td>2.1 scheduling</td><td>opus 4.8</td><td>NC 4.0/5</td><td>regex-missed 2020/$15M incident; 4× War Story relabeled.</td></tr>
+<tr><td>2.2 scaling</td><td>deepseek</td><td>NC</td><td>regex-missed late-2023 incident; <strong>9+ leaked rewrite artifacts</strong> ("the original module", "the preserved … diagram") cleaned from learner-facing prose; large-cluster scalability source added; <code>scaleUp</code>-defaults note.</td></tr>
+<tr><td>2.3 storage</td><td>cursor</td><td>NC 4.7/5</td><td><strong>Factual P1: CSI migration was claimed "GA in 1.23"</strong> — actually 1.23 = beta-on-by-default, <strong>core CSI Migration GA = 1.25</strong>. Plus object-storage LO#1 gap closed; <code>volumeClaimTemplates</code> mermaid label. (Was T0 — no war-story gate issue.)</td></tr>
+<tr><td>2.4 configuration</td><td>grok-build (cand.)</td><td>NC 4.5/5</td><td>line-412 war-story reframe; flagged an index/frontmatter time mismatch.</td></tr>
+</table>
+<p><strong>Index consistency:</strong> grok flagged 2.4's "25-30 min" vs frontmatter "40-50 min"; ground-check found <em>all four</em> part2 index rows were uniformly wrong (the frontmatter values 60-75 / 45-60 / 45-60 / 40-50 are real). Fixed all 4 ("fix all occurrences").</p>
+
+<h2 id="dedup">4. CI snag — incident-dedup gate fired on 2.3 (latent duplicate)</h2>
+<div class="box">
+The first #1738 CI run <strong>failed the Incident dedup gate</strong>: <code>kind=duplicate | incident=GitLab 2017 db1 incident | file=module-2.3-storage.md</code>. The GitLab 2017 database incident was the opening hook in <strong>both 1.5-pods and 2.3-storage</strong> — and it had been in both on origin all along. The dedup gate is a <strong>delta gate</strong> (only re-evaluates touched files), so it stayed silent until <strong>1.5 was finalized this session (wave 2)</strong> and then <strong>2.3 was touched (wave 3)</strong> — surfacing the latent pre-existing duplication. My wave-3 inline-citation addition made 2.3's copy more prominent.
+<br><br>
+<strong>Fix:</strong> 1.5 owns GitLab (it is 1.5's primary hook and already merged), so <strong>2.3 yielded</strong> — reframed 2.3's opening to a fingerprint-free <code>Hypothetical scenario:</code> (dropped "GitLab"/"January 2017"/"300 GB" + removed the now-orphaned Sources entry, 12→10 sources, still ≥10). Re-verified T0 + local dedup gate PASS from the worktree, amended + force-pushed, CI green, merged. <strong>Lesson:</strong> when finalizing a track wave-by-wave, expect the dedup gate to surface shared incidents as you reach the second module that tells them.
+</div>
+
+<h2>5. Process &amp; ground-check notes</h2>
+<ul>
+<li><strong>cursor executed both consolidated fix briefs flawlessly</strong> (6 files wave 2, 5 files wave 3), auto-committed both, and respected every rejection (iptables grep, GitLab in 1.5, <code>nginx:1.29</code>/<code>nginx:latest</code> left as-is). It even caught one extra "preserves the original" instance in 2.2 beyond the 9 I listed — good "fix all occurrences".</li>
+<li>The two teaching sentences cursor added to 1.6 (to hold the 5000-word floor after stripping the $120k fingerprint) were <strong>accurate K8s pedagogy, not fabrication</strong> (verified).</li>
+<li><strong>grok-build (candidate)</strong> performed better this wave: clean ground-check compliance on 2.4, correctly self-marked its <code>nginx:1.29</code> nit as no-action. Still flaky WS relay — the 2.4 review needed <strong>one retry</strong> (first attempt: <code>Transport channel closed</code>). Trial tally now ~3 ground-checked reviews; keep as 1/wave non-load-bearing until ~5.</li>
+<li><strong>opus 4.8</strong> remains the strongest reviewer (caught the most serious regex-missed fingerprinted incidents on 1.3/1.7/2.1) but is slow in read-only (140s–225s); no stall this session.</li>
+<li><strong>deepseek-v4-pro</strong> earned its keep on 2.2 — the 9-instance leaked-rewrite-meta finding ("the original module") was real and would have shipped confusing learner-facing content; no hallucinations this session.</li>
+<li>Opus's 1.3 review cited 2.3:267 ("CSI migration GA in 1.23") as a "verifiable fact" example — <strong>but it was wrong</strong> (GA was 1.25); cursor's independent 2.3 review caught the actual error. Cross-review across modules works.</li>
+</ul>
+
+<h2>6. Where we are / NEXT</h2>
+<p><strong>KCNA: 17/28 done</strong> — part0 (2/2) ✅ · part1 (9/9) ✅ · part2 (4/4) ✅. <strong>Remaining 11:</strong> part3 (3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.9 = 8; 3.8 &amp; 3.10 already done) + part4 (4.1, 4.2, 4.3 = 3).</p>
+<div class="fix">
+<strong>NEXT — KCNA wave 4 (part3, 8 modules):</strong> same proven loop. <strong>Run a <code>verify_module.py</code> tier sweep first</strong> (expect anti-fab war-stories + possibly regex-missed incidents). Mix reviewers opus + cursor + deepseek + grok-build (1/wave, ground-check, retry-on-WS-fail); ≤2/OAuth. part3 is observability/ecosystem-heavy — <strong>watch CNCF maturity-status claims</strong> (graduated/incubating/sandbox change over time) and <strong>incident-dedup across the track</strong> (a part3 module may re-tell an incident already owned by an earlier module → reframe the later one). Then part4 (3 modules), then <strong>kcsa → extending-k8s → tool certs → cloud 85 → ai-ml-eng → on-prem → platform</strong> per curriculum order.
+</div>
+<p><strong>Reusable artifacts (session89):</strong> <code>logs/remediation/briefs/session89/{fix-kcna-wave2.md, fix-kcna-wave3.md, finalize-kcna-w2.sh, finalize-kcna-w3.sh, review-kcna-module-*.md, grok-inline-*.md}</code>; the review-prompt generator is <code>session88/gen-kcna-review-prompt.sh</code>.</p>
+<p><strong>Still pending (carryover):</strong> gemini-cli <code>--approval-mode=yolo</code> fix not yet applied to <code>adapters/gemini.py</code>; <code>revision_pending</code> board-ladder auto-flip; 43 alias-less <code>k</code> modules.</p>
+</body>
+</html>
