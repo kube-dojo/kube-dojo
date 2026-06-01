@@ -201,7 +201,7 @@ Docker and Kubernetes are even more commonly confused because beginners encounte
 
 A practical decision often begins with operational ownership. If a team wants the simplest way to host a low-traffic marketing site, a managed application platform may be a better fit than a Kubernetes cluster. If a team has many services, needs portable manifests, wants mature rollout controls, and can invest in platform operations, Kubernetes starts to make more sense. The tool choice should follow the workload and team, not the other way around.
 
-War story: a small SaaS team once moved a two-service application from a VM to Kubernetes because a customer asked whether they were "cloud native." The first month brought no user-visible benefit, but it did bring ingress configuration, certificate automation, image scanning, resource sizing, logging decisions, and upgrade planning. The migration became valuable only after the product grew into many services with independent release cycles; before that, the simpler VM had been easier to reason about.
+Hypothetical scenario: a small SaaS team once moved a two-service application from a VM to Kubernetes because a customer asked whether they were "cloud native." The first month brought no user-visible benefit, but it did bring ingress configuration, certificate automation, image scanning, resource sizing, logging decisions, and upgrade planning. The migration became valuable only after the product grew into many services with independent release cycles; before that, the simpler VM had been easier to reason about.
 
 A platform service can be the opposite tradeoff. It may hide servers, load balancing, TLS, and scaling behind a short configuration file or a web console. That is excellent when the team wants to ship product features and the provider's assumptions fit the workload. The tradeoff is that deeper customization may be limited, portability may be lower, and advanced networking or policy requirements may not fit. Kubernetes is attractive when teams need a common substrate across many workloads, not merely because they want a fancier deployment target.
 
@@ -403,7 +403,7 @@ The correct mental model is that desired state is the target and current state i
 - [Kubernetes Documentation: Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
 - [Kubernetes Documentation: Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
 - [Kubernetes Documentation: Version Skew Policy](https://kubernetes.io/releases/version-skew-policy/)
-- [Kubernetes Documentation: High Availability with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/)
+- [Kubernetes Documentation: Overview components](https://kubernetes.io/docs/concepts/overview/components/)
 - [Google Cloud Blog: Bringing Pokemon GO to life on Google Cloud](https://cloud.google.com/blog/products/containers-kubernetes/bringing-pokemon-go-to-life-on-google-cloud)
 
 ## Next Module
