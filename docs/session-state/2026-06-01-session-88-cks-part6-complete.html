@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 88 — CKS part6 finalized, CKS track 100% complete</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 2px solid #2a6; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #176; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  h3 { font-size: 1.02rem; margin-top: 1.1rem; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .88em; }
+  pre { background: #f7f7f7; border-left: 3px solid #2a6; padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .89em; }
+  th, td { border: 1px solid #ddd; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f7f4; }
+  .ok { color: #2a6; font-weight: 600; }
+  .warn { color: #c60; font-weight: 600; }
+  .bad { color: #c33; font-weight: 600; }
+  .box { background: #fffbe6; border: 1px solid #e8d000; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  .done { background: #eafbf0; border: 1px solid #2a6; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  .fix { background: #eef4ff; border: 1px solid #6699e8; border-radius: 6px; padding: .6rem 1rem; margin: 1rem 0; }
+  ul { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 88 — CKS part6 finalized · CKS track 100% complete (30/30)</h1>
+<p><strong>Date:</strong> 2026-06-01 · <strong>Branch:</strong> main (clean) · <strong>Board:</strong> CKS 27 → <strong>30/30 done</strong> (+3 net; review-axis 390 → <strong>394</strong>).</p>
+
+<div class="done">
+<strong>Headline:</strong> Finished the last CKS part — <strong>part6 Runtime Security (6.1–6.4)</strong> — via one consolidated PR <strong>#1734</strong>. <strong>The CKS track is now 100% done on the review axis (30/30).</strong> Two modules needed fixes (6.1 metadata, 6.3 reviewer findings); two finalized with <strong>no content change</strong> (6.2, 6.4) after every reviewer finding was rejected on ground-check. No-codex roster held: <strong>cursor <code>--model auto</code> + opus 4.8 headless + deepseek-v4-pro</strong> all performed cleanly.
+</div>
+
+<h2>1. The four modules</h2>
+<table>
+<tr><th>Module</th><th>Reviewer (R1)</th><th>Verdict</th><th>Outcome</th></tr>
+<tr><td>6.1 audit-logging</td><td>deepseek-v4-pro</td><td>NEEDS_CHANGES</td><td>Only blocker was the stale <code>revision_pending: true</code> draft flag (content 4.9/5, all gates pass). <strong>Removed the flag from the frontmatter.</strong> Megagraph nit (line 325, 3278-char single paragraph) accepted as-is — rendered output unaffected; reformatting dense gate-passing content for a source-only concern not worth the risk.</td></tr>
+<tr><td>6.2 falco</td><td>gemini-3.1-pro (yolo test review from s87)</td><td>APPROVE_WITH_NITS</td><td><span class="ok">No content change.</span> All nits <strong>rejected on ground-check</strong> — see §2.</td></tr>
+<tr><td>6.3 container-investigation</td><td><strong>claude Opus 4.8</strong> headless</td><td>APPROVE 4.5/5</td><td>Applied P2 + 3 nits (§3). Opus is the strongest reviewer — it caught a real pedagogical gap.</td></tr>
+<tr><td>6.4 immutable-infrastructure</td><td>deepseek-v4-pro</td><td>APPROVE 33/40</td><td><span class="ok">No content change.</span> 3 optional nits, none applied — see §4.</td></tr>
+</table>
+
+<h2>2. 6.2 — every gemini finding was a false positive (ground-check pays off)</h2>
+<p>6.2 carried an incidental gemini review from the s87 yolo-fix test. Ground-checking each finding against the live file and sibling modules:</p>
+<ul>
+<li><strong>P1 "hardcoded incident link"</strong> (claimed line 38, actually line 34 — gemini line numbers are off) — the absolute path <code>/k8s/cks/part1-cluster-setup/module-1.5-gui-security/</code> is the <strong>track-wide convention</strong>: modules 1.1, 1.2, 1.3, 2.2, 2.3, 2.5, 5.3, <strong>and 6.4</strong> all use the identical absolute path for the <code>tesla-2018-cryptojacking</code> incident-xref. Changing 6.2 to relative would break consistency with 8 siblings. <span class="bad">Rejected.</span></li>
+<li><strong>P2 "redundant links"</strong> — no true within-sentence duplicates; the same citation legitimately appears in different sections. <span class="bad">Rejected.</span></li>
+<li><strong>P2/nit "missing active-learning prompts" + "quiz blockquote formatting"</strong> — cosmetic; current quiz format passes the <code>structure_quiz_6_8_with_details</code> gate and matches curriculum standard. <span class="bad">Rejected.</span></li>
+</ul>
+<p>6.2 passes every verifier gate (T0, 5000 body_words). Finalized as-is.</p>
+
+<h2>3. 6.3 — Opus 4.8 caught a real CNI-enforcement gap (PR #1734)</h2>
+<div class="fix">
+<strong>P2 (genuine):</strong> the hands-on lab applies a deny-all <code>NetworkPolicy</code> to isolate the suspect Pod, but a default <code>kind</code>/<code>kindnet</code> cluster <strong>does not enforce NetworkPolicy</strong> — so at the exact "contain the workload" step, egress still flows and the learner gets a false sense of containment. The CNI caveat was stated 4× in the conceptual sections but never reinforced where the learner runs it. Fix: added a CNI-enforcement caveat blockquote right after the isolation code fence.
+</div>
+<p>Also folded in 3 mechanical nits: unified the duration (frontmatter <code>40 min</code> vs body <code>45-50 minutes</code> → both <code>45</code>); reordered <code>find -maxdepth 1 -type f</code> (GNU option-after-non-option warning); added a <code>runc state</code> containerd <code>--root</code> hint comment. Re-verified T0, 5077 body_words.</p>
+
+<h2>4. 6.4 — deepseek APPROVE, all 3 nits correctly declined</h2>
+<ul>
+<li><strong>Nit 1 "placeholder digests look real"</strong> — the digests (<code>sha256:1111222233334444…</code>) are transparently fake and line 464 explicitly warns to use a real digest. deepseek's suggested fix (<code>sha256:REPLACE_WITH_REAL_DIGEST</code>) would make the digest <em>syntactically invalid</em>, which is worse. <span class="bad">Rejected.</span></li>
+<li><strong>Nit 2</strong> — deepseek itself said "no fix needed." Skipped.</li>
+<li><strong>Nit 3 "RO-fs write test on /root confounds permission vs read-only"</strong> — a valid nuance, but the module already hedges it at line 130 ("If both writes fail, the volume or ownership is wrong") and the test contrasts <code>/root</code> (fails) vs the <code>/tmp</code> emptyDir mount (succeeds). Minor; module is internally consistent + APPROVED. Skipped for finalize.</li>
+</ul>
+
+<h2>5. Mechanism notes for next session</h2>
+<div class="box">
+<strong>revision_pending board bug — clean fix found.</strong> Session 87 manually flipped the board state for stuck <code>needs_rewrite</code> modules (1.4, 5.4). This session, 6.1 had the same <code>revision_pending: true</code> issue — but <strong>removing the flag from the actual frontmatter in the content PR</strong> made the board compute <code>done</code> correctly with <em>no</em> manual flip. <strong>Prefer this:</strong> when a module is stuck <code>needs_rewrite</code> only because of a stale <code>revision_pending: true</code>, clear it in the content fix PR, not via a post-merge board hack. (The underlying ladder bug at <code>local_api.py:3795</code> is still open, but clearing the real flag sidesteps it.)
+</div>
+<ul>
+<li><strong>Roster held perfectly (no codex):</strong> opus 4.8 headless = strongest reviewer (caught the 6.3 CNI gap; review-class, no MCP bloat, ~170s); deepseek-v4-pro = two clean reviews (6.1, 6.4), <em>no hallucinations</em> this session; cursor <code>--model auto</code> = workhorse fixer (executed the 5-edit brief exactly, zero overshoot, auto-committed both). gemini CI secondary = clean APPROVE 5/5, no findings.</li>
+<li><strong>Cursor edit DID auto-commit</strong> this time (2 clean commits) — but still ground-checked the full diff before pushing; it was exactly the briefed edits.</li>
+<li><strong>Stale primary <code>.git/index.lock</code></strong> appeared from an interrupted <code>git pull</code> (a concurrent codex agent is running in <code>.worktrees/cks-fix-1.2</code> — left untouched). Cleared the 0-byte primary lock after confirming read ops worked + my pull process had exited; worktree locks are separate files.</li>
+<li><strong>gemini-cli yolo fix STILL not applied</strong> to <code>scripts/agent_runtime/adapters/gemini.py</code> (carryover from s87). The verified fix is <code>--approval-mode=yolo</code> in a throwaway worktree.</li>
+</ul>
+
+<h2>6. Where we are / NEXT</h2>
+<p><strong>k8s track:</strong> CKA (41/41) ✅ · CKAD (24/24) ✅ · <strong>CKS (30/30) ✅ — completed this session.</strong> Remaining k8s sub-tracks in curriculum order: <strong>kcna → kcsa → extending-k8s → tool certs</strong>. Then per the curriculum order: <code>cloud</code> (85) → <code>ai-ml-engineering</code> → <code>on-premises</code> → <code>platform</code>.</p>
+<p><strong>Same proven loop:</strong> per-module cross-family review (cursor + opus 4.8 + deepseek; ≤2/OAuth) → ground-check (reject FPs) → fix (cursor/deepseek) → self-verify (<code>verify_module.py</code> + spot-check P1) → consolidated per-wave worktree PR (<code>chore(content):</code> + Learner-check) → CI → rebase-merge → finalize (<code>finalize-*.sh</code>: review records + <code>reset-stage … COMMITTED</code>). No review prompts pre-generated for kcna yet (generator: <code>session84/gen-review-prompt.sh</code>).</p>
+<p>Artifacts this session: brief <code>logs/remediation/briefs/session88/fix-cks-part6.md</code>; finalize <code>logs/remediation/briefs/session88/finalize-part6.sh</code>; reviews in <code>logs/dispatch_responses/cks-rev-6.{3,4}-*.txt</code>.</p>
+
+</body>
+</html>
