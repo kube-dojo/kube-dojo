@@ -123,6 +123,8 @@ spec:
         sizeLimit: 256Mi
 ```
 
+> **Predict:** before you apply this Pod, which single write path will still succeed, and why?
+
 This manifest separates identity, filesystem, and writable space. The Pod-level context says the workload should run as a non-root identity and use the runtime default seccomp profile. The container-level context makes the image root read-only, prevents privilege escalation, and drops Linux capabilities. The `emptyDir` mounts give the application specific write targets without reopening `/usr`, `/bin`, `/etc`, or the rest of the image filesystem. ([Kubernetes Security Context](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/), [Kubernetes Volumes](https://v1-35.docs.kubernetes.io/docs/concepts/storage/volumes/#emptydir))
 
 `emptyDir` is the usual escape hatch for immutable Pods because it is created when the Pod is assigned to a node, starts empty, can be shared by containers in the same Pod, and is deleted permanently when the Pod is removed from the node. A container crash does not delete the `emptyDir`, so the pattern supports ordinary restart behavior while still avoiding hidden writes into the image root. Memory-backed `emptyDir` mounts become tmpfs and count against memory, so use `sizeLimit` and resource limits when the write path can grow. ([Kubernetes Volumes](https://v1-35.docs.kubernetes.io/docs/concepts/storage/volumes/#emptydir))
@@ -195,6 +197,8 @@ image: registry.example.com/payments/api:v1.8.3@sha256:2222333344445555666677778
 ```
 
 `imagePullPolicy: Always` is not a substitute for digest pinning. With a tag, `Always` tells the kubelet to resolve the image name each time it launches a container, and that resolution can still find a changed tag. With a digest, Kubernetes can pin the exact content even if a human-readable tag is also present, because the documentation states that only the digest is used for pulling when both are specified. ([Kubernetes Images](https://v1-35.docs.kubernetes.io/docs/concepts/containers/images/))
+
+> **Check yourself:** if a manifest uses `image: app:1.2` with `imagePullPolicy: IfNotPresent`, what exactly is *not* guaranteed about the bytes that run?
 
 Signing adds a trust decision to the immutable content decision. Cosign documentation warns to sign container images by digest rather than tag so that the signature applies to the content you think you are signing, and Sigstore verification documentation covers verifying those signatures before trusting an image. In a secure pipeline, the image digest is built, scanned, signed, and then admitted only if the signature or attestation matches the expected identity. ([Cosign Signing](https://docs.sigstore.dev/cosign/signing/signing_with_containers/), [Cosign Verification](https://docs.sigstore.dev/cosign/verifying/verify/))
 
@@ -461,13 +465,46 @@ kubectl exec -n immutable-lab mutable-demo -- sh -c 'echo can-write-root > /root
 kubectl delete pod mutable-demo -n immutable-lab
 ```
 
-Then apply a hardened manifest with `/tmp` mounted as `emptyDir` and repeat the write tests. In a real exam, you would use a real digest from the provided registry rather than the placeholder digest shown in the teaching manifest.
+Then apply a hardened Pod with `/tmp` mounted as an `emptyDir` and repeat the write tests. The manifest is inlined below so the drill runs as-is; in a real exam you would pin the image to the registry-provided `@sha256` digest, which the admission policy above enforces.
 
 ```bash
-kubectl apply -n immutable-lab -f immutable-demo.yaml
+# Hardened Pod: read-only root filesystem + non-root + /tmp emptyDir for sanctioned writes.
+# NOTE: in the CKS exam, pin `image:` to the registry-provided @sha256 digest — the admission
+# policy in "Admission Enforcement" above enforces digest pinning. The plain tag is used here
+# only so the drill pulls on a stock kind/containerd v1.35 cluster.
+kubectl apply -n immutable-lab -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: immutable-demo
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["sh", "-c", "echo starting; sleep 3600"]
+      securityContext:
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: tmp
+      emptyDir:
+EOF
 kubectl wait pod/immutable-demo -n immutable-lab --for=condition=Ready --timeout=90s
 
-kubectl exec -n immutable-lab immutable-demo -- sh -c 'echo root-write > /root/proof.txt'
+# Negative test: writing to the image root fails because the root filesystem is read-only.
+kubectl exec -n immutable-lab immutable-demo -- sh -c 'echo root-write > /root/proof.txt; echo "exit code: $?"'
+# Positive test: the explicitly mounted /tmp emptyDir is writable.
 kubectl exec -n immutable-lab immutable-demo -- sh -c 'echo tmp-write > /tmp/proof.txt; cat /tmp/proof.txt'
 
 kubectl delete namespace immutable-lab
