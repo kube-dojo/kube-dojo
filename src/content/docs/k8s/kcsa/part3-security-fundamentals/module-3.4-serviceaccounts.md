@@ -24,9 +24,7 @@ After completing this module, you will be able to review real workload manifests
 
 ## Why This Module Matters
 
-A retail engineering team once treated Kubernetes ServiceAccounts as background plumbing. Their payment dashboard ran in a production namespace, but the pod never called the Kubernetes API during normal operation, so nobody reviewed the identity mounted into the container. Months earlier, a troubleshooting shortcut had bound a broad role to the namespace's `default` ServiceAccount, and that shortcut stayed behind after the incident ticket closed. When an attacker exploited a server-side request forgery bug in the dashboard, the first useful file they reached was the mounted ServiceAccount token, and that single token gave them enough API access to enumerate pods, read selected Secrets, and find cloud credentials that were never meant to leave the cluster.
-
-The company did not lose data because ServiceAccounts are inherently dangerous. It lost control because every pod identity had been treated like a generic keycard instead of a scoped credential with a clear purpose, expiration, and audience. The team spent several days rotating Secrets, rebuilding trust in audit logs, and proving to customers that the compromised dashboard could not reach their data path. The cloud bill for the incident response environment and unauthorized compute was roughly $50,000, but the larger cost was the discovery that a convenience setting had become a lateral movement path.
+Many teams treat Kubernetes ServiceAccounts as background plumbing until a pod compromise turns an auto-mounted token into a lateral movement path. The hypothetical scenario later in this module walks through how that pattern plays out when the `default` ServiceAccount carries broad RBAC and an application vulnerability exposes the token file. Shared implicit identity makes future drift hard to reason about: if someone binds a broad role to `default` for a troubleshooting shortcut, every unnamed pod in the namespace inherits that permission until someone notices. The secure habit is to treat every pod identity as a scoped credential with a clear purpose, expiration, and audience — not a generic keycard every workload shares by default.
 
 This module teaches ServiceAccount security as an operational discipline rather than a checkbox. You will learn how pods authenticate to the Kubernetes API in Kubernetes 1.35+, why default identities create hidden blast radius, how bound tokens reduce but do not erase risk, and how RBAC decisions shape the attack paths available after a container compromise. You will also practice reviewing a flawed manifest, replacing it with a safer identity design, and deciding when a pod should have no API token at all.
 
@@ -116,11 +114,10 @@ Bound tokens are still bearer tokens. Anyone who can read the token file can use
 The TokenRequest API is the control plane mechanism behind explicit token requests. You can request a token with a defined audience and expiration, and you can bind it to a particular object such as a pod. In practice, most application teams use projected ServiceAccount token volumes in pod specs rather than creating TokenRequest objects by hand, but reading the API shape helps you see the security properties Kubernetes is trying to express.
 
 ```yaml
+# Illustrative TokenRequest body — POST .../serviceaccounts/{name}/token
+# Not a persisted object; in practice use `kubectl create token <sa>` or a projected-token volume.
 apiVersion: authentication.k8s.io/v1
 kind: TokenRequest
-metadata:
-  name: my-token
-  namespace: default
 spec:
   audiences:
   - api                      # Who can use this token
@@ -251,11 +248,11 @@ Securing the default ServiceAccount is a namespace hygiene step, not a complete 
 
 Policy enforcement can turn that hygiene into a stable standard. Admission policies can reject pods in production namespaces when they omit `serviceAccountName`, use `default`, or request automatic token mounting without an approved label. The exact mechanism varies by cluster, but the principle is consistent: prevent implicit identity from reaching production unnoticed. Start with audit mode if you expect many violations, then move high-confidence rules to enforcement after teams have migration examples and a clear exception path.
 
-### War Story: The $50,000 Dashboard Breach
+### Hypothetical scenario: The $50,000 Dashboard Breach
 
-In a real-world incident at a mid-sized tech company, developers deployed an internal monitoring dashboard using the `default` ServiceAccount in a production namespace. To make setup "easier," someone had previously bound a `ClusterRole` with `get secrets` permissions to this default account.
+Developers deploy an internal monitoring dashboard using the `default` ServiceAccount in a production namespace. To make setup "easier," someone had previously bound a `ClusterRole` with `get` and `list` on `secrets` (cluster-scoped) to this default account.
 
-When an attacker discovered a simple Server-Side Request Forgery vulnerability in the dashboard application, they did not need to break out of the container to inflict massive damage. They simply directed the vulnerable application to read the auto-mounted token at `/var/run/secrets/kubernetes.io/serviceaccount/token`. Using this token, the attacker queried the Kubernetes API, downloaded every Secret in the cluster, extracted cloud provider credentials, and spun up cryptocurrency miners. The result was a $50,000 cloud bill and a frantic, full-scale credentials rotation, all stemming from a leaked token that should never have been mounted in the first place.
+When an attacker discovered a simple Server-Side Request Forgery vulnerability in the dashboard application, they did not need to break out of the container to inflict massive damage. They simply directed the vulnerable application to read the auto-mounted token at `/var/run/secrets/kubernetes.io/serviceaccount/token`. Using this token, the attacker queried the Kubernetes API, listed and read sensitive Secrets across the cluster, extracted cloud provider credentials, and spun up cryptocurrency miners. The result was a $50,000 cloud bill and a frantic, full-scale credentials rotation, all stemming from a leaked token that should never have been mounted in the first place.
 
 The lesson is not that every `default` ServiceAccount already has dangerous permissions. Many clusters will show limited access when you test it. The lesson is that a shared implicit identity makes future drift hard to reason about. A safe namespace should make the secure path boring: every app has a named ServiceAccount, pods without API needs receive no token, and any RBAC binding to `default` is treated as a security exception that requires a short-lived migration plan.
 
@@ -411,7 +408,7 @@ The strongest ServiceAccount programs are boring in the best sense. A reviewer c
 | Pattern | When to Use It | Why It Works | Scaling Consideration |
 |---------|----------------|--------------|-----------------------|
 | Dedicated ServiceAccount per application | Any workload with distinct ownership or API needs | It keeps identity, audit, and RBAC blast radius aligned to one app | Name accounts consistently so reviews and dashboards can group them by namespace and owner |
-| Token-free workload by default | Pods that do not call the Kubernetes API | A compromised container cannot steal a token that was never mounted | Use admission policy to flag missing `automountServiceAccountToken: false` for simple app templates |
+| Token-free workload by default | Pods that do not call the Kubernetes API | A compromised container cannot steal a token that was never mounted | Use admission policy to flag pods that still auto-mount tokens (implicit `true`) for simple app templates |
 | Narrow RoleBinding with `k auth can-i` proof | Controllers, leader election, config watchers, and operators | Live authorization checks catch permissions that static review misses | Add expected `can-i` checks to release review for high-risk workloads |
 | Workload identity for cloud access | Pods that need AWS, Google Cloud, or Azure APIs | It removes static cloud keys from Kubernetes Secrets and improves audit trails | Keep cloud IAM policies as narrow as Kubernetes RBAC, because either side can widen blast radius |
 
@@ -528,7 +525,7 @@ The important skill is to explain both the obvious and hidden issues. The `clust
 
 As you work through the exercise, separate evidence from preference. "I dislike the default namespace" is weaker than "the default namespace often lacks ownership boundaries, and this manifest gives no reason the workload belongs there." "ClusterRoleBinding feels too broad" is weaker than "this subject receives `cluster-admin`, so a stolen token can perform any API action accepted by admission." KCSA-style reasoning rewards that precision because the goal is to identify how an attacker would use each misconfiguration.
 
-**Scenario**: Review the following setup and identify the ServiceAccount, namespace, RBAC, and token-mounting issues before writing a safer replacement:
+**Exercise scenario**: Review the following setup and identify the ServiceAccount, namespace, RBAC, and token-mounting issues before writing a safer replacement:
 
 ```yaml
 # ServiceAccount with too much access

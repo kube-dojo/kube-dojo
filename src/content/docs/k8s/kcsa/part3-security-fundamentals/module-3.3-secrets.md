@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-An operations team at a mid-sized payments company spent a long weekend investigating why a routine database password rotation kept failing. The first clue was not a Kubernetes event or an application alert; it was a security engineer finding the old password in a crash report that had been uploaded to an internal ticket. The team traced the value through a Deployment manifest, an environment variable, a process argument, a debug log, and finally a stale Secret stored in a cluster backup. The secret had not been exploited, but the audit response still consumed several engineering days, delayed a product launch, and forced emergency rotation of credentials across multiple environments.
+**Hypothetical scenario:** An operations team at a mid-sized payments company spends a long weekend investigating why a routine database password rotation keeps failing. The first clue is not a Kubernetes event or an application alert; it is a security engineer finding the old password in a crash report uploaded to an internal ticket. The team traces the value through a Deployment manifest, an environment variable, a process argument, a debug log, and finally a stale Secret stored in a cluster backup. The secret is not exploited, but the audit response still consumes several engineering days, delays a product launch, and forces emergency rotation of credentials across multiple environments.
 
 That story is uncomfortable because every individual decision looked ordinary at the time. Kubernetes Secrets were used instead of ConfigMaps, RBAC existed, and only a small group could administer the namespace. The problem was that the team treated a Secret object as a vault instead of as an API object with special handling rules. Once a sensitive value enters the Kubernetes API, it can be copied into etcd, delivered to kubelets, mounted into pods, exposed to authorized clients, included in backups, and accidentally printed by applications that were never designed to protect credentials.
 
@@ -82,6 +82,8 @@ The `data` field contains base64-encoded values, while `stringData` lets you sub
 | `kubernetes.io/basic-auth` | Username + password | Basic authentication |
 | `kubernetes.io/ssh-auth` | SSH private key | SSH authentication |
 | `kubernetes.io/service-account-token` | SA token | Service account auth |
+
+Legacy type; auto-creation removed in 1.24 — prefer projected ServiceAccount tokens (see [Module 3.4](../module-3.4-serviceaccounts/)).
 
 Secret `type` is partly documentation and partly validation. A `kubernetes.io/tls` Secret must contain the expected certificate and key fields, while an `Opaque` Secret can hold arbitrary names. The type does not choose a stronger encryption mode, and it does not automatically rotate the value. The value of typing is that humans and controllers can reason about intent: a registry pull secret should be referenced by image pull configuration, a TLS secret should feed ingress or service TLS, and an arbitrary app credential should be named and scoped so its purpose is obvious during review.
 
@@ -183,7 +185,7 @@ The recommendation to prefer volume mounts is a risk-reduction default, not a la
 
 Before running this in a lab cluster, what output do you expect from `k describe pod app` if a Secret is used through `secretKeyRef`? You should expect to see that an environment variable is sourced from a Secret reference, not the decoded value itself. That is useful, but it is not a complete protection story, because the value still exists in the running process environment once the container starts.
 
-A practical war story: one platform team allowed developers to use `envFrom` for entire Secret objects because it made onboarding quick. Months later, a single shared Secret contained both a database password and an unrelated third-party API token. A service that needed only the database password inherited the API token too, and a debug endpoint printed the whole process environment during a production incident. The fix was not only "use mounts"; it was also to split Secrets by consumer, mount only specific keys, and make secret names reflect the credential owner and rotation plan.
+**Hypothetical scenario:** One platform team allows developers to use `envFrom` for entire Secret objects because it makes onboarding quick. Months later, a single shared Secret contains both a database password and an unrelated third-party API token. A service that needs only the database password inherits the API token too, and a debug endpoint prints the whole process environment during a production incident. The fix is not only "use mounts"; it is also to split Secrets by consumer, mount only specific keys, and make secret names reflect the credential owner and rotation plan.
 
 That kind of cleanup is easier when applications have a narrow configuration contract. If a service expects every possible credential in its environment, platform teams cannot reason about which value is actually required. If the service reads one file path for one purpose, reviewers can connect the Secret, the mount, the application code, and the rotation plan. This is why secrets work often becomes application architecture work. A platform can provide the safer delivery pattern, but each workload still needs a clear agreement about what it consumes and what it must never print.
 
@@ -282,12 +284,13 @@ Provider order matters because the first provider writes new data and later prov
 | Provider | Description | Use Case |
 |----------|-------------|----------|
 | `identity` | No encryption | Never for secrets |
-| `aescbc` | AES-CBC encryption | Self-managed clusters |
-| `aesgcm` | AES-GCM encryption | Faster than aescbc |
-| `kms` | External KMS | Production, compliance |
+| `aescbc` | Legacy local AES-CBC; keys live on the control plane (upstream not recommended) | Migration/fallback only |
+| `aesgcm` | Legacy local AES-GCM; keys live on the control plane (upstream not recommended) | Migration/fallback only |
+| `kms v2` | Stable since 1.29; envelope encryption with keys in an external KMS (recommended production/compliance path) | Production, compliance |
+| `kms v1` | Deprecated since 1.28 | Migrate to `kms v2` |
 | `secretbox` | XSalsa20 + Poly1305 | Alternative to AES |
 
-The local providers encrypt data using keys that the API server can access. That may satisfy a storage-at-rest requirement, but it still leaves key custody close to the control plane. KMS providers move key operations to an external service or plugin, often using envelope encryption. The API server encrypts each object with a data encryption key, while the key encryption key stays in the KMS. This gives security teams central key policy, audit logs, and rotation controls that fit better with enterprise compliance programs.
+The local AES providers encrypt data using keys that the API server can access. That may satisfy a storage-at-rest requirement, but it still leaves key custody close to the control plane. KMS providers move key operations to an external service or plugin, often using envelope encryption. The API server encrypts each object with a data encryption key, while the key encryption key stays in the KMS. This gives security teams central key policy, audit logs, and rotation controls that fit better with enterprise compliance programs.
 
 ### KMS Integration
 
@@ -312,8 +315,11 @@ The local providers encrypt data using keys that the API server can access. That
 │  • Audit logging in KMS                                    │
 │  • Compliance requirements met                             │
 │                                                             │
-│  PROVIDERS: AWS KMS, GCP KMS, Azure Key Vault, HashiCorp  │
-│             Vault                                          │
+│  KMS ENCRYPTION PLUGINS (EncryptionConfiguration):         │
+│  AWS KMS, GCP KMS, Azure Key Vault                         │
+│                                                             │
+│  EXTERNAL SECRET STORES (separate integration path):       │
+│  HashiCorp Vault, cloud secret managers                    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -351,10 +357,9 @@ For production, consider external secrets managers:
 │  ├── Azure Key Vault                                       │
 │  └── CSI driver integration                                │
 │                                                             │
-│  KUBERNETES OPERATORS                                      │
-│  ├── External Secrets Operator                             │
-│  ├── Secrets Store CSI Driver                              │
-│  └── Sync external secrets to K8s Secrets                  │
+│  KUBERNETES INTEGRATIONS                                   │
+│  ├── External Secrets Operator — sync external → K8s Secret│
+│  └── Secrets Store CSI Driver — direct mount; sync optional│
 │                                                             │
 │  BENEFITS OVER NATIVE SECRETS:                             │
 │  • Centralized management                                  │
@@ -599,8 +604,8 @@ Work through the review as if you were the platform engineer approving a product
 
 2. **Secret in command args**
    - `--db-password=$(DB_PASSWORD)` exposes secret in process list
-   - Visible via `ps aux`, logged in audit logs
-   - Fix: Pass via file or env var, read in app
+   - Visible via `ps aux`, `/proc`, and process listings on the node
+   - Fix: Read from a read-only Secret volume mount (or CSI/provider file path); do not pass via command args or env
 
 3. **Secret as environment variable**
    - `API_KEY` via env is visible in /proc

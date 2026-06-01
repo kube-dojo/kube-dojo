@@ -246,7 +246,9 @@ spec:
   - Egress
   egress:
   - to:
-    - namespaceSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
       podSelector:
         matchLabels:
           k8s-app: kube-dns
@@ -257,7 +259,7 @@ spec:
       port: 53
 ```
 
-The DNS example deliberately shows both UDP and TCP port 53. UDP handles most queries, but TCP may be used for larger responses, retries, or specific resolver behavior, so allowing only UDP can create intermittent failures that are hard to reproduce. The namespace selector shown here is broad because cluster DNS lives outside the application namespace, but in a real cluster you should verify the actual namespace and labels used by your DNS deployment before applying the rule.
+The DNS example deliberately shows both UDP and TCP port 53. UDP handles most queries, but TCP may be used for larger responses, retries, or specific resolver behavior, so allowing only UDP can create intermittent failures that are hard to reproduce. The namespace selector targets `kube-system` where cluster DNS typically runs, but in a real cluster you should verify the actual namespace and labels used by your DNS deployment before applying the rule.
 
 Some namespaces need an internal collaboration zone where workloads can talk to each other but not to the rest of the cluster. That model is weaker than per-service least privilege, yet it is still a major improvement over a flat cluster when used for tightly owned workloads with similar sensitivity. It is also a useful migration step when a team is not ready to map every individual flow on day one.
 
@@ -292,8 +294,7 @@ spec:
   policyTypes:
   - Ingress
   ingress:
-  - from: []  # Empty = allow from anywhere
-    ports:
+  - ports:
     - port: 443
 ---
 # Allow web to reach API
@@ -339,7 +340,7 @@ spec:
 
 This example allows web ingress from anywhere because it represents a public-facing tier, but many clusters should replace that broad peer with an ingress controller namespace selector. The phrase "from anywhere" can mean the internet, the node network, or the pod network depending on CNI and traffic path, so do not treat it as a harmless shortcut. The safer habit is to describe the real caller and encode that caller with labels whenever the dataplane makes it possible.
 
-A practical rollout often starts with a war-room exercise rather than a production change. One team I worked with placed a default-deny policy in a staging namespace and immediately discovered that the API tier made outbound calls to a legacy metrics collector during startup. The dependency was not on the architecture diagram, but the failing connection created a concrete decision: either document and allow it, remove it, or keep the namespace open forever. NetworkPolicy is useful partly because it forces those hidden dependencies into daylight.
+A common rollout pattern is to apply a default-deny policy in a staging namespace first. Often this immediately reveals that the API tier makes outbound calls to a legacy metrics collector during startup. The dependency is not on the architecture diagram, but the failing connection creates a concrete decision: either document and allow it, remove it, or keep the namespace open forever. NetworkPolicy is useful partly because it forces those hidden dependencies into daylight.
 
 Default deny also changes how you design deployment pipelines. A new service should not ship with a policy added days later after someone remembers segmentation; the policy is part of the service interface. Review the Deployment labels, Service selectors, NetworkPolicy selectors, and smoke tests together in the same pull request. If the application cannot start under the policy, that is not a network team problem alone, because the application has an undocumented dependency.
 
@@ -791,6 +792,8 @@ spec:
     ports:
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP
 ---
 # Allow API ingress from web
 apiVersion: networking.k8s.io/v1
@@ -842,6 +845,8 @@ spec:
     ports:
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP
 ---
 # Allow DB ingress from API
 apiVersion: networking.k8s.io/v1
