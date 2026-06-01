@@ -120,7 +120,7 @@ The secure example is not universally deployable because real applications may n
 kubesec can also run as a local HTTP server, but the hosted public API should be avoided for proprietary manifests. Kubernetes YAML often reveals image names, internal service names, namespaces, labels, cloud account structure, environment variable names, and sometimes literal secrets. If a pipeline uses the HTTP mode, run the server inside the trusted CI environment and post to `127.0.0.1` or an internal service. The same privacy rule applies to every external scanner: do not upload sensitive manifests to a service unless your organization has approved that data boundary.
 
 ```bash
-kubesec http 127.0.0.1:8080
+kubesec http 8080
 curl -sS -X POST --data-binary @deployment.yaml http://127.0.0.1:8080/scan
 ```
 
@@ -133,8 +133,12 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
       - name: Render manifests
         run: kubectl kustomize deploy/overlays/prod > rendered.yaml
       - name: Run kubesec
@@ -304,8 +308,8 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
   validations:
-    - expression: "object.spec.containers.all(c, has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot)"
-      message: "all containers must set securityContext.runAsNonRoot to true"
+    - expression: "object.spec.containers.all(c, (has(object.spec.securityContext) && has(object.spec.securityContext.runAsNonRoot) && object.spec.securityContext.runAsNonRoot) || (has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot))"
+      message: "all containers must run as non-root via pod-level or per-container securityContext.runAsNonRoot"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -321,6 +325,8 @@ spec:
 ```
 
 The expression receives strongly typed variables such as `object`, `oldObject`, `request`, `params`, and `namespaceObject`. For a create request, `object` is the incoming resource. For an update request, `oldObject` is the previous version. If a policy uses parameters, `params` is populated from the parameter resource selected by the binding. If no `paramKind` is specified, `params` is null. This design lets a platform team write one reusable expression and bind it with different parameter objects across namespaces or teams.
+
+The `require-nonroot` example above matches how Kubernetes applies pod-level `securityContext` to containers: a pod that sets `runAsNonRoot: true` at the spec level satisfies the policy even when individual containers omit the field, which is the same pattern as the hardened-web Pod earlier in this module. The expression checks only regular `containers`; `initContainers` and `ephemeralContainers` need separate rules if your baseline must cover them too.
 
 ```yaml
 apiVersion: admissionregistration.k8s.io/v1
@@ -404,9 +410,10 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
       - name: Render Kubernetes manifests
         run: kubectl kustomize deploy/overlays/prod > rendered.yaml
       - name: Trivy image and IaC scan
@@ -513,6 +520,10 @@ Complete these tasks in a local kind or disposable test cluster. Keep all files 
 - [ ] Switch only the test namespace from dry-run to denial, then confirm the insecure Deployment is rejected.
 - [ ] Write one exception case and narrow it by namespace, ServiceAccount, image, or label rather than disabling the whole policy.
 - [ ] Remove the test policies and manifests after recording the commands and expected outputs in your notes.
+
+## Learner check
+
+> The CKS exam expects both sides of that reasoning. You need to scan a YAML file quickly with a tool such as kubesec, recognize why a negative score matters, and know which fields to change under pressure.
 
 ## Sources
 
