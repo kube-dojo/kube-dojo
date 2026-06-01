@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 5.4: Admission Controllers"
 slug: k8s/cks/part5-supply-chain-security/module-5.4-admission-controllers
 sidebar:
@@ -7,11 +7,11 @@ sidebar:
 lab:
   id: cks-5.4-admission-controllers
   url: https://killercoda.com/kubedojo/scenario/cks-5.4-admission-controllers
-  duration: "40 min"
+  duration: "40-45 min"
   difficulty: advanced
   environment: kubernetes
 ---
-> **Complexity**: `[MEDIUM]` - Critical CKS policy boundary
+> **Complexity**: `[COMPLEX]` - Critical CKS policy boundary
 >
 > **Time to Complete**: 40-45 minutes
 >
@@ -62,6 +62,8 @@ sequenceDiagram
     A->>E: Persist accepted object
 ```
 
+Pause and predict: a mutating webhook injects a 500m-CPU sidecar into every Pod in a namespace that already has a `ResourceQuota` limiting `requests.cpu`. The submitted manifest requests no CPU at all. At which admission stage does the quota decision run, and against which object shape — the YAML the user typed, or the object after mutation and LimitRanger defaulting? Write your answer before reading on: quota is a validating admission check on the final admitted shape, so the sidecar and any LimitRanger defaults count toward the namespace budget.
+
 Use the exam shorthand "mutating, validating, quota" as a reasoning model, but remember that quota is implemented by the `ResourceQuota` validating admission controller, not by a separate API-server phase named quota. The practical reason to place quota late in your mental model is that quota should observe the request after defaults and mutations have decided the resource requests, object count, and final namespace target. If a mutating webhook adds a sidecar with CPU and memory requests, or LimitRanger defaults missing resource requests, the quota decision should be reasoned about against that final admitted shape. ([Kubernetes ResourceQuota Admission](https://v1-35.docs.kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#resourcequota), [Kubernetes LimitRanger Admission](https://v1-35.docs.kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#limitranger))
 
 Mutating admission is not a safe place to enforce a rule that depends on seeing the final object, because another mutating controller can still change the object later in the mutation phase and mutating webhooks may be reinvoked when later mutations occur. Kubernetes documentation advises policy authors who must see the final object state to use validating admission, and it separately documents reinvocation policy because mutating webhooks should be idempotent when they are run more than once. For CKS, that means a defaulting webhook can add labels or security context fields, but the final deny decision for "all containers must be non-root" belongs in PodSecurity, ValidatingAdmissionPolicy, Gatekeeper, Kyverno, or another validating control. ([Kubernetes Dynamic Admission Control](https://v1-35.docs.kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/))
@@ -100,6 +102,8 @@ webhooks:
 ```
 
 The webhook fields are operational controls, not decoration. `failurePolicy: Fail` rejects matching requests when the webhook call fails or times out, which protects policy assurance but turns webhook health into an API availability dependency. `failurePolicy: Ignore` lets the request continue when the webhook cannot be reached, which preserves availability but creates a fail-open policy gap. `timeoutSeconds` bounds how long the API server waits for the webhook, and Kubernetes documents webhook timeouts and failure handling as first-class configuration because admission calls sit directly on the request path. The maximum is 30 seconds; the apiserver rejects webhook configs with `timeoutSeconds` above this. ([Kubernetes Dynamic Admission Control](https://v1-35.docs.kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/))
+
+Pause and predict: a validating webhook that enforces image registry policy has `failurePolicy: Fail`, but its backing Service is unreachable during an outage. What happens to matching `CREATE` requests — are they admitted or rejected? Now change only `failurePolicy` to `Ignore` and predict again. Under `Fail`, matching writes are rejected when the webhook call errors or times out; under `Ignore`, those writes can proceed without enforcement until the webhook recovers.
 
 The webhook request and response both use `AdmissionReview`, so a correct webhook must understand the API version it receives and return the same version in its response. That detail matters during upgrades. A webhook that only handles old review versions can fail after configuration changes. A webhook that returns unclear messages turns every denial into a support ticket. Good webhooks return precise status messages, short timeouts, no external side effects when avoidable, and metrics that identify denial, timeout, and internal error paths. ([Kubernetes Dynamic Admission Control](https://v1-35.docs.kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/), [Admission Webhook Good Practices](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/admission-webhooks-good-practices/))
 
@@ -147,8 +151,8 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
   validations:
-    - expression: "object.spec.containers.all(c, has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot)"
-      message: "all containers must set securityContext.runAsNonRoot to true"
+    - expression: "object.spec.containers.all(c, has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot) && object.spec.?initContainers.orValue([]).all(c, has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot) && object.spec.?ephemeralContainers.orValue([]).all(c, has(c.securityContext) && has(c.securityContext.runAsNonRoot) && c.securityContext.runAsNonRoot)"
+      message: "all containers, initContainers, and ephemeralContainers must set securityContext.runAsNonRoot to true"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -206,6 +210,18 @@ spec:
           container := input.review.object.spec.containers[_]
           not startswith_allowed(container.image)
           msg := sprintf("container %s uses disallowed image %s", [container.name, container.image])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.initContainers[_]
+          not startswith_allowed(container.image)
+          msg := sprintf("initContainer %s uses disallowed image %s", [container.name, container.image])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.ephemeralContainers[_]
+          not startswith_allowed(container.image)
+          msg := sprintf("ephemeralContainer %s uses disallowed image %s", [container.name, container.image])
         }
 
         startswith_allowed(image) {
@@ -267,7 +283,49 @@ spec:
 
 Kyverno and Gatekeeper differ most in authoring model and ecosystem fit. Gatekeeper is a strong choice when a team already uses OPA and Rego, wants portable policy logic, and values constraint templates plus the Gatekeeper policy library. Kyverno is often a stronger fit when the platform team wants policy definitions to look like Kubernetes resources, wants CEL-based validation with Kyverno extensions, or wants mutation, reporting, image verification, and exception workflows in one Kubernetes-native policy system. The correct exam answer follows the prompt: use Gatekeeper when asked for OPA, use Kyverno when asked for Kyverno, and mention VAP when the cluster can solve the validation natively. ([Gatekeeper Introduction](https://open-policy-agent.github.io/gatekeeper/website/docs/), [Kyverno ValidatingPolicy](https://kyverno.io/docs/policy-types/validating-policy/))
 
-Kyverno's `ClusterPolicy` validate rules remain common in existing clusters and training material. Older examples usually set the spec-level `validationFailureAction: Enforce|Audit`, while Kyverno 1.13+ also supports the newer per-rule `failureAction` field where `Enforce` blocks noncompliant creates or updates and `Audit` records violations in PolicyReport or ClusterPolicyReport resources. Current Kyverno documentation also presents stable CEL-based `ValidatingPolicy` resources, which extend Kubernetes ValidatingAdmissionPolicy with Kyverno-specific fields for background processing, pipelines, reports, exceptions, and testing. In practice, check the installed Kyverno version and policy API before assuming which examples apply. ([Kyverno Validate Rules](https://kyverno.io/docs/policy-types/cluster-policy/validate/), [Kyverno ValidatingPolicy](https://kyverno.io/docs/policy-types/validating-policy/))
+Kyverno's `ClusterPolicy` validate rules remain common in existing clusters and training material. Older examples usually set the spec-level `validationFailureAction: Enforce|Audit`, while Kyverno 1.13+ also supports the newer per-rule `failureAction` field where `Enforce` blocks noncompliant creates or updates and `Audit` records violations in PolicyReport or ClusterPolicyReport resources. Kyverno's CEL-based `ValidatingPolicy` API was introduced in v1.14 and is marked stable in v1.18; it extends Kubernetes ValidatingAdmissionPolicy with Kyverno-specific fields for background processing, pipelines, reports, exceptions, and testing. In practice, check the installed Kyverno version and policy API before assuming which examples apply. ([Kyverno Validate Rules](https://kyverno.io/docs/policy-types/cluster-policy/validate/), [Kyverno ValidatingPolicy](https://kyverno.io/docs/policy-types/validating-policy/))
+
+```yaml
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: audit-team-label
+spec:
+  validationActions: ["Audit"]
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  validations:
+    - message: "pods should set metadata.labels.team"
+      expression: "'team' in object.metadata.?labels.orValue({})"
+```
+
+On clusters still running Kyverno releases before the `ValidatingPolicy` API, the same audit-only behavior is commonly expressed with `ClusterPolicy` and `validationFailureAction: Audit`:
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: audit-team-label
+spec:
+  validationFailureAction: Audit
+  rules:
+    - name: require-team-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "pods should set metadata.labels.team"
+        pattern:
+          metadata:
+            labels:
+              team: "?*"
+```
 
 Kyverno is especially attractive when a team wants one policy system to both enforce and explain. A deny can return a user-facing message. An audit can create report data. A mutation can repair a missing default. An image policy can verify signed artifacts in the same ecosystem. That breadth is useful, but it also means policy authors must separate advisory checks from blocking checks. A noisy audit rule should not become an enforcing rule until the report data proves the organization can comply. ([Kyverno Documentation](https://kyverno.io/docs/), [Kyverno ValidatingPolicy](https://kyverno.io/docs/policy-types/validating-policy/))
 
@@ -306,7 +364,7 @@ Use a short command sequence when time is limited. Read the exact error. Identif
 - **Admission can reject a request after RBAC allows it.** Authentication and authorization happen before admission, so a user can have permission to create Pods and still be denied by PodSecurity, quota, VAP, Gatekeeper, Kyverno, or a webhook.
 - **VAP is stable from Kubernetes v1.30.** The v1.35 docs mark ValidatingAdmissionPolicy as stable and KEP-3488 records the CEL admission enhancement behind the feature.
 - **Mutating webhooks are not final-state policy checks.** Kubernetes documents that validating admission should be used when a webhook needs to see the final object after all mutations are complete.
-- **Failing closed is a tradeoff, not a slogan.** `failurePolicy: Fail` improves assurance during webhook errors, but it also makes webhook availability part of API-server write availability for matching requests.
+- **Failing closed is a tradeoff, not a slogan.** `failurePolicy: Fail` rejects matching requests when webhook calls error or time out (maximum `timeoutSeconds` is 30), which improves assurance but makes webhook availability part of API-server write availability for matching requests.
 
 ## Common Mistakes
 
@@ -367,20 +425,126 @@ Reason from authentication and authorization into mutating admission, then API v
 
 ## Hands-On Exercise
 
-Complete this lab in a disposable cluster where you can create namespaces and admission policies. The goal is to observe built-in admission behavior, create a native CEL validation rule, and practice the debugging path from denial message to policy source.
+Complete this lab in a disposable cluster where you can create namespaces and admission policies. The goal is to observe built-in admission behavior, create a native CEL validation rule, and practice the debugging path from denial message to policy source. Use restricted-compliant Pod manifests in every VAP test so Pod Security Admission does not deny the workload before the VAP binding is evaluated.
 
-- [ ] Create a namespace named `admission-lab` and label it with `environment=production`.
-- [ ] Add Pod Security labels that enforce the restricted profile in the namespace, then try to create a privileged Pod and record the admission error.
-- [ ] Create a `ResourceQuota` that limits Pods and CPU requests in `admission-lab`, then create a `LimitRange` that defaults CPU requests for containers.
-- [ ] Create a small Deployment without explicit CPU requests, observe whether LimitRanger defaults the requests, and check whether ResourceQuota allows or denies the final object.
-- [ ] Apply a `ValidatingAdmissionPolicy` and binding that requires Pods in namespaces labeled `environment=production` to set `metadata.labels.team`.
-- [ ] Try to create a Pod without the `team` label, confirm the VAP denial message, then add the label and confirm admission succeeds.
-- [ ] Inspect the relevant policy objects with `kubectl get validatingadmissionpolicy`, `kubectl get validatingadmissionpolicybinding`, `kubectl describe resourcequota`, and `kubectl describe limitrange`.
-- [ ] If Gatekeeper is installed, create the `K8sAllowedRepos` ConstraintTemplate and Constraint from this module in `dryrun`, then inspect `kubectl get constraints` and the constraint status.
-- [ ] If Kyverno is installed, create an equivalent validating policy in Audit mode (Kyverno 1.14+; use `kyverno.io/v1 ClusterPolicy` for older installations), create one violating Pod, and inspect the generated report or event.
-- [ ] Clean up by deleting the VAP binding, VAP, optional Gatekeeper or Kyverno policy resources, and the `admission-lab` namespace.
+### Task 1: Create the lab namespace and Pod Security labels
 
-```yaml
+Create namespace `admission-lab`, label it for the VAP binding, and pin restricted Pod Security enforcement to the cluster version you are running.
+
+```bash
+kubectl create namespace admission-lab
+
+kubectl label namespace admission-lab environment=production --overwrite
+
+kubectl label namespace admission-lab \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/enforce-version=v1.35 \
+  pod-security.kubernetes.io/warn=restricted \
+  pod-security.kubernetes.io/warn-version=v1.35 \
+  --overwrite
+
+kubectl get namespace admission-lab --show-labels
+```
+
+### Task 2: Confirm Pod Security blocks privileged Pods
+
+Apply a privileged Pod and record the PSA denial. This proves built-in validating admission runs before your custom VAP rule.
+
+```bash
+cat <<'EOF' | kubectl apply -n admission-lab -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-demo
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+    securityContext:
+      privileged: true
+EOF
+```
+
+The request should fail with a PodSecurity violation. If it succeeds, re-check the namespace labels from task 1.
+
+### Task 3: Add ResourceQuota and LimitRange
+
+Install namespace budget controls, then observe how LimitRanger defaulting affects the object ResourceQuota evaluates.
+
+```bash
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: admission-lab-quota
+  namespace: admission-lab
+spec:
+  hard:
+    pods: "10"
+    requests.cpu: "500m"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: admission-lab-defaults
+  namespace: admission-lab
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 100m
+EOF
+
+kubectl describe resourcequota admission-lab-quota -n admission-lab
+kubectl describe limitrange admission-lab-defaults -n admission-lab
+```
+
+### Task 4: Observe LimitRanger defaulting against quota
+
+Create a Deployment whose Pod template omits CPU requests. LimitRanger should default each container to `100m`, and ResourceQuota should count that final shape.
+
+```bash
+cat <<'EOF' | kubectl apply -n admission-lab -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quota-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quota-demo
+  template:
+    metadata:
+      labels:
+        app: quota-demo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["sleep", "3600"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+EOF
+
+kubectl rollout status deployment/quota-demo -n admission-lab
+kubectl get pod -n admission-lab -l app=quota-demo -o jsonpath='{range .items[*]}{.metadata.name}{" requests.cpu="}{.spec.containers[0].resources.requests.cpu}{"\n"}{end}'
+kubectl describe resourcequota admission-lab-quota -n admission-lab
+```
+
+### Task 5: Apply the VAP and binding, then wait for registration
+
+Apply the policy objects below, then pause briefly so the API server registers the policy before the first test Pod. On kind v1.35, an immediate create can succeed once before the binding is active.
+
+```bash
+cat <<'EOF' | kubectl apply -f -
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -408,7 +572,96 @@ spec:
     namespaceSelector:
       matchLabels:
         environment: production
+EOF
+
+sleep 3
+kubectl get validatingadmissionpolicy,validatingadmissionpolicybinding
 ```
+
+### Task 6: Test VAP denial and success with restricted-compliant Pods
+
+Create one Pod without the `team` label and one with it. Both specs satisfy restricted PSA so the VAP message is the differentiator.
+
+```bash
+cat <<'EOF' | kubectl apply -n admission-lab -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-team-label
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sleep", "3600"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+EOF
+```
+
+The create should fail with the VAP message about `metadata.labels.team`.
+
+```bash
+cat <<'EOF' | kubectl apply -n admission-lab -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: with-team-label
+  labels:
+    team: platform
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sleep", "3600"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+EOF
+
+kubectl get pod with-team-label -n admission-lab
+```
+
+### Task 7: Optional Gatekeeper and Kyverno audit paths
+
+If Gatekeeper is installed, apply the `K8sAllowedRepos` ConstraintTemplate and Constraint from this module with `enforcementAction: dryrun`, then inspect constraint status. If Kyverno is installed, apply the Audit-mode `ValidatingPolicy` from the Kyverno section (introduced in v1.14, stable in v1.18) or the `ClusterPolicy` audit example for older releases, create a Pod without `team`, and inspect the generated PolicyReport or event while confirming the Pod is still admitted.
+
+### Task 8: Clean up
+
+```bash
+kubectl delete validatingadmissionpolicybinding require-team-label-production
+kubectl delete validatingadmissionpolicy require-team-label.example.com
+kubectl delete namespace admission-lab
+```
+
+Delete optional Gatekeeper or Kyverno resources if you created them in task 7.
+
+### Success Criteria
+
+- [ ] `privileged-demo` is rejected by Pod Security before any custom policy is applied.
+- [ ] `quota-demo` shows LimitRanger-defaulted CPU requests in the admitted Pod spec.
+- [ ] `no-team-label` is rejected by the VAP binding with a message naming `metadata.labels.team`.
+- [ ] `with-team-label` is admitted while the namespace still enforces restricted PSA.
+- [ ] You can explain why restricted-compliant manifests are required for the VAP step.
+- [ ] You can describe a safe admission policy rollout (warn or audit before deny, narrow namespace scope) and one break-glass recovery step when a fail-closed webhook is unavailable.
+
+## Learner check
+
+> Use the exam shorthand "mutating, validating, quota" as a reasoning model, but remember that quota is implemented by the `ResourceQuota` validating admission controller, not by a separate API-server phase named quota.
+
+Before moving on, explain why a mutating webhook that adds a sidecar can cause a ResourceQuota denial even when the submitted YAML requested no CPU.
 
 ## Sources
 
