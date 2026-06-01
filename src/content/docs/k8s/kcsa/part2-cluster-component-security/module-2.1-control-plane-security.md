@@ -25,7 +25,7 @@ Once an attacker can speak to the machinery that creates, schedules, and stores 
 
 That story matters because control plane security is not a decorative hardening checklist. The API server decides whether a request is real, whether the caller is allowed to act, whether the object is acceptable, and whether the event is recorded for later investigation. etcd stores the truth that the API server protects, including Secret objects and RBAC policy. The scheduler and controller manager continuously turn desired state into running workloads, so their credentials and network placement shape how far an attacker can move after one component fails.
 
-For the KCSA exam, control plane security sits inside a large cluster component security domain, but the operational value is broader than the exam outline. A production team that can evaluate API server flags, diagnose etcd exposure, compare controller privileges, and implement a repeatable assessment can reduce cluster-wide compromise paths before an incident. This module uses Kubernetes 1.35+ terminology and examples, and the lab uses the common shell alias `alias k=kubectl`; after that introduction, commands and prompts refer to the Kubernetes CLI as `k`.
+For the KCSA exam, control plane security sits inside a large cluster component security domain, but the operational value is broader than the exam outline. A production team that can evaluate API server flags, diagnose etcd exposure, compare controller privileges, and implement a repeatable assessment can reduce cluster-wide compromise paths before an incident. This module uses Kubernetes 1.35+ terminology and examples; quiz answers and solution guidance use the common shell alias `k` for `kubectl`.
 
 ## Control Plane Architecture
 
@@ -88,8 +88,12 @@ Authentication answers the first question in the request path: who is making thi
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │  SERVICE ACCOUNT TOKENS                             │   │
 │  │  • Used by: Pods                                    │   │
-│  │  • JWT tokens, auto-mounted                         │   │
-│  │  • Bound to specific audience and expiration        │   │
+│  │  • Since 1.24: short-lived projected/bound tokens   │   │
+│  │    (TokenRequest API; audience + expiry)            │   │
+│  │  • Auto-mounted when automountServiceAccountToken   │   │
+│  │    is true (the default) for pods using the SA      │   │
+│  │  • Pre-1.24: legacy non-expiring Secret-backed      │   │
+│  │    tokens (no longer auto-created)                  │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -139,7 +143,7 @@ Authorization answers the next question: is this identity allowed to perform thi
 │                                                             │
 │  WEBHOOK                                                    │
 │  • External authorization service                          │
-│  • Custom policy engines (OPA/Gatekeeper)                  │
+│  • (SubjectAccessReview to external authz service)         │
 │                                                             │
 │  Typical configuration: --authorization-mode=Node,RBAC     │
 │                                                             │
@@ -171,7 +175,8 @@ Admission control answers a more subtle question: should this otherwise valid an
 │  VALIDATING (accept/reject requests)                       │
 │  ├── PodSecurity: Enforces Pod Security Standards          │
 │  ├── ValidatingAdmissionPolicy: CEL-based validation       │
-│  └── Custom webhooks: Policy enforcement                   │
+│  └── Custom webhooks: OPA/Gatekeeper (ValidatingAdmission   │
+│      Webhook), other policy enforcement                    │
 │                                                             │
 │  SECURITY-CRITICAL ADMISSION CONTROLLERS                   │
 │  ├── PodSecurity (PSA)                                     │
@@ -182,7 +187,7 @@ Admission control answers a more subtle question: should this otherwise valid an
 └─────────────────────────────────────────────────────────────┘
 ```
 
-For KCSA-level control plane security, two admission themes deserve special attention. PodSecurity helps enforce Pod Security Standards so teams cannot casually create privileged, host-mounted, or otherwise risky pods in namespaces where those profiles are not allowed. NodeRestriction works with the Node authorizer to limit what kubelets can modify, which helps keep a compromised node credential from changing objects outside its legitimate node identity. These controls reduce blast radius, but they must be enabled and paired with RBAC that does not hand attackers a separate path around them.
+For KCSA-level control plane security, two admission themes deserve special attention. The **PodSecurity** admission plugin is enabled by default since Kubernetes 1.25 and helps enforce Pod Security Standards so teams cannot casually create privileged, host-mounted, or otherwise risky pods in namespaces where those profiles are not allowed. **NodeRestriction** is not in the default admission plugin set; it must be enabled explicitly (for example via `--enable-admission-plugins`) and works with the Node authorizer to limit what kubelets can modify, which helps keep a compromised node credential from changing objects outside its legitimate node identity. These controls reduce blast radius, but NodeRestriction in particular must be deliberately enabled and paired with RBAC that does not hand attackers a separate path around them.
 
 Admission webhooks add flexibility, and that flexibility creates an availability tradeoff. A validating webhook that times out on every pod creation can stop deployments across the cluster, while a mutating webhook that changes security context incorrectly can introduce risk at scale. The control plane security question is not simply whether webhooks exist. You evaluate whether they are reachable, whether their failure policy matches the risk, whether they are protected by TLS, and whether audit logs make their decisions visible enough to troubleshoot.
 
