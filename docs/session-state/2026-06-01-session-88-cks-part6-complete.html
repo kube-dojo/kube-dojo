@@ -78,5 +78,35 @@
 <p><strong>Same proven loop:</strong> per-module cross-family review (cursor + opus 4.8 + deepseek; ≤2/OAuth) → ground-check (reject FPs) → fix (cursor/deepseek) → self-verify (<code>verify_module.py</code> + spot-check P1) → consolidated per-wave worktree PR (<code>chore(content):</code> + Learner-check) → CI → rebase-merge → finalize (<code>finalize-*.sh</code>: review records + <code>reset-stage … COMMITTED</code>). No review prompts pre-generated for kcna yet (generator: <code>session84/gen-review-prompt.sh</code>).</p>
 <p>Artifacts this session: brief <code>logs/remediation/briefs/session88/fix-cks-part6.md</code>; finalize <code>logs/remediation/briefs/session88/finalize-part6.sh</code>; reviews in <code>logs/dispatch_responses/cks-rev-6.{3,4}-*.txt</code>.</p>
 
+<hr>
+<h1>Session 88 (cont.) — grok CLI evaluated, real 6.4 bug fixed, KCNA started</h1>
+<p><strong>After CKS completion, the session continued</strong> at the user's request to evaluate a newly-installed grok CLI, which then surfaced (and we fixed) a real bug, and we started the KCNA track.</p>
+
+<h2>7. grok CLI evaluation — UNPROVEN candidate</h2>
+<p>User: "use grok directly (not hermes); composer-2.5 via my grok subscription beats grok-4.3" — and later, the key guidance: <strong>"treat them as unproven until they prove their worth."</strong></p>
+<ul>
+<li><strong>What it is:</strong> <code>~/.local/bin/grok</code> ("Grok Build TUI"), logged in via grok.com. Invoke headless: <code>grok -p "…"</code> or <code>--prompt-file &lt;p&gt; -m &lt;model&gt; --output-format plain</code> (NOT <code>text</code>; <code>-p</code> has NO tools → inline content). Models: <code>grok-composer-2.5-fast</code> = Cursor's Composer (same model as our cursor lane, different harness → <em>cannot</em> cross-family-review cursor's work) + <code>grok-build</code> = <strong>grok-4.3</strong>.</li>
+<li><strong>Correction (mine was wrong):</strong> hermes is NOT retired — it is the <strong>deepseek-v4-pro transport</strong> (<code>hermes -z --provider deepseek</code>; deepseek.py wraps it). Keep it.</li>
+<li><strong>Trials (n=2):</strong> (1) <em>find -maxdepth</em>: both grok models confidently WRONG (claimed late <code>-maxdepth</code> is ignored; GNU find applies it — proven with gfind). (2) <em>CKS 6.4 review</em> (known ground-truth): both caught a REAL shipped defect deepseek+orchestrator missed; <strong>grok-build = disciplined, trap-aware, no fabricated provenance</strong>; <strong>grok-composer = thorough but fabricates verification provenance</strong> (claimed docker-pull/manual-fetch with no tools). (3) <em>kcna 1.2 review</em>: grok-build surfaced real findings but <strong>misattributed the failing gate</strong> and <strong>missed the real one</strong> (kubectl-alias), and its WS relay was flaky (needed a retry).</li>
+<li><strong>Verdict:</strong> ground-checked CANDIDATE reviewer (prefer grok-build); no adapter built; not load-bearing. Memory: <code>feedback_grok_cli_candidate_roster</code>.</li>
+</ul>
+
+<h2>8. CKS 6.4 — real runnability bug fixed (PR #1735)</h2>
+<p>The grok trial paid for itself: it surfaced a genuine defect in <strong>shipped, finalized</strong> 6.4 (3 reviewers converged + orchestrator ground-check). The hardened-Pod hands-on did <code>kubectl apply -f immutable-demo.yaml</code> (never created) pinning a <strong>fake placeholder digest</strong> → <code>ImagePullBackOff</code>, so the read-only-root demonstration never ran. Fixed: self-contained runnable heredoc (<code>busybox:1.36</code> tag + exam-digest-pin note), exit-status capture, + the 2 inline active-learning prompts required by <code>module-quality.md:24</code>. Re-verified T0; stays <code>done</code>. <strong>Lesson:</strong> a green verifier (axis 1) + APPROVE review can still ship a broken lab — the digest was syntactically valid so nothing caught it but a reviewer reasoning about the actual pull.</p>
+
+<h2>9. KCNA track started — wave 1 (PR #1736), 4 modules → done</h2>
+<p>Review-axis <strong>394 → 397</strong>; kcna <strong>3 → 7/28</strong> done (21 remain). Reviewers: opus (0.1), cursor (0.2), deepseek (1.1), <strong>grok-build candidate</strong> (1.2). <strong>Key finding:</strong> 3 of 4 were genuinely <strong>T3</strong> (real verifier failures, not just review-axis) — a verifier sweep before fixing is now part of the kcna loop.</p>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Real T3 gate / fix</th></tr>
+<tr><td>0.1 kcna-overview</td><td>opus 4.8</td><td>T0 but opus caught a heuristic-missed fluent anti-fab anecdote + 4 web-verified currency errors (2yr validity; Nov-2025 five-domain split IS current, not "older lens"; 75% is <em>less</em> forgiving; CKA wasn't the only cert)</td></tr>
+<tr><td>0.2 study-strategy</td><td>cursor</td><td>T3 <code>anti_fabrication</code> (War story L189) → Hypothetical</td></tr>
+<tr><td>1.1 what-is-kubernetes</td><td>deepseek</td><td>T3 <code>anti_fabrication</code> (War story L204) → Hypothetical</td></tr>
+<tr><td>1.2 container-fundamentals</td><td>grok-build (cand.)</td><td>T3 <code>runnable_no_kubectl_alias</code> (orchestrator-found; grok misattributed it to anti-fab) → <code>alias k=kubectl</code> ×3 blocks; + 2 anecdotes reframed</td></tr>
+</table>
+<p><strong>Dominant theme:</strong> unsourced war-stories across the track → reframe to <code>Hypothetical scenario:</code> (the war-story-hygiene workstream). cursor executed the 4-module fix brief flawlessly (zero overshoot). Artifacts: <code>session88/{gen-kcna-review-prompt.sh, fix-kcna-wave1.md, finalize-kcna-w1.sh}</code>; wave-1 review prompts pre-generated through 1.3.</p>
+
+<h2>10. NEXT</h2>
+<p><strong>kcna wave 2:</strong> 1.3-control-plane (T3 anti-fab, prompt ready) → 1.4–1.9, then part2 (2.1–2.4), part3 (3.1–3.10), part4 (4.1–4.3). 21 modules remain. Same loop; <strong>verifier-sweep each wave first</strong> (kcna has real T3s, not just review-axis). Keep grok-build as a ground-checked candidate (1 module/wave), prefer the proven opus/cursor/deepseek for the rest. <strong>Still pending:</strong> gemini-cli <code>--approval-mode=yolo</code> fix not yet applied to <code>adapters/gemini.py</code>.</p>
+
 </body>
 </html>
