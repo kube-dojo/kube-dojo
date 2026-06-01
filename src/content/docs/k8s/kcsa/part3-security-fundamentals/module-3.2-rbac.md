@@ -20,9 +20,9 @@ After completing this module, you will be able to make and defend practical auth
 
 ## Why This Module Matters
 
-In 2023, a financial services platform suffered a severe Kubernetes incident after a deployment automation account was granted broad write permissions during a weekend release freeze. The change was supposed to be temporary, but it remained in the cluster after the release succeeded. When attackers later obtained the automation token from a compromised build job, they did not need a kernel exploit or a novel container escape. They used the permissions already granted to the ServiceAccount, created privileged workloads, mounted sensitive volumes, and turned a CI compromise into a cluster-wide recovery effort that consumed days of engineering time and delayed customer-facing work.
+**Hypothetical scenario:** Consider a financial services platform that grants a deployment automation account broad write permissions during a weekend release freeze. The change is supposed to be temporary, but it remains in the cluster after the release succeeds. When attackers later obtain the automation token from a compromised build job, they do not need a kernel exploit or a novel container escape. They use the permissions already granted to the ServiceAccount, create privileged workloads, mount sensitive volumes, and turn a CI compromise into a cluster-wide recovery effort that demands urgent credential rotation, workload review, and binding cleanup.
 
-RBAC is the guardrail that decides whether an authenticated Kubernetes request is allowed after the API server knows who made the request. Authentication answers "who are you?", admission answers "is this object acceptable?", and authorization answers "may this subject do this verb on this resource in this scope?". If that middle authorization decision is too generous, every other control has to work harder. If it is too narrow or confusing, operators start bypassing the model with emergency bindings that become permanent risk.
+RBAC is the guardrail that decides whether an authenticated Kubernetes request is allowed after the API server knows who made the request. Authentication answers "who are you?", authorization answers "may this subject do this verb on this resource in this scope?", and admission — which runs after authorization — answers "is this object acceptable?". If that authorization decision is too generous, every other control has to work harder. If it is too narrow or confusing, operators start bypassing the model with emergency bindings that become permanent risk.
 
 This module treats RBAC as an engineering design problem rather than a list of object names to memorize. You will learn how Roles, ClusterRoles, RoleBindings, ClusterRoleBindings, users, groups, and ServiceAccounts combine into effective permissions; why apparently harmless verbs like `create` can become escalation paths; and how to reason about access before applying a manifest. When this module mentions command-line checks, it uses the short alias `alias k=kubectl`, so a command like `k auth can-i get pods -n production` means the standard Kubernetes client command with a shorter name.
 
@@ -169,7 +169,7 @@ Each rule is a tuple of API group, resource, optional resource name, and verb. Y
 │  SPECIAL VERBS                                             │
 │  ├── deletecollection - Delete multiple resources          │
 │  ├── bind     - Bind roles (for RoleBindings)              │
-│  ├── escalate - Modify roles (requires special permission) │
+│  ├── escalate - Grant role permissions beyond your own     │
 │  ├── impersonate - Act as another user                     │
 │  └── * (wildcard) - All verbs (DANGEROUS)                  │
 │                                                             │
@@ -723,7 +723,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-The solution follows the scenario but it is still worth reviewing critically. The developer and team-lead roles use read wildcards for namespace resources, which may be acceptable in a training exercise but should be narrowed in sensitive production namespaces. The CI/CD role avoids direct Pod creation and does not use a ClusterRoleBinding, which keeps the automation boundary closer to the stated deployment need. In a stricter environment, you would also separate secret management into a smaller role and require additional approval before binding it.
+The solution follows the scenario but it is still worth reviewing critically. The developer and team-lead roles use read wildcards for namespace resources, which may be acceptable in a training exercise but should be narrowed in sensitive production namespaces. Note: `resources: ["*"]` read **includes Secrets** — in a real `dev` namespace this is the first grant to narrow, since it gives every developer credential-read access. Compare the built-in `view` ClusterRole, which deliberately excludes Secrets. The CI/CD role avoids direct Pod creation and does not use a ClusterRoleBinding, which keeps the automation boundary closer to the stated deployment need. In a stricter environment, you would also separate secret management into a smaller role and require additional approval before binding it.
 
 </details>
 
