@@ -409,7 +409,7 @@ Notice the difference between `describe` and `get -o yaml` or `jsonpath`. `k des
 > Providing certificates as a read-only volume mount is the standard pattern because applications expect certificates to exist as files on the filesystem, and `readOnly: true` prevents accidental modification.
 > </details>
 
-War story: a platform team once rotated a database password by updating a Secret and assumed every workload would immediately use the new value. Several Deployments consumed the password as an environment variable, so those Pods kept authenticating with the old credential until they restarted. The fix was not merely "update the Secret"; the fix was to document consumption patterns, restart affected Pods during rotations, and move certificate-style material to read-only volume mounts where the application could reload it.
+**Hypothetical scenario:** a platform team once rotated a database password by updating a Secret and assumed every workload would immediately use the new value. Several Deployments consumed the password as an environment variable, so those Pods kept authenticating with the old credential until they restarted. The fix was not merely "update the Secret"; the fix was to document consumption patterns, restart affected Pods during rotations, and move certificate-style material to read-only volume mounts where the application could reload it.
 
 Stop and think: Secrets in Kubernetes are base64 encoded, not encrypted. If someone can run `k get secret db-credentials -o yaml`, what cluster permissions, storage settings, and operational processes would you review before calling the setup production-ready?
 

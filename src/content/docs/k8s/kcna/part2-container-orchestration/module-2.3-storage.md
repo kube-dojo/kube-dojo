@@ -22,9 +22,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In January 2017, GitLab.com experienced one of the most public database incidents in modern operations. During an exhausting recovery attempt, an administrator removed data from the wrong database node while trying to repair replication, and roughly 300 gigabytes of production data disappeared before the team could stop the damage. The company spent hours broadcasting the recovery effort, rebuilding from incomplete backups, and explaining to customers why a platform built to host critical source code had lost some of its own state.
+**Hypothetical scenario:** during an exhausting database recovery, an engineer removes data from the wrong database node while trying to repair replication, and a large volume of production data disappears before the team can stop the damage. The team spends hours rebuilding from incomplete backups and explaining to customers why a platform lost some of its own state. Public post-incident reports from real companies follow this exact shape often enough that it has become a canonical operations lesson.
 
-That incident did not happen inside Kubernetes, but it exposes the same uncomfortable truth that every platform engineer eventually faces: compute is replaceable, state is not. A stateless web Pod can vanish and return somewhere else without drama because its useful data lives behind another API. A database Pod, message broker, search index, or artifact registry cannot treat its local files as disposable scratch space. If the orchestrator deletes the Pod, reschedules it to another node, or evicts it during pressure, the application needs a storage contract that survives the compute lifecycle.
+That kind of failure does not require Kubernetes to occur, but it exposes the same uncomfortable truth that every platform engineer eventually faces: compute is replaceable, state is not. A stateless web Pod can vanish and return somewhere else without drama because its useful data lives behind another API. A database Pod, message broker, search index, or artifact registry cannot treat its local files as disposable scratch space. If the orchestrator deletes the Pod, reschedules it to another node, or evicts it during pressure, the application needs a storage contract that survives the compute lifecycle.
 
 Kubernetes storage orchestration is the set of abstractions that creates that contract. The hard part is not memorizing the names PersistentVolume, PersistentVolumeClaim, StorageClass, or CSI driver; the hard part is predicting what happens when they interact with real failure domains, access modes, reclaim policies, and node placement. By the end of this module, you should be able to look at a stuck database Pod, a Pending claim, or a risky StorageClass default and reason through the operational consequence before it becomes a production incident.
 
@@ -76,7 +76,7 @@ The safest habit is to draw the lifecycle boundary before writing YAML. Ask what
 
 Kubernetes separates storage ownership from storage consumption with two API objects. A PersistentVolume, or PV, represents a storage asset the cluster can use. A PersistentVolumeClaim, or PVC, represents an application's request for storage. This division is deliberate because platform teams and application teams need different levels of detail. Platform teams care about providers, zones, disk classes, encryption, reclaim behavior, and driver configuration. Application teams usually care about capacity, access mode, and the name they can mount into a Pod.
 
-A PersistentVolume is cluster-scoped, which means it does not live inside a namespace. It can be provisioned manually by an administrator or created dynamically by a provisioner. In older static setups, administrators created PVs in advance, describing capacity, access modes, reclaim policy, and a backend-specific implementation. The following preserved example shows that style with a legacy AWS EBS in-tree field; on Kubernetes 1.35, production AWS clusters should use the EBS CSI driver, but the manifest is still useful for understanding the anatomy of a PV object found in older estates.
+A PersistentVolume is cluster-scoped, which means it does not live inside a namespace. It can be provisioned manually by an administrator or created dynamically by a provisioner. In older static setups, administrators created PVs in advance, describing capacity, access modes, reclaim policy, and a backend-specific implementation. The following example shows that style with a legacy AWS EBS in-tree field; on Kubernetes 1.35, production AWS clusters should use the EBS CSI driver, but the manifest is still useful for understanding the anatomy of a PV object found in older estates.
 
 ```yaml
 # Example: A static PersistentVolume definition
@@ -200,7 +200,7 @@ CSI solves that by defining a standard interface between container orchestrators
 flowchart TD
     subgraph ControlPlane["KUBERNETES CONTROL PLANE"]
         direction TB
-        SS["StatefulSet"] -- "creates" --> PVC["PersistentVolumeClaim"]
+        SS["StatefulSet"] -- "creates via volumeClaimTemplates" --> PVC["PersistentVolumeClaim"]
         PVC -. "triggers" .-> EP["external-provisioner"]
     end
 
@@ -254,6 +254,8 @@ A final anti-pattern is solving application-level replication with Kubernetes vo
 
 ## Decision Framework
 
+Block, file, and object storage answer different questions even when all three appear in a platform diagram. Block storage (typical RWO cloud disks) gives one Pod a dedicated mount path backed by a single device; it fits databases and queues that need low-latency local I/O. File storage (RWX NFS, EFS, or similar) exposes a shared directory many Pods can mount, which suits content libraries and build caches when the application expects POSIX semantics. Object storage (S3, GCS, Azure Blob) uses an HTTP API for blobs and keys; Kubernetes does not mount object buckets as standard Pod volumes, so stateless apps usually call the API from application code when they need durable artifacts without tying data to a specific node.
+
 Start the storage decision by asking whether the data must survive Pod deletion. If the answer is no, use ephemeral storage such as `emptyDir` and keep the capacity bounded so node disks do not become accidental dumping grounds. If the answer is yes, ask whether exactly one writer needs high-performance block semantics, many readers need the same immutable content, or many writers need a shared filesystem. That access pattern narrows the backend before capacity or price enters the conversation.
 
 For single-writer databases and queues, choose an RWO or RWOP class backed by a reliable block storage driver, use `WaitForFirstConsumer` in topology-constrained clusters, and set reclaim policy according to data value. For shared media libraries, content management uploads, and build artifact directories, choose an RWX-capable filesystem and test application locking under concurrent writes. For large immutable datasets or public assets, object storage may be the cleaner architecture even if Kubernetes can mount a filesystem, because object APIs often scale better for distribution and lifecycle management.
@@ -264,7 +266,7 @@ Finally, decide what evidence you will use when something goes wrong. PVC status
 
 ## Did You Know?
 
-- In December 2021, with Kubernetes 1.23, CSI migration reached general availability for several major in-tree plugins, marking a major step away from provider code compiled into core Kubernetes binaries.
+- In Kubernetes 1.23, CSI migration for several major in-tree plugins (AWS EBS, GCE PD, Azure Disk) reached beta on-by-default; the core CSI Migration feature graduated to GA in Kubernetes 1.25, marking a major step away from provider code compiled into core Kubernetes binaries.
 - AWS Nitro-based EC2 instances document a practical EBS attachment ceiling of 28 volumes for many instance families, and the root volume counts toward that limit.
 - Kubernetes 1.20 introduced stable VolumeSnapshot API support, which gave backup vendors a Kubernetes-native way to coordinate point-in-time storage copies through CSI drivers.
 - `ReadWriteOncePod` reached stable status in Kubernetes 1.29, giving supported CSI drivers a stricter single-Pod write mode than classic ReadWriteOnce node-level attachment.
@@ -450,7 +452,6 @@ Because the StorageClass was configured with `reclaimPolicy: Delete`, deleting t
 - [Kubernetes CSI Developer Documentation](https://kubernetes-csi.github.io/docs/)
 - [Kubernetes CSI Drivers](https://kubernetes-csi.github.io/docs/drivers.html)
 - [AWS EC2: Amazon EBS Volume Limits](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html)
-- [GitLab: GitLab.com Database Incident](https://about.gitlab.com/blog/gitlab-dot-com-database-incident/)
 
 ## Next Module
 
