@@ -6,13 +6,13 @@ sidebar:
 lab:
   id: cks-5.2-image-scanning
   url: https://killercoda.com/kubedojo/scenario/cks-5.2-image-scanning
-  duration: "35 min"
-  difficulty: advanced
+  duration: "45 min"
+  difficulty: medium
   environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Critical CKS skill
 >
-> **Time to Complete**: 45-50 minutes
+> **Time to Complete**: 45 minutes
 >
 > **Prerequisites**: Module 5.1 (Image Security), Docker basics, and Kubernetes manifests
 
@@ -57,7 +57,7 @@ The upstream data path is intentionally broad. Aqua's `vuln-list` repository tra
 
 The database pipeline is not a simple copy of NVD. A useful scanner result requires an advisory identifier, an affected package or ecosystem, vulnerable version ranges, and enough source context to map that advisory to what Trivy found in the image or filesystem. Aqua's database build process packages upstream records into OCI-distributed database artifacts, and the trivy-db metadata uses a 24-hour update interval as the normal freshness boundary. In practice, a CVE can appear through NVD, an OS vendor advisory, GHSA, a language ecosystem advisory, or Aqua research once there is actionable package mapping. When those sources disagree, Trivy may still show the finding, but the severity source and fixed-version fields become part of the evidence you must read.
 
-Air-gapped environments usually mirror the OCI database artifacts rather than expecting every runner to reach Aqua's public registries. A platform team can copy `trivy-db`, `trivy-java-db`, and `trivy-checks` into an internal registry, then point scans at that mirror with `--db-repository`, `--java-db-repository`, and the checks bundle setting where needed. The mirror job is the controlled internet-facing component; the cluster or CI runner consumes only the approved internal artifact. That design also gives auditors a stable answer to "which advisory database did this scan use," because the mirror digest and update timestamp can be recorded with the scan report.
+Air-gapped environments usually mirror the OCI database artifacts rather than expecting every runner to reach Aqua's public registries. A platform team can copy `trivy-db`, `trivy-java-db`, and `trivy-checks` into an internal registry, then point scans at that mirror with `--db-repository`, `--java-db-repository`, and `--checks-bundle-repository` where needed. The mirror job is the controlled internet-facing component; the cluster or CI runner consumes only the approved internal artifact. That design also gives auditors a stable answer to "which advisory database did this scan use," because the mirror digest and update timestamp can be recorded with the scan report.
 
 ```text
 Image layers or filesystem
@@ -111,6 +111,8 @@ trivy image --format json --output trivy-nginx.json nginx:1.27
 # Narrow to fixed high-impact vulnerabilities for a fast rebuild gate.
 trivy image --ignore-unfixed --severity HIGH,CRITICAL nginx:1.27
 ```
+
+Pause and predict: given the vector `AV:N/AC:L/PR:L` on a batch job image with no network egress, the vulnerable package is present but the daemon that uses it never starts, and the namespace blocks privilege escalation — would you block deployment on Critical severity alone, or do you need more evidence first? A strong answer names what still needs verification: confirm the severity from `SeveritySource` and NVD rather than trusting one scanner row, prove the attack chain is unreachable in this workload, and decide whether compensating controls justify a time-bound exception instead of an immediate rebuild.
 
 A severity gate should be boring, predictable, and documented. A common policy is to fail new images on fixed Critical vulnerabilities, warn on High findings, and require a ticket or time-bound exception for any accepted risk. Another common policy fails on both High and Critical only for internet-facing services or production namespaces, while internal batch jobs receive a shorter warning window instead of an immediate block. The correct answer depends on asset exposure, fix availability, business criticality, exploit maturity, and whether the vulnerable package is actually reachable.
 
@@ -179,6 +181,8 @@ trivy k8s --skip-images --report summary
 `trivy k8s` is not a replacement for per-image CI scans. The cluster command works from Kubernetes API discovery and workload inventory, so it can find images that actually run, objects that violate Kubernetes checks, and drift between declared pipelines and live state. A per-image scan is better for a deterministic build gate because it scans the artifact before deployment and can fail the exact pipeline that produced it. Use both when possible: the pipeline scan prevents known-bad artifacts from entering the registry, and the cluster scan catches stale deployments, manual changes, injected sidecars, and workloads that arrived before the gate existed.
 
 Cluster-wide and namespace-scoped scans have different RBAC implications. A cluster-wide scan needs permission to list many resource types across namespaces and may need access to cluster-scoped resources, so it should be run by a deliberately scoped service account rather than a human admin token copied into CI. A namespace-scoped scan is safer for an application team because it limits discovery to the team's boundary, but it can miss cluster-level policy objects, admission configuration, CRDs, and workloads outside the namespace that still affect the application. For CKS practice, assume the service account permissions are part of the answer: prove what you can list, scan only the requested scope, and avoid requesting cluster-admin when the task only asks for one namespace.
+
+> **Pause and predict**: an exam task gives you a namespace-scoped `Role` that can list Pods and Deployments in `payments` but nothing cluster-scoped. Can that identity run `trivy k8s --include-namespaces payments --report summary` successfully, and what cluster objects might the scan miss even when it succeeds? The useful habit is to map scanner discovery needs to RBAC verbs before you assume the command will see the whole risk picture.
 
 Custom resources and cluster-scoped resources differ from Pods because they may describe controllers, policies, or admission behavior rather than executable containers. A Pod spec exposes image names, security context, volumes, service account, and runtime settings. A CRD instance might represent an Ingress controller rule, a network policy abstraction, a certificate issuer, or a platform-specific deployment object that later creates Pods indirectly. Cluster-scoped resources such as ClusterRoles and CRDs also affect multiple namespaces, so misconfiguration there can create broad exposure even when every Pod in the current namespace looks reasonable. A scanner report should separate vulnerable workload images from unsafe cluster configuration because the remediation owner is often different.
 
@@ -284,6 +288,8 @@ That workflow is intentionally strict but not magical. `exit-code: "1"` means th
 
 The scan, sign, and push order deserves precision. The security intent is "scan before publishing a trusted artifact," but cosign signatures are normally attached to registry references and digests. The practical workflow is build a local tag, scan that tag, push only after the scan gate passes, resolve the pushed digest, then sign the digest. Admission policy can later require a valid signature on the digest while vulnerability policy records the SARIF or JSON evidence that justified the push. If the workflow signs before the scanner gate or pushes before the scan result is known, downstream systems can observe an artifact that the pipeline later rejects.
 
+Pause and predict: if you reorder the GitHub Actions steps to push before the Trivy scan, sign immediately after push, and only then fail the job on Critical findings, what can a registry consumer observe during the minutes between push and failure? The answer should mention a vulnerable or unreviewed digest already published, a signature that attests to the wrong moment in the pipeline, and admission systems that may pull the artifact before the gate completes.
+
 SARIF upload turns a one-time CI log into an audit trail in GitHub's Security tab. The useful triage flow is to upload SARIF on every run, fail the job only on the policy threshold, assign ownership for new findings, and close findings by rebuilding or documenting a time-bound exception. Retention matters because scan results describe a moment in time: image digest, Trivy version, database metadata, workflow SHA, and the exact gate settings. A future reviewer should be able to answer whether a deployment was accepted because there were no matching findings, because the finding was unfixed and filtered, or because an explicit allowlist policy suppressed it.
 
 GitLab has two common patterns. GitLab's own container scanning documentation says the container scanning analyzer uses Trivy and passes Trivy environment variables through, while the Trivy documentation also shows a direct GitLab CI job using the `aquasec/trivy` image. The built-in template is easier for GitLab Security Dashboard integration; the direct job is easier for open-source repositories or custom reports. In both cases, keep the job tied to the image digest or tag produced by the same pipeline stage.
@@ -292,6 +298,7 @@ GitLab has two common patterns. GitLab's own container scanning documentation sa
 stages:
   - build
   - scan
+  - publish
 
 variables:
   IMAGE_REF: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
@@ -302,15 +309,19 @@ build_image:
   services:
     - docker:27-dind
   script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - docker build -t "$IMAGE_REF" .
-    - docker push "$IMAGE_REF"
+    - docker save "$IMAGE_REF" -o image.tar
+  artifacts:
+    paths:
+      - image.tar
 
 trivy_image_scan:
   stage: scan
   image:
     name: docker.io/aquasec/trivy:0.70.0
     entrypoint: [""]
+  services:
+    - docker:27-dind
   variables:
     TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivy-cache"
   cache:
@@ -318,6 +329,7 @@ trivy_image_scan:
     paths:
       - .trivy-cache/
   script:
+    - docker load -i image.tar
     - trivy image --download-db-only
     - trivy image --format json --output "trivy-${CI_COMMIT_SHA}.json" "$IMAGE_REF"
     - trivy image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL "$IMAGE_REF"
@@ -326,6 +338,20 @@ trivy_image_scan:
     expire_in: 30 days
     paths:
       - "trivy-${CI_COMMIT_SHA}.json"
+      - image.tar
+
+push_image:
+  stage: publish
+  image: docker:27
+  services:
+    - docker:27-dind
+  needs:
+    - job: trivy_image_scan
+      artifacts: true
+  script:
+    - docker load -i image.tar
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker push "$IMAGE_REF"
 ```
 
 Design gates around failure domains. A global Critical gate can stop every service in an organization when a widely used base image receives a new advisory, so mature teams separate "newly introduced by this change" from "pre-existing backlog," and they maintain an emergency path for false positives or unavailable fixes. The emergency path should be auditable: who approved the exception, which CVE or advisory ID it covers, when it expires, and what compensating control or rebuild plan exists. A scanner gate without an exception process will be bypassed when it blocks real delivery, while a scanner gate with no exit-code policy produces attractive reports that nobody has to obey.
@@ -341,7 +367,7 @@ Trivy supports several suppression mechanisms. The classic `.trivyignore` file s
 ```text
 # .trivyignore
 # Accept until 2026-06-30: package present in debug-only image, not deployed.
-CVE-2024-3094
+CVE-2023-48795
 ```
 
 ```yaml
@@ -354,7 +380,7 @@ vulnerabilities:
     expired_at: "2026-06-30"
 ```
 
-The example IDs above are real CVEs, but the suppression reasons are deliberately lab examples. In a production repository, never copy an ignore entry from a tutorial into a live policy. Validate the CVE in NVD or the vendor advisory, prove the affected package is present in the scanned artifact, and write a reason that a reviewer can verify. A useful allowlist expires; a dangerous allowlist is permanent, broad, and disconnected from ownership.
+The example IDs above are real CVEs, but the suppression reasons are deliberately lab examples. In a production repository, never copy an ignore entry from a tutorial into a live policy. Validate the CVE in NVD or the vendor advisory, prove the affected package is present in the scanned artifact, and write a reason that a reviewer can verify. A useful allowlist expires; a dangerous allowlist is permanent, broad, and disconnected from ownership. Critical supply-chain findings such as CVE-2024-3094 (the xz-utils backdoor, NVD CVSS v3.1 10.0 Critical) should not appear in a routine ignore file without executive incident-response ownership, because suppressing a confirmed backdoor is a fundamentally different decision than accepting a medium-rated protocol weakness in a non-production debug image.
 
 VEX is better than a bare ignore when you need machine-readable exploitability context across tools. If a library is present but the vulnerable function is unreachable, a VEX statement can say the product is not affected and explain the justification. That does not remove the CVE from history, and it does not mean every scanner will accept the statement automatically. It gives security, platform, and application teams a structured way to separate "package present" from "risk exploitable here" without losing auditability.
 
@@ -448,11 +474,11 @@ Aqua Security also has a commercial platform around cloud-native security, while
    CI image scanning checks the artifact before deployment, but clusters can drift through manual deploys, old ReplicaSets, init containers, injected sidecars, scheduled Jobs, and images that predate the current gate. `trivy k8s` inspects what is running or configured through Kubernetes, which catches runtime inventory gaps. It should be scoped carefully with namespace and report flags so the scan is useful without overloading cluster operations.
    </details>
 
-8. **A scan finds `CVE-2024-3094` as Medium with fixed versions available, but the same image is approved for an offline batch namespace. What is the correct triage sequence before changing gates?**
+8. **A scan finds `CVE-2024-3094` (NVD CVSS v3.1 10.0 Critical, the xz-utils backdoor) in an image approved for an offline batch namespace with no egress. What is the correct triage sequence before changing gates?**
 
    <details>
    <summary>Answer</summary>
-   First, classify the finding by verifying whether the vulnerability is actually reachable in the deployed container and whether a patched package is available for that exact image lineage. If it is present but accepted temporarily, document the acceptance with a time-bound exception in an allowlist file (`.trivyignore`/`.trivyignore.yaml`) or VEX statement, and record approver, rationale, and expiry. Then set a rebuild or base-image migration task and align the policy with the namespace risk profile instead of merely disabling the alert.
+   First, verify severity from authoritative sources — read `SeveritySource` in JSON output and confirm the NVD record — before treating the finding as anything less than Critical. Then classify reachability: is the affected package actually executed in the container, and do compensating controls (no egress, read-only root filesystem, non-root execution, admission policy) break the attack chain? A Critical backdoor in an offline batch namespace still needs far stronger justification than a Medium finding: executive incident-response ownership, a documented rebuild or base-image migration plan with a short expiry, and explicit compensating-control evidence. Only after that review should you consider a time-bound exception in `.trivyignore.yaml` or VEX, never a silent flat-file suppression. Align the gate with namespace risk, but do not downgrade Critical supply-chain findings without verified severity and ownership.
    </details>
 
 ## Hands-On Exercise
@@ -489,6 +515,12 @@ When a scan returns more than one hundred CVEs and the timer is running, use a t
 - [ ] You ran a namespace-scoped `trivy k8s` scan and can explain what cluster state it observes.
 - [ ] You wrote an exception that includes CVE ID, package context, owner, reason, and expiry.
 - [ ] You can explain why SHA-pinned GitHub Actions reduce, but do not eliminate, CI supply-chain risk.
+
+## Learner check
+
+> Image scanning with Trivy is not a single command memorization exercise. The CKS skill is knowing which artifact to scan, which database and severity source produced the evidence, which findings should fail a pipeline, and which risks scanning cannot see without manifest checks, cluster inventory, and digest-based deployment discipline.
+
+---
 
 ## Sources
 
