@@ -6,13 +6,13 @@ sidebar:
 lab:
   id: cks-6.3-container-investigation
   url: https://killercoda.com/kubedojo/scenario/cks-6.3-container-investigation
-  duration: "40 min"
+  duration: "45 min"
   difficulty: advanced
   environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - CKS incident-response investigation skill
 >
-> **Time to Complete**: 45-50 minutes
+> **Time to Complete**: 45 minutes
 >
 > **Prerequisites**: [Module 6.2 (Runtime Security with Falco)](../module-6.2-falco/), [Module 6.1 (Audit Logging)](../module-6.1-audit-logging/), Linux process and namespace basics
 
@@ -156,7 +156,7 @@ CID=$(sudo crictl ps --pod "$POD_ID" --name "$CONTAINER" -q)
 sudo crictl inspect "$CID" > evidence-crictl-inspect.json
 sudo crictl inspect "$CID" | jq -r '.status.id, .status.image.image, .status.imageRef, .info.pid'
 PID=$(sudo crictl inspect "$CID" | jq -r '.info.pid')
-sudo runc state "$CID" 2>/dev/null || true
+sudo runc state "$CID" 2>/dev/null || true   # containerd: add --root /run/containerd/runc/k8s.io to query runc directly
 ```
 
 The PID is the bridge from Kubernetes vocabulary to Linux evidence. Once you know it, `/proc/$PID` can show the executable symlink, current working directory, command line, environment, file descriptors, memory mappings, root filesystem view, mount information, and namespace handles. The man pages for `/proc`, `/proc/pid/exe`, `/proc/pid/cwd`, `/proc/pid/fd`, and `/proc/pid/maps` document these files as kernel interfaces. That is why they remain useful when the container image has no shell or package manager. They are also live views, not archived logs. Capture them before you restart, delete, or evict the workload. If the target process exits, `/proc/$PID` may now describe a different process or no process at all. ([Linux proc filesystem](https://man7.org/linux/man-pages/man5/proc.5.html), [/proc/pid/exe](https://man7.org/linux/man-pages/man5/proc_pid_exe.5.html), [/proc/pid/cwd](https://man7.org/linux/man-pages/man5/proc_pid_cwd.5.html), [/proc/pid/fd](https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html), [/proc/pid/maps](https://man7.org/linux/man-pages/man5/proc_pid_maps.5.html))
@@ -436,6 +436,8 @@ kubectl debug -n cks-63-lab -it pod/suspicious-app \
   -- /bin/bash
 ```
 
+> **CNI enforcement caveat:** NetworkPolicy is only enforced by a policy-capable CNI such as Calico or Cilium. On a default `kind`/`kindnet` cluster the `isolate-suspicious-app` policy is accepted but silently NOT enforced, so egress still flows — confirm the object exists with `kubectl get netpol -n cks-63-lab`, and use a Calico-enabled cluster to observe real egress blocking during isolation.
+
 Inside the debug container, run the following read-oriented checks. If the runtime does not expose the target process namespace to the debug container, exit and use the node-side `crictl` path from the earlier section instead. Compare what you see with the Pod manifest you saved before isolation. The manifest tells you expected image, command, mounts, and service account. The live namespace tells you what actually ran after scheduling. Investigation happens in the gap between those two views. A clean manifest with a suspicious process suggests runtime compromise or misuse after admission. A risky manifest with host mounts, broad service account access, or writable paths suggests the workload design itself made the incident easier. The response plan changes depending on which side of that gap explains the evidence.
 
 ```bash
@@ -444,7 +446,7 @@ ss -tnp
 ls -la /proc/1/fd
 readlink /proc/1/exe
 readlink /proc/1/cwd
-find /proc/1/root/tmp -type f -maxdepth 1 -ls 2>/dev/null
+find /proc/1/root/tmp -maxdepth 1 -type f -ls 2>/dev/null
 ```
 
 After practice, clean up only after you have confirmed which evidence files you captured and which questions they answer. The cleanup step should feel different from the containment step. Containment keeps the suspect object available while reducing harm. Cleanup removes the lab objects because the exercise is complete. In production, that same difference matters. You should know whether a command is preserving, isolating, collecting, or destroying evidence before you run it. If you cannot name that category, pause and choose a less destructive observation command first. That habit is what turns a fast response into a repeatable incident workflow.
