@@ -226,7 +226,7 @@ k logs -l app=checkout --tail=20
 
 The worked example also demonstrates why "configuration in the environment" is not the same as "all configuration is harmless." A database URL usually belongs in a Secret because it may contain credentials, while a feature flag or log format may belong in a ConfigMap or plain environment value. The principle is externalization; the security decision depends on sensitivity and access control.
 
-War story: one platform team migrated a payments worker to Kubernetes and kept a daily migration command inside the container entrypoint because it worked on a single VM. When the Deployment scaled to three replicas, three Pods tried to run the migration at the same time, and one process held a lock long enough to delay startup for the others. The durable fix was not a bigger timeout; it was moving the administrative task into a separate Kubernetes Job so normal web processes stayed disposable and predictable.
+**Hypothetical scenario:** a platform team migrates a payments worker to Kubernetes and keeps a daily migration command inside the container entrypoint because it worked on a single VM. When the Deployment scaled to three replicas, three Pods tried to run the migration at the same time, and one process held a lock long enough to delay startup for the others. The durable fix was not a bigger timeout; it was moving the administrative task into a separate Kubernetes Job so normal web processes stayed disposable and predictable.
 
 Notice how many factors are involved in that single story. The image was reusable, but the run command mixed serving traffic with administration. The process was stateless enough to scale, but startup behavior was not disposable because it depended on a global database lock. The better Kubernetes design did not require a new programming language or a service mesh; it required matching the 12-factor process model to Kubernetes controllers with a Deployment for serving and a Job for migration.
 
@@ -295,7 +295,7 @@ The practical boundary question is not "how many services should we have?" A bet
 
 Kubernetes supports both choices. A cloud native monolith can run as a Deployment with replicas, probes, external configuration, and centralized logs. A microservice system can run many Deployments and Services with separate rollout strategies, resource requests, network policies, and autoscaling rules. The architectural maturity comes from matching the platform shape to the application and team, not from chasing a service count.
 
-War story: a retail engineering group split a checkout system into order, inventory, payment, coupon, and shipping services before they had tracing, versioned contracts, or local development parity. The first holiday incident was not caused by Kubernetes; it was caused by humans being unable to answer which service owned a failing discount calculation. They kept the microservices, but only after adding ownership maps, contract tests, distributed tracing, and a rule that a service boundary needed a business owner as well as a repository.
+**Hypothetical scenario:** a retail engineering group splits a checkout system into order, inventory, payment, coupon, and shipping services before they have tracing, versioned contracts, or local development parity. The first holiday incident was not caused by Kubernetes; it was caused by humans being unable to answer which service owned a failing discount calculation. They kept the microservices, but only after adding ownership maps, contract tests, distributed tracing, and a rule that a service boundary needed a business owner as well as a repository.
 
 That story illustrates why service boundaries should follow change boundaries. If coupons and payments always change together, forcing them into separate services can create a distributed transaction problem without delivering independent release value. If recommendations change many times a week and checkout changes carefully under stricter controls, separating them may reduce risk. The cloud native answer depends on the economic shape of change, not on an abstract preference for smaller deployables.
 
@@ -478,6 +478,8 @@ Readiness is one of the clearest examples of that domain knowledge. A service ma
 Graceful shutdown matters for the same reason. Kubernetes sends a termination signal and gives the container time to exit, but the application must stop accepting new work, finish or hand off in-flight requests, and close resources cleanly. A service that ignores shutdown can lose messages during every rollout, which makes routine replacement feel dangerous. A service that handles shutdown well turns replacement into a normal maintenance action.
 
 Failure design should be tested before the first major incident. Delete a non-production Pod and watch whether traffic recovers. Break a dependency in a staging environment and observe whether readiness, logs, and user experience match the design. Slow a downstream call and check whether timeouts protect the caller. These exercises are small, but they build confidence that the written architecture is reflected in runtime behavior.
+
+Kubernetes gives you concrete mechanisms for each failure pattern above. A Deployment's `replicas` field and the Service/endpoints controller implement redundancy: when one Pod fails readiness or disappears, remaining endpoints keep receiving traffic. `PodDisruptionBudget` objects add a voluntary-disruption guard during node drains and cluster upgrades by limiting how many Pods may be unavailable at once. For dependency failures, application-level timeouts and retries belong in code or a service mesh, but the platform still participates through readiness probes that remove unhealthy instances from load balancing before liveness restarts amplify an outage.
 
 ## Patterns & Anti-Patterns
 
@@ -663,6 +665,7 @@ spec:
             httpGet:
               path: /ready
               port: 8080
+            initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
