@@ -25,9 +25,9 @@ After completing this module, you will be able to make workload choices from obs
 
 ## Why This Module Matters
 
-At 09:18 on a busy retail morning, an operations team rolled a payment API from one container image to another and expected Kubernetes to keep the service steady. They had tested the new image, but they had deployed it as a bare Pod because that seemed simpler during the previous sprint. When the node hosting that Pod was drained for an urgent kernel patch, the application disappeared until a human noticed failed checkouts, recreated the Pod by hand, and restored the Service endpoint. The incident report estimated more than $120,000 in abandoned carts, yet the root cause was not a broken container or a mysterious platform failure. The team had chosen the wrong workload resource for the job.
+**Hypothetical scenario:** an operations team rolls a payment API from one container image to another and expects Kubernetes to keep the service steady. They had tested the new image, but they had deployed it as a bare Pod because that seemed simpler during the previous sprint. A bare Pod is fine for a quick test, yet it does not survive node maintenance unless something recreates it. When the node hosting that Pod was drained for an urgent kernel patch, the application disappeared until a human noticed failed checkouts, recreated the Pod by hand, and restored the Service endpoint. The root cause was not a broken container or a mysterious platform failure. The team had chosen the wrong workload resource for the job.
 
-Another team in the same company made the opposite mistake a week later. They placed a clustered database into a Deployment because Deployments were familiar, then watched one replacement Pod come back with a new name and a different volume claim than the database member expected. Replication lag grew while the application retried writes, and the engineers spent the afternoon separating storage identity from stateless rollout thinking. Their problem was not that Deployments are bad; their problem was that Deployments solve a different class of problem than StatefulSets, Jobs, CronJobs, and DaemonSets.
+In a contrasting scenario, another team places a clustered database into a Deployment because Deployments were familiar, treating replaceable web tiers and named database members as the same operational problem, then watched one replacement Pod come back with a new name and a different volume claim than the database member expected. Replication lag grew while the application retried writes, and the engineers spent the afternoon separating storage identity from stateless rollout thinking. Their problem was not that Deployments are bad; their problem was that Deployments solve a different class of problem than StatefulSets, Jobs, CronJobs, and DaemonSets.
 
 This module teaches the decision skill behind those incidents. Kubernetes gives you controllers that watch desired state and reconcile Pods toward that state, but each controller carries a different promise about identity, lifetime, scheduling, update behavior, and recovery. KCNA expects you to recognize those promises, and production work expects you to apply them before you write YAML. By the end, you should be able to look at an application requirement and decide whether it wants a Deployment, ReplicaSet, StatefulSet, DaemonSet, Job, or CronJob, then verify that the controller is doing the work you intended.
 
@@ -73,11 +73,11 @@ KCNA questions often phrase this as a resource choice, but real operations phras
 
 The table below previews the decision surface. Do not treat it as a substitute for the rest of the module; treat it as a compact map you will revisit after seeing how each controller behaves under change. The most useful column is Pod identity, because identity often reveals whether you are managing replaceable application workers or named members of a coordinated system.
 
-| Resource | Purpose | Pod Identity | Replicas |
-|----------|---------|--------------|----------|
-| **Deployment** | Stateless apps | Random names | Variable |
-| **ReplicaSet** | Maintain count | Random names | Fixed |
-| **StatefulSet** | Stateful apps | Stable names | Ordered |
+| Resource | Purpose | Pod Identity | Scaling / updates |
+|----------|---------|--------------|-------------------|
+| **Deployment** | Stateless apps | Random names | Declarative count + rollout history |
+| **ReplicaSet** | Maintain count | Random names | Declarative count, no rollout API |
+| **StatefulSet** | Stateful apps | Stable names | Ordered, stable identity |
 | **DaemonSet** | Per-node agent | Per node | One per node |
 | **Job** | Run to completion | Temporary | Until done |
 | **CronJob** | Scheduled Jobs | Temporary | Per schedule |
@@ -153,7 +153,7 @@ The rollout diagram shows why the middle layer matters. During an image update, 
 │  Benefits:                                                 │
 │  • Zero downtime                                           │
 │  • Gradual rollout                                         │
-│  • Automatic rollback on failure                           │
+│  • Rollback available via revision history (`k rollout undo`) │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -250,7 +250,7 @@ k get rs -l app=quote-api
 k rollout history deployment/quote-api
 ```
 
-A real operations war story illustrates the difference. A team once thought a rollout had failed because old ReplicaSets were still visible after a successful release. They deleted the old ReplicaSets to "clean up," then discovered they had removed the easiest rollback path minutes before a client-side regression appeared. The old ReplicaSet with zero replicas was not clutter; it was revision history represented as a Kubernetes object.
+**Hypothetical scenario:** a team once thought a rollout had failed because old ReplicaSets were still visible after a successful release. They deleted the old ReplicaSets to "clean up," then discovered they had removed the easiest rollback path minutes before a client-side regression appeared. The old ReplicaSet with zero replicas was not clutter; it was revision history represented as a Kubernetes object.
 
 Deployments are the correct default for replaceable application replicas, but they are not a universal answer. If the Pod name becomes part of cluster membership, if each replica needs a unique persistent volume, if a task should stop after success, or if one Pod must run on every node, a Deployment's strengths become mismatches. Good Kubernetes design starts by asking what promise the workload needs before choosing the familiar resource.
 

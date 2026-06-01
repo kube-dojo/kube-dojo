@@ -24,7 +24,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In December 2020, a large retail platform suffered a three-hour checkout outage during its highest-traffic seasonal sales window, and the internal post-incident estimate put lost revenue above fifteen million dollars. The failure did not begin with a broken database, a failed deployment tool, or a missing capacity reservation. It began when frontend components kept sending traffic to hardcoded backend Pod IP addresses after an autoscaling event replaced those Pods with new replicas on different nodes.
+**Hypothetical scenario:** a retail platform suffers a checkout outage during a peak sales window. The failure did not begin with a broken database, a failed deployment tool, or a missing capacity reservation. It began when frontend components kept sending traffic to hardcoded backend Pod IP addresses after an autoscaling event replaced those Pods with new replicas on different nodes.
 
 The replacement backend Pods were healthy, but they were invisible to clients that had been configured with old addresses. Traffic concentrated on a few dying targets while fresh capacity sat idle, timeouts propagated through the checkout path, retry storms exhausted connection pools, and support teams saw symptoms that looked like a general platform failure. The deeper problem was that the application had treated Pod identity as stable when Kubernetes deliberately treats Pods as replaceable infrastructure.
 
@@ -171,7 +171,7 @@ Evaluate environment variable discovery versus DNS discovery by asking when the 
 
 There are still narrow cases where Service environment variables are tolerable. A one-off job created after its dependencies, a tiny teaching cluster, or a legacy application that can only read host and port from environment variables may use them without drama. The moment services are independently deployed, scaled, or moved across namespaces, DNS is the better default because it matches the dynamic nature of Kubernetes itself.
 
-War story: a platform team once spent an afternoon chasing what looked like random connection failures in a batch processor. The Service existed, DNS worked from a debug Pod, and the backend Pods were ready. The failing workers had been created minutes before the Service during a failed rollout, so their environment lacked the expected `PAYMENTS_SERVICE_HOST` variable. Restarting the workers fixed the symptom, but the durable fix was moving the application configuration to DNS names.
+**Hypothetical scenario:** a platform team once spent an afternoon chasing what looked like random connection failures in a batch processor. The Service existed, DNS worked from a debug Pod, and the backend Pods were ready. The failing workers had been created minutes before the Service during a failed rollout, so their environment lacked the expected `PAYMENTS_SERVICE_HOST` variable. Restarting the workers fixed the symptom, but the durable fix was moving the application configuration to DNS names.
 
 ## Service Types and Exposure Boundaries
 
@@ -487,7 +487,7 @@ For KCNA questions, eliminate choices by boundary. ClusterIP means internal only
 
 ## Did You Know?
 
-- **ClusterIP is virtual:** The ClusterIP does not actually exist as a normal network interface on a Pod. kube-proxy or the cluster data plane implements the forwarding behavior, and IPVS mode reached general availability in Kubernetes v1.11 in July 2018 for better large-scale Service handling.
+- **ClusterIP is virtual:** The ClusterIP does not actually exist as a normal network interface on a Pod. kube-proxy or the cluster data plane implements the forwarding behavior, and IPVS mode reached general availability in Kubernetes v1.11 in June 2018 for better large-scale Service handling.
 - **LoadBalancer normally includes NodePort:** A LoadBalancer Service usually allocates a ClusterIP and node ports beneath it. Since Kubernetes v1.24, `allocateLoadBalancerNodePorts: false` can disable automatic NodePort allocation for providers that route directly to Pods or otherwise do not need node ports.
 - **Headless Services skip the virtual IP:** Setting `clusterIP: None` makes DNS return backend addresses directly instead of routing through one virtual Service address. That is why StatefulSets commonly pair stable Pod names with a headless Service for peer identity.
 - **Services are namespace-scoped:** A Service selector finds Pods only inside its own namespace, even when another namespace has matching labels. Cross-namespace communication works by using DNS names such as `<service>.<namespace>.svc.cluster.local`, not by selecting remote Pods.

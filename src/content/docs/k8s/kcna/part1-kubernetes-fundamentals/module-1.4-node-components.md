@@ -23,7 +23,7 @@ After completing this module, you will be able to connect observable symptoms to
 
 ## Why This Module Matters
 
-During a regional checkout incident at a large online retailer, the application team saw a confusing symptom: Deployments were healthy in Git, the control plane accepted new manifests, and dashboards showed enough desired replicas, yet customers intermittently received connection resets during payment. The expensive part was not the first broken Pod; it was the thirty minutes of uncertainty while teams argued whether the scheduler, the network plugin, the load balancer, or the application image was responsible. In that window, orders backed up, call-center volume climbed, and the incident commander needed a simple answer: is the cluster still deciding correctly, or are the nodes failing to execute those decisions?
+**Hypothetical scenario:** Picture a checkout incident where the application team sees a confusing symptom: Deployments were healthy in Git, the control plane accepted new manifests, and dashboards showed enough desired replicas, yet customers intermittently received connection resets during payment. The expensive part was not the first broken Pod; it was the thirty minutes of uncertainty while teams argued whether the scheduler, the network plugin, the load balancer, or the application image was responsible. In that window, orders backed up, call-center volume climbed, and the incident commander needed a simple answer: is the cluster still deciding correctly, or are the nodes failing to execute those decisions?
 
 That distinction is the heart of Kubernetes architecture. The control plane stores desired state and chooses where work should run, but the node components turn that intent into running processes, network rules, health reports, and endpoint updates. If kubelet stops reporting, the API server may still be available while a node becomes `NotReady`. If kube-proxy rules are stale, Pods may be running while Services route poorly. If the container runtime cannot pull an image, scheduling succeeded but execution failed. A practitioner who can separate those layers can shorten an incident from broad speculation to a focused diagnostic path.
 
@@ -140,7 +140,7 @@ k get events -A --field-selector involvedObject.kind=Node,involvedObject.name=<n
 
 Before running this, what output do you expect if a node is healthy enough to report status but too full to accept new workloads? Look for a `Ready` condition that may still be true, a pressure condition that is true, recent eviction or disk warnings, and Pods that are clustered on that node because they were already running before the pressure became severe.
 
-A useful war story comes from a platform team that investigated repeated "random" restarts in a logging-heavy namespace. The application team focused on crash loops, while the platform team noticed that every affected Pod had recently landed on the same worker node. `k describe node` showed `DiskPressure=True`, and the kubelet events showed image garbage collection failing to free enough space. The containers were not defective; the node's local storage was exhausted by logs and unused images, and kubelet was doing exactly what it is designed to do under pressure.
+**Hypothetical scenario:** a platform team investigates repeated "random" restarts in a logging-heavy namespace. The application team focused on crash loops, while the platform team noticed that every affected Pod had recently landed on the same worker node. `k describe node` showed `DiskPressure=True`, and the kubelet events showed image garbage collection failing to free enough space. The containers were not defective; the node's local storage was exhausted by logs and unused images, and kubelet was doing exactly what it is designed to do under pressure.
 
 Another common incident begins with a node that is technically reachable but slow enough that status updates lag and probes fail. Application owners may see readiness failures, while platform engineers see kubelet warnings, and network engineers see no obvious packet drop. In that case, the correct question is not "which team owns Kubernetes" but "which contract is failing first." If kubelet cannot reliably observe and report container health, the API will become stale, controllers will react to stale data, and Service endpoint changes may trail the real condition of the workload.
 
@@ -213,6 +213,8 @@ spec:
 ```
 
 Apply it and inspect the events. The first command creates desired state in the API server; the interesting story begins after the scheduler assigns a node and the target kubelet asks the runtime to do the container work.
+
+Save the manifest above as `runtime-demo.yaml`, then:
 
 ```bash
 k apply -f runtime-demo.yaml
@@ -290,9 +292,12 @@ In iptables mode, kube-proxy writes packet-filtering and NAT rules into the Linu
 | userspace | kube-proxy receives and forwards connections | Legacy learning context | Extra copying and poor modern fit |
 | iptables | Kernel rules perform NAT and selection | Default, broad compatibility | Large rule sets can become harder to manage at scale |
 | IPVS | Kernel load-balancer tables select endpoints | Large Service counts or high churn | Requires IPVS kernel support and operational familiarity |
+| nftables | Kernel nftables rules perform selection (newer iptables alternative) | Modern clusters wanting iptables-class behavior with better scaling | Requires a recent kernel + kube-proxy support |
 | eBPF replacement | CNI programs kernel behavior directly | Advanced networking and observability needs | Adds dependency on a capable CNI and deeper platform expertise |
 
-Service routing has a separate readiness dependency that often explains "Pod is running but traffic fails" incidents. kubelet evaluates readiness probes and reports Pod readiness. The endpoints controller then includes ready Pods in EndpointSlices for the Service. kube-proxy watches those EndpointSlices and updates node-local routing state. If a Pod is `Running` but not `Ready`, it may be doing exactly what you want: staying out of Service traffic until it can handle requests safely.
+Service routing has a separate readiness dependency that often explains "Pod is running but traffic fails" incidents. kubelet evaluates readiness probes and reports Pod readiness. The EndpointSlice controller then publishes ready Pod addresses into EndpointSlices for the Service. kube-proxy watches those EndpointSlices and updates node-local routing state. If a Pod is `Running` but not `Ready`, it may be doing exactly what you want: staying out of Service traffic until it can handle requests safely.
+
+The legacy Endpoints API is deprecated as of Kubernetes v1.33; EndpointSlices are primary. Prefer `k get endpointslices` in new workflows (`k get endpoints` still works on 1.35).
 
 Readiness is where application health and node networking meet. The application decides whether it can serve, kubelet checks that decision through the configured probe, the API records readiness, EndpointSlices publish eligible backends, and kube-proxy or the CNI programs traffic behavior. Each step can be correct while the overall user symptom is still "clients cannot reach the service." This is why a mature debugging path checks readiness and endpoints before diving into packet captures.
 
@@ -523,7 +528,7 @@ kube-proxy can only route to endpoints that exist in the Service endpoint data i
 
 <details><summary>5. Your platform team is comparing iptables mode, IPVS mode, and an eBPF CNI replacement for Service routing. What tradeoffs should guide the decision?</summary>
 
-iptables mode is broadly compatible and common, which makes it a practical default for many clusters. IPVS can scale better for large numbers of Services because it uses kernel load-balancer tables, but it requires kernel support and operational familiarity. eBPF replacement designs can improve performance and observability while removing kube-proxy, but they shift responsibility into the CNI platform and require deeper networking expertise. The right choice depends on cluster scale, team skills, support model, and observability needs.
+iptables mode is broadly compatible and common, which makes it a practical default for many clusters. nftables is a newer in-kernel alternative to the iptables backend for kube-proxy. IPVS can scale better for large numbers of Services because it uses kernel load-balancer tables, but it requires kernel support and operational familiarity. eBPF replacement designs can improve performance and observability while removing kube-proxy, but they shift responsibility into the CNI platform and require deeper networking expertise. The right choice depends on cluster scale, team skills, support model, and observability needs.
 
 </details>
 
@@ -597,7 +602,7 @@ k get nodes -o wide
 
   </details>
 
-- [ ] Watch the Pod move from `Pending` to `Running` and identify evidence that the kubelet acted on the node assignment.
+- [ ] Watch the Pod move from `Pending` to `Running` (with `nodeName` set, `Pending` reflects kubelet/runtime work, not scheduler delay) and identify evidence that the kubelet acted on the node assignment.
   ```bash
   k get pod node-demo -w
   k describe pod node-demo
@@ -698,7 +703,7 @@ The success criteria are written as checkboxes because the exercise is not finis
 
 - [ ] The selected node shows `Ready` status.
 - [ ] The node description shows both `Kubelet Version` and `Container Runtime Version`.
-- [ ] The `node-demo` Pod schedules onto the intended node and reaches `Running`.
+- [ ] The `node-demo` Pod lands on the intended node and reaches `Running`.
 - [ ] The `node-demo-svc` Service has an endpoint that matches the Pod IP.
 - [ ] A temporary client Pod successfully reaches the Service over HTTP.
 - [ ] You can explain which task belongs to `kubelet`, `kube-proxy`, and the container runtime during the exercise.

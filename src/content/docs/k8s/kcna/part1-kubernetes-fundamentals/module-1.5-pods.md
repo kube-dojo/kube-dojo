@@ -347,7 +347,7 @@ k logs pod-demo
 k logs pod-demo -c app --previous
 ```
 
-War story: a platform team once chased a "network outage" because customers saw intermittent 503 responses after a release. The Pods all showed `Running`, which delayed the investigation. The real issue was a readiness probe that pointed at a shallow TCP port instead of an application health endpoint, so Pods entered the Service before their dependency cache had loaded. The fix was not a network change; it was a better readiness probe and a rollout policy that respected application warm-up. The Pod phase was technically true and operationally insufficient.
+**Hypothetical scenario:** a platform team once chased a "network outage" because customers saw intermittent 503 responses after a release. The Pods all showed `Running`, which delayed the investigation. The real issue was a readiness probe that pointed at a shallow TCP port instead of an application health endpoint, so Pods entered the Service before their dependency cache had loaded. The fix was not a network change; it was a better readiness probe and a rollout policy that respected application warm-up. The Pod phase was technically true and operationally insufficient.
 
 The most useful question during lifecycle work is "who can make this state change?" The scheduler can place a pending Pod on a node, the kubelet can start containers and report status, the container runtime can pull and launch images, the application can pass or fail probes, and controllers can create replacement Pods. A human with `k delete pod` can force a controller to create a new replica, but that only helps when the owner and template are correct. Deleting a standalone Pod is not healing; it is removal.
 
