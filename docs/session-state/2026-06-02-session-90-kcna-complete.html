@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 90 — KCNA track COMPLETE (28/28)</title>
+<style>
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
+  h2 { color: #326ce5; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; vertical-align: top; font-size: .92em; }
+  th { background: #326ce5; color: #fff; }
+  .tldr { background: #eef4ff; border-left: 4px solid #326ce5; padding: .8rem 1rem; border-radius: 4px; }
+  .win { background: #eafbe7; border-left: 4px solid #2e9e2e; padding: .8rem 1rem; border-radius: 4px; }
+  .lesson { background: #fff7e6; border-left: 4px solid #e0a800; padding: .6rem 1rem; border-radius: 4px; margin: .6rem 0; }
+  ul { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 90 — KCNA track COMPLETE (28/28)</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-02 · <strong>Branch:</strong> main (clean) ·
+<strong>Board:</strong> KCNA 17 → <strong>28/28 done</strong> (track complete); review-axis 407 → <strong>418</strong> (+11).
+Two consolidated PRs merged: <strong>#1739</strong> (wave 4, part3 ×8) and <strong>#1740</strong> (wave 5, part4 ×3).</p>
+
+<p class="win"><strong>🎉 The entire KCNA certification track is now reviewed-to-<code>done</code>.</strong>
+With CKA + CKAD + CKS + KCNA all 100%, the k8s cert tracks remaining are <strong>KCSA → Extending K8s → tool certs</strong>.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Wave / PR</th><th>Modules</th><th>Headline fixes</th></tr>
+<tr>
+  <td><strong>Wave 4</strong><br>PR #1739<br>(part3, 8)</td>
+  <td>3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.9</td>
+  <td>
+    <strong>Stale CNCF maturity (the big theme — KCNA tests it):</strong> OpenTelemetry Incubating→<strong>Graduated</strong> (3.2, 3.5);
+    Istio "Not CNCF"→<strong>CNCF Graduated</strong> (3.2, lesson moved to Grafana); wasmCloud Sandbox→<strong>Incubating</strong> (3.9);
+    3.7 table — Kyverno/Cilium→Graduated, Backstage/OpenKruise→Incubating, Sandbox=WasmEdge/SpinKube.<br>
+    <strong>Accuracy:</strong> Restricted PSS controls corrected (3.6); per-namespace default SA vs cluster-wide CRB (3.6 Q5);
+    Jaeger v2-on-OTel-Collector (3.5); removed <code>k version --short</code> (3.2); contributor stats sourced+softened (3.7).<br>
+    <strong>Hygiene/gates:</strong> war-stories/openers → <code>Hypothetical scenario:</code>; kubectl alias + Knight-Capital visible link + xref re-anchor (3.3); body_words floors met.
+  </td>
+</tr>
+<tr>
+  <td><strong>Wave 5</strong><br>PR #1740<br>(part4, 3)</td>
+  <td>4.1, 4.2, 4.3</td>
+  <td>
+    <strong>Maturity:</strong> Tekton (CNCF)→<strong>CNCF Incubating</strong> (2026-03-24) + Argo Workflows→Graduated (4.1); Artifact Hub→<strong>CNCF Incubating</strong> (4.2).<br>
+    <strong>Structural:</strong> the misplaced "KCNA Curriculum Complete!" block (sat <em>after</em> 4.2's "Next→4.3" link) <strong>relocated to 4.3</strong>, the true final module; weight table now uses the <strong>official KCNA exam domain split</strong> (46/22/16/8/8) + Module 0.1 pointer.<br>
+    <strong>Factual:</strong> 4.3 opener had a wrong date ("June 2019" for the real TSB <strong>April 2018</strong> failure) → reframed fingerprint-free <code>Hypothetical scenario:</code>; <code>helm search</code>→<code>helm search repo</code>.
+  </td>
+</tr>
+</table>
+
+<h2>Loop &amp; roster (no-codex, held all session)</h2>
+<ul>
+  <li><strong>Reviewers (mixed pools, ≤2–3/OAuth):</strong> opus 4.8 headless, cursor <code>--model auto</code>, deepseek-v4-pro, grok-build (candidate, 1/wave, ground-checked). <strong>Fixer:</strong> cursor in a worktree, one consolidated PR per wave.</li>
+  <li><strong>grok-build:</strong> real content findings (3.3 Knight-Capital visible-link gap) but <strong>fabricated verifier provenance</strong> again (claimed the module cited a KEDA graduation date it never mentions) → ground-checked away. Stays a candidate.</li>
+  <li><strong>CI gemini (secondary signal):</strong> wave-4 it raised a maturity <strong>false positive</strong> (claimed WasmEdge promoted to Incubating — cncf.io confirms still Sandbox) → rejected; wave-5 it returned an empty API response (non-blocking).</li>
+</ul>
+
+<h2>Key lessons</h2>
+<div class="lesson"><strong>Maturity status must be web-verified, not trusted to a model's training data.</strong>
+OpenTelemetry <strong>graduated 2026-05-11</strong> — <em>both</em> Opus and DeepSeek marked it "correctly Incubating" (their cutoffs predate it). Only a live cncf.io check caught it. Same applied to Kyverno (Graduated 2026-03), Tekton (Incubating 2026-03), Artifact Hub (Incubating 2024-05).</div>
+<div class="lesson"><strong>The fixer can introduce a new error while fixing the old one.</strong>
+Wave-4 cursor replaced 3.7's stale Sandbox examples with "KubeEdge, Kratix" — but <strong>KubeEdge graduated in 2024</strong>. Caught by web-verifying the replacements (→ WasmEdge, SpinKube). De-frag/maturity rewrites stay fabrication-prone; ground-check the <em>new</em> values too.</div>
+<div class="lesson"><strong>A visible cross-ref link can break the incident-dedup gate.</strong>
+Adding a markdown link to 3.3's Knight-Capital reference pushed the <code>&lt;!-- incident-xref --&gt;</code> marker past <code>has_xref_near</code>'s 200-char window → violation. Fix: place the xref marker <em>immediately after</em> the incident name (matching 3.1's working pattern), before the link.</div>
+<div class="lesson"><strong>grok must always carry <code>-m grok-build</code>.</strong>
+grok's default model is <code>grok-composer-2.5-fast</code> = Cursor's Composer on a different harness — same model as the cursor lane, so it would break cross-family review and risk shared-backend bleed. (User flagged this mid-session; the dispatch honored it.)</div>
+
+<h2>State &amp; next</h2>
+<ul>
+  <li><strong>k8s cert tracks done:</strong> CKA (41/41), CKAD (24/24), CKS (30/30), <strong>KCNA (28/28)</strong>.</li>
+  <li><strong>NEXT k8s sub-track:</strong> <code>kcsa</code> (Kubernetes and Cloud Native Security Associate), then Extending K8s, then the tool certs — same proven review→ground-check→consolidated-fix→PR→finalize loop. <strong>Run a <code>verify_module.py</code> tier sweep before each wave</strong> and <strong>web-verify every CNCF maturity claim</strong> (KCSA is security/CNCF-ecosystem heavy — expect the same maturity-drift + war-story-hygiene work).</li>
+  <li>After the k8s cert tracks: <strong>cloud (85) → ai-ml-eng → on-prem → platform</strong>, curriculum order.</li>
+  <li>Reusable this session: <code>logs/remediation/briefs/session90/{fix-kcna-wave4.md, fix-kcna-wave5.md, finalize-kcna-w4.sh, finalize-kcna-w5.sh}</code> + the session88 <code>gen-kcna-review-prompt.sh</code> generator.</li>
+  <li><strong>Carry-over follow-up:</strong> opus noted the UK translation <code>uk/.../module-4.1-ci-cd.md</code> carries the same old <code>TEKTON (CNCF)</code> label — mirror the maturity fixes there when UK work resumes (UK is deferred until EN production-ready).</li>
+  <li><strong>Still unapplied (carried from s87/88):</strong> the gemini-cli <code>--approval-mode=yolo</code> fix in <code>adapters/gemini.py</code>.</li>
+</ul>
+</body>
+</html>
