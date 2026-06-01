@@ -6,7 +6,7 @@ sidebar:
 revision_pending: false
 ---
 
-**Complexity**: `[HIGH]` - advanced orchestration concepts with direct impact on reliability, cost, and application design. **Time to complete**: 45-60 minutes. **Prerequisites**: Module 2.1, Scheduling. This module assumes Kubernetes 1.35 or newer behavior for autoscaling APIs and examples. The full Kubernetes command is `kubectl`; in runnable commands after the setup line, this module uses the shorter exam-friendly alias `k`, defined as `alias k=kubectl`.
+**Complexity**: `[HIGH]` - advanced orchestration concepts with direct impact on reliability, cost, and application design. **Time to complete**: 45-60 minutes. **Prerequisites**: Module 2.1, Scheduling. This module assumes Kubernetes 1.35 behavior for autoscaling APIs and examples. The full Kubernetes command is `kubectl`; in runnable commands after the setup line, this module uses the shorter exam-friendly alias `k`, defined as `alias k=kubectl`.
 
 ```bash
 alias k=kubectl
@@ -23,9 +23,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In late 2023, a large online retailer prepared for a national shopping event with dashboards, marketing forecasts, and a Kubernetes platform that looked calm during rehearsal. When the first campaign went live, checkout traffic climbed faster than the team expected, payment callbacks slowed, and several web Pods began saturating CPU while the cluster still appeared to have unused memory. The application did not fail in one dramatic crash; it degraded in layers as slow Pods made clients retry, retries amplified load, new Pods waited for image pulls, and replacement nodes needed minutes to join.
+**Hypothetical scenario:** an online retailer prepared for a national shopping event with dashboards, marketing forecasts, and a Kubernetes platform that looked calm during rehearsal. When the first campaign went live, checkout traffic climbed faster than the team expected, payment callbacks slowed, and several web Pods began saturating CPU while the cluster still appeared to have unused memory. The application did not fail in one dramatic crash; it degraded in layers as slow Pods made clients retry, retries amplified load, new Pods waited for image pulls, and replacement nodes needed minutes to join.
 
-The incident review estimated tens of millions of dollars in lost orders and customer credits, but the technical lesson was more precise than "add more servers." The team had a Horizontal Pod Autoscaler with an aggressive maximum, but the Pods lacked realistic CPU requests, so utilization signals were misleading. The Cluster Autoscaler could add nodes, but only after Pods were already unschedulable, and the service had no spare warm capacity while new nodes booted. Their rollout policy also allowed too many replicas to be unavailable during maintenance, so a routine node drain collided with peak traffic.
+The incident review estimated significant lost orders and customer credits, but the technical lesson was more precise than "add more servers." The team had a Horizontal Pod Autoscaler with an aggressive maximum, but the Pods lacked realistic CPU requests, so utilization signals were misleading. The Cluster Autoscaler could add nodes, but only after Pods were already unschedulable, and the service had no spare warm capacity while new nodes booted. Their rollout policy also allowed too many replicas to be unavailable during maintenance, so a routine node drain collided with peak traffic.
 
 Scaling is the point where Kubernetes stops being a container launcher and becomes a control system. It observes signals, compares them with intent, and changes desired state while the scheduler, controllers, cloud provider, and application all react at different speeds. A strong operator does not merely "turn on autoscaling"; they decide which signal represents user pain, which layer should react, how quickly it should react, and what guardrails prevent the reaction from making the outage worse. That is the practical skill this module builds.
 
@@ -39,7 +39,7 @@ Vertical scaling changes the resource envelope of a Pod rather than the number o
 
 Cluster scaling sits below both workload strategies. If HPA asks for six more Pods but every node lacks the requested CPU or memory, the scheduler marks those Pods as pending and waits for capacity. Cluster Autoscaler notices that unschedulable condition and asks the cloud or infrastructure provider for more nodes. This means cluster scaling is reactive to scheduling pressure, not a magic source of instant capacity. Node boot, kubelet registration, image pull, CNI setup, and readiness probes all add latency before users feel relief.
 
-The diagram below preserves the three scaling dimensions from the original module. Read it from the user-facing layer downward: first decide whether more Pods would actually absorb load, then decide whether each Pod is right-sized, and finally decide whether the cluster has enough node capacity to honor those Pod requests. The arrows look simple, but the control loops operate on different clocks, which is why a reliable design often combines steady minimum replicas, realistic resource requests, and a cluster buffer.
+The diagram below shows the three scaling dimensions. Read it from the user-facing layer downward: first decide whether more Pods would actually absorb load, then decide whether each Pod is right-sized, and finally decide whether the cluster has enough node capacity to honor those Pod requests. The arrows look simple, but the control loops operate on different clocks, which is why a reliable design often combines steady minimum replicas, realistic resource requests, and a cluster buffer.
 
 ```mermaid
 graph TD
@@ -65,7 +65,7 @@ Pause and predict: if an API has three replicas at 90 percent CPU, no pending Po
 
 Manual scaling is not the end state for elastic production systems, but it is the baseline every operator should understand before delegating decisions to a controller. A Deployment stores desired replicas in `spec.replicas`, and the Deployment controller reconciles that desired count through ReplicaSets and Pods. When you run a scale command, you are not directly creating Pods; you are changing desired state and letting the normal controllers converge. That distinction matters because autoscalers work by changing the same field.
 
-The original module showed manual scaling through both command-based and edit-based paths. In practice, `scale` is useful during incident response, temporary migrations, and demonstrations because it is explicit and quick. Editing the object is useful when you need to inspect the current spec or make a persistent GitOps-aligned change through a manifest. The danger is forgetting that a manual change may be overwritten by GitOps, by a Deployment manifest reapplied later, or by an autoscaler that owns the replica count.
+Manual scaling works through both command-based and edit-based paths. In practice, `scale` is useful during incident response, temporary migrations, and demonstrations because it is explicit and quick. Editing the object is useful when you need to inspect the current spec or make a persistent GitOps-aligned change through a manifest. The danger is forgetting that a manual change may be overwritten by GitOps, by a Deployment manifest reapplied later, or by an autoscaler that owns the replica count.
 
 ```mermaid
 graph TD
@@ -101,7 +101,7 @@ The Horizontal Pod Autoscaler, or HPA, automates the decision to add or remove r
 
 For CPU utilization, HPA uses the relationship between actual CPU usage and the Pod's requested CPU. If a container requests `100m` and uses `80m`, it is at 80 percent utilization for that resource. This is why resource requests are not documentation; they are inputs to the control loop. A request that is too low makes normal behavior look overloaded, causing unnecessary scale-out. A request that is too high makes real pressure appear mild, delaying scale-out until users already feel latency.
 
-The preserved HPA diagram shows the basic control loop. Metrics Server or another metrics adapter provides current values, the HPA controller compares those values with the target, and the Deployment controller creates or removes replicas after HPA updates desired state. The calculation in the diagram is intentionally approximate because the real controller also applies tolerance, missing-metric handling, stabilization, and behavior policies. Still, the mental model is accurate enough for KCNA-level diagnosis and for reading production events.
+The HPA diagram shows the basic control loop. Metrics Server or another metrics adapter provides current values, the HPA controller compares those values with the target, and the Deployment controller creates or removes replicas after HPA updates desired state. The calculation in the diagram is intentionally approximate because the real controller also applies tolerance, missing-metric handling, stabilization, and behavior policies. Still, the mental model is accurate enough for KCNA-level diagnosis and for reading production events.
 
 ```mermaid
 flowchart TD
@@ -128,7 +128,7 @@ flowchart TD
     end
 ```
 
-An HPA object defines three kinds of intent: what to scale, how far it may scale, and what signals should drive the decision. The `scaleTargetRef` names the workload, `minReplicas` preserves a floor for availability and warm capacity, and `maxReplicas` protects budgets and downstream dependencies. The metric block below keeps the original module's essential configuration, using the stable `autoscaling/v2` API that supports resource, Pods, object, and external metrics.
+An HPA object defines three kinds of intent: what to scale, how far it may scale, and what signals should drive the decision. The `scaleTargetRef` names the workload, `minReplicas` preserves a floor for availability and warm capacity, and `maxReplicas` protects budgets and downstream dependencies. The metric block below uses the stable `autoscaling/v2` API that supports resource, Pods, object, and external metrics.
 
 ```yaml
 # Key HPA settings to understand:
@@ -152,7 +152,7 @@ spec:
 
 In this example, the HPA keeps `my-app` between two and ten replicas while trying to keep average CPU utilization near 50 percent. If the application has four replicas at 90 percent CPU, the proportional calculation points toward roughly eight replicas. If the application has four replicas at 25 percent CPU, the calculation points toward fewer replicas, but scale-down stabilization slows the reduction so a brief lull does not remove capacity too quickly. That delay is a feature, not a bug.
 
-HPA can scale on several metric types, and choosing the metric is an engineering decision. CPU is convenient because it is common and cheap to collect, but it is not always connected to user pain. Memory utilization is tricky because memory pressure often does not drop immediately when replicas increase. Queue depth, requests per second per Pod, and active connection count can be better signals when they describe work waiting to be processed. The table below preserves the original metric categories while framing them as choices.
+HPA can scale on several metric types, and choosing the metric is an engineering decision. CPU is convenient because it is common and cheap to collect, but it is not always connected to user pain. Memory utilization is tricky because memory pressure often does not drop immediately when replicas increase. Queue depth, requests per second per Pod, and active connection count can be better signals when they describe work waiting to be processed. The table below lists the metric categories while framing them as choices.
 
 | Type | Description | Example |
 |------|-------------|---------|
@@ -195,7 +195,9 @@ spec:
         periodSeconds: 60
 ```
 
-A practical war story: one platform team configured HPA for an internal API using CPU because that was the only metric available on launch day. During a partner import, latency spiked but CPU stayed modest because Pods were mostly waiting on an external service. HPA did nothing, and the team initially blamed Kubernetes. The fix was not more autoscaler tuning; it was adding a queue in front of the importer and scaling workers on queue depth, which represented work waiting rather than CPU consumed while waiting.
+`scaleUp` uses controller defaults when omitted; only `scaleDown` is tuned here for brevity.
+
+**Hypothetical scenario:** one platform team configured HPA for an internal API using CPU because that was the only metric available on launch day. During a partner import, latency spiked but CPU stayed modest because Pods were mostly waiting on an external service. HPA did nothing, and the team initially blamed Kubernetes. The fix was not more autoscaler tuning; it was adding a queue in front of the importer and scaling workers on queue depth, which represented work waiting rather than CPU consumed while waiting.
 
 When HPA behaves unexpectedly, resist the urge to change the target percentage first. Read the HPA description, confirm whether metrics are present, compare current utilization with target utilization, and inspect recent events for messages about missing requests or failed metric retrieval. Then compare desired replicas with available replicas on the target Deployment. This sequence separates signal collection, autoscaler calculation, controller reconciliation, scheduler placement, and Pod readiness. Changing a threshold before locating the failed handoff often hides the real problem for the next incident.
 
@@ -207,7 +209,7 @@ The Vertical Pod Autoscaler, or VPA, answers a different question from HPA. Inst
 
 VPA is an add-on rather than a built-in core controller, and it is usually discussed through three components. The Recommender observes historical usage and proposes CPU and memory values. The Admission Controller can apply recommendations when new Pods are created. The Updater can evict existing Pods so replacements start with new resource requests. That final behavior is powerful but disruptive, so many production teams run VPA in recommendation mode first and review its advice before enabling automatic updates.
 
-The preserved VPA diagram captures the basic flow. A Pod starts with declared requests, the recommender observes real usage, and VPA produces a more suitable request range. If automatic update is enabled, the old Pod may be recreated, which means readiness probes, disruption budgets, rollout settings, and state management all become part of the scaling design. VPA is less like turning a dial on a running process and more like teaching Kubernetes what size envelope future Pods should request.
+The VPA diagram captures the basic flow. A Pod starts with declared requests, the recommender observes real usage, and VPA produces a more suitable request range. If automatic update is enabled, the old Pod may be recreated, which means readiness probes, disruption budgets, rollout settings, and state management all become part of the scaling design. VPA is less like turning a dial on a running process and more like teaching Kubernetes what size envelope future Pods should request.
 
 ```mermaid
 flowchart TD
@@ -322,7 +324,7 @@ A useful comparison is restaurant operations. HPA adds more cashiers when the li
 
 Effective scaling begins with resource requests because requests connect scheduling, HPA utilization, and node capacity. A Deployment without CPU requests may still run, but HPA cannot calculate CPU utilization in the expected way, the scheduler cannot reserve realistic capacity, and Cluster Autoscaler receives weak signals. A Deployment with inflated requests may look safe to the application team but expensive to the platform. Good requests are measured, reviewed, and adjusted as real traffic changes.
 
-The original best-practices diagram correctly links requests, replica bounds, disruption budgets, scaling speed, and HPA/VPA interactions. The important refinement is that these are not independent checkboxes. They form a control system. `minReplicas` protects warm capacity, `maxReplicas` bounds blast radius, resource requests make placement truthful, PDBs protect voluntary disruptions, and scaling behavior settings dampen thrashing. When one piece is missing, the others often become harder to reason about during an incident.
+The best-practices diagram below correctly links requests, replica bounds, disruption budgets, scaling speed, and HPA/VPA interactions. The important refinement is that these are not independent checkboxes. They form a control system. `minReplicas` protects warm capacity, `maxReplicas` bounds blast radius, resource requests make placement truthful, PDBs protect voluntary disruptions, and scaling behavior settings dampen thrashing. When one piece is missing, the others often become harder to reason about during an incident.
 
 ```mermaid
 graph TD
@@ -397,7 +399,7 @@ Anti-patterns usually begin with a reasonable shortcut that outlives its context
 | Autoscaling without requests | HPA utilization and scheduler placement become unreliable. | Define measured CPU and memory requests for every container. |
 | HPA and VPA both managing CPU on the same workload | VPA changes requests while HPA interprets utilization from those requests. | Use VPA in recommendation mode or scale HPA on a non-resource metric. |
 | Treating Cluster Autoscaler as instant capacity | Pods wait while nodes boot, join, and pull images. | Keep warm capacity for critical services and optimize startup paths. |
-| Unlimited replica maximums | Runaway scaling can overload dependencies and budgets. | Set maximums from downstream capacity and alert when the cap is reached. |
+| No replica maximum | Runaway scaling can overload dependencies and budgets. | Set maximums from downstream capacity and alert when the cap is reached. |
 
 ## Decision Framework
 
@@ -499,7 +501,7 @@ Large images or slow image registries are common causes, and `k describe pod` ev
 
 This exercise builds a small Nginx workload, attaches an HPA, generates traffic, and asks you to observe the difference between desired replicas and Ready capacity. It is intentionally simple because the learning goal is the control loop, not Nginx performance engineering. You can use kind, minikube, or a disposable cloud cluster, but make sure you have permission to install Metrics Server or that your environment already provides metrics.
 
-The preserved lab manifest deploys one Nginx Pod with CPU and memory requests so HPA has a utilization denominator. The Service exposes the Pod inside the cluster and can be adapted to local cluster behavior. In a production module, `nginx:latest` would be too loose for change control, but it is acceptable here as a disposable practice image. If your cluster blocks LoadBalancer Services, change the type to `ClusterIP` and keep the load generator inside the namespace.
+The lab manifest deploys one Nginx Pod with CPU and memory requests so HPA has a utilization denominator. The Service exposes the Pod inside the cluster and can be adapted to local cluster behavior. In a production module, `nginx:latest` would be too loose for change control, but it is acceptable here as a disposable practice image. If your cluster blocks LoadBalancer Services, change the type to `ClusterIP` and keep the load generator inside the namespace.
 
 ```yaml
 # deployment.yaml
@@ -547,7 +549,7 @@ spec:
   type: LoadBalancer # Or NodePort for local clusters
 ```
 
-Apply the manifest and confirm that the Deployment reaches one Ready replica before creating the HPA. If your cluster does not already have Metrics Server, install it from the upstream components manifest and wait for the APIService to become available. The original module used the direct upstream URL, preserved here for continuity: `https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml`.
+Apply the manifest and confirm that the Deployment reaches one Ready replica before creating the HPA. If your cluster does not already have Metrics Server, install it from the upstream components manifest and wait for the APIService to become available. Install it from the upstream components manifest: `https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml`.
 
 ```bash
 k apply -f deployment.yaml
@@ -556,7 +558,7 @@ k get deploy nginx-deployment
 k get apiservice v1beta1.metrics.k8s.io
 ```
 
-Now create the HPA. The preserved one-line autoscale command is shown first, followed by the alias form you should use for practice. The command targets 50 percent CPU utilization with a floor of one replica and a ceiling of five replicas, which keeps the exercise small enough for local clusters while still showing the control loop.
+Now create the HPA. The one-line autoscale command is shown first, followed by the alias form you should use for practice. The command targets 50 percent CPU utilization with a floor of one replica and a ceiling of five replicas, which keeps the exercise small enough for local clusters while still showing the control loop.
 
 ```bash
 kubectl autoscale deployment nginx-deployment --cpu-percent=50 --min=1 --max=5
@@ -567,7 +569,7 @@ k autoscale deployment nginx-deployment --cpu-percent=50 --min=1 --max=5
 k get hpa
 ```
 
-Generate load from inside the cluster so network path differences do not distract from the HPA behavior. The original module used a BusyBox shell loop, and that remains a useful lightweight approach. In another terminal, watch the HPA and Pods so you can see metrics, desired replicas, and Ready state change over time. Stop the load generator after a few minutes, then observe the slower scale-down behavior.
+Generate load from inside the cluster so network path differences do not distract from the HPA behavior. A BusyBox shell loop is a useful lightweight approach. In another terminal, watch the HPA and Pods so you can see metrics, desired replicas, and Ready state change over time. Stop the load generator after a few minutes, then observe the slower scale-down behavior.
 
 ```bash
 kubectl run -it --rm load-generator --image=busybox -- /bin/sh
@@ -635,6 +637,7 @@ k delete deployment nginx-deployment
 - [Kubernetes: Assigning Pods to Nodes](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
 - [Kubernetes: Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)
 - [Metrics Server Components Manifest](https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml)
+- [Considerations for large clusters](https://kubernetes.io/docs/setup/best-practices/cluster-large/)
 
 ## Next Module
 
