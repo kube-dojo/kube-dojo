@@ -23,7 +23,7 @@ After completing this module, you will be able to evaluate release strategies as
 
 ## Why This Module Matters
 
-In June 2019, a major UK bank pushed a database migration to production using a single big-bang deployment. Every customer-facing service, including mobile banking, online transfers, and card payments, went down simultaneously at 14:23 on a Friday afternoon. The rollback took 9 hours, 1.9 million customers could not access their accounts over an entire weekend, and the bank was fined 48.65 million GBP by regulators. Post-incident analysis showed that the deepest failure was not a missing unit test or a malformed manifest; it was a release strategy that sent a risky change to everyone at once with no incremental validation path and no fast way to redirect traffic.
+**Hypothetical scenario:** A major bank pushes a database migration to production using a single big-bang deployment. Every customer-facing service, including mobile banking, online transfers, and card payments, goes down simultaneously on a Friday afternoon. The rollback takes many hours, customers cannot access their accounts over an entire weekend, and regulators later impose a substantial fine. Post-incident analysis shows that the deepest failure is not a missing unit test or a malformed manifest; it is a release strategy that sends a risky change to everyone at once with no incremental validation path and no fast way to redirect traffic.
 
 The fix was not simply "write better code." The organization changed how it exposed production to new versions. Later migrations used progressive release controls, better readiness checks, and rollback decisions tied to observable symptoms instead of conference-room optimism. That shift matters because Kubernetes can reconcile Deployments all day long, yet it is unable to decide whether your new payment path is safe for every customer. The cluster can replace Pods, but the release strategy determines how much damage one bad change can do before a human or automated controller stops it.
 
@@ -329,7 +329,7 @@ Canary rollback must be designed before promotion begins. If the canary is purel
 
 Small systems can still use canary thinking even without exact weighted routing. A team might deploy one canary Pod behind a separate internal Service, run synthetic checks against it, then manually shift a small customer group through an Ingress rule. Another team might use a feature flag to expose a code path to selected tenants while the underlying Deployment rolls normally. These are not identical to a service-mesh canary, but they preserve the core idea: expose a risky change to a limited, observable audience before it becomes the default behavior.
 
-War story: a media platform once canaried a new transcoder that passed error-rate checks because the service returned HTTP 200 for every job. The actual problem was degraded video quality for a subset of older codecs, and the first alarm came from support tickets rather than automated analysis. The team fixed the release process by adding domain-specific quality metrics to the canary gate. The strategy had limited blast radius, but the metrics had been too generic to catch the real failure mode.
+**Hypothetical scenario:** A media platform canaries a new transcoder that passes error-rate checks because the service returns HTTP 200 for every job. The actual problem is degraded video quality for a subset of older codecs, and the first alarm comes from support tickets rather than automated analysis. The team fixes the release process by adding domain-specific quality metrics to the canary gate. The strategy has limited blast radius, but the metrics were too generic to catch the real failure mode.
 
 Stop and think: a canary deployment sends 5 percent of traffic to the new version, but 5 percent of 10 million daily users is 500,000 people. Is 5 percent always safe? Consider how many users are exposed, whether the failure is reversible, whether the canary touches shared state, how fast metrics arrive, and whether you can isolate the canary to lower-risk cohorts before broad exposure.
 
@@ -587,3 +587,19 @@ k delete namespace release-lab
 ## Next Module
 
 [Back to KCNA Overview](/k8s/kcna/) - Revisit the KCNA map and connect release strategies to the broader application delivery domain.
+
+## KCNA Curriculum Complete!
+
+Congratulations. You have completed the full KCNA curriculum — from Kubernetes fundamentals through container orchestration, cloud native architecture, observability, and application delivery. This module closes Part 4 and the entire KCNA learning path.
+
+| Exam domain | Official KCNA exam weight |
+|-------------|--------------------------|
+| Kubernetes Fundamentals | 46% |
+| Container Orchestration | 22% |
+| Cloud Native Architecture | 16% |
+| Cloud Native Observability | 8% |
+| Cloud Native Application Delivery | 8% |
+
+See [Module 0.1: KCNA Overview](../../part0-introduction/module-0.1-kcna-overview/) for the full domain breakdown and study strategy.
+
+Use the release-strategy decision framework from this module as a final exam review tool. If you can explain when to choose rolling update, blue/green, or canary, and if you can describe the promotion and rollback gates that keep a failed change from reaching every user, you are ready for KCNA-level application delivery questions.
