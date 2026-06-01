@@ -6,8 +6,8 @@ sidebar:
 lab:
   id: cks-5.1-image-security
   url: https://killercoda.com/kubedojo/scenario/cks-5.1-image-security
-  duration: "35 min"
-  difficulty: advanced
+  duration: "40-45 min"
+  difficulty: intermediate
   environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Core CKS skill
@@ -118,6 +118,8 @@ EXPOSE 8080
 ENTRYPOINT ["/server"]
 ```
 
+Pause and predict: on a CKS Dockerfile task, which `FROM` line would you change first, and what would you replace it with? Write the base image and final-stage runtime you expect before you read the multi-stage section, because exam fixes usually start at inheritance rather than at application code.
+
 ## Multi-Stage Builds
 
 Multi-stage builds separate "what is needed to create the program" from "what is needed to run the program." That distinction is essential for security because build stages often need compilers, package managers, test tools, credential helpers, and source trees. Runtime stages usually need far less: a binary, a runtime interpreter, CA certificates, application assets, and configuration defaults. When the final stage copies only specific artifacts from the builder, the compiler and package cache do not become part of the production filesystem.
@@ -165,7 +167,7 @@ In Kubernetes, image pull credentials are usually stored as Secrets of type `kub
 
 ServiceAccount-level `imagePullSecrets` are useful when many Pods in a namespace use the same registry. Instead of repeating the secret on every Pod template, attach it to a dedicated ServiceAccount and make workloads use that account. Avoid placing powerful pull credentials on the default ServiceAccount across every namespace unless there is a clear platform policy and audit trail. Pull access can expose proprietary code, embedded configuration, and old vulnerable images. Treat it as a supply-chain permission, not just a convenience for avoiding anonymous rate limits.
 
-Registry credentials also interact with node caches. Historically, operators sometimes assumed that if an image was already cached on a node, a Pod could start without proving it still had pull rights. Current Kubernetes documentation describes image pull credential verification behavior controlled by kubelet configuration when the related feature is enabled. The operational lesson is broader than one feature gate: do not rely on node caches as an authorization boundary. Use namespace-scoped pull secrets, short-lived credentials where possible, registry audit logs, and admission policies that restrict allowed registry hostnames.
+Registry credentials also interact with node caches. Historically, operators sometimes assumed that if an image was already cached on a node, a Pod could start without proving it still had pull rights. In Kubernetes 1.35, `KubeletEnsureSecretPulledImages` is beta and enabled by default, so the kubelet can verify that pull credentials are still valid before using a cached image on the node. The operational lesson is still broader than that one control: do not rely on node caches as an authorization boundary. Use namespace-scoped pull secrets, short-lived credentials where possible, registry audit logs, and admission policies that restrict allowed registry hostnames.
 
 Registry topology affects availability as well as security. Many production clusters use a private registry, pull-through cache, or regional mirror so node scale-ups do not depend on anonymous public pulls. That reduces exposure to Docker Hub rate limits and public registry outages, but it creates a responsibility to mirror the exact artifact you reviewed. A mirror that refreshes tags automatically can reintroduce mutability unless promotion records the digest and the mirror preserves it. A mirror that caches vulnerable images forever can hide upstream deletion or deprecation events. Treat the mirror as part of the supply chain: restrict who can populate it, log what digest was mirrored, and periodically garbage-collect images that no longer have a supported release owner.
 
@@ -187,13 +189,15 @@ kubectl -n image-lab patch serviceaccount app-runner \
 
 ## Image Pull Policies
 
-`imagePullPolicy` controls when the kubelet checks the registry and when it uses a cached local image. Kubernetes defaults are easy to miss: if you omit the field and use `:latest` or no tag, the policy becomes `Always`; if you omit the field and use a non-`latest` tag, the policy becomes `IfNotPresent`. The policy is set when the object is created and does not automatically change later if you edit the image tag. That detail matters in exam troubleshooting because changing `nginx:1.25` to `nginx:latest` does not guarantee the pull policy becomes `Always` unless you set it explicitly.
+Before reading on: what pull policy does `nginx` with no tag get by default, and why is that a supply-chain risk when the registry tag can move? Write your answer, then compare it to the defaults below.
+
+`imagePullPolicy` controls when the kubelet checks the registry and when it uses a cached local image. Kubernetes defaults are easy to miss: if you omit the field and use `:latest` or no tag, the policy becomes `Always`; if you omit the field and use a non-`latest` tag, the policy becomes `IfNotPresent`; if you omit the field and reference the image by digest only (for example `nginx@sha256:...` with no tag), the policy also becomes `IfNotPresent`. The policy is set when the object is created and does not automatically change later if you edit the image tag. That detail matters in exam troubleshooting because changing `nginx:1.25` to `nginx:latest` does not guarantee the pull policy becomes `Always` unless you set it explicitly.
 
 `Always` does not mean "download every layer every time." Kubernetes documentation states that the kubelet resolves the name to a digest each time it launches a container, then uses the cached image if the exact digest is already present. This gives fresh tag resolution while still benefiting from layer and digest caching. The security benefit is that mutable tags are rechecked; the reliability cost is that container start now depends on registry reachability and credentials. During a registry outage or network partition, workloads with `Always` and no cached resolved digest may fail to start even if a previous image exists locally.
 
 `IfNotPresent` is useful when you deploy immutable references or pre-pulled images and want faster startup with less registry dependency. It is dangerous when paired with mutable tags because different nodes may run different cached content for the same tag. One node may already have yesterday's `app:prod`, another node may pull today's `app:prod`, and both Pods appear to use the same spec. Digest pinning makes `IfNotPresent` much safer because the content identity is explicit. If the digest is absent, kubelet pulls it; if it is present, kubelet uses the same content.
 
-`Never` belongs to special cases: air-gapped clusters, preloaded lab images, or environments where image distribution is handled outside normal registry pulls. It fails fast when the image is missing from the node, which can be useful during exams when a task states that images are preloaded. It is not a general hardening setting. If you set `Never` on a normal cluster without a node image distribution process, Pods will fail with image pull errors and no security control has improved.
+`Never` belongs to special cases: air-gapped clusters, preloaded lab images, or environments where image distribution is handled outside normal registry pulls. With `Never`, the kubelet does not contact a registry at all. If the image is not already present on the node, the Pod fails with `ErrImageNeverPull` / `ImageNeverPull`, not `ImagePullBackOff`. That failure mode can be useful during exams when a task states that images are preloaded. It is not a general hardening setting. If you set `Never` on a normal cluster without a node image distribution process, Pods fail because the image is missing locally, and no security control has improved.
 
 For production, combine explicit pull policies with immutable references. Use digests for release manifests, set `IfNotPresent` when the digest itself is the freshness boundary, and use `Always` where a mutable tag is unavoidable during development or a controlled automation path. For CKS, be ready to explain the defaults, inspect the effective Pod spec, and fix the mismatch that causes either stale content or unnecessary registry dependency.
 
@@ -324,10 +328,15 @@ nodes:
 ```bash
 kind create cluster --name image-lab --config kind-with-registry.yaml
 
+docker network connect kind kind-registry
+
 for node in $(kind get nodes --name image-lab); do
   docker exec "$node" mkdir -p /etc/containerd/certs.d/localhost:5001
   cat <<EOT | docker exec -i "$node" tee /etc/containerd/certs.d/localhost:5001/hosts.toml
-[host."http://registry:5000"]
+server = "http://localhost:5001"
+
+[host."http://kind-registry:5000"]
+  capabilities = ["pull", "resolve"]
 EOT
 done
 ```
@@ -344,6 +353,12 @@ done
 - [ ] Rebuild a visibly different image and push it to the same `v1` tag, but do not change the Deployment digest; restart the Pod and verify it still runs the originally pinned digest.
 - [ ] Patch the Deployment to the new digest, wait for rollout, and confirm that the digest changes only after the manifest changes.
 - [ ] Clean up with `kubectl delete namespace image-lab`, delete the kind cluster, and remove the local registry container if it was created only for this lab.
+
+## Learner check
+
+> A digest proves content identity, but it does not prove who built the image; production promotion should pair digest pinning with signature or attestation checks from the approved pipeline.
+
+Before you move on, explain why `imagePullPolicy: Never` is not a hardening control and which error you expect when the image is missing from the node. A solid answer names `ErrImageNeverPull` / `ImageNeverPull`, not `ImagePullBackOff`.
 
 ## Sources
 
