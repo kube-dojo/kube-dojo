@@ -15,11 +15,11 @@ After completing this module, you will be able to:
 1. **Compare** containers and virtual machines by evaluating kernel sharing, isolation boundaries, startup cost, and operational tradeoffs.
 2. **Diagnose** namespace and cgroup behavior when a container can see the wrong process, network, filesystem, or resource limit.
 3. **Evaluate** OCI images, registries, tags, layers, and digests to choose reproducible packaging practices for Kubernetes workloads.
-4. **Implement** a container runtime inspection workflow that connects Docker, containerd, CRI-O, CRI, and Kubernetes pod behavior.
+4. **Describe** a container runtime inspection workflow that connects Docker, containerd, CRI-O, CRI, and Kubernetes pod behavior.
 
 ## Why This Module Matters
 
-In 2023, a payments platform shipped a small reporting service as a container because the team wanted fast deployment and consistent dependencies across development, staging, and production. The service looked harmless during testing, but a memory leak appeared during a month-end traffic spike, and the container kept allocating memory until the node began evicting unrelated workloads. The post-incident estimate put direct customer compensation, overtime, and delayed settlement work at more than $250,000, yet the root cause was not an exotic Kubernetes failure; it was a basic misunderstanding of what container isolation does and does not provide.
+**Hypothetical scenario:** A payments platform ships a small reporting service as a container because the team wants fast deployment and consistent dependencies across development, staging, and production. The service looks harmless during testing, but a memory leak appears during a month-end traffic spike, and the container keeps allocating memory until the node begins evicting unrelated workloads. The post-incident costs include customer compensation, overtime, and delayed settlement work, yet the root cause is not an exotic Kubernetes failure; it is a basic misunderstanding of what container isolation does and does not provide.
 
 That kind of outage feels unfair at first because containers are often described as isolated packages, and the word isolated sounds stronger than it really is. A container can have its own process list, hostname, mount view, and network interfaces while still sharing the host kernel and competing for the same finite CPU and memory. Kubernetes can schedule pods, restart containers, and pull images, but it cannot make poor assumptions disappear; if engineers do not know where the isolation boundary sits, they will debug the wrong layer when pressure arrives.
 
@@ -133,7 +133,7 @@ The table below preserves the common KCNA comparison, but each row should be rea
 
 The security implication is the part beginners tend to underestimate. A VM escape usually has to cross a hypervisor boundary, while a container escape often means the attacker has found a way to abuse the shared kernel, a mounted host path, a privileged capability, or a misconfigured runtime. That does not make containers unsafe by default, but it does mean production clusters need defense in depth: non-root users, minimal capabilities, read-only filesystems where possible, trusted images, and workload isolation policies.
 
-A platform team once moved internal batch jobs from VMs to containers and celebrated the first capacity report because the same hosts could run many more jobs. Two weeks later, the team discovered that one job expected to write to `/var/log/app` forever, and every restarted container lost the local file unless a volume was mounted. The VM-era assumption had been that a server was a durable home; the container-era assumption needed to be that the process could be replaced at any moment.
+**Hypothetical scenario:** A platform team moves internal batch jobs from VMs to containers and celebrates the first capacity report because the same hosts can run many more jobs. Two weeks later, the team discovers that one job expected to write to `/var/log/app` forever, and every restarted container loses the local file unless a volume is mounted. The VM-era assumption had been that a server was a durable home; the container-era assumption needed to be that the process could be replaced at any moment.
 
 Before running anything in Kubernetes, ask which boundary you actually need. If two teams own trusted services for the same product, containers on shared nodes may be a good fit. If unrelated customers run arbitrary code, the design may require separate nodes, sandboxed runtimes, or containers inside lightweight VMs. The KCNA-level answer is not "containers are better" or "VMs are better"; the answer is that each technology optimizes a different boundary.
 
@@ -314,6 +314,7 @@ spec:
 ```
 
 ```bash
+alias k=kubectl
 k apply -f pod.yaml
 k get pods container-fundamentals-demo
 k describe pod container-fundamentals-demo
@@ -398,6 +399,7 @@ The same reasoning applies when inspecting pods in Kubernetes. A pod stuck in `I
 Here is a compact runtime inspection sequence you can use on a test cluster when the pod from the previous section is present. The goal is not to memorize commands; it is to connect the Kubernetes status you see through `k` to the runtime activity underneath kubelet.
 
 ```bash
+alias k=kubectl
 k get pod container-fundamentals-demo -o wide
 k describe pod container-fundamentals-demo
 k get pod container-fundamentals-demo -o jsonpath='{.status.containerStatuses[0].imageID}{"\n"}'
@@ -612,6 +614,7 @@ The SHA256 entries represent content-addressed layers that the runtime can cache
 If you have a disposable Kubernetes 1.35 test cluster, create a pod manifest from the earlier YAML example, apply it, and inspect the pod status with the short alias.
 
 ```bash
+alias k=kubectl
 k apply -f pod.yaml
 k get pods
 k describe pod container-fundamentals-demo
