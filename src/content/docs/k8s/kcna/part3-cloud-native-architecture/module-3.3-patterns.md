@@ -20,7 +20,7 @@ After completing this module, you will be able to make architecture choices that
 
 ## Why This Module Matters
 
-The control-loop design pattern in this module is illustrated by the Knight Capital 2012 story in *Infrastructure as Code*, where uneven rollout state and weak reconciliation turned a mixed fleet into a systemic failure. <!-- incident-xref: knight-capital-2012 -->
+The control-loop design pattern in this module is illustrated by the Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> story in [the modern DevOps track's infrastructure-as-code module](../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/), where uneven rollout state and weak reconciliation turned a mixed fleet into a systemic failure.
 
 Cloud native architecture is the discipline of deciding which control loops should exist, where they should run, and what they should be allowed to change. A small team can sometimes survive with a few Deployments, Services, and hand-written runbooks, because everyone knows the traffic path and the blast radius is visible. As the system grows, the fragile parts move away from individual containers and into the spaces between them: service-to-service calls, certificate rotation, traffic splitting, deployment drift, queue backlogs, resource pressure, tenant boundaries, and stateful failover. These problems are not solved by memorizing more commands; they are solved by choosing patterns that make the desired behavior explicit and continuously enforced.
 
@@ -469,10 +469,11 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.24
+        image: nginx:1.27
 ```
 
 ```bash
+alias k=kubectl
 k apply -f nginx-deploy.yaml
 ```
 

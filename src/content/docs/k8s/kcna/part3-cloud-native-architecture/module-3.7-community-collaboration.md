@@ -57,7 +57,7 @@ CNCF GOVERNANCE HIERARCHY
   ┌─────────────────────▼────────────────────────────────────┐
   │        TECHNICAL OVERSIGHT COMMITTEE (TOC)               │
   │     Technical vision, project acceptance, standards      │
-  │           (11 elected community members)                 │
+  │           (11 voting TOC members)                 │
   └───────┬─────────────┬────────────────┬───────────────────┘
           │             │                │
    ┌──────▼──────┐ ┌───▼─────────┐ ┌────▼────────────┐
@@ -74,7 +74,7 @@ Technical Advisory Groups, or TAGs, provide cross-project guidance in broad doma
 
 Working Groups are more focused and usually more temporary. They form around a problem that cuts across existing ownership boundaries, such as policy, conformance, or multi-tenancy. The important distinction is that a Working Group can gather people from multiple projects or SIGs without becoming the permanent owner of all resulting code. Once the problem is understood and ownership can move to the right maintainers, the Working Group may wind down or change shape.
 
-Kubernetes adds another layer because it predates the CNCF. Google released Kubernetes as open source in 2014 and donated it to the newly formed CNCF in 2015, but the Kubernetes project has its own Steering Committee, SIGs, subprojects, OWNERS files, release team, and enhancement process. When someone says "the CNCF decided Kubernetes should do this," slow down and ask which body actually made the decision. Most Kubernetes technical direction comes from Kubernetes governance inside the CNCF umbrella, not from a foundation executive.
+Kubernetes adds another layer because it predates the CNCF. Google open-sourced Kubernetes at DockerCon in June 2014 and donated it to the newly formed CNCF in 2015 (formally accepted as its first hosted project in March 2016), but the Kubernetes project has its own Steering Committee, SIGs, subprojects, OWNERS files, release team, and enhancement process. When someone says "the CNCF decided Kubernetes should do this," slow down and ask which body actually made the decision. Most Kubernetes technical direction comes from Kubernetes governance inside the CNCF umbrella, not from a foundation executive.
 
 This distinction changes how you ask for help. If your question is about whether a project should move from Incubating to Graduated, the CNCF TOC and project maturity process are relevant. If your question is about a Kubernetes API behavior in Services, the right path probably starts with SIG Network, the relevant repository, and a Kubernetes Enhancement Proposal if the change is large enough. Correct routing is not etiquette theater; it keeps architectural questions in front of the people who own the technical contract.
 
@@ -158,11 +158,11 @@ The CNCF Landscape can be overwhelming because it maps far more than the set of 
 
 The original maturity table is preserved here because it is the core KCNA comparison:
 
-| Level | What It Means | Requirements | Examples |
+| Level | What It Means | Requirements | Examples (maturity as of mid-2026; levels change — check cncf.io/projects) |
 |-------|--------------|--------------|----------|
-| **Sandbox** | Early stage, experimental | TOC sponsor, clear scope | Backstage (early), OpenKruise |
-| **Incubating** | Growing adoption, maturing governance | Healthy contributor base, used in production | Kyverno, Cilium (before graduation) |
-| **Graduated** | Production-ready, proven governance | Independent security audit, diverse maintainers | Kubernetes, Prometheus, Envoy, Argo |
+| **Sandbox** | Early stage, experimental | TOC sponsor, clear scope | WasmEdge, SpinKube |
+| **Incubating** | Growing adoption, maturing governance | Healthy contributor base, used in production | Backstage, OpenKruise |
+| **Graduated** | Production-ready, proven governance | Independent security audit, diverse maintainers | Kubernetes, Prometheus, Envoy, Cilium, Kyverno |
 
 Sandbox is the entry point for early projects that need a neutral home and room to collaborate. A Sandbox project may be promising, but the stage does not prove production readiness. It tells you the project has a defined scope and a path into the foundation. For a critical dependency, that is only the beginning of your evaluation, not the end.
 
@@ -261,9 +261,9 @@ For tool adoption, invert the flow. Start with the workload's criticality, then 
 
 ## Did You Know?
 
-1. **Kubernetes has over 3,200 individual contributors** from more than 80 countries. No single company contributes more than 25% of the code, by design.
+1. **Kubernetes is one of the highest-velocity open-source projects ever**, with tens of thousands of contributors from dozens of countries; its governance (Steering Committee seat caps, vendor-neutral SIGs) is explicitly designed to prevent any single company from dominating ([10 Years of Kubernetes](https://kubernetes.io/blog/2024/06/06/10-years-of-kubernetes/)).
 
-2. **The first Kubernetes commit was on June 6, 2014.** It was open-sourced by Google just one year later and donated to the newly formed CNCF in 2015, one of the fastest paths from internal tool to community-governed project in infrastructure history.
+2. **The first Kubernetes commit was on June 6, 2014.** Google open-sourced the project at DockerCon that same month, and the CNCF formally accepted Kubernetes as its first hosted project in March 2016 — one of the fastest paths from internal tool to community-governed infrastructure in history.
 
 3. **KEP-4222 introduced CBOR serialization work through the public enhancement process.** The long review path exposed compatibility and client behavior concerns that would have been much harder to fix after a stable API promise.
 
@@ -299,7 +299,7 @@ The PR will probably be paused or redirected because a user-facing Kubernetes AP
 
 <details><summary>Question 2: Your company is evaluating two CNCF projects for service mesh. Project A is Graduated and Project B is Sandbox but has more features. Your manager asks which to choose for a production deployment handling financial transactions. What factors from the CNCF maturity model should inform this decision?</summary>
 
-The Graduated project has stronger maturity evidence, including governance, production adoption, maintainer diversity, and an independent security audit requirement. The Sandbox project may still be valuable, but its maturity level signals higher uncertainty and a greater need for internal validation. For financial transactions, reliability, security response, and long-term maintainability matter more than feature count. A reasonable plan is to evaluate the Sandbox project in a non-critical environment while favoring the Graduated option for the production control path.
+The Graduated project has stronger maturity evidence, including governance, production adoption, maintainer diversity, and an independent security audit requirement. The Sandbox project may still be valuable, but its maturity level signals higher uncertainty and a greater need for internal validation. For financial transactions, reliability, security response, and long-term maintainability matter more than feature count. A reasonable plan is to evaluate the Sandbox project in a non-critical environment while favoring the Graduated option for the production control path. *(This scenario is illustrative — no CNCF Sandbox service mesh exists as of mid-2026.)*
 </details>
 
 <details><summary>Question 3: A contributor has been actively fixing bugs in SIG Network for six months. They want to become a Reviewer so their approvals carry more weight. Who grants this status, and what are they evaluating?</summary>

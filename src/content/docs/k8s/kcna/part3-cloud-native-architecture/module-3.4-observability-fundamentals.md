@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At 2:13 a.m. during a regional retail promotion, a checkout platform began returning slow responses from only a fraction of requests. The uptime probe still said the site was available, the load balancer looked healthy, and the database dashboard showed no obvious outage, yet support tickets were arriving faster than the on-call engineer could read them. The business impact was not abstract: several minutes of degraded checkout during a high-demand event can mean abandoned carts, expensive incident coordination, and damaged trust that takes longer to repair than the actual bug.
+**Hypothetical scenario:** at 2:13 a.m. during a regional retail promotion, a checkout platform begins returning slow responses from only a fraction of requests. The uptime probe still said the site was available, the load balancer looked healthy, and the database dashboard showed no obvious outage, yet support tickets were arriving faster than the on-call engineer could read them. The business impact was not abstract: several minutes of degraded checkout during a high-demand event can mean abandoned carts, expensive incident coordination, and damaged trust that takes longer to repair than the actual bug.
 
 The team that recovered quickly was not the team with the prettiest dashboard. It was the team that could connect user-facing symptoms to service-level metrics, follow one slow request across several services, and land on the log line that explained the bottleneck without guessing. Observability matters because cloud native systems fail in combinations: a safe deployment, a warm cache, a retry policy, and a small connection pool can interact in a way no single alert rule predicted.
 
@@ -163,7 +163,7 @@ For resources, track:
 
 Kubernetes metrics usually arrive from more than one layer. The resource metrics pipeline can show recent CPU and memory usage for Pods and nodes, kube-state style metrics can describe object state such as desired replicas or Pod readiness, and application metrics should expose service behavior such as request rate, errors, duration, queue depth, and dependency failures. Treat those layers as complementary: platform metrics explain scheduling and runtime pressure, while application metrics explain whether users are harmed.
 
-In a Prometheus-style setup, scrape targets and labels need deliberate ownership. A ServiceMonitor, PodMonitor, or scrape annotation can make collection easy, but the metric names and labels still belong to the service team. Good Kubernetes labels such as namespace, service, version, route, method, and status help segment incidents; unbounded labels such as user ID, raw URL, session ID, and request ID belong in logs or traces instead of time-series storage.
+In a Prometheus Operator setup, a ServiceMonitor or PodMonitor (custom resources) can make collection easy, but the metric names and labels still belong to the service team. Good Kubernetes labels such as namespace, service, version, route, method, and status help segment incidents; unbounded labels such as user ID, raw URL, session ID, and request ID belong in logs or traces instead of time-series storage.
 
 Logs are timestamped records of events, and they carry the details that metrics intentionally omit. A useful log line says which service emitted it, when it happened, what operation was attempted, which request or trace it belonged to, and which safe identifiers help connect it to other evidence. The difference between "payment failed" and a structured event with `service`, `level`, `trace_id`, `order_id`, and a sanitized error code is the difference between searching a haystack and querying a record.
 
@@ -502,7 +502,7 @@ The framework also helps when no incident is active. During design review, ask w
 ## Did You Know?
 
 - **The term has control theory roots.** Observability originally described whether a system's internal state could be determined from external outputs, a concept that became newly practical for software as distributed systems made direct inspection impossible.
-- **OpenTelemetry became a CNCF project in 2019.** It unified earlier OpenTracing and OpenCensus efforts so teams could instrument metrics, logs, and traces without binding every application to one vendor from the start.
+- **OpenTelemetry became a CNCF project in 2019** (graduated 2026). It unified earlier OpenTracing and OpenCensus efforts so teams could instrument metrics, logs, and traces without binding every application to one vendor from the start.
 - **Cardinality can dominate cost faster than traffic.** A single metric label with millions of possible values can create millions of time series, even if the application emits only one counter name.
 - **The SRE golden signals are four user-centered views.** Latency, traffic, errors, and saturation give teams a compact way to monitor services without pretending that every internal metric deserves a page.
 

@@ -26,7 +26,7 @@ After completing this module, you will be able to make defensible ecosystem deci
 
 ## Why This Module Matters
 
-A payments company once traced a costly outage to a tooling decision that looked harmless during a migration planning meeting. The platform team had replaced a boring, well-understood logging path with a newer collector because the project appeared in a cloud native landscape view beside familiar names. When production traffic surged, the collector's operational behavior was still unfamiliar to the team, the escalation path was unclear, and engineers spent hours separating a product listing from a governed project relationship. The incident was not caused by open source itself. It was caused by reading an ecosystem map as if it were a production-readiness guarantee.
+**Hypothetical scenario:** a payments company traces a costly outage to a tooling decision that looked harmless during a migration planning meeting. The platform team had replaced a boring, well-understood logging path with a newer collector because the project appeared in a cloud native landscape view beside familiar names. When production traffic surged, the collector's operational behavior was still unfamiliar to the team, the escalation path was unclear, and engineers spent hours separating a product listing from a governed project relationship. The incident was not caused by open source itself. It was caused by reading an ecosystem map as if it were a production-readiness guarantee.
 
 That failure pattern is common because the cloud native world is large, fast-moving, and full of overlapping names. Kubernetes is only one project in a larger ecosystem that includes runtimes, registries, network plugins, service meshes, policy engines, observability systems, delivery tools, and security projects. Some are hosted by the Cloud Native Computing Foundation, some are merely adjacent, some are commercial offerings, and some are defaults in a Kubernetes distribution without being the only defensible choice. A KCNA candidate does not need to memorize every logo, but a working engineer must learn how to ask better questions than "is this popular?"
 
@@ -119,7 +119,7 @@ The service discovery path introduces CoreDNS. In a Kubernetes cluster, Pods sho
 
 Observability projects answer different questions. Prometheus collects and stores numeric time-series metrics, which are excellent for alerting on symptoms such as latency, error rate, saturation, and resource usage. Fluentd collects and forwards logs, which carry event context and application messages. Jaeger helps trace a request across distributed services. OpenTelemetry provides vendor-neutral APIs, SDKs, and collectors for telemetry signals. These tools complement each other because a metric can tell you something is wrong, a trace can narrow where it happened, and logs can explain why.
 
-Networking and service-mesh projects sit in the request path, so their risk profile deserves extra attention. Envoy is a high-performance proxy often used as a data plane for service meshes. Linkerd is a CNCF Graduated service mesh with a focus on simplicity, while Istio is widely used and associated with Envoy even though the ecosystem relationship is more nuanced than "all service mesh equals CNCF." Cilium brings eBPF-based networking, policy, and observability capabilities into the cluster networking conversation. The names matter less than the operating question: who owns traffic behavior when a request fails?
+Networking and service-mesh projects sit in the request path, so their risk profile deserves extra attention. Envoy is a high-performance proxy often used as a data plane for service meshes. Linkerd and Istio are both CNCF Graduated service meshes — Linkerd focused on simplicity, Istio on breadth of traffic-management features. CNCF hosting is a governance signal, not proof either mesh fits your workload. Cilium brings eBPF-based networking, policy, and observability capabilities into the cluster networking conversation. The names matter less than the operating question: who owns traffic behavior when a request fails?
 
 Security projects cover different layers, not one magic shield. Falco detects suspicious runtime behavior, Open Policy Agent provides policy as code, and SPIFFE with SPIRE gives workloads a consistent identity model. These projects can support zero-trust architecture, admission control, runtime detection, and workload authentication, but they need policies, ownership, and response processes. Installing a security project without deciding who responds to findings is like installing a smoke detector without giving anyone responsibility for evacuation.
 
@@ -184,7 +184,7 @@ This approach prevents a common mistake: starting with a tool name and then inve
 
 Stop and think: the CNCF Landscape has over 1,000 entries, but not all of them are CNCF projects. Many are commercial products or projects hosted elsewhere. Why would the landscape include non-CNCF tools, and how could this be misleading for someone choosing production tooling? The balanced answer is that a broad ecosystem map helps discovery and comparison, but it must be paired with governance checks, maturity checks, and architecture review before adoption.
 
-War story: a platform team at a media company once adopted two adjacent delivery tools because both appeared in the same landscape category and both had strong community attention. The first tool reconciled desired state from Git, while the second managed progressive rollout behavior. That combination can be valid, but the team had not defined ownership boundaries, so failed releases produced conflicting signals and two teams each assumed the other system was authoritative. The post-incident fix was not "remove one logo"; it was to document the control loop each tool owned, the alert each team owned, and the rollback path each service followed.
+**Hypothetical scenario:** a platform team at a media company adopts two adjacent delivery tools because both appear in the same landscape category and both have strong community attention. The first tool reconciled desired state from Git, while the second managed progressive rollout behavior. That combination can be valid, but the team had not defined ownership boundaries, so failed releases produced conflicting signals and two teams each assumed the other system was authoritative. The post-incident fix was not "remove one logo"; it was to document the control loop each tool owned, the alert each team owned, and the rollback path each service followed.
 
 You can practice the same discipline with a simple checklist. For each candidate, write the problem it solves in one sentence, the Kubernetes object or runtime path it touches, the maturity or governance signal you can verify, the failure mode you most fear, and the person or team who will operate it. If you cannot fill in those fields, you are still in discovery. That is fine, but it means the tool should not move into the critical path yet.
 
@@ -199,10 +199,10 @@ flowchart TB
     subgraph Observability [OBSERVABILITY]
         direction TB
         Prom["<b>PROMETHEUS (Graduated)</b><br>• Metrics collection and storage<br>• Pull-based model<br>• PromQL query language<br>• AlertManager for alerting"]
-        Graf["<b>GRAFANA (Not CNCF, but commonly paired)</b><br>• Dashboards and visualization<br>• Works with Prometheus"]
+        Graf["<b>GRAFANA (Not CNCF — popular ≠ governed)</b><br>• Dashboards and visualization<br>• Works with Prometheus"]
         Jaeg["<b>JAEGER (Graduated)</b><br>• Distributed tracing<br>• Track requests across services"]
         Flu["<b>FLUENTD (Graduated)</b><br>• Log collection<br>• Routes logs to storage"]
-        Otel["<b>OPENTELEMETRY (Incubating)</b><br>• Unified observability framework<br>• Traces, metrics, logs<br>• Vendor-neutral"]
+        Otel["<b>OPENTELEMETRY (Graduated)</b><br>• Unified observability framework<br>• Traces, metrics, logs<br>• Vendor-neutral"]
         
         Prom ~~~ Graf ~~~ Jaeg ~~~ Flu ~~~ Otel
     end
@@ -223,7 +223,7 @@ flowchart TB
     subgraph Networking [NETWORKING]
         direction TB
         Env["<b>ENVOY (Graduated)</b><br>• L7 proxy<br>• Data plane for service meshes<br>• Dynamic configuration via API"]
-        Istio["<b>ISTIO (Not CNCF - but very popular)</b><br>• Service mesh<br>• Uses Envoy<br>• Traffic management, security, observability"]
+        Istio["<b>ISTIO (CNCF Graduated)</b><br>• Service mesh<br>• Uses Envoy<br>• Traffic management, security, observability"]
         Link["<b>LINKERD (Graduated)</b><br>• Service mesh<br>• Lightweight, focused on simplicity"]
         Cil["<b>CILIUM (Graduated)</b><br>• eBPF-based networking<br>• CNI plugin<br>• Network policies, observability"]
         Core["<b>COREDNS (Graduated)</b><br>• DNS server for Kubernetes<br>• Default DNS in Kubernetes"]
@@ -374,7 +374,7 @@ As you work, be honest about uncertainty. A good evaluation worksheet can say th
 
 - [ ] Choose one scenario: missing metrics, unclear service-to-service latency, weak image governance, inconsistent network policy, or confusing deployment ownership.
 - [ ] Map the scenario to one primary CNCF Landscape category and one backup category that might also be involved.
-- [ ] Run `k version --short` or, if your client does not support that output, run `k version` and confirm you are thinking in Kubernetes 1.35+ terms.
+- [ ] Run `k version` and confirm you are thinking in Kubernetes 1.35+ terms.
 - [ ] Run `k get pods -A` and identify at least two platform components that look like DNS, networking, observability, policy, or delivery infrastructure.
 - [ ] Pick one candidate CNCF project from this module and write its CNCF relationship, maturity signal, owner, likely failure mode, and rollback question.
 - [ ] Decide whether the candidate belongs in production now, a limited proof of concept, or research only, and justify the decision with blast-radius reasoning.

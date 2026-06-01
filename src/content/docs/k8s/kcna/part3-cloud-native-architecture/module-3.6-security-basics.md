@@ -132,7 +132,7 @@ The principle of least privilege is easy to state and hard to practice because e
 
 **Before running this in a real cluster, what output do you expect?** If the ServiceAccount only has the Role shown above, it should be able to read Secrets in its namespace but should not be able to delete Pods. If your prediction and the command output disagree, do not immediately widen the policy. First check the namespace, the subject name, the binding scope, and whether another binding grants permissions you forgot existed.
 
-A practical war story makes this concrete. A platform team once discovered that an internal deployment tool had `cluster-admin` because an early prototype needed to create namespaces and nobody revisited the binding. Months later the tool only updated Deployments in two namespaces, but the old binding remained. When the team simulated a compromised pipeline token, the token could read Secrets, patch admission webhooks, and delete workloads across the cluster. The fix was not exotic: split namespace creation into a controlled admin workflow, give the pipeline a namespaced Role for deployment updates, and audit the remaining ClusterRoleBindings on a schedule.
+**Hypothetical scenario:** a platform team discovers that an internal deployment tool has `cluster-admin` because an early prototype needed to create namespaces and nobody revisited the binding. Months later the tool only updated Deployments in two namespaces, but the old binding remained. When the team simulated a compromised pipeline token, the token could read Secrets, patch admission webhooks, and delete workloads across the cluster. The fix was not exotic: split namespace creation into a controlled admin workflow, give the pipeline a namespaced Role for deployment updates, and audit the remaining ClusterRoleBindings on a schedule.
 
 ## Gate 2: Image Trust, Tags, Scanning, and Provenance
 
@@ -173,13 +173,13 @@ Many container images run as root inside the container unless the image author o
 
 Host networking is dangerous for similar reasons. A pod using `hostNetwork: true` shares the node's network namespace, which lets it bind ports on the node and interact with traffic in ways ordinary pod networking would not allow. Some infrastructure components genuinely need host-level access, especially networking agents and node-level system software. Most application workloads do not. When an ordinary web app asks for host networking, the correct first response is not "sure"; it is "what exact node-level capability are you trying to use?"
 
-Kubernetes defines three Pod Security Standards as named policy levels. These levels are enforced by the built-in Pod Security Admission controller when namespaces are labeled for enforcement, audit, or warning behavior. The table from the original module is still the right starting point because it explains the tradeoff plainly: stronger restrictions reduce attack surface but require applications to be written and packaged in a way that can live within those restrictions.
+Kubernetes defines three Pod Security Standards as named policy levels. These levels are enforced by the built-in Pod Security Admission controller when namespaces are labeled for enforcement, audit, or warning behavior. The `pod-security.kubernetes.io/enforce`, `warn`, and `audit` labels can be set independently — for example, `warn: restricted` surfaces violations without blocking workloads while the team fixes images, then `enforce: restricted` applies once compatibility is proven.
 
 | Level | What It Allows | Use Case |
 |---|---|---|
 | **Privileged** | Everything. No restrictions. | System-level infrastructure (CNI, storage drivers) |
 | **Baseline** | Blocks the most dangerous settings (hostNetwork, privileged containers, hostPath) while remaining broadly compatible | General-purpose workloads with minimal changes |
-| **Restricted** | Requires running as non-root, drops all capabilities, enforces read-only root filesystem | Security-sensitive and hardened workloads |
+| **Restricted** | Requires running as non-root, drops all capabilities (only `NET_BIND_SERVICE` add-back allowed), seccomp `RuntimeDefault`, restricted volume types, no privilege escalation | Security-sensitive and hardened workloads |
 
 Baseline is often the practical first step for a mixed application environment because it blocks the clearest foot-guns without forcing every existing image to be rebuilt immediately. Restricted is the better target for sensitive workloads, new services, and teams that control their Dockerfiles. The tradeoff is developer friction. An application that writes temporary files into its root filesystem or assumes it can bind privileged ports may fail under Restricted until the team adjusts the image and runtime configuration. That friction is not a reason to avoid Restricted; it is a reason to plan the migration deliberately.
 
@@ -205,7 +205,7 @@ A default-deny posture is the common secure pattern. You first create a policy t
 
 **Stop and think:** by default, every pod in many Kubernetes clusters can communicate with every other pod. If an attacker compromises a single pod in the `frontend` namespace, what resources could they access without NetworkPolicies in place? A good answer includes databases, admin dashboards, internal APIs, and possibly the Kubernetes API server if the pod also has a useful ServiceAccount token.
 
-The following example shows a simple default-deny ingress policy. It is intentionally small so you can focus on the idea: select pods in the current namespace and allow no ingress rules. In a real application, you would add a second policy that permits traffic from the exact frontend pods and ports that should reach the backend service. NetworkPolicy behavior depends on a CNI plugin that implements it, so operators must verify support in their chosen networking layer.
+The following example shows a simple default-deny ingress policy. It is intentionally small so you can focus on the idea: select pods in the current namespace and allow no ingress rules. In a real application, you would add a second policy that permits traffic from frontend pods using `namespaceSelector` and `podSelector` labels, on the specific ports the service requires. NetworkPolicy behavior depends on a CNI plugin that implements it — verify support in your chosen networking layer before relying on policies in production. Calico, Cilium, and other CNIs implement NetworkPolicy, but default kubenet or some managed-cluster configurations may not enforce rules until you enable a compatible CNI.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -336,9 +336,9 @@ Without NetworkPolicies, Kubernetes networking is commonly open enough that the 
 </details>
 
 <details>
-<summary>Question 5: A security audit finds that many pods across several namespaces all use the `default` ServiceAccount. That ServiceAccount can read Secrets cluster-wide. What is the blast radius, and how would you remediate it?</summary>
+<summary>Question 5: A security audit finds that many pods in the `analytics` namespace use the `default` ServiceAccount, and that ServiceAccount is bound to a ClusterRole that grants `get` and `list` on Secrets cluster-wide through a ClusterRoleBinding named `default-secret-reader`. What is the blast radius, and how would you remediate it?</summary>
 
-The blast radius is severe because compromising any one of those pods can expose Secrets far beyond the pod's own namespace. The immediate fix is to remove the broad binding from the default ServiceAccount so new and existing pods stop inheriting dangerous API access. The durable fix is to create dedicated ServiceAccounts for workloads that need the API and set no meaningful permissions for workloads that do not. For pods that never call the API, disabling automatic token mounting further reduces the value of a compromise.
+The blast radius is severe because compromising any pod in `analytics` that mounts that token could expose Secrets across the entire cluster, not just within the namespace. Each namespace has its own `default` ServiceAccount, but a ClusterRoleBinding applies cluster-wide regardless of which namespace the subject lives in. The immediate fix is to remove or narrow the ClusterRoleBinding so the default ServiceAccount no longer inherits cluster-wide Secret access. The durable fix is to create dedicated ServiceAccounts for workloads that need the API and set no meaningful permissions for workloads that do not. For pods that never call the API, disabling automatic token mounting further reduces the value of a compromise.
 
 </details>
 
@@ -388,10 +388,10 @@ Review the following scenarios. For each one, identify which of the Three Gates 
 
 | # | Gate Violated | Proposed Fix |
 |---|---|---|
-| 1 | Seatbelt (Gate 3) | Remove the `hostPath` mount. Enforce the Baseline or Restricted Pod Security Standard on the namespace to block host filesystem access, preventing container escapes. |
+| 1 | Seatbelt (Gate 3) | Remove the `hostPath` mount. Enforce the Baseline or Restricted Pod Security Standard on the namespace to block host filesystem access, reducing host-level blast radius. |
 | 2 | Badge (Gate 1) | Remove the wildcard verbs. Create a namespace-scoped Role that explicitly lists only the exact verbs (e.g., `create`, `update`, `get`) and resources (e.g., `deployments`, `services`) the pipeline actually needs. |
 | 3 | Bag Check (Gate 2) | Change `nginx:latest` to a specific image digest (`nginx@sha256:...`). Ensure the image is pulled from a trusted, scanned internal registry rather than directly from Docker Hub. |
-| 4 | Seatbelt (Gate 3) | Implement a default-deny NetworkPolicy in the `backend` namespace. Then, create a specific NetworkPolicy that only allows ingress traffic from pods labeled as part of the `frontend` namespace. |
+| 4 | Seatbelt (Gate 3) | Implement a default-deny NetworkPolicy in the `backend` namespace. Then, create a specific NetworkPolicy with `namespaceSelector` and `podSelector` that allows ingress from the `frontend` namespace on port 443 only. |
 
 </details>
 

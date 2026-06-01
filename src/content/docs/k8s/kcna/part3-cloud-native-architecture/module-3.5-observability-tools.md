@@ -22,7 +22,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-During a holiday traffic surge, an online retailer watched successful checkouts collapse while every Kubernetes Deployment still reported the expected replica count. The public status page stayed green for several minutes because the cluster was alive, the Pods were running, and the nodes had spare CPU. The real failure sat between the payment service and a database connection pool that had quietly saturated after a configuration rollout. Revenue leaked away while engineers bounced between shell sessions, raw logs, and a dashboard that only showed node utilization. The expensive part of the incident was not the bug itself; it was the time spent proving where the bug was not.
+**Hypothetical scenario:** during a holiday traffic surge, an online retailer watches successful checkouts collapse while every Kubernetes Deployment still reports the expected replica count. The public status page stayed green for several minutes because the cluster was alive, the Pods were running, and the nodes had spare CPU. The real failure sat between the payment service and a database connection pool that had quietly saturated after a configuration rollout. Revenue leaked away while engineers bounced between shell sessions, raw logs, and a dashboard that only showed node utilization. The expensive part of the incident was not the bug itself; it was the time spent proving where the bug was not.
 
 That pattern is common in cloud native systems because Kubernetes separates components so effectively that no single component tells the whole story. A Pod can be running while its request latency is terrible, a Service can have endpoints while every request returns a server error, and a cluster can have enough CPU while a downstream dependency is stalled. Observability tools exist to shorten the path from symptom to evidence. They do not replace engineering judgment, but they give that judgment reliable instruments: metrics for trends, logs for events, traces for request paths, and dashboards that bring those signals into one workflow.
 
@@ -130,8 +130,8 @@ That discovery behavior is why Prometheus feels native in Kubernetes even when t
 │  rate(http_requests_total[5m])                           │
 │  "Requests per second over last 5 minutes"               │
 │                                                             │
-│  histogram_quantile(0.99, rate(request_duration_bucket   │
-│    [5m]))                                                 │
+│  histogram_quantile(0.99, sum by (le) (rate(              │
+│    request_duration_seconds_bucket[5m])))                │
 │  "99th percentile latency"                               │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -153,9 +153,9 @@ The Pushgateway is the exception that proves the pull-model rule. It exists for 
 
 The key phrase is service-level batch job, not "anything short-lived." If a Kubernetes Job represents a specific business activity such as nightly reconciliation, publishing a final success or duration metric can be useful. If the metric represents a machine instance, a one-off Pod, or a workflow whose lifecycle is already visible in Kubernetes events, pushing can create stale series that appear healthy after the producer is gone. Treat Pushgateway usage as a design decision that needs cleanup semantics, ownership, and clear labels.
 
-Before running any PromQL, ask what decision the query should support. `rate(http_requests_total[5m])` is useful when you need traffic velocity, while `histogram_quantile(0.99, rate(request_duration_bucket[5m]))` is useful when the slowest user experiences matter more than the average. If an alert fires from a single instant sample, it may flap during normal spikes. If it waits too long, responders learn about customer pain after the business does. The art is choosing a window that matches the symptom and the operational action.
+Before running any PromQL, ask what decision the query should support. `rate(http_requests_total[5m])` is useful when you need traffic velocity, while `histogram_quantile(0.99, sum by (le) (rate(request_duration_seconds_bucket[5m])))` is useful when the slowest user experiences matter more than the average. If an alert fires from a single instant sample, it may flap during normal spikes. If it waits too long, responders learn about customer pain after the business does. The art is choosing a window that matches the symptom and the operational action.
 
-War Story: a team once tracked HTTP requests by adding the user's unique ID as a Prometheus label, producing samples like `http_requests_total{user_id="12345"}`. When the application grew quickly, Prometheus created millions of unique label combinations, which meant millions of time series. Memory usage climbed until Prometheus crashed, and the monitoring outage hid the application outage. The fix was not a bigger dashboard; it was a better metric design that used bounded labels such as status code, route template, method, and service.
+**Hypothetical scenario:** a team tracks HTTP requests by adding the user's unique ID as a Prometheus label, producing samples like `http_requests_total{user_id="12345"}`. When the application grew quickly, Prometheus created millions of unique label combinations, which meant millions of time series. Memory usage climbed until Prometheus crashed, and the monitoring outage hid the application outage. The fix was not a bigger dashboard; it was a better metric design that used bounded labels such as status code, route template, method, and service.
 
 Metrics become operational only when they are connected to alerting. Grafana can alert, and many teams use it, but the Prometheus ecosystem includes Alertmanager for grouping, deduplicating, silencing, and routing alerts. The difference matters during an incident because ten alerts about one failing dependency should become one actionable page, not ten independent interruptions. A good alert states customer impact, likely ownership, and a first query to run; a bad alert merely says a graph crossed a line.
 
@@ -267,12 +267,12 @@ Sampling is the main tracing tradeoff for busy systems. Capturing every trace ma
 │  ─────────────────────────────────────────────────────────  │
 │  • End-to-end distributed tracing                         │
 │  • Originally from Uber                                   │
-│  • OpenTracing compatible                                 │
+│  • OpenTracing-compatible (historical); Jaeger v2 on OTel Collector │
 │  • Service dependency analysis                            │
 │                                                             │
-│  Components:                                               │
-│  • Jaeger Client (in your app)                           │
-│  • Jaeger Agent (per node)                               │
+│  Components (v1 legacy; v2 uses OTel Collector):           │
+│  • Jaeger Client / OTel SDK (in your app)                │
+│  • Jaeger Agent (per node — removed in Jaeger v2)        │
 │  • Jaeger Collector                                       │
 │  • Jaeger Query/UI                                        │
 │                                                             │
@@ -310,7 +310,7 @@ Collector configuration is usually described as receivers, processors, exporters
 │              OPENTELEMETRY                                  │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  CNCF Incubating project - THE unified standard          │
+│  CNCF Graduated project - THE unified standard          │
 │                                                             │
 │  What it provides:                                         │
 │  ─────────────────────────────────────────────────────────  │

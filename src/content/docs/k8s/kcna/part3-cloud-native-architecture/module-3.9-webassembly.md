@@ -24,7 +24,7 @@ After completing this module, you will be able to make defensible runtime decisi
 
 ## Why This Module Matters
 
-During a checkout surge, a retail platform allowed merchants to run custom discount logic directly in the purchase path. The old design isolated that third-party code with heavyweight service boundaries, so every checkout carried extra network hops, capacity planning, and failure modes. When the company moved that extension model to WebAssembly, the engineering problem changed: instead of provisioning separate services for each merchant script, the platform could execute small, sandboxed modules synchronously inside a strict runtime with predictable latency. That kind of redesign is not a small optimization; at the scale of online commerce, shaving tens of milliseconds from a critical path can protect conversion rate, infrastructure cost, and customer trust at the same time.
+**Hypothetical scenario:** during a checkout surge, a retail platform allows merchants to run custom discount logic directly in the purchase path. The old design isolated that third-party code with heavyweight service boundaries, so every checkout carried extra network hops, capacity planning, and failure modes. When the company moved that extension model to WebAssembly, the engineering problem changed: instead of provisioning separate services for each merchant script, the platform could execute small, sandboxed modules synchronously inside a strict runtime with predictable latency. That kind of redesign is not a small optimization; at the scale of online commerce, shaving tens of milliseconds from a critical path can protect conversion rate, infrastructure cost, and customer trust at the same time.
 
 Cloud native teams are now facing the same architectural question in smaller forms. They already know how to package applications as OCI images, deploy Pods, and let Kubernetes schedule containers, but some workloads feel awkward inside that model. A function that runs for a few milliseconds does not need a full Linux userspace. A customer-supplied plugin should not inherit broad filesystem and network access. An edge node with limited storage should not pull hundreds of megabytes when the useful code is a tiny parser. WebAssembly, usually shortened to Wasm, gives platform teams another runtime shape for those cases, and KCNA expects you to know where that shape fits.
 
@@ -161,9 +161,12 @@ A Wasm runtime executes `.wasm` binaries in the same broad sense that a containe
 | **Wasmtime** | Reference implementation by Bytecode Alliance; production-grade, standards-focused |
 | **WasmEdge** | CNCF Sandbox project; optimized for edge and cloud native; supports networking and AI extensions |
 | **Spin** | Developer framework by Fermyon; build and run serverless Wasm apps easily |
-| **wasmCloud** | CNCF Sandbox project; distributed platform for building Wasm applications with a component model |
+| **wasmCloud** | CNCF Incubating project; distributed platform for building Wasm applications with a component model |
+| **SpinKube** | CNCF Sandbox project (accepted Jan 2025); runs Spin Wasm apps on Kubernetes via CRDs and RuntimeClass |
 
-The ecosystem is young enough that names matter less than categories. Wasmtime is important because it is standards-focused and widely used as an embeddable runtime. WasmEdge is important in KCNA context because it is a CNCF Sandbox project and explicitly targets edge and cloud native scenarios. Spin is useful because it gives developers a pleasant framework for building event-driven Wasm applications without hand-assembling every host interface. wasmCloud is useful because it treats Wasm components as portable actors connected through providers, which changes how distributed applications can be assembled.
+The ecosystem is young enough that names matter less than categories. Wasmtime is important because it is standards-focused and widely used as an embeddable runtime. WasmEdge is important in KCNA context because it is a CNCF Sandbox project and explicitly targets edge and cloud native scenarios. Spin is useful because it gives developers a pleasant framework for building event-driven Wasm applications without hand-assembling every host interface. wasmCloud is useful because it is a CNCF Incubating project that treats Wasm components as portable actors connected through providers, which changes how distributed applications can be assembled.
+
+SpinKube extends that picture to Kubernetes-native deployment: it runs Spin Wasm applications through CRDs and RuntimeClass, so platform teams can schedule Wasm workloads with the same API objects they already use for containers.
 
 WASI is the point where many pilots either become practical or stall. A function that reads input, writes output, and performs pure computation usually ports well. A service that expects arbitrary POSIX behavior, process spawning, filesystem traversal, raw sockets, or dynamic linking may hit missing or evolving WASI support. Networking is especially important to evaluate because historical WASI support was stronger for filesystem and standard-stream patterns than for rich outbound service clients. Newer component-model and WASI proposals continue to improve the story, but the safe operational stance is to test the exact libraries you plan to use.
 
@@ -287,7 +290,7 @@ The architecture decision tells you something important about Kubernetes. Kubele
 
 The e-commerce example makes the placement choice concrete. A `payment-processor` written in Java with database transactions, tracing agents, and JVM tuning should use the default container runtime. A `tax-calculator` written in Rust, stateless, and invoked at checkout can use a Wasm RuntimeClass if latency and sandboxing justify the operational setup. A `recommendation-engine` using Python GPU libraries should remain a container workload because direct hardware integration and native dependencies matter more than cold-start speed. The value of RuntimeClass is that all three can live in one cluster without pretending they have the same runtime needs.
 
-War story: one platform team tried to schedule every Wasm pilot onto generic worker nodes because the Pod spec was the only visible change. Half the failures looked like ordinary image pull or startup problems until operators realized the runtime handler existed only on a subset of nodes. The fix was not clever application code; it was node labeling, RuntimeClass scheduling, admission validation, and a runbook that checked handler availability before debugging the module itself. Runtime diversity is still infrastructure, and infrastructure needs inventory.
+**Hypothetical scenario:** a platform team tries to schedule every Wasm pilot onto generic worker nodes because the Pod spec is the only visible change. Half the failures looked like ordinary image pull or startup problems until operators realized the runtime handler existed only on a subset of nodes. The fix was not clever application code; it was node labeling, RuntimeClass scheduling, admission validation, and a runbook that checked handler availability before debugging the module itself. Runtime diversity is still infrastructure, and infrastructure needs inventory.
 
 ## Evaluating Workload Fit and Migration Risk
 
@@ -497,6 +500,8 @@ The migration-risk section should name concrete risks rather than generic cautio
 </details>
 
 ### Success Criteria
+
+A complete Wasm placement review should meet every criterion below before the pilot moves to production traffic.
 
 - [ ] Your comparison explains why Wasm and containers are complementary rather than replacements.
 - [ ] Your design uses `RuntimeClass` only for workloads that benefit from Wasm-specific properties.
