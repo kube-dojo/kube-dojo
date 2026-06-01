@@ -31,7 +31,7 @@ After completing this module, you will be able to perform the following diagnost
 
 ## Why This Module Matters
 
-In December 2021, a large trading platform suffered a public outage after a control plane upgrade exposed a weakness in its Kubernetes management layer. Customer-facing applications did not all crash at once; many containers kept running where they already were. The business impact still became painful because engineers could not reliably create new workloads, move failed Pods, or apply urgent configuration changes while the control plane was unhealthy. The lesson is direct: Kubernetes application availability depends not only on containers, but also on the management system that records desired state and turns it into action.
+**Hypothetical scenario:** a trading platform suffers a public outage after a control plane upgrade exposes a weakness in its management layer. Customer-facing applications did not all crash at once; many containers kept running where they already were. The business impact still became painful because engineers could not reliably create new workloads, move failed Pods, or apply urgent configuration changes while the control plane was unhealthy. The lesson is direct: Kubernetes application availability depends not only on containers, but also on the management system that records desired state and turns it into action.
 
 The same pattern appears in less dramatic internal incidents. A team sees web traffic degrade after a node failure, yet the first instinct is to inspect the Deployment, the container image, or the Service. Those checks matter, but they can miss the real fault if the scheduler cannot bind replacement Pods, if the controller manager is not creating new Pods, or if etcd cannot accept writes. Control plane architecture is therefore not trivia for certification questions; it is the map that lets you separate workload bugs from cluster management failures under pressure.
 
@@ -184,7 +184,7 @@ k get --raw=/readyz
 
 When diagnosing an API path, read the error carefully. `Forbidden` means the authenticated identity reached the API server but lacks permission. `Unauthorized` often means credentials were missing or invalid. `The connection to the server was refused` points before authorization, often to a dead endpoint, wrong kubeconfig, failed local tunnel, or unavailable API server. `etcdserver: request timed out` points behind the API server toward persistence pressure or quorum trouble.
 
-War story: a platform team once blamed a new admission policy because developers could not create Deployments after a maintenance window. The actual failure was an etcd member replacement that left the etcd cluster without quorum. The API server process still listened on its port, which made simple health checks look misleadingly alive, but writes could not be committed. The useful clue was that read-only requests sometimes worked while object creation consistently stalled or failed.
+**Hypothetical scenario:** a platform team once blamed a new admission policy because developers could not create Deployments after a maintenance window. The actual failure was an etcd member replacement that left the etcd cluster without quorum. The API server process still listened on its port, which made simple health checks look misleadingly alive, but writes could not be committed. The useful clue was that read-only requests sometimes worked while object creation consistently stalled or failed.
 
 The certification angle is straightforward, but the operational angle is richer. If a question asks where Kubernetes state is stored, answer etcd. If it asks which component validates API objects or exposes the REST API, answer kube-apiserver. If it asks whether every component writes directly to etcd, reject that model. The API server is the mediated, auditable path, and etcd is the consistent backing store that makes the rest of the control plane safe to automate.
 
@@ -247,7 +247,7 @@ The kube-controller-manager runs many built-in controllers in one process. A con
 │  • Monitors node health                                    │
 │  • Responds when nodes go down                            │
 │                                                             │
-│  Replication Controller:                                   │
+│  ReplicaSet Controller:                                    │
 │  • Maintains correct number of Pods                       │
 │  • Creates/deletes Pods as needed                         │
 │                                                             │
@@ -304,7 +304,7 @@ spec:
 
 That YAML is intentionally ordinary because the architecture lesson is in the side effects. Applying it creates one top-level desired object, then controllers and the scheduler create and update several dependent objects. A useful exercise is to run `k get deployment,replicaset,pods -w` in one terminal while applying the file in another. You will see Kubernetes gradually close the gaps between desired state and observed state.
 
-War story: an application team once increased a Deployment from two replicas to eight during a traffic spike and watched six Pods sit in `Pending`. They assumed the image registry was slow, but `k describe pod` showed `Insufficient cpu` scheduling events. The scheduler was functioning correctly; it was refusing to bind Pods to nodes that could not honor requests. The fix was capacity and request tuning, not restarting scheduler or changing the image.
+**Hypothetical scenario:** an application team once increased a Deployment from two replicas to eight during a traffic spike and watched six Pods sit in `Pending`. They assumed the image registry was slow, but `k describe pod` showed `Insufficient cpu` scheduling events. The scheduler was functioning correctly; it was refusing to bind Pods to nodes that could not honor requests. The fix was capacity and request tuning, not restarting scheduler or changing the image.
 
 ## Control Plane Communication and Request Flow
 
@@ -375,7 +375,7 @@ k describe deployment control-plane-demo
 k describe pod <new-pod-name>
 ```
 
-War story: during a platform migration, a team opened an incident because a Deployment showed the correct replica count while traffic still dropped. The object chain revealed that Pods were created and scheduled, but readiness probes failed after kubelet started the containers. The control plane had done its job; the application was refusing to become ready. Without tracing the stages, the team would have wasted time blaming scheduler and controllers for a workload-level health check problem.
+**Hypothetical scenario:** during a platform migration, a team opened an incident because a Deployment showed the correct replica count while traffic still dropped. The object chain revealed that Pods were created and scheduled, but readiness probes failed after kubelet started the containers. The control plane had done its job; the application was refusing to become ready. Without tracing the stages, the team would have wasted time blaming scheduler and controllers for a workload-level health check problem.
 
 ## Cloud Integration and High Availability
 
@@ -458,7 +458,7 @@ A mature HA design also considers maintenance behavior. Upgrades, certificate ro
 
 For self-managed clusters, etcd restore is the scenario to practice before anyone needs it. Restoring a snapshot usually means making careful decisions about cluster identity, member configuration, certificates, and the point in time you are restoring. A sloppy restore can resurrect old desired state or conflict with workloads that continued running after the snapshot. The safe operational habit is to rehearse the procedure on an isolated cluster and document exactly what application teams should expect after recovery.
 
-War story: a team ran three API servers but placed all etcd members on the same underlying virtualization host. Their architecture diagram looked highly available, yet a single host outage removed the entire data store. The API endpoint still had multiple configured backends, but none could commit state. High availability is not a checkbox counted by process replicas; it is a failure-domain design that asks which physical, network, and storage failures the cluster can actually survive.
+**Hypothetical scenario:** a team ran three API servers but placed all etcd members on the same underlying virtualization host. Their architecture diagram looked highly available, yet a single host outage removed the entire data store. The API endpoint still had multiple configured backends, but none could commit state. High availability is not a checkbox counted by process replicas; it is a failure-domain design that asks which physical, network, and storage failures the cluster can actually survive.
 
 ## Patterns & Anti-Patterns
 
@@ -688,6 +688,7 @@ Goal: observe the Kubernetes control plane in action, identify what each core co
   k cluster-info
   k get componentstatuses 2>/dev/null || true
   ```
+  `componentstatuses` is deprecated since Kubernetes v1.19 and may be empty or absent on a 1.35 cluster, so do not treat its output as authoritative.
 
 - [ ] Clean up the exercise resources.
   ```bash
