@@ -28,7 +28,7 @@ After completing this module, you will be able to apply these outcomes in design
 
 ## Why This Module Matters
 
-In early 2018, a large electric-vehicle manufacturer disclosed that attackers had abused an exposed Kubernetes dashboard to run cryptocurrency mining workloads in its cloud account. Public reporting focused on the visible mistake, but the deeper lesson was about trust boundaries: once the intruder reached the cluster control surface, weak segmentation turned a single foothold into a much broader blast radius. The direct cost was not only compute waste; it was incident response time, engineering distraction, secret-rotation work, and the uncomfortable question every security team asks after containment: what else could that workload have reached while it was running?
+In early 2018, [a major automotive company](/k8s/cks/part1-cluster-setup/module-1.5-gui-security/) <!-- incident-xref: tesla-2018-cryptojacking --> disclosed that attackers had abused an exposed Kubernetes dashboard to run cryptocurrency mining workloads in its cloud account. Public reporting focused on the visible mistake, but the deeper lesson was about trust boundaries: once the intruder reached the cluster control surface, weak segmentation turned a single foothold into a much broader blast radius. The direct cost was not only compute waste; it was incident response time, engineering distraction, secret-rotation work, and the uncomfortable question every security team asks after containment: what else could that workload have reached while it was running?
 
 Kubernetes makes distributed systems feel clean because a pod can reach a service name without caring which node holds the endpoint. That convenience is intentional, and it is one reason the platform scales operationally. The security cost is just as intentional: the default network is open until you add controls, and namespaces are organizational labels rather than packet filters. A compromised frontend, a debug container left too permissive, or a vulnerable internal API can become a route toward databases, message brokers, metadata services, and control-plane-adjacent endpoints if the cluster has no deliberate network policy.
 
@@ -80,7 +80,7 @@ The consequence is lateral movement. Attackers rarely need every credential in t
 
 Kubernetes does not treat this openness as a bug because many clusters run platform components, operators, service discovery, admission systems, and observability agents that genuinely need cross-workload communication. A default-deny posture would break many naive installations. The platform therefore gives you the primitives and expects the cluster operator to choose a policy model appropriate to the environment. For KCSA-level security reasoning, that distinction matters: Kubernetes provides mechanisms, while your architecture supplies the security intent.
 
-One war story repeats across many internal platforms. A team adds a new reporting service that reads from a message queue and writes to an analytics database. During launch week, an engineer deploys a debug pod with a package manager and shell tools to inspect the queue. Months later, that pod image pattern is copied into another namespace, where it retains broad network reach. Nothing looks alarming in Kubernetes events, but the cluster has quietly normalized a workload that can probe far more than it needs.
+A recurring pattern seen across many internal platforms: a team adds a new reporting service that reads from a message queue and writes to an analytics database. During launch week, an engineer deploys a debug pod with a package manager and shell tools to inspect the queue. Months later, that pod image pattern is copied into another namespace, where it retains broad network reach. Nothing looks alarming in Kubernetes events, but the cluster has quietly normalized a workload that can probe far more than it needs.
 
 The safer habit is to define traffic contracts while the application is still small. If a namespace holds a three-tier application, write down which tier initiates each connection, which port is required, whether DNS is needed, and whether external egress is legitimate. That contract becomes your NetworkPolicy inventory. It also becomes a test plan: if an unexpected pod can reach the database, the design has drifted away from the contract.
 
@@ -115,7 +115,8 @@ NetworkPolicy is part of the Kubernetes API, but the API server does not enforce
 │  ├──────────────┼────────────────────────────────────┤     │
 │  │ Calico       │ Full (plus extensions)             │     │
 │  │ Cilium       │ Full (plus extensions)             │     │
-│  │ Weave        │ Full                               │     │
+│  │ Weave Net ⚠️ │ Full (effectively unmaintained     │     │
+│  │              │ since Weaveworks shut down 2024)   │     │
 │  │ Flannel      │ None (basic networking only)       │     │
 │  │ AWS VPC CNI  │ Via network policy features/add-on │     │
 │  └──────────────┴────────────────────────────────────┘     │
@@ -482,7 +483,7 @@ A common production pattern is to start with NetworkPolicy for coarse isolation 
 |------|-------------|
 | **Istio** | Full-featured, complex, widely adopted |
 | **Linkerd** | Lightweight, simple, fast |
-| **Cilium** | eBPF-based, combined CNI and mesh |
+| **Cilium** | eBPF-based CNI with optional mesh features |
 | **Consul Connect** | HashiCorp's service mesh |
 
 Choosing among mesh options is not only a feature comparison. Istio offers extensive traffic management and policy surfaces, which can be valuable in large platform teams but demanding for small teams. Linkerd emphasizes simplicity and automatic mTLS, which can reduce operational friction. Cilium can combine CNI policy, eBPF observability, and encryption features in one ecosystem. Consul Connect may fit organizations already invested in HashiCorp service discovery. The right choice depends on who will operate it during incidents, upgrades, and certificate rotations.
@@ -514,7 +515,7 @@ The practical design sequence is usually coarse to fine. First, select a CNI tha
 
 The sequence should remain testable. For every important path, write a positive test and a negative test. A positive test proves the application can still do its job. A negative test proves an unapproved pod, namespace, or identity cannot do the same thing. Without both sides, you either have a brittle security design that breaks production or a comfortable design that permits the attacker path you meant to close.
 
-War story: a financial services platform team once rolled out egress deny policies to a namespace holding internal APIs. The change passed a manifest review because every backend-to-database path was represented, but production error rates climbed after deployment. The missing dependency was not the database; it was a token introspection endpoint used during authentication and a DNS TCP fallback path triggered by large responses. The fix was not to abandon egress policy. The fix was to add dependency discovery, staged shadow testing, and explicit exceptions that were reviewed like code.
+Hypothetical scenario: a financial services platform team once rolled out egress deny policies to a namespace holding internal APIs. The change passed a manifest review because every backend-to-database path was represented, but production error rates climbed after deployment. The missing dependency was not the database; it was a token introspection endpoint used during authentication and a DNS TCP fallback path triggered by large responses. The fix was not to abandon egress policy. The fix was to add dependency discovery, staged shadow testing, and explicit exceptions that were reviewed like code.
 
 This is why network policy design belongs in normal delivery workflows. Labels should be part of deployment conventions, policy changes should be reviewed beside application changes, and new service dependencies should update the traffic contract. A policy repository that nobody touches after initial rollout becomes stale quickly. The cluster will keep accepting deployments, service names will keep resolving, and the network will gradually diverge from the security model unless policy review is treated as a living practice.
 
@@ -789,14 +790,18 @@ spec:
           tier: backend
     ports:
     - port: 8080
-  - to:  # Allow DNS
-    - namespaceSelector: {}
+  - to:  # Allow DNS (kube-system only)
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
       podSelector:
         matchLabels:
           k8s-app: kube-dns
     ports:
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP  # add if your cluster requires TCP 53 for DNS
 ---
 # 6. Allow backend egress to database
 apiVersion: networking.k8s.io/v1
@@ -817,14 +822,18 @@ spec:
           tier: database
     ports:
     - port: 5432
-  - to:  # Allow DNS
-    - namespaceSelector: {}
+  - to:  # Allow DNS (kube-system only)
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
       podSelector:
         matchLabels:
           k8s-app: kube-dns
     ports:
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP  # add if your cluster requires TCP 53 for DNS
 ```
 
 The solution preserves the core three-tier design, but you should adapt DNS selectors to your cluster. Some clusters label DNS pods differently, and some require TCP 53 as well as UDP 53. You should also add database egress only if the database truly needs backups, replication, or external services.
@@ -865,7 +874,7 @@ Key patterns remain straightforward even when the underlying implementation is s
 - [Cilium: Kubernetes Network Policy](https://docs.cilium.io/en/stable/network/kubernetes/policy/)
 - [Cilium: Transparent Encryption](https://docs.cilium.io/en/stable/security/network/encryption/)
 - [Istio: Security](https://istio.io/latest/docs/concepts/security/)
-- [Linkerd: Automatic mTLS](https://linkerd.io/2/features/automatic-mtls/)
+- [Linkerd: Automatic mTLS](https://linkerd.io/docs/features/automatic-mtls/)
 - [Amazon EKS: Network Policy](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html)
 
 ## Next Module

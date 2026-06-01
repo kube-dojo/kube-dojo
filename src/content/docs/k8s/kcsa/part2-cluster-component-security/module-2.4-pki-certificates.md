@@ -23,7 +23,7 @@ After completing this module, you will be able to apply these outcomes during cl
 
 ## Why This Module Matters
 
-In February 2020, a well-known certificate authority incident forced emergency certificate replacement across many customer environments because some issued certificates violated browser ecosystem rules. The problem was not Kubernetes-specific, but the operational lesson lands hard in Kubernetes: certificates are quiet infrastructure until a trust decision fails, and then the failure looks like everything failing at once. Teams had to inventory certificates, understand who trusted which issuer, decide which systems could rotate safely, and coordinate replacement under business pressure rather than during a calm maintenance window.
+In February 2020, a **Let's Encrypt** CAA rechecking bug (2020-02-29) forced emergency certificate replacement across many customer environments because some issued certificates violated browser ecosystem rules. Source: [Let's Encrypt: CAA Rechecking Bug (revocation incident, 2020-02-29)](https://letsencrypt.org/caaproblem/). The problem was not Kubernetes-specific, but the operational lesson lands hard in Kubernetes: certificates are quiet infrastructure until a trust decision fails, and then the failure looks like everything failing at once. Teams had to inventory certificates, understand who trusted which issuer, decide which systems could rotate safely, and coordinate replacement under business pressure rather than during a calm maintenance window.
 
 Kubernetes clusters carry the same kind of hidden dependency. The API server presents a serving certificate to every client, kubelets authenticate to the API server with client certificates, etcd can use a separate certificate authority for peer and client trust, and the aggregation layer has its own front-proxy trust chain. If any of those credentials expires, is issued with the wrong identity, or is signed by the wrong CA, the symptom rarely says "your PKI model is stale." Instead, operators see nodes become `NotReady`, control-plane components refuse connections, log streaming fails, or admission and extension APIs return confusing TLS errors.
 
@@ -213,7 +213,8 @@ TLS bootstrap solves the chicken-and-egg problem of a new node that needs a cert
 │     └── Requests certificate signing (CSR)                 │
 │                                                             │
 │  3. CSR approved (auto or manual)                          │
-│     └── API server signs certificate                       │
+│     └── Certificate signer controllers sign the cert       │
+│         (e.g. kube-controller-manager)                     │
 │                                                             │
 │  4. Node receives signed certificate                       │
 │     └── Uses cert for all future communication            │
@@ -255,7 +256,7 @@ k certificate approve <csr-name>
 
 Do not approve CSRs by habit during an outage. An attacker who can create pressure at the same time as a suspicious request may benefit from an operator's desire to make red dashboards green. The safer pattern is to document what a legitimate kubelet CSR looks like in your environment, require a second-person review for unusual subjects or signer names, and alert on unexpected CSR volume. Operational speed and security review can coexist if the expected path is documented before the incident.
 
-A practical war story illustrates the diagnostic sequence. A platform team replaced several worker nodes after a hardware refresh and saw them join briefly, then drift into `NotReady`. The initial suspicion was a CNI problem because pods could not be scheduled reliably, but `k get certificatesigningrequests` showed pending kubelet client certificate requests. The bootstrap token was valid, yet the controller that normally approved node CSRs had been restricted during a hardening change. Restoring the correct approval policy and reviewing the requested node identities fixed the join path without changing the network layer at all.
+Hypothetical scenario: a practical composite illustrates the diagnostic sequence. A platform team replaced several worker nodes after a hardware refresh and saw them join briefly, then drift into `NotReady`. The initial suspicion was a CNI problem because pods could not be scheduled reliably, but `k get certificatesigningrequests` showed pending kubelet client certificate requests. The bootstrap token was valid, yet the controller that normally approved node CSRs had been restricted during a hardening change. Restoring the correct approval policy and reviewing the requested node identities fixed the join path without changing the network layer at all.
 
 Certificate monitoring should be boring by design. Track the expiration of kubeadm-managed certificates, kubelet client certificates, and any manually issued admin or automation certificates. Alert well before the deadline, and make renewal a rehearsed operational procedure rather than a once-per-year memory test. When the CA itself approaches expiry, plan earlier because CA rotation touches more trust relationships and may require reissuing many dependent certificates. A leaf certificate renewal is maintenance; a rushed CA rotation is a high-risk migration.
 
@@ -302,7 +303,9 @@ ServiceAccount identity belongs in this module because it solves a similar probl
 │  LEGACY TOKENS (pre-1.24)                                  │
 │  • Stored in Secrets                                       │
 │  • Never expire                                            │
-│  • Mounted to all pods automatically                       │
+│  • Pre-1.24: non-expiring token Secret auto-created per SA │
+│    and mounted into pods using that SA when                │
+│    automountServiceAccountToken is true (the default)      │
 │  • Security risk!                                          │
 │                                                             │
 │  BOUND SERVICE ACCOUNT TOKENS (1.24+)                      │
@@ -373,7 +376,8 @@ Secure certificate operations combine inventory, rotation, monitoring, and least
 │  MINIMIZE TRUST                                            │
 │  ☐ Use separate CA for etcd (optional)                     │
 │  ☐ Don't share CA across clusters                          │
-│  ☐ Revoke compromised certificates                         │
+│  ☐ Apply compensating controls (RBAC removal, rotation,    │
+│    CA replacement) for compromised credentials             │
 │                                                             │
 │  USE SHORT-LIVED CREDENTIALS                               │
 │  ☐ Bound service account tokens                            │
@@ -418,8 +422,8 @@ serverTLSBootstrap: true
 A monitoring design should alert before expiration and also catch unexpected certificate issuance. Expiration monitoring can read certificate files from control-plane nodes, inspect kubeadm output, or ingest metrics if your platform exposes them. Issuance monitoring can watch CSR objects and audit events. The first protects availability, while the second protects trust. A cluster that alerts only on expiration may miss a sudden batch of suspicious CSRs; a cluster that watches CSRs but ignores dates may still go down during an otherwise preventable renewal miss.
 
 ```bash
-k get certificatesigningrequests
-k get events -A --field-selector reason=CertificateApproved
+k get csr -o wide
+k get csr <name> -o yaml  # inspect status.conditions (type: Approved)
 openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -subject -issuer -dates
 ```
 
@@ -628,6 +632,7 @@ A strong checklist names the owner and does not rely on memory. For an API serve
 
 ## Sources
 
+- [Let's Encrypt: CAA Rechecking Bug (revocation incident, 2020-02-29)](https://letsencrypt.org/caaproblem/)
 - [Kubernetes: Certificates and Certificate Signing Requests](https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/)
 - [Kubernetes: X.509 Client Certificates](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#x509-client-certificates)
 - [Kubernetes: PKI Certificates and Requirements](https://kubernetes.io/docs/setup/best-practices/certificates/)

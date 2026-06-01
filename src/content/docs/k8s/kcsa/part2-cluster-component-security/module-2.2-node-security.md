@@ -31,7 +31,7 @@ After completing this module, you will be able to perform the following review t
 
 ## Why This Module Matters
 
-For more than a year before its discovery in 2021, malware named Siloscape ran inside the Kubernetes clusters of real organizations without anyone noticing. It arrived as an ordinary web-application compromise, used a Windows container escape to reach the underlying host, and from there walked the cluster looking for credentials, mounted volumes, and other workloads it could pivot through. Researchers found 23 active victims when they cracked the malware's command-and-control server. The clusters had all been running normally — no obvious alarms, no unusual workloads in the dashboard. Once the attacker reached the machinery that actually runs pods, the control plane was no longer an abstract boundary; a worker node sees pod filesystems, mounted service account tokens, runtime sockets, logs, local network traffic, and kubelet credentials, and those are exactly the ingredients an intruder needs to convert one weak workload into a broader incident.
+For more than a year before its discovery in 2021, malware named Siloscape (Palo Alto Networks Unit 42, 2021) ran inside the Kubernetes clusters of real organizations without anyone noticing. It arrived as an ordinary web-application compromise, used a Windows container escape to reach the underlying host, and from there walked the cluster looking for credentials, mounted volumes, and other workloads it could pivot through. Researchers found 23 active victims when they cracked the malware's command-and-control server. The clusters had all been running normally — no obvious alarms, no unusual workloads in the dashboard. Once the attacker reached the machinery that actually runs pods, the control plane was no longer an abstract boundary; a worker node sees pod filesystems, mounted service account tokens, runtime sockets, logs, local network traffic, and kubelet credentials, and those are exactly the ingredients an intruder needs to convert one weak workload into a broader incident.
 
 Node security matters because worker nodes are where Kubernetes promises meet Linux reality. The API server can reject unsafe manifests, admission controllers can enforce policy, and RBAC can be carefully scoped, yet a node still has to pull images, mount volumes, start containers, apply cgroups, connect pods to networks, and report status. Each of those actions needs power, and power creates a target. If an attacker controls a privileged pod, the kubelet API, or the container runtime socket, the conversation changes from "can they call the Kubernetes API" to "can they act as the machine that the API trusts to run workloads."
 
@@ -87,6 +87,7 @@ Before you evaluate a specific setting, ask which boundary it affects. Kubelet a
 The practical inspection path starts by collecting node and pod context without assuming the cluster is safe. The following commands are deliberately read-oriented; they help you see which nodes exist, which versions they report, and which pods are concentrated on a node before you decide where deeper inspection is justified.
 
 ```bash
+alias k=kubectl
 k get nodes -o wide
 k describe node <node-name>
 k get pods --all-namespaces --field-selector spec.nodeName=<node-name> -o wide
@@ -276,6 +277,7 @@ spec:
       image: registry.k8s.io/pause:3.10
       securityContext:
         allowPrivilegeEscalation: false
+        runAsNonRoot: true
         capabilities:
           drop: ["ALL"]
         seccompProfile:
@@ -284,7 +286,7 @@ spec:
 
 The decision to use sandboxing should come after you classify the workload. A batch job that processes untrusted customer-supplied files may justify extra isolation even if it runs slower. A latency-sensitive internal service with no untrusted code path may get more value from strict pod security, fast patching, and narrow RBAC. Which approach would you choose for a shared build platform that runs pull-request code from many teams, and why would a standard runtime plus policy enforcement still leave residual risk?
 
-War story: a company running an internal CI platform allowed build pods to mount a host cache directory for speed. The mount looked limited because it pointed at a cache path rather than `/`, but the build image also ran as root and had enough filesystem tools to place executable content where a node-level maintenance job later consumed it. The incident did not start as a kernel escape; it started as a convenience mount that crossed a trust boundary. The fix combined narrower volumes, non-root execution, RuntimeDefault seccomp, admission policy, and moving untrusted builds onto sandbox-capable nodes.
+Illustrative scenario: a company running an internal CI platform allowed build pods to mount a host cache directory for speed. The mount looked limited because it pointed at a cache path rather than `/`, but the build image also ran as root and had enough filesystem tools to place executable content where a node-level maintenance job later consumed it. The incident did not start as a kernel escape; it started as a convenience mount that crossed a trust boundary. The fix combined narrower volumes, non-root execution, RuntimeDefault seccomp, admission policy, and moving untrusted builds onto sandbox-capable nodes.
 
 When you review runtime isolation, separate controls that reduce likelihood from controls that reduce impact. Dropping Linux capabilities, disabling privilege escalation, using RuntimeDefault seccomp, and avoiding host namespaces reduce what a compromised process can do from inside its container. Sandboxed runtimes and dedicated node pools reduce impact if an escape attempt succeeds or if the workload itself is untrusted. Both categories are useful, but they answer different questions, and confusing them leads to weak designs.
 
@@ -321,7 +323,7 @@ Node-level attacks usually follow one of two paths. Misconfiguration-based attac
 │                                                             │
 │  Runtime vulnerabilities                                   │
 │  ├── CVE-2019-5736 (runc)                                  │
-│  └── CVE-2020-15257 (containerd)                           │
+│  └── CVE-2020-15257 (containerd-shim API)                  │
 │                                                             │
 │  Kernel vulnerabilities                                    │
 │  └── Privilege escalation through kernel exploits          │
@@ -399,7 +401,7 @@ k get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}/
 
 Treat the results as a conversation starter rather than a verdict. A CNI plugin or storage CSI node plugin may legitimately run with host access, but it should live in a restricted namespace, use a reviewed image, have narrow RBAC, and be owned by a platform team. An application pod in a product namespace that requests the same access is different evidence. The same field can be acceptable for a node agent and unacceptable for a customer-facing service.
 
-Kernel and runtime vulnerabilities add urgency to patching because they bypass intention. CVE-2019-5736 in runc showed that a container runtime bug could allow overwrite of the host runc binary under certain conditions, and CVE-2020-15257 showed that containerd's CRI plugin could expose an unsafe abstract Unix domain socket behavior. The lesson is not that those exact bugs define today's threat; the lesson is that runtime and kernel patching belong in the security design, not in an operations backlog that waits for convenient maintenance windows.
+Kernel and runtime vulnerabilities add urgency to patching because they bypass intention. CVE-2019-5736 in runc showed that a container runtime bug could allow overwrite of the host runc binary under certain conditions, and CVE-2020-15257 showed that the containerd-shim API was reachable over an abstract Unix domain socket from host-network containers, allowing privilege escalation. The lesson is not that those exact bugs define today's threat; the lesson is that runtime and kernel patching belong in the security design, not in an operations backlog that waits for convenient maintenance windows.
 
 A useful compromise model also includes scheduling. If every sensitive workload can land next to every risky workload, the cluster turns a single node compromise into a data gathering opportunity. Taints, tolerations, node selectors, topology spread, and separate node groups are not only availability tools; they also help decide which credentials and data coexist on a machine. The goal is not perfect separation for every service, but deliberate separation for workloads with different trust levels, regulatory impact, or tenant ownership.
 
@@ -718,6 +720,9 @@ Success means the weak kubelet settings are removed from bootstrap templates or 
 
 ## Sources
 
+- [Unit 42: Siloscape — first malware targeting Windows containers to compromise cloud environments](https://unit42.paloaltonetworks.com/siloscape/)
+- [NVD: CVE-2019-5736](https://nvd.nist.gov/vuln/detail/CVE-2019-5736)
+- [NVD: CVE-2020-15257](https://nvd.nist.gov/vuln/detail/CVE-2020-15257)
 - [Kubernetes: Kubelet authentication/authorization](https://kubernetes.io/docs/reference/access-authn-authz/kubelet-authn-authz/)
 - [Kubernetes: Using Node Authorization](https://kubernetes.io/docs/reference/access-authn-authz/node/)
 - [Kubernetes: Authorization overview](https://kubernetes.io/docs/reference/access-authn-authz/authorization/)
