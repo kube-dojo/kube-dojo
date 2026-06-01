@@ -21,6 +21,8 @@ After completing this module, you will be able to perform security review work r
 
 In 2023, the MOVEit Transfer compromise showed how quickly a single exposed system can become a business crisis. Attackers exploited one managed file transfer product, then used the access to steal data from hundreds of organizations across government, finance, health care, and education. Public estimates placed the total downstream cost in the billions of dollars once response work, legal exposure, customer notification, and operational disruption were counted. The lesson was not merely that one product had a serious flaw; the deeper lesson was that many organizations had trusted one perimeter control too much and had not sufficiently limited what a successful compromise could reach.
 
+Source: CISA Advisory AA23-158A (June 2023), "#StopRansomware: CL0P Ransomware Gang Exploits MOVEit Vulnerability."
+
 Kubernetes clusters create the same kind of risk in a more dynamic form. A pod is rarely just a pod; it may carry a service account token, talk to other services, mount configuration, call the Kubernetes API, and run on a node shared with unrelated workloads. If that pod is configured with broad RBAC, privileged container settings, unrestricted network egress, and no admission guardrails, a single application bug can turn into a cluster-wide incident. If the same pod is surrounded by layered controls, narrow permissions, verified service-to-service communication, and secure defaults, the same bug may remain a contained workload event instead of becoming a platform compromise.
 
 This module teaches the principles behind those choices. Kubernetes changes quickly, and this course targets Kubernetes 1.35+, but the principles are older and more durable than any one API version. Defense in depth, least privilege, zero trust, separation of duties, fail secure design, the CIA triad, attack surface reduction, and blast radius management give you a way to reason when the exact command, product, or incident is unfamiliar. KCSA questions often describe a situation rather than ask for a command, so your job is to recognize which principle is being tested and choose the control that makes the system more resilient.
@@ -471,8 +473,8 @@ Finally, use the CIA triad to explain why a finding matters to the service owner
 ## Did You Know?
 
 - **Defense in depth** comes from military strategy, where layered positions made attackers spend time and resources before reaching the protected asset.
-- **Least privilege** was formalized by Jerome Saltzer in the 1970s, long before containers, cloud IAM, or Kubernetes RBAC existed.
-- **Zero Trust** was described by Forrester Research in 2010, and Google's BeyondCorp publications later showed how large organizations could apply it at enterprise scale.
+- **Least privilege** was formalized by Jerome Saltzer (Saltzer & Schroeder, 1975), long before containers, cloud IAM, or Kubernetes RBAC existed.
+- **Zero Trust** was described by Forrester Research analyst John Kindervag in 2010, and Google's BeyondCorp publications (Google BeyondCorp, 2014+) later showed how large organizations could apply it at enterprise scale.
 - **The CIA triad** dates back to early information-security teaching and remains useful because almost every control protects confidentiality, integrity, availability, or some combination of the three.
 
 ## Common Mistakes

@@ -26,7 +26,7 @@ After completing this module, you will be able to make provider-aware Kubernetes
 
 ## Why This Module Matters
 
-The textbook 2019 cloud-IAM case study is documented in [the CKS node-metadata module](../../../cks/part1-cluster-setup/module-1.4-node-metadata/) <!-- incident-xref: capital-one-2019 -->: a workload bug became a cloud identity problem, and a cloud identity problem became a data exposure problem affecting tens of millions of records. The lesson worth carrying into KCSA is not the specific exploit; it is the architecture boundary that the exploit crossed. A workload running inside a cluster is also running inside a cloud account, and that cloud account holds identities, network paths, storage buckets, and privileges that the cluster itself cannot revoke. The breach also led to regulatory action and a widely reported settlement, which is the kind of consequence that turns an abstract architecture boundary into an executive concern.
+The metadata/SSRF pivot pattern covered in [the CKS node-metadata module](/k8s/cks/part1-cluster-setup/module-1.4-node-metadata/) <!-- incident-xref: capital-one-2019 --> mirrors the architecture boundary crossed in the 2019 Capital One breach (~100M individuals affected; an $80M OCC civil money penalty in 2020). A workload bug became a cloud identity problem, and a cloud identity problem became a data exposure problem. The lesson worth carrying into KCSA is not the specific exploit; it is the architecture boundary that the exploit crossed. A workload running inside a cluster is also running inside a cloud account, and that cloud account holds identities, network paths, storage buckets, and privileges that the cluster itself cannot revoke. Regulatory action and a widely reported settlement turned that abstract boundary into an executive concern.
 
 Kubernetes does not erase that boundary. A managed control plane can remove the operational burden of patching API server binaries, maintaining etcd availability, and hardening physical infrastructure, yet it still leaves your team responsible for who can reach the API endpoint, which pods can talk across namespaces, which cloud roles a service account may assume, and where application data is encrypted. The danger is not that the provider is careless; the danger is that teams mistake a secure service for a secure deployment.
 
@@ -182,9 +182,9 @@ The most common provider-default surprise is API server reachability. A public e
 | Security Feature | Amazon EKS | Google GKE | Azure AKS |
 |------------------|------------|------------|-----------|
 | **API Server Endpoint** | Public by default (can be restricted) | Public by default (Private clusters recommended) | Public by default (Private clusters available) |
-| **Node OS** | Amazon Linux 2 / Bottlerocket | Container-Optimized OS (COS) | Ubuntu / Azure Linux |
-| **Workload Identity** | IAM Roles for Service Accounts (IRSA/Pod Identity) | Workload Identity (enabled by default on Autopilot) | Microsoft Entra Workload ID |
-| **Network Policies** | Requires add-on (e.g., Calico or VPC CNI) | Dataplane V2 (Cilium) built-in | Azure Network Policies or Calico |
+| **Node OS** | Amazon Linux 2023 / Bottlerocket (AL2 legacy) | Container-Optimized OS (COS) | Ubuntu / Azure Linux |
+| **Workload Identity** | IAM Roles for Service Accounts (IRSA/Pod Identity) | Workload Identity (enabled by default on Autopilot) | Microsoft Entra Workload ID (formerly Azure AD Workload Identity) |
+| **Network Policies** | Requires add-on (e.g., Calico or VPC CNI) | Built-in when Dataplane V2 is enabled (default on Autopilot; opt-in at create time on Standard clusters) | Azure Network Policies or Calico |
 
 That table is a starting point, not a verdict. EKS gives strong integration with AWS IAM, but the team must choose endpoint settings, node role scope, add-ons, and workload identity design. GKE offers strong managed defaults, especially in Autopilot, yet teams still need to review authorized networks, service accounts, and policy posture. AKS integrates naturally with Microsoft Entra ID and Azure networking, but production readiness still depends on private cluster decisions, node pool controls, workload identity, and policy enforcement.
 
@@ -262,6 +262,8 @@ Kubernetes adds a second authorization layer, and the order matters. A human mig
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+On modern EKS clusters, EKS Access Entries (`accessConfig.authenticationMode`) can map IAM principals to Kubernetes permissions; the `aws-auth` ConfigMap remains the legacy path on older clusters.
 
 The most dangerous IAM mistake in Kubernetes is giving a node role broad permissions and then letting every pod inherit the node's cloud identity. That pattern was common before workload identity matured, because it was easy to attach one storage policy to a node group and call the application done. It also meant a small application compromise could become a cloud account compromise if the attacker reached the instance metadata service or abused a library that could request credentials.
 
@@ -488,7 +490,7 @@ The final decision should leave an audit trail that future teams can understand.
 
 ## Did You Know?
 
-- **85% of cloud breaches** involve human error according to several industry summaries, and the recurring pattern is usually misconfigured access or exposed storage rather than a cinematic exploit chain.
+- **Many cloud breaches involve human error**, and the recurring pattern is usually misconfigured access or exposed storage rather than a cinematic exploit chain.
 
 - **Workload Identity** eliminates the need for static cloud credentials in many pod designs. GKE Workload Identity, EKS IAM Roles for Service Accounts or Pod Identity, and AKS Workload Identity all implement this pattern with provider-specific details.
 
@@ -659,6 +661,7 @@ Remember that the cloud provider gives you secure building blocks, while your te
 - [Kubernetes security overview](https://kubernetes.io/docs/concepts/security/)
 - [Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
 - [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+- [OCC News Release 2020-101: Capital One civil money penalty (Aug 6, 2020)](https://occ.gov/news-issuances/news-releases/2020/nr-occ-2020-101.html)
 
 ## Next Module
 

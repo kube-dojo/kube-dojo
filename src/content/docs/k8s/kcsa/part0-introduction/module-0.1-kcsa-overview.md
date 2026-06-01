@@ -23,7 +23,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A regional payments company once treated Kubernetes security as a specialist concern rather than a shared operating discipline. The platform team owned the cluster, the developers owned the application, and the compliance team owned the audit spreadsheet, but no group could explain how a default service account token, an overly broad RoleBinding, and missing NetworkPolicies combined into a real attack path. When a vulnerable internal service was exploited, the attacker did not need an exotic kernel flaw or a custom exploit chain. They used ordinary Kubernetes behavior to query the API, discover other workloads, and pivot toward data services that the original application never needed to reach.
+Consider a regional payments company that treats Kubernetes security as a specialist concern rather than a shared operating discipline. The platform team owns the cluster, the developers own the application, and the compliance team owns the audit spreadsheet, but no group can explain how a default service account token, an overly broad RoleBinding, and missing NetworkPolicies combine into a real attack path. If a vulnerable internal service is exploited, an attacker need not rely on an exotic kernel flaw or a custom exploit chain. They can use ordinary Kubernetes behavior to query the API, discover other workloads, and pivot toward data services that the original application never needed to reach.
 
 The direct financial loss in that kind of incident is rarely limited to the first compromised workload. Engineers spend nights rotating credentials, auditors ask why baseline controls were not mapped to a framework, customers ask whether their data crossed trust boundaries, and product work stalls while leaders decide which environments can be trusted again. The expensive part is not merely that one pod was misconfigured. The expensive part is that several teams had partial knowledge, no shared vocabulary, and no confident way to recognize a basic Kubernetes security failure before production exposed it.
 
@@ -33,7 +33,7 @@ This module gives you the map before the journey begins. You will see where KCSA
 
 ## What KCSA Is Really Testing
 
-The Kubernetes and Cloud Native Security Associate is a pre-professional, multiple-choice certification focused on security knowledge in the Kubernetes and cloud native ecosystem. The official Linux Foundation page describes it as a starting point for candidates who want to advance toward professional-level security work, and the current public exam page lists it as online, proctored, multiple choice, 90 minutes, beginner level, and available without prerequisites. That combination matters because KCSA measures judgment before muscle memory: you must recognize risks, choose safer designs, and connect controls to threats even when you are not asked to type commands into a live cluster.
+The Kubernetes and Cloud Native Security Associate is a pre-professional, multiple-choice and multi-select certification focused on security knowledge in the Kubernetes and cloud native ecosystem. The official Linux Foundation page describes it as a starting point for candidates who want to advance toward professional-level security work, and the current public exam page lists it as online, proctored, multiple-choice and multi-select, 90 minutes, beginner level, and available without prerequisites. That combination matters because KCSA measures judgment before muscle memory: you must recognize risks, choose safer designs, and connect controls to threats even when you are not asked to type commands into a live cluster.
 
 The most useful way to understand KCSA is as a bridge. KCNA gives broad cloud native literacy, KCSA narrows that literacy into security reasoning, and CKS later asks you to implement and troubleshoot security controls under time pressure. A candidate who has only studied general Kubernetes objects may recognize a Deployment, Service, and namespace, but still miss why a workload that can list Secrets or talk to every service has become a lateral movement platform. A candidate who jumps straight into CKS commands without the KCSA foundation may memorize hardening steps without understanding which threat each step is meant to reduce.
 
@@ -42,7 +42,7 @@ The most useful way to understand KCSA is as a bridge. KCNA gives broad cloud na
 │           KUBERNETES SECURITY CERTIFICATION PATH            │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ENTRY LEVEL (Multiple Choice)                             │
+│  ENTRY LEVEL (Multiple Choice & Multi-select)              │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │  KCNA - Kubernetes and Cloud Native Associate       │   │
 │  │  • General Kubernetes concepts                      │   │
@@ -67,12 +67,12 @@ The most useful way to understand KCSA is as a bridge. KCNA gives broad cloud na
 └─────────────────────────────────────────────────────────────┘
 ```
 
-There is one important correction to carry forward from the original overview. Older study notes often described the KCSA certification validity as three years, but the current Linux Foundation training page visible in May 2026 lists certification validity as two years. The practical exam-planning facts remain familiar: the exam is multiple choice, the duration is 90 minutes, there are no prerequisites, and the curriculum is organized around six security domains. Treat any exam detail you see in a cached blog post as something to verify against the official page before scheduling, because certification programs can change policy details faster than curriculum sites change prose.
+There is one important correction to carry forward from the original overview. Older study notes often described the KCSA certification validity as three years, but the current Linux Foundation training page visible in May 2026 lists certification validity as two years. The practical exam-planning facts remain familiar: the exam is multiple-choice and multi-select, the duration is 90 minutes, there are no prerequisites, and the curriculum is organized around six security domains. Treat any exam detail you see in a cached blog post as something to verify against the official page before scheduling, because certification programs can change policy details faster than curriculum sites change prose.
 
 | Aspect | Details |
 |--------|---------|
 | **Duration** | 90 minutes |
-| **Questions** | About 60 multiple choice |
+| **Questions** | About 60 multiple-choice and multi-select |
 | **Passing Score** | 75% target in common study guidance; verify current policy before exam day |
 | **Format** | Online proctored |
 | **Prerequisites** | None |
@@ -82,7 +82,7 @@ The KCSA-versus-CKS distinction is the first decision point most learners ask ab
 
 | Aspect | KCSA | CKS |
 |--------|------|-----|
-| Format | Multiple choice | Hands-on CLI |
+| Format | Multiple-choice and multi-select | Hands-on CLI |
 | Focus | Security concepts | Security implementation |
 | Skills tested | Understanding threats and defenses | Configuring security |
 | Prerequisites | None | Active CKA |
@@ -271,7 +271,7 @@ Which approach would you choose here and why: equal time for every domain, or we
 
 ## Patterns & Anti-Patterns
 
-Because this is an introductory module, the most important pattern is to study KCSA as applied security reasoning rather than as a glossary. The exam is multiple choice, but the best preparation is still active: read a concept, place it in the 4 Cs or one of the six domains, imagine a failure, name the control that reduces that failure, and explain the tradeoff. That rhythm turns a large curriculum into a repeatable diagnostic process.
+Because this is an introductory module, the most important pattern is to study KCSA as applied security reasoning rather than as a glossary. The exam is multiple-choice and multi-select, but the best preparation is still active: read a concept, place it in the 4 Cs or one of the six domains, imagine a failure, name the control that reduces that failure, and explain the tradeoff. That rhythm turns a large curriculum into a repeatable diagnostic process.
 
 | Pattern | When to Use It | Why It Works | Scaling Consideration |
 |---------|----------------|--------------|-----------------------|
@@ -318,7 +318,7 @@ The decision is not about prestige. It is about the evidence you need and the wo
 | Ignoring the threat model domain | Attack-path language feels less concrete than RBAC or Secrets | For every control, write the attacker behavior it is meant to interrupt |
 | Skipping compliance because it is 10% | The domain looks small compared with the two 22% domains | Learn the basic purpose of CIS, NIST, benchmarks, assessments, and evidence |
 | Not connecting concepts across domains | The curriculum is divided into sections, but incidents cross those boundaries | Practice scenarios that combine identity, network, workload, platform, and evidence |
-| Rushing through subtle wording | Multiple-choice questions can include several security-sounding options | Read for the exact asset, threat, layer, and constraint before choosing |
+| Rushing through subtle wording | Multiple-choice and multi-select questions can include several security-sounding options | Read for the exact asset, threat, layer, and constraint before choosing |
 | Treating KCSA as a miniature CKS | Hands-on labs feel more concrete than conceptual review | Use light `k` inspection for anchoring, then return to scenario reasoning |
 | Trusting stale exam logistics | Blog posts and old notes can outlive policy changes | Verify duration, validity, prerequisites, and curriculum links on official pages |
 
@@ -330,7 +330,7 @@ It depends on the gap they are trying to close. CKS is the right target if they 
 
 </details>
 
-<details><summary>You have 90 minutes and about 60 multiple-choice questions on exam day. After 45 minutes you have answered 25 questions. Should you be worried, and what strategy would you apply?</summary>
+<details><summary>You have 90 minutes and about 60 multiple-choice and multi-select questions on exam day. After 45 minutes you have answered 25 questions. Should you be worried, and what strategy would you apply?</summary>
 
 You are slightly behind a simple even-time pace, so you should adjust without panicking. The safer strategy is to move through a first pass answering questions you can reason through confidently, mark questions where two options remain plausible, and return later instead of letting one scenario consume too much time. KCSA rewards careful reading, but careful does not mean slow on every item. The goal is to collect the points your preparation has made available while preserving time for the questions that need deeper elimination.
 
