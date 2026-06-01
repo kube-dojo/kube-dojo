@@ -24,7 +24,7 @@ After completing this module, you will be able to make packaging decisions from 
 
 ## Why This Module Matters
 
-In late 2023, a payments team at a large retailer spent a full launch evening chasing a production outage that did not come from Kubernetes itself. The Deployment was valid, the Service was valid, and the container image had passed every pipeline check, yet the checkout API kept recycling because production had a memory limit copied from a small development namespace. The bad value lived in one of several nearly identical YAML files, and the on-call engineer fixed the staging copy first because the filenames looked alike at a glance. By the time the production manifest was corrected, customers had seen failed payments, support had opened an incident bridge, and the team had learned that raw manifests do not stay simple once environments multiply.
+**Hypothetical scenario:** A payments team at a large retailer spends a full launch evening chasing a production outage that does not come from Kubernetes itself. The Deployment is valid, the Service is valid, and the container image has passed every pipeline check, yet the checkout API keeps recycling because production has a memory limit copied from a small development namespace. The bad value lives in one of several nearly identical YAML files, and the on-call engineer fixes the staging copy first because the filenames look alike at a glance. By the time the production manifest is corrected, customers have seen failed payments, support has opened an incident bridge, and the team learns that raw manifests do not stay simple once environments multiply.
 
 That kind of failure is why application packaging matters. Kubernetes gives you an API for declaring desired state, but it does not automatically tell you how to organize the many objects that make up one application across teams, environments, and release versions. Packaging tools sit in the space between application code and cluster reconciliation: they help you reuse a known structure, change the few values that should differ, preview the YAML that will be applied, and keep enough release history to recover when a change behaves differently in the real cluster than it did in a review.
 
@@ -226,7 +226,7 @@ helm rollback checkout --namespace payments
 | `helm uninstall` | Remove a release |
 | `helm list` | List releases |
 | `helm repo add` | Add chart repository |
-| `helm search` | Search for charts |
+| `helm search repo` | Search chart repositories; use `helm search hub` for Artifact Hub |
 
 Before running this in a lab cluster, what output do you expect from `helm template` if the values file sets `replicas: 5` but the template accidentally hardcodes `replicas: 2`? The rendered YAML will show `2`, because templates control the final manifest and values only matter where the chart author references them. That is the practical debugging habit to build: do not assume a values file is active just because it exists. Render the chart and confirm that the value appears in the object Kubernetes will actually receive.
 
@@ -490,7 +490,7 @@ Helm and Kustomize dominate KCNA-level packaging discussions, but they are not t
 
 Jsonnet and Tanka appeal to teams that want programmable configuration with reusable functions and data structures. CUE appeals to teams that want validation and constraints built into the configuration language itself. Carvel provides a suite of tools around templating, image resolution, and application deployment. Operators go beyond packaging by adding a controller that watches custom resources and performs lifecycle actions, which is useful for stateful systems that need domain-specific automation. The decision is less about fashion and more about whether the team needs simple variation, reusable packaging, typed configuration, or active reconciliation logic.
 
-Artifact discovery adds another operational question: when should you build a package yourself, and when should you use a package from the ecosystem? Artifact Hub is a CNCF project that indexes Helm charts and other cloud native artifacts, making it a common starting point when teams need a known application such as PostgreSQL, Prometheus, cert-manager, or an ingress controller. Discovery is useful, but it does not replace review. A chart found through a hub still needs source inspection, version pinning, values review, and a test installation before it belongs in production.
+Artifact discovery adds another operational question: when should you build a package yourself, and when should you use a package from the ecosystem? Artifact Hub is a CNCF Incubating project that indexes Helm charts and other cloud native artifacts, making it a common starting point when teams need a known application such as PostgreSQL, Prometheus, cert-manager, or an ingress controller. Discovery is useful, but it does not replace review. A chart found through a hub still needs source inspection, version pinning, values review, and a test installation before it belongs in production.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -498,7 +498,7 @@ Artifact discovery adds another operational question: when should you build a pa
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  artifacthub.io                                           │
-│  CNCF project                                              │
+│  CNCF Incubating project                                   │
 │                                                             │
 │  Central repository for:                                  │
 │  ─────────────────────────────────────────────────────────  │
@@ -810,19 +810,7 @@ For the decision note, Kustomize is a reasonable answer because the application 
 - [Kustomize kustomization reference](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/)
 - [Kustomize built-ins reference](https://kubectl.docs.kubernetes.io/references/kustomize/builtins/)
 - [kubectl apply reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/)
+- [Artifact Hub (CNCF Incubating project)](https://www.cncf.io/projects/artifact-hub/)
 - [Artifact Hub documentation](https://artifacthub.io/docs/)
 - [Artifact Hub repositories documentation](https://artifacthub.io/docs/topics/repositories/)
 - [Kubernetes Secrets documentation](https://kubernetes.io/docs/concepts/configuration/secret/)
-
-## KCNA Curriculum Complete!
-
-Congratulations. You have completed the KCNA application delivery sequence covering CI/CD fundamentals, application packaging, and release strategy selection.
-
-| Part | Topic | Weight |
-|------|-------|--------|
-| Part 1 | Kubernetes Fundamentals | 44% |
-| Part 2 | Container Orchestration | 28% |
-| Part 3 | Cloud Native Architecture (incl. Observability) | 12% |
-| Part 4 | Application Delivery | 16% |
-
-Use the packaging decision framework from this module as a final exam review tool. If you can explain why a team would choose Helm, Kustomize, or both, and if you can describe how to inspect the rendered manifests before rollout, you are ready for the KCNA level of application delivery questions.

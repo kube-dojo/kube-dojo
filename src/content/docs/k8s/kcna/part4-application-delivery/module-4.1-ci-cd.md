@@ -153,7 +153,7 @@ The package stage is where container registries become central. A registry store
 │  ─────────────────────────────────────────────────────────  │
 │  • Docker Hub (docker.io)                                │
 │  • GitHub Container Registry (ghcr.io)                   │
-│  • Google Container Registry (gcr.io)                    │
+│  • Google Container Registry (gcr.io, legacy; now served via Artifact Registry) │
 │  • Quay.io                                               │
 │                                                             │
 │  Private registries:                                      │
@@ -230,7 +230,7 @@ Kubernetes-native CI/CD adds a second category of tools. Tekton builds and runs 
 │              KUBERNETES-NATIVE CI/CD                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  TEKTON (CNCF)                                            │
+│  TEKTON (CNCF Incubating)                                 │
 │  ─────────────────────────────────────────────────────────  │
 │  • CI/CD as Kubernetes resources                          │
 │  • Tasks, Pipelines, PipelineRuns                        │
@@ -248,7 +248,7 @@ Kubernetes-native CI/CD adds a second category of tools. Tekton builds and runs 
 │  • Similar to Argo CD                                     │
 │  • Tight Helm integration                                │
 │                                                             │
-│  ARGO WORKFLOWS (CNCF)                                    │
+│  ARGO WORKFLOWS (CNCF Graduated)                          │
 │  ─────────────────────────────────────────────────────────  │
 │  • Workflow engine for Kubernetes                        │
 │  • DAG-based workflows                                    │
