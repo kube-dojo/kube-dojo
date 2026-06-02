@@ -208,7 +208,7 @@ When comparing these tools under exam pressure, watch for answers that describe 
 
 You should also separate install topology from operating model. ArgoCD can manage multiple clusters from one control plane, and Flux can be installed per cluster or in patterns that support fleet management. Those choices affect credentials, network paths, and blast radius. A centralized control plane can simplify visibility but concentrates trust, while per-cluster controllers reduce shared blast radius but require consistent bootstrapping and alerting across many targets.
 
-Another comparison point is how each tool expresses dependencies. ArgoCD teams often model ordering with sync waves, hooks, and app-of-apps structures, while Flux teams may model dependencies between Kustomizations or HelmReleases. Both approaches can work, and both can be abused. If a database operator, namespace policy, and application deployment all reconcile in the wrong order, the issue is dependency design, not the mere presence of GitOps.
+Another comparison point is how each tool expresses dependencies. ArgoCD teams often model ordering with sync waves, hooks, and app-of-apps structures, while Flux teams may model dependencies between Kustomizations or HelmReleases. `ApplicationSet` generates Argo CD `Application`s from generators (e.g. a list of clusters, Git directories, or pull requests), which is the standard multi-cluster / fleet pattern — distinct from hand-maintaining one `Application` per target. Both approaches can work, and both can be abused. If a database operator, namespace policy, and application deployment all reconcile in the wrong order, the issue is dependency design, not the mere presence of GitOps.
 
 Finally, consider how each tool handles drift in human workflows. ArgoCD's visual diff can make drift obvious to a responder, while Flux's Kubernetes resources can make drift visible through familiar object conditions and events. In either model, the team still needs a rule for manual changes: observe with cluster commands, repair desired state in Git, and reserve direct mutation for documented emergencies. Without that rule, the tool only automates a conflict between humans and controllers.
 
@@ -376,7 +376,7 @@ The final decision is rarely permanent. Teams often begin with one repository, K
 
 ## Did You Know?
 
-- ArgoCD began as an open source project at Intuit in 2018, and it later became part of the Cloud Native Computing Foundation ecosystem through the Argo project.
+- ArgoCD began as an open source project at Intuit in 2018. The Argo project reached CNCF Graduated status in December 2022 (the same year Flux graduated); Argo CD is its best-known sub-project.
 - Flux reached CNCF Graduated status in 2022, which reflects broad adoption and project maturity rather than a change in the basic GitOps control-loop idea.
 - Kustomize has been available through `kubectl kustomize` for years, so teams can render overlays with Kubernetes-native tooling even when they do not run a GitOps controller locally.
 - Kubernetes Secrets are only base64-encoded by default, not encrypted for every reader of the repository, which is why GitOps designs need deliberate secret-management patterns.
@@ -516,7 +516,7 @@ patches:
 
 <details><summary>Solution outline for Tasks 3 through 5</summary>
 
-Render the overlay first with `kustomize build apps/checkout/overlays/prod > /tmp/checkout-prod.yaml`, then inspect it as a reviewer. If you have a cluster, run `k diff -f /tmp/checkout-prod.yaml`; if you do not, explain which objects would be created or changed and why. Choose ArgoCD when the team needs an application-centric view, visible sync health, and shared dashboard operations; choose Flux when the team needs modular Kubernetes-native resources and delegated controller composition. The promotion note should name the reviewed production overlay change and the immutable image tag or digest being moved forward.
+Render the overlay first with `kustomize build apps/checkout/overlays/prod > /tmp/checkout-prod.yaml`, then inspect it as a reviewer. If you have a cluster, run `kubectl diff -f /tmp/checkout-prod.yaml`; if you do not, explain which objects would be created or changed and why. Choose ArgoCD when the team needs an application-centric view, visible sync health, and shared dashboard operations; choose Flux when the team needs modular Kubernetes-native resources and delegated controller composition. The promotion note should name the reviewed production overlay change and the immutable image tag or digest being moved forward.
 
 </details>
 
@@ -527,6 +527,10 @@ Success criteria:
 - [ ] You can explain whether a problem belongs to rendering, reconciliation, rollout safety, or cluster policy.
 - [ ] You can justify ArgoCD or Flux based on operating model rather than popularity.
 - [ ] You can state how production promotion is reviewed and traced.
+
+## Learner check
+
+> `ApplicationSet` generates Argo CD `Application`s from generators (e.g. a list of clusters, Git directories, or pull requests), which is the standard multi-cluster / fleet pattern — distinct from hand-maintaining one `Application` per target.
 
 ## Sources
 

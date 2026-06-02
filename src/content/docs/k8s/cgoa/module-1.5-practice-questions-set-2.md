@@ -269,7 +269,7 @@ When you review missed questions, write the stage name beside the miss. Use labe
 
 1. The OpenGitOps project describes four principles: declarative desired state, versioned and immutable storage, automatically applied agents, and continuous reconciliation.
 2. Flux graduated from the Cloud Native Computing Foundation in 2022, and its architecture is intentionally split across specialized controllers rather than presented only as one central dashboard.
-3. Argo CD graduated from the Cloud Native Computing Foundation in 2022, and its Application custom resource is a central concept for grouping sync, health, and source configuration.
+3. The Argo project graduated from the Cloud Native Computing Foundation in 2022; in Argo CD, the Application custom resource is a central concept for grouping sync, health, and source configuration.
 4. Kustomize has been available through `kubectl kustomize` since Kubernetes 1.14, which is why many Kubernetes users encounter overlays before they install any separate templating tool.
 
 ## Common Mistakes
@@ -361,7 +361,7 @@ Option 1 is correct because rendering and reconciliation are separate responsibi
 <details>
 <summary>Analysis</summary>
 
-Option 1 is correct because the failure is at admission, so updating signing/policy inputs is the shortest path to resolving the block. Option 2 is wrong because rebuild alone does not address an existing admission denial on unsigned images. Option 3 is not correct because credentials are not the failure point when admission blocks apply due image policy. Option 4 is wrong because a direct edit may hide the immediate symptom but leaves the cluster diverged from reviewed Git state and risks repeat rejection after controller-driven reconciliation.
+Option 1 is correct because the failure is at admission, so updating signing/policy inputs is the shortest path to resolving the block. Until the image meets policy, every sync attempt will fail the same way and the Deployment will keep serving the last admitted revision — fixing CI output alone does not clear an admission webhook that rejects unsigned images. Option 2 is wrong because rebuild alone does not address an existing admission denial on unsigned images. Option 3 is not correct because credentials are not the failure point when admission blocks apply due image policy. Option 4 is wrong because a direct edit may hide the immediate symptom but leaves the cluster diverged from reviewed Git state and risks repeat rejection after controller-driven reconciliation.
 </details>
 
 ### 7. A team uses CI to build images, update the desired-state repository, and directly apply the manifests while Argo CD watches the same path. What design risk should you identify?
@@ -374,7 +374,7 @@ Option 1 is correct because the failure is at admission, so updating signing/pol
 <details>
 <summary>Analysis</summary>
 
-Option 1 is correct because CI and Argo CD both mutating runtime state creates non-authoritative outcomes and confusing evidence trails. Option 2 is wrong because speed is not equivalent to correctness when two systems can write different states. Option 3 is incorrect because overlap can create mismatched versions and drift reports, not guaranteed safety. Option 4 is wrong because this architecture increases governance and traceability complexity unless direct apply is strictly constrained.
+Option 1 is correct because CI and Argo CD both mutating runtime state creates non-authoritative outcomes and confusing evidence trails — during an incident you may not know whether the live image came from the last pipeline push or the controller's last sync. Option 2 is wrong because speed is not equivalent to correctness when two systems can write different states. Option 3 is incorrect because overlap can create mismatched versions and drift reports, not guaranteed safety. Option 4 is wrong because this architecture increases governance and traceability complexity unless direct apply is strictly constrained.
 </details>
 
 ## Hands-On Exercise
@@ -461,6 +461,10 @@ Set a timer for twelve minutes and answer seven scenario questions from this mod
 
 The goal is to produce a compact error log. If you missed the Flux question, the missing phrase might be "specialized controllers." If you missed the Helm and Kustomize question, it might be "renderer, not reconciler." If you missed the incident question, it might be "Git remains desired state." Reviewing by mechanism trains transfer to new questions better than memorizing the exact wording.
 </details>
+
+## Learner check
+
+> Option 1 is correct because CI and Argo CD both mutating runtime state creates non-authoritative outcomes and confusing evidence trails — during an incident you may not know whether the live image came from the last pipeline push or the controller's last sync.
 
 ## Sources
 
