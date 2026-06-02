@@ -347,14 +347,12 @@ Read that configuration slowly because it teaches the connector mental model bet
 ```yaml
 connectors:
   count:
-    traces:
-      spans:
-        - name: span.count
-          description: "Count of spans"
+    spans:
+      span.count:
+        description: "Count of spans"
     logs:
-      log_records:
-        - name: log.record.count
-          description: "Count of log records"
+      log.record.count:
+        description: "Count of log records"
 ```
 
 OTLP itself has two common transports, and the right answer depends on constraints rather than preference. gRPC uses HTTP/2 and Protocol Buffers, supports streaming patterns, and is a strong internal default. HTTP can use Protobuf or JSON over request-response paths such as `/v1/traces`, `/v1/metrics`, and `/v1/logs`, which makes it easier to work through proxies and easier to inspect with ordinary HTTP tooling.
@@ -506,7 +504,7 @@ spec:
 
 Auto-instrumentation is powerful because the Operator can inject language agents into pods through annotations, but it should be introduced with clear ownership. The application still needs compatible runtimes, predictable resource overhead, and an endpoint that can accept the resulting telemetry. Start with a small namespace or a single workload, then expand after you have verified trace quality, attribute names, and sampling behavior.
 
-Before copying an `Instrumentation` manifest, confirm the CRD versions served by the installed Operator. Some distributions and exam contexts expect a newer served version such as `v1alpha2`, while older and upstream examples may still show `v1alpha1` with conversion support.
+Before copying an `Instrumentation` manifest, confirm the CRD versions served by the installed Operator. The **`Instrumentation` kind is served at `opentelemetry.io/v1alpha1`**. **`OpenTelemetryCollector`** is the kind that introduced **`v1beta1`** alongside older served versions—do not confuse the two CRDs when reading exam prompts or upstream samples.
 
 ```yaml
 apiVersion: opentelemetry.io/v1alpha1
@@ -719,8 +717,8 @@ exporters:
     endpoint: tempo.observability.svc.cluster.local:4317
     tls:
       insecure: true
-  otlp/loki:
-    endpoint: loki.observability.svc.cluster.local:3100
+  otlphttp/loki:
+    endpoint: http://loki.observability.svc.cluster.local:3100/otlp
     tls:
       insecure: true
   prometheus:
@@ -762,10 +760,10 @@ service:
     logs:
       receivers: [otlp, filelog]
       processors: [memory_limiter, transform/redact, batch]
-      exporters: [otlp/loki, debug]
+      exporters: [otlphttp/loki, debug]
 ```
 
-When reviewing a configuration like this, walk one signal at a time. For traces, OTLP input passes through memory protection, health-check filtering, redaction, batching, Tempo export, spanmetric generation, and debug output. For metrics, OTLP, Prometheus, host, and derived span metrics share a pipeline before Prometheus and debug export. For logs, OTLP and file input share redaction and batching before the Loki-style OTLP endpoint and debug mirror.
+When reviewing a configuration like this, walk one signal at a time. For traces, OTLP input passes through memory protection, health-check filtering, redaction, batching, Tempo export, spanmetric generation, and debug output. For metrics, OTLP, Prometheus, host, and derived span metrics share a pipeline before Prometheus and debug export. For logs, OTLP and file input share redaction and batching before **OTLP/HTTP export to Loki** (`otlphttp/loki` at `http://…:3100/otlp`—Loki accepts OTLP over HTTP, not OTLP/gRPC on port 3100) and debug mirror.
 
 That walk-through is the fastest way to find hidden mistakes. If a processor exists but is not in the relevant signal pipeline, it cannot affect that signal. If a connector appears as an exporter but not as a receiver in another pipeline, its output has nowhere useful to go. If debug output is present but backend data is missing, the exporter, backend, authentication, or network path becomes the next investigation target.
 
@@ -1163,6 +1161,14 @@ A production design would usually run node agents for file logs and host metrics
 - [Kubernetes DaemonSet documentation](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)
 - [Kubernetes Deployment documentation](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
 
+## Learner check
+
+> Under `connectors.count`, metric names are map keys (`span.count`, `log.record.count`) directly under `spans` and `logs`—there is no `traces:` wrapper and no list items with `name:`.
+
+> Instrumentation is served at opentelemetry.io/v1alpha1; OpenTelemetryCollector (not Instrumentation) added the v1beta1 API version.
+
+> Logs export to Loki via otlphttp/loki at http://loki…:3100/otlp because Loki accepts OTLP over HTTP only, not OTLP/gRPC on :3100.
+
 ## Next Module
 
-[OTCA Track Overview]() - Instrument applications using OTel SDKs across multiple languages.
+[OTCA Track Overview](/k8s/otca/) — Review all four OTCA domains and continue with the observability toolkit modules.
