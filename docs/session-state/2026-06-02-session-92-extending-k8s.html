@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 92 — Extending K8s sub-track COMPLETE (8/8)</title>
+<style>
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
+  h2 { color: #326ce5; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; vertical-align: top; font-size: .92em; }
+  th { background: #326ce5; color: #fff; }
+  .tldr { background: #eef4ff; border-left: 4px solid #326ce5; padding: .8rem 1rem; border-radius: 4px; }
+  .win { background: #eafbe7; border-left: 4px solid #2e9e2e; padding: .8rem 1rem; border-radius: 4px; }
+  .lesson { background: #fff7e6; border-left: 4px solid #e0a800; padding: .6rem 1rem; border-radius: 4px; margin: .6rem 0; }
+  ul { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 92 — Extending K8s sub-track COMPLETE (8/8)</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-02 · <strong>Branch:</strong> main (clean, synced) ·
+<strong>Board:</strong> review-axis 441 → <strong>448</strong> (+7). Two consolidated PRs merged:
+<strong>#1749</strong> (wave 1: 1.1–1.3) · <strong>#1750</strong> (wave 2: 1.4–1.7). With 1.8 (API Aggregation,
+already <code>done</code>), the <strong>Extending Kubernetes</strong> sub-track is now 100% reviewed-to-<code>done</code>.</p>
+
+<p class="win"><strong>🎉 Extending K8s (CRDs, controllers/client-go, kubebuilder, advanced operators,
+admission webhooks, scheduler plugins, API aggregation) is complete.</strong> This is a <em>code-heavy</em>
+track (Go, client-go, controller-runtime, CEL, scheduler framework) — the real defects were code/API
+correctness the verifier cannot see, caught by cross-family review + ground-checking. Remaining k8s cert
+work: <strong>10+ tool/specialty certs</strong> (capa/cba/cca/cgoa/cnpa/cnpe/finops/ica/kca/lfcs/otca/pca/bridges);
+then curriculum order resumes <strong>cloud (85) → ai-ml-engineering → on-premises → platform</strong>.</p>
+
+<h2>What shipped (2 waves, 7 modules flipped to <code>done</code>)</h2>
+<table>
+<tr><th>Wave / PR</th><th>Modules</th><th>Headline fixes</th></tr>
+<tr>
+  <td><strong>W1</strong> #1749</td>
+  <td>1.1, 1.2, 1.3</td>
+  <td><strong>1.1 (opus):</strong> P1 — the complete copy-run pod-watcher <code>main.go</code> <strong>deadlocked on Ctrl+C</strong>
+  (signal goroutine called <code>cancel()</code> only; worker parked in <code>queue.Get()</code>; <code>defer ShutDown()</code> unreachable) →
+  <code>Run</code> now mirrors module 1.3 (<code>go wait.Until</code> + block on <code>&lt;-ctx.Done()</code> + deferred <code>ShutDown()</code>); decisive
+  evidence was the sibling 1.3, which teaches the correct idiom. <strong>1.2 (cursor):</strong> P1 — <code>None</code>-vs-<code>Webhook</code>
+  CRD conversion accuracy (prose claimed automatic <code>port</code>↔<code>ports</code> translation for a differing-schema CRD with no
+  <code>spec.conversion</code>); CEL <code>x-kubernetes-validations</code> GA 1.29; <code>has(self.ingress)</code> guard; over-escaped cron regex.
+  <strong>1.3 (deepseek):</strong> code idiomatically correct; DeepCopy-before-mutate rationale; lab step renumber 6→7.</td>
+</tr>
+<tr>
+  <td><strong>W2</strong> #1750</td>
+  <td>1.4, 1.5, 1.6, 1.7</td>
+  <td><strong>1.4 (opus):</strong> P1 — Service <code>CreateOrUpdate</code> mutate wiped the <strong>immutable <code>clusterIP</code></strong>
+  (whole-<code>Spec</code> assignment) → 2nd reconcile rejected → perpetual error loop → owned-fields-only mutate; <code>EventRecorder</code> wired.
+  <strong>1.5 (deepseek):</strong> P1 broken Go (<code>env.ValueFrom</code> on a custom <code>EnvVar</code> type that had no such field — reviewer
+  misdiagnosed it as <code>corev1.EnvVarSource</code>) → documented a <code>ValueFrom string</code> field; <strong>added Operator Capability
+  Levels L1–L5 + OLM/OperatorHub</strong> (Operator Framework = CNCF <strong>Incubating</strong>). <strong>1.6 (cursor):</strong> <code>matchConditions</code>
+  <code>has()</code> guard (errored fail-closed under <code>failurePolicy: Fail</code>); standalone server returns an <code>AdmissionReview</code> envelope.
+  <strong>1.7 (opus):</strong> P1 — plugin Go used pre-1.31/1.32 signatures that won't build on 1.35 → <code>Score(... nodeInfo NodeInfo)</code>,
+  <code>CycleState</code>/<code>NodeInfo</code> as interfaces, <code>PreFilter</code> gains <code>nodes</code>, <code>EventsToRegister(ctx) (…, error)</code>; removed a broken
+  <code>kubectl apply</code> of a <code>KubeSchedulerConfiguration</code> (no REST endpoint).</td>
+</tr>
+</table>
+
+<h2>Loop &amp; roster (no-codex, held all session)</h2>
+<ul>
+  <li><strong>Per wave:</strong> cross-family R1 reviews (mixed pools, ≤2/OAuth) → orchestrator ground-check
+  + web-verify every version/maturity claim → one consolidated <code>cursor</code> fix in a worktree → verify all
+  T0 → incident-dedup gate (CI-mode) → PR (<code>chore(content):</code> + Learner-check in the PR body) → CI →
+  rebase-merge → finalize (<code>.pipeline/reviews</code> record + <code>reset-stage COMMITTED</code>).</li>
+  <li><strong>Reviewers:</strong> opus 4.8 headless (1.1/1.4/1.7 — strongest; pulled the release-1.35
+  scheduler interface to verify signatures, traced the reconcile loop and the deadlock), cursor
+  <code>--model auto</code> (1.2/1.6 review + both consolidated fixes), deepseek-v4-pro (1.3/1.5 — disciplined, ran real
+  curl/verifier checks). agy not used (dropped). gemini not used locally (yolo fix still unapplied); CI
+  gemini-3.1-pro reviewed both PRs and passed cleanly (no false positives this time).</li>
+  <li><strong>Back-catalog rate held:</strong> 6 of 7 reviews returned NEEDS_CHANGES (1.6 was APPROVE_WITH_NITS).
+  Reviews cheap, fixes the spend — as every prior track.</li>
+  <li>Both PRs: CI fully green (site-health, incident-dedup CI-mode, CodeQL ×3, gemini cross-family). Reusable
+  scripts: <code>logs/remediation/briefs/session92/{review-ext-*.md, fix-ext-wave{1,2}.md, finalize-ext-w{1,2}.sh,
+  pr-body-w{1,2}.md}</code>.</li>
+</ul>
+
+<h2>Lessons / catches worth carrying forward</h2>
+<p class="lesson"><strong>Code-heavy tracks: the defects live where the verifier is blind.</strong> Every P1
+this session was a code/API-correctness bug (a goroutine deadlock, a <code>CreateOrUpdate</code> immutable-field wipe,
+a non-compiling field reference, stale scheduler-plugin signatures) — all on modules the verifier passed at
+T0. Cross-family review (especially opus pulling upstream source) is the only gate that catches these. Brief
+code-heavy reviews toward <em>compile-conceptually / build-against-the-pinned-version</em>, not just prose/density.</p>
+<p class="lesson"><strong>Ground-checking corrected two reviewer misdiagnoses — both would have introduced
+errors.</strong> (1) deepseek flagged 1.5's <code>env.ValueFrom</code> as a <code>*corev1.EnvVarSource</code> mismatch; the real type was
+the module's custom <code>EnvVar{Name,Value}</code> with <em>no</em> <code>ValueFrom</code> field at all — its proposed
+<code>ConfigMapKeyRef</code> fix wouldn't have compiled either. (2) opus suggested moving 1.7's imports to
+<code>k8s.io/kube-scheduler/framework</code>; the canonical <code>interface.go</code> still lives at
+<code>k8s.io/kubernetes/pkg/scheduler/framework</code> (the module's existing import), so I kept that path and applied
+only the web-verified signature changes. Reinforces <code>feedback_three_quality_axes</code> and the
+ground-check-deepseek rule.</p>
+<p class="lesson"><strong>Scheduler-framework signatures churn across minor versions.</strong> <code>Score</code> dropped
+<code>nodeName string</code> for <code>nodeInfo NodeInfo</code>; <code>CycleState</code>/<code>NodeInfo</code> are interfaces (no pointer);
+<code>EventsToRegister</code> gained <code>ctx</code>+<code>error</code> in 1.32; <code>PreFilter</code> gained <code>nodes []NodeInfo</code>. Web-verified against the
+v1.35 interface. Added a one-line "confirm against your cluster's godoc" hedge so the module stays honest as
+the API keeps moving. Same applies to any future scheduler/extending content.</p>
+<p class="lesson"><strong>Version facts web-verified this session:</strong> ValidatingAdmissionPolicy GA 1.30;
+MutatingAdmissionPolicy beta 1.34 → <strong>GA 1.36</strong> (so <em>beta</em> on the 1.35 standard); CEL
+<code>x-kubernetes-validations</code> GA 1.29; Operator Framework = CNCF <strong>Incubating</strong>; kubebuilder = kubernetes-sigs (not CNCF).</p>
+
+<h2>Curriculum / board state after this session</h2>
+<ul>
+  <li><strong>Review-axis: 448 done</strong> (was 441). <code>shipped_unreviewed</code> 176→170; <code>needs_review</code> 18→17.</li>
+  <li><strong>Tracks 100% done:</strong> prerequisites (44) · linux (37) · ai · CKA (41) · CKAD (24) · CKS (30) ·
+  KCNA (28) · KCSA (26) · <strong>Extending K8s (8, this session)</strong>.</li>
+  <li><strong>k8s remaining:</strong> 10+ tool/specialty certs, then curriculum order resumes
+  <strong>cloud (85) → ai-ml-engineering → on-premises → platform</strong>.</li>
+  <li>No tech-debt introduced. Three worktrees created and cleaned up; primary stayed on <code>main</code> throughout.</li>
+</ul>
+
+<h2>NEXT session</h2>
+<ul>
+  <li><strong>Next k8s sub-track: tool/specialty certs.</strong> Candidate dirs under <code>src/content/docs/k8s/</code>:
+  <code>capa, cba, cca, cgoa, cnpa, cnpe, finops, ica, kca, lfcs, otca, pca, bridges</code>. Same review-first loop. Run a
+  <code>verify_module.py</code> tier sweep first; <strong>WEB-VERIFY every CNCF maturity claim</strong> (these tool certs are
+  ecosystem-heavy — Cilium, Istio, Argo, Prometheus, OpenTelemetry, Kyverno, etc., and maturity tiers shift —
+  see <code>feedback_web_verify_cncf_maturity</code>; OTel <em>graduated</em> 2026-05-11). For code-heavy ones, brief reviews
+  toward build-against-the-pinned-version. For any real named incident a reviewer wants cited, grep
+  <code>incident-xref:</code> for an existing canonical owner first and cross-ref rather than re-citing.</li>
+  <li>Then <strong>cloud → ai-ml-eng → on-prem → platform</strong> per curriculum order.</li>
+  <li>Standing carryover (unchanged): gemini-cli headless <code>--approval-mode=yolo</code> fix still not applied to
+  <code>adapters/gemini.py</code>; the <code>revision_pending</code> board-ladder bug (workaround: drop the frontmatter line);
+  grok-build remains an unproven candidate; codex still pulled by the user.</li>
+</ul>
+</body>
+</html>
