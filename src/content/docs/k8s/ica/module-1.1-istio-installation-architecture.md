@@ -66,9 +66,15 @@ Here is the recovered architecture diagram from the original module, completed s
 │                 Envoy / Ambient Data Plane              │
 │ Sidecars, ztunnel, waypoint proxies, gateways            │
 └─────────────────────────────────────────────────────────┘
+          ▲
+          │ xDS config push (gRPC :15010/:15012) — not via API server
+          │
+        istiod
 ```
 
-The diagram deliberately shows Kubernetes in the middle because installation failures often appear there first. A missing CRD prevents Istio custom resources from being stored, a failing mutating webhook prevents sidecar injection, and a broken validating webhook rejects configuration before Envoy ever sees it. When you debug an Istio install, do not jump straight to Envoy. First ask whether Kubernetes accepted the desired state, then ask whether `istiod` translated it, and only then ask whether the data plane applied it.
+The arrows in the first diagram show troubleshooting and dependency layering, not the live configuration path. `istiod` reads desired state from the Kubernetes API server, then pushes xDS configuration directly to each Envoy proxy over gRPC (ports 15010/15012). The API server is not on the hot path for config distribution.
+
+The diagram deliberately places Kubernetes in the middle because installation failures often appear there first. A missing CRD prevents Istio custom resources from being stored, a failing mutating webhook prevents sidecar injection, and a broken validating webhook rejects configuration before Envoy ever sees it. When you debug an Istio install, do not jump straight to Envoy. First ask whether Kubernetes accepted the desired state, then ask whether `istiod` translated it, and only then ask whether the data plane applied it.
 
 Pause and predict: if `istiod` is restarted while existing sidecar-injected pods keep running, what do you expect to happen to already-established application traffic, and what do you expect to happen to new mesh configuration? The expected answer is split. Existing Envoy sidecars continue processing traffic with the last accepted configuration, while new routing changes, fresh certificates, and newly started proxies may stall or age until `istiod` is healthy again. That distinction is why control-plane availability and data-plane continuity are related but not identical.
 
@@ -281,7 +287,7 @@ Admission failures are more subtle because a failed webhook can block unrelated 
 kubectl get mutatingwebhookconfiguration -o name | grep istio
 kubectl get validatingwebhookconfiguration -o name | grep istio
 kubectl describe mutatingwebhookconfiguration istio-sidecar-injector
-kubectl get endpoints -n istio-system istiod
+kubectl get endpointslices -n istio-system -l kubernetes.io/service-name=istiod
 ```
 
 Control-plane readiness problems should be handled like any other critical Deployment, but with mesh-specific consequences in mind. Check rollout status, logs, service endpoints, certificates, and events. If `istiod` cannot start, new proxies cannot get configuration. If `istiod` starts but its service has no endpoints, admission and discovery calls fail. If it is overloaded, proxies may connect slowly or report stale resources. The symptom might appear in application traffic, but the root cause may be control-plane saturation.
