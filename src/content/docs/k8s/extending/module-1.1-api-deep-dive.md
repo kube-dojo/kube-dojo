@@ -32,7 +32,7 @@ The airport security analogy is useful, with one important adjustment. The Kuber
 
 ## Core Concept 1: The API Server Request Pipeline
 
-When you run `kubectl create deployment nginx --image=nginx`, `kubectl` constructs an HTTP request, signs it using credentials from your kubeconfig, and sends it to the API Server. The API Server does not immediately write the Deployment to etcd. It first turns the network request into a Kubernetes identity and a requested verb, checks whether that identity is allowed to perform that verb on that resource, applies admission logic, validates the resulting object, and only then persists the accepted object.
+When you run `kubectl create deployment nginx --image=nginx:1.27`, `kubectl` constructs an HTTP request, signs it using credentials from your kubeconfig, and sends it to the API Server. The API Server does not immediately write the Deployment to etcd. It first turns the network request into a Kubernetes identity and a requested verb, checks whether that identity is allowed to perform that verb on that resource, applies admission logic, validates the resulting object, and only then persists the accepted object.
 
 The order matters because each stage receives a different form of the request. Authentication sees credentials and produces user information. Authorization sees the user, verb, API group, resource, namespace, and name. Mutating admission sees the object before final validation and may add defaults or sidecars. Validating admission sees the final candidate object and may accept or reject it, but it cannot rewrite it. Persistence stores the approved state and advances the resource version that watch clients use to stay synchronized.
 
@@ -97,7 +97,8 @@ The API Server is intentionally stateless with respect to durable cluster data. 
 │   ┌─────────────────────────────────────────────────────────┐      │
 │   │  6. PERSISTENCE                                          │      │
 │   │     Write to etcd                                        │      │
-│   │     • Serialize to storage format (protobuf)             │      │
+│   │     • Serialize to storage format (protobuf for built-in   │      │
+│   │       resources; JSON for CustomResources)                 │      │
 │   │     • Apply resource version                             │      │
 │   │     • Notify watchers via etcd watch                     │      │
 │   └─────────────────────────────────────────────────────────┘      │
@@ -127,7 +128,7 @@ kubectl auth can-i create pods --as=system:serviceaccount:default:my-sa
 kubectl auth can-i --list
 ```
 
-Admission is the extension-heavy part of the pipeline. Mutating admission can change an incoming object by adding labels, injecting containers, setting defaults, or normalizing fields. Validating admission evaluates the final object and returns accept or reject. Kubernetes 1.35 clusters can use admission webhooks for external logic and ValidatingAdmissionPolicy for in-tree CEL expressions, so the design choice is no longer "webhook or nothing." Use the simplest mechanism that can express the policy and reserve webhooks for logic that needs external data, complex calls, or mutation.
+Admission is the extension-heavy part of the pipeline. Mutating admission can change an incoming object by adding labels, injecting containers, setting defaults, or normalizing fields. Validating admission evaluates the final object and returns accept or reject. Kubernetes 1.35 clusters can use admission webhooks for external logic and ValidatingAdmissionPolicy (stable since Kubernetes 1.30) for in-tree CEL expressions, so the design choice is no longer "webhook or nothing." Use the simplest mechanism that can express the policy and reserve webhooks for logic that needs external data, complex calls, or mutation.
 
 Mutation should be used carefully because it changes the object that every later stage sees. A sidecar injector that adds containers can accidentally trigger a validating policy that counts containers, and a defaulting webhook that adds labels can affect selectors, quotas, or controller behavior. Validation is easier to reason about because it does not rewrite the request, but it can still create operational risk if a webhook is slow or unreachable. In production, the admission design includes timeout, failure policy, namespace selection, object selection, and a rollout plan, not just the webhook code.
 
@@ -414,7 +415,7 @@ func main() {
 	podInformer := factory.Core().V1().Pods().Informer()
 
 	// Register event handlers.
-	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
 			fmt.Printf("[ADDED]    %s/%s (Phase: %s)\n",
@@ -433,7 +434,10 @@ func main() {
 			pod := obj.(*corev1.Pod)
 			fmt.Printf("[DELETED]  %s/%s\n", pod.Namespace, pod.Name)
 		},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to register event handler: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Start the informer in background goroutines.
 	stopCh := make(chan struct{})
@@ -445,7 +449,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Failed to sync informer cache")
 		os.Exit(1)
 	}
-	fmt.Println("Cache synced! Watching for Pod changes...\n")
+	fmt.Println("Cache synced! Watching for Pod changes...")
 
 	// Use the Lister to read from cache, not from the API Server.
 	lister := factory.Core().V1().Pods().Lister()
@@ -490,6 +494,7 @@ AddFunc: func(obj interface{}) {
 }
 
 // Process items from the queue.
+// Simplified for teaching — see the complete program below for bounded retries and Forget.
 func processNextItem(queue workqueue.TypedRateLimitingInterface[string]) bool {
 	key, shutdown := queue.Get()
 	if shutdown {
@@ -579,7 +584,7 @@ Dry run is also a safe way to test admission behavior before a rollout. If a new
 
 ```bash
 # Create a deployment manifest locally.
-kubectl create deployment my-app --image=nginx --dry-run=client -o yaml > deployment.yaml
+kubectl create deployment my-app --image=nginx:1.27 --dry-run=client -o yaml > deployment.yaml
 
 # Server-side dry run validates through the API Server without persisting.
 kubectl apply -f deployment.yaml --dry-run=server
@@ -656,6 +661,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // AnnotationWatcher watches Pods for annotation changes.
@@ -690,7 +697,7 @@ func NewAnnotationWatcher(clientset kubernetes.Interface) *AnnotationWatcher {
 		factory:   factory,
 	}
 
-	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
 			if len(pod.Annotations) > 0 {
@@ -707,7 +714,9 @@ func NewAnnotationWatcher(clientset kubernetes.Interface) *AnnotationWatcher {
 		DeleteFunc: func(obj interface{}) {
 			w.enqueue(obj)
 		},
-	})
+	}); err != nil {
+		klog.Fatalf("Failed to register event handler: %v", err)
+	}
 
 	return w
 }
@@ -723,12 +732,11 @@ func (w *AnnotationWatcher) enqueue(obj interface{}) {
 
 // Run starts the informer and processes the workqueue.
 func (w *AnnotationWatcher) Run(ctx context.Context) error {
+	defer utilruntime.HandleCrash()
 	defer w.queue.ShutDown()
 
-	// Start informers.
 	w.factory.Start(ctx.Done())
 
-	// Wait for cache sync.
 	klog.Info("Waiting for informer cache to sync...")
 	if !cache.WaitForCacheSync(ctx.Done(), w.informer.HasSynced) {
 		return fmt.Errorf("failed to sync informer cache")
@@ -751,18 +759,16 @@ func (w *AnnotationWatcher) Run(ctx context.Context) error {
 	klog.Infof("Initial state: %d total Pods, %d with annotations",
 		len(pods), annotatedCount)
 
-	// Process workqueue items.
 	klog.Info("Starting workers...")
-	for {
-		select {
-		case <-ctx.Done():
-			klog.Info("Context cancelled, shutting down")
-			return nil
-		default:
-			if !w.processNextItem() {
-				return nil
-			}
-		}
+	go wait.Until(w.runWorker, time.Second, ctx.Done())
+
+	<-ctx.Done()
+	klog.Info("Context cancelled, shutting down")
+	return nil
+}
+
+func (w *AnnotationWatcher) runWorker() {
+	for w.processNextItem() {
 	}
 }
 
@@ -1021,7 +1027,7 @@ go build -o pod-watcher .
 
 ```bash
 # Create a Pod.
-kubectl run test-pod --image=nginx
+kubectl run test-pod --image=nginx:1.27
 
 # Checkpoint: wait for the Pod to be Ready.
 kubectl wait --for=condition=Ready pod/test-pod --timeout=120s

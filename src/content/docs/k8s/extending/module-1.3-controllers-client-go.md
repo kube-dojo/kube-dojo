@@ -207,7 +207,7 @@ func (c *Controller) handleOwnedResource(obj interface{}) {
         }
         object, ok = tombstone.Obj.(metav1.Object)
         if !ok {
-            return
+            return // production code logs decode failures via utilruntime.HandleError
         }
     }
 
@@ -887,7 +887,10 @@ func buildConfig() (*rest.Config, error) {
 	}
 
 	// Fall back to kubeconfig
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		klog.Warningf("Could not determine home directory, using empty path: %v", err)
+	}
 	kubeconfig := filepath.Join(home, ".kube", "config")
 	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }
@@ -903,7 +906,7 @@ The next part says that deletion of the parent is not an error. When the control
 
 Defaulting is another contract boundary. In this module, the controller applies defaults for replicas and port before building child objects, while the CRD schema also defines defaults for those fields. In production you should be clear about where defaulting happens and how it is tested. If defaults live in the CRD schema, clients and controllers see a more consistent object. If defaults live only in controller code, other API readers may see missing fields until reconciliation interprets them.
 
-The Deployment reconciliation block demonstrates create-or-update behavior. On not-found, the controller creates a child from the desired shape. On other read errors, it returns the error because the controller does not know enough to proceed. On an existing Deployment, it compares only the fields it owns, such as replica count and image, then deep-copies the object before updating so it does not mutate cache state directly.
+The Deployment reconciliation block demonstrates create-or-update behavior. On not-found, the controller creates a child from the desired shape. On other read errors, it returns the error because the controller does not know enough to proceed. On an existing Deployment, it compares only the fields it owns, such as replica count and image, then deep-copies the object before updating so it does not mutate cache state directly. Objects returned from a lister live in the informer's shared cache and are read-only; mutating them in place corrupts the cache for every other reader and can cause subtle, hard-to-reproduce reconciliation bugs, so you copy first and write the copy.
 
 The Service block is simpler because the preserved code creates the Service when missing and otherwise leaves it alone. That is a design choice worth noticing. If the `WebApp` port changes, a stricter controller might patch the Service, while a conservative controller might treat Service port changes as immutable and report a condition. The right answer depends on the API contract you document for `WebApp`.
 
@@ -1077,7 +1080,10 @@ import (
 func runWithLeaderElection(ctx context.Context, kubeClient kubernetes.Interface,
     startFunc func(ctx context.Context)) {
 
-    id, _ := os.Hostname()
+    id, err := os.Hostname()
+    if err != nil {
+        klog.Warningf("Could not determine hostname for leader identity, using empty string: %v", err)
+    }
 
     lock := &resourcelock.LeaseLock{
         LeaseMeta: metav1.ObjectMeta{
@@ -1399,7 +1405,7 @@ kubectl get deployment demo-app     # Should be gone (GC'd via OwnerRef)
 kubectl get svc demo-app             # Should be gone
 ```
 
-8. **Cleanup**:
+7. **Cleanup**:
 ```bash
 kind delete cluster --name controller-lab
 ```
