@@ -52,16 +52,16 @@ The important exam distinction is that reconciliation is continuous, not ceremon
 You can reason about reconciliation with a simple mental model. The platform receives desired state from a source such as Git, an API request, or a service catalog form. A controller or reconciler reads the current state from Kubernetes, cloud APIs, or platform inventory. The system then decides whether to create, update, delete, or alert, and it repeats that comparison on a regular schedule or after events.
 
 ```text
-+--------------------+       ++--------------------+
++--------------------+       +---------------------+
 | Desired state      |       | Actual state        |
 | Git, API, catalog  |       | Cluster, cloud, IAM |
-+---------+----------+       ++----------+---------+
++---------+----------+       +----------+----------+
           |                             ^
           v                             |
-+--------------------+       ++---------+----------+
++--------------------+       +----------+----------+
 | Reconciler         | ----> | Change or report    |
 | compare and decide |       | until states align  |
-+--------------------+       ++--------------------+
++--------------------+       +---------------------+
 ```
 
 That diagram is intentionally small because the exam usually tests the concept rather than the machinery. The best answer often says the loop compares desired and actual state, then brings them together. Weaker answers describe reconciliation as a deployment phase, a manual meeting, or a way to hide drift. Hiding drift is especially wrong because mature platforms make drift visible and actionable; they do not pretend reality matches the document.
@@ -114,9 +114,9 @@ Consider a scorecard that combines user and system signals. Adoption shows wheth
 
 Do not reduce platform measurement to cost reduction. Cost matters because platform work consumes people, infrastructure, and tooling, but a cheaper platform that slows every team is not a win. Likewise, a costly platform may be justified when it removes broad delivery risk and accelerates many teams. The exam answer should reflect balanced measurement rather than a single financial or activity metric.
 
-## Connecting the Original Comparison Traps
+## Connecting the Comparison Traps
 
-The original five questions in this set were short, but they represented important CNPA comparison traps. The first trap asks whether platform engineering means every team builds alone, a dedicated group builds reusable internal products, operations handles everything manually, or standards disappear. The reusable-product answer is strongest because it combines specialization with leverage; one platform team improves the shared path so many application teams can move with less duplicated effort.
+These comparison-trap questions are short, but each represents an important CNPA distinction. The first trap asks whether platform engineering means every team builds alone, a dedicated group builds reusable internal products, operations handles everything manually, or standards disappear. The reusable-product answer is strongest because it combines specialization with leverage; one platform team improves the shared path so many application teams can move with less duplicated effort.
 
 The second trap asks whether reconciliation is one-time setup, a continuous desired-versus-actual loop, a manual approval process, or a way to hide drift. The continuous-loop answer is strongest because it reflects Kubernetes controller thinking and GitOps-style operations. Drift is not embarrassing noise to hide; it is evidence the system needs to correct, report, or ask for a new desired state.
 
@@ -144,7 +144,7 @@ The third question is whether guardrails are encoded in a way developers can und
 
 The fourth question is whether measurement reflects user value. A dashboard that counts catalog clicks may be useful, but it does not prove the path works. A stronger dashboard shows how many services completed onboarding, how long onboarding took, how often reconciliation failed, which policies rejected requests, and how many support tickets came from the same workflow step. Those measures help the platform team improve the product instead of merely reporting activity.
 
-Now test the proposal against the original distractors. “Every team builds its own deployment tooling” would be a poor outcome because the proposed workflow should replace duplicated service onboarding scripts. “The ops team handles all provisioning requests manually” would also be weak because the routine path should be automated and reconciled. “Developers may use any workflow, with no standards” would conflict with the idea of a supported path, even if some exceptions remain possible for unusual workloads.
+Now test the proposal against these trap distractors. “Every team builds its own deployment tooling” would be a poor outcome because the proposed workflow should replace duplicated service onboarding scripts. “The ops team handles all provisioning requests manually” would also be weak because the routine path should be automated and reconciled. “Developers may use any workflow, with no standards” would conflict with the idea of a supported path, even if some exceptions remain possible for unusual workloads.
 
 The most subtle weakness would be a platform that looks self-service but secretly depends on manual approvals for ordinary work. A portal can collect a request while an operator still copies YAML later, and the user may not notice until work queues up. During review, ask whether the platform returns status automatically, whether it records why a request is waiting, and whether the normal request can complete without a private handoff. Those checks reveal whether the workflow truly reduces dependency on the platform team.
 
@@ -388,7 +388,7 @@ Start by writing a one-page review in your notes. Describe the repeated develope
 - [ ] Diagnose reconciliation and drift scenarios by identifying desired state, actual state, and the component that compares them.
 - [ ] Design guardrails by listing at least four controls, including policy, limits, auditability, and scoped developer autonomy.
 - [ ] Measure platform health with adoption, reliability, and time-to-value signals instead of team busyness alone.
-- [ ] Explain why each original comparison-trap distractor is wrong in one or two sentences.
+- [ ] Explain why each comparison-trap distractor is wrong in one or two sentences.
 
 <details><summary>Solution guide</summary>
 

@@ -36,6 +36,8 @@ happened, how bad is it for users, and who should act?" If any one contract is m
 system does not help if the alert that should page on user-visible error budget burn never fires. A service mesh retry policy can make a transient fault survivable, but it can also amplify load if the platform does not define where retries
 are allowed and how they are measured. ([Gateway API: API Overview](https://gateway-api.sigs.k8s.io/docs/concepts/api-overview/), [Google SRE Workbook: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/))
 
+In this module, *platform API* means a north–south exposure contract (Gateway API / Ingress / HTTPRoute). The CNPA *provisioning* platform APIs — Crossplane XRDs/Compositions/Claims and CRD+operator patterns — are covered in module 1.2 and the Platform Engineering track; don't conflate the two on the exam.
+
 Platform engineers need literacy across the whole path because they are the translators between product teams and infrastructure implementations. The application team should not need to know which controller watches a `HelmRelease`, which
 Gateway implementation programmed an external proxy, or which collector tier exports traces to a backend. They do need a stable interface, clear ownership boundaries, and a way to diagnose whether today's incident belongs to delivery,
 routing, or telemetry. Flux describes reconciliation as ensuring actual state matches a declarative desired state, Argo CD describes automated sync and self-heal in terms of out-of-sync applications, and the OpenTelemetry Protocol describes
@@ -74,6 +76,8 @@ converges or reports why it cannot. Argo CD describes automated sync as acting o
 `Kustomization` objects reconciling manifests from those artifacts, including periodic dry-run detection and drift correction. The shared idea is durable desired state plus repeated comparison, which is why manual cluster edits are usually
 drift, not a supported deployment path. ([Argo CD: Automated Sync Policy](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/), [Argo CD: Diff Strategies](https://argo-cd.readthedocs.io/en/stable/user-guide/diff-strategies/),
 [Flux: Kustomization](https://fluxcd.io/flux/components/kustomize/kustomizations/))
+
+GitOps tools like Argo CD and Flux reconcile *manifests* to desired state; progressive-delivery controllers like Argo Rollouts and Flagger handle *workload* rollout strategies (canary, blue-green) on top of that synced state.
 
 ```mermaid
 flowchart LR
