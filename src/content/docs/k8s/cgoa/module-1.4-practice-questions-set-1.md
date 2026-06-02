@@ -100,10 +100,6 @@ Now imagine that the Deployment creates Pods and Kubernetes later writes status 
 
 A practical drift investigation starts by asking three questions. First, which object and field differ between Git and the cluster? Second, who is supposed to own that field: Git, a Kubernetes controller, an autoscaler, or a human operator during a break-glass event? Third, what should the reconciliation system do now: report, sync, pause, or escalate? These questions turn a vague "GitOps is broken" complaint into a concrete diagnosis.
 
-```bash
-kubectl -n shop get deployment checkout -o yaml
-```
-
 In KubeDojo modules, commands are shown with the full `kubectl` invocation to match the course style and the anti-alias checks:
 
 ```bash
@@ -340,7 +336,7 @@ The framework also helps compare push-based and pull-based approaches without sl
 
 ## Did You Know?
 
-1. OpenGitOps principles emphasize a declarative desired state, versioned and immutable storage, automatic application, and continuous reconciliation.
+1. OpenGitOps principles emphasize a declarative desired state, versioned and immutable storage, pulled automatically (agents pull the desired state), and continuous reconciliation.
 2. A GitOps controller can report drift without automatically fixing it if the platform is configured for manual synchronization or approval gates.
 3. Helm and Kustomize can both produce Kubernetes manifests, and GitOps controllers can use either one as part of the rendering step.
 4. Pull-based GitOps reduces the need for external systems to hold direct cluster credentials, but it still requires careful RBAC and secret-management design.
@@ -584,6 +580,10 @@ Write a final answer as if you were explaining the scenario to a teammate prepar
 
 A strong final explanation says GitOps uses Git as the reviewed desired-state source and a controller to continuously reconcile the cluster toward that state. It defines drift as the mismatch between Git-declared state and live cluster state, then explains that CI/CD may build and scan the hotfix image while GitOps owns runtime reconciliation. It also notes that pull-based reconciliation can reduce direct production credentials in external systems, but it still requires RBAC, repository access, and secret controls.
 </details>
+
+## Learner check
+
+> OpenGitOps principles emphasize a declarative desired state, versioned and immutable storage, pulled automatically (agents pull the desired state), and continuous reconciliation.
 
 ## Sources
 

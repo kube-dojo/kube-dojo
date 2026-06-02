@@ -35,7 +35,7 @@ The CGOA blueprint is a signal about where the exam expects judgment. [Higher-we
 |---|---:|---|---|
 | GitOps Terminology | 20% | Whether you can interpret desired state, drift, reconciliation, state store, and feedback loop in scenario wording | Build a working vocabulary by explaining each term through a small incident |
 | GitOps Principles | 30% | Whether you can evaluate a workflow against OpenGitOps ideas instead of tool preference | Practice eliminating answers that break declarative, versioned, pulled, or reconciled behavior |
-| Related Practices | 16% | Whether you can compare GitOps with IaC, CaC, DevOps, CI, CD, and progressive delivery | Use contrast tables and ask which system owns which decision |
+| Related Practices | 16% | Whether you can compare GitOps with IaC, CaC, DevOps, DevSecOps, CI, CD, and progressive delivery | Use contrast tables and ask which system owns which decision |
 | GitOps Patterns | 20% | Whether you can reason about promotion, rollback, environments, multi-cluster layout, and drift handling | Work through sequence-based scenarios and identify the source of truth |
 | Tooling | 14% | Whether you can place ArgoCD, Flux, Helm, Kustomize, and policy tools into the model | Learn tool roles and trade-offs, but keep principles ahead of product names |
 
@@ -135,8 +135,11 @@ CGOA expects you to understand GitOps in context, not in isolation. Infrastructu
 | CI | How do we build, test, scan, and package changes? | CI can validate artifacts and update desired state through reviewed changes | Letting CI become the production deploy authority |
 | CD | How do changes reach environments reliably? | GitOps can be a CD operating model for deployment reconciliation | Equating every deployment pipeline with GitOps |
 | DevOps | How do teams improve flow, feedback, and shared ownership? | GitOps supports DevOps goals with auditable automated operations | Treating DevOps as a specific tool or command sequence |
+| DevSecOps | How do security controls run on the delivery path? | DevSecOps embeds shift-left scanning and policy in the pipeline; GitOps governs how versioned desired state is pulled and reconciled by agents | Treating security scanning alone as GitOps reconciliation |
 | Progressive delivery | How do we reduce risk during rollout? | GitOps can manage desired rollout configuration for canary or blue-green patterns | Assuming rollout strategy replaces source-of-truth discipline |
 | Policy as Code | How do we define and enforce rules automatically? | Policy can validate desired state before or during reconciliation | Assuming policy checks alone provide deployment reconciliation |
+
+DevSecOps is orthogonal to GitOps in the same way CI is: it governs what security gates run on the way to production (shift-left scanning, policy checks, supply-chain controls), while GitOps governs how reviewed desired state reaches the cluster through pull-based reconciliation. A pipeline can be strong on DevSecOps and still weak on GitOps if CI pushes manifests directly after scans pass.
 
 The boundary between CI and GitOps is especially important. CI is excellent at producing evidence that a change is safe enough to propose: tests passed, images were built, vulnerabilities were scanned, and manifests were rendered. GitOps is concerned with the reviewed desired state and the reconciliation of that desired state into runtime environments. The practices cooperate, but the exam will punish answers that collapse them into one push pipeline.
 
@@ -382,7 +385,7 @@ Before running a timed practice set, write the following decision sequence on sc
 
 3. **Drift detection is useful because it protects both reliability and auditability.** It tells teams when runtime state no longer matches the reviewed target, which helps them separate intentional change from accidental or unauthorized change.
 
-4. **Tooling questions are often principle questions in disguise.** The exam may name ArgoCD, Flux, Helm, or Kustomize, but the stronger answer usually depends on source of truth, reconciliation, immutability, or feedback.
+4. **The CGOA blueprint is weighted toward principles.** GitOps Principles is the single heaviest domain at **30%**, followed by GitOps Terminology and GitOps Patterns at **20%** each, Related Practices at **16%**, and Tooling at **14%** — so principle-level reasoning earns more than tool trivia.
 
 ## Common Mistakes
 
@@ -520,6 +523,10 @@ EOF
 - [ ] You have identified one weakest domain for follow-up review and linked it to a module in the recommended KubeDojo path.
 
 **Reflection prompt:** After completing the worksheet, choose the scenario that felt most ambiguous and write a short explanation of what made it hard. Ambiguity is useful feedback. If the difficulty came from vocabulary, review terminology. If it came from two answers sounding correct, practice tracing the full control loop. If it came from tool names, rewrite the scenario in tool-neutral language and solve it again.
+
+## Learner check
+
+> DevSecOps is orthogonal to GitOps in the same way CI is: it governs what security gates run on the way to production (shift-left scanning, policy checks, supply-chain controls), while GitOps governs how reviewed desired state reaches the cluster through pull-based reconciliation.
 
 ## Sources
 
