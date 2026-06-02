@@ -27,7 +27,7 @@ This module turns the broad LFCS track into an exam-day operating method. You wi
 
 The LFCS mental model starts with the difference between answer recognition and state production. In a multiple-choice exam, the prompt and options often carry enough context to jog your memory, and partial recognition can still help you eliminate poor choices. In a performance exam, the machine is the answer sheet. If a service is supposed to be enabled, a user is supposed to belong to a group, or a mount is supposed to persist after reboot, the scorer does not care whether you knew the right concept in conversation. It can only inspect the final system state.
 
-That is why the original short version of this module emphasized the sentence "change, verify, move on." The phrase is simple, but it should shape every minute of your preparation. You should practice tasks in a way that forces recall, execution, and proof in the same loop. Reading a command table can introduce vocabulary, but it does not teach your hands to recover from a mistyped option, recognize a misleading success message, or decide whether a reload is enough when the prompt asked for persistence.
+That is why the operating principle is "change, verify, move on." The phrase is simple, but it should shape every minute of your preparation. You should practice tasks in a way that forces recall, execution, and proof in the same loop. Reading a command table can introduce vocabulary, but it does not teach your hands to recover from a mistyped option, recognize a misleading success message, or decide whether a reload is enough when the prompt asked for persistence.
 
 The official LFCS instructions also matter because they make the exam feel more like a constrained administration shift than a classroom exercise. Current Linux Foundation candidate-facing material describes a remotely proctored session, a two-hour time box, and performance-based command-line tasks. Those constraints mean you must prepare for attention management as seriously as command syntax. A candidate who spends too long polishing one fragile task can lose points elsewhere even if the eventual fix is correct.
 
@@ -36,6 +36,22 @@ Think of LFCS as a queue of small operational tickets. Each ticket names an obje
 The distribution-independent flavor of LFCS preparation reinforces this workflow. You may practice on one distribution and encounter slightly different package names, service defaults, or helper tools elsewhere, but the exam still rewards general Linux administration competence. For example, `systemctl status` and `journalctl` habits transfer across many modern distributions, while package-manager muscle memory may vary. Strong preparation therefore balances command fluency with the ability to read local help, inspect current state, and adapt without panic.
 
 This is also why you should avoid building your plan around exam folklore. Candidate reports can be useful for understanding stress, but they are not a stable source of task content, and they can push you toward memorizing someone else's sequence instead of learning an adaptable workflow. The durable skill is the ability to enter any ordinary Linux environment, observe what is true, and move the system toward a requested state with commands you can justify.
+
+### LFCS Exam Blueprint (Domains & Weightings)
+
+The current LFCS exam (2-hour, performance-based, distribution-independent) is scored across five domains:
+
+| Domain | Weight |
+|---|---|
+| Operations Deployment | 25% |
+| Networking | 25% |
+| Storage | 20% |
+| Essential Commands | 20% |
+| Users and Groups | 10% |
+
+Source: [Linux Foundation — LFCS certification page](https://training.linuxfoundation.org/certification/linux-foundation-certified-sysadmin-lfcs/) (verify the live blueprint before exam day; the Linux Foundation updates domains periodically).
+
+The KubeDojo LFCS practice modules regroup these domains for hands-on flow: essential commands (module 1.2), running systems + networking (module 1.3), and storage + services + users (module 1.4).
 
 Here is the compact operating model you should keep in your head while studying. It is intentionally more like a runbook than a syllabus because LFCS preparation is about doing, not collecting definitions.
 
@@ -91,7 +107,7 @@ Prompt reading also helps you decide when a command should be avoided. If the ta
 
 ## The Three-Pass Exam Strategy
 
-A performance exam should not be approached as a sacred linear sequence. The question order may be convenient, but it is not necessarily optimized for your confidence, speed, or current recall. The original module proposed three passes: quick wins, medium tasks, and heavy or fragile tasks. That strategy remains the backbone of this rewrite because it protects throughput without encouraging careless skipping.
+A performance exam should not be approached as a sacred linear sequence. The question order may be convenient, but it is not necessarily optimized for your confidence, speed, or current recall. A three-pass strategy — quick wins, medium tasks, and heavy or fragile tasks — protects throughput without encouraging careless skipping.
 
 Pass one is for obvious, low-risk, fast-to-verify work. These tasks usually involve creating users or groups, adjusting straightforward permissions, creating files or links, inspecting requested state, or making small command-line changes where the failure surface is limited. The purpose is not merely emotional comfort, though confidence does matter. The purpose is to reduce the number of untouched prompts quickly, collect points that should not be left on the table, and warm up your command recall on tasks where a mistake is easy to see.
 
@@ -158,7 +174,7 @@ One useful practice habit is to record failed proofs, not just failed commands. 
 
 ## Building a Tiny Task Journal
 
-The original module recommended a tiny task journal because cognitive load becomes the enemy during hands-on exams. That advice is easy to underestimate until you experience a timed terminal session with multiple half-finished tasks. Your memory starts mixing prompt numbers, file paths, service names, and suspected fixes. A journal gives your attention a control surface so you do not waste time rediscovering what you already decided.
+A tiny task journal helps because cognitive load becomes the enemy during hands-on exams. That advice is easy to underestimate until you experience a timed terminal session with multiple half-finished tasks. Your memory starts mixing prompt numbers, file paths, service names, and suspected fixes. A journal gives your attention a control surface so you do not waste time rediscovering what you already decided.
 
 The journal should be small enough that it does not become a second exam. You only need the task identifier, a status, and one useful detail such as a path, unit, user, device, or verification gap. The statuses can be simple: `done`, `needs verify`, `skip`, and `broken/revisit`. The detail should be whatever lets you resume the task without rereading the full prompt from zero. If the journal takes more than a few seconds to update, it is too elaborate.
 
@@ -187,13 +203,13 @@ Journal discipline also reveals whether your study plan is balanced. If every pr
 
 ## Turning KubeDojo into Terminal-First Practice
 
-KubeDojo can give you topic coverage, but LFCS readiness comes from converting that coverage into repeated terminal work. The original module warned against treating the hub as the only prep asset. That warning matters because reading feels productive even when it does not build recall. A certification training system must turn each module into tasks, each task into commands, and each command sequence into verified system state.
+KubeDojo can give you topic coverage, but LFCS readiness comes from converting that coverage into repeated terminal work. Treating the hub as the only prep asset is a mistake because reading feels productive even when it does not build recall. A certification training system must turn each module into tasks, each task into commands, and each command sequence into verified system state.
 
 The practice loop should be simple. Read or review a mapped module, extract a few concrete administration tasks, perform them in a clean shell, verify each result, and repeat the tasks that felt slow or uncertain. If a topic does not become a task, it remains passive knowledge. If a task does not include verification, it trains you to trust command output instead of system state. If a practice session has no time limit, it may build depth but it will not fully prepare you for exam pacing.
 
 For example, a users and permissions study block should not end with "I reviewed ownership." It should end with a sequence such as creating a user, creating a group, adding the user to the group, preparing a shared directory, applying the intended mode, creating a test file, and proving access. A services block should not end with "I read about systemd." It should end with starting, stopping, enabling, disabling, checking logs, and explaining the difference between runtime state and boot state.
 
-The following practice plan keeps the original module's weekly prep loop but makes it more operational. Each session combines review, execution, timing, and postmortem because those parts reinforce different skills. Review gives you vocabulary, execution builds recall, timing exposes hesitation, and postmortem turns mistakes into the next session's target.
+The following practice plan uses a weekly prep loop made operational. Each session combines review, execution, timing, and postmortem because those parts reinforce different skills. Review gives you vocabulary, execution builds recall, timing exposes hesitation, and postmortem turns mistakes into the next session's target.
 
 | Session | Primary goal | Practice shape | Postmortem question |
 |---|---|---|---|
@@ -302,7 +318,7 @@ For practice, time-box each prompt family differently. Quick file and user tasks
 
 <details><summary>Question 1: You read an LFCS prompt asking you to make a service active now and enabled after reboot. You can remember only one command confidently. What should your workflow protect against?</summary>
 
-The workflow should protect against proving only one of the two requested states. Starting the service does not prove boot enablement, and enabling the service does not prove that it is active right now. A strong answer names both proof checks, such as `systemctl is-active` and `systemctl is-enabled`, before calling the task done. This directly evaluates the LFCS task prompt and uses the three-pass strategy only after the desired state is clear.
+The workflow should protect against proving only one of the two requested states. Starting the service does not prove boot enablement, and enabling the service does not prove that it is active right now. A strong answer names both proof checks, such as `systemctl is-active` and `systemctl is-enabled`, before calling the task done. This directly evaluates the LFCS task prompt: the three-pass strategy only helps once the required states are clear — here, those states are "active now" and "enabled at boot."
 
 </details>
 

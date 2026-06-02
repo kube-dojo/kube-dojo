@@ -50,11 +50,11 @@ groupadd ops
 getent passwd alice
 getent group ops
 id alice
-sudo -l
+sudo -l -U alice
 visudo
 ```
 
-After running those commands, read the output as evidence rather than noise. `getent passwd alice` confirms the account database can resolve the user through the configured name service, which matters on systems that use local files, LDAP, or another NSS source. `getent group ops` confirms the group exists through the same resolution path. `id alice` shows effective group membership as the system sees it, and `sudo -l` tests sudo policy for the current user rather than assuming the group name is sufficient on every distribution.
+After running those commands, read the output as evidence rather than noise. `getent passwd alice` confirms the account database can resolve the user through the configured name service, which matters on systems that use local files, LDAP, or another NSS source. `getent group ops` confirms the group exists through the same resolution path. `id alice` shows effective group membership as the system sees it, and `sudo -l -U alice` tests sudo policy for that user rather than assuming the group name is sufficient on every distribution.
 
 Ownership and permissions are where identity becomes operational. A file mode is only meaningful when paired with owner and group, and a directory mode is only meaningful when you remember that directory execute means traversal, not program execution. If a user cannot open `/srv/app/config.yml`, you need to ask two questions before changing anything: can the user traverse every parent directory, and does the final file grant read permission through owner, group, ACL, or other mode bits? Guessing between `chmod` and `chown` is slower than inspecting the path carefully.
 
@@ -183,6 +183,7 @@ Storage tasks feel dangerous because they touch durable state, so the safe appro
 ```bash
 lsblk
 blkid
+# run only ONE of these (choose ext4 OR xfs)
 mkfs.ext4 /dev/sdb1
 mkfs.xfs /dev/sdb1
 mkdir -p /data
@@ -218,6 +219,7 @@ pvcreate /dev/sdb1
 vgcreate vg_data /dev/sdb1
 lvcreate -n lv_app -L 10G vg_data
 mkfs.ext4 /dev/vg_data/lv_app
+mkdir -p /srv/app
 mount /dev/vg_data/lv_app /srv/app
 ```
 
@@ -266,8 +268,8 @@ apt install -y nginx
 systemctl enable --now nginx
 systemctl status nginx
 systemctl is-enabled nginx
-systemctl restart nginx
 systemctl daemon-reload
+systemctl restart nginx
 ```
 
 The `enable --now` form is efficient because it expresses both boot persistence and immediate startup. Still, you should inspect state afterward because a unit can be enabled and failed at the same time. `systemctl status nginx` shows the active state and recent log context, while `systemctl is-enabled nginx` answers whether boot policy is set. If the service fails, read the status output before reinstalling packages or changing permissions; many failures are caused by missing paths, invalid configuration, unavailable ports, or a user that cannot read required files.
@@ -584,6 +586,7 @@ Use a spare lab disk, a partition created for practice, or a loopback device. Cr
 ```bash
 lsblk
 blkid
+# run only ONE of these (choose ext4 OR xfs)
 mkfs.ext4 /dev/sdb1
 mkfs.xfs /dev/sdb1
 mkdir -p /data
@@ -597,7 +600,7 @@ echo "UUID=$UUID /data ext4 defaults 0 2" | sudo tee -a /etc/fstab
 mount -a
 ```
 
-Choose either ext4 or XFS for the actual lab run; the commands are shown together because the original practice module covered both filesystem choices. If you choose XFS, make the `/etc/fstab` filesystem type match `xfs`, not `ext4`.
+Choose either ext4 or XFS for the actual lab run; the commands are shown together so you can compare both filesystem choices. If you choose XFS, make the `/etc/fstab` filesystem type match `xfs`, not `ext4`.
 
 </details>
 
@@ -617,6 +620,7 @@ pvcreate /dev/sdb1
 vgcreate vg_data /dev/sdb1
 lvcreate -n lv_app -L 10G vg_data
 mkfs.ext4 /dev/vg_data/lv_app
+mkdir -p /srv/app
 mount /dev/vg_data/lv_app /srv/app
 ```
 
@@ -656,8 +660,8 @@ apt install -y nginx
 systemctl enable --now nginx
 systemctl status nginx
 systemctl is-enabled nginx
-systemctl restart nginx
 systemctl daemon-reload
+systemctl restart nginx
 ```
 
 After the service starts, check the exact success condition the task names. If the task only asks for boot persistence, `systemctl is-enabled` is relevant. If the task asks for a running service, `systemctl status` and logs are relevant. If the task asks the service to read from `/srv/app`, path ownership, mode bits, mount state, and service user identity are all relevant.
@@ -677,8 +681,8 @@ After the service starts, check the exact success condition the task names. If t
 - https://man7.org/linux/man-pages/man5/fstab.5.html
 - https://man7.org/linux/man-pages/man8/blkid.8.html
 - https://man7.org/linux/man-pages/man8/lsblk.8.html
-- https://man7.org/linux/man-pages/man8/systemctl.1.html
-- https://docs.kernel.org/admin-guide/device-mapper/lvm.html
+- https://man7.org/linux/man-pages/man1/systemctl.1.html
+- https://man7.org/linux/man-pages/man8/lvm.8.html
 
 ## Next Module
 

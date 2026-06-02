@@ -17,6 +17,7 @@ Before starting this module, make sure you can navigate a shell, edit text files
 - **Required**: [LFCS Essential Commands Practice](./module-1.2-essential-commands-practice/)
 - **Helpful**: [Module 1.2: Processes & systemd](/linux/foundations/system-essentials/module-1.2-processes-systemd/)
 - **Helpful**: [Module 3.1: TCP/IP Essentials](/linux/foundations/networking/module-3.1-tcp-ip-essentials/)
+- **Helpful**: [Module 3.2: DNS on Linux](/linux/foundations/networking/module-3.2-dns-linux/)
 - **Helpful**: [Module 3.4: iptables & netfilter](/linux/foundations/networking/module-3.4-iptables-netfilter/)
 
 ## Learning Outcomes
@@ -36,6 +37,8 @@ This module trains that evidence chain. LFCS running-system work is not about me
 
 The exam pressure matters because the wrong move is often more expensive than waiting ten seconds to inspect. Rebooting early can erase useful state, restarting repeatedly can rotate away the most relevant log line, and editing persistent network configuration before proving a runtime route can strand your session. The goal here is not to move slowly; it is to move in a sequence that preserves your options. When you can explain what changed, why it changed, and how you verified it, you stop treating recovery as luck.
 
+This section covers SSH client reachability; `sshd_config` server hardening (`PermitRootLogin`, host keys) is practiced in the full mock exam (module 1.5) and the Linux track.
+
 ## Diagnose systemd Service Failures with Evidence
 
 Running-system diagnosis starts with a simple distinction: a process is a running program, while a `systemd` unit is the manager's record of how that program should be started, stopped, restarted, and connected to dependencies. LFCS tasks often blur those two layers. A daemon can be running even when the unit is disabled for boot, a unit can be enabled even when the process is currently dead, and a process can be alive but bound to the wrong port. If you treat the process list as the truth, you miss persistence. If you treat `systemctl status` as the only truth, you may miss an unrelated process that owns the socket.
@@ -43,7 +46,7 @@ Running-system diagnosis starts with a simple distinction: a process is a runnin
 The first pass is deliberately small. Look for the process, identify its command line, decide whether it is healthy enough to keep, and only then take action. `kill -TERM` asks the process to exit cleanly, which gives it a chance to flush files and release locks. `kill -KILL` is the last resort because the kernel terminates the process immediately. `nice` and `renice` do not fix a failed service, but they matter in exam scenarios where a background job consumes CPU and makes the machine feel broken while core services are technically healthy.
 
 ```bash
-ps aux | grep nginx
+ps aux | grep nginx   # also matches the grep process itself; pgrep is cleaner
 top
 pgrep -a ssh
 kill -TERM <pid>
@@ -91,6 +94,8 @@ Use a running-system troubleshooting ladder to keep that discipline visible whil
 6. persistence
 
 The ladder is not a law, but it is a good default. Process state tells you what is happening right now, unit state tells you what the service manager thinks should happen, logs tell you why a transition succeeded or failed, configuration tells you what the program was asked to do, network checks tell you whether the service can be reached, and persistence checks tell you whether the fix survives reboot. When the task is vague, following the ladder prevents the common exam failure of changing three things before verifying any one of them.
+
+Authoring unit files from scratch (`[Unit]`/`[Service]`/`ExecStart`, `daemon-reload`) is practiced in [Linux: Processes & systemd](/linux/foundations/system-essentials/module-1.2-processes-systemd/).
 
 There is another reason to keep the ladder explicit: it gives you a defensible stopping point. If a service is active, enabled, logging cleanly, and listening on the expected address, you do not need to keep editing simply because the original symptom made you nervous. If the service is active but the port is closed, you know the next layer is socket ownership or service configuration. If the port is open but the client still cannot connect, you know the next layer is routing, firewall policy, or name resolution. This is how you convert a vague failure into a small set of testable claims.
 
@@ -237,7 +242,7 @@ nmcli device status
 systemctl is-enabled NetworkManager
 ```
 
-Use the output as a sequence of questions. Does the interface have the address you expected? Does the route table choose the gateway you expected? Can the host reach an IP address without DNS? Does `getent hosts` resolve the name through the system's configured resolver path? Is a service actually listening on the port you expect, and is it enabled for boot if the task asks for persistence? These questions keep route, DNS, firewall, and service failures from collapsing into a vague statement like "networking is broken."
+Use the output as a sequence of questions. Does the interface have the address you expected? Does the route table choose the gateway you expected? Can the host reach an IP address without DNS? Does `getent hosts` resolve the name through the system's configured resolver path? Resolver files (`/etc/resolv.conf`) and `resolvectl` are covered in [Module 3.2: DNS on Linux](/linux/foundations/networking/module-3.2-dns-linux/); this module stays at `getent hosts`-level name checks. Is a service actually listening on the port you expect, and is it enabled for boot if the task asks for persistence? These questions keep route, DNS, firewall, and service failures from collapsing into a vague statement like "networking is broken."
 
 Service reachability has both a local and a remote side. Locally, `ss` can prove that a daemon is listening on an address and port, but it cannot prove that a remote client can traverse the path. Remotely, a connection failure may reflect routing, firewall policy, service binding, or authentication. Keep those layers separate. If a service listens only on `127.0.0.1`, a remote client cannot reach it even though the local socket looks healthy. If a service listens on the expected address but remote traffic fails, the next question is the path between client and server.
 
@@ -546,4 +551,4 @@ Success criteria should prove both repair and cleanup, so do not mark the exerci
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [LFCS Storage, Services & Users Practice](./module-1.4-storage-services-and-users-practice/).
