@@ -327,7 +327,7 @@ properties:
 
 The `ports` example is a practical server-side apply decision. Without map semantics, a manager that owns one list item can conflict with or overwrite another manager that owns a different item because the whole list may be treated as one field. With `x-kubernetes-list-type: map` and a stable key, Kubernetes can reason about individual entries, which is closer to how operators expect lists of ports, conditions, and named rules to behave.
 
-CEL rules are best used for relationships that OpenAPI does not express cleanly, such as `minReplicas` being less than or equal to `maxReplicas` or requiring an ingress host when TLS is enabled. Keep CEL rules small, deterministic, and directly tied to the field being validated. If the rule requires network calls, large lookups, or business policy that changes frequently, use an admission webhook or controller logic instead.
+CEL rules are best used for relationships that OpenAPI does not express cleanly, such as `minReplicas` being less than or equal to `maxReplicas` or requiring an ingress host when TLS is enabled. CEL validation rules via `x-kubernetes-validations` graduated to GA in Kubernetes 1.29, so they are a dependable, server-enforced layer on every supported cluster rather than an alpha convenience. Keep CEL rules small, deterministic, and directly tied to the field being validated. If the rule requires network calls, large lookups, or business policy that changes frequently, use an admission webhook or controller logic instead.
 
 ```yaml
 spec:
@@ -338,7 +338,7 @@ spec:
     fieldPath: ".minReplicas"
   - rule: "self.replicas >= self.minReplicas && self.replicas <= self.maxReplicas"
     message: "replicas must be between minReplicas and maxReplicas"
-  - rule: "!self.ingress.tlsEnabled || self.ingress.host != ''"
+  - rule: "!has(self.ingress) || !self.ingress.tlsEnabled || self.ingress.host != ''"
     message: "host is required when TLS is enabled"
   properties:
     minReplicas:
@@ -468,7 +468,7 @@ spec:
                       type: string
 ```
 
-In this example, both versions remain served, but only `v1beta1` is stored. A client may create a `v1alpha1` object, but the API server converts it to the storage version before writing it. A client may later request the same object as `v1alpha1`, and the API server converts the stored `v1beta1` form back into the requested version before returning it.
+In this example, both versions remain served, but only `v1beta1` is stored. Because these two versions are structurally different, automatic conversion between them requires a conversion webhook (`strategy: Webhook`, shown next). With the default `None` strategy the API server only rewrites the `apiVersion` label and copies fields as-is, which is safe ONLY when the schemas are compatible. A client may create a `v1alpha1` object and the API server persists it in the storage version; on read, it returns the stored fields under the requested version label without translating `port` into `ports` unless a webhook performs that mapping.
 
 There are two conversion strategies. The `None` strategy is effectively a no-op and is only safe when the schemas are compatible enough that the same object can be represented across versions without semantic translation. The `Webhook` strategy sends conversion reviews to a service you operate, and that service must handle every supported version pair correctly enough that old and new clients see stable meaning.
 
@@ -497,6 +497,7 @@ kubectl get webapps --all-namespaces -o yaml > /dev/null
 
 # Or use the storage version migrator (kube-storage-version-migrator)
 # This systematically reads and rewrites all objects in the new storage version
+# (optional component — not installed on default kind/minikube clusters)
 ```
 
 Pause and predict: if you have 10,000 `WebApp` resources stored as `v1alpha1` and you mark `v1beta1` as storage, do those objects instantly rewrite in etcd? They do not. The API server can serve converted views on demand, but you still need a rewrite or a storage-version migration process if you want the backing data to move to the new storage representation.
@@ -551,9 +552,12 @@ Now standard scaling commands can target the custom resource:
 # Scale the custom resource
 kubectl scale webapp my-app --replicas=5
 
-# Use HPA
+# Use HPA (also requires Metrics Server and a controller that keeps
+# status.replicas, status.selector, and readyReplicas current)
 kubectl autoscale webapp my-app --min=2 --max=10 --cpu-percent=80
 ```
+
+CPU-based autoscaling on arbitrary CRDs is not automatic just because the scale subresource exists. HPA reads metrics through Metrics Server and writes desired replicas through the scale endpoint, but your controller must maintain the status fields HPA consults and reconcile child workloads accordingly.
 
 Pause and predict: if you configure HPA for your custom resource but omit the `scale` subresource, what breaks first? The HPA has no standard scale endpoint to read or write for that resource, so it can not reliably determine current replicas or update desired replicas. The fix is not an HPA flag; it is a CRD contract that exposes scale paths with fields your controller actually maintains.
 
@@ -739,8 +743,8 @@ spec:
                     value:
                       type: string
                     valueFrom:
-                      type: string
-                      description: "Secret or ConfigMap reference (name:key format)."
+                      type: object
+                      description: "Simplified placeholder — in Kubernetes, valueFrom is an object with secretKeyRef or configMapKeyRef, not a string."
               resources:
                 type: object
                 properties:
@@ -1038,7 +1042,7 @@ Add schema validation to the `schedule` field so the API server rejects malforme
 
 ```yaml
 x-kubernetes-validations:
-- rule: "self.matches('^(\\\\S+\\\\s+){4}\\\\S+$')"
+- rule: "self.matches('^(\\S+\\s+){4}\\S+$')"
   message: "schedule must be a valid cron expression with 5 fields"
 ```
 
@@ -1066,9 +1070,9 @@ Keep only the essential fields at priority zero, because those columns are shown
 </details>
 
 <details>
-<summary>8. A developer writes `imgae` instead of `image` in a strict custom resource manifest. The apply succeeds, but the misspelled field disappears when they read the object back. What happened?</summary>
+<summary>8. A developer writes `imgae` instead of `image` in a strict custom resource manifest that omits the required `image` field. What happens?</summary>
 
-The API server pruned the unknown field because the CRD has a structural schema that does not include `imgae`. Pruning removes fields outside the declared schema before persistence, which keeps stored objects aligned with the API contract. The apply can still succeed if the required real `image` field is absent only when the schema failed to mark it required. The fix is to require important fields and use server-side dry run tests that include common typos and omissions.
+The apply fails validation because `spec.image` is required. If the schema did not mark `image` as required and the manifest contained only the misspelled `imgae` field, the API server would prune that unknown field during admission because the CRD has a structural schema that does not include `imgae`. Pruning removes fields outside the declared schema before persistence, which keeps stored objects aligned with the API contract. The fix is to require important fields and use server-side dry run tests that include common typos and omissions.
 
 </details>
 
@@ -1080,7 +1084,7 @@ Exercise scenario: you are publishing a `BackupPolicy` API for application teams
 
 ### Task 1: Create the CRD
 
-Apply a CRD that serves both versions, marks `v1beta1` as storage, deprecates `v1alpha1`, enables status, and publishes useful printer columns. Read the manifest before running it and identify which validation rule prevents `retention.maxCount` from being lower than `retention.minCount`.
+Apply a CRD that serves both versions, marks `v1beta1` as storage, deprecates `v1alpha1`, enables status, and publishes useful printer columns. Because `v1alpha1` and `v1beta1` use different schemas and this CRD has no `spec.conversion` block, the default `None` strategy only relabels `apiVersion` — cross-version reads return stored fields untranslated. In production you would add `spec.conversion.strategy: Webhook` or keep version schemas compatible. Read the manifest before running it and identify which validation rule prevents `retention.maxCount` from being lower than `retention.minCount`.
 
 ```bash
 cat << 'CRDEOF' | kubectl apply -f -
@@ -1406,7 +1410,7 @@ EOF
 <details>
 <summary>Solution notes</summary>
 
-The request should still succeed because `v1alpha1` is served, but the warning tells users which version to adopt. Because `v1beta1` is storage, a complete production system would need conversion behavior if the versions have different shapes. This exercise focuses on the CRD surface, so treat the warning as a prompt to plan conversion before a real migration.
+The request should still succeed because `v1alpha1` is served, but the warning tells users which version to adopt. Because `v1beta1` is storage and the two versions have different shapes with default `None` conversion, reading the object as `v1beta1` returns the stored `v1alpha1` fields without translating `target: "deployment/web"` into the structured `v1beta1` target object. This exercise focuses on the CRD surface, so treat the warning as a prompt to plan a conversion webhook before a real migration.
 
 </details>
 
