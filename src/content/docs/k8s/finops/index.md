@@ -62,7 +62,7 @@ Bonus: Hands-On with OpenCost (toolkit)
 
 | # | Module | Complexity | Time | Focus |
 |---|--------|------------|------|-------|
-| 1 | [FinOps Fundamentals](module-1.1-finops-fundamentals/) | `[MEDIUM]` | 45 min | Principles, lifecycle, teams, organizational models |
+| 1 | [FinOps Fundamentals](module-1.1-finops-fundamentals/) | `[MEDIUM]` | 60 min | Principles, lifecycle, teams, organizational models |
 | 2 | [FinOps in Practice](module-1.2-finops-practice/) | `[MEDIUM]` | 50 min | Cost allocation, optimization, billing, K8s FinOps |
 
 ---

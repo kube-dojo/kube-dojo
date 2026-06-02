@@ -4,7 +4,7 @@ slug: k8s/finops/module-1.1-finops-fundamentals
 sidebar:
   order: 2
 ---
-> **Certification Track** | Complexity: `[MEDIUM]` | Time: 90 minutes
+> **Certification Track** | Complexity: `[MEDIUM]` | Time: 60 minutes
 
 ## Overview
 
@@ -84,6 +84,25 @@ Operate answers the question, "How do we make good behavior repeatable?" In Kube
 
 The loop matters because each phase depends on the previous one but can also expose defects in it. An optimization review may reveal that the allocation model hides shared ingress cost. A governance review may reveal that teams bypass labels when creating emergency resources. A finance forecast may reveal that engineering needs more granular product metrics. The right response is to improve the system, not to blame the last person who touched a manifest.
 
+## The FinOps Framework Map: Phases, Domains, Capabilities
+
+Candidates often confuse the lifecycle Phases with the Framework's Domains, but they answer different
+questions. Keeping them straight is worth easy exam points.
+
+- **Phases** (Inform → Optimize → Operate) are *iterative work modes* — where you are in the loop right now.
+- **Domains** are the *business outcomes* of a FinOps practice, and they run in parallel rather than as
+  serial steps. The four Domains are **Understand Usage & Cost**, **Quantify Business Value**,
+  **Optimize Usage & Cost**, and **Manage the FinOps Practice**.
+- **Capabilities** are the *functional activities* inside each Domain. For example, Understand Usage &
+  Cost includes Data Ingestion, Allocation, Reporting & Analytics, and Anomaly Management. (This module
+  names the Domains; the Capabilities are exercised in [Module 1.2](module-1.2-finops-practice/).)
+- **Scopes** are the technology areas the framework applies to — Cloud, SaaS, Datacenter, and beyond.
+
+In one line: Phases are *when*, Domains are *what outcomes*, Capabilities are *how*, and Scopes are
+*where*. Sources: [FinOps Framework — Domains](https://www.finops.org/framework/domains/),
+[Capabilities](https://www.finops.org/framework/capabilities/),
+[Scopes](https://www.finops.org/framework/scopes/).
+
 ## FinOps Maturity Model
 
 The FinOps Foundation maturity model uses Crawl, Walk, and Run to describe how sophisticated a capability is in a particular organization. The model is not a badge ladder where every team must reach Run for every capability. It is a practical way to start small, measure value, and mature where business needs justify the effort. That nuance is important for Kubernetes teams because a startup with one cluster does not need the same allocation machinery as an enterprise with hundreds of clusters across clouds, and it is aligned with the [maturity model](https://www.finops.org/framework/maturity-model/).
@@ -92,7 +111,7 @@ At Crawl maturity, the organization has basic visibility and a small number of r
 
 At Walk maturity, the organization has more consistent allocation and recurring optimization. Kubernetes Walk maturity might include standard labels in templates, OpenCost or a managed equivalent in each cluster, reports split by namespace and product, regular review of request-to-usage ratios, and a documented process for shared cluster costs. Teams begin to compare cost with value metrics such as requests served, customers supported, or build minutes produced. Finance can forecast with better inputs because engineering can explain the drivers behind changes.
 
-At Run maturity, cost awareness is integrated into engineering workflows and policy. Kubernetes Run maturity might include admission controls that require ownership metadata, automated rightsizing recommendations with engineering review, namespace budgets, anomaly alerts, chargeback or showback, and unit economics dashboards that connect platform spend to product outcomes. Automation is preferred where it is reliable, but mature teams still keep humans in the loop for tradeoffs that affect reliability, security, or customer experience.
+At Run maturity, cost awareness is integrated into engineering workflows and policy. Kubernetes Run maturity might include admission controls that require ownership metadata, automated rightsizing recommendations with engineering review, namespace budgets, anomaly alerts, chargeback (assigning costs directly to the owning team's budget) or showback (cost visibility reported to teams, with no budget transfer), and unit economics dashboards that connect platform spend to product outcomes. Automation is preferred where it is reliable, but mature teams still keep humans in the loop for tradeoffs that affect reliability, security, or customer experience.
 
 The maturity model is also useful for avoiding over-engineering. A team at Crawl should not spend months building a perfect allocation model before it has basic ownership coverage. A team at Walk should not automate rightsizing until it can explain what a recommendation means for latency and memory risk. A team at Run should not assume that one successful cluster policy applies to every workload class. FinOps maturity is valuable only when it improves decisions.
 
@@ -177,8 +196,6 @@ OpenCost is the open source starting point for Kubernetes cost allocation. The p
 Kubecost builds on the same cost allocation lineage and adds commercial features around reporting, recommendations, governance, alerting, federation, and enterprise workflows. For this module, you only need awareness of the distinction: OpenCost gives you a vendor-neutral open source cost signal, while Kubecost packages a broader product experience around that signal. The right tool choice depends on scale, support needs, multi-cluster reporting, billing reconciliation, and governance requirements. The upstream project is tracked at [github.com/opencost/opencost](https://github.com/opencost/opencost).
 
 Cloud-provider native tools are also part of the landscape. AWS supports split cost allocation data for Amazon EKS, which can provide Pod-level visibility in Cost and Usage Reports and aggregate by Kubernetes primitives such as namespace and cluster using [AWS Cost Explorer](https://docs.aws.amazon.com/aws-cost-management/latest/userguide/ce-what-is.html) and the [AWS CE API](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html). Google Kubernetes Engine cost allocation can expose cluster, namespace, and label dimensions into Cloud Billing via [GKE cost allocations](https://cloud.google.com/kubernetes-engine/docs/how-to/cost-allocations). Microsoft Cost Management has Kubernetes cost views for AKS via [Azure Cost Management and Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/) and [Azure Kubernetes cost view](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/view-kubernetes-costs), with broader context in [Azure cost management overview](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management). These native features are valuable because they connect Kubernetes allocation to provider billing systems, but their coverage, freshness, and dimensions vary.
-
-For provider-side reporting and reconciliation, see [AWS Cost Explorer](https://docs.aws.amazon.com/aws-cost-management/latest/userguide/ce-what-is.html), the [AWS CE API](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html), [Google Cloud Billing reports](https://cloud.google.com/billing/docs/how-to/reports), and [Azure Cost Management and Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/).
 
 General cost explorers such as AWS Cost Explorer, Google Cloud Billing reports, and Azure Cost Management are still necessary because not every cost is born inside Kubernetes. Container platforms depend on registries, object storage, databases, queues, CDNs, observability systems, security tools, and support plans. A Kubernetes FinOps practice should therefore avoid tool tunnel vision. Use cluster-aware tools for workload allocation, provider tools for billing truth and commitments, and product metrics for value.
 
@@ -405,7 +422,7 @@ kind delete cluster --name finops-lab
 ```
 ## Learner Check / Self-Assessment
 
-You are ready to move on when you can explain the difference between FinOps as a value practice and cost cutting as a short-term tactic. You should be able to describe how Inform, Optimize, and Operate form a loop, why Crawl/Walk/Run maturity is capability-specific, and why Kubernetes allocation requires both scheduler data and business metadata. If you cannot yet explain how a Pod request can affect node cost even when usage is low, repeat the second exercise and compare the request table with `kubectl top`.
+You are ready to move on when you can explain the difference between FinOps as a value practice and cost cutting as a short-term tactic. You should be able to describe how Inform, Optimize, and Operate form a loop, why Crawl/Walk/Run maturity is capability-specific, and why Kubernetes allocation requires both scheduler data and business metadata. If you cannot yet explain how a Pod request can affect node cost even when usage is low, repeat the Hands-On Lab's request-vs-usage comparison (the `kubectl top` vs Pod-request step).
 
 You should also be able to sketch a basic collaboration model for your own organization. Identify who owns namespace standards, who receives cost reports, who can approve rate commitments, who understands product value, and who can change workload manifests. If any of those owners are missing, that gap is more important than choosing a more advanced tool. FinOps starts with visibility and ownership because optimization without ownership becomes an argument over numbers.
 

@@ -321,7 +321,7 @@ helm template opencost opencost/opencost \
   --set opencost.prometheus.internal.namespaceName=prometheus-system \
   --set opencost.prometheus.internal.serviceName=prometheus-server \
   --set opencost.prometheus.internal.scheme=http \
-  --set opencost.prometheus.internal.port=9090 \
+  --set opencost.prometheus.internal.port=80 \
   | kubectl apply -n opencost -f -
 
 kubectl wait --for=condition=Available deployment/opencost \
