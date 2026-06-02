@@ -63,7 +63,7 @@ Before `ls`, `rm`, `find`, or almost any other external command receives its arg
 
 The important mental model is that a glob is not a pattern handed to every tool automatically. An unquoted `*.log` belongs to the shell first. If files in the current directory match, the shell replaces the pattern with those local filenames before `find` or `tar` sees anything. If no files match, many shells leave the literal pattern in place, which means the same command can behave differently depending on the current directory. That context sensitivity is why unquoted patterns are a frequent exam-time trap.
 
-- `*`: Matches zero or more characters. For example, `*.log` matches `error.log` and `.log`.
+- `*`: Matches zero or more characters, but **not** a leading dot. For example, `*.log` matches `error.log` but **not** the hidden file `.log` — to match dotfiles you must write the leading dot explicitly (e.g. `.*log`).
 - `?`: Matches exactly one character. For example, `file?.txt` matches `file1.txt` but not `file10.txt`.
 - `[abc]`: Matches any one character listed inside the brackets.
 - `[!abc]` or `[^abc]`: Matches any one character not listed inside the brackets.
@@ -94,7 +94,7 @@ ls -li /tmp/drill1/dir1  # Note identical inode numbers for file1 and hardlink
 readlink /tmp/drill1/dir2/symlink.txt
 ```
 
-This preserved drill does more than create a toy tree. It lets you see how directory entries relate to inodes, which is the foundation for understanding why hard links and symbolic links behave differently. When `ls -li` shows identical inode numbers for `file1.txt` and `hardlink.txt`, you are not looking at two independent file payloads. You are looking at two names for the same underlying inode, and that fact drives both the power and the constraints of hard links.
+This drill does more than create a toy tree. It lets you see how directory entries relate to inodes, which is the foundation for understanding why hard links and symbolic links behave differently. When `ls -li` shows identical inode numbers for `file1.txt` and `hardlink.txt`, you are not looking at two independent file payloads. You are looking at two names for the same underlying inode, and that fact drives both the power and the constraints of hard links.
 
 ## Search, Metadata, and Text Extraction
 
@@ -107,7 +107,7 @@ find /var/log -name "*.log"
 find /etc -type f -mtime -1
 grep -R "error" /var/log
 sed -n '1,20p' /etc/fstab
-awk '{print $1, $3}' /etc/passwd
+awk -F':' '{print $1, $3}' /etc/passwd
 ```
 
 The first two commands ask metadata questions: which names end in `.log`, and which regular files under `/etc` changed recently. The `grep` command asks a content question, so it opens files under `/var/log` and searches for the string `error`. The `sed` command prints a controlled line range without opening an editor, and the `awk` command prints selected fields from each input line. These tools overlap at the edges, but their strengths are distinct enough that choosing well saves both time and mistakes.
@@ -132,7 +132,7 @@ sed -n '1,10p' /etc/passwd
 awk -F':' '{print $1, $3}' /etc/passwd
 ```
 
-That preserved drill is intentionally ordinary because ordinary commands are what you execute under pressure. The better version of `grep -R "root" /var/log` would often add `--binary-files=without-match` or narrow the path further, but the central point remains: use recursive content search only after the directory is small enough to justify opening files. If the task is merely to locate configuration filenames, `find /etc -name "*.conf"` avoids reading every configuration file payload.
+This drill is intentionally ordinary because ordinary commands are what you execute under pressure. The better version of `grep -R "root" /var/log` would often add `--binary-files=without-match` or narrow the path further, but the central point remains: use recursive content search only after the directory is small enough to justify opening files. If the task is merely to locate configuration filenames, `find /etc -name "*.conf"` avoids reading every configuration file payload.
 
 Pause and predict: if `/etc` contains both files and directories modified during the last day, what does `find /etc -mtime -1` return compared with `find /etc -type f -mtime -1`? The first command can return any filesystem object that passes the time test, while the second returns only regular files. That `-type f` predicate is small, but it removes false positives and keeps later commands from accidentally treating directories as files.
 
@@ -187,12 +187,12 @@ tar -cJf backup.tar.xz /etc/myapp
 tar -xJf backup.tar.xz -C /tmp/restore
 ```
 
-The preserved examples show the three common compression families, but a production-quality command usually improves the path handling. Creating an archive from `/etc/myapp` can store absolute path information or emit warnings depending on the implementation. A cleaner pattern is to change into the parent directory and archive the relative child name: `tar -czf backup.tar.gz -C /etc myapp`. That way, extraction creates `myapp` under the chosen restore directory instead of trying to recreate a path rooted at `/`.
+These examples show the three common compression families, but a production-quality command usually improves the path handling. Creating an archive from `/etc/myapp` can store absolute path information or emit warnings depending on the implementation. A cleaner pattern is to change into the parent directory and archive the relative child name: `tar -czf backup.tar.gz -C /etc myapp`. That way, extraction creates `myapp` under the chosen restore directory instead of trying to recreate a path rooted at `/`.
 
 ```bash
 gzip file.txt          # produces file.txt.gz, removes original
 gunzip file.txt.gz     # restores file.txt
-bzip2 file.txt         # produces file.txt.bz2
+bzip2 file.txt         # produces file.txt.bz2 (removes original)
 bunzip2 file.txt.bz2
 xz file.txt            # produces file.txt.xz
 unxz file.txt.xz
@@ -381,7 +381,7 @@ The framework is intentionally compact because you should be able to apply it du
 
 ## Did You Know?
 
-- In 1984, the standard `tar` utility was formally codified by POSIX, though the Unix `tar` program originated in the late 1970s for writing archives to sequential magnetic tape.
+- In 1988, the `ustar` (Unix Standard TAR) format was standardized in POSIX.1 (IEEE Std 1003.1-1988), though the Unix `tar` program originated in the late 1970s for writing archives to sequential magnetic tape.
 - The `xz` file format appeared in 2009 and uses the LZMA2 compression algorithm, which often improves size compared with `gzip` while trading away compression speed.
 - A Linux directory is conceptually a mapping from filenames to inode numbers, which is why a hard link can make two names refer to one underlying file object.
 - The standard `cp` command was present in early Unix history, and its modern administrative value comes from metadata-preserving options such as `-p` and `-a`.
@@ -422,7 +422,7 @@ The shell processes redirections from left to right, so `2>&1` first points stde
 <details>
 <summary>4. You are under time pressure to archive a web directory located at `/var/www/app`. You want the archive to extract cleanly. You use `tar -czf backup.tar.gz -C /backup /var/www/app`. Will this work as intended?</summary>
 
-No, this command is structurally flawed because `-C /backup` tells `tar` to change into `/backup` before looking for the source path. Unless `/backup/var/www/app` exists, the command fails or captures something other than the intended tree. A cleaner command is `tar -czf backup.tar.gz -C /var/www app`, followed by `tar -tzf backup.tar.gz` to verify that the archive contains a relative `app` directory. The important idea is to control archive layout before you need to restore it.
+Because `/var/www/app` is absolute, `-C /backup` is ignored for path resolution; `tar` still archives it but strips the leading `/`, so the archive stores `var/www/app/…` (with a *Removing leading /* warning) instead of a clean relative `app/`. Use `tar -czf backup.tar.gz -C /var/www app` so it stores `app/`. List with `tar -tzf backup.tar.gz` to verify layout before you need to restore it.
 </details>
 
 <details>
