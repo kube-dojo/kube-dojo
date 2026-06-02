@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Session 92 — Extending K8s sub-track COMPLETE (8/8)</title>
+<title>Session 92 — Extending K8s COMPLETE + Claude billing reroute + tool-certs wave 1</title>
 <style>
   body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
   h1 { border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
@@ -19,11 +19,12 @@
 </style>
 </head>
 <body>
-<h1>Session 92 — Extending K8s sub-track COMPLETE (8/8)</h1>
+<h1>Session 92 — Extending K8s COMPLETE + Claude billing reroute + tool-certs wave 1</h1>
 <p class="tldr"><strong>Date:</strong> 2026-06-02 · <strong>Branch:</strong> main (clean, synced) ·
-<strong>Board:</strong> review-axis 441 → <strong>448</strong> (+7). Two consolidated PRs merged:
-<strong>#1749</strong> (wave 1: 1.1–1.3) · <strong>#1750</strong> (wave 2: 1.4–1.7). With 1.8 (API Aggregation,
-already <code>done</code>), the <strong>Extending Kubernetes</strong> sub-track is now 100% reviewed-to-<code>done</code>.</p>
+<strong>Board:</strong> review-axis 441 → <strong>454</strong> (+13). Three workstreams this session:
+(1) <strong>Extending K8s sub-track COMPLETE</strong> — PRs <strong>#1749</strong> (1.1–1.3) + <strong>#1750</strong> (1.4–1.7),
+8/8 with 1.8 already done; (2) <strong>Claude billing-reroute policy</strong> locked (memory + STATUS + skill);
+(3) <strong>tool/specialty-cert wave 1</strong> — PR <strong>#1751</strong> (ICA Istio ×4 + PCA Prometheus ×2 → <code>done</code>).</p>
 
 <p class="win"><strong>🎉 Extending K8s (CRDs, controllers/client-go, kubebuilder, advanced operators,
 admission webhooks, scheduler plugins, API aggregation) is complete.</strong> This is a <em>code-heavy</em>
@@ -112,19 +113,55 @@ MutatingAdmissionPolicy beta 1.34 → <strong>GA 1.36</strong> (so <em>beta</em>
   <li>No tech-debt introduced. Three worktrees created and cleaned up; primary stayed on <code>main</code> throughout.</li>
 </ul>
 
+<h2>Addendum A — Claude billing reroute (mid-session, user-initiated)</h2>
+<p class="win">User flagged the <strong>June-15-2026 Claude billing change</strong> and was weighing cancelling the
+subscription. Confirmed (web-verified): <code>claude -p</code> / Agent-SDK / GH-Actions move to a <strong>separate
+capped programmatic credit pool</strong> ($20 Pro / $100 Max5× / $200 Max20×) — <strong>interactive Claude Code
+(the orchestrator) keeps using the main subscription quota, unaffected.</strong></p>
+<ul>
+  <li><strong>Verdict: don't cancel.</strong> Keep Claude as orchestrator (main quota, irreplaceable) + minimize
+  headless <code>-p</code> (route bulk reviews/edits to cursor + deepseek; reserve opus-<code>-p</code> for ≤1 hardest review/wave).</li>
+  <li><strong>TIMING:</strong> user renews <strong>June 18 → Max 5×</strong>; that's when the reroute binds. Through June 17
+  (Max 20×, ~70% of weekly limit used last week) <strong>use Claude FREELY</strong> — don't conserve.</li>
+  <li>Investigated the poor-claude / pty wrappers: mechanically viable (drives the official CLI in a real PTY =
+  interactive surface) but hacky (<code>bypassPermissions</code> + <code>kill $PPID</code>, no clean stdout, MCP-bloat) +
+  ToS-gray → experiment only; <strong>never</strong> token-extraction into a personal API server.</li>
+  <li>Locked durably: memory <code>feedback_claude_billing_reroute</code>, STATUS "Active policies", orchestrator skill
+  roster (commits <code>77e9d6d5</code>, <code>7701f432</code>). Verify pool consumption on claude.ai → Settings → Usage.</li>
+</ul>
+
+<h2>Addendum B — tool/specialty-cert wave 1 (PR #1751)</h2>
+<p>First wave of the tool-cert remediation, curriculum order after Extending K8s. <strong>6 modules → <code>done</code></strong>
+(ICA Istio 1.1–1.4 + PCA Prometheus 1.1–1.2). Reviews: opus 4.8 (ICA 1.1/1.2/1.4), cursor (ICA 1.3, PCA 1.1),
+deepseek (PCA 1.2). Used opus freely per the weekly headroom.</p>
+<ul>
+  <li><strong>Real defects:</strong> ICA 1.2 had 4-of-7 quiz YAML blocks mismatched to their answers (Q6's YAML
+  contradicted its "create a ServiceEntry" answer); ICA 1.4 had two invalid CEL filters (<code>response.duration</code>
+  doesn't exist; <code>response.flags</code> is an int bit-vector) + a lab that never installed its observability addons;
+  ICA 1.3 a brittle <code>proxy-config</code> command; PCA 1.1 used <code>resets()</code> on a gauge; PCA 1.2 failed 3 structural
+  gates (sources 9→10, common-mistakes 10→8, hands-on checkboxes added).</li>
+  <li><strong>Ground-check catches:</strong> rejected a deepseek FALSE-POSITIVE ("4 dead links" in PCA 1.2 — all
+  4 targets exist; would have broken valid links); web-verified IstioOperator (in-cluster operator removed 1.24
+  but <code>istioctl install -f</code> still works → precise note, not a rip-out; Helm recommended); normalized Istio
+  sample pins to <code>release-1.27</code>. No new CNCF maturity claims.</li>
+  <li><strong>Bridges excluded:</strong> <code>k8s/bridges/*</code> are intentional navigational bridge pages (diagnostic +
+  skills-gap map + sequenced path), not teaching modules — the verifier flags them T3 only by format. Tracked as a
+  verifier-classification follow-up (tooling, not content).</li>
+</ul>
+
 <h2>NEXT session</h2>
 <ul>
-  <li><strong>Next k8s sub-track: tool/specialty certs.</strong> Candidate dirs under <code>src/content/docs/k8s/</code>:
-  <code>capa, cba, cca, cgoa, cnpa, cnpe, finops, ica, kca, lfcs, otca, pca, bridges</code>. Same review-first loop. Run a
-  <code>verify_module.py</code> tier sweep first; <strong>WEB-VERIFY every CNCF maturity claim</strong> (these tool certs are
-  ecosystem-heavy — Cilium, Istio, Argo, Prometheus, OpenTelemetry, Kyverno, etc., and maturity tiers shift —
-  see <code>feedback_web_verify_cncf_maturity</code>; OTel <em>graduated</em> 2026-05-11). For code-heavy ones, brief reviews
-  toward build-against-the-pinned-version. For any real named incident a reviewer wants cited, grep
-  <code>incident-xref:</code> for an existing canonical owner first and cross-ref rather than re-citing.</li>
+  <li><strong>Continue tool/specialty certs (wave 2+), curriculum order:</strong> remaining sidebar order is
+  <strong>CCA (Cilium, 1) → CGOA (GitOps, 5) → CBA (Backstage, 3) → OTCA (OpenTelemetry, 2) → KCA (Kyverno, 2) →
+  CAPA (Argo, 2) → CNPE (Platform Eng, 5) → CNPA (Platform Assoc, 5) → FinOps (2)</strong>; <strong>LFCS (5)</strong> sits in an
+  earlier sidebar section. ~31 modules left. Same loop. <strong>WEB-VERIFY every CNCF maturity claim</strong> (Cilium
+  Graduated, Argo Graduated, OTel <em>Graduated</em> 2026-05-11, Kyverno Incubating, Backstage Incubating — tiers shift).
+  Reusable scripts: <code>session92/{review-*.md, fix-toolcerts-wave1.md, finalize-toolcerts-w1.sh}</code>.</li>
   <li>Then <strong>cloud → ai-ml-eng → on-prem → platform</strong> per curriculum order.</li>
-  <li>Standing carryover (unchanged): gemini-cli headless <code>--approval-mode=yolo</code> fix still not applied to
-  <code>adapters/gemini.py</code>; the <code>revision_pending</code> board-ladder bug (workaround: drop the frontmatter line);
-  grok-build remains an unproven candidate; codex still pulled by the user.</li>
+  <li>Standing carryover: <strong>from June 18 (Max 5×) apply the minimize-<code>-p</code> reroute</strong>
+  (<code>feedback_claude_billing_reroute</code>); gemini-cli headless <code>--approval-mode=yolo</code> fix still not applied to
+  <code>adapters/gemini.py</code>; <code>revision_pending</code> board-ladder bug (workaround: drop the frontmatter line);
+  verifier bridge-content-type exclusion follow-up; grok-build unproven; codex still pulled by the user.</li>
 </ul>
 </body>
 </html>
