@@ -22,7 +22,7 @@ After completing this module, you will be able to perform the assessment work th
 4. **Design** an ongoing assessment program that combines automated checks, manual review, metrics, remediation tracking, and periodic validation.
 ## Why This Module Matters
 
-Real Kubernetes incidents rarely come from one missing control; they come from a reachable management surface, weak access control, and insufficient detection lining up at the same time. The textbook 2018 case at a major automotive company is documented in [the CKS GUI security module](../../../cks/part1-cluster-setup/module-1.5-gui-security/) <!-- incident-xref: tesla-2018-cryptojacking --> — and no single assessment type would have caught it alone. A vulnerability scan could have noticed exposure, an audit could have questioned authentication, a threat model could have challenged the trust boundary, and a penetration test could have proved the blast radius before an intruder did. The discipline an assessor needs is choosing the right combination of techniques, not memorizing one.
+Real Kubernetes incidents rarely come from one missing control; they come from a reachable management surface, weak access control, and insufficient detection lining up at the same time. The 2018 Tesla cryptojacking case (documented in [the CKS GUI security module](../../../cks/part1-cluster-setup/module-1.5-gui-security/) <!-- incident-xref: tesla-2018-cryptojacking -->) illustrates the point. *Applying this module's framework:* a vulnerability scan could have noticed exposure, an audit could have questioned authentication, a threat model could have challenged the trust boundary, and a penetration test could have proved the blast radius before an intruder did. The discipline an assessor needs is choosing the right combination of techniques, not memorizing one.
 
 Security assessments are how a team turns confidence into evidence. A cluster can have RBAC, audit logs, NetworkPolicies, image scanning, Pod Security admission, and encrypted Secrets, yet still be unsafe if those controls are incomplete, mis-scoped, or never tested under realistic conditions. The operational question is not whether the diagram contains a control box. The question is whether an ordinary engineering change can bypass the control, whether an attacker can chain two small findings together, and whether the team can prove the fix remained effective after the next deployment.
 
@@ -122,7 +122,7 @@ When attackers breach a cluster, they typically follow a predictable lifecycle. 
 
 This path structure explains why assessors care about findings that seem harmless in isolation. A pod that can reach the kubelet API may not be able to authenticate today, yet the reachable endpoint still expands the blast radius of future credential theft or an authentication bypass vulnerability. A default ServiceAccount with read-only permissions may look minor until the same namespace contains Secrets that unlock a database. A permissive egress policy may look operationally convenient until an SSRF flaw lets an attacker reach the cloud metadata service.
 
-War Story: In the 2019 Capital One breach, an attacker exploited a Server-Side Request Forgery vulnerability in a web application. The app was running with an overprivileged IAM role, which is the cloud equivalent of giving a Kubernetes workload more ServiceAccount authority than it needs. The attacker used the SSRF to query the cloud metadata service, stole the role's credentials, and synced large amounts of data from S3. The Kubernetes lesson is direct: initial access plus overprivileged workload identity creates a blast radius that application firewalls alone cannot contain.
+The 2019 Capital One breach (covered in [the CKS node-metadata module](../../../cks/part1-cluster-setup/module-1.4-node-metadata/) <!-- incident-xref: capital-one-2019 -->) shows how a Server-Side Request Forgery vulnerability plus an overprivileged IAM role let an attacker query the cloud metadata service, steal the role's credentials, and exfiltrate S3 data. The Kubernetes lesson is direct: initial access plus overprivileged workload identity creates a blast radius that application firewalls alone cannot contain.
 
 Pause and predict: an attacker finds an exposed Jenkins dashboard, runs a malicious build job, accesses the pod's default ServiceAccount token, and uses it to read Secrets in the `default` namespace. Which phases of the attack path did they just execute, and which controls would have broken the chain earliest? The exposed dashboard is initial access, the malicious build job is code execution inside the environment, and the token use is lateral movement through Kubernetes identity. The earliest control might be authentication on Jenkins, but strong ServiceAccount defaults, namespace isolation, and RBAC would reduce the damage if the first control failed.
 
@@ -285,8 +285,8 @@ Assume this is a Kubernetes 1.35 cluster where administrators use OIDC, workload
    *Scenario*: An admin deletes a production namespace and blames a glitch.
    *Control*: Kubernetes Audit Logging is enabled and shipped to an immutable SIEM. (Mitigated).
 4. **Information Disclosure**: Can someone see things they shouldn't?
-   *Scenario*: A user with read access to the cluster views Secrets.
-   *Control*: RBAC is configured, but developers currently have the `view` cluster role, which exposes some metadata. (Action Item: Review and tighten RBAC).
+   *Scenario*: A user with read access to the cluster views resource metadata (pod specs, ConfigMaps, labels).
+   *Control*: RBAC is configured, and developers currently have the built-in `view` ClusterRole, which intentionally does not grant Secret read but still exposes workload metadata that may reveal architecture details. (Action Item: Review and tighten RBAC).
 5. **Denial of Service**: Can someone crash the API?
    *Scenario*: A misconfigured CI/CD pipeline spams the API server with millions of requests.
    *Control*: API Priority and Fairness (APF) is enabled to rate-limit service accounts. (Mitigated).
@@ -518,7 +518,7 @@ Before you start, decide what you will treat as a trust boundary. The internet-t
 | E | RBAC to read secrets | Minimal secret access |
 
 **TOP RISKS:**
-1. SA token leads to API access -> Disable auto-mount
+1. SA token leads to API access -> Disable auto-mount and restrict token projection
 2. Database credentials exposed -> Use Vault, rotate
 3. No network isolation -> NetworkPolicy
 4. Missing audit logs -> Enable audit logging
@@ -563,4 +563,4 @@ The first two commands validate whether the backend ServiceAccount can read Secr
 - [Aqua Security kube-hunter](https://github.com/aquasecurity/kube-hunter)
 ## Next Module
 
-[Next: KCSA Overview](../) - Review the full KCSA path, identify weak areas, and turn these assessment habits into exam preparation and day-to-day platform practice.
+[KCSA Overview](../) — review the full certification path and turn these assessment habits into exam preparation and day-to-day platform practice.

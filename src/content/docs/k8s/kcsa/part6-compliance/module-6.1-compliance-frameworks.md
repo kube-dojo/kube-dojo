@@ -26,7 +26,7 @@ After completing this module, you will be able to make defensible design decisio
 
 ## Why This Module Matters
 
-A healthcare payments startup once learned the hard way that "we use Kubernetes" was not an answer to an auditor's question. Its platform processed card payments for patient invoices, stored clinical billing notes, and supported customers in the European Union, so one application crossed PCI DSS, HIPAA, and GDPR boundaries at the same time. The engineering team had encryption enabled in several places and had a mature deployment pipeline, but nobody could show which namespace contained regulated data, which service accounts could read it, how long audit logs were retained, or whether a new workload could bypass the intended network boundary.
+Hypothetical scenario: A healthcare payments startup once learned the hard way that "we use Kubernetes" was not an answer to an auditor's question. Its platform processed card payments for patient invoices, stored clinical billing notes, and supported customers in the European Union, so one application crossed PCI DSS, HIPAA, and GDPR boundaries at the same time. The engineering team had encryption enabled in several places and had a mature deployment pipeline, but nobody could show which namespace contained regulated data, which service accounts could read it, how long audit logs were retained, or whether a new workload could bypass the intended network boundary.
 
 The financial impact came from delay rather than a public breach. A large hospital customer paused rollout until the startup could produce credible evidence, the sales team missed a renewal window, and engineers spent weeks reconstructing decisions that should have been recorded continuously. Nothing in that failure was exotic. The cluster had default service account token behavior, permissive network paths, inconsistent image scanning reports, and audit logs that were useful for debugging but not sufficient for a regulated access review.
 
@@ -316,9 +316,9 @@ GDPR follows personal data and accountability. A Kubernetes operator may not dec
 
 Before running the next command in a real environment, what output would you expect from `k auth can-i get secrets --as system:serviceaccount:payments:checkout -n payments`? If the answer is yes, the next question is whether that access is needed, whether it is logged, and whether the service account can reach only the workloads that justify the permission.
 
-When these three frameworks overlap, the same Kubernetes evidence can support different stories. HIPAA may use audit logs to show technical safeguards around protected health information, SOC 2 may use the same logs to show monitoring and logical access control, and GDPR may use related records to demonstrate accountability and security of processing. The control does not change, but the explanation changes because each framework asks why the control exists and what risk it reduces.
+When these three frameworks overlap, the same Kubernetes evidence can support different stories. HIPAA may use audit logs to show technical safeguards around protected health information, SOC 2 may use the same logs to show monitoring and logical access control, and GDPR may use related records to demonstrate accountability and security of processing. For GDPR specifically, remember that Article 30 RoPA is a processing inventory maintained by the privacy team, while Kubernetes audit logs supply technical evidence under Article 32 and Article 5(2) accountability — the control does not change, but the explanation changes because each framework asks why the control exists and what risk it reduces.
 
-There are also limits that Kubernetes cannot solve alone. HIPAA workforce training, SOC 2 vendor risk review, and GDPR legal basis for processing are organizational controls. Kubernetes can store evidence, enforce deployment paths, and restrict access, but it cannot replace contracts, policies, records of processing, or human accountability. A mature compliance map is honest about those limits so the platform team does not promise more than the cluster can prove.
+HIPAA network segmentation through NetworkPolicy maps to Access Control and Transmission Security safeguards — controlling who can reach ePHI workloads and protecting data in transit between segments — rather than Integrity, which addresses alteration or destruction of ePHI. HIPAA workforce training, SOC 2 vendor risk review, and GDPR legal basis for processing are organizational controls. Kubernetes can store evidence, enforce deployment paths, and restrict access, but it cannot replace contracts, policies, records of processing, or human accountability. A mature compliance map is honest about those limits so the platform team does not promise more than the cluster can prove.
 
 ### Default vs. Compliant Posture
 
@@ -327,8 +327,8 @@ A vanilla Kubernetes cluster prioritizes flexible scheduling and developer produ
 | Component | Vanilla Kubernetes Default | Compliance-Ready Posture | Compliance Impact |
 |-----------|----------------------------|--------------------------|-------------------|
 | **Network** | Flat network (all pods can communicate) | Default-deny NetworkPolicies, strict segmentation | Fails PCI-DSS scope reduction; fails SOC 2 logical access |
-| **Secrets** | Base64 encoded in etcd (plain-text) | Encrypted at rest using a KMS provider | Fails HIPAA/PCI-DSS data protection requirements |
-| **Service Accounts** | Tokens automounted to every pod | `automountServiceAccountToken: false` by default | Fails least privilege access (SOC 2, PCI-DSS) |
+| **Secrets** | Base64 encoded in etcd (plain-text) | Encrypted at rest using a KMS `EncryptionConfiguration` provider | Fails HIPAA/PCI-DSS data protection requirements |
+| **Service Accounts** | Tokens automounted to every pod | `automountServiceAccountToken: false` as a platform or namespace default for regulated workloads | Fails least privilege access (SOC 2, PCI-DSS) |
 | **Pod Security** | Pods can run as root, mount host paths | Pod Security Admission (Restricted/Baseline) | Fails SOC 2 system operations security; increases blast radius |
 | **Audit Logs** | Often disabled or limited retention | API server audit logging enabled, shipped to SIEM | Fails HIPAA audit controls; fails PCI-DSS monitoring |
 | **Images** | Pull from any registry, no scanning | Signed images from trusted registries, continuous scanning | Fails PCI-DSS secure development; fails SOC 2 vulnerability management |
@@ -491,7 +491,7 @@ Runbooks should separate "prove the design" from "prove the operation." Design e
 │  CONTINUOUS COMPLIANCE:                                    │
 │  Automated checks → Continuous monitoring → Real-time fix │
 │                     ↓                                      │
-│  Benefits: Always compliant, proactive, efficient         │
+│  Benefits: Reduces audit surprise, improves operating effectiveness, proactive │
 │                                                             │
 │  IMPLEMENTATION:                                           │
 │  ├── Policy as code (Kyverno/OPA)                        │
@@ -686,12 +686,14 @@ Treat the exercise as a small design review. If you choose a shared cluster, jus
 | Control | PCI-DSS | HIPAA | SOC 2 | GDPR |
 |---------|---------|-------|-------|------|
 | **RBAC with least privilege** | 7.1, 7.2 (Access control) | Access Control (Technical) | CC6.1-CC6.3 (Logical access) | Article 32 (Security measures) |
-| **API server audit logging** | 10.1-10.3 (Track access) | Audit Controls (Technical) | CC7.2 (Monitoring) | Article 30 (Records of processing) |
+| **API server audit logging** | 10.1-10.3 (Track access) | Audit Controls (Technical) | CC7.2 (Monitoring) | Article 32 (Security of processing); Article 5(2) (Accountability) |
 | **Secrets encrypted at rest** | 3.4 (Protect stored data) | Encryption (Technical) | CC6.7 (Data protection) | Article 32 (Encryption) |
-| **Network Policies** | 1.2, 1.3 (Firewall rules) | Integrity (Technical) | CC6.6 (Network controls) | Article 32 (Security measures) |
+| **Network Policies** | 1.2, 1.3 (Firewall rules) | Access Control and Transmission Security (Technical) | CC6.6 (Network controls) | Article 32 (Security measures) |
 | **Image scanning** | 6.1, 6.2 (Vulnerability management) | Risk Analysis (Admin) | CC7.1 (Vulnerability management) | Article 32 (Testing) |
 
 **Key observations:**
+- GDPR Article 30 (Record of Processing Activities, or RoPA) is a separate processing inventory maintained outside Kubernetes; API server audit logs are technical evidence for access monitoring under Article 32 and accountability under Article 5(2), not a substitute for RoPA. Privacy teams maintain RoPA as a living register of processing purposes, data categories, and retention; platform teams supply audit log exports that prove who accessed regulated workloads during a review period.
+- HIPAA network segmentation maps to Access Control (who can reach ePHI workloads) and Transmission Security (protecting data in transit between segments), not Integrity, which covers alteration or destruction of ePHI. A default-deny NetworkPolicy demonstrates that only authorized pods can initiate connections to a patient-billing namespace.
 - Most controls map to multiple frameworks
 - Access control and encryption are universal requirements
 - Audit logging is required by every framework
@@ -734,7 +736,7 @@ A passing review does not require every command to return "no"; it requires the 
 
 ## Sources
 
-- [PCI Security Standards Council: PCI DSS v4.0.1 standard](https://docs.pcisecuritystandards.org/PCI%20DSS/Standard/PCI-DSS-v4_0_1.pdf)
+- [PCI Security Standards Council: PCI DSS](https://www.pcisecuritystandards.org/standards/pci-dss/)
 - [U.S. HHS: HIPAA Security Rule](https://www.hhs.gov/hipaa/for-professionals/security/index.html)
 - [U.S. HHS: HIPAA Breach Notification Rule](https://www.hhs.gov/hipaa/for-professionals/breach-notification/index.html)
 - [AICPA and CIMA: SOC suite of services](https://www.aicpa-cima.com/resources/landing/system-and-organization-controls-soc-suite-of-services)
