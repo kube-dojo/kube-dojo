@@ -46,7 +46,7 @@ kind: ClusterPolicy
 metadata:
   name: require-run-as-nonroot
 spec:
-  validationFailureAction: Enforce
+  validationFailureAction: Enforce  # spec-level; Kyverno 1.12+ prefers per-rule validate.failureAction
   rules:
     - name: check-nonroot
       match:
@@ -401,11 +401,9 @@ spec:
                 - Pod
       preconditions:
         all:
-          - key: "{{ request.namespace }}"
-            operator: In
-            value:
-              - production
-              - prod-*
+          - key: "{{ request.object.metadata.labels.environment || '' }}"
+            operator: Equals
+            value: production
       validate:
         message: "All containers in production namespaces must have a readinessProbe."
         pattern:
@@ -414,7 +412,7 @@ spec:
               - readinessProbe: {}
 ```
 
-Preconditions are also where many policy bugs hide. Authors often put too much logic in `match`, which is mostly about resource selection, or they confuse `any` with `all`. Read `any` as OR and `all` as AND. If a rule should apply to high-criticality workloads or to workloads in financial namespaces, use `any`. If a rule should apply only when both the namespace and label match, use `all`.
+Preconditions are also where many policy bugs hide. Authors often put too much logic in `match`, which is mostly about resource selection, or they confuse `any` with `all`. Read `any` as OR and `all` as AND. If a rule should apply to high-criticality workloads or to workloads in financial namespaces, use `any`. If a rule should apply only when both the namespace and label match, use `all`. Set operators such as `AnyIn` and `AllIn` compare **literal** strings only: a value like `prod-*` in the list does not glob-match `prod-foo` (wildcards work with `Equals` / `NotEquals`, not with set membership). The production probe example above keys off a workload `environment` label instead of guessing namespace names.
 
 ```yaml
 apiVersion: kyverno.io/v1
@@ -436,7 +434,7 @@ spec:
             operator: Equals
             value: "high"
           - key: "{{ request.namespace }}"
-            operator: In
+            operator: AnyIn
             value:
               - production
               - financial
@@ -454,12 +452,12 @@ spec:
 
 | Operator | Description | Example |
 |---|---|---|
-| `Equals` / `NotEquals` | Exact match | `key: "foo"`, `value: "foo"` |
-| `In` / `NotIn` | Membership check | `key: "foo"`, `value: ["foo","bar"]` |
+| `Equals` / `NotEquals` | Exact match (supports wildcards in value) | `key: "foo"`, `value: "foo"` |
+| `In` / `NotIn` | **Deprecated** (v1.6.0+); use `AnyIn` / `AnyNotIn` instead | Prefer `AnyIn` for membership |
+| `AnyIn` / `AllIn` | Set membership (literal names only, no globs) | `key: "prod-foo"`, `value: ["production","financial"]` |
 | `GreaterThan` / `LessThan` | Numeric comparison | `key: "5"`, `value: 3` |
 | `GreaterThanOrEquals` / `LessThanOrEquals` | Inclusive comparison | `key: "5"`, `value: 5` |
-| `AnyIn` / `AnyNotIn` | Any element matches | Array-to-array comparison |
-| `AllIn` / `AllNotIn` | All elements match | Array-to-array comparison |
+| `AnyNotIn` / `AllNotIn` | Negated set membership | Array-to-array comparison |
 | `DurationGreaterThan` | Time duration comparison | `key: "2h"`, `value: "1h"` |
 
 Dynamic context extends the same idea by letting a policy read data that is not present in the submitted object. A ConfigMap can hold a list of allowed registries, or an API call can fetch the live Namespace so the policy can evaluate namespace labels and annotations. This is useful, but it is not free. Every external lookup introduces RBAC requirements, failure modes, and latency, so use it when the data genuinely needs to change independently from the policy definition.
@@ -499,8 +497,8 @@ spec:
           Allowed: {{ allowedRegistries.data.registries }}
         deny:
           conditions:
-            all:
-              - key: "{{ request.object.spec.containers[].image | [0] | split(@, '/') | [0] }}"
+            any:
+              - key: "{{ request.object.spec.containers[].image | map(@, split(@, '/')[0]) }}"
                 operator: AnyNotIn
                 value: "{{ allowedRegistries.data.registries | split(@, ',') }}"
 ```
@@ -544,8 +542,11 @@ An internal API call uses Kyverno's service account, so RBAC becomes part of the
 context:
   - name: externalCheck
     apiCall:
+      service:
+        url: "https://policy-check.internal/validate"
+        # caBundle: |-
+        #   <PEM>
       method: POST
-      urlPath: "https://policy-check.internal/validate"
       data:
         - key: image
           value: "{{ request.object.spec.containers[0].image }}"
@@ -979,6 +980,9 @@ spec:
       mutate:
         patchesJson6902: |-
           - op: add
+            path: "/metadata/labels"
+            value: {}
+          - op: add
             path: "/metadata/labels/managed-by"
             value: "kyverno"
           - op: add
@@ -1071,6 +1075,14 @@ kubectl get policyreport -A
 ```bash
 kind delete cluster --name kyverno-lab
 ```
+
+## Learner check
+
+> **JSON6902 parent map:** RFC 6902 `add` does not create missing parent objects. The lab mutation prepends `- op: add` / `path: "/metadata/labels"` / `value: {}` before nested label keys so `test-pass` (no `metadata.labels` map) still receives `managed-by` and `policy-version`.
+
+> **External `apiCall`:** `urlPath` targets only the in-cluster Kubernetes API server. HTTPS endpoints use `apiCall.service.url` (optional `caBundle` / headers), not `urlPath`.
+
+> **Preconditions:** `AnyIn` replaces deprecated `In` / `NotIn`. Set operators match literal strings; the production probe rule uses `metadata.labels.environment == production` instead of a `prod-*` namespace pattern.
 
 ## Sources
 

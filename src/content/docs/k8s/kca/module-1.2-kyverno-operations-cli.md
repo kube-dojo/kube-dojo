@@ -115,7 +115,7 @@ kyverno apply policy.yaml --resource pod.yaml \
   --set request.object.metadata.namespace=production
 ```
 
-Exit codes are part of the contract, so treat them as carefully as the printed output. A zero exit means all evaluated resources passed according to the command inputs. A one exit means at least one evaluated result violated the policy expectation. A two exit usually means the test itself could not run, such as invalid YAML, a missing file, or an unreadable path, and that should be handled as a pipeline error rather than a policy decision.
+Exit codes are part of the contract, so treat them as carefully as the printed output. A zero exit means all evaluated resources passed according to the command inputs. A non-zero exit means at least one resource failed policy evaluation or the command could not complete setup (invalid YAML, missing files, unreadable paths). Kyverno documents exit semantics per release; run `kyverno apply --help` and the CLI reference for your pinned version before encoding CI gates on specific numeric codes.
 
 Before running this in CI, what output do you expect if one manifest is intentionally noncompliant and your policy is designed to reject it? The answer should be a nonzero job when you use `kyverno apply` as a gate, but a passing job when you use `kyverno test` and declare that the noncompliant resource is expected to fail. That difference is the reason mature teams use both commands: `apply` gates proposed workloads, while `test` verifies the policy's intended behavior.
 
@@ -184,7 +184,7 @@ kyverno test tests/ --detailed-results
 
 The `result` field accepts `pass`, `fail`, `skip`, `warn`, and `error`, which means a test suite can document intended behavior rather than only successful admission. That is especially useful for audit-mode policies, exceptions, preconditions, and deny rules where the interesting behavior is often "this object should not pass." In review, a `kyverno-test.yaml` file becomes executable policy documentation because every expected result explains what the policy author believed should happen.
 
-`kyverno jp` exists because many Kyverno policies depend on JMESPath expressions, and JMESPath bugs are hard to spot in a policy file. A precondition can silently evaluate to false, a variable can return an array when you expected a string, or a missing field can flow into a default expression. Testing the query separately reduces that ambiguity before you blame the match block, webhook configuration, or resource filters.
+`kyverno jp` exists because many Kyverno policies depend on JMESPath expressions, and JMESPath bugs are hard to spot in a policy file. A precondition can silently evaluate to false, a variable can return an array when you expected a string, or a missing field can flow into a default expression. Testing the query separately reduces that ambiguity before you blame the match block, webhook configuration, or resource filters. Pipe representative admission JSON through `kyverno jp query` when a rule uses projections such as `containers[].image` or filtered lists, because the CLI prints the evaluated shape you will compare against `deny` conditions and preconditions.
 
 ```bash
 # Query a JSON file.
@@ -331,27 +331,27 @@ Which approach would you choose here and why: one global policy exclusion for `k
 
 Kyverno exposes Prometheus metrics on port `8000` at the `/metrics` endpoint by default, and those metrics tell you whether policy evaluation is healthy as a service. Reports answer "what happened to resources," while metrics answer "how often, how quickly, and with what result is Kyverno evaluating requests?" You need both views because a cluster can have no new violations and still have a slow or unhealthy admission path.
 
-The three KCA-relevant metrics to remember are policy results, admission requests, and policy execution duration. `kyverno_policy_results_total` shows policy outcomes by policy, rule, result, and resource information. `kyverno_admission_requests_total` focuses on admission traffic and whether requests were allowed or denied. `kyverno_policy_execution_duration_seconds` is a histogram that helps you identify slow policy evaluation before it becomes a user-visible API latency problem.
+The three KCA-relevant metrics to remember are policy results, admission requests, and policy execution duration. `kyverno_policy_results_total` counts evaluations with labels such as `policy_name`, `rule_name`, `rule_result` (pass/fail), and resource kind. `kyverno_admission_requests_total` counts admission traffic by `resource_kind`, `resource_namespace`, and `operation` — it does not expose an `allowed` label; denials show up in policy results. `kyverno_policy_execution_duration_seconds` is a histogram that helps you identify slow policy evaluation before it becomes a user-visible API latency problem.
 
 | Metric | Type | What It Tells You |
 |--------|------|-------------------|
-| `kyverno_policy_results_total` | Counter | Total policy evaluations by policy, rule, result, and resource type |
-| `kyverno_admission_requests_total` | Counter | Total admission requests received, grouped by allowed or denied outcomes |
+| `kyverno_policy_results_total` | Counter | Policy evaluations by policy, rule, `rule_result`, and resource type |
+| `kyverno_admission_requests_total` | Counter | Admission requests by kind, namespace, and operation (not allow/deny) |
 | `kyverno_policy_execution_duration_seconds` | Histogram | How long policy evaluation takes, which matters for admission latency SLOs |
 | `kyverno_controller_reconcile_total` | Counter | Background controller reconciliation activity |
 
 ```promql
 # Policy violation rate over the last five minutes.
-rate(kyverno_policy_results_total{result="fail"}[5m])
+rate(kyverno_policy_results_total{rule_result="fail"}[5m])
 
 # Admission request latency at p99.
 histogram_quantile(0.99, rate(kyverno_policy_execution_duration_seconds_bucket[5m]))
 
-# Total blocked admission requests.
-sum(kyverno_admission_requests_total{allowed="false"})
+# Total policy failures (denials surface here, not on admission_requests_total).
+sum(kyverno_policy_results_total{rule_result="fail"})
 
 # Violations grouped by policy name.
-sum by (policy_name) (kyverno_policy_results_total{result="fail"})
+sum by (policy_name) (kyverno_policy_results_total{rule_result="fail"})
 ```
 
 Metrics are only useful when they are collected consistently. If your cluster uses Prometheus Operator, the Helm chart can create a `ServiceMonitor` with labels that match your Prometheus selector. If your platform team manages monitoring resources separately, a manually managed `ServiceMonitor` can be clearer because ownership, labels, and scrape intervals are controlled alongside other observability configuration.
@@ -450,14 +450,11 @@ resources:
 webhookAnnotations:
   cert-manager.io/inject-ca-from: kyverno/kyverno-svc.kyverno.svc.tls
 
-# Failure policy controls what happens when Kyverno is unavailable.
+# Failure policy and resource filters share one config: mapping (duplicate keys override silently).
 config:
   webhooks:
     - failurePolicy: Fail
     # failurePolicy: Ignore
-
-# Resource filters exclude system namespaces and noisy objects from policy evaluation.
-config:
   resourceFilters:
     - "[*,kyverno,*]"
     - "[Event,*,*]"
@@ -522,7 +519,7 @@ Runbooks should start by locating the symptom boundary: before deployment, durin
 
 Keep one short incident note for each Kyverno symptom, even when the fix looks obvious. Record the command or API operation that failed, the Kyverno CLI and controller versions, the policy and rule names, the affected resource, and whether the evidence came from CI, admission, reports, metrics, or logs. That note prevents a local fixture problem from being confused with a webhook outage.
 
-For CI failures, preserve the exact command line, working directory, policy paths, resource paths, exit code, and the runner image or container tag. Exit code `1` usually means policy evaluation found a violation, while exit code `2` points to a test setup problem such as missing files or invalid YAML. That difference decides whether the owner should fix manifests or repair the pipeline.
+For CI failures, preserve the exact command line, working directory, policy paths, resource paths, exit code, and the runner image or container tag. A non-zero `kyverno apply` or `kyverno test` exit means the run failed, but the numeric code alone does not always separate policy violations from setup errors across CLI versions. Compare stderr, `--detailed-results`, and the pinned CLI docs before deciding whether to fix manifests or repair the pipeline.
 
 For admission denials, start with the user-facing error because it often includes the policy, rule, and message that Kyverno returned to the API server. Then move to controller logs for the same time window and resource. If the live request contains namespace labels, generated defaults, admission user data, or context lookups that your local manifest lacks, the CLI result and admission result can legitimately differ.
 
@@ -825,9 +822,10 @@ kyverno test tests/
 ```
 
 ```text
-Test Results:
-|-- require-resource-limits/check-limits/good-pod  PASSED
-`-- require-resource-limits/check-limits/bad-pod   PASSED
+ID | POLICY                    | RULE         | RESOURCE  | RESULT
+---|---------------------------|--------------|-----------|-------
+1  | require-resource-limits   | check-limits | good-pod  | Pass
+2  | require-resource-limits   | check-limits | bad-pod   | Pass
 
 Test Summary: 2 tests passed, 0 tests failed
 ```
@@ -882,6 +880,14 @@ Add a third Pod with two containers, where one container has limits and the othe
 - [Kyverno Playground](https://playground.kyverno.io/)
 - [Kyverno cluster policy CRD](https://raw.githubusercontent.com/kyverno/kyverno/main/config/crds/kyverno/kyverno.io_clusterpolicies.yaml)
 - [Kyverno policy CRD](https://raw.githubusercontent.com/kyverno/kyverno/main/config/crds/kyverno/kyverno.io_policies.yaml)
+
+## Learner check
+
+> **Helm `values.yaml`:** One top-level `config:` block holds both `webhooks` (`failurePolicy: Fail`) and `resourceFilters` as siblings — duplicate `config:` keys would silently drop webhook settings.
+
+> **Prometheus:** Use `rule_result="fail"` on `kyverno_policy_results_total`; `kyverno_admission_requests_total` has no `allowed` label — count denials via policy results.
+
+> **CLI exits:** Treat non-zero `kyverno apply` / `kyverno test` as failure; confirm exit-code meaning with `--help` for your CLI version instead of assuming `1` vs `2`.
 
 ## Next Module
 
