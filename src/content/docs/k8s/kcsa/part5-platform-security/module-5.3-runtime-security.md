@@ -126,7 +126,7 @@ spec:
       type: RuntimeDefault
   containers:
   - name: nginx
-    image: nginx:1.25.3
+    image: nginx:1.27
     securityContext:
       # You can also define it at the container level
       # which overrides the pod-level setting
@@ -273,7 +273,7 @@ spec:
     image: nginx:alpine
 ```
 
-War story: during a red-team exercise, a Java service had a path traversal bug that allowed attackers to request files outside the intended content directory. The application ran as root in its container, so normal file ownership would not have been enough protection. The AppArmor profile denied reads from sensitive host and system paths, so the exploit still manipulated strings successfully, but the kernel rejected the file operation and produced audit evidence that defenders could investigate.
+Hypothetical scenario: during a red-team exercise, a Java service had a path traversal bug that allowed attackers to request files outside the intended content directory. The application ran as root in its container, so normal file ownership would not have been enough protection. The AppArmor profile denied reads from sensitive host and system paths, so the exploit still manipulated strings successfully, but the kernel rejected the file operation and produced audit evidence that defenders could investigate.
 
 That story is also a reminder that MAC is not only about prevention. A well-named AppArmor or SELinux denial gives defenders a high-signal event because ordinary applications should not attempt to read Kubernetes node credentials, host configuration, or shadow password files. Runtime security observability from the previous module becomes more useful when the enforced profile is specific enough that a violation says something meaningful about the workload's behavior.
 
@@ -517,14 +517,15 @@ Seccomp, capabilities, and MAC all reduce what a process can do to a shared kern
 │  gVisor (runsc)                                           │
 │  ├── User-space kernel (Sentry)                           │
 │  ├── Intercepts and emulates syscalls                     │
-│  ├── ~70% syscall coverage                                │
+│  ├── Implements a large portion of the Linux syscall      │
+│  │   interface (see gVisor compatibility notes)           │
 │  ├── Performance overhead (varies by workload)            │
 │  └── Use for: Untrusted workloads, multi-tenant           │
 │                                                             │
 │  Kata Containers                                          │
 │  ├── Lightweight VM per container                         │
 │  ├── Separate kernel (not shared)                         │
-│  ├── Hardware virtualization (KVM)                        │
+│  ├── Typically KVM (also Firecracker, Cloud Hypervisor)   │
 │  ├── Higher overhead than gVisor                          │
 │  └── Use for: Maximum isolation, compliance               │
 │                                                             │

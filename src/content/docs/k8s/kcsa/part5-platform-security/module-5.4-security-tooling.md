@@ -24,9 +24,7 @@ After completing this module, you will be able to perform the following security
 
 ## Why This Module Matters
 
-In late 2021, a widely used Java logging library vulnerability forced operations teams into an uncomfortable race. A platform team at a large online retailer discovered that it could inventory container images quickly, but it could not prove which workloads were already running vulnerable packages, which namespaces would block emergency patches, or which suspicious runtime activity deserved immediate response. The team had expensive tools, several dashboards, and plenty of alerts, yet the incident bridge still spent hours arguing over ownership because each tool described only one slice of the risk.
-
-That kind of failure is not caused by one missing scanner. It is caused by an unplanned security tooling stack where build-time checks, admission policy, runtime detection, cluster hardening, secret handling, and service identity do not form a chain. Kubernetes makes this problem sharper because the attack surface spans images, manifests, admission controllers, kubelet behavior, cloud identity, network paths, and the kernel boundary beneath containers. A finding from one layer is useful only when the team knows which other layer should prevent, confirm, or compensate for it.
+During the December 2021 [Log4Shell disclosure](/platform/disciplines/reliability-security/devsecops/module-4.4-supply-chain-security/) <!-- incident-xref: log4shell --> (CVE-2021-44228), many platform teams found they could inventory container images quickly but could not prove which running workloads were affected, which namespaces would block emergency patches, or which suspicious runtime activity deserved immediate response. A platform team discovered that it had expensive tools, several dashboards, and plenty of alerts, yet the incident bridge still spent hours arguing over ownership because each tool described only one slice of the risk. That kind of failure is not caused by one missing scanner. It is caused by an unplanned security tooling stack where build-time checks, admission policy, runtime detection, cluster hardening, secret handling, and service identity do not form a chain. Kubernetes makes this problem sharper because the attack surface spans images, manifests, admission controllers, kubelet behavior, cloud identity, network paths, and the kernel boundary beneath containers. A finding from one layer is useful only when the team knows which other layer should prevent, confirm, or compensate for it.
 
 This module teaches the security tools named most often in Kubernetes security practice and KCSA preparation, but the goal is not memorizing logos. You will learn how to evaluate tool categories, compare overlapping tools honestly, design a small stack that fits a team, and diagnose gaps before an incident exposes them. The examples assume Kubernetes 1.35+ behavior and use `alias k=kubectl`; when you see an inline command such as `k get pods -A`, read it as the standard kubectl client through that short alias.
 
@@ -227,7 +225,7 @@ kube-bench maps cluster and node configuration to the CIS Kubernetes Benchmark. 
 
 The important nuance is that kube-bench findings are not all equally actionable in every cluster. A self-managed cluster gives the platform team direct access to control plane flags and host files. A managed service may hide those components or implement equivalent controls differently. The finding still matters, but the remediation path may be a provider setting, an upgrade, a support ticket, or a compensating control. Treat benchmark results as a structured conversation with the platform owner, not as a blind pass-fail score.
 
-kubeaudit focuses more on workload manifests and running resources. It looks for practical workload risks such as privileged containers, root users, added capabilities, missing resource limits, host namespace usage, and service account token exposure. This makes it complementary to kube-bench. If kube-bench is inspecting the building's locks and fire doors, kubeaudit is walking through each office to see whether people propped doors open, stored keys on desks, or ran machinery without guards.
+kubeaudit focuses more on workload manifests and running resources. It looks for practical workload risks such as privileged containers, root users, added capabilities, missing resource limits, host namespace usage, and service account token exposure. Status: archived / read-only since Oct 2024 — included for tool-category awareness. This makes it complementary to kube-bench. If kube-bench is inspecting the building's locks and fire doors, kubeaudit is walking through each office to see whether people propped doors open, stored keys on desks, or ran machinery without guards.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -236,6 +234,7 @@ kubeaudit focuses more on workload manifests and running resources. It looks for
 │                                                             │
 │  WHAT: Kubernetes security auditing tool                    │
 │  BY: Shopify (open source)                                 │
+│  STATUS: Archived / read-only since Oct 2024               │
 │                                                             │
 │  AUDITS FOR:                                               │
 │  ├── Privileged containers                                │
@@ -290,7 +289,7 @@ Polaris overlaps with workload auditing, but it presents findings as best-practi
 └─────────────────────────────────────────────────────────────┘
 ```
 
-kube-hunter moves from audit into controlled penetration testing. It looks for exposed Kubernetes components, kubelet weaknesses, etcd exposure, and other discoverable risks. Because it can run in remote, internal, and active modes, it must be used with change-control discipline. An internal scan can reveal what an attacker might see after gaining a foothold, while an active scan can alter systems or trigger alarms. That makes authorization and scoping part of the tool, not paperwork around the tool.
+kube-hunter moves from audit into controlled penetration testing. It looks for exposed Kubernetes components, kubelet weaknesses, etcd exposure, and other discoverable risks. Status: no longer actively maintained (last release 2022); upstream recommends Trivy. Because it can run in remote, internal, and active modes, it must be used with change-control discipline. An internal scan can reveal what an attacker might see after gaining a foothold, while an active scan can alter systems or trigger alarms. That makes authorization and scoping part of the tool, not paperwork around the tool.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -299,6 +298,8 @@ kube-hunter moves from audit into controlled penetration testing. It looks for e
 │                                                             │
 │  WHAT: Kubernetes penetration testing tool                  │
 │  BY: Aqua Security (open source)                           │
+│  STATUS: No longer actively maintained (last release 2022); │
+│          upstream recommends Trivy                          │
 │                                                             │
 │  FINDS:                                                    │
 │  ├── Exposed API servers                                  │
@@ -327,7 +328,7 @@ kube-hunter moves from audit into controlled penetration testing. It looks for e
 
 A useful assessment program starts with baselines and trends. The first run will often produce a discouraging list, especially on older clusters where teams have accumulated exceptions and legacy manifests. Do not respond by hiding the results. Categorize findings by platform ownership, workload ownership, severity, exploitability, and remediation cost. Then decide which findings become admission policies, which become tickets, and which remain documented risks because the platform cannot change them immediately.
 
-War story: a financial services team once ran a benchmark tool shortly before an external audit and found several control-plane checks marked as failures. The first reaction was panic, but the deeper review showed that some checks applied to self-managed clusters while the team's managed control plane used provider-managed equivalents. The real gap was not the failed label; it was the absence of documented evidence. They fixed the evidence path, then focused engineering effort on worker-node and workload issues they actually controlled.
+Hypothetical scenario: a financial services team once ran a benchmark tool shortly before an external audit and found several control-plane checks marked as failures. The first reaction was panic, but the deeper review showed that some checks applied to self-managed clusters while the team's managed control plane used provider-managed equivalents. The real gap was not the failed label; it was the absence of documented evidence. They fixed the evidence path, then focused engineering effort on worker-node and workload issues they actually controlled.
 
 ## Policy Enforcement: Admission as a Control Point
 
@@ -446,7 +447,7 @@ Tetragon approaches runtime security through eBPF observability and enforcement,
 
 Runtime security succeeds or fails on signal quality. A "shell in container" rule is valuable when production web containers never need shells, but noisy when maintenance jobs legitimately run shell scripts all day. Suppressing the rule globally destroys coverage. The better approach is contextual tuning: allow known maintenance pods by label, downgrade expected events, keep high-priority alerts for unusual namespaces, and route severe events to people who can act. Detection rules should encode operational knowledge, not fight it.
 
-War story: a platform team deployed Falco with default alerts and routed every warning to the same incident channel. Within two weeks, engineers had trained themselves to ignore the stream because batch jobs produced noisy shell alerts and backup containers wrote to paths that looked suspicious. The fix was not uninstalling Falco. The team built namespace-specific exceptions, mapped severities to response channels, attached runbooks, and reviewed the top noisy rules every Friday until alerts became rare enough to deserve attention.
+Hypothetical scenario: a platform team deployed Falco with default alerts and routed every warning to the same incident channel. Within two weeks, engineers had trained themselves to ignore the stream because batch jobs produced noisy shell alerts and backup containers wrote to paths that looked suspicious. The fix was not uninstalling Falco. The team built namespace-specific exceptions, mapped severities to response channels, attached runbooks, and reviewed the top noisy rules every Friday until alerts became rare enough to deserve attention.
 
 Runtime tooling also depends on response maturity. If Falco or Tetragon detects a suspicious process, the responder needs to know whether to isolate a namespace, scale a deployment to zero, capture forensic data, rotate credentials, block egress, or open an application incident. A tool can say "this behavior is unusual"; it cannot decide the business impact alone. The stack is complete only when detection leads to a practiced action.
 
@@ -477,7 +478,7 @@ HashiCorp Vault is a broad secrets platform rather than a Kubernetes-only tool. 
 │                                                             │
 │  3. EXTERNAL SECRETS OPERATOR                              │
 │     ├── Syncs Vault secrets to K8s Secrets                │
-│     └── Automatic rotation                                 │
+│     └── Periodic refresh from the source secret store      │
 │                                                             │
 │  BENEFITS:                                                 │
 │  • Dynamic secrets (auto-generated)                       │
@@ -511,7 +512,7 @@ Sealed Secrets solves a narrower GitOps problem. Teams want declarative manifest
 │  5. Controller decrypts to regular Secret in cluster       │
 │                                                             │
 │  WORKFLOW:                                                 │
-│  kubectl create secret ... --dry-run -o yaml |            │
+│  kubectl create secret ... --dry-run=client -o yaml |     │
 │    kubeseal > sealed-secret.yaml                          │
 │  git add sealed-secret.yaml                               │
 │  git commit -m "Add encrypted secret"                     │
@@ -543,7 +544,7 @@ Service mesh security adds another layer by giving workloads stronger service id
 │  └── More granular than NetworkPolicy                     │
 │                                                             │
 │  EXAMPLE:                                                  │
-│  apiVersion: security.istio.io/v1beta1                    │
+│  apiVersion: security.istio.io/v1                         │
 │  kind: AuthorizationPolicy                                │
 │  spec:                                                    │
 │    selector:                                              │

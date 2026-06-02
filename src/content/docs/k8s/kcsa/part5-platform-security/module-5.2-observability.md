@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2024, a regional payments company discovered that an attacker had used a compromised service account to list production Secrets, exec into a long-running container, and open a quiet outbound connection to a database replica. The cluster had prevention controls: images were scanned, Pod Security Admission was enabled, and developers did not have direct cluster-admin access. The incident still lasted long enough to become expensive because the team could not quickly answer a basic sequence of questions: who touched the Secret, which pod ran the shell, what namespace sent the unusual traffic, and whether the same identity had modified RBAC earlier in the week.
+Hypothetical scenario: a regional payments company discovered that an attacker had used a compromised service account to list production Secrets, exec into a long-running container, and open a quiet outbound connection to a database replica. The cluster had prevention controls: images were scanned, Pod Security Admission was enabled, and developers did not have direct cluster-admin access. The incident still lasted long enough to become expensive because the team could not quickly answer a basic sequence of questions: who touched the Secret, which pod ran the shell, what namespace sent the unusual traffic, and whether the same identity had modified RBAC earlier in the week.
 
 The financial impact came less from a single failed control than from slow reconstruction. Engineers pulled fragments from API server audit logs, node logs, application logs, cloud firewall exports, and a chat channel where runtime alerts had been posted without paging anyone. Each source told part of the truth, but no one had designed the signals as an investigation system. By the time the company understood the path from credential use to container activity to database access, the response had already expanded into customer notification, compliance review, and several weeks of platform hardening.
 
@@ -95,7 +95,7 @@ An audit policy decides which requests are logged and at what level. The level i
 │  Panic            - On panic                               │
 │                                                             │
 │  WHAT TO LOG:                                              │
-│  • All authentication failures                             │
+│  • Anonymous / unauthenticated API access                  │
 │  • Secrets access                                          │
 │  • RBAC changes                                            │
 │  • Pod creation/deletion                                   │
@@ -105,13 +105,13 @@ An audit policy decides which requests are logged and at what level. The level i
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The policy below is intentionally security-biased. It logs anonymous access, Secret access, exec and attach activity, RBAC changes, and pod mutations with more detail than ordinary reads. That ordering matters because audit policy rules are evaluated in order. A broad `Metadata` rule placed too early can accidentally prevent later high-value rules from taking effect. When you evaluate an audit policy, read it like a firewall policy: from top to bottom, asking which rule catches a request first.
+The policy below is intentionally security-biased. It logs anonymous access, Secret access, exec and attach activity, RBAC changes, and pod mutations with more detail than ordinary reads. Broader visibility into failed authentication for known users usually requires API server logs, authentication metrics, or identity-provider audit trails—not a single audit rule. That ordering matters because audit policy rules are evaluated in order. A broad `Metadata` rule placed too early can accidentally prevent later high-value rules from taking effect. When you evaluate an audit policy, read it like a firewall policy: from top to bottom, asking which rule catches a request first.
 
 ```yaml
 apiVersion: audit.k8s.io/v1
 kind: Policy
 rules:
-  # Log authentication failures at metadata level
+  # Log anonymous / unauthenticated API access at metadata level
   - level: Metadata
     users: ["system:anonymous"]
     verbs: ["*"]
@@ -162,7 +162,7 @@ An audit event becomes useful when responders know which fields to inspect first
 │    "level": "Request",                                     │
 │    "auditID": "abc-123-def",                              │
 │    "stage": "ResponseComplete",                            │
-│    "requestURI": "/api/v1/namespaces/prod/secrets/db-cred",│
+│    "requestURI": "/api/v1/namespaces/prod/secrets/db-credentials",│
 │    "verb": "get",                                          │
 │    "user": {                                               │
 │      "username": "alice@example.com",                      │
@@ -186,7 +186,7 @@ The example above can answer several incident questions quickly. It says a human
 
 For command-line checks during a lab or incident drill, define `alias k=kubectl` and then use `k auth can-i get secrets --as system:serviceaccount:prod:checkout`. That command does not prove a Secret was accessed, but it helps evaluate whether the identity had the permission needed to perform the access shown in the audit log. In real investigations, permission checks are strongest when combined with the actual audit event, because RBAC may have changed after the suspicious request occurred.
 
-War story: one platform team discovered that its audit policy logged RBAC changes at `Metadata` but not `Request`. During a compromise review, responders could see that a ClusterRoleBinding had been patched, but not which subject had been added because the request body was absent and the object had already been changed again. The team could eventually reconstruct the change from GitOps history, but the delay exposed a design flaw. For high-impact mutation resources, metadata alone may tell you that something happened without preserving enough detail to explain why it mattered.
+Hypothetical scenario: one platform team discovered that its audit policy logged RBAC changes at `Metadata` but not `Request`. During a compromise review, responders could see that a ClusterRoleBinding had been patched, but not which subject had been added because the request body was absent and the object had already been changed again. The team could eventually reconstruct the change from GitOps history, but the delay exposed a design flaw. For high-impact mutation resources, metadata alone may tell you that something happened without preserving enough detail to explain why it mattered.
 
 ## Runtime Security Monitoring
 
@@ -206,7 +206,8 @@ Falco is a common open source runtime security tool because it observes system c
 │  • Kubernetes-aware (pod context)                          │
 │                                                             │
 │  HOW IT WORKS:                                             │
-│  Kernel → eBPF/kernel module → Falco → Rules → Alerts     │
+│  Kernel → eBPF (modern driver) or legacy kernel module →  │
+│           Falco → Rules → Alerts                           │
 │                                                             │
 │  DETECTS:                                                  │
 │  • Shell spawned in container                              │
@@ -291,13 +292,14 @@ Falco is not the only runtime option, and the tool choice should follow the oper
 │  ├── Managed rules and compliance                          │
 │  └── Enterprise features                                   │
 │                                                             │
-│  KUBEARMOR                                                 │
+│  KUBEARMOR (CNCF Sandbox)                                  │
 │  ├── LSM-based enforcement                                 │
 │  ├── Process, file, network policies                       │
 │  ├── Less established than Falco                           │
 │  └── Focus on enforcement                                  │
 │                                                             │
-│  AQUA/PRISMA/STACKROX                                      │
+│  AQUA/PRISMA/STACKROX (RHACS)                              │
+│  ├── StackRox → Red Hat Advanced Cluster Security         │
 │  ├── Commercial platforms                                  │
 │  ├── Full-stack security                                   │
 │  ├── Runtime + vulnerability management                    │
@@ -389,7 +391,7 @@ Correlation is where these queries become powerful. Imagine an audit alert for a
 
 The inverse is also true: correlation can reduce false positives. If a production exec occurs during an approved incident, from the expected engineer, after a change ticket, and without any runtime follow-on indicators, the alert may remain informational. That does not mean it should be ignored; it means the response can be evidence preservation and review rather than emergency containment. A strong monitoring program supports both escalation and de-escalation by providing enough surrounding facts.
 
-War story: a team once alerted on every denied RBAC request and created so much noise that engineers stopped reading the channel. During a real incident, the attacker generated denied requests while probing permissions, but the signal blended into the background. The fix was not to delete the alert. The team changed it to detect unusual denied-request rates by identity, namespace, and source, then paired it with successful sensitive operations by the same principal. The result was fewer alerts with a clearer story.
+Hypothetical scenario: a team once alerted on every denied RBAC request and created so much noise that engineers stopped reading the channel. During a real incident, the attacker generated denied requests while probing permissions, but the signal blended into the background. The fix was not to delete the alert. The team changed it to detect unusual denied-request rates by identity, namespace, and source, then paired it with successful sensitive operations by the same principal. The result was fewer alerts with a clearer story.
 
 ### Worked Example: Following One Suspicious Identity
 
