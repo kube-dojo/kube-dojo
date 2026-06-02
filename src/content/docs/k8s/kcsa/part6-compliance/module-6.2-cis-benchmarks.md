@@ -32,7 +32,7 @@ After completing this module, you will be able to apply the benchmark as a pract
 
 ## Why This Module Matters
 
-In 2023, a financial services platform preparing for a PCI audit found a Kubernetes cluster with anonymous kubelet access still reachable from an internal network segment. The first scan looked ordinary: a list of CIS failures, several warnings, and a neat percentage that suggested the environment was "mostly compliant." During the investigation, the team discovered that one failed kubelet authorization control could expose pod metadata, logs, and exec-like surfaces depending on surrounding network controls. The expensive part was not the individual flag change; it was the audit delay, emergency node rotation, evidence cleanup, and customer assurance work that followed.
+Hypothetical scenario: In 2023, a financial services platform preparing for a PCI audit found a Kubernetes cluster with anonymous kubelet access still reachable from an internal network segment. The first scan looked ordinary: a list of CIS failures, several warnings, and a neat percentage that suggested the environment was "mostly compliant." During the investigation, the team discovered that one failed kubelet authorization control could expose pod metadata, logs, and exec-like surfaces depending on surrounding network controls. The expensive part was not the individual flag change; it was the audit delay, emergency node rotation, evidence cleanup, and customer assurance work that followed.
 
 That kind of failure is why the Center for Internet Security Benchmark matters. It turns a broad phrase like "secure the cluster" into concrete, reviewable expectations for API server flags, etcd TLS, kubelet authentication, RBAC, Pod Security, NetworkPolicy, audit logging, and secret encryption. The benchmark is not a law, and it is not a substitute for threat modeling, but it gives operators and auditors a shared checklist that can be tested repeatedly instead of argued from memory.
 
@@ -99,7 +99,7 @@ The easiest way to learn the benchmark is to map each category to the failure it
 │  1.2 API SERVER                                            │
 │  ├── Disable anonymous authentication                      │
 │  ├── Enable RBAC authorization                            │
-│  ├── Disable insecure port                                │
+│  ├── Disable insecure port (removed in 1.24; N/A on 1.35+) │
 │  ├── Enable admission controllers                          │
 │  ├── Configure audit logging                              │
 │  ├── Set appropriate request limits                        │
@@ -160,6 +160,10 @@ The answer depends on responsibility. On EKS, GKE, and AKS, customers do not edi
 etcd deserves its own category because it stores the cluster state that everyone else depends on. If an attacker can read etcd, they may be able to read Secrets, service account tokens, workload definitions, and configuration history. If an attacker can write to etcd, the API server's normal authorization path can be bypassed. That is why the benchmark emphasizes mutual TLS, certificate validation, restrictive file permissions, and encryption at rest instead of treating etcd as just another internal database.
 
 For KCSA, you do not need to memorize every etcd flag, but you should recognize the pattern. Peer communication protects etcd members from impersonation inside the quorum. Client communication protects access from the API server and administrative clients. Data security protects the files and snapshots left behind on disk or in backup systems. When you assess a finding, ask which path it protects: member-to-member trust, API-server-to-etcd trust, or stored data exposure.
+
+### Control Plane Configuration
+
+CIS Section 3 covers authentication, authorization, and audit logging as cluster-wide settings rather than per-component flags. Section 3 checks whether the API server enforces strong authentication modes, uses RBAC (not permissive authorization), configures audit policy with appropriate retention, and limits anonymous or overly broad access paths. On Kubernetes 1.35+, many Section 3 findings overlap with Section 1 API server checks, but the section still matters because it frames the request path as a governance layer: who can authenticate, what authorization mode applies, and whether security-relevant API activity is recorded for investigation and compliance evidence.
 
 ### Worker Nodes
 
@@ -329,7 +333,7 @@ kube-bench is the common open-source tool for checking Kubernetes clusters again
 ### Running kube-bench
 
 ```bash
-# Run on master node
+# Run on control plane node
 kube-bench run --targets master
 
 # Run on worker node
@@ -453,7 +457,7 @@ Prioritization starts with exploitability and blast radius, not with the order o
 │                                                             │
 │  CRITICAL (Fix immediately):                               │
 │  ├── Anonymous auth enabled on API server                 │
-│  ├── Insecure port enabled                                │
+│  ├── Insecure port enabled (removed in 1.24; flag N/A if scanner still reports it) │
 │  ├── AlwaysAllow authorization mode                       │
 │  ├── No audit logging                                     │
 │  └── etcd exposed without auth                            │
@@ -506,7 +510,7 @@ The NetworkPolicy finding becomes a workload-owner conversation because isolatio
 
 This approach also helps with compliance mapping. The API server and kubelet findings support access-control and system-hardening requirements. NetworkPolicy supports segmentation and least-privilege communication. The scan output proves there was a gap, but the remediation evidence should prove the new state, the owner, the date, the validation method, and the reason any remaining exception is acceptable. That is the difference between "we ran a tool" and "we operate a control."
 
-In real reviews, I like to add one more column to the finding triage spreadsheet: "wrong-benchmark risk." This column asks whether a finding might be invalid because the scanner profile, Kubernetes version, provider model, or runtime distribution does not match the cluster. It prevents teams from burning time on hosted control plane settings, removed features, or checks written for a different distribution. It also forces the reviewer to cite the reason a finding is not applicable instead of simply deleting inconvenient lines.
+A useful additional column in the finding triage spreadsheet is "wrong-benchmark risk." This column asks whether a finding might be invalid because the scanner profile, Kubernetes version, provider model, or runtime distribution does not match the cluster. It prevents teams from burning time on hosted control plane settings, removed features, or checks written for a different distribution. It also forces the reviewer to cite the reason a finding is not applicable instead of simply deleting inconvenient lines.
 
 Another useful column is "remediation coupling." Some findings can be fixed independently, such as a namespace label or a stale clusterrolebinding. Others are coupled to node images, API server restarts, admission policy rollout, or application behavior. Coupled findings need change windows, stakeholder communication, and a rollback path. If you treat them like ordinary tickets, you may pass the benchmark eventually, but you will teach teams to fear security work because it appears as unexplained production risk.
 
@@ -722,7 +726,7 @@ They should review the privilege granted to the scanner itself. kube-bench often
 [PASS] 4.2.6 Ensure --read-only-port is set to 0
 [FAIL] 5.1.1 Ensure cluster-admin role is only used where required
 [WARN] 5.2.1 Minimize privileged containers
-[FAIL] 5.7.1 Create NetworkPolicy for each namespace
+[FAIL] 5.3.2 Create NetworkPolicy for each namespace
 ```
 
 ### Tasks
@@ -801,7 +805,7 @@ If the cluster is self-managed, control plane flag validation usually comes from
 
 **MEDIUM - Fix Within Weeks:**
 
-6. **5.7.1 - NetworkPolicy per namespace**
+6. **5.3.2 - NetworkPolicy per namespace**
    - Create default deny policies
    - Add explicit allow policies
    Risk: Unrestricted pod communication
