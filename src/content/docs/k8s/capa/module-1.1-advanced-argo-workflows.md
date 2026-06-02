@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Module 1.1: Advanced Argo Workflows"
 slug: k8s/capa/module-1.1-advanced-argo-workflows
 sidebar:
@@ -39,7 +38,7 @@ Enterprise pipelines do not operate in a vacuum. They must handle API rate limit
 
 - **Hera is the official Python SDK:** The old `argo-workflows` PyPI package was officially removed in v4.0 because it failed to build reliably. The recommended replacement is **Hera**, which is maintained under the `argoproj-labs` GitHub organization.
 - **Workflow Archival does NOT save logs:** When you enable workflow archival, completed workflow states are persisted to PostgreSQL (>=9.4) or MySQL (>=5.7.8), but pod execution logs are explicitly not archived. You must rely on standard Kubernetes log aggregation (like Promtail/Loki) for log retention.
-- **CEL-based validation blocks bad manifests instantly:** Version 4.0.0 (released February 4, 2026) introduced comprehensive Common Expression Language (CEL) validation rules embedded directly into the CRDs, enforcing structural integrity at cluster admission time.
+- **CEL-based validation blocks bad manifests instantly:** Version 4.0.0 (released February 4, 2026) introduced CEL-based validation rules embedded directly into the CRDs, enforcing structural integrity at cluster admission time.
 - **The singular `schedule` field is gone:** As of Argo Workflows v4.0, the singular `schedule` field for `CronWorkflows` was hard-removed. You must use the `schedules` field, which accepts a required non-empty list of cron strings.
 
 ## Section 1: Architecture & The Emissary Executor
@@ -80,17 +79,16 @@ The Resource template performs CRUD operations on Kubernetes resources directly 
         name: output-{{workflow.name}}
       data:
         result: "done"
-    successCondition: "status.phase == Active"
-    failureCondition: "status.phase == Failed"
 ```
+
+For a ConfigMap `create`, successful creation is sufficient — ConfigMaps have no `.status` field, so `successCondition` and `failureCondition` would never evaluate. Reserve those fields for resources that expose status, such as a Job (`successCondition: "status.succeeded > 0"`) or a Pod (`successCondition: "status.phase == Succeeded"`).
 
 ### 2. Suspend Template
 The Suspend template pauses execution until a human resumes the workflow or a specified duration elapses. It is the primary mechanism for approval gates because the workflow remains visible in Kubernetes, preserves its parameters and node graph, and avoids inventing an external state machine that operations teams must reconcile after every restart.
 
 ```yaml
 - name: approval-gate
-  suspend:
-    duration: "0"     # Wait indefinitely until resumed
+  suspend: {}         # Wait indefinitely until manually resumed
 - name: timed-pause
   suspend:
     duration: "30m"   # Auto-resume after 30 minutes
@@ -380,12 +378,13 @@ spec:
 ```
 
 ### Lifecycle Hooks
-Hooks execute actions when a template starts (`running`) or finishes (`exit`), independently of the main container logic. Use them for operational side effects like audit events or short notifications, and keep the hook resilient because a broken hook can change how operators interpret the final workflow result.
+Only `exit` is a reserved hook name that fires unconditionally as an exit handler. Every other hook is a custom-named hook that fires when its `expression` evaluates true — `workflow.status == "Running"` is the idiomatic expression for a start-of-execution hook. Use hooks for operational side effects like audit events or short notifications, and keep the hook resilient because a broken hook can change how operators interpret the final workflow result.
 
 ```yaml
 - name: deploy
   hooks:
     running:
+      expression: 'workflow.status == "Running"'
       template: log-start
     exit:
       template: log-completion
@@ -433,7 +432,7 @@ Lock down your containers with strict security contexts so the executor and task
 ```
 
 ### Upgrades and Versioning
-The latest stable release is **v4.0.4 (released 2026-04-02)**. Argo Workflows maintains release branches for only the two most recent minor versions, shipping new minor versions approximately every 6 months. Furthermore, they only test two minor Kubernetes versions per release. 
+The latest stable release is **v4.0.5 (released 2026-04-23)**. Argo Workflows maintains release branches for only the two most recent minor versions, shipping new minor versions approximately every 6 months. Furthermore, they only test two minor Kubernetes versions per release. 
 
 When upgrading, use the `argo convert` command. Added in v4.0, this CLI tool automatically upgrades `Workflow`, `WorkflowTemplate`, `ClusterWorkflowTemplate`, and `CronWorkflow` manifests to the v4.0 syntax, handling renaming like `schedule` to `schedules`.
 
