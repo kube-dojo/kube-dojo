@@ -23,7 +23,7 @@ After completing this module, you will be able to apply the following skills dur
 
 ## Why This Module Matters
 
-In 2019, a large financial technology company traced a production compromise back to a container image that looked ordinary in Kubernetes but carried an outdated web framework, a leaked package token in an image layer, and a debugging shell that should never have shipped. The cluster controls were not obviously broken: Pods were scheduled normally, the registry required authentication, and the Deployment had passed a basic CI job. The loss came from treating the image as a delivery box instead of a security boundary, and the cleanup cost grew because every node that pulled the image had cached evidence, dependencies, and secrets in different places.
+Hypothetical scenario: a large financial technology company traced a production compromise back to a container image that looked ordinary in Kubernetes but carried an outdated web framework, a leaked package token in an image layer, and a debugging shell that should never have shipped. The cluster controls were not obviously broken: Pods were scheduled normally, the registry required authentication, and the Deployment had passed a basic CI job. The loss came from treating the image as a delivery box instead of a security boundary, and the cleanup cost grew because every node that pulled the image had cached evidence, dependencies, and secrets in different places.
 
 That pattern is common because Kubernetes makes images feel routine. A Pod specification names an image, kubelet pulls it, and the workload starts; the dangerous parts happened earlier, when the base image was chosen, dependencies were installed, files were copied, tags were assigned, and scan results were interpreted. An attacker does not need to break the Kubernetes API if the image already contains a vulnerable package, a root process, writable filesystem paths, or a mutable tag that can be replaced after approval. Image security is therefore not one tool or one scan report; it is a chain of decisions from build to store to deploy to run.
 
@@ -97,13 +97,14 @@ Compatibility is the main reason teams cannot always jump straight to scratch or
 │              BASE IMAGE COMPARISON                          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  IMAGE TYPE           SIZE      CVEs    USE CASE            │
+│  IMAGE TYPE           SIZE      CVEs*   USE CASE            │
 │  ───────────────────────────────────────────────────────    │
 │  ubuntu:22.04        ~77MB     100+    Development          │
 │  debian:bookworm     ~50MB     50+     General purpose      │
 │  alpine:3.19         ~7MB      10-20   Lightweight apps     │
 │  distroless/static   ~2MB      0-5     Static binaries      │
 │  scratch             0MB       0       Go/Rust binaries     │
+│  *CVE counts are illustrative and go stale as bases change │
 │                                                             │
 │  RECOMMENDATIONS:                                          │
 │  ├── Production: Distroless or Alpine                      │
@@ -179,7 +180,7 @@ The security value is not only smaller size. Source code left in an image can re
 └─────────────────────────────────────────────────────────────┘
 ```
 
-A realistic war story: a platform team once blocked a service because its image scanner found Critical CVEs in `gcc` and `make`, even though the application never invoked either binary at runtime. The application team argued that the findings were false positives because the vulnerable packages were "only build tools." The platform response was correct: if the packages are in the runtime image, they are runtime packages, regardless of intent. Moving the compiler into a builder stage removed the findings, reduced pull time, and made the production container easier to reason about.
+Hypothetical scenario: a platform team once blocked a service because its image scanner found Critical CVEs in `gcc` and `make`, even though the application never invoked either binary at runtime. The application team argued that the findings were false positives because the vulnerable packages were "only build tools." The platform response was correct: if the packages are in the runtime image, they are runtime packages, regardless of intent. Moving the compiler into a builder stage removed the findings, reduced pull time, and made the production container easier to reason about.
 
 Multi-stage builds are not a license to ignore the builder stage. A compromised compiler, package manager plugin, or build script can still affect the artifact copied into the runtime stage. That is why secure teams combine multi-stage builds with pinned dependency inputs, locked package manifests, controlled build networks, and provenance records. The builder stage may not ship to production, but it still has influence over the bytes that do ship.
 
@@ -254,7 +255,7 @@ The most practical scanning programs use multiple scan points. Build-time scanni
 │  ├── Multiple DB sources                                   │
 │  └── CI/CD integration                                     │
 │                                                             │
-│  CLAIR (CoreOS/Red Hat)                                    │
+│  CLAIR (Quay/Red Hat)                                      │
 │  ├── API-based scanning                                    │
 │  ├── Registry integration                                  │
 │  └── Continuous monitoring                                 │
@@ -428,7 +429,7 @@ The most effective admission policies are written with developer ergonomics in m
 
 ### Policy Enforcement
 
-Good image admission policies are specific enough to reduce risk and clear enough that developers can fix violations. "Only use trusted registries" is a useful rule when the registry has scanning and promotion controls. "No latest tag" is useful because it removes a class of non-repeatable deployments. "Require digest" is stronger because it pins content identity, although it usually needs tooling support so humans are not hand-editing long hashes. "Require signature" adds provenance and tamper evidence, but it depends on key management and trustworthy build identities.
+Good image admission policies are specific enough to reduce risk and clear enough that developers can fix violations. "Only use trusted registries" is a useful rule when the registry has scanning and promotion controls. "No latest tag" is useful because it removes a class of non-repeatable deployments. "Require digest" is stronger because it pins content identity, although it usually needs tooling support so humans are not hand-editing long hashes. "Require signature" adds provenance and tamper evidence, but it depends on key management and trustworthy build identities. CI pipelines typically sign release images with [Cosign](https://docs.sigstore.dev/cosign/overview/) through the [Sigstore](https://www.sigstore.dev/) project; at deploy time, Kyverno `verifyImages` rules or dedicated controllers such as Connaisseur check that signatures match trusted keys or certificate authorities before the Pod is admitted.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -491,9 +492,11 @@ spec:
         spec:
           containers:
           - image: "gcr.io/my-project/* | myregistry.io/*"
+          initContainers:
+          - image: "gcr.io/my-project/* | myregistry.io/*"
 ```
 
-This policy is intentionally simple because the concept matters more than the exact syntax. It validates Pod image references and rejects images outside the trusted registry list. In a real cluster, you would also cover init containers and ephemeral containers, define namespace exceptions for system workloads, and pair the registry rule with digest and signature checks. The security outcome is strongest when the policy points developers toward a promotion path, such as mirroring an approved external image into the private registry after scanning and signing.
+This policy is intentionally simple because the concept matters more than the exact syntax. It validates Pod and init container image references and rejects images outside the trusted registry list. Production policies should also cover `ephemeralContainers`, define namespace exceptions for system workloads, and pair the registry rule with digest and signature checks. The security outcome is strongest when the policy points developers toward a promotion path, such as mirroring an approved external image into the private registry after scanning and signing.
 
 A common operational failure is allowing admission rules to drift away from pipeline rules. If CI signs images but admission does not verify signatures, signing becomes a compliance artifact rather than a cluster control. If admission requires private registries but the registry allows arbitrary pushes by humans, the policy proves only location, not trust. The engineering target is consistency: the build pipeline creates evidence, the registry stores evidence and artifacts, and admission checks that evidence before Kubernetes accepts the workload.
 
@@ -627,7 +630,7 @@ The framework deliberately asks practical questions instead of naming tools firs
 
 ## Did You Know?
 
-- **The average container image has 300+ packages** and 100+ known vulnerabilities. Minimal base images can reduce this by 90%.
+- **Container images often carry hundreds of OS packages**, each with its own vulnerability record. Minimal base images substantially reduce scan surface and patch burden.
 
 - **Distroless images have no shell**; if an attacker gets code execution, they cannot easily run ordinary shell commands. This is defense in depth.
 
@@ -802,7 +805,7 @@ Use the solution below to compare your findings with a complete review that sepa
 FROM node:20-alpine@sha256:abc123 AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 COPY src/ ./src/
 
 FROM gcr.io/distroless/nodejs20:nonroot
