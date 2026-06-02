@@ -42,7 +42,7 @@ If you are learning the operator pattern or building a Go operator for internal 
 |---------|-------------|--------------|
 | Maintained by | Kubernetes SIG API Machinery | Operator Framework (Red Hat) |
 | Language support | Go only | Go, Ansible, Helm |
-| Project layout | Kubebuilder layout | Kubebuilder layout (since v1.25+) |
+| Project layout | Kubebuilder layout | Kubebuilder layout (aligned since Operator SDK v1.0) |
 | OLM integration | Manual | Built-in |
 | Scorecard testing | No | Yes |
 | Dependency | controller-runtime | controller-runtime |
@@ -353,6 +353,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/record"
 
 	appsv1beta1 "github.com/kubedojo/webapp-operator/api/v1beta1"
 )
@@ -360,7 +361,8 @@ import (
 // WebAppReconciler reconciles a WebApp object.
 type WebAppReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=apps.kubedojo.io,resources=webapps,verbs=get;list;watch;create;update;patch;delete
@@ -413,25 +415,25 @@ func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			"app.kubernetes.io/part-of":    webapp.Name,
 		}
 
-		deployment.Spec = appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
+		deployment.Spec.Replicas = &replicas
+		if deployment.CreationTimestamp.IsZero() {
+			deployment.Spec.Selector = &metav1.LabelSelector{
 				MatchLabels: labels,
+			}
+		}
+		deployment.Spec.Template = corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: labels,
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "app",
-							Image: webapp.Spec.Image,
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: port,
-									Protocol:      corev1.ProtocolTCP,
-								},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "app",
+						Image: webapp.Spec.Image,
+						Ports: []corev1.ContainerPort{
+							{
+								ContainerPort: port,
+								Protocol:      corev1.ProtocolTCP,
 							},
 						},
 					},
@@ -470,16 +472,14 @@ func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	svcResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
-		service.Spec = corev1.ServiceSpec{
-			Selector: map[string]string{"app": webapp.Name},
-			Ports: []corev1.ServicePort{
-				{
-					Port:       port,
-					TargetPort: intstr.FromInt32(port),
-					Protocol:   corev1.ProtocolTCP,
-				},
+		service.Spec.Selector = map[string]string{"app": webapp.Name}
+		service.Spec.Type = corev1.ServiceTypeClusterIP
+		service.Spec.Ports = []corev1.ServicePort{
+			{
+				Port:       port,
+				TargetPort: intstr.FromInt32(port),
+				Protocol:   corev1.ProtocolTCP,
 			},
-			Type: corev1.ServiceTypeClusterIP,
 		}
 		return controllerutil.SetControllerReference(webapp, service, r.Scheme)
 	})
@@ -523,6 +523,7 @@ func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			deployment.Status.ReadyReplicas, replicas)
 	}
 
+	previousPhase := webapp.Status.Phase
 	webapp.Status.ReadyReplicas = deployment.Status.ReadyReplicas
 	webapp.Status.AvailableReplicas = deployment.Status.AvailableReplicas
 	webapp.Status.Phase = phase
@@ -531,6 +532,10 @@ func (r *WebAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	if err := r.Status().Update(ctx, webapp); err != nil {
 		return ctrl.Result{}, fmt.Errorf("updating status: %w", err)
+	}
+
+	if phase == "Running" && previousPhase != "Running" {
+		r.Recorder.Event(webapp, corev1.EventTypeNormal, "Running", readyCondition.Message)
 	}
 
 	// If not fully ready, requeue to check again
@@ -579,7 +584,7 @@ flowchart TD
 
 Idempotency is what keeps this from becoming noisy. If the live Deployment already matches the desired Deployment, controller-runtime does not need to issue an update, which reduces API traffic and avoids triggering unnecessary rollouts. If a user edits a managed field, the next reconciliation sees the difference, applies the mutation again, and updates the child object back to the operator-owned shape.
 
-There is a subtle design choice inside every mutation function: which fields are truly owned by the operator. In the WebApp example, the operator owns the main container image, port, labels, selector, replica count, and Service shape because those are part of the WebApp abstraction. In a larger platform, you might intentionally preserve annotations injected by policy tools or sidecar configuration added by another controller. Idempotent does not mean overwriting everything; it means repeatedly applying the ownership model you chose.
+There is a subtle design choice inside every mutation function: which fields are truly owned by the operator. In the WebApp example, the operator owns the main container image, port, labels, selector, replica count, and Service shape because those are part of the WebApp abstraction. The mutate functions set only those owned fields and leave server-assigned values such as `spec.clusterIP` untouched; resetting `clusterIP` to empty on every reconcile would make the second `Update` fail because that field is immutable. In a larger platform, you might intentionally preserve annotations injected by policy tools or sidecar configuration added by another controller. Idempotent does not mean overwriting everything; it means repeatedly applying the ownership model you chose.
 
 | Return Value | Meaning |
 |-------------|---------|
@@ -702,7 +707,7 @@ func main() {
 	var metricsAddr string
 	var probeAddr string
 	var enableLeaderElection bool
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "Metrics endpoint address")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "Metrics endpoint address") // "0" disables metrics in this simplified main.go; generated v4 scaffolds serve secure metrics on :8443
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Health probe address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election")
 	flag.Parse()
@@ -720,14 +725,17 @@ func main() {
 		LeaderElectionID:       "webapp-operator.kubedojo.io",
 	})
 	if err != nil {
+		// real scaffold logs setupLog.Error(err, ...) before exit
 		os.Exit(1)
 	}
 
 	// Register the WebApp controller
 	if err = (&controller.WebAppReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("webapp-controller"),
 	}).SetupWithManager(mgr); err != nil {
+		// real scaffold logs setupLog.Error(err, ...) before exit
 		os.Exit(1)
 	}
 
@@ -737,6 +745,7 @@ func main() {
 
 	// Start the manager (blocks until context cancelled)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		// real scaffold logs setupLog.Error(err, ...) before exit
 		os.Exit(1)
 	}
 }
@@ -751,7 +760,7 @@ The scheme registration in `init()` is another small block with large consequenc
 | Shared cache | One informer per GVK, shared across controllers |
 | Leader election | Kubernetes Lease-based, built in |
 | Health probes | `/healthz` and `/readyz` endpoints |
-| Metrics | Prometheus-compatible `/metrics` |
+| Metrics | Prometheus-compatible `/metrics` when `metrics-bind-address` is not `"0"` (this simplified `main.go` disables metrics by default; generated v4 scaffolds serve secure metrics on `:8443`) |
 | Webhook server | HTTPS server for admission webhooks |
 | Graceful shutdown | SIGTERM handling, drains controllers |
 

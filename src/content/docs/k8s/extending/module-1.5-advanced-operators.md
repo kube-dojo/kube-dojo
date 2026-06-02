@@ -169,7 +169,7 @@ The most reliable cleanup functions are written like reconciliation functions. T
 
 You should avoid long blocking cleanup inside one reconcile call when the external API has slow operations. If deleting a managed database requires a multi-minute asynchronous operation, the finalizer can initiate deletion, write a condition such as `CleanupPending`, emit a Normal event, and requeue after a short delay to poll progress. The object remains in `Terminating`, but the controller does not hold a goroutine indefinitely or hide progress from users. The important rule is that the finalizer stays present until the external system has reached the safe terminal state.
 
-Finalizers are not a replacement for owner references. For Kubernetes children such as Deployments and Services, owner references allow built-in garbage collection to do the right thing after the parent is deleted. For resources outside the cluster, or resources you intentionally do not own through Kubernetes metadata, finalizers are the hook that lets your controller participate in deletion. Production operators often use both: owner references for in-cluster dependents and finalizers for external systems or cleanup ordering that garbage collection cannot express.
+Finalizers are not a replacement for owner references. Owner references only garbage-collect Kubernetes objects in the same cluster — they cannot cascade-delete external or cloud resources or cross-cluster objects, which is exactly why finalizers exist for that cleanup. For Kubernetes children such as Deployments and Services, owner references allow built-in garbage collection to do the right thing after the parent is deleted. For resources outside the cluster, or resources you intentionally do not own through Kubernetes metadata, finalizers are the hook that lets your controller participate in deletion. Production operators often use both: owner references for in-cluster dependents and finalizers for external systems or cleanup ordering that garbage collection cannot express.
 
 When a deletion becomes stuck, resist the reflex to remove the finalizer manually. Manual removal is sometimes the right emergency action, but it should be treated as an operator override with a known cleanup debt, not as the normal fix. First read the object's events, controller logs, and status conditions to identify whether the cleanup function is failing, timing out, or waiting on a dependency. If you do patch the finalizer away during an incident, record the external resource identifiers so a human can complete cleanup afterward.
 
@@ -193,7 +193,7 @@ type Condition struct {
     ObservedGeneration int64
 
     // LastTransitionTime: when the status last changed
-    LastTransitionTime Time
+    LastTransitionTime metav1.Time
 
     // Reason: machine-readable CamelCase reason
     Reason string
@@ -292,7 +292,7 @@ func (r *WebAppReconciler) updateConditions(ctx context.Context,
 		readyCondition.Status = metav1.ConditionTrue
 		readyCondition.Reason = ReasonAvailable
 		readyCondition.Message = "All components are ready"
-		webapp.Status.Phase = "Running"
+		webapp.Status.Phase = "Running" // production code would use a typed phase constant
 	} else {
 		readyCondition.Status = metav1.ConditionFalse
 		readyCondition.Reason = ReasonReconciling
@@ -498,11 +498,23 @@ spec:
 
 Watch design is the other half of production reconciliation. `For(&WebApp{})` tells the controller to reconcile when the primary resource changes, while `Owns(&Deployment{})` and `Owns(&Service{})` enqueue the owning WebApp when owned children change. Custom watches are useful when a WebApp depends on a resource it does not own, such as a ConfigMap selected by name. The risk is fan-out: a single ConfigMap update can enqueue many WebApps, so the mapping function should be simple, bounded, and scoped to a namespace unless the operator is intentionally cluster-wide.
 
+The WebApp `EnvVar` type from module 1.4 is extended here with an optional `valueFrom` field naming a ConfigMap to source the value from, so the mapping function can detect ConfigMap references without using core `EnvVarSource`:
+
+```go
+type EnvVar struct {
+	Name      string `json:"name"`
+	Value     string `json:"value,omitempty"`
+	ValueFrom string `json:"valueFrom,omitempty"` // ConfigMap name when value is sourced externally
+}
+```
+
 ```go
 import (
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 func (r *WebAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -562,8 +574,6 @@ func (r *WebAppReconciler) findWebAppsForConfigMap(
 Predicates are filters, not correctness features, and they can easily hide events your controller needs. `GenerationChangedPredicate` is useful on the primary custom resource because status updates do not change generation and should not necessarily trigger another full pass. Applying the same predicate to owned Deployments can be wrong if you expect to react to readiness changes, Pod failures, or other status-driven signals. A good watch strategy filters the noisy event source, not the event source that carries evidence of drift.
 
 ```go
-import "sigs.k8s.io/controller-runtime/pkg/predicate"
-
 func (r *WebAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1beta1.WebApp{},
@@ -944,6 +954,18 @@ make test
 KUBEBUILDER_ASSETS=$($ENVTEST use --print-path latest) \
   go test ./internal/controller/ -v -ginkgo.v
 ```
+
+### Operator Capability Levels
+
+The [Operator Capability Model](https://github.com/operator-framework/operator-sdk/blob/master/doc/images/operator-capability-model.svg) describes how mature an operator is across five levels. Use it to set expectations with users and to plan incremental investment:
+
+- **Level 1 — Basic Install:** automated install and configuration of the operand.
+- **Level 2 — Seamless Upgrades:** operator manages patch and minor version upgrades of the operand.
+- **Level 3 — Full Lifecycle:** app lifecycle plus storage lifecycle — backups, failure recovery, restore.
+- **Level 4 — Deep Insights:** metrics, alerts, log processing, and workload analysis (operand observability).
+- **Level 5 — Auto Pilot:** auto-scaling (horizontal/vertical), auto-tuning, abnormality detection, scheduling tuning.
+
+Finalizers and structured conditions in this module are stepping stones toward **Level 3 (Full Lifecycle)**: they make deletion and readiness observable instead of best-effort. Distribution and upgrade paths sit in the **Operator Framework**, a CNCF Incubating project: **Operator Lifecycle Manager (OLM)** installs, upgrades, and manages operators and their dependencies on a cluster, and **[OperatorHub.io](https://operatorhub.io/)** is the public catalog where many OLM-packaged operators are published.
 
 ## Patterns & Anti-Patterns
 

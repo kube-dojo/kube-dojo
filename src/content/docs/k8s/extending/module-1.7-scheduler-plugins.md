@@ -38,17 +38,17 @@ The Scheduling Framework is the extension mechanism inside `kube-scheduler`. It 
 
 That split is the first design constraint for plugin authors. Anything that runs once per scheduling cycle can afford more work than logic that runs once per node, and anything in the binding cycle must treat the node decision as already made. If you put a network call inside `Score`, it may run across thousands of nodes for one pod. If you put irreversible side effects inside `Reserve`, you must also implement cleanup behavior for failures later in the cycle. Scheduler code is not ordinary controller code; it is hot-path control-plane code, and small latency mistakes multiply quickly.
 
-The queueing phase deserves special attention because it determines when a pod is even considered. A `PreEnqueue` plugin can keep pods out of the active queue until required state exists, and a `Sort` plugin influences which pending pod gets scheduled first. Most custom scheduler work starts later, in filtering and scoring, because queue behavior changes fairness across workloads. If you do touch queueing, define the fairness contract explicitly: which pods wait, which pods jump ahead, and how operators can explain that behavior during an outage.
+The queueing phase deserves special attention because it determines when a pod is even considered. A `PreEnqueue` plugin can keep pods out of the active queue until required state exists, and a `QueueSort` plugin influences which pending pod gets scheduled first. Most custom scheduler work starts later, in filtering and scoring, because queue behavior changes fairness across workloads. If you do touch queueing, define the fairness contract explicitly: which pods wait, which pods jump ahead, and how operators can explain that behavior during an outage.
 
 ```mermaid
 flowchart TD
     Start([Pod enters scheduling queue]) --> PreEnqueue
 
     subgraph Queueing Phase
-        PreEnqueue[1. PreEnqueue<br/>Reject pods before queuing] --> Sort[2. Sort<br/>Order pods in the queue]
+        PreEnqueue[1. PreEnqueue<br/>Reject pods before queuing] --> QueueSort[2. QueueSort<br/>Order pods in the queue]
     end
 
-    Sort --> PreFilter
+    QueueSort --> PreFilter
 
     subgraph Scheduling Cycle
         PreFilter[3. PreFilter<br/>Compute shared state] --> Filter[4. Filter<br/>Eliminate infeasible nodes]
@@ -76,7 +76,7 @@ The scheduler framework also gives you a useful mental model for performance rev
 | Extension Point | When It Runs | What It Does | Return Type |
 |----------------|-------------|-------------|-------------|
 | **PreEnqueue** | Before queuing | Gate pods from entering queue | Allow/Reject |
-| **Sort** | Queue ordering | Prioritize pods in queue | Less function |
+| **QueueSort** | Queue ordering | Prioritize pods in queue | Less function |
 | **PreFilter** | Once per cycle | Compute shared filter state | Status |
 | **Filter** | Per node | Eliminate infeasible nodes | Status (pass/fail) |
 | **PostFilter** | After no node fits | Try preemption | Status + nominated node |
@@ -139,6 +139,8 @@ scheduler-plugins/
 
 The Score plugin below ranks nodes based on a tier label. Nodes labeled `scheduling.kubedojo.io/tier: premium` receive a higher score than `standard` or unlabeled nodes, so mission-critical workloads drift toward more reliable hardware without making every workload author write a large node affinity stanza. The plugin reads from the scheduler's shared snapshot, not from the API server, and it accepts scores as structured arguments so operators can tune policy through configuration rather than recompiling the binary for every change.
 
+Scheduler framework plugin interfaces evolve across Kubernetes minor versions; confirm exact method signatures against the godoc for your cluster's version when you build out-of-tree plugins. Examples here target Kubernetes 1.35.
+
 This example intentionally uses node labels because labels are visible, cacheable, and already part of Kubernetes scheduling vocabulary. In a production system, those labels should be maintained by automation rather than by humans typing commands during an incident. A node inventory controller might set the tier label based on hardware class, maintenance state, or procurement metadata. The scheduler plugin should consume that normalized signal, not become responsible for discovering hardware facts itself. Keeping discovery outside the scheduler makes the plugin simpler and keeps placement latency predictable.
 
 ```go
@@ -191,18 +193,15 @@ func (pl *NodePreference) Name() string {
 // Score scores a node based on its tier label.
 func (pl *NodePreference) Score(
 	ctx context.Context,
-	state *framework.CycleState,
+	state framework.CycleState,
 	pod *v1.Pod,
-	nodeName string,
+	nodeInfo framework.NodeInfo,
 ) (int64, *framework.Status) {
 
-	// Get the node info from the snapshot.
-	nodeInfo, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
-	if err != nil {
-		return 0, framework.AsStatus(fmt.Errorf("getting node %q: %w", nodeName, err))
-	}
-
 	node := nodeInfo.Node()
+	if node == nil {
+		return 0, framework.AsStatus(fmt.Errorf("node info has no node"))
+	}
 
 	// Check for the tier label.
 	tierValue, exists := node.Labels[LabelKey]
@@ -227,7 +226,7 @@ func (pl *NodePreference) ScoreExtensions() framework.ScoreExtensions {
 // NormalizeScore normalizes the scores to [0, MaxNodeScore].
 func (pl *NodePreference) NormalizeScore(
 	ctx context.Context,
-	state *framework.CycleState,
+	state framework.CycleState,
 	pod *v1.Pod,
 	scores framework.NodeScoreList,
 ) *framework.Status {
@@ -253,10 +252,10 @@ func (pl *NodePreference) NormalizeScore(
 }
 
 // EventsToRegister returns the events that trigger rescheduling.
-func (pl *NodePreference) EventsToRegister() []framework.ClusterEventWithHint {
+func (pl *NodePreference) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
 	return []framework.ClusterEventWithHint{
 		{ClusterEvent: framework.ClusterEvent{Resource: framework.Node, ActionType: framework.Add | framework.Update}},
-	}
+	}, nil
 }
 
 // New creates a new NodePreference plugin.
@@ -265,6 +264,7 @@ func New(ctx context.Context, obj runtime.Object, handle framework.Handle) (fram
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type NodePreferenceArgs, got %T", obj)
 	}
+	// Typed plugin args must be registered with the scheduler component-config scheme (as kubernetes-sigs/scheduler-plugins does via apis/config AddToScheme), or the framework passes *runtime.Unknown and this assertion fails at startup.
 
 	return &NodePreference{
 		handle: handle,
@@ -332,8 +332,9 @@ const preFilterStateKey = "PreFilter" + Name
 
 func (pl *GPUFilter) PreFilter(
 	ctx context.Context,
-	state *framework.CycleState,
+	state framework.CycleState,
 	pod *v1.Pod,
+	nodes []framework.NodeInfo,
 ) (*framework.PreFilterResult, *framework.Status) {
 
 	gpuType := pod.Annotations[PodGPUAnnotation]
@@ -359,9 +360,9 @@ func (pl *GPUFilter) PreFilterExtensions() framework.PreFilterExtensions {
 // Filter checks if a node has the required GPU type and available GPUs.
 func (pl *GPUFilter) Filter(
 	ctx context.Context,
-	state *framework.CycleState,
+	state framework.CycleState,
 	pod *v1.Pod,
-	nodeInfo *framework.NodeInfo,
+	nodeInfo framework.NodeInfo,
 ) *framework.Status {
 
 	// Read pre-filter state.
@@ -625,6 +626,9 @@ data:
     profiles:
     - schedulerName: custom-scheduler
       plugins:
+        filter:
+          enabled:
+          - name: GPUFilter
         score:
           enabled:
           - name: NodePreference
@@ -995,9 +999,10 @@ The image must be visible to the kind nodes, not only to your local Docker daemo
 
 ```bash
 kubectl apply -f manifests/rbac.yaml
-kubectl apply -f manifests/scheduler-config.yaml
 kubectl apply -f manifests/deployment.yaml
 ```
+
+`KubeSchedulerConfiguration` has no cluster REST endpoint — configuration is delivered through the `custom-scheduler-config` ConfigMap mounted in the Deployment, not via a standalone `kubectl apply` of `scheduler-config.yaml`.
 
 <details>
 <summary>Solution notes for task 4</summary>
