@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 94 — CAPA + CNPE tool-cert wave-2 (7 modules) + dedup-regex fix</title>
+<style>
+  body { font: 16px/1.6 -apple-system, Segoe UI, Roboto, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 2px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.25rem; margin-top: 2rem; color: #1e40af; }
+  h3 { font-size: 1.05rem; margin-top: 1.3rem; }
+  code { background: #f1f5f9; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .92rem; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #eff6ff; }
+  .tldr { background: #f0f9ff; border-left: 4px solid #2563eb; padding: .8rem 1rem; margin: 1rem 0; }
+  .win { background: #f0fdf4; border-left: 4px solid #16a34a; padding: .6rem 1rem; margin: .8rem 0; }
+  ul { margin: .4rem 0; }
+  .meta { color: #64748b; font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>Session 94 — CAPA + CNPE tool-cert wave-2 (7 modules) + dedup-regex CI fix</h1>
+<p class="meta">Date: 2026-06-02 · Branch: main (clean, pushed) · Orchestrator: Claude Opus 4.8 · No-codex review-first loop.</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Review-axis <strong>462 → 467 done</strong> (+5 net). Two tool/specialty-cert sub-tracks
+finalized to <code>done</code> via two consolidated PRs: <strong>#1757 CAPA (Argo ×2)</strong> ·
+<strong>#1758 CNPE (Platform Engineering ×5)</strong>. Plus a folded-in CI-gate fix
+(<code>fix(quality):</code> Argo CD path-traversal dedup regex). Same loop: cross-family R1
+(opus 4.8 headless + cursor <code>--model auto</code> + deepseek-v4-pro, ≤2/OAuth) → orchestrator
+ground-check / web-verify every verifier-blind code &amp; CNCF-maturity claim → consolidated cursor fix →
+verify T0 → dedup gate → PR → CI → rebase-merge → finalize. <strong>7 of the remaining ~19 wave-2 cert
+modules done; CNPA (5) · FinOps (2) · LFCS (5) remain.</strong>
+</div>
+
+<h2>Pre-task — dedup-gate regex fix (commit <code>a0e8bd1f</code>, shipped in PR #1757)</h2>
+<p>The session-93 carryover flagged <code>scripts/audit_incident_reuse.py:162</code>: the "Argo CD
+path-traversal CVE-2022-24348" pattern <code>r"Argo CD.{0,80}(path traversal|2022|CVE)"</code>
+false-positived on benign "Argo CD … graduated 2022" prose (CGOA 1.3/1.5 tripped CI dedup). Tightened to
+<code>r"Argo CD.{0,80}path[- ]?traversal"</code> (the literal CVE-2022-24348 is already matched by the
+sibling pattern) + added a mirror test (graduation prose must NOT match; path-traversal must). All 12
+dedup tests pass; lint clean. This unblocks all future Argo-family content.</p>
+
+<h2>CAPA — Certified Argo Project Associate (2 modules, PR #1757)</h2>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Verdict</th><th>Key fixes (all ground-checked vs upstream)</th></tr>
+<tr><td>1.1 advanced-argo-workflows</td><td>opus 4.8</td><td>NEEDS_CHANGES 4/5</td>
+<td>3 verifier-blind config defects: lifecycle <code>running</code> hook missing its required <code>expression</code>; <code>suspend: duration "0"</code> (means "resume immediately", not "wait forever") → <code>suspend: {}</code>; <code>successCondition</code> on a ConfigMap (no <code>.status</code> → would hang) removed. CEL wording softened; v4.0.4→v4.0.5; <code>revision_pending</code> removed.</td></tr>
+<tr><td>1.2 argo-events</td><td>cursor composer-2.5</td><td>NEEDS_CHANGES 3.6/5</td>
+<td>2 P1 API defects: <code>argoWorkflow</code> trigger used invalid <code>group/version/resource</code> + <code>operation: create</code> → <code>operation: submit</code> (that shape belongs to the <code>k8s</code> trigger); OR logic used the removed pre-1.0 <code>dependencyGroups</code>/<code>circuit</code> → per-trigger <code>conditions</code> referencing dependency names (§5.1, Quiz 5, Quiz 8, Task 7). Sources 3→12 (was T3); install expects single <code>controller-manager</code>; Quiz 8 routes via <code>body.repository.full_name</code>; Calendar+Kafka snippets added.</td></tr>
+</table>
+<div class="win"><strong>Notable:</strong> 1.1's many post-cutoff <strong>Argo Workflows v4.0 claims were independently web-verified CORRECT</strong> (v4.0.0=2026-02-04; singular→plural <code>schedule/mutex/semaphore</code> removal; <code>argo convert</code>; 9 template types with NO <code>data</code> template) — opus reached the same conclusion. The easy reviewer mistake here would have been flagging the correct v4.0 facts as fictional.</div>
+
+<h2>CNPE — Cloud Native Platform Engineering Associate (5 modules, PR #1758)</h2>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Verdict</th><th>Key fixes</th></tr>
+<tr><td>1.1 exam-strategy</td><td>cursor</td><td>NEEDS_CHANGES 4/5</td><td>leak; official CNPE 5-domain blueprint table (15/25/25/20/15, $445 — web-verified); Crossplane v1→v2 note; OTel-baggage nit</td></tr>
+<tr><td>1.2 gitops-lab</td><td>opus 4.8</td><td>APPROVE 4.5/5</td><td>Argo <code>Rollout</code>/<code>Deployment</code> selector-collision clarifier; namespace default aligned; trimmed self-ref (all manifests opus-verified schema-valid)</td></tr>
+<tr><td>1.3 platform-apis-lab</td><td>cursor</td><td>APPROVE_W_NITS 4.6/5</td><td>3 leaks; Crossplane XRD/Composition/Claim cross-link (absolute <code>/platform/…/module-7.2-crossplane/</code>) + v1/v2 mapping; term nits</td></tr>
+<tr><td>1.4 obs-security-lab</td><td>opus 4.8</td><td>NEEDS_CHANGES 4.5/5</td><td>leak (line 216); Quiz-3 "broad secret access"→"broad resource access"</td></tr>
+<tr><td>1.5 mock-exam</td><td>deepseek-v4-pro</td><td>APPROVE_W_NITS 4/5</td><td>8 leaks; 5-domain table + Platform Architecture paragraph (was missing the 15% domain)</td></tr>
+</table>
+
+<h3>Ground-check value-adds (the point of the loop)</h3>
+<ul>
+<li><strong>Sibling-grep caught a systematic leak the reviewers only sampled.</strong> The "original module" rewrite artifact appeared in <strong>1.1, 1.3, 1.4 AND 1.5</strong> (14 lines). The fix brief targeted every instance while explicitly <em>preserving</em> the legitimate teaching vocabulary "verify the <em>original symptom</em> / <em>original issue</em> / <em>original plan</em> / <em>original intent</em>" (post-fix grep: 0 leaks, 17× "original symptom" intact).</li>
+<li><strong>Web-verified</strong> the CNPE blueprint (15/25/25/20/15, 120-min, $445) and Crossplane v2 (namespaced XRs, Claims removed; v2.2 Mar-2026, latest v2.3, <code>docs/latest</code>=v2) — both fed real fixes (1.1/1.3/1.5).</li>
+<li><strong>Independently verified all 7 mock-exam answer keys correct</strong> before trusting deepseek's "no wrong keys," and <strong>rejected a deepseek hallucination</strong> (it claimed <code>src/content/docs/k8s/cnpe/</code> was empty and the 1.5 line-29 cross-reference was broken — false; modules exist; line 29 left intact).</li>
+</ul>
+
+<h2>Finalize</h2>
+<p>CAPA: 1.1 reset <code>SKIPPED→COMMITTED</code> (<code>revision_pending</code> cleared in the content PR); 1.2 already COMMITTED.
+CNPE: 1.1/1.3/1.4/1.5 reset <code>AUDITED→COMMITTED</code>; 1.2 already COMMITTED. APPROVE review records written + force-committed
+(<code>.pipeline/</code> is gitignored) under <code>docs(reviews):</code> commits <code>3abb4558</code> (CAPA) + <code>0966e147</code> (CNPE).
+Board confirmed: all 7 modules <code>done</code>.</p>
+
+<h2>NEXT</h2>
+<p>Continue tool/specialty-cert wave-2 in sidebar order: <strong>CNPA (Platform Associate ×5) → FinOps (×2)</strong>;
+<strong>LFCS (×5)</strong> sits earlier in the sidebar (Fundamentals/Linux area). Then <strong>cloud 85 → ai-ml-eng → on-prem → platform</strong> per curriculum order.
+Same proven loop. Reusable artifacts: <code>logs/remediation/briefs/session94/{review-*-shared.md, review-{capa,cnpe}-*.full.md, fix-{capa,cnpe}-*.md, pr-body-*.md}</code>.</p>
+<p><strong>Carryover follow-ups still open:</strong> leaked-meta-text in <code>platform/.../mlops/module-5.6-ml-pipelines.md</code> + <code>cloud/hyperscaler-rosetta-stone.md</code> (out of wave-2 — the CNPE 1.4 instance is now fixed); gemini-cli yolo adapter fix; <code>revision_pending</code> auto-flip finalize step (ladder bug). See STATUS.md TODO.</p>
+</body>
+</html>
