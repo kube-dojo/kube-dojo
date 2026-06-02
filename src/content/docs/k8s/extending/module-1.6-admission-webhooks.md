@@ -77,7 +77,7 @@ The distinction between mutation and validation is partly about capability and p
 
 | Feature | Mutating | Validating |
 |---------|----------|------------|
-| Can modify the object | Yes, by returning JSON Patch | No, it returns allow, deny, and optional warnings |
+| Can modify the object | Yes, by returning JSON Patch | No, it returns allow, deny, and optional warnings (mutating webhooks can also return `warnings` since Kubernetes 1.19) |
 | Can reject the request | Yes | Yes |
 | Execution order | First, before final validation | Second, after all mutation passes finish |
 | Typical use | Inject sidecars, set defaults, add labels | Enforce policies, naming rules, security rules |
@@ -411,13 +411,13 @@ func handleMutate(w http.ResponseWriter, r *http.Request) {
 	var admissionReview admissionv1.AdmissionReview
 	if err := json.NewDecoder(r.Body).Decode(&admissionReview); err != nil {
 		klog.Errorf("Failed to decode request: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		sendResponse(w, "", false, fmt.Sprintf("failed to decode request: %v", err))
 		return
 	}
 
 	request := admissionReview.Request
 	if request == nil {
-		http.Error(w, "admission review request is required", http.StatusBadRequest)
+		sendResponse(w, "", false, "admission review request is required")
 		return
 	}
 	klog.Infof("Processing %s %s/%s by %s",
@@ -515,6 +515,7 @@ func sendResponse(w http.ResponseWriter, uid types.UID, allowed bool, message st
 	json.NewEncoder(w).Encode(response)
 }
 
+// Always return an AdmissionReview envelope. Raw http.Error bodies are treated as webhook call failures under failurePolicy: Fail, not structured denials.
 func sendPatchResponse(w http.ResponseWriter, uid types.UID, patch []byte) {
 	patchType := admissionv1.PatchTypeJSONPatch
 	response := admissionv1.AdmissionReview{
@@ -737,7 +738,7 @@ Matching is the second half of reliability. A broad webhook rule increases API s
 
 ```yaml
 webhooks:
-- name: mwebapp.kubedojo.io
+- name: sidecar-injector.kubedojo.io
   rules:
   - apiGroups: [""]
     apiVersions: ["v1"]
@@ -768,14 +769,16 @@ webhooks:
   - name: "not-system-namespace"
     expression: "!request.namespace.startsWith('kube-')"
   - name: "has-annotation"
-    expression: "object.metadata.annotations['validate'] == 'true'"
+    expression: "has(object.metadata.annotations) && object.metadata.annotations['validate'] == 'true'"
 ```
+
+A matchConditions evaluation error is fail-closed when `failurePolicy: Fail` — the webhook is not invoked and the request is rejected, so guard optional maps and keys in CEL expressions.
 
 Matching choices should also be reviewed as part of change management, not only as code. If a team changes a namespace label that controls webhook participation, that label change can alter admission behavior for every workload in the namespace even though no webhook manifest changed. For that reason, mature platforms treat opt-in labels as part of the namespace contract, restrict who can change them, and include them in onboarding documentation. The goal is to make admission behavior predictable from the namespace metadata rather than hidden in a cluster-scoped object that application teams rarely inspect.
 
 Timeouts deserve the same explicit ownership. A long timeout may feel safer because it gives the webhook more time to answer, but it also extends the time every matching API request can be stalled. A very short timeout reduces stall time but may create noisy intermittent failures if the webhook performs heavy decoding, logging, or remote calls. Start with a small value, measure admission latency under load, and then tune based on observed request behavior instead of copying the default into every configuration.
 
-Kubernetes also offers ValidatingAdmissionPolicy, which uses CEL expressions for many validation cases without requiring a webhook server. That feature is not a drop-in replacement for every webhook, because it cannot call external systems or perform arbitrary mutation, but it is often the better answer for simple field checks. If your policy is "deny Pods without a label" or "deny images outside a pattern," evaluate CEL-based validation before deciding to own an HTTPS service in the control-plane request path.
+Kubernetes also offers ValidatingAdmissionPolicy, which uses CEL expressions for many validation cases without requiring a webhook server. **MutatingAdmissionPolicy** also exists but is **beta as of Kubernetes 1.35** (GA in 1.36) and is out of scope here — this module focuses on webhook-based admission. ValidatingAdmissionPolicy is not a drop-in replacement for every webhook, because it cannot call external systems or perform arbitrary mutation, but it is often the better answer for simple field checks. If your policy is "deny Pods without a label" or "deny images outside a pattern," evaluate CEL-based validation before deciding to own an HTTPS service in the control-plane request path.
 
 There is also a social reason to prefer the simplest enforcement mechanism that works. A webhook is usually owned by a platform or security team, while the workloads it affects are owned by many application teams. When a denial happens, the user sees an API error during their deployment, not a ticket explaining your design history. The closer a rule is to native Kubernetes schema, CEL policy, or well-documented namespace configuration, the easier it is for users to predict and correct their own mistakes without waiting for a platform engineer.
 
@@ -1125,6 +1128,8 @@ webhooks:
     matchLabels:
       webhook: enabled
 ```
+
+An `objectSelector` (for example `sidecar.kubedojo.io/inject: "true"`) would narrow matches before the handler runs and cut unnecessary webhook calls; this lab filters by annotation inside the handler instead.
 
 <details>
 <summary>Solution notes for Task 3</summary>
