@@ -141,7 +141,7 @@ For OTCA, focus on the behavior first: [batch means asynchronous buffering; simp
 | Batch size | `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | How many spans go in one export call | Export calls become too small or too bursty |
 
 Metrics use the same provider idea but a different middle component.
-[A meter creates instruments, instruments record measurements, and the reader decides when collection happens and which temporality the exporter prefers.](https://opentelemetry.io/docs/concepts/signals/metrics/)
+[A meter creates instruments, instruments record measurements, and the reader decides when collection happens; the exporter's `preferred_temporality` setting then tells the reader whether to export cumulative or delta values.](https://opentelemetry.io/docs/concepts/signals/metrics/)
 This distinction matters because metrics are not shipped one measurement at a time; the SDK aggregates many recordings into sums, histograms, last values, or other forms.
 When a metric looks wrong in a backend, the bug is often in instrument choice, aggregation, label cardinality, or temporality rather than in the exporter.
 
@@ -325,7 +325,7 @@ For performance debugging, histograms are often the bridge from "something got s
 | Observe queue depth | Observable Gauge | Value exists outside request flow | `queue.name=orders` |
 | Observe total CPU time | Observable Counter | OS counter increases over time | `cpu.state=user` |
 
-[Temporality defines what a metric value means over time.](https://opentelemetry.io/docs/reference/specification/metrics/data-model/)
+[Temporality defines what a metric value means over time.](https://opentelemetry.io/docs/specs/otel/metrics/data-model/)
 Cumulative temporality reports the total since a starting point, while delta temporality reports the change since the last collection.
 If a counter records increments of ten, twenty, and five across three collection windows, cumulative reports ten, thirty, and thirty-five, while delta reports ten, twenty, and five.
 Neither is universally better; the backend and reader must agree on interpretation.
@@ -481,6 +481,24 @@ In exam scenarios, look for the more specific variable when two settings appear 
 | `OTEL_TRACES_SAMPLER` | Trace sampling strategy | `always_on` or `traceidratio` | Controls which traces are sampled |
 | `OTEL_TRACES_SAMPLER_ARG` | Sampler argument | `0.10` | Ten percent sampling for ratio sampler |
 
+### Trace samplers and head sampling
+
+Sampling decides whether a trace is recorded before export cost accumulates.
+The SDK applies a **sampler** at span creation time for root spans and for children according to sampler rules.
+Environment variables map to built-in sampler types; you can also configure samplers programmatically on `TracerProvider`.
+
+| Sampler | `OTEL_TRACES_SAMPLER` value | Behavior | Typical use |
+|---|---|---|---|
+| **AlwaysOn** | `always_on` | Every root trace is sampled | Dev, low-traffic services, debugging |
+| **AlwaysOff** | `always_off` | No new traces are sampled | Tests, deliberate disablement |
+| **TraceIdRatioBased** | `traceidratio` | Probabilistic **head** sampling from trace ID (e.g. `OTEL_TRACES_SAMPLER_ARG=0.10` → ~10%) | Cost control while spans are still independent |
+| **ParentBased** | (decorator, not a separate env name) | Wraps a root sampler: a child span **inherits** the parent's sampled decision across service boundaries | Default production pattern |
+
+**ParentBased** is the decorator you should picture on service boundaries.
+If the upstream service did not sample the trace, downstream work should not suddenly create a full trace tree unless you intentionally override that policy.
+The SDK default is effectively **ParentBased(TraceIdRatioBased)** with a ratio argument, so cross-service calls stay consistent with the parent's `traceparent` sampled flag.
+**TraceIdRatioBased** alone applies only at roots; **ParentBased** ensures children respect upstream decisions.
+
 OTLP is the standard export protocol you should expect to see in modern OTel designs.
 The exporter may send directly to a backend, but many production architectures send to an OpenTelemetry Collector first.
 The collector can [receive telemetry, batch it, filter it, enrich it, and fan it out to one or more backends](https://opentelemetry.io/docs/collector/).
@@ -556,8 +574,7 @@ The best result is a layered trace: automatic spans show technical boundaries, w
 
 ## Part 7: Worked Examples From Input to Solution
 
-The audit failure called out a common curriculum problem: code snippets that sit on the page as reference material do not teach learners how to move from a problem to a solution.
-This section uses the input-to-solution pattern instead.
+Reference snippets that sit on the page do not teach how to move from a problem to a solution, so this section uses an input-to-solution pattern instead.
 Each example starts with an operational problem, shows the uninstrumented or incomplete input, states the desired telemetry, then walks through the solution.
 After the worked example, you will get a similar "your turn" task in the exercise.
 
@@ -952,6 +969,10 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(ctx, "POST /checkout", trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
 
+	// Client span FIRST — its context is what must be propagated downstream.
+	ctx, clientSpan := tracer.Start(ctx, "POST payment-service", trace.WithSpanKind(trace.SpanKindClient))
+	defer clientSpan.End()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:8081/pay", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -959,11 +980,7 @@ func gatewayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-
-	clientSpanCtx, clientSpan := tracer.Start(ctx, "POST payment-service", trace.WithSpanKind(trace.SpanKindClient))
-	defer clientSpan.End()
-
-	_ = clientSpanCtx
+	// resp, _ := http.DefaultClient.Do(req)  // would actually send
 	time.Sleep(25 * time.Millisecond)
 	fmt.Fprintln(w, "checkout accepted")
 }
@@ -1282,7 +1299,7 @@ If you used `SimpleSpanProcessor`, switch to batch processing and explain how re
 - [OpenTelemetry Kubernetes getting started](https://opentelemetry.io/docs/kubernetes/getting-started/)
 - [cncf.io: otca](https://www.cncf.io/training/certification/otca/) — The official CNCF OTCA exam page lists The OpenTelemetry API and SDK domain at 46%.
 - [opentelemetry.io: overview](https://opentelemetry.io/docs/specs/otel/overview/) — The OpenTelemetry overview specification explicitly distinguishes API packages from the SDK implementation.
-- [opentelemetry.io: data model](https://opentelemetry.io/docs/reference/specification/metrics/data-model/) — The metrics data model specification defines delta vs cumulative temporality and exemplars with trace_id and span_id.
+- [opentelemetry.io: data model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/) — The metrics data model specification defines delta vs cumulative temporality and exemplars with trace_id and span_id.
 - [opentelemetry.io: exporters](https://opentelemetry.io/docs/languages/python/exporters/) — The official exporters documentation contrasts simple and batched processing and explicitly recommends batching.
 - [opentelemetry.io: sdk environment variables](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/) — The SDK environment variable specification defines these exact batch span processor variables.
 - [opentelemetry.io: sdk](https://opentelemetry.io/docs/specs/otel/metrics/sdk/) — The metrics SDK specification defines the periodic exporting MetricReader as the push-oriented reader implementation.
@@ -1297,6 +1314,12 @@ If you used `SimpleSpanProcessor`, switch to batch processing and explain how re
 - [opentelemetry.io: python](https://opentelemetry.io/docs/zero-code/python/) — The Python zero-code documentation shows configuration and launch through the opentelemetry-instrument command.
 - [opentelemetry.io: configuration](https://opentelemetry.io/docs/zero-code/dotnet/configuration/) — The .NET automatic-instrumentation configuration docs explicitly document CLR profiler variables and DOTNET_STARTUP_HOOKS.
 - [opentelemetry.io: js](https://opentelemetry.io/docs/zero-code/js/) — The JavaScript zero-code documentation gives this exact NODE_OPTIONS-based require-hook pattern.
+
+## Learner check
+
+> Client span FIRST — its context is what must be propagated downstream. Start the client span before building the outbound request, then Inject from that ctx so the downstream service's parent is the client span, not the server span.
+
+> ParentBased wraps a root sampler so a child span inherits the parent's sampled decision across service boundaries; TraceIdRatioBased with OTEL_TRACES_SAMPLER_ARG=0.10 applies probabilistic head sampling at roots.
 
 ## Next Module
 
