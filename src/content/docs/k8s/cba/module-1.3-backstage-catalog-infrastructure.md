@@ -22,7 +22,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At Spotify, before the open-sourcing of Backstage, engineers faced a massive crisis of cognitive fragmentation. During a major peak traffic event, a critical payment routing service went down. The incident response team mobilized instantly, but they spent the first 45 minutes merely trying to diagnose who owned the service, where the deployment manifests were located, and what the upstream infrastructure dependencies were. Millions of dollars in transactions were delayed. This was not a failure of code; it was a catastrophic failure of context.
+At Spotify, before Backstage was open-sourced, engineers routinely faced cognitive fragmentation during incidents. **Hypothetical scenario:** during a peak-traffic outage, responders can lose the first stretch of an incident just identifying who owns a service, where deployment manifests live, and what upstream dependencies exist — not because the code is unknowable, but because that context is scattered across wikis, chat, and tribal knowledge. This was the organizational pain Backstage's catalog was built to cure.
 
 The software catalog is the beating heart of Backstage. Without it, Backstage is just a plugin framework with a pretty UI. With it, you have a single pane of glass over every service, API, team, and piece of infrastructure your organization owns. It bridges the gap between raw infrastructure and human accountability, turning tribal knowledge into an explicit graph of relationships. 
 
@@ -217,7 +217,7 @@ Backstage ships built-in discovery integrations for GitHub, GitLab, and Bitbucke
 # app-config.yaml
 catalog:
   providers:
-    githubDiscovery:
+    github:
       myOrgProvider:
         organization: 'myorg'
         catalogPath: '/catalog-info.yaml'   # where to look in each repo
@@ -494,19 +494,19 @@ auth:
 
 To truly understand Domain 2 of the CBA, you must grasp core plugins. 
 
-**The Kubernetes Plugin**: The Backstage Kubernetes feature consists of two distinct packages: `@backstage/plugin-kubernetes` (the frontend UI surfacing health) and `@backstage/plugin-kubernetes-backend` (which handles cluster connectivity logic and service accounts). Historical references are OK (e.g., feature X was introduced in v1.1, v1.2, v1.3, v1.4, v1.5, v1.6, and v1.7). For modern production setups today, Kubernetes versions must strictly be v1.35 or higher. Do not deploy end-of-life API objects when binding Backstage ServiceAccounts to your clusters.
+**The Kubernetes Plugin**: The Backstage Kubernetes feature consists of two distinct packages: `@backstage/plugin-kubernetes` (the frontend UI surfacing health) and `@backstage/plugin-kubernetes-backend` (which handles cluster connectivity logic and service accounts). The backend plugin authenticates to clusters via ServiceAccounts; target a supported, non-EOL Kubernetes version.
 
 **TechDocs**: TechDocs uses MkDocs under the hood to convert Markdown files into a static HTML documentation site. TechDocs recommends generating docs on CI/CD and storing output to an external storage provider (e.g., AWS S3 or Google Cloud Storage) rather than generating dynamically on the Backstage server itself. This architectural choice dramatically reduces CPU load on the Backstage backend.
 
 ---
 
-## War Story: The 10,000 Entity Tsunami
+## Scenario: The 10,000 Entity Tsunami
 
-A platform team at a mid-size fintech company set up GitHub discovery to auto-register every repo in their organization. Within a week, the catalog had 10,000 entities—but morale was awful. The catalog ingested archived repositories, ancient forks, and experimental prototypes without prejudice. Search became absolutely useless.
+**Hypothetical scenario:** A platform team at a mid-size fintech company sets up GitHub discovery to auto-register every repo in their organization. Within a week, the catalog has 10,000 entities—but morale is awful. The catalog ingests archived repositories, ancient forks, and experimental prototypes without prejudice. Search becomes useless.
 
 When they removed the configuration block in panic, the entities remained. They became orphaned entities. Backstage correctly tracked that they had been registered via a Location that no longer existed, flagging them for human review. The team spent a weekend writing a Python loop calling `DELETE /api/catalog/entities/by-uid/<uid>` to purge the ghost data.
 
-**The Lesson:** Always scope discovery providers using repository topic tags or explicit path exclusions to prevent digital hoarding.
+**The Lesson:** Always scope discovery providers using repository topic tags, repository naming conventions, or explicit path exclusions so archived forks and experiments never flood the catalog — digital hoarding makes search and ownership workflows worse than having no portal at all.
 
 ## Exam Design Notes for Catalog and Infrastructure Scenarios
 
@@ -669,7 +669,7 @@ Backstage securely handles this by using the **proxy plugin** (`/api/proxy`), wh
 <details>
 <summary>Answer</summary>
 
-Entities can be registered through **manual registration** or **automated discovery**. Manual registration involves explicitly adding static Location entries in `app-config.yaml` under `catalog.locations` or clicking the "Register Existing Component" button in the UI. Automated discovery, on the other hand, utilizes built-in providers (like `githubDiscovery`, `gitlab`, or `githubOrg`) configured under `catalog.providers` to automatically scan repositories and organizational groups for `catalog-info.yaml` files. Automated discovery is highly recommended for scaling across large engineering organizations, while manual registration is useful for testing or isolated components.
+Entities can be registered through **manual registration** or **automated discovery**. Manual registration involves explicitly adding static Location entries in `app-config.yaml` under `catalog.locations` or clicking the "Register Existing Component" button in the UI. Automated discovery, on the other hand, utilizes built-in providers (like `github`, `gitlab`, or `githubOrg`) configured under `catalog.providers` to automatically scan repositories and organizational groups for `catalog-info.yaml` files. Automated discovery is highly recommended for scaling across large engineering organizations, while manual registration is useful for testing or isolated components.
 
 </details>
 
@@ -888,6 +888,12 @@ curl http://localhost:7007/api/proxy/jsonplaceholder/todos/1
 - [Backstage Docs: Discovery and integration](https://backstage.io/docs/integrations/)
 - [Backstage Docs: Authentication](https://backstage.io/docs/auth/)
 - [Backstage Docs: Docker deployment](https://backstage.io/docs/deployment/docker/)
+
+## Learner check
+
+> The `GithubEntityProvider` discovery key under `catalog.providers` is **`github`**. Configure repository scanning there alongside `gitlab` and `githubOrg` as needed.
+
+---
 
 ## Next Module
 
