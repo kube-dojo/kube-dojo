@@ -10,7 +10,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GATE_SCRIPT = REPO_ROOT / "scripts/quality/incident_dedup_gate.py"
 PYTHON_BIN = shutil.which("python3") or shutil.which("python") or "python"
-INCIDENTS = runpy.run_path(str(REPO_ROOT / "scripts" / "audit_incident_reuse.py"))["INCIDENTS"]
+INCIDENTS = runpy.run_path(str(REPO_ROOT / "scripts" / "audit_incident_reuse.py"))[
+    "INCIDENTS"
+]
 
 
 def _git(repo: Path, args: list[str]) -> None:
@@ -22,8 +24,14 @@ def _init_repo_with_scripts(repo: Path) -> None:
     quality_dir = scripts_dir / "quality"
     scripts_dir.mkdir(parents=True, exist_ok=True)
     quality_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(REPO_ROOT / "scripts" / "check_incident_reuse.py", scripts_dir / "check_incident_reuse.py")
-    shutil.copy(REPO_ROOT / "scripts" / "audit_incident_reuse.py", scripts_dir / "audit_incident_reuse.py")
+    shutil.copy(
+        REPO_ROOT / "scripts" / "check_incident_reuse.py",
+        scripts_dir / "check_incident_reuse.py",
+    )
+    shutil.copy(
+        REPO_ROOT / "scripts" / "audit_incident_reuse.py",
+        scripts_dir / "audit_incident_reuse.py",
+    )
     shutil.copy(GATE_SCRIPT, quality_dir / "incident_dedup_gate.py")
 
     _git(repo, ["init", "-b", "main"])
@@ -56,7 +64,12 @@ def _run_gate(
     mode: str | None = None,
     emit_json: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    cmd = [PYTHON_BIN, str(repo / "scripts/quality/incident_dedup_gate.py"), "--base", base]
+    cmd = [
+        PYTHON_BIN,
+        str(repo / "scripts/quality/incident_dedup_gate.py"),
+        "--base",
+        base,
+    ]
     if mode is not None:
         cmd.extend(["--mode", mode])
     if emit_json:
@@ -82,7 +95,10 @@ def _parse_gate_payload(result: subprocess.CompletedProcess[str]) -> dict:
 
 
 def _matches_incident(incident: str, text: str) -> bool:
-    return any(re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL) for pattern in INCIDENTS[incident])
+    return any(
+        re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        for pattern in INCIDENTS[incident]
+    )
 
 
 def test_github_october_2018_split_brain_requires_specific_incident_anchor() -> None:
@@ -95,6 +111,20 @@ def test_github_october_2018_split_brain_requires_specific_incident_anchor() -> 
 
     assert not _matches_incident(incident, generic_acquisition_anchor)
     assert _matches_incident(incident, split_brain_outage_anchor)
+
+
+def test_argo_cd_path_traversal_requires_specific_incident_anchor() -> None:
+    incident = "Argo CD path-traversal CVE-2022-24348"
+    generic_graduation_anchor = "Argo CD became a CNCF Graduated project in 2022, citing a mature CVE response process."
+    path_traversal_anchor = (
+        "Argo CD had a path traversal vulnerability that let attackers read files "
+        "outside the repository root."
+    )
+    hyphenated_anchor = "The Argo CD path-traversal flaw allowed directory escape."
+
+    assert not _matches_incident(incident, generic_graduation_anchor)
+    assert _matches_incident(incident, path_traversal_anchor)
+    assert _matches_incident(incident, hyphenated_anchor)
 
 
 def test_delta_mode_pass_when_set_is_identical(tmp_path: Path) -> None:
@@ -119,7 +149,11 @@ def test_delta_mode_fails_when_new_triple_added(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert payload["status"] == "fail"
     assert payload["mode"] == "delta"
-    assert ["duplicate", "Target 2013 breach", "src/content/docs/new/module.md"] in payload["added"]
+    assert [
+        "duplicate",
+        "Target 2013 breach",
+        "src/content/docs/new/module.md",
+    ] in payload["added"]
 
 
 def test_delta_mode_pass_when_old_triple_removed(tmp_path: Path) -> None:
@@ -142,14 +176,27 @@ def test_delta_mode_fails_when_old_replaced_by_different_triple(tmp_path: Path) 
     _commit(repo, "src/content/docs/module.md", VIOLATION_UBER, "seed base")
     _branch(repo, "delta-replace")
     _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "remove old violation")
-    _commit(repo, "src/content/docs/other/module.md", VIOLATION_TARGET, "add replacement violation")
+    _commit(
+        repo,
+        "src/content/docs/other/module.md",
+        VIOLATION_TARGET,
+        "add replacement violation",
+    )
 
     result = _run_gate(repo, base="main", mode="delta", emit_json=True)
     payload = _parse_gate_payload(result)
     assert result.returncode == 1
     assert payload["status"] == "fail"
-    assert ["duplicate", "Target 2013 breach", "src/content/docs/other/module.md"] in payload["added"]
-    assert ["duplicate", "Uber 2022 hardcoded credentials", "src/content/docs/module.md"] in payload["removed"]
+    assert [
+        "duplicate",
+        "Target 2013 breach",
+        "src/content/docs/other/module.md",
+    ] in payload["added"]
+    assert [
+        "duplicate",
+        "Uber 2022 hardcoded credentials",
+        "src/content/docs/module.md",
+    ] in payload["removed"]
 
 
 def test_absolute_mode_fails_when_any_after_violation_exists(tmp_path: Path) -> None:
@@ -251,14 +298,18 @@ def test_absolute_mode_passes_when_fp_lives_only_in_inline_code(tmp_path: Path) 
     assert result.returncode == 0, payload
 
 
-def test_absolute_mode_still_fails_when_real_incident_is_in_prose(tmp_path: Path) -> None:
+def test_absolute_mode_still_fails_when_real_incident_is_in_prose(
+    tmp_path: Path,
+) -> None:
     """Make sure the code-strip pass doesn't over-relax: the same triple in
     prose must still flag, otherwise we've broken the whole gate."""
     repo = tmp_path / "repo"
     _init_repo_with_scripts(repo)
     _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
     _branch(repo, "real-prose")
-    _commit(repo, "src/content/docs/new/module.md", PROSE_REAL_INCIDENT, "add prose case")
+    _commit(
+        repo, "src/content/docs/new/module.md", PROSE_REAL_INCIDENT, "add prose case"
+    )
 
     result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
     payload = _parse_gate_payload(result)
