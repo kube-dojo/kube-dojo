@@ -213,7 +213,7 @@ kubectl logs deploy/<name> -n <namespace> --tail=50
 kubectl describe deploy/<name> -n <namespace>
 ```
 
-Preserving that exact command block matters because it is the original module's minimal verification asset. It is not enough for every incident, and it deliberately omits metrics, traces, and policy engine logs that would be available in a fuller platform, but it remains a useful last-mile check. Events show whether the control plane is still rejecting or warning, logs show whether the workload is still failing locally, and the Deployment description shows whether the controller reached the desired state.
+This minimal command block matters as a last-mile check. It is not enough for every incident, and it deliberately omits metrics, traces, and policy engine logs that would be available in a fuller platform, but it remains useful for quick orientation. Events show whether the control plane is still rejecting or warning, logs show whether the workload is still failing locally, and the Deployment description shows whether the controller reached the desired state.
 
 For a CNPE lab, you should also practice writing a remediation note in the same structure every time. State the symptom, the evidence, the cause, the change, the verification, and the guardrail status. This is not bureaucratic ceremony. It forces you to identify whether your fix preserved RBAC, admission, runtime controls, network policy, and secret handling, which is the difference between fixing a service and quietly creating a platform exception nobody can audit later.
 
@@ -334,7 +334,7 @@ First determine whether privileged mode is actually required. If it is accidenta
 <details>
 <summary>Question 3: A workload receives `forbidden` when trying to read one ConfigMap in its own namespace. Which remediation best preserves the platform security posture?</summary>
 
-Create or update a namespace-scoped Role that grants the specific verb on the specific resource, then bind it to the workload's service account. A cluster-wide binding or broad secret access would make the immediate error disappear while expanding blast radius beyond the evidence. You should verify with `kubectl auth can-i` using the service account identity and then confirm the application recovers. This answer maps the symptom to RBAC authorization rather than admission or runtime policy.
+Create or update a namespace-scoped Role that grants the specific verb on the specific resource, then bind it to the workload's service account. A cluster-wide binding or broad resource access would make the immediate error disappear while expanding blast radius beyond the evidence. You should verify with `kubectl auth can-i` using the service account identity and then confirm the application recovers. This answer maps the symptom to RBAC authorization rather than admission or runtime policy.
 </details>
 
 <details>

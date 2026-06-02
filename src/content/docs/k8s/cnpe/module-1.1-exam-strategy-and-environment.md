@@ -64,6 +64,7 @@ Another practical prompt-reading habit is to separate nouns from verbs. The noun
 |-------------|----------------|---------------|--------------|
 | GitOps delivery | Which repository path owns the desired state? | application diff, sync status, rollout status | editing live cluster objects that Git will overwrite |
 | Platform API | Which custom object is the user-facing contract? | claim, XR, resource refs, conditions | debugging only the managed resource and ignoring the claim |
+| Platform architecture / infrastructure | Which topology, tenancy, or sizing choice matches the prompt? | namespace layout, node pools, storage class, cost signals | patching one workload when the platform design is wrong |
 | Observability | Which signal proves user-visible behavior changed? | metric query, trace span, log correlation, alert state | treating one log line as the whole incident |
 | Security and policy | Is the rule supposed to audit or enforce? | admission event, policy report, denied request | changing policy before confirming match scope |
 | Operations | Which component owns reconciliation? | controller logs, events, status conditions | restarting components without reading status |
@@ -86,7 +87,7 @@ kubectl config current-context
 kubectl get events -A --sort-by=.lastTimestamp | tail -n 10
 ```
 
-That command block is intentionally plain. It preserves the original module's verification habit because it catches three high-value mistakes: uncommitted local edits, the wrong Kubernetes context, and recent cluster-level warnings. It does not solve the task, but it prevents you from solving a task in the wrong place. In an exam, that is often the difference between a recoverable typo and a long detour.
+That command block is intentionally plain. This short environment check catches three high-value mistakes: uncommitted local edits, the wrong Kubernetes context, and recent cluster-level warnings. It does not solve the task, but it prevents you from solving a task in the wrong place. In an exam, that is often the difference between a recoverable typo and a long detour.
 
 Timeboxing is the discipline that makes the three-pass strategy real. If a task does not reveal a credible next action after a bounded inspection, mark it and move on. A useful scratchpad entry can be short: `Q3: app out of sync, repo path unclear, return after GitOps tasks`. You are not abandoning the task; you are preserving the rest of the exam while keeping enough state to resume.
 
@@ -144,7 +145,7 @@ Once you understand the prompt and trust your environment, the next question is 
 
 For GitOps tasks, treat Git as the desired-state contract unless the prompt clearly says otherwise. Inspect the application, repository path, target revision, sync status, and health before changing manifests. Argo CD distinguishes desired state from live state, and that distinction is exactly why GitOps helps platform teams operate at scale. If the desired state is wrong, fix Git; if the desired state is right but sync is blocked, inspect the controller, diff, hooks, waves, and permissions.
 
-For platform API tasks, identify the user-facing object first. In Crossplane terms, a claim can be namespaced while a composite resource is cluster-scoped, and the composition owns managed resources behind the abstraction. That separation is the point of a platform API: application teams request an outcome without managing every infrastructure detail. In an exam task, debugging only the cloud resource or only the Kubernetes object can waste time if you skip the relationship between claim, composite resource, composition, and managed resource conditions.
+For platform API tasks, identify the user-facing object first. In Crossplane terms, a claim can be namespaced while a composite resource is cluster-scoped, and the composition owns managed resources behind the abstraction. That separation is the point of a platform API: application teams request an outcome without managing every infrastructure detail. In Crossplane v1 (and v2 LegacyCluster mode), a namespaced **Claim** maps to a cluster-scoped composite resource (XR); in Crossplane v2 the XR is namespaced by default and there is no separate Claim API. Exam tasks may use either model — diagnosis still flows claim → XR → composition → managed-resource refs in v1, or namespaced-XR conditions in v2. In an exam task, debugging only the cloud resource or only the Kubernetes object can waste time if you skip the relationship between claim, composite resource, composition, and managed resource conditions.
 
 For observability tasks, resist the urge to treat the first signal as the truth. Metrics, logs, traces, events, and policy reports answer different questions. A metric can show rate or saturation, a trace can show request path, a log can show a local event, and a Kubernetes event can show controller behavior. CNPE-style operations work often asks you to combine signals just enough to choose a safe lever, not to conduct an open-ended investigation.
 
@@ -152,7 +153,7 @@ For security and policy tasks, confirm the intended mode before changing the rul
 
 ```bash
 kubectl get applications.argoproj.io -A
-kubectl get claims -A 2>/dev/null || true
+kubectl get claims -A 2>/dev/null || true  # claim plural is per-XRD — substitute your claim CRD plural
 kubectl get events -A --sort-by=.lastTimestamp | tail -n 20
 kubectl auth can-i create deployments --namespace default
 ```
@@ -308,10 +309,20 @@ The framework is intentionally small enough to memorize, but your implementation
 
 ## Did You Know?
 
-- CNPE is described by CNCF as a 120-minute online, proctored, performance-based exam, so time management is part of the tested skill rather than an afterthought.
-- The CNPE domain weights published by CNCF put GitOps and continuous delivery at 25% and platform APIs and self-service capabilities at 25%, which means half the blueprint rewards source-of-truth and abstraction work.
+- CNPE is a 120-minute, online, proctored, performance-based exam; cost is $445 with one free retake, so time management is part of the tested skill rather than an afterthought.
+- The official CNPE exam blueprint weights five domains as follows:
+
+| Domain | Weight |
+|---|---|
+| Platform Architecture and Infrastructure | 15% |
+| GitOps and Continuous Delivery | 25% |
+| Platform APIs and Self-Service Capabilities | 25% |
+| Observability and Operations | 20% |
+| Security and Policy Enforcement | 15% |
+
+  GitOps and platform APIs together account for half the blueprint, which means source-of-truth and abstraction work are central to the exam.
 - Kubernetes custom resources extend the Kubernetes API, so a platform API built on CRDs can be inspected with ordinary API habits even when the underlying resources are complex.
-- OpenTelemetry groups telemetry into signals such as traces, metrics, logs, and baggage, which is a useful mental model when choosing evidence for operations tasks.
+- OpenTelemetry groups telemetry into signals such as traces, metrics, and logs (with baggage for cross-service context), which is a useful mental model when choosing evidence for operations tasks.
 
 ## Common Mistakes
 

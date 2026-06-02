@@ -41,7 +41,7 @@ Example:
   Claim   -> Namespace + Policy + App Template -> Deployment, Service, Secret, RBAC
 ```
 
-That original mental model is intentionally short because it is the core of the module. User intent should flow into a platform contract, and the implementation should be reconciled behind the contract rather than edited as a one-off artifact. When the contract is healthy, the user can explain the desired state in plain language, the platform can create the right resources consistently, and both sides can look at status to decide what happened next.
+That mental model is intentionally short — it is the through-line of this lesson. User intent should flow into a platform contract, and the implementation should be reconciled behind the contract rather than edited as a one-off artifact. When the contract is healthy, the user can explain the desired state in plain language, the platform can create the right resources consistently, and both sides can look at status to decide what happened next.
 
 The first CNPE move is therefore not `kubectl apply` against every generated resource you can find. The first move is to locate the object that owns the user-facing intent and then read it carefully. In a Crossplane-based platform, that might be a claim whose fields describe class, region, size, and team ownership. In a Kubebuilder operator, it might be a custom resource whose spec declares the desired workspace. In Backstage, it might begin as a form-backed template that eventually commits or applies the custom resource.
 
@@ -110,7 +110,11 @@ Self-service does not mean every user receives cluster-admin access and a pile o
 
 Backstage is useful when discoverability and developer workflow matter. A Software Template can collect inputs, scaffold a repository, register a component, and trigger automation that creates or updates platform resources. The template is not necessarily the source of truth for the running infrastructure; it is often the front door that helps a user produce a valid request. Treat Backstage as the menu board and ordering workflow, not automatically as the reconciler that keeps every generated resource healthy.
 
-Crossplane is useful when the platform needs composite resources and claims that reconcile infrastructure or Kubernetes resources over time. A platform team can define a composite type, bind it to a composition, and expose a claim that developers consume without learning the provider details underneath. This is powerful because it separates the user-facing contract from the implementation recipe, but it also means troubleshooting includes both the claim and the composed resources.
+Crossplane is useful when the platform needs composite resources and claims that reconcile infrastructure or Kubernetes resources over time. A platform team can define a `CompositeResourceDefinition (XRD)`, bind it to a composition, and expose a claim that developers consume without learning the provider details underneath. This is powerful because it separates the user-facing contract from the implementation recipe, but it also means troubleshooting includes both the claim and the composed resources.
+
+> **Crossplane API kinds on the CNPE exam**
+>
+> The fictional `TeamWorkspace` CRD in this lab teaches the contract pattern; on the exam you will also see real Crossplane kinds: `CompositeResourceDefinition (XRD)` = the schema/contract, `Composition` = how it is implemented, and `Claim`/namespaced-XR = what the user submits (v1 claim + cluster XR; v2 namespaced XR with no separate claim). See the [Crossplane toolkit module](/platform/toolkits/infrastructure-networking/platforms/module-7.2-crossplane/) for the full mapping.
 
 Kubebuilder and custom operators are useful when the domain has behavior that cannot be expressed cleanly as templated resources. If creating a workspace requires sequencing, external checks, finalizers, status aggregation, or ongoing repair, a controller can encode those rules. The tradeoff is operational responsibility: once you author a controller, you own reconcile logic, upgrades, failure handling, RBAC, metrics, and the user experience of status messages.
 
@@ -150,7 +154,7 @@ spec:
   networkProfile: internal-only
 ```
 
-This request is intentionally small because a platform API should keep the common path narrow. The controller can translate `quotaClass: small` into concrete ResourceQuota and LimitRange objects, translate `networkProfile: internal-only` into policy, and translate `team: payments` into access bindings. If a learner is tempted to add every generated label, selector, and RoleBinding subject to the claim, that is a sign the abstraction is leaking.
+This request is intentionally small because a platform API should keep the common path narrow. The controller can translate `quotaClass: small` into concrete ResourceQuota and LimitRange objects, translate `networkProfile: internal-only` into policy, and translate `team: payments` into access bindings. If a learner is tempted to add every generated label, selector, and RoleBinding subject to the workspace request, that is a sign the abstraction is leaking.
 
 Apply and inspect the request through the supported object first. The commands below assume the CRD exists in the lab cluster; if it does not, use the same reading pattern with any platform-track CRD or template available in your environment. The point is to learn the sequence, not to depend on this exact fictional API group.
 
@@ -161,9 +165,9 @@ kubectl describe teamworkspace payments-dev -n platform-requests
 kubectl get events -n platform-requests --sort-by=.lastTimestamp
 ```
 
-The healthy path should show accepted input, progressing status, and eventually a ready condition or equivalent signal. If the controller creates a namespace, quota, policy, and access binding, inspect them as evidence but resist treating them as the primary interface. Generated resources tell you what the controller did. The claim tells you what the platform is supposed to keep doing.
+The healthy path should show accepted input, progressing status, and eventually a ready condition or equivalent signal. If the controller creates a namespace, quota, policy, and access binding, inspect them as evidence but resist treating them as the primary interface. Generated resources tell you what the controller did. The workspace request tells you what the platform is supposed to keep doing.
 
-Governed self-service also depends on RBAC. A user may be allowed to create a claim in `platform-requests` without being allowed to create namespaces or cluster-wide roles directly. That is a feature, not a restriction to bypass. The platform controller can hold the broader permissions because it applies policy consistently, while users receive the narrow permission needed to request approved outcomes. This keeps accidental privilege expansion out of the normal developer workflow.
+Governed self-service also depends on RBAC. A user may be allowed to create a platform contract object in `platform-requests` without being allowed to create namespaces or cluster-wide roles directly. That is a feature, not a restriction to bypass. The platform controller can hold the broader permissions because it applies policy consistently, while users receive the narrow permission needed to request approved outcomes. This keeps accidental privilege expansion out of the normal developer workflow.
 
 ```bash
 kubectl auth can-i create teamworkspaces.platform.example.com -n platform-requests
@@ -175,7 +179,7 @@ The expected answer for many users is yes to the first command and no to the dir
 
 Admission policy can add another guardrail before the controller even runs. A validating rule might reject unknown quota classes, require an owner label, or prevent production workspaces from using a permissive network profile. A mutating rule might add standard labels or defaults. Admission does not replace reconciliation because it does not keep resources healthy over time, but it prevents invalid intent from entering the system and gives users faster feedback.
 
-This is where the restaurant analogy from the original module still helps. A good platform API is like a menu, not a kitchen tour. The caller should order outcomes, and the platform should handle the cooking, plating, and cleanup. If the menu lets every customer rewrite the kitchen inventory during lunch, the result is not empowerment; it is a failure to define the operating boundary.
+This is where the restaurant analogy from earlier still helps. A good platform API is like a menu, not a kitchen tour. The caller should order outcomes, and the platform should handle the cooking, plating, and cleanup. If the menu lets every customer rewrite the kitchen inventory during lunch, the result is not empowerment; it is a failure to define the operating boundary.
 
 ## Diagnosing Reconciliation Failures
 
@@ -189,7 +193,7 @@ kubectl describe <custom-resource>
 kubectl get events -A --sort-by=.lastTimestamp | tail -n 15
 ```
 
-Those original verification commands are still the right compact starting point. `kubectl get` lets you compare spec and status, `kubectl describe` often aggregates conditions and recent events, and sorted events reveal recent failures across namespaces when the object is not namespace-scoped or when generated resources live elsewhere. In a larger cluster, you would narrow the event query to the relevant namespace or involved object once you know where the controller is acting.
+Those verification commands are the right compact starting point. `kubectl get` lets you compare spec and status, `kubectl describe` often aggregates conditions and recent events, and sorted events reveal recent failures across namespaces when the object is not namespace-scoped or when generated resources live elsewhere. In a larger cluster, you would narrow the event query to the relevant namespace or involved object once you know where the controller is acting.
 
 The first failure family is invalid input. A field may be missing, an enum value may be unsupported, a referenced secret may not exist, or an environment value may violate policy. Invalid input should be fixed in the claim, template input, or custom resource spec because that is where the user expresses intent. If the controller reports `InvalidQuotaClass`, editing the generated ResourceQuota avoids the lesson and leaves the next reconciliation with the same bad request.
 
@@ -412,7 +416,7 @@ A strong recommendation includes the smallest durable change. For example: "Cons
 
 ### Verification Commands
 
-Use the commands below with the real kind, name, and namespace from your lab. The first block preserves the compact verification sequence from the original module; the second block adds access-boundary checks that make governance visible.
+Use the commands below with the real kind, name, and namespace from your lab. The first block preserves the compact verification sequence above; the second block adds access-boundary checks that make governance visible.
 
 ```bash
 kubectl get <custom-resource> -o yaml
