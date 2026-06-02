@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 91 — KCSA track COMPLETE (26/26)</title>
+<style>
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
+  h2 { color: #326ce5; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; vertical-align: top; font-size: .92em; }
+  th { background: #326ce5; color: #fff; }
+  .tldr { background: #eef4ff; border-left: 4px solid #326ce5; padding: .8rem 1rem; border-radius: 4px; }
+  .win { background: #eafbe7; border-left: 4px solid #2e9e2e; padding: .8rem 1rem; border-radius: 4px; }
+  .lesson { background: #fff7e6; border-left: 4px solid #e0a800; padding: .6rem 1rem; border-radius: 4px; margin: .6rem 0; }
+  ul { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 91 — KCSA track COMPLETE (26/26)</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-02 · <strong>Branch:</strong> main (clean, synced) ·
+<strong>Board:</strong> KCSA 3 → <strong>26/26 done</strong> (track complete); review-axis 418 → <strong>441</strong> (+23).
+Six consolidated PRs merged: <strong>#1743</strong> (part0+1), <strong>#1744</strong> (part2), <strong>#1745</strong> (part3),
+<strong>#1746</strong> (part4), <strong>#1747</strong> (part5), <strong>#1748</strong> (part6).</p>
+
+<p class="win"><strong>🎉 The entire KCSA certification track is now reviewed-to-<code>done</code>.</strong>
+All five exam-relevant K8s cert tracks (CKA + CKAD + CKS + KCNA + KCSA) are 100%. Remaining cert work:
+<strong>Extending K8s → tool certs</strong>; then the curriculum-order continues <strong>cloud (85) → ai-ml-eng → on-prem → platform</strong>.</p>
+
+<h2>What shipped (6 waves, 23 modules flipped to <code>done</code>)</h2>
+<table>
+<tr><th>Wave / PR</th><th>Modules</th><th>Headline fixes</th></tr>
+<tr>
+  <td><strong>W1</strong> #1743<br>(part0+1)</td>
+  <td>0.1, 0.2, 1.2, 1.3</td>
+  <td>opener anecdotes → conditional/<code>Hypothetical</code>; exam format → "multiple-choice <strong>and multi-select</strong>" (opus web-verified LF page); 4 Cs → CNCF cloud-native vocabulary (not "K8s-specific"); Capital One sourced+xref-kept (OCC NR 2020-101); MOVEit sourced (CISA AA23-158A); GKE Dataplane V2 / EKS Access Entries.</td>
+</tr>
+<tr>
+  <td><strong>W2</strong> #1744<br>(part2)</td>
+  <td>2.1, 2.2, 2.3, 2.4</td>
+  <td>OPA/Gatekeeper moved authz-Webhook → <strong>admission</strong>; SA-token 1.24+ accuracy; <strong>CVE-2020-15257</strong> re-attributed to the containerd-shim API (was "CRI plugin"); Siloscape sourced (Unit 42, facts verified); Tesla → canonical CKS-1.5 cross-ref; Weave Net flagged unmaintained (Weaveworks closed 2024); Let's Encrypt CAA cite. <em>Rejected a reviewer's false "ABAC removed in 1.24" nit.</em></td>
+</tr>
+<tr>
+  <td><strong>W3</strong> #1745<br>(part3)</td>
+  <td>3.2, 3.3, 3.4, 3.5</td>
+  <td>opus caught a real self-contradiction in 3.2 (worked-solution dev Role <code>resources:["*"]</code> grants Secret read while the module teaches <code>view</code> excludes Secrets); encryption table → <strong>KMS v2</strong> (GA 1.29) + legacy AES + KMS v1 deprecated 1.28 (web-verified); Vault un-grouped from native KMS providers; RBAC verb <code>get</code>→<code>get</code>+<code>list</code>; TokenRequest shown as a subresource, not an appliable manifest; DNS-egress TCP/53.</td>
+</tr>
+<tr>
+  <td><strong>W4</strong> #1746<br>(part4)</td>
+  <td>4.1, 4.2, 4.3, 4.4</td>
+  <td><strong>SLSA ladder corrected to v1.0</strong> (Build track L0–L3; L4 marked future/deferred; removed SLSA-0.1 "two-person review" — web-verified slsa.dev; the module contradicted its own linked spec); digest-pin <strong>ValidatingAdmissionPolicy CEL extended to initContainers</strong> (closed a real bypass); synthetic <code>CVE-2020-0000</code> labeled; NVD sources added; etcd reframed control-plane/node-adjacent; KEV date Mar 26 → <strong>Mar 18 2025</strong> (web-verified).</td>
+</tr>
+<tr>
+  <td><strong>W5</strong> #1747<br>(part5)</td>
+  <td>5.1, 5.2, 5.3, 5.4</td>
+  <td>war-story hygiene ×8; <strong>kubeaudit (archived Oct 2024)</strong> + <strong>kube-hunter (EOL → Trivy)</strong> tool-currency notes (web-verified); StackRox → RHACS; stale gVisor "~70% syscall" → qualitative; cosign/sigstore in core prose. <strong>Kept</strong> the verified-correct maturity claims (Falco Graduated 2024-02-29, Cilium Graduated 2023, Cosign = Sigstore/LF). <em>Required a force-push to fix a Log4Shell dedup miss (see lessons).</em></td>
+</tr>
+<tr>
+  <td><strong>W6</strong> #1748<br>(part6)</td>
+  <td>6.1, 6.2, 6.3</td>
+  <td><strong>GDPR audit-log mapping Art 30 (RoPA) → Art 32 + Art 5(2)</strong>; HIPAA NetworkPolicy → Access Control/Transmission Security; <strong>insecure-port marked removed-in-1.24 / N/A on 1.35+</strong> (was a live "CRITICAL"); CIS NetworkPolicy check ID <strong>5.7.1 → 5.3.2</strong>; dead PCI-DSS PDF → live page; small real-content additions cleared the two body_words floors; Capital One "War Story:" → CKS-1.4 cross-ref + marker.</td>
+</tr>
+</table>
+
+<h2>Loop &amp; roster (no-codex, held all session)</h2>
+<ul>
+  <li><strong>Per wave:</strong> cross-family R1 reviews (mixed pools, ≤2/OAuth) → orchestrator ground-check + web-verify every CNCF maturity / incident / version claim → one consolidated <code>cursor</code> fix in a worktree → verify all T0 → local incident-dedup gate (CI-mode) → PR (<code>chore(content):</code> + Learner-check in the PR body) → CI → rebase-merge → finalize (<code>.pipeline/reviews</code> record + <code>reset-stage COMMITTED</code>).</li>
+  <li><strong>Reviewers:</strong> opus 4.8 headless (strongest — caught the 3.2 RBAC self-contradiction and the SLSA-ladder error; web-verifies facts), cursor <code>--model auto</code> (workhorse review+fix), deepseek-v4-pro (clean, no hallucinations this session). agy not used (dropped). grok not used this track.</li>
+  <li><strong>Back-catalog rate held:</strong> ~22 of 23 reviews returned NEEDS_CHANGES — reviews are cheap, fixes are the spend, exactly as prior tracks.</li>
+  <li>All 6 PRs: CI fully green (CodeQL ×3, incident-dedup, gemini cross-family, site-health). Reusable scripts: <code>logs/remediation/briefs/session91/{review-kcsa-*.md, fix-kcsa-wave{1..6}.md, finalize-kcsa-w{1..6}.sh}</code>.</li>
+</ul>
+
+<h2>Lessons / catches worth carrying forward</h2>
+<p class="lesson"><strong>Ground-checking caught reviewer errors in both directions.</strong>
+(1) A cursor review claimed "ABAC was removed in K8s 1.24" — false (ABAC authz mode still exists, just legacy); rejected, would have introduced an error.
+(2) opus said 5.4's two <code>War story:</code> blocks were "fine to leave" — but it didn't run the verifier, and the anti-fab gate flags the literal lead-in regardless of fingerprint; both had to be relabeled to clear T3.</p>
+<p class="lesson"><strong>Incident-dedup: grep EVERY named incident a fixer introduces, not just the ones you pre-brief.</strong>
+opus suggested anchoring a vague Log4Shell mention in 5.4 to <code>CVE-2021-44228</code>; I applied it without grepping → CI dedup FAIL (Log4Shell is named in 9 modules). Fix matched the established pattern: cross-reference the <strong>canonical owner</strong> with its <code>&lt;!-- incident-xref: log4shell --&gt;</code> marker (owner = platform devsecops 4.4). Same resolution used for Capital One in 6.3 (owner = cks 1.4) and Tesla in 2.3 (owner = cks 1.5). A fresh citation for a canonically-owned incident is what trips the gate. Memory <code>feedback_incident_dedup_gate_each_incident_once</code> updated with the cross-ref-not-citation rule. The plain local gate can false-pass — run <code>incident_dedup_gate.py --mode absolute --base origin/main</code> (the CI invocation) from the worktree.</p>
+<p class="lesson"><strong>CNCF maturity on the security track: every claim verified against cncf.io, and they were all correct this time.</strong>
+Falco Graduated 2024-02-29, Cilium Graduated 2023-10-11, KubeArmor Sandbox, Cosign = Sigstore/LF (not CNCF). Unlike KCNA (session 90, where reviewers' training cutoffs lagged real graduations), the KCSA modules' maturity claims were accurate — but the supply-chain/tooling modules (4.4, 5.4) also wisely <em>avoided</em> tier labels, which is the lowest-risk authoring choice.</p>
+
+<h2>Curriculum / board state after this session</h2>
+<ul>
+  <li><strong>Review-axis: 441 done.</strong> Tracks 100% done: prerequisites (44) · linux (37) · ai · CKA (41) · CKAD (24) · CKS (30) · KCNA (28) · <strong>KCSA (26, this session)</strong>.</li>
+  <li><strong>k8s cert tracks remaining: Extending K8s, then 10+ tool certs.</strong> After cert tracks, curriculum order resumes at <strong>cloud (85) → ai-ml-engineering → on-premises → platform</strong>.</li>
+  <li>No new tech-debt introduced. Six worktrees created and cleaned up; primary stayed on <code>main</code> throughout.</li>
+</ul>
+
+<h2>NEXT session</h2>
+<ul>
+  <li><strong>Next k8s sub-track: <code>extending-k8s</code></strong> (CRDs, operators, admission webhooks, aggregated API, API machinery). Same review-first loop. Run a <code>verify_module.py</code> tier sweep first; expect anti-fab war-stories + a few kubectl-alias T3s. Web-verify any CNCF maturity claim (Operator Framework, kubebuilder, etc.). For any real named incident a reviewer wants cited, grep <code>incident-xref:</code> for an existing canonical owner first and cross-ref rather than re-citing.</li>
+  <li>Then the remaining <strong>tool certs</strong>, then <strong>cloud → ai-ml-eng → on-prem → platform</strong> per curriculum order.</li>
+  <li>Standing carryover (unchanged): gemini-cli headless <code>--approval-mode=yolo</code> fix still not applied to <code>adapters/gemini.py</code>; the <code>revision_pending</code> board-ladder bug (workaround: drop the frontmatter line); grok-build remains an unproven candidate.</li>
+</ul>
+</body>
+</html>
