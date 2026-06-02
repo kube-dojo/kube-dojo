@@ -23,7 +23,7 @@ Before starting this module, you should have completed the earlier ICA modules b
 - Basic Kubernetes operational comfort with Deployments, Services, namespaces, labels, and `kubectl logs`
 - Basic familiarity with metrics, logs, traces, and Prometheus-style time series queries
 
-This module assumes Kubernetes 1.35+ and a modern Istio installation using the [Telemetry API](https://istio.io/latest/news/releases/1.5.x/announcing-1.5/upgrade-notes/). Older Istio material may mention Mixer, global-only tracing flags, or heavy `EnvoyFilter` customization for basic telemetry. Treat those patterns as historical unless a legacy cluster forces you to maintain them.
+This module assumes Kubernetes 1.35+ and a modern Istio installation using the [Telemetry API](https://istio.io/latest/docs/reference/config/telemetry/). Older Istio material may mention Mixer (removed in the 1.5 era), global-only tracing flags, or heavy `EnvoyFilter` customization for basic telemetry. Treat those patterns as historical unless a legacy cluster forces you to maintain them.
 
 ---
 
@@ -491,6 +491,7 @@ Configure tracing with Telemetry after the tracing provider exists in mesh confi
 ```yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
+# In-cluster IstioOperator controller removed in 1.24; still works with istioctl install -f; Helm recommended
 spec:
   meshConfig:
     extensionProviders:
@@ -587,10 +588,10 @@ spec:
 |---|---|---|
 | `response.code >= 400` | Client and server errors | General failure investigation |
 | [`response.code >= 500`](https://istio.io/latest/docs/tasks/observability/logs/telemetry-api/) | Server errors only | Backend reliability triage |
-| `response.duration > 1000` | Slow requests above one second | Latency investigation |
+| `request.duration > duration("1s")` | Slow requests above one second | Latency investigation |
 | `connection.mtls == false` | Plaintext or non-mTLS traffic | Security validation |
 | `response.code == 403` | Authorization denials | Policy debugging |
-| `response.flags != "-"` | Envoy-level anomalies | Proxy timeout or reset triage |
+| `response.flags != 0` | Envoy-level anomalies (non-zero flag bit-vector) | Proxy timeout or reset triage |
 
 > **Pause and predict:** You enable an access log filter for `response.code >= 500`, then test a missing page that returns `404`. Should that request appear in the sidecar access logs?
 >
@@ -629,6 +630,7 @@ A text access log line can look dense because it compresses many facts into one 
 ```yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
+# meshConfig.accessLogFile is the legacy global toggle; Telemetry accessLogging is preferred for new installs
 spec:
   meshConfig:
     accessLogFile: /dev/stdout
@@ -869,6 +871,11 @@ kubectl label namespace default istio-injection=enabled --overwrite
 
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
 
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/prometheus.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/grafana.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/kiali.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/jaeger.yaml
+
 kubectl wait --for=condition=ready pod -l app=productpage --timeout=180s
 
 kubectl wait --for=condition=ready pod -l app=reviews --timeout=180s
@@ -1106,6 +1113,11 @@ kubectl delete telemetry default-debug-tracing -n default
 kubectl delete telemetry productpage-error-logs -n default
 
 kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
+
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/prometheus.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/grafana.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/kiali.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/addons/jaeger.yaml
 ```
 
 If you installed Istio only for this lab and no other module needs it, you can uninstall it separately.
@@ -1133,7 +1145,8 @@ kubectl delete namespace istio-system
 - https://istio.io/latest/docs/examples/bookinfo/
 - https://prometheus.io/docs/practices/histograms/
 
----
+### Further reading
+
 - [Istio Telemetry Reference](https://istio.io/latest/docs/reference/config/telemetry/) — Canonical reference for Telemetry scope, overrides, tracing, metrics, and access-logging configuration.
 - [Istio Standard Metrics](https://istio.io/latest/docs/reference/config/metrics/) — Defines the metric names, labels, and semantics used throughout the module's PromQL and dashboard guidance.
 - [Distributed Tracing Overview](https://istio.io/latest/docs/tasks/observability/distributed-tracing/overview/) — Best source for trace propagation requirements, provider setup, and the boundary between proxy-generated spans and application behavior.

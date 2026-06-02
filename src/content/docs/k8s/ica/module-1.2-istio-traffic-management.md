@@ -251,12 +251,25 @@ spec:
   ports:
   - number: 443
     name: https
-    protocol: TLS
+    protocol: HTTPS
   resolution: DNS
 ```
 
 ```yaml
-# Now you can apply traffic rules to external services!
+# Originate TLS at the sidecar so HTTP-level rules apply
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: external-api-tls
+spec:
+  host: api.external.com
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+```
+
+```yaml
+# Now you can apply HTTP traffic rules to the external host
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
@@ -269,7 +282,11 @@ spec:
     route:
     - destination:
         host: api.external.com
+        port:
+          number: 443
 ```
+
+With `protocol: TLS`, the sidecar performs SNI passthrough and HTTP `timeout`/`retries` rules are ignored. Declare `HTTPS` and originate TLS with a DestinationRule when you need mesh-level HTTP policy on an external API.
 
 In a permissive mesh, outbound traffic can still reach many external destinations without a ServiceEntry, so early tests may appear to work. In a locked-down mesh using `meshConfig.outboundTrafficPolicy.mode: REGISTRY_ONLY`, unregistered external hosts are blocked because the sidecar has no registry entry to use. The operational lesson is to test egress rules under the same mesh policy you expect in production, otherwise a demo that passes locally can fail immediately after a security hardening change.
 
@@ -635,7 +652,7 @@ flowchart TD
     end
 
     subgraph Circuit OPEN Scope
-        Req2[The 101st Request] --> CP2[Connection Pool FULL <br/> 100/100 active connections]
+        Req2[Request beyond http1MaxPendingRequests / http2MaxRequests] --> CP2[HTTP concurrency pool FULL]
         CP2 -.->|Instant 503 returned| Fail[Client Application Error]
     end
 
@@ -738,16 +755,16 @@ spec:
 Testing ingress from a local cluster usually means discovering the gateway address and then sending a request with the expected Host header. The Host header matters because the Gateway server and VirtualService host matching are host-aware. If you curl the IP without the correct host, you may prove only that the load balancer is reachable, not that the intended route is configured.
 
 ```bash
-# Get the ingress gateway's external IP
+# Cloud LB (run this block OR the kind/minikube block below — not both)
 export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway \
   -o jsonpath='{.spec.ports[?(@.name=="http2")].port}')
 
-# For kind/minikube (NodePort):
-export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway \
-  -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
-export INGRESS_HOST=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+# kind/minikube (NodePort) — use instead of the LB block above
+# export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway \
+#   -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+# export INGRESS_HOST=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 
 # Test
 curl -H "Host: httpbin.example.com" http://$INGRESS_HOST:$INGRESS_PORT/status/200
@@ -784,11 +801,11 @@ spec:
 
 | Mode | Description |
 |------|-------------|
-| `SIMPLE` | Standard TLS termination workflow (only the server certificate is verified) |
-| `MUTUAL` | Strict mTLS enforcement (explicitly mandates both client and server cryptographic certs) |
-| `PASSTHROUGH` | Silently forward the fully encrypted traffic stream entirely as-is (SNI-based routing without termination) |
-| `AUTO_PASSTHROUGH` | Operates identically to PASSTHROUGH but utilizes heavily automated SNI routing configurations |
-| `ISTIO_MUTUAL` | Exclusively utilize Istio's deeply internal mTLS certificates (strictly designed for mesh-internal gateways) |
+| `SIMPLE` | TLS termination at the gateway (server certificate only) |
+| `MUTUAL` | TLS termination with required client certificates |
+| `PASSTHROUGH` | Forward the encrypted stream; route by SNI without terminating TLS |
+| `AUTO_PASSTHROUGH` | SNI-based passthrough for multi-cluster east-west gateways; no VirtualService required to map SNI to destination |
+| `ISTIO_MUTUAL` | Use Istio-issued certificates for mesh-internal gateway mTLS |
 
 Egress traffic management is the mirror image of ingress from an operator's perspective. Instead of asking what outside users may send into the mesh, you ask what internal workloads may call outside the cluster and how those calls should be observed. A permissive egress posture is convenient during early development, but it weakens auditability because any workload can reach arbitrary external hosts. A registry-only posture makes external dependencies explicit.
 
@@ -801,6 +818,8 @@ spec:
     outboundTrafficPolicy:
       mode: REGISTRY_ONLY          # Block unregistered external services
 ```
+
+The in-cluster IstioOperator controller was removed in Istio 1.24; this file still works with `istioctl install -f`, but Helm is now the recommended install/config path.
 
 ServiceEntry is the basic allow-list object for that locked-down model. It describes the external host, protocol, port, resolution method, and whether the target is outside or inside the mesh. Once the host is present in the service registry, you can apply other Istio policies to it. That is the major advantage over a simple firewall rule: the mesh can observe and shape the traffic in the same control model used for internal services.
 
@@ -1012,15 +1031,18 @@ spec:
   hosts:
   - productpage
   http:
+  - match:
+    - headers:
+        x-test:
+          exact: canary
+    route:
+    - destination:
+        host: productpage
+        subset: v2
   - route:
     - destination:
         host: productpage
         subset: v1
-      weight: 80
-    - destination:
-        host: productpage
-        subset: v2
-      weight: 20
 ```
 
 </details>
@@ -1039,11 +1061,10 @@ spec:
   hosts:
   - ratings
   http:
-  - fault:
-      delay:
-        percentage:
-          value: 50
-        fixedDelay: 5s
+  - timeout: 3s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
     route:
     - destination:
         host: ratings
@@ -1057,9 +1078,39 @@ spec:
 Inspect the Gateway server host and port first, because the gateway must accept the request before routing can happen. Next inspect the bound VirtualService and confirm that its `hosts` and `gateways` fields match the Gateway context. Then inspect the path match and destination service port. If those objects look correct, compare generated proxy route configuration because the running Envoy config is the source of truth for the actual request path.
 
 ```yaml
-meshConfig:
-  outboundTrafficPolicy:
-    mode: REGISTRY_ONLY
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: bookinfo-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: bookinfo
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - bookinfo-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /productpage
+    route:
+    - destination:
+        host: productpage
+        port:
+          number: 9080
 ```
 
 </details>
@@ -1086,40 +1137,28 @@ Create a ServiceEntry for the external host so Istio adds it to the service regi
 
 ```yaml
 apiVersion: networking.istio.io/v1
-kind: Gateway
+kind: ServiceEntry
 metadata:
-  name: frontend-gateway
-spec:
-  selector:
-    istio: ingressgateway
-  servers:
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    hosts:
-    - "frontend.example.com"
-    tls:
-      mode: SIMPLE
-      credentialName: frontend-tls
-```
-
-```yaml
-apiVersion: networking.istio.io/v1
-kind: VirtualService
-metadata:
-  name: frontend
+  name: google-api
 spec:
   hosts:
-  - "frontend.example.com"
-  gateways:
-  - frontend-gateway
-  http:
-  - route:
-    - destination:
-        host: frontend
-        port:
-          number: 80
+  - www.googleapis.com
+  ports:
+  - number: 443
+    name: https
+    protocol: TLS
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: google-api
+spec:
+  host: www.googleapis.com
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
 ```
 
 </details>
@@ -1171,16 +1210,16 @@ istioctl install --set profile=demo -y
 kubectl label namespace default istio-injection=enabled
 
 # Deploy Bookinfo
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
 
 # Wait for pods
 kubectl wait --for=condition=ready pod --all -n default --timeout=120s
 
 # Deploy all DestinationRules
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/networking/destination-rule-all.yaml
 
 # Deploy the Gateway
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/networking/bookinfo-gateway.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/networking/bookinfo-gateway.yaml
 
 # Verify
 istioctl analyze
@@ -1337,7 +1376,7 @@ Generate local load with Fortio and look for `Code 503` responses. Those respons
 
 ```bash
 # Install fortio (Istio's load testing tool)
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/httpbin/sample-client/fortio-deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/httpbin/sample-client/fortio-deploy.yaml
 kubectl wait --for=condition=ready pod -l app=fortio
 
 # Send 20 concurrent connections

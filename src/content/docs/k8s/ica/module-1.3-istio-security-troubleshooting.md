@@ -366,12 +366,12 @@ flowchart TD
     CPol -- No Match --> DPol[DENY policies]
     
     DPol -- Match --> Rej[REJECT Request]
-    DPol -- No Match --> APol[ALLOW policies]
+    DPol -- No Match --> HasAllow{ALLOW policies for workload?}
     
-    APol -- Match --> Allow1[ALLOW Request]
-    APol -- No Match --> Deny1[DENY Request]
-    
-    APol -- No policies exist? --> Allow2[ALLOW Request default]
+    HasAllow -- No --> AllowDefault[ALLOW default]
+    HasAllow -- Yes --> APol[Evaluate ALLOW rules]
+    APol -- Rule matches --> Allow1[ALLOW Request]
+    APol -- No rule matches --> Deny1[DENY Request]
 ```
 
 Critical security warning: if there are no AuthorizationPolicies defined for a particular workload, all traffic is permitted by default. However, the exact moment you instantiate any applicable ALLOW policy, all traffic that does not explicitly match an ALLOW rule is automatically denied. Pause and predict: if you apply an ALLOW policy to a workload that permits traffic from the `frontend` service, what happens to critical health-check requests originating from the Kubernetes kubelet, and how would you verify whether probes are affected?
@@ -622,6 +622,8 @@ spec:
 When a service mesh fails, the symptom is often separated from the cause by several layers of generated proxy configuration. A 403 can come from a DENY policy, an ALLOW policy defaulting everything else to deny, a missing JWT principal, or an external authorization service; a 503 can come from an undefined subset, an empty endpoint list, a stale proxy, or a healthy upstream that is unreachable because mTLS negotiation failed. A systematic approach prevents you from rewriting random manifests while the real signal is already visible in Istio analysis output or Envoy configuration.
 
 ### 5.1 istioctl analyze
+
+`istioctl x` (also exposed as `istioctl experimental`) holds diagnostic subcommands that may change between releases. For routine debugging, prefer stable commands such as `istioctl analyze`, `istioctl proxy-status`, and `istioctl proxy-config` unless release notes document a specific experimental helper you need.
 
 `istioctl analyze` is the first command you should run when something is not working as expected because it checks Kubernetes and Istio resources together before you chase runtime symptoms. It catches errors such as references to missing hosts, undefined subsets, invalid schemas, and gateway credential problems that are easy to miss during manual YAML review. It does not prove that live traffic is healthy, but it narrows the problem space quickly and often explains why a proxy never received the configuration you expected.
 
@@ -885,7 +887,7 @@ The framework also helps with exam pacing. If the question gives you a broken su
 
 ## Did You Know?
 
-- Istio graduated its core security APIs to `security.istio.io/v1`, which means PeerAuthentication, RequestAuthentication, and AuthorizationPolicy examples should use the stable API version in modern Kubernetes 1.35+ practice environments.
+- Istio's security CRDs are stable at `security.istio.io/v1` (promoted in Istio 1.22), which means PeerAuthentication, RequestAuthentication, and AuthorizationPolicy examples should use that API version in modern Kubernetes 1.35+ practice environments.
 - Istio workload identities follow the SPIFFE URI pattern `spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>`, so changing a service account name changes the principal that AuthorizationPolicy rules match.
 - Envoy receives separate xDS resource types for clusters, listeners, endpoints, routes, and extension configuration, which is why `proxy-status` can show one column stale while the others remain synchronized.
 - RequestAuthentication rejects invalid JWTs with authentication failure, but a request with no JWT is not rejected by that resource alone; authorization is the layer that makes identity mandatory.
@@ -995,15 +997,15 @@ It implies the proxy has not acknowledged the latest endpoint discovery configur
 
 Gather evidence that the Gateway references a real certificate secret with the expected `credentialName`, that the secret is in the namespace where the gateway deployment expects credentials, and that the Gateway hosts match the client SNI or Host header. `istioctl analyze` can catch missing credentials or invalid references before you chase VirtualService routes. Route changes will not repair a gateway that cannot complete TLS termination. Only after TLS succeeds should you inspect route matching and upstream service behavior.
 
-```bash
-# During installation
-istioctl install --set meshConfig.accessLogFile=/dev/stdout -y
+Check `credentialName`, Secret namespace/placement (often `istio-system` for ingress gateways), Gateway `hosts` alignment with client SNI/Host, and `istioctl analyze` for IST0104 (missing credential). Route changes will not fix TLS termination that never succeeds.
 
-# Or via IstioOperator
-spec:
-  meshConfig:
-    accessLogFile: /dev/stdout
+To enable access logs for investigation:
+
+```bash
+istioctl install --set meshConfig.accessLogFile=/dev/stdout -y
 ```
+
+An `IstioOperator` manifest with `meshConfig.accessLogFile` still works with `istioctl install -f`, but the in-cluster IstioOperator controller was removed in Istio 1.24; Helm is the recommended install/config path.
 
 </details>
 
@@ -1041,9 +1043,9 @@ istioctl install --set profile=demo \
 
 kubectl label namespace default istio-injection=enabled --overwrite
 
-# Deploy Bookinfo
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/networking/destination-rule-all.yaml
+# Deploy Bookinfo (pin samples to release-1.27; use a matching istioctl build)
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/networking/destination-rule-all.yaml
 
 kubectl wait --for=condition=ready pod --all -n default --timeout=120s
 ```
@@ -1066,7 +1068,8 @@ spec:
 EOF
 
 # Verify mTLS is working
-istioctl proxy-config clusters productpage-v1-$(kubectl get pods -l app=productpage -o jsonpath='{.items[0].metadata.name}' | cut -d'-' -f3-) | grep reviews
+PP_POD=$(kubectl get pod -l app=productpage -o jsonpath='{.items[0].metadata.name}')
+istioctl proxy-config clusters "$PP_POD.default" | grep -E 'reviews|9080'
 ```
 
 Verify securely: traffic should still work between all services because they all possess injected sidecars and can participate in Istio mTLS. A successful response proves the migration boundary is internally consistent, while a failed response gives you a clean opportunity to practice checking `proxy-status`, container lists, and cluster configuration before changing policy.
@@ -1087,12 +1090,12 @@ The expected solution is a successful Bookinfo response after STRICT mTLS is app
 Apply specific access control boundaries to prevent unauthorized peer identity from reaching the reviews workload. The policy below is written as a DENY rule so you can observe how a non-matching service account is rejected while the expected productpage identity remains allowed. In a production review, you would also ask whether the rule name matches the action clearly enough for another engineer to understand it during an incident.
 
 ```bash
-# Deny all traffic to reviews (start restrictive)
+# Deny reviews traffic except from bookinfo-productpage (selective DENY via notPrincipals)
 kubectl apply -f - <<EOF
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
-  name: deny-all-reviews
+  name: deny-non-productpage-to-reviews
   namespace: default
 spec:
   selector:
@@ -1230,10 +1233,10 @@ Restore your environment to a pristine baseline when you are done, especially if
 
 ```bash
 kubectl delete peerauthentication default -n istio-system
-kubectl delete authorizationpolicy deny-all-reviews -n default
+kubectl delete authorizationpolicy deny-non-productpage-to-reviews -n default
 kubectl delete virtualservice reviews-broken -n default
-kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/networking/destination-rule-all.yaml
 istioctl uninstall --purge -y
 kubectl delete namespace istio-system
 ```
@@ -1253,8 +1256,8 @@ kubectl delete namespace istio-system
 - https://istio.io/latest/docs/ops/diagnostic-tools/istioctl-analyze/
 - https://istio.io/latest/docs/ops/diagnostic-tools/proxy-cmd/
 - https://istio.io/latest/docs/ops/common-problems/security-issues/
-- https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/platform/kube/bookinfo.yaml
-- https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/networking/destination-rule-all.yaml
+- https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
+- https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/networking/destination-rule-all.yaml
 
 ---
 

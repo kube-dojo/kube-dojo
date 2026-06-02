@@ -223,8 +223,8 @@ Counter reset counts are also operational signals. A service that restarts repea
 # How many times has this counter reset in the last hour?
 resets(http_requests_total[1h])
 
-# High reset count may indicate crash loops
-resets(process_start_time_seconds[1h]) > 5
+# High restart count may indicate crash loops (use a counter, not a gauge)
+increase(kube_pod_container_status_restarts_total[1h]) > 5
 ```
 
 The common rule for rate windows is at least four times the scrape interval. With a fifteen-second scrape interval, a one-minute range usually gives enough points for a meaningful slope, while a thirty-second range can collapse into two samples or become empty after one missed scrape. The rule is not magic, but it is a practical lower bound that keeps dashboard lines from becoming scrape-alignment artifacts.
@@ -662,7 +662,7 @@ groups:
       # CPU utilization per node
       - record: node:node_cpu_utilization:ratio_rate5m
         expr: |
-          1 - avg by (node)(rate(node_cpu_seconds_total{mode="idle"}[5m]))
+          1 - avg by (instance)(rate(node_cpu_seconds_total{mode="idle"}[5m]))
 ```
 
 Rules also create a contract between teams. An application team can own raw instrumentation, a platform team can own cluster-level recording rules, and dashboard authors can depend on the recorded metric shape without copying complex expressions everywhere. That contract only works if the rule is reviewed like code: check labels, cardinality, evaluation interval, and whether the expression hides a failure mode that an alert still needs to see.
