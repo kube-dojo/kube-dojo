@@ -45,7 +45,7 @@ This module is code-heavy by design. The exam shows you TypeScript and React sni
 1. **Massive Ecosystem**: The Backstage community maintains a public directory at `backstage.io/plugins` and a dedicated [`backstage/community-plugins` repository governed strictly under the Apache License 2.0](https://github.com/backstage/community-plugins). The [Certified Backstage Associate (CBA) certification itself is officially offered by the CNCF](https://www.cncf.io/training/certification/cba/).
 2. **Strict Release Cadence**: As a CNCF Incubating project (not yet Graduated), Backstage follows [a monthly main release line (shipping the Tuesday before the third Wednesday of each month) and a weekly `next` release line on Tuesdays for early access](https://github.com/backstage/backstage/blob/master/docs/overview/versioning-policy.md). The `next` release line offers early access to upcoming features with fewer stability guarantees.
 3. **Runtime Support Windows**: Backstage strictly supports [exactly two adjacent even-numbered Node.js LTS releases (e.g., Node.js 22 and 24 as of v1.46.0)](https://github.com/backstage/backstage/releases/tag/v1.46.0) and the [last three major TypeScript versions](https://github.com/backstage/backstage/blob/master/docs/overview/versioning-policy.md) at any given time. React 18 is currently supported, with React 19 under evaluation.
-4. **The New Default**: The Backstage GitHub releases confirm v1.49.0 as the stable release as of 2026-01-28. v1.49.0 is the verified baseline referenced here; check the Backstage releases page for any newer versions before relying on release-specific behavior. [As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.](https://github.com/backstage/backstage/releases/tag/v1.49.0)
+4. **The New Default**: The Backstage GitHub releases confirm v1.49.0 as the stable release as of ~March 18, 2026. v1.49.0 is the verified baseline referenced here; check the Backstage releases page for any newer versions before relying on release-specific behavior. [As of v1.49.0, newly created Backstage apps use the New Frontend System by default. The old `--next` CLI flag has been removed and replaced by a `--legacy` flag.](https://github.com/backstage/backstage/releases/tag/v1.49.0)
 
 ---
 
@@ -55,7 +55,7 @@ Before writing any code, you need to understand where plugins run. This is one o
 
 Choosing a frontend plugin versus a backend plugin is a security and capability decision, not a packaging preference. If the feature only needs to render data the user already has permission to see, and all sensitive work happens through existing Backstage APIs, a frontend plugin is usually enough. If the feature needs database access, long-lived secrets, filesystem reads, or calls to systems that must never be exposed to browsers, you need a backend plugin (often paired with a thin frontend UI). Many real features — catalog views, custom dashboards, template wizards — use both: React in the browser, Express routes and injected services in Node.js.
 
-When you read exam code, trace the import graph first. Browser bundles cannot safely import `@backstage/backend-plugin-api`, Knex, or Node-only SDKs. Conversely, backend plugins do not render JSX. The HTTP boundary between them is deliberate: the frontend uses `fetchApiRef` so Backstage can attach auth headers, resolve proxy base URLs, and keep credentials out of client-side code.
+When you read exam code, trace the import graph first. Browser bundles cannot safely import `@backstage/backend-plugin-api`, Knex, or Node-only SDKs. Conversely, backend plugins do not render JSX. The HTTP boundary between them is deliberate: the frontend uses `discoveryApiRef` to resolve each plugin's base URL and `fetchApiRef` so Backstage can attach auth headers and keep credentials out of client-side code.
 
 On newer Backstage versions, you may also see references to the New Frontend System (`createFrontendPlugin`, extension blueprints). The legacy `createPlugin` API remains heavily represented in exam material and existing apps. Regardless of which API a snippet uses, the split remains the same: UI and routing in the frontend package, data and secrets in the backend package.
 
@@ -113,7 +113,7 @@ Teams often split work across two packages in the same feature: `@org/plugin-fea
 
 Frontend plugins are how Backstage feels like a single product instead of a collection of iframes. They register routes, expose React pages, declare API refs for typed clients, and integrate with the app shell (sidebar, themes, error boundaries). On the exam, expect to interpret `createPlugin`, route refs, and `createRoutableExtension` — these three pieces together answer "how does this page become a first-class Backstage feature?"
 
-A dedicated API ref (for example, a custom client interface registered with `createApiRef`) is the idiomatic way for plugin code to stay testable and decoupled from fetch details. Components call `useApi(myApiRef)` instead of hardcoding URLs. That pattern mirrors how core plugins expose catalog, scaffolder, and permission clients, and it is the detail reviewers look for when distinguishing "React page pasted into App.tsx" from a real plugin.
+A dedicated API ref (for example, a custom client interface registered with `createApiRef`) is the idiomatic way for plugin code to stay testable and decoupled from fetch details. Components call `useApi(myApiRef)` instead of hardcoding URLs. For HTTP calls to backend plugins, combine `discoveryApiRef` (base URL per plugin ID) with `fetchApiRef` (auth-aware fetch) — that pattern mirrors how core plugins expose catalog, scaffolder, and permission clients, and it is the detail reviewers look for when distinguishing "React page pasted into App.tsx" from a real plugin.
 
 Dynamic imports in `createRoutableExtension` are not optional polish. They keep initial bundle size manageable in large monorepos with dozens of plugins. When a user opens your page, Backstage loads that plugin chunk on demand. Exam questions sometimes show a static import and ask why lazy loading matters — the answer ties to performance and the plugin platform model, not generic React trivia.
 
@@ -205,7 +205,7 @@ Here is a complete frontend plugin page that fetches data from a backend API and
 ```tsx
 // plugins/my-dashboard/src/components/MyDashboardPage/MyDashboardPage.tsx
 import React from 'react';
-import { useApi, fetchApiRef } from '@backstage/core-plugin-api';
+import { useApi, discoveryApiRef, fetchApiRef } from '@backstage/core-plugin-api';
 import {
   Header,
   Page,
@@ -253,7 +253,7 @@ const columns: TableColumn<ServiceHealth>[] = [
 ];
 
 export const MyDashboardPage = () => {
-  // useApi hook retrieves a Backstage API implementation by its ref
+  const discoveryApi = useApi(discoveryApiRef);
   const fetchApi = useApi(fetchApiRef);
 
   // useAsync handles loading/error states for async operations
@@ -262,9 +262,8 @@ export const MyDashboardPage = () => {
     loading,
     error,
   } = useAsync(async (): Promise<ServiceHealth[]> => {
-    const response = await fetchApi.fetch(
-      '/api/my-dashboard/services/health',
-    );
+    const baseUrl = await discoveryApi.getBaseUrl('my-dashboard');
+    const response = await fetchApi.fetch(`${baseUrl}/services/health`);
     if (!response.ok) {
       throw new Error(`Failed to fetch: ${response.statusText}`);
     }
@@ -399,7 +398,7 @@ export const myDashboardPlugin = createBackendPlugin({
 });
 ```
 
-Key concepts: **`createBackendPlugin`** declares a backend plugin with a unique `pluginId`; **`coreServices`** provides dependency injection — instead of constructing dependencies yourself, you declare what you need and Backstage provides them; **`coreServices.httpRouter`** is an Express router scoped to `/api/<pluginId>`; **`coreServices.database`** is a Knex.js database client that Backstage manages; and **`coreServices.logger`** is a Winston logger scoped to the plugin. Additionally, backend extension points are created with `createExtensionPoint` from `@backstage/backend-plugin-api`. A backend module may only extend a single plugin and must be installed in the same backend instance as that plugin.
+Key concepts: **`createBackendPlugin`** declares a backend plugin with a unique `pluginId`; **`coreServices`** provides dependency injection — instead of constructing dependencies yourself, you declare what you need and Backstage provides them; **`coreServices.httpRouter`** is an Express router scoped to `/api/<pluginId>`; **`coreServices.database`** is a Knex.js database client that Backstage manages; and **`coreServices.logger`** is a **`LoggerService`** (from `@backstage/backend-plugin-api`) scoped to the plugin — backed by winston internally but exposed as the framework abstraction. Additionally, backend extension points are created with `createExtensionPoint` from `@backstage/backend-plugin-api`. A backend module may only extend a single plugin and must be installed in the same backend instance as that plugin.
 
 Compare this to legacy backends where each plugin exported a `createRouter` function and the host called it manually. The new system's `registerInit` hook runs after dependency graph resolution, which prevents plugins from touching the database before migrations run. When you see exam code listing `deps: { logger, http, database, config }`, treat it as the canonical pattern — missing `httpAuth` or `auth` in a snippet that calls other plugins is a hint the question is about service-to-service auth gaps.
 
@@ -408,12 +407,11 @@ Compare this to legacy backends where each plugin exported a `createRouter` func
 ```typescript
 // plugins/my-dashboard-backend/src/router.ts
 import { Router } from 'express';
-import { Logger } from 'winston';
-import { DatabaseService } from '@backstage/backend-plugin-api';
+import { DatabaseService, LoggerService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
 
 interface RouterOptions {
-  logger: Logger;
+  logger: LoggerService;
   database: DatabaseService;
   config: Config;
 }
@@ -497,11 +495,13 @@ export async function createRouter(
 }
 ```
 
-Express routers in Backstage plugins should stay thin: validate input, call services, map errors to HTTP status codes, and log with the injected Winston logger. Heavy business logic belongs in separate modules so you can unit test without standing up HTTP. Database migrations inside route handlers (as shown above) are acceptable for teaching examples; production plugins often use dedicated migration files executed by Backstage's database service on startup. The exam cares that you recognize Knex access through `database.getClient()` rather than constructing your own connection pool from raw `app-config` passwords.
+Express routers in Backstage plugins should stay thin: validate input, call services, map errors to HTTP status codes, and log with the injected `LoggerService`. Heavy business logic belongs in separate modules so you can unit test without standing up HTTP. Database migrations inside route handlers (as shown above) are acceptable for teaching examples; production plugins often use dedicated migration files executed by Backstage's database service on startup. The exam cares that you recognize Knex access through `database.getClient()` rather than constructing your own connection pool from raw `app-config` passwords.
 
 Route paths are relative to the plugin mount point. A handler registered as `router.get('/services/health')` is reachable at `/api/my-dashboard/services/health` when `pluginId` is `my-dashboard`. Mixing absolute paths or duplicate plugin IDs across teams causes subtle 404s that look like auth failures in the browser network tab.
 
 ---
+
+### 3.4 Registering the Backend Plugin
 
 ```typescript
 // packages/backend/src/index.ts
@@ -529,11 +529,13 @@ In the New Backend System, you leverage the built-in `coreServices.auth` and `co
 
 ```typescript
 // Example snippet demonstrating service-to-service auth
+import { Router } from 'express';
 import { coreServices } from '@backstage/backend-plugin-api';
 
 // Inside your plugin's init method:
-async init({ logger, http, auth, httpAuth }) {
-  http.get('/dependent-data', async (req, res) => {
+async init({ logger, http, auth, httpAuth, discovery }) {
+  const router = Router();
+  router.get('/dependent-data', async (req, res) => {
     try {
       // 1. Extract the credentials of the user making the request
       const credentials = await httpAuth.credentials(req);
@@ -544,11 +546,12 @@ async init({ logger, http, auth, httpAuth }) {
         targetPluginId: 'catalog',
       });
 
-      // 3. Attach the generated token to the downstream API call
-      const response = await fetch('http://localhost:7007/api/catalog/entities', {
+      // 3. Resolve catalog base URL via discovery — never hardcode localhost
+      const catalogBaseUrl = await discovery.getBaseUrl('catalog');
+      const response = await fetch(`${catalogBaseUrl}/entities`, {
         headers: {
           Authorization: `Bearer ${token}`,
-        }
+        },
       });
       
       const data = await response.json();
@@ -558,6 +561,7 @@ async init({ logger, http, auth, httpAuth }) {
       res.status(500).send('Internal Error');
     }
   });
+  http.use(router);
 }
 ```
 
@@ -979,7 +983,7 @@ export function createJiraTicketAction(options: { config: Config }) {
 ```typescript
 // plugins/scaffolder-backend-custom/src/plugin.ts
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node/alpha';
-import { createBackendModule } from '@backstage/backend-plugin-api';
+import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { createJiraTicketAction } from './actions/createJiraTicket';
 
 export const scaffolderModuleJiraAction = createBackendModule({
@@ -1143,28 +1147,26 @@ import React from 'react';
 import { screen } from '@testing-library/react';
 import { renderInTestApp } from '@backstage/test-utils';
 import { MyDashboardPage } from './MyDashboardPage';
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-// Mock the backend API using MSW (Mock Service Worker)
+// Mock the backend API using MSW v2 (Mock Service Worker)
 const server = setupServer(
-  rest.get('/api/my-dashboard/services/health', (_req, res, ctx) => {
-    return res(
-      ctx.json([
-        {
-          name: 'auth-service',
-          status: 'healthy',
-          lastChecked: '2025-01-15T10:30:00Z',
-          responseTimeMs: 42,
-        },
-        {
-          name: 'payment-service',
-          status: 'degraded',
-          lastChecked: '2025-01-15T10:30:00Z',
-          responseTimeMs: 1500,
-        },
-      ]),
-    );
+  http.get('/api/my-dashboard/services/health', () => {
+    return HttpResponse.json([
+      {
+        name: 'auth-service',
+        status: 'healthy',
+        lastChecked: '2025-01-15T10:30:00Z',
+        responseTimeMs: 42,
+      },
+      {
+        name: 'payment-service',
+        status: 'degraded',
+        lastChecked: '2025-01-15T10:30:00Z',
+        responseTimeMs: 1500,
+      },
+    ]);
   }),
 );
 
@@ -1186,8 +1188,8 @@ describe('MyDashboardPage', () => {
 
   it('should show an error panel when the API fails', async () => {
     server.use(
-      rest.get('/api/my-dashboard/services/health', (_req, res, ctx) => {
-        return res(ctx.status(500));
+      http.get('/api/my-dashboard/services/health', () => {
+        return HttpResponse.json({ error: 'fail' }, { status: 500 });
       }),
     );
 
@@ -1209,7 +1211,7 @@ Integration tests for backend plugins sometimes use `@backstage/backend-test-uti
 import { createRouter } from './router';
 import express from 'express';
 import request from 'supertest';
-import { getVoidLogger } from '@backstage/backend-common';
+import { mockServices } from '@backstage/backend-test-utils';
 import Knex from 'knex';
 
 describe('createRouter', () => {
@@ -1224,7 +1226,7 @@ describe('createRouter', () => {
     });
 
     const router = await createRouter({
-      logger: getVoidLogger(),
+      logger: mockServices.logger.mock(),
       database: {
         getClient: async () => knex,
       } as any,
@@ -1279,7 +1281,7 @@ Frontend tests that mock APIs without MSW may accidentally call real network end
 |---------|---------------|-----|
 | Importing backend code in a frontend plugin | Looks like regular TypeScript imports | Frontend runs in the browser. It cannot access Node.js APIs, the filesystem, or the database. Use `fetchApiRef` to call your backend plugin over HTTP. |
 | Using MUI v4 syntax (`makeStyles`, `@material-ui/core`) | Following outdated tutorials | Backstage uses MUI v5. Use `sx` prop, `styled()`, or `@mui/material` imports. |
-| Hardcoding API URLs (`fetch('http://localhost:7007/...')`) | Works in local dev | Use `fetchApiRef` from `@backstage/core-plugin-api`. Backstage handles base URL resolution, auth headers, and proxy routing. |
+| Hardcoding API URLs (`fetch('http://localhost:7007/...')`) | Works in local dev | Use `discoveryApiRef.getBaseUrl('<pluginId>')` for the base URL and `fetchApiRef` for auth-aware requests — never hardcode host/port. |
 | Forgetting to register the backend plugin | Plugin code exists but is not loaded by the backend | Add `backend.add(myPlugin)` in `packages/backend/src/index.ts`. No registration = no routes mounted. |
 | Template actions with no error handling | Happy-path development | If a template action throws, the entire scaffolder run fails with a cryptic error. Wrap external API calls in try/catch and provide meaningful error messages. |
 | Using `getBy*` in tests for async content | Unfamiliar with testing-library patterns | Data that loads from an API is async. Use `findBy*` (which retries) instead of `getBy*` (which asserts immediately). |
@@ -1305,7 +1307,7 @@ They failed to bind the extension to a plugin instance using `createPlugin()`. A
 
 A junior developer submits a PR for a new frontend plugin. In their component, they retrieve data using `const res = await window.fetch('http://localhost:7007/api/inventory/data');`. During code review, you explicitly reject this approach. How should the developer modify their code to correctly make authenticated requests to the backend plugin?
 
-The developer should use `useApi(fetchApiRef)` to retrieve the Backstage fetch API, and then make the request using `fetchApi.fetch('/api/my-plugin/endpoint')`. The standard `window.fetch` does not automatically know the backend's base URL and fails to append the required authorization headers for Backstage's security perimeter. By using the framework's API reference, the frontend safely delegates base URL resolution, proxy routing, and token injection to Backstage core. Hardcoding URLs also guarantees the plugin will break when deployed to different environments like staging or production.
+The developer should use `useApi(discoveryApiRef)` to resolve the plugin base URL and `useApi(fetchApiRef)` for the auth-aware fetch client, for example: `const baseUrl = await discoveryApi.getBaseUrl('my-plugin'); await fetchApi.fetch(\`${baseUrl}/data\`)`. The standard `window.fetch` does not resolve plugin base URLs and fails to append the required authorization headers for Backstage's security perimeter. `discoveryApiRef` owns base-URL resolution; `fetchApiRef` injects auth headers and proxy routing. Hardcoding URLs guarantees the plugin will break when deployed to different environments like staging or production.
 </details>
 
 <details>
@@ -1404,10 +1406,10 @@ Next, open `plugins/team-links-backend/src/router.ts` and replace its contents w
 
 ```typescript
 import { Router } from 'express';
-import { Logger } from 'winston';
+import { LoggerService } from '@backstage/backend-plugin-api';
 
 export interface RouterOptions {
-  logger: Logger;
+  logger: LoggerService;
 }
 
 const links = [
@@ -1454,7 +1456,7 @@ yarn new --select plugin
 
 ```tsx
 import React from 'react';
-import { useApi, fetchApiRef } from '@backstage/core-plugin-api';
+import { useApi, discoveryApiRef, fetchApiRef } from '@backstage/core-plugin-api';
 import useAsync from 'react-use/lib/useAsync';
 import {
   Header,
@@ -1606,8 +1608,8 @@ Here is what you should be able to do:
 
 ## Next Module
 
-- **Module 3**: [Backstage Catalog Deep Dive](../module-1.3-backstage-catalog-infrastructure/) — Entity processors, providers, annotations, and troubleshooting (Domain 3, 22%)
-- **Module 1**: [Backstage Development Workflow](../module-1.1-backstage-dev-workflow/) — Monorepo structure, Docker builds, CLI commands (Domain 1, 24%)
+- **Module 1.3**: [Backstage Catalog Deep Dive](../module-1.3-backstage-catalog-infrastructure/) — Entity processors, providers, annotations, and troubleshooting (Domain 3, 22%)
+- **Module 1.1**: [Backstage Development Workflow](../module-1.1-backstage-dev-workflow/) — Monorepo structure, Docker builds, CLI commands (Domain 1, 24%)
 - Review the [Backstage Official Plugin Development Guide](https://backstage.io/docs/plugins/) for additional depth
 
 ---

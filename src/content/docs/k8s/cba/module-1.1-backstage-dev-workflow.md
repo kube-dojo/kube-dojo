@@ -36,7 +36,7 @@ Domain 1 accounts for nearly a quarter of the exam. Candidates who skip this fou
 
 ## Did You Know?
 
-- Backstage was created at Spotify and open-sourced under the Apache License, Version 2.0, which is why many examples still reflect the needs of large internal developer platforms rather than small single-service applications.
+- Backstage is a CNCF Incubating project — donated by Spotify and accepted into the CNCF in September 2020, then promoted to Incubating in March 2022. It was created at Spotify and open-sourced under the Apache License, Version 2.0, which is why many examples still reflect the needs of large internal developer platforms rather than small single-service applications.
 - A generated Backstage app is a monorepo, not a single package. The app shell, backend, plugins, configuration, lockfile, and Docker build all depend on workspace-level coordination.
 - Backstage configuration is layered deliberately. Base config, local developer overrides, production config, and environment substitution are separate mechanisms with different security and review expectations.
 - The New Backend System changes plugin registration from manual imperative wiring toward declarative module registration, so CBA candidates must recognize both patterns when reading real enterprise repositories.
@@ -213,13 +213,13 @@ const catalogApiRef = createApiRef<CatalogApi>({
 
 ### 3.1 Scaffolding a New App
 
-The official way to create a Backstage app is via the `@backstage/create-app` CLI package. To ensure reproducible scaffolding, especially in CI/CD environments, it is best to use non-interactive flags.
+The official way to create a Backstage app is via the `@backstage/create-app` CLI package. Flags like `--skip-install` and `--path` make directory layout and install timing reproducible in scripts, but the CLI still prompts interactively for the app name — there is no supported flag or environment variable to supply that name non-interactively.
 
 ```bash
-# Create a new Backstage app (non-interactive)
+# Create a new Backstage app (skips install; still prompts for app name)
 npx @backstage/create-app@latest --skip-install --path my-backstage-app
 
-# You'll be prompted for an app name unless provided via env or flags
+# Answer the app-name prompt when it appears
 # This generates the full monorepo structure
 ```
 
@@ -280,7 +280,7 @@ Once running, you can attach VS Code directly to the inspector process by adding
 
 ### 4.1 Multi-Stage Dockerfile
 
-Deploying Backstage efficiently requires a multi-stage Dockerfile. The generated `packages/backend/Dockerfile` separates the heavy build tools from the final runtime environment to keep the production image strictly minimized.
+Deploying Backstage efficiently requires a multi-stage Dockerfile. A representative multi-stage Dockerfile (as in `packages/backend/Dockerfile` in a generated app) separates the heavy build tools from the final runtime environment to keep the production image strictly minimized.
 
 ```dockerfile
 # Stage 1 - Build
@@ -314,7 +314,7 @@ COPY app-config.yaml app-config.production.yaml ./
 # Run as non-root
 USER node
 
-CMD ["node", "dist/index.cjs.js"]
+CMD ["node", "dist/index.cjs.js", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]
 ```
 
 ### 4.2 Optimizing Image Size
@@ -381,11 +381,11 @@ yarn workspace app add @backstage/plugin-catalog
 # Add a dev dependency
 yarn workspace backend add --dev @types/express
 
-# Add a dependency to the root (shared tooling)
-yarn add -W eslint prettier
+# Add a dependency to the root (shared tooling) — from the repo root
+yarn add eslint prettier
 ```
 
-The `-W` flag explicitly confirms your intent to install a package at the workspace root, which should be reserved strictly for shared development tooling like linters and formatters.
+In Yarn 4, the repository root is already a workspace, so you install shared dev tooling from the root with a plain `yarn add` (no `-W` / `--ignore-workspace-root-check`; those flags are Yarn 1 classic only and error in Yarn 4). Reserve root-level dependencies strictly for shared development tooling like linters and formatters.
 
 > **Stop and think**: You are building a backend plugin that needs the `pg` (PostgreSQL) package. Should you install it using `yarn workspace backend add pg` or `yarn workspace my-plugin-backend add pg`?
 > 
@@ -539,7 +539,7 @@ auth:
         clientSecret: ${GITHUB_CLIENT_SECRET}
 ```
 
-Beyond basic configurations, be aware of advanced platform integrations. For example, the Backstage Kubernetes plugin consists of two entirely separate packages: `@backstage/plugin-kubernetes` (the UI component) and `@backstage/plugin-kubernetes-backend` (the cluster API connector). Both must be installed and configured independently. Additionally, as of 2025, Backstage natively supports MCP (Model Context Protocol) server integration, facilitating AI tooling connectivity. Finally, when building Software Templates, always ensure your Scaffolder action IDs use strict `camelCase` (e.g., `fetchComponent`); using `kebab-case` causes the template parser to interpret hyphens as subtraction operators, returning fatal `NaN` evaluation errors.
+Beyond basic configurations, be aware of advanced platform integrations. For example, the Backstage Kubernetes plugin consists of two entirely separate packages: `@backstage/plugin-kubernetes` (the UI component) and `@backstage/plugin-kubernetes-backend` (the cluster API connector). Both must be installed and configured independently. Additionally, as of 2025, Backstage natively supports MCP (Model Context Protocol) server integration, facilitating AI tooling connectivity. Finally, when building Software Templates, remember that built-in Scaffolder **action** IDs are colon-namespaced (for example `fetch:template`, `publish:github`, `catalog:register`). Custom actions register their own action ID in `createTemplateAction`. **Step IDs** and custom-action IDs referenced in `${{ steps.<id>.output }}` must avoid hyphens — Nunjucks parses `-` as subtraction (→ `NaN`) — so use `camelCase` step IDs or bracket notation such as `${{ steps['deploy-to-prod'].output.url }}`.
 
 ## Exam Design Notes for the Backstage Developer Workflow
 
@@ -699,7 +699,7 @@ This is also a registration-style question. In older repositories you may see le
 <details>
 <summary>Show Answer</summary>
 
-The Backstage template engine evaluates the hyphens in the action name `deploy-to-prod` as mathematical subtraction operators. Because it forcefully attempts to subtract string values, the mathematical operation fails and returns a `Not a Number` (NaN) error state. To fix this specific issue and prevent deep template evaluation bugs, Scaffolder template action IDs must always be written in strict `camelCase`. The team should rename their action to `deployToProd` to ensure the template engine parses the reference correctly as an object property rather than a mathematical equation.
+The Backstage template engine evaluates hyphens in **step IDs** (and similar identifiers inside `${{ steps.<id>.output }}`) as mathematical subtraction operators. Because it forcefully attempts to subtract string values, the operation fails and returns a `Not a Number` (NaN) error state. Built-in Scaffolder action IDs use colon namespaces such as `fetch:template`, `publish:github`, and `catalog:register`. To fix this issue, rename the template step `id` to `deployToProd` (camelCase), or keep `deploy-to-prod` and reference outputs with bracket notation: `${{ steps['deploy-to-prod'].output.url }}`.
 </details>
 
 **Q8: Your organization wants to deploy TechDocs to production but is currently using the local filesystem as the storage backend. Why is this problematic, and what are the supported alternatives?**
@@ -725,11 +725,11 @@ Using the local filesystem for TechDocs is strongly discouraged for production b
 
 ### Task 1: Scaffold the Application
 
-Begin by generating a fresh Backstage repository. We use specific flags to ensure the process runs deterministically and without interactive prompts.
+Begin by generating a fresh Backstage repository. `--skip-install` and `--path` pin the output directory and defer `yarn install`, but you still answer the interactive app-name prompt.
 
 ```bash
 npx @backstage/create-app@latest --skip-install --path cba-lab
-# When prompted, name it: cba-lab (bypassed by --path flag)
+# When prompted for the app name, enter: cba-lab
 cd cba-lab
 ```
 
@@ -806,13 +806,18 @@ docker images cba-lab:latest
 
 ### Task 5: Run the Container
 
-Execute the freshly built container image locally, mapping the required backend port:
+Execute the freshly built container image locally, mapping the required backend port. After the container starts, confirm backend health with a real endpoint — bare `http://localhost:7007/` returns 404, so use `/healthcheck` on legacy backends or `/.backstage/health/v1/readiness` on the new backend system. Once curl succeeds, clean up your system resources:
 
 ```bash
 docker run -p 7007:7007 cba-lab:latest
 ```
 
-Navigate to `http://localhost:7007` to verify the backend health endpoints are responding correctly. Once confirmed, clean up your system resources:
+In a second terminal:
+
+```bash
+curl -s http://localhost:7007/healthcheck
+# or (new backend): curl -s http://localhost:7007/.backstage/health/v1/readiness
+```
 
 ```bash
 # Stop any running containers
@@ -823,12 +828,12 @@ cd .. && rm -rf cba-lab
 ```
 
 ### Success Checklist
-- [ ] Successfully generated the Backstage monorepo using the non-interactive CLI flag.
+- [ ] Successfully generated the Backstage monorepo with `--skip-install` and `--path`, answering the app-name prompt.
 - [ ] Verified the presence of the `packages/app` and `packages/backend` directories.
 - [ ] Started the local development server and accessed the catalog at `localhost:3000`.
 - [ ] Applied a local configuration override and verified the updated application title.
 - [ ] Built a multi-stage Docker image from the repository root context.
-- [ ] Deployed the local container and successfully reached the backend health endpoint.
+- [ ] Deployed the local container and successfully reached `/healthcheck` or `/.backstage/health/v1/readiness`.
 
 ---
 
@@ -865,4 +870,10 @@ cd .. && rm -rf cba-lab
 
 ## Next Module
 
-[Module 2: Backstage Plugins and Extensions](../module-1.2-backstage-plugin-development/) - Build your first frontend and backend plugin, understand the powerful plugin API system, and learn exactly how Backstage's sophisticated dependency injection framework connects isolated components at runtime.
+[Module 1.2: Backstage Plugins and Extensions](../module-1.2-backstage-plugin-development/) - Build your first frontend and backend plugin, understand the powerful plugin API system, and learn exactly how Backstage's sophisticated dependency injection framework connects isolated components at runtime.
+
+---
+
+## Learner check
+
+> In Yarn 4, the repository root is already a workspace, so you install shared dev tooling from the root with a plain `yarn add` (no `-W` / `--ignore-workspace-root-check`; those flags are Yarn 1 classic only and error in Yarn 4).
