@@ -38,13 +38,13 @@ Pause and predict: if an application is unhealthy after a Git commit, what evide
 
 Think of the exam as a set of inspection lanes in a workshop. You do not disassemble the engine because the dashboard light is on; you check the signal, confirm the system, and isolate the layer with the cheapest trustworthy evidence. In Kubernetes 1.35+ environments, that evidence often comes from resource status, events, controller conditions, and narrow command output. The platform operator habit is to move from broad signal to specific cause without turning the investigation into a scavenger hunt.
 
-The original practice module summarized the sample exam flow in four tasks: GitOps delivery, platform API self-service, observability or security incident response, and operations follow-up. That sequence still works as the backbone of the mock exam, but the deeper lesson is that each task has a different success definition. A delivery fix is not complete because a manifest was edited; it is complete when the intended environment converges. A platform API fix is not complete because a claim was accepted; it is complete when the contract is valid, status is meaningful, and reconciliation reaches the expected state.
+The mock exam is built around four task types: GitOps delivery, platform API self-service, observability or security incident response, and operations follow-up. That sequence still works as the backbone of the mock exam, but the deeper lesson is that each task has a different success definition. A delivery fix is not complete because a manifest was edited; it is complete when the intended environment converges. A platform API fix is not complete because a claim was accepted; it is complete when the contract is valid, status is meaningful, and reconciliation reaches the expected state.
 
 In a realistic rehearsal, the task text may deliberately include tempting details. A namespace name, a failed pod, or an angry event is useful evidence, but it is not automatically the root cause. Good exam work turns each clue into a question: which system produced this clue, what does that system own, and what would change if my hypothesis were true? That habit keeps you from confusing implementation noise with platform intent, especially when a task spans GitOps, APIs, and runtime behavior.
 
 ## Running the Mock Exam Under Real Pressure
 
-The rules of the rehearsal are simple because the complexity should come from the work, not from ceremony. Set a timer and do not pause it. Keep a small scratchpad of task state. Verify every change before moving on. Do not optimize for perfect elegance when a smaller correct fix exists. If a task stalls, park it and return later with a fresh hypothesis. These rules preserve the original module's purpose: build pressure tolerance and sequencing skill rather than produce a polished design document.
+The rules of the rehearsal are simple because the complexity should come from the work, not from ceremony. Set a timer and do not pause it. Keep a small scratchpad of task state. Verify every change before moving on. Do not optimize for perfect elegance when a smaller correct fix exists. If a task stalls, park it and return later with a fresh hypothesis. These rules keep the rehearsal focused on building pressure tolerance and sequencing skill rather than producing a polished design document.
 
 Timer discipline matters because platform engineers often lose time in respectable ways. You can spend ten minutes making a solution prettier, five minutes collecting evidence you already have, and another stretch rereading documentation while easier points wait untouched. The mock exam exposes those habits because the clock keeps moving. A stable pacing workflow protects you from the false comfort of effort, which is when you are busy but not improving the score.
 
@@ -54,9 +54,21 @@ Exercise scenario: You have a 90-minute practice window and four tasks. The deli
 
 Before running this, what output do you expect from your final verification pass, and what would make you stop trusting that pass? Strong candidates answer in terms of signals, not vibes. They expect a clean Git state or intentional file diff, current events that no longer show the failing symptom, and workload state that matches the repaired namespace. They stop trusting the pass if the command checks the wrong namespace, if the resource name is stale, or if the verification proves only that a command ran.
 
-The original module used a dress rehearsal analogy, and it is still a useful mental model. A real performance does not test whether you can memorize the score; it tests whether you can keep tempo, recover from mistakes, and finish strongly. CNPE works the same way. The best rehearsal outcome is not a perfect first run, but a repeatable read-act-verify loop that survives distraction and leaves behind enough evidence for an examiner to follow.
+A dress-rehearsal analogy is a useful mental model here. A real performance does not test whether you can memorize the score; it tests whether you can keep tempo, recover from mistakes, and finish strongly. CNPE works the same way. The best rehearsal outcome is not a perfect first run, but a repeatable read-act-verify loop that survives distraction and leaves behind enough evidence for an examiner to follow.
 
 ## Working Each Domain Without Losing the Thread
+
+The CNCF CNPE blueprint weights five domains on the exam. Use this table when pacing your mock run so you do not undertrain any slice of the blueprint:
+
+| Domain | Weight |
+|---|---|
+| Platform Architecture and Infrastructure | 15% |
+| GitOps and Continuous Delivery | 25% |
+| Platform APIs and Self-Service Capabilities | 25% |
+| Observability and Operations | 20% |
+| Security and Policy Enforcement | 15% |
+
+Platform Architecture and Infrastructure tasks ask you to reason about IDP architecture decisions, cluster topology, infrastructure-as-code patterns, multi-tenancy boundaries, and cost or right-sizing choices — not just patch a single workload. Typical prompts involve namespace layout, node pool or storage class selection, network segmentation, and whether a platform design matches tenancy or compliance requirements. Treat these tasks like the other domains: identify the contract, change the owning layer, and verify with evidence.
 
 GitOps delivery tasks begin with intent. You inspect the repository change, identify the environment boundary, and compare that desired state with the controller's view and the live Kubernetes result. The highest-value question is not, "Which command fixes this?" but, "Which source of truth is wrong or blocked?" If the repository is wrong, repair the manifest or overlay. If the controller is blocked, inspect sync status, health, or diff behavior. If live state was manually changed, restore convergence rather than normalize drift.
 
@@ -66,11 +78,11 @@ Observability and security tasks begin with evidence. A failing request may show
 
 Operations follow-up tasks begin with the next person. After an incident or repair, the platform should be easier to operate than it was before. That may mean adding a missing alert, improving a runbook clue, clarifying a status message, or documenting the verification signal that proved the fix. The follow-up should not be theatrical. It should reduce ambiguity for the operator who sees the same class of symptom later and needs to know where to look first.
 
-The sample exam flow from the original module remains a practical map. Task one is GitOps delivery: inspect repository intent, repair the environment-specific change, restore sync or correct rollout, and verify that live state matches desired state. Task two is platform API self-service: read the CRD or claim, identify contract fields, repair validation, status, or reconciliation issues, and confirm that the object reaches the expected healthy state. Task three is observability or security: narrow the cause with metrics, logs, traces, or events, apply the smallest safe fix, preserve guardrails, and verify that the symptom is gone. Task four is operations follow-up: confirm the right alert or runbook signal exists, document the operational clue, and keep the platform explainable.
+The sample exam flow remains a practical map: Task one is GitOps delivery: inspect repository intent, repair the environment-specific change, restore sync or correct rollout, and verify that live state matches desired state. Task two is platform API self-service: read the CRD or claim, identify contract fields, repair validation, status, or reconciliation issues, and confirm that the object reaches the expected healthy state. Task three is observability or security: narrow the cause with metrics, logs, traces, or events, apply the smallest safe fix, preserve guardrails, and verify that the symptom is gone. Task four is operations follow-up: confirm the right alert or runbook signal exists, document the operational clue, and keep the platform explainable.
 
 The difference between a strong and weak run is often visible in the verbs. Strong runs inspect, compare, narrow, repair, verify, and record. Weak runs poke, hope, broaden, rewrite, and move on. That contrast is not about personality; it is about observability and control. Under pressure, precise verbs help you notice whether you are moving toward proof or merely creating more changes to reason about.
 
-The original scoring rubric is worth keeping because it mirrors the platform layers you must integrate during the rehearsal.
+The scoring rubric below is worth keeping because it mirrors the platform layers you must integrate during the rehearsal.
 
 | Area | Full Credit | Partial Credit |
 |------|-------------|----------------|
@@ -92,7 +104,7 @@ Which approach would you choose here and why: a broad command that lists everyth
 
 There is also a social dimension to verification, even in a solo exam. The command output is the explanation you leave for your future self during the final review pass. If your verification is only "it looks better," the final pass has nothing to audit. If your verification names the resource, namespace, condition, and expected transition, the final pass can quickly confirm that the work still holds. That distinction matters because late corrections are expensive and often happen under fatigue.
 
-Keep the original module's simple verification block as the end-of-run baseline. It is deliberately small: check Git state, inspect recent events, and list the workload state in the relevant namespace. In a real mock exam you should add task-specific proof around it, but this baseline catches a surprising number of avoidable mistakes. It also reinforces the habit that verification belongs in the workflow, not as an optional ceremony after the timer has already expired.
+Keep this simple verification block as the end-of-run baseline. It is deliberately small: check Git state, inspect recent events, and list the workload state in the relevant namespace. In a real mock exam you should add task-specific proof around it, but this baseline catches a surprising number of avoidable mistakes. It also reinforces the habit that verification belongs in the workflow, not as an optional ceremony after the timer has already expired.
 
 ## Debriefing Like an Examiner
 
@@ -100,7 +112,7 @@ The debrief is where a mock exam becomes training instead of merely a stressful 
 
 Start by reconstructing the timeline from your scratchpad. Which task did you open first, when did you switch, where did you park work, and how much time remained for review? Then examine the layer choices. Did you patch an implementation detail when the intent was wrong? Did you treat a policy denial as a workload failure? Did you keep digging after the evidence was already enough? These questions are uncomfortable in exactly the way good practice should be.
 
-The original module's debrief questions still work because they force cause and consequence into the same conversation. Which task consumed the most time, and why? Did you move too early on any hard task? Where did verification save you from a bad assumption? Which platform layer was easiest to reason about under pressure? Answer each question with evidence from the run, not with a general feeling about your readiness.
+These debrief questions work because they force cause and consequence into the same conversation. Which task consumed the most time, and why? Did you move too early on any hard task? Where did verification save you from a bad assumption? Which platform layer was easiest to reason about under pressure? Answer each question with evidence from the run, not with a general feeling about your readiness.
 
 An examiner-style debrief should produce a small set of concrete practice changes. For example, you might decide to rehearse CRD contract reading for twenty minutes before the next mock, write a tighter verification checklist for GitOps tasks, or practice parking an incident after a fixed timebox. Those are useful changes because they are observable. During the next run, you can tell whether you actually did them.
 
@@ -152,7 +164,7 @@ Another useful pattern is parking stuck work with a named return condition. Park
 
 A third pattern is layer ownership. Before changing anything, ask which layer owns the failing behavior: Git intent, controller reconciliation, platform API contract, policy guardrail, workload runtime, or operational signal. This pattern works because platform systems are built from contracts. If you repair the wrong layer, the symptom may briefly disappear while the underlying contract remains broken, which is exactly the sort of weak answer a full mock exam is designed to expose.
 
-The original module identified several common failure patterns, and they remain useful because they describe habits rather than tool-specific mistakes.
+Several common failure patterns are worth naming because they describe habits rather than tool-specific mistakes.
 
 | Failure Pattern | What It Looks Like | Better Habit |
 |-----------------|--------------------|--------------|

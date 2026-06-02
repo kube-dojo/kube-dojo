@@ -47,7 +47,7 @@ The first professional habit is to ask which state you are observing. Desired st
 |------|-------|---------------------|------------------|-------------|
 | Desired state | Git repository and rendering tool | What should exist after reconciliation? | Kustomize overlay sets `replicas: 3` | Assuming a local edit exists in Git before it is committed |
 | Rendered state | Helm, Kustomize, or another generator | What manifests will the controller apply? | `kustomize build overlays/staging` output | Debugging raw templates without checking rendered YAML |
-| Live state | Kubernetes API server | What exists in the cluster right now? | `kubectl get deploy payment-api -n payments -o yaml` | Treating a manual live patch as the new source of truth |
+| Live state | Kubernetes API server | What exists in the cluster right now? | `kubectl get deploy payment-api -n payments-staging -o yaml` | Treating a manual live patch as the new source of truth |
 | Sync state | GitOps controller | Do desired and live match from the controller's view? | Argo CD `Synced`, Flux `Ready=True` | Assuming sync means the application is healthy |
 | Health state | GitOps controller and workload status | Are resources usable after they exist? | Deployment available condition, Pod readiness | Missing a bad readiness probe after sync succeeds |
 | Rollout state | Kubernetes workload controller or rollout controller | Is traffic safely moving to the new revision? | `kubectl rollout status`, Rollout phase, analysis result | Stopping after a ReplicaSet exists without checking availability |
@@ -89,7 +89,7 @@ Use a consistent inspection order during exam work. Start with the GitOps object
 ```bash
 APP_NAMESPACE="${APP_NAMESPACE:-argocd}"
 APP_NAME="${APP_NAME:-payment-api-staging}"
-WORKLOAD_NAMESPACE="${WORKLOAD_NAMESPACE:-payments}"
+WORKLOAD_NAMESPACE="${WORKLOAD_NAMESPACE:-payments-staging}"
 
 kubectl get application "$APP_NAME" -n "$APP_NAMESPACE" -o wide
 kubectl describe application "$APP_NAME" -n "$APP_NAMESPACE"
@@ -418,7 +418,7 @@ A successful render should show the Deployment and Service named `payment-api`, 
 
 The controller will likely report successful sync because the manifests are valid and applied. Users may still experience failure because the Service no longer selects the Pods. This is a classic example of sync state being clean while application health or traffic behavior is wrong, and it is why senior verification includes selectors, endpoints, and readiness rather than only controller status.
 
-Now create an Argo CD `Application` that points at the staging overlay. Replace `https://example.com/org/platform-repo.git` with the actual repository URL in a real lab. The YAML itself is valid and shows the required fields: [source repository, path, target revision, destination cluster, destination namespace, and sync policy](https://argo-cd.readthedocs.io/en/stable/user-guide/application-specification/).
+Now create an Argo CD `Application` that points at the staging overlay. Replace `https://example.com/org/platform-repo.git` with the actual repository URL in a real lab. This shows the required fields: [source repository, path, target revision, destination cluster, destination namespace, and sync policy](https://argo-cd.readthedocs.io/en/stable/user-guide/application-specification/).
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -462,7 +462,7 @@ kubectl describe application payment-api-staging -n argocd
 
 Read the status fields as a sequence of claims. [A sync status of `Synced` means desired and live resources match according to Argo CD. A health status of `Healthy` means Argo CD considers the managed resources usable](https://argo-cd.readthedocs.io/en/release-3.4/getting_started/). A revision field tells you which Git revision was reconciled. If the revision is old, the controller may be healthy but not yet operating on your commit.
 
-For Flux, the equivalent object might be a [`Kustomization` that points at a `GitRepository`](https://fluxcd.io/flux/components/kustomize/kustomizations/). The object names differ, but the same evidence sequence applies: source fetched, artifact created, kustomization reconciled, resources applied, workload healthy. The following YAML is a valid shape for Flux-style reconciliation.
+For Flux, the equivalent object might be a [`Kustomization` that points at a `GitRepository`](https://fluxcd.io/flux/components/kustomize/kustomizations/). The object names differ, but the same evidence sequence applies: source fetched, artifact created, kustomization reconciled, resources applied, workload healthy. The following YAML shows a Flux-style reconciliation shape.
 
 ```yaml
 apiVersion: source.toolkit.fluxcd.io/v1
@@ -689,7 +689,7 @@ A CNPE prompt might not name the strategy. Instead, it might say that only a sma
 
 The payment authorization change deserves stronger progressive delivery because the blast radius and business risk are higher. The CSS change may be safe with a direct rollout and normal verification. The decision is not based on whether canary sounds modern; it is based on failure impact, detectability, rollback speed, and the quality of signals available during the release.
 
-Argo Rollouts is one common Kubernetes-native way to express progressive delivery. The following canary example is intentionally small. [It sets an initial traffic weight, pauses for observation, increases exposure, pauses again, and then completes if the rollout remains healthy](https://argoproj.github.io/argo-rollouts/features/canary/). Real production setups often integrate service mesh or ingress traffic routing and metric analysis.
+Argo Rollouts is one common Kubernetes-native way to express progressive delivery. The following canary example is intentionally small. [It sets an initial traffic weight, pauses for observation, increases exposure, pauses again, and then completes if the rollout remains healthy](https://argoproj.github.io/argo-rollouts/features/canary/). Real production setups often integrate service mesh or ingress traffic routing and metric analysis. An Argo Rollout replaces the Deployment for this workload — do not run both against the same selector; alternatively reference an existing Deployment via `spec.workloadRef`.
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
