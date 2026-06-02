@@ -416,7 +416,7 @@ Exercise scenario: suppose a platform team annotates a service as global and see
 When operating across untrusted networks, securing pod-to-pod traffic is mandatory. Cilium supports two methods:
 
 1. **WireGuard**: Cilium supports WireGuard transparent encryption. Each node auto-generates a key-pair and distributes its public key via the `network.cilium.io/wg-pub-key` CiliumNode annotation.
-2. **IPsec**: Cilium's IPsec pod-to-pod encryption is highly stable. However, IPsec node-to-node encryption (host traffic) remains a beta feature. 
+2. **IPsec**: Cilium's IPsec pod-to-pod encryption is highly stable. For host-level IPsec, consult the current Cilium encryption docs for the stability of node-to-node (host traffic) encryption, which has changed across releases. 
 
 Critically, IPsec transparent encryption is not supported when Cilium is chained on top of another CNI plugin (e.g., using AWS VPC CNI for routing and Cilium exclusively for enforcement).
 
@@ -448,35 +448,61 @@ flowchart TD
     end
 ```
 
-### CiliumBGPPeeringPolicy
+### Cilium BGP Control Plane (BGPv2)
 
-The `CiliumBGPPeeringPolicy` CRD was introduced to construct these topologies dynamically. 
+The legacy BGPv1 control plane was removed in Cilium 1.19; the current API is the BGPv2 resource set (`CiliumBGPClusterConfig`, `CiliumBGPPeerConfig`, `CiliumBGPAdvertisement`) under `cilium.io/v2`.
+
+The BGPv2 control plane splits cluster-wide peering, per-peer session parameters, and route advertisements into separate resources. Nodes that should run BGP need the `bgp: enabled` label so the `CiliumBGPClusterConfig.spec.nodeSelector` matches them.
 
 ```yaml
-# Configure BGP peering with a ToR (Top-of-Rack) router
-apiVersion: cilium.io/v2alpha1
-kind: CiliumBGPPeeringPolicy
+# Configure BGP peering with a ToR (Top-of-Rack) router (BGPv2)
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
 metadata:
-  name: rack-1-bgp
+  name: cilium-bgp
 spec:
-  # Which nodes this policy applies to
   nodeSelector:
     matchLabels:
-      rack: rack-1
-  virtualRouters:
-  - localASN: 65001          # Your cluster's ASN
-    exportPodCIDR: true       # Advertise pod CIDRs to peers
-    neighbors:
-    - peerAddress: "10.0.0.1/32"  # ToR router IP
-      peerASN: 65000               # Router's ASN
-      # Optional: authentication
-      # authSecretRef: bgp-auth-secret
-    serviceSelector:
-      # Advertise LoadBalancer service VIPs
-      matchExpressions:
-      - key: service.cilium.io/bgp-announce
-        operator: In
-        values: ["true"]
+      bgp: enabled
+  bgpInstances:
+  - name: "instance-65000"
+    localASN: 65000
+    peers:
+    - name: "tor-peer"
+      peerASN: 65100
+      peerAddress: 192.168.1.1
+      peerConfigRef:
+        name: "cilium-peer-config"
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: cilium-peer-config
+spec:
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: "bgp"
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: bgp-advertisements
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+    - advertisementType: "PodCIDR"
+    - advertisementType: "Service"
+      service:
+        addresses:
+          - LoadBalancerIP
+          - ClusterIP
+      selector:
+        matchLabels:
+          bgp: enabled
 ```
 
 | Concept | Meaning |
@@ -486,7 +512,7 @@ spec:
 | Route Advertisement | Announcing "I can reach this IP range" to peers. |
 | eBGP | External BGP -- peering between different ASNs (cluster to external router). |
 | iBGP | Internal BGP -- peering within the same ASN (less common in Cilium). |
-| `exportPodCIDR` | Tell peers how to reach pods on this node. |
+| `PodCIDR` advertisement | In `CiliumBGPAdvertisement`, `advertisementType: "PodCIDR"` tells peers how to reach pod IPs on matched nodes. |
 
 > **Pause and predict**: If you advertise the pod CIDR via BGP, what additional external networking equipment configuration is required for a client on the internet to reach those pods?
 > *Consider whether internal pod IPs are typically routable across the public internet.*
@@ -582,20 +608,22 @@ spec:
 
 ### Bandwidth Manager
 
-Bandwidth Manager is a fairness and blast-radius feature rather than a security boundary. It helps keep selected workloads from consuming more egress bandwidth than the platform intends, which is useful for batch jobs, replication tasks, or noisy tenants. The policy should be aligned with workload labels that are stable and meaningful, because a label drift can remove the cap from the workload that needed it or accidentally constrain a latency-sensitive service. As with network policy, the label taxonomy is part of the control surface.
+Bandwidth Manager is a fairness and blast-radius feature rather than a security boundary. It helps keep selected workloads from consuming more egress bandwidth than the platform intends, which is useful for batch jobs, replication tasks, or noisy tenants. The cap is set per-Pod via a standard annotation on the Pod template, so it travels with the workload rather than through a separately selected policy object. Bandwidth Manager has no CRD — Cilium applies an EDT/eBPF rate from the Pod annotation, and ingress shaping is also supported when you set `kubernetes.io/ingress-bandwidth`.
 
 ```yaml
-apiVersion: cilium.io/v2
-kind: CiliumBandwidthPolicy
+# Bandwidth Manager is enabled cluster-wide via Helm:
+#   cilium install --set bandwidthManager.enabled=true
+# The egress cap is then set per-Pod with a standard annotation:
+apiVersion: v1
+kind: Pod
 metadata:
-  name: rate-limit-batch-jobs
+  name: bandwidth-limited
+  annotations:
+    kubernetes.io/egress-bandwidth: "50M"   # also supports kubernetes.io/ingress-bandwidth
 spec:
-  endpointSelector:
-    matchLabels:
-      workload-type: batch
-  egress:
-    rate: "50M"     # 50 Mbit/s egress cap
-    burst: "10M"    # Allow short bursts up to 10 Mbit above rate
+  containers:
+  - name: app
+    image: nginx:1.27
 ```
 
 ### Egress Gateway
@@ -604,7 +632,7 @@ CiliumEgressGatewayPolicy routes outbound traffic from selected pods through ded
 
 Why you need this: Many external firewalls, databases, and SaaS APIs allowlist traffic by source IP. Without an egress gateway, pod traffic exits from whatever node the pod resides on, resulting in shifting source IPs.
 
-Cilium Egress Gateway is GA (not beta) in Cilium version 1.19.x; it requires BPF masquerading and kube-proxy replacement to be enabled. **Crucially, Egress Gateway is incompatible with Cluster Mesh.** 
+Cilium Egress Gateway is GA since Cilium 1.14 (and current in 1.19.x); it requires BPF masquerading and kube-proxy replacement to be enabled. **Crucially, Egress Gateway is incompatible with Cluster Mesh.** 
 
 > **Stop and think**: Why is Cilium Egress Gateway incompatible with Cluster Mesh?
 > *Answer: Egress gateways rely on strict SNAT and localized routing logic that conflicts with the cross-cluster identity synchronization and datapath behavior inherent to Cluster Mesh.*
@@ -682,7 +710,7 @@ Before running this, what output do you expect if Hubble Relay is enabled but th
 
 ### Installation and Status
 
-*Although some unverified sources suggest the minimum supported Kubernetes version for Cilium 1.19.x is Kubernetes version 1.21, you must always consult the official compatibility matrix directly prior to installation.*
+*Always consult the official Cilium and Kubernetes compatibility matrix prior to installation.*
 
 ```bash
 # Install Cilium (most common invocation)
@@ -921,16 +949,16 @@ The request will only be routed to Cluster B if there are absolutely zero health
 </details>
 
 <details markdown="1">
-<summary>Question 5: You are configuring a `CiliumBGPPeeringPolicy` to communicate with a top-of-rack router. You want to ensure that the individual IPs of pods scheduled on the worker nodes are directly routable from external corporate networks without relying on NodePort or LoadBalancer translation. Which specific configuration parameter must you include?</summary>
+<summary>Question 5: You are configuring BGPv2 with a `CiliumBGPAdvertisement` to communicate with a top-of-rack router. You want the individual IPs of pods scheduled on worker nodes to be directly routable from external corporate networks without relying on NodePort or LoadBalancer translation. Which advertisement must you include?</summary>
 
-You must include the `exportPodCIDR: true` directive within your `virtualRouters` specification in the policy. This parameter instructs the Cilium agent on each node to automatically advertise its designated pod CIDR range to the configured BGP peer. By doing this, external routers learn exactly which physical node to forward traffic to for a specific pod IP block, eliminating the need for intermediary LoadBalancers or NodePorts. Without this setting, the BGP session may establish successfully, but the external network will remain completely unaware of how to route packets directly to the internal pod IP addresses.
+You must include a `CiliumBGPAdvertisement` entry with `advertisementType: "PodCIDR"`. That tells BGP peers how to reach pod address blocks on nodes matched by your `CiliumBGPClusterConfig` selector. Common distractors that do **not** solve direct pod reachability: advertising only `Service` VIPs (LoadBalancerIP or ClusterIP), enabling BGP on nodes without the matching `bgp: enabled` label, or assuming an `established` BGP session alone publishes pod routes. Without the PodCIDR advertisement, the session may come up while external routers still have no path to individual pod IPs.
 
 </details>
 
 <details markdown="1">
 <summary>Question 6: While upgrading your cluster infrastructure, you identify that your bare-metal servers utilize native XDP-supported NIC drivers. You want to accelerate your kube-proxy replacement. Does Cilium support this, and what constraints exist?</summary>
 
-Yes, Cilium natively supports this, as XDP-based load balancing acceleration has been available since Cilium version 1.8. It operates at the network driver layer to bypass the host's kernel network stack entirely, which drastically improves load balancing performance for edge services like NodePorts. However, you must ensure your kernel is sufficiently modern (kernel 5.3+ is recommended, with 4.19.57 as the absolute minimum) to support the required eBPF hooks. Additionally, you must acknowledge that this acceleration mode relies on specific datapath prerequisites, and is supported primarily when Cilium is configured to use native routing mode rather than overlay networking.
+Yes, Cilium natively supports this, as XDP-based load balancing acceleration has been available since Cilium version 1.8. It operates at the network driver layer to bypass the host's kernel network stack entirely, which drastically improves load balancing performance for edge services like NodePorts. However, you must ensure your kernel is sufficiently modern (kernel 5.3+ is recommended, with 4.19.57 as the absolute minimum) to support the required eBPF hooks. Additionally, you must acknowledge that this acceleration mode relies on specific datapath prerequisites; XDP acceleration is most commonly used with native routing, though datapath and driver support determine what is viable in your environment.
 
 </details>
 
@@ -940,11 +968,11 @@ Yes, Cilium natively supports this, as XDP-based load balancing acceleration has
 
 ### Objective
 
-Set up a two-cluster environment with Cilium Cluster Mesh, deploy a global service, verify cross-cluster connectivity, and construct a simulated `CiliumBGPPeeringPolicy`.
+Set up a two-cluster environment with Cilium Cluster Mesh, deploy a global service, verify cross-cluster connectivity, and apply BGPv2 `CiliumBGPClusterConfig` / `CiliumBGPAdvertisement` resources for conceptual validation.
 
 This lab is intentionally split between runnable cluster work and a conceptual BGP validation step. `kind` can give you two Kubernetes control planes with separate pod CIDRs, which is enough to practice Cluster Mesh, global service annotations, local affinity, failover behavior, and Hubble-friendly connectivity tests. It cannot provide a real top-of-rack router by itself, so the BGP section focuses on CRD shape and expected status rather than pretending a peer exists. That separation keeps the exercise honest while still building the operational muscle you need for a real environment.
 
-As you work, keep a short evidence log rather than only chasing successful commands. Record the cluster names, cluster IDs, pod CIDRs, service annotations, and the exact command that proves local traffic fails over to the remote cluster. For the BGP policy, record that the CRD is accepted and that the session remains active without a real peer. Those notes turn the lab from a sequence of commands into a diagnostic checklist you can reuse during a production change review.
+As you work, keep a short evidence log rather than only chasing successful commands. Record the cluster names, cluster IDs, pod CIDRs, service annotations, and the exact command that proves local traffic fails over to the remote cluster. For the BGPv2 resources, record that the CRDs are accepted and that `cilium bgp peers` reports session state without a real ToR peer. Those notes turn the lab from a sequence of commands into a diagnostic checklist you can reuse during a production change review.
 
 ### Part 1: Create Two Clusters
 
@@ -1150,33 +1178,61 @@ kubectl --context kind-cluster-a -n demo scale deployment echo --replicas=2
 
 ### Part 6: Explore BGP Configuration (Conceptual)
 
-BGP requires external router infrastructure that `kind` clusters cannot intrinsically simulate without additional peering containers. However, we can assert and validate the CRD structures.
+BGP requires external router infrastructure that `kind` clusters cannot intrinsically simulate without additional peering containers. However, we can assert and validate the BGPv2 CRD structures.
 
 ```bash
-# Apply a BGP peering policy (it won't establish a session
-# without a real router, but you can verify the CRD is accepted)
+# Label nodes so CiliumBGPClusterConfig nodeSelector matches
+kubectl --context kind-cluster-a label node --all bgp=enabled --overwrite
+
+# Apply BGPv2 resources (no real ToR peer — validates CRD acceptance)
 kubectl --context kind-cluster-a apply -f - << 'EOF'
-apiVersion: cilium.io/v2alpha1
-kind: CiliumBGPPeeringPolicy
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
 metadata:
   name: lab-bgp
 spec:
   nodeSelector:
     matchLabels:
-      kubernetes.io/os: linux
-  virtualRouters:
-  - localASN: 65001
-    exportPodCIDR: true
-    neighbors:
-    - peerAddress: "172.18.0.100/32"
+      bgp: enabled
+  bgpInstances:
+  - name: "instance-65001"
+    localASN: 65001
+    peers:
+    - name: "lab-tor"
       peerASN: 65000
+      peerAddress: 172.18.0.100
+      peerConfigRef:
+        name: lab-peer-config
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: lab-peer-config
+spec:
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: bgp
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: lab-advertisements
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+    - advertisementType: "PodCIDR"
 EOF
 
-# Verify the policy was accepted
-kubectl --context kind-cluster-a get ciliumbgppeeringpolicy
+# Verify BGPv2 resources were accepted
+kubectl --context kind-cluster-a get ciliumbgpclusterconfig,ciliumbgppeerconfig,ciliumbgpadvertisement
 
-# Check BGP status (will show "active" since no real peer exists)
+# Check BGP status (session state without a real peer)
 cilium bgp peers --context kind-cluster-a
+cilium bgp routes advertised ipv4 unicast --context kind-cluster-a
 ```
 
 ### Success Criteria
@@ -1186,7 +1242,7 @@ cilium bgp peers --context kind-cluster-a
 - [ ] Global service annotation (`service.cilium.io/global: "true"`) is successfully applied.
 - [ ] Service with `local` affinity routes to local cluster endpoints initially.
 - [ ] When local endpoints are scaled to 0, traffic instantly and smoothly fails over to the remote cluster.
-- [ ] `CiliumBGPPeeringPolicy` CRD is strictly validated and accepted by the cluster API.
+- [ ] BGPv2 `CiliumBGPClusterConfig` / `CiliumBGPAdvertisement` resources are accepted by the cluster API and `cilium bgp peers` shows the session `established` (or the expected non-peer state in this lab).
 - [ ] `cilium clustermesh status` executes cleanly and outputs a verified connection schema.
 
 ### Cleanup
@@ -1196,6 +1252,12 @@ kind delete cluster --name cluster-a
 kind delete cluster --name cluster-b
 rm cluster-a.yaml cluster-b.yaml
 ```
+
+---
+
+## Learner check
+
+> The legacy BGPv1 control plane was removed in Cilium 1.19; the current API is the BGPv2 resource set (`CiliumBGPClusterConfig`, `CiliumBGPPeerConfig`, `CiliumBGPAdvertisement`) under `cilium.io/v2`.
 
 ---
 
@@ -1216,4 +1278,4 @@ rm cluster-a.yaml cluster-b.yaml
 
 ## Next Module
 
-Multi-cluster networking requires precision, but managing identities across thousands of mutating pods requires strategy. Head to [Module 1.2: Identity Allocation Strategies](/platform/toolkits/infrastructure-networking/networking/module-1.2-identity) to explore how kvstore and CRD-backed identity engines differ in massive scale environments.
+Cluster Mesh and BGP give you multi-cluster and routed exposure; for a deeper Cilium datapath, policy, and operations toolkit walkthrough, continue to [Module 5.1: Cilium](/platform/toolkits/infrastructure-networking/networking/module-5.1-cilium/) in the Platform Engineering networking toolkit track.
