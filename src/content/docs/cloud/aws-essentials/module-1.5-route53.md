@@ -30,7 +30,7 @@ After completing this module, you will be able to configure Route 53 with confid
 
 ## Why This Module Matters
 
-In October 2021, Facebook disappeared from the internet. Not figuratively -- literally. For six hours, the company's DNS records were unreachable because a routine BGP configuration change accidentally withdrew the routes to Facebook's DNS servers. The result was a major global outage that disrupted users, affected the business, and complicated internal recovery work.
+In October 2021, Facebook disappeared from the internet. Not figuratively -- literally. For six hours, the company's DNS records were unreachable because a routine BGP configuration change accidentally withdrew the routes to Facebook's DNS servers. The result was a major global outage that disrupted users, affected the business, and complicated internal recovery work ([Cloudflare's analysis of the October 2021 Facebook outage](https://blog.cloudflare.com/october-2021-facebook-outage/)).
 
 DNS is the invisible foundation of every internet application. When it works, nobody thinks about it. When it fails, nothing else matters -- your beautifully architected microservices, your multi-region deployment, your zero-downtime release strategy -- all of it becomes unreachable if users cannot resolve your domain name.
 
@@ -99,7 +99,7 @@ An **ALIAS** is a Route 53 extension, not a standard DNS type clients see on the
 | Query billing | Standard per-million query rate | **Free** when target is a supported AWS resource (not another Route 53 record in the same zone) |
 | Target types | Any DNS name | AWS resources + limited record-to-record alias chains per AWS rules |
 | Health-aware routing | Attach health checks to the record set | Can set `EvaluateTargetHealth: true` so Route 53 checks ELB/CloudFront health before returning the alias answer |
-| TTL | You set TTL; resolvers cache | Alias records use a fixed TTL of 60 seconds managed by Route 53 |
+| TTL | You set TTL; resolvers cache | You cannot set TTL on an alias to an AWS resource; Route 53 uses a TTL determined by the target (often 60s for ELB; for an alias to another record in the same zone, the target record's TTL applies) |
 
 **Evaluate target health** on an alias is easy to miss: for an ALIAS to an Application Load Balancer, enabling it tells Route 53 to consider the load balancer's health when answering, which pairs with failover or weighted alias designs without maintaining a separate health check on a bare IP. For CloudFront, AWS documentation often shows `EvaluateTargetHealth: false` because the distribution edge is the stability boundary — match the pattern in your architecture docs rather than copying one JSON block blindly.
 
@@ -129,7 +129,7 @@ aws route53 list-hosted-zones
 aws route53 get-hosted-zone --id Z0123456789ABCDEFGHIJ
 ```
 
-When Route 53 creates a public hosted zone, [it automatically assigns four name servers from different TLD domains](https://aws.amazon.com/documentation-overview/route53/) (e.g., `ns-123.awsdns-45.com`, `ns-456.awsdns-78.net`, `ns-789.awsdns-12.org`, `ns-1012.awsdns-34.co.uk`). This four-TLD spread is designed to improve availability.
+When Route 53 creates a public hosted zone, [it automatically assigns four name servers from different TLD domains](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/GetInfoAboutHostedZone.html) (e.g., `ns-123.awsdns-45.com`, `ns-456.awsdns-78.net`, `ns-789.awsdns-12.org`, `ns-1012.awsdns-34.co.uk`). This four-TLD spread is designed to improve availability.
 
 **Delegation is the handoff you own:** buying a domain does not automatically use Route 53 unless registrar name servers point to those four NS records (or you register the domain with Route 53 and accept its delegation). Until delegation propagates, your meticulously crafted A and ALIAS records are invisible to the internet. Cutover runbooks should list: create zone → copy NS to registrar → wait for parent TTL → verify with `dig NS example.com` → only then create customer-facing records.
 
@@ -385,12 +385,12 @@ The table below is the map exam writers expect you to carry: what each policy op
 | **Latency** | Best **network latency** from user to AWS Region | Global API with ALBs in `us-east-1` and `eu-west-1` | Latency ($0.60/M) |
 | **Failover** | **Active-passive** availability (one primary, one standby) | DR: primary Region ALB, secondary only when health fails | Standard |
 | **Geolocation** | Traffic by **user location** (continent/country/US state) | GDPR: EU users to EU stack; default `*` catch-all | Geo ($0.70/M) |
-| **Geoproximity** | Traffic by **resource location** with optional bias shift | Move 20% traffic from `us-west-2` toward `us-east-1` during maintenance using bias | Geo ($0.70/M) |
+| **Geoproximity** | Traffic by **resource location** with geographic bias (-99..+99) | Expand or shrink the region a resource serves during maintenance (bias is not a traffic-percentage knob) | Geo ($0.70/M) |
 | **Multivalue answer** | Up to **eight healthy** answers per query (random subset) | Simple HA: multiple healthy web heads without client-side pick | Standard |
 
 ### Simple Routing
 
-One record name and type; you may list multiple values in the same record set. Route 53 returns **up to eight** values in random order and the **client** chooses which to try — Route 53 does not health-check simple records unless you combine other features. Use simple routing when you have one obvious target or when client-side retry across a small static pool is acceptable.
+One record name and type; you may list multiple values in the same record set. Route 53 returns **all** values in the record set in random order (bounded by DNS response size), and the **client** chooses which to try — Route 53 does not health-check simple records unless you combine other features. Use simple routing when you have one obvious target or when client-side retry across a small static pool is acceptable.
 
 ```bash
 # Simple routing: single value
@@ -499,7 +499,7 @@ Users in New York get routed to `us-east-1`. Users in London get `eu-west-1`. Us
 
 Latency routing is **active-active** at the DNS layer: both Regions answer when healthy. It does not replace application data replication or session affinity requirements — users can land in a Region whose database replica is stale if you have not engineered multi-Region consistency. Pair latency with health checks on each Regional record so a degraded Region drops out of rotation. Remember billing: latency queries cost more per million than simple weighted answers; at extreme QPS, that delta belongs in FinOps review alongside CloudFront vs direct ALB designs.
 
-**Latency vs geolocation vs geoproximity:** choose latency when the goal is **performance** without legal constraint. Choose geolocation when **policy** requires users in country X to never receive an IP in country Y. Choose geoproximity when you need to **drain or fill** a Region based on where resources live, especially during partial Region maintenance. Mixing policies on the same name is invalid — solve composite requirements with separate subdomains (`api.example.com` latency, `www.example.com` geolocation) or front with CloudFront and a single origin policy.
+**Latency vs geolocation vs geoproximity:** choose latency when the goal is **performance** without legal constraint. Choose geolocation when **policy** requires users in country X to never receive an IP in country Y. Choose geoproximity when you need to **drain or fill** a Region based on where resources live, especially during partial Region maintenance. Mixing policies on the same name is invalid (without Traffic Flow) — solve composite requirements with separate subdomains (`api.example.com` latency, `www.example.com` geolocation) or front with CloudFront and a single origin policy.
 
 ### Failover Routing
 
@@ -598,7 +598,7 @@ aws route53 change-resource-record-sets \
 
 Geoproximity answers a different question than geolocation. **Geolocation** routes based on where the **user** is. **Geoproximity** routes based on where your **resources** are, using AWS's map of resource locations, and lets you apply a **bias** to expand or shrink the geographic footprint each resource serves. [AWS documents geoproximity for shifting traffic between Regions during capacity events](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-geoproximity.html) — for example, nudging European users toward `eu-west-1` while `eu-central-1` undergoes maintenance without rewriting every latency record by hand.
 
-Geoproximity requires a **traffic policy** or the Route 53 console geoproximity wizard in many setups; the bias value is the knob operators tune during incidents. Pair with health checks when you need unhealthy resources removed from the answer set, and remember geoproximity queries bill at the **geo** rate ($0.70 per million in US Regions), not the standard tier.
+Since January 2024, geoproximity is a first-class routing policy you can create via the Route 53 console, API, CLI, or SDK in public and private hosted zones — Traffic Flow is not required. The **bias** value (-99 to +99) expands or shrinks the geographic region each resource serves; it is not a direct traffic-percentage control (use **weighted** routing for proportional splits). Pair with health checks when you need unhealthy resources removed from the answer set, and remember geoproximity queries bill at the **geo** rate ($0.70 per million in US Regions), not the standard tier.
 
 ### Multivalue Answer Routing
 
@@ -652,7 +652,7 @@ flowchart TD
 |--------------------|--------|-------|
 | "Only secondary Region if primary is down" | Failover + health check on primary | Weighted alone (no automatic standby) |
 | "EU users never hit US stack" | Geolocation with EU record + `*` default | Latency (optimizes RTT, not legal boundary) |
-| "Shift 30% traffic away from us-west-2 resources" | Geoproximity bias | Geolocation (user-based, not resource-based) |
+| "Shift 30% traffic to canary, 70% to prod" | Weighted | Geoproximity bias (geographic region knob, not percentage) |
 | "Return only healthy web servers, up to eight" | Multivalue answer | Simple with multiple A records (no health filter) |
 | "10% canary, 90% prod" | Weighted | Failover (binary, not proportional) |
 | "Fastest AWS Region for each user" | Latency | Geolocation (country ≠ lowest RTT) |
@@ -880,7 +880,7 @@ A warning: enabling DNSSEC is easy, but getting it wrong can make your domain un
 | DNSSEC enabled without DS record at registrar | You enable signing but forget the chain of trust | Incomplete DNSSEC is worse than no DNSSEC -- DNSSEC-validating resolvers will refuse to resolve your domain. Always complete the DS record step |
 | Private hosted zone not associated with VPC | Zone created but queries return NXDOMAIN | Associate the private hosted zone with every VPC that needs to resolve those records |
 | Setting all weights to 0 in weighted routing | Trying to disable traffic to all endpoints | When all weights are 0, Route 53 returns all records equally. To truly stop traffic, delete the records or use a health check |
-| Expecting instant global failover at TTL 3600 | DNS caches outside Route 53 | Route 53 updated but ISPs still cache old IP | Lower TTL before DR tests; plan RTO as TTL + health-check detection time |
+| Expecting instant global failover at TTL 3600 | DNS caches outside Route 53 — Route 53 is updated but ISPs serve the old IP until TTL expires | Lower TTL before DR tests; plan RTO as TTL + health-check detection time |
 
 ---
 
