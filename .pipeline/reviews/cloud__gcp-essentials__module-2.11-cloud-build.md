@@ -28,3 +28,5 @@ but found another document
     ^
 **Output**: 55284 chars
 **Duration**: 3m 50s
+## 2026-06-03T11:45:26Z — `REVIEW` — `APPROVE`
+Cloud GCP Essentials wave 6d (session 96). Reviewer: opus-4.8. expand; add-iam-policy-binding, 60min default timeout, gcloud-in-curl, PUBSUB payload bindings, webhook query-secret, GitLab flags, default-SA-2024. Gates green; dedup PASS; PR #1771 CI green; opus web-verified.
