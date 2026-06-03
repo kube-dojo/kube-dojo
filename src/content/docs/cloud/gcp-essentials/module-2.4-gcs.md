@@ -153,9 +153,9 @@ GCS offers four storage classes. The key insight is that [**cheaper storage has 
 | Storage Class | Monthly Cost (per GB) | Retrieval Cost (per GB) | Min Duration | Availability SLA | Use Case |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **STANDARD** | varies by location | $0.00 | None | [99.95% (multi-region)](https://cloud.google.com/storage/docs/storage-classes) | Frequently accessed data |
-| **NEARLINE** | varies by location | $0.01 | 30 days | 99.9% | Monthly access (backups) |
-| **COLDLINE** | varies by location | $0.02 | 90 days | 99.9% | Quarterly access (archives) |
-| **ARCHIVE** | starts at a very low per-GB monthly rate | $0.05 | 365 days | 99.9% | Yearly access (compliance) |
+| **NEARLINE** | varies by location | $0.01 | 30 days | 99.9% (multi-region) | Monthly access (backups) |
+| **COLDLINE** | varies by location | $0.02 | 90 days | 99.9% (multi-region) | Quarterly access (archives) |
+| **ARCHIVE** | starts at a very low per-GB monthly rate | $0.05 | 365 days | 99.9% (multi-region) | Yearly access (compliance) |
 
 Pricing varies by location type as well as class. For Iowa (`us-central1`) regional buckets, [Google's published rates](https://cloud.google.com/storage/pricing) illustrate the tradeoff: Standard storage is roughly $0.020 per gibibyte-month, Nearline about half that, Coldline roughly one quarter, and Archive an order of magnitude lower still—before retrieval and operation charges. Multi-region `US` Standard storage runs higher (on the order of $0.026 per gibibyte-month in the same pricing table) because you pay for geographic redundancy at rest. Dual-region buckets bill both underlying regions, so a NAM4 Standard object effectively accumulates storage cost in each paired region. Use the pricing calculator with your real access pattern instead of picking Archive because the per-GB number looks smallest on a spreadsheet.
 
@@ -195,7 +195,7 @@ With Autoclass enabled:
 - All objects start as STANDARD.
 - After 30 days without access, they move to NEARLINE.
 - After 90 days without access, they move to COLDLINE.
-- After 365 days without access, they move to ARCHIVE.
+- After 365 days without access, they move to COLDLINE (the default terminal class). Archive is opt-in via `--autoclass-terminal-storage-class=ARCHIVE` if you need the lowest at-rest rate and accept the 365-day minimum duration.
 - If accessed again, they automatically move back to STANDARD.
 - [No retrieval fees apply when Autoclass moves objects between classes.](https://cloud.google.com/storage/pricing)
 
@@ -377,7 +377,7 @@ gcloud storage buckets add-iam-policy-binding gs://my-bucket \
 gcloud storage buckets get-iam-policy gs://my-bucket
 ```
 
-Uniform bucket-level access (UBLA) disables object ACLs so IAM policies on the bucket and project become the only authorization path. Google [recommends UBLA for essentially all new buckets](https://cloud.google.com/storage/docs/uniform-bucket-level-access) because dual systems—IAM plus per-object ACLs—create audit gaps: a bucket IAM policy can deny `allUsers` while a forgotten object ACL still grants `allUsers:READ`. Enabling UBLA is reversible for seven days; after that, ACLs are permanently removed from objects. Migration plans should inventory ACL overrides with `gcloud storage objects get-iam-policy` or Storage Insights before flipping the flag in production.
+Uniform bucket-level access (UBLA) disables object ACLs so IAM policies on the bucket and project become the only authorization path. Google [recommends UBLA for essentially all new buckets](https://cloud.google.com/storage/docs/uniform-bucket-level-access) because dual systems—IAM plus per-object ACLs—create audit gaps: a bucket IAM policy can deny `allUsers` while a forgotten object ACL still grants `allUsers:READ`. Enabling UBLA is reversible for 90 days; after 90 consecutive days with UBLA enabled, you can no longer revert to fine-grained ACLs. Migration plans should inventory ACL overrides with `gcloud storage objects get-iam-policy` or Storage Insights before flipping the flag in production.
 
 Fine-grained access (legacy ACL mode) still appears in older modules and third-party tools. ACLs can grant `READER` on one object without exposing siblings, which sounds attractive for multi-tenant invoice buckets, but at scale you cannot reason about effective access from IAM alone. The supported pattern for per-tenant isolation is separate buckets or prefixes with IAM Conditions on resource names, plus signed URLs for unauthenticated downloaders—not object ACL sprawl.
 
@@ -399,9 +399,10 @@ Fine-grained access (legacy ACL mode) still appears in older modules and third-p
 gcloud org-policies set-policy /tmp/prevent-public.yaml --organization=ORG_ID
 
 # /tmp/prevent-public.yaml:
-# constraint: constraints/storage.publicAccessPrevention
-# booleanPolicy:
-#   enforced: true
+# name: organizations/ORG_ID/policies/constraints/storage.publicAccessPrevention
+# spec:
+#   rules:
+#   - enforce: true
 
 # Check if a specific bucket is publicly accessible
 gcloud storage buckets get-iam-policy gs://my-bucket \
@@ -420,9 +421,10 @@ Impersonation-based signing (`--impersonate-service-account`) avoids long-lived 
 
 ```bash
 # Generate a signed URL valid for 1 hour
-# (requires a service account key or impersonation)
+# (requires a service account key file or impersonation)
 gcloud storage sign-url gs://my-bucket/report.pdf \
-  --duration=1h
+  --duration=1h \
+  --private-key-file=KEY.json
 
 # Generate a signed URL using service account impersonation (no key needed)
 gcloud storage sign-url gs://my-bucket/report.pdf \
@@ -528,7 +530,7 @@ When a dataset is public but the publisher does not want to fund egress for the 
 
 At moderate scale—hundreds of terabytes and millions of daily operations—GCS invoices are usually dominated by four knobs: at-rest storage class mix, retrieval and early-deletion surcharges, operation class volume, and egress to clients or other regions. Storage class mistakes are slow burns: everything left in Standard in a multi-region bucket costs more every month even if nobody reads it. Retrieval mistakes are spikes: promoting a Coldline snapshot to an interactive dashboard without caching triggers per-gibibyte read fees plus egress. Operation storms come from list-heavy automation: recursive `gcloud storage ls` across an entire bucket is a Class B operation per listing tranche and does not scale like a database index scan.
 
-Cost control patterns that actually work in production include co-locating buckets with compute, using lifecycle or Autoclass for aging data, setting versioning plus noncurrent cleanup rules, enabling Inventory Reports instead of brute-force listing, and fronting static assets with Cloud CDN so repeat downloads do not re-hit the bucket from distant regions. Turbo Replication and dual-region placement add predictable replication line items on every write; budget them as part of RPO spending, not as surprise data-processing fees. Tags on buckets bill [$0.005 per tag per month](https://cloud.google.com/storage/pricing); keep tag cardinality small and meaningful for FinOps dashboards.
+Cost control patterns that actually work in production include co-locating buckets with compute, using lifecycle or Autoclass for aging data, setting versioning plus noncurrent cleanup rules, enabling Inventory Reports instead of brute-force listing, and fronting static assets with Cloud CDN so repeat downloads do not re-hit the bucket from distant regions. Turbo Replication and dual-region placement add predictable replication line items on every write; budget them as part of RPO spending, not as surprise data-processing fees. Tags on buckets bill [$0.005 per tag per month](https://cloud.google.com/resource-manager/pricing); keep tag cardinality small and meaningful for FinOps dashboards.
 
 Unexpected cost spikes often trace to one of these triggers: changing millions of objects to a colder class manually (Class A operations at the destination rate plus early deletion), restoring an entire versioned bucket after an incident without lifecycle on noncurrent generations, enabling Autoclass on a bucket full of sub-128 KiB artifacts that never tier, or serving multi-region objects to global users without a CDN. Build a monthly review that compares storage gigabytes-by-class, retrieval SKU lines, and egress by destination region; Google Cloud Billing export to BigQuery makes that repeatable.
 
@@ -610,7 +612,7 @@ Document the decision you made in each column of this table in your internal arc
 
 These notes highlight defaults and limits that rarely appear in quickstarts but routinely appear in production incidents or FinOps reviews.
 
-1. **GCS processes over 2 trillion objects per day** across all customers. The service has been running since 2010 and has achieved [99.999999999% (11 nines) durability](https://cloud.google.com/storage/docs/availability-durability). In practical terms, annual object loss due to underlying storage durability is expected to be extremely rare.
+1. **GCS has been running since 2010** and has achieved [99.999999999% (11 nines) durability](https://cloud.google.com/storage/docs/availability-durability). In practical terms, annual object loss due to underlying storage durability is expected to be extremely rare.
 
 2. **The "flat namespace" design means listing millions of objects is expensive**. A `gcloud storage ls gs://my-bucket/` against a very large bucket can be slow and consume operations quota. Use prefixes to narrow your listing (`gs://my-bucket/logs/2024/01/`), or use Cloud Storage Inventory Reports for bulk analysis.
 
@@ -858,8 +860,8 @@ gcloud storage buckets add-iam-policy-binding gs://$BUCKET_NAME \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/storage.objectViewer"
 
-# Grant your user permission to impersonate the service account
-gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+# Grant your user permission to impersonate the signer service account
+gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
   --member="user:$(gcloud config get-value account)" \
   --role="roles/iam.serviceAccountTokenCreator"
 

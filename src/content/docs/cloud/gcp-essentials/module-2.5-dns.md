@@ -197,19 +197,19 @@ Cloud DNS allows you to configure [routing policies that intelligently direct tr
 
 ### Weighted Round Robin
 
-Weighted routing distributes traffic across multiple IP addresses based on weights you define, which makes it the default choice for canary releases and blue/green cutovers where you want a deterministic percentage split without geography semantics. Weights are not percentages themselves—Cloud DNS normalizes weights up to 1000—so a 80/20 intent is expressed as `primary=80;canary=20` in `--routing-policy-data`. When health checks are enabled, unhealthy targets drop out of the weighted pool and the remaining healthy weights are renormalized, which means your canary might receive more than twenty percent of traffic if the primary VIP fails probes unless you also assign zero-weight standby records.
+Weighted routing distributes traffic across multiple IP addresses based on weights you define, which makes it the default choice for canary releases and blue/green cutovers where you want a deterministic percentage split without geography semantics. Weights are not percentages themselves—Cloud DNS normalizes weights up to 1000—so an 80/20 intent is expressed as `80=34.120.55.200;20=34.120.55.201` in `--routing-policy-data` (weight first, then IP). When health checks are enabled, unhealthy targets drop out of the weighted pool and the remaining healthy weights are renormalized, which means your canary might receive more than twenty percent of traffic if the primary VIP fails probes unless you also assign zero-weight standby records.
 
 Operationally, pair WRR with observability on both VIPs during a release: DNS only steers names; it does not know HTTP error rates. If the canary VIP accepts TCP but returns 500 responses, DNS will still send clients there until application health checks or manual weight changes intervene.
 
 ```bash
 # Add a weighted round-robin policy to split traffic 80/20
-gcloud dns record-sets transaction add "34.120.55.200,34.120.55.201" \
+gcloud dns record-sets transaction add \
   --name="api.example.com." \
   --ttl=300 \
   --type=A \
   --zone=example-zone \
   --routing-policy-type=WRR \
-  --routing-policy-data="34.120.55.200=80;34.120.55.201=20"
+  --routing-policy-data="80=34.120.55.200;20=34.120.55.201"
 ```
 
 ### Geolocation Routing
@@ -220,7 +220,7 @@ Geolocation is not a compliance guarantee by itself: geofencing changes failover
 
 ```bash
 # Add a geolocation routing policy
-gcloud dns record-sets transaction add "34.120.55.200,34.120.55.202" \
+gcloud dns record-sets transaction add \
   --name="app.example.com." \
   --ttl=300 \
   --type=A \
@@ -236,15 +236,26 @@ Failover routing expresses active/backup semantics explicitly: Cloud DNS serves 
 Failover differs from WRR because intent is ordered preference, not proportional sharing. Use failover when only one endpoint should receive traffic at a time; use WRR when both endpoints should simultaneously receive production traffic at known ratios.
 
 ```bash
-# Add a failover routing policy
-gcloud dns record-sets transaction add "34.120.55.200,34.120.55.203" \
+# Add a failover routing policy (requires health checking on the primary target)
+gcloud compute health-checks create http my-api-hc \
+  --check-interval=30s \
+  --healthy-threshold=1 \
+  --unhealthy-threshold=3 \
+  --port=80 \
+  --request-path="/healthz" \
+  --host="api.example.com."
+
+gcloud dns record-sets transaction add \
   --name="app.example.com." \
   --ttl=300 \
   --type=A \
   --zone=example-zone \
   --routing-policy-type=FAILOVER \
   --routing-policy-primary-data="34.120.55.200" \
-  --routing-policy-backup-data="34.120.55.203"
+  --routing-policy-backup-data="34.120.55.203" \
+  --routing-policy-backup-data-type=A \
+  --enable-health-checking \
+  --health-check=my-api-hc
 ```
 
 ### Health Checks, Geofencing, and Policy Limits
@@ -258,16 +269,30 @@ Weighted round robin supports weights from 0 through 1000. Zero-weight targets c
 DNS routing policies cannot be configured on forwarding zones, DNS peering zones, managed reverse lookup zones, or Service Directory zones. Plan steering on standard public or private managed zones that hold the A/AAAA answers you want to health-check.
 
 ```bash
-# Example: create an internal fast health check (private zone / ILB use case)
-gcloud dns health-checks create http my-api-hc \
+# Internal load balancer (private zone): reference the ILB forwarding rule name
+# in --routing-policy-data with --enable-health-checking. Cloud DNS reuses the
+# LB's health check—no separate gcloud dns health-checks command exists.
+gcloud dns record-sets transaction add \
+  --name="api.internal.example.com." \
+  --ttl=300 \
+  --type=A \
+  --zone=internal-zone \
+  --routing-policy-type=FAILOVER \
+  --routing-policy-primary-data="my-ilb-forwarding-rule" \
+  --routing-policy-backup-data="10.10.1.99" \
+  --routing-policy-backup-data-type=A \
+  --enable-health-checking
+
+# External endpoints (public zone): create a Compute Engine HTTP health check
+gcloud compute health-checks create http my-api-hc \
   --check-interval=30s \
   --healthy-threshold=1 \
   --unhealthy-threshold=3 \
   --port=80 \
   --request-path="/healthz" \
-  --host="api.internal.example.com."
+  --host="api.example.com."
 
-# Attach health check IDs when defining routing policy RRsets (see routing policy docs for flags)
+# Attach the health check when defining routing-policy RRsets (see routing policy docs for flags)
 ```
 
 Supported RR types for routing policies include A, AAAA, CNAME, MX, SRV, and TXT, but only A/AAAA carry health-check semantics for steering. DNSSEC-enabled zones that use health checks must use a single IP per policy item—you cannot mix health-checked and non-health-checked addresses in the same policy line when DNSSEC is on.
@@ -480,7 +505,7 @@ gcloud dns response-policies create security-policy \
 gcloud dns response-policies rules create block-c2 \
   --response-policy=security-policy \
   --dns-name="c2.hacker-network.com." \
-  --local-data-rrsets="c2.hacker-network.com. 300 IN A 127.0.0.1"
+  --local-data="name=c2.hacker-network.com.,type=A,ttl=300,rrdatas=127.0.0.1"
 
 # Bypass: allow one subdomain past a wildcard override
 gcloud dns response-policies rules create allow-partner-api \
@@ -590,14 +615,14 @@ DNS query logs land in Cloud Logging under `resource.type="dns_query"`. Logging 
 
 Cloud DNS has [no free tier](https://cloud.google.com/dns/pricing). Billing aggregates **all zone types**—public, private, and forwarding—into a single managed-zone count, prorated hourly. The first 25 zone-months per billing account are priced at roughly $0.20 per zone per month (derived from the published hourly rate); additional tiers decrease per-zone cost at 25+ and 10,000+ zones. A platform team with hundreds of micro-zones per microservice therefore pays mostly for zone inventory, not queries.
 
-Query pricing splits **regular queries** (about $0.40 per million for the first billion per month) from **routing policy queries** (about $0.70 per million for the same tier). Any RRset using WRR, GEO, or FAILOVER steering bills at the higher routing-policy rate even if the answer is a single A record. Health checks add hourly charges: internal fast checks are roughly $0.00274 per hour each, internal premium checks roughly $0.00548 per hour—multiplied by every VIP you probe. A multi-region active-active design with three geolocation buckets and three health checks per region can accrue more cost in probes than in user-facing queries during low-traffic services.
+Query pricing splits **regular queries** (about $0.40 per million for the first billion per month) from **routing policy queries** (about $0.70 per million for the same tier). Any RRset using WRR, GEO, or FAILOVER steering bills at the higher routing-policy rate even if the answer is a single A record. Health checks add monthly charges: internal fast checks are **$0.50/month** each, internal premium checks **$2.00/month** each (roughly 4× the fast rate)—multiplied by every VIP you probe. A multi-region active-active design with three geolocation buckets and three health checks per region can accrue more cost in probes than in user-facing queries during low-traffic services.
 
 | Cost driver | What increases spend | Knobs that reduce spend |
 | :--- | :--- | :--- |
 | Managed zones | One zone per suffix per project; sprawl from teams creating duplicate private zones | Consolidate suffixes; use hub VPC + peering instead of duplicating zone attachments |
 | Regular queries | Low TTLs, chatty service meshes, retry storms | Raise TTL for stable records; fix failing dependencies causing NXDOMAIN retries |
 | Routing policy queries | Geo/WRR/failover on high-QPS names | Use routing policies only on names that need steering; use load balancers for simple active-passive |
-| Health checks | Many ILB VIPs with short intervals | Share health checks where possible; increase interval within allowed bounds |
+| Health checks | Many ILB VIPs with short intervals | Share health checks where possible; increase interval within allowed bounds (billed per month, not per hour) |
 | Forwarding target hostnames | Extra lookup to resolve FQDN targets | Use IP targets; cache on-prem forwarder side |
 | DNS logging + DNS Armor | Log ingestion; per-workload threat-detection units | Scope logging to production VPCs; tune DNS Armor exclusions |
 
@@ -615,7 +640,7 @@ Mature Cloud DNS designs treat names as platform APIs: suffixes are versioned, h
 | DNS hub VPC with peering zones | Many spokes, centralized platform team | Spokes attach one peering zone per suffix instead of N zone×VPC bindings | Hub becomes critical—use IaC and restricted IAM on hub projects |
 | TTL runway before migrations | Planned IP or load balancer changes | Lets caches expire before cutover | Automate TTL lowering via transactions; restore higher TTL after validation |
 | Response policy for emergency blocks | Need fast org-wide sinkhole without redeploying apps | Evaluated before zone records; no agent on VMs | Document bypass rules for security tooling domains |
-| Routing policy + health checks | Multi-region active/active behind ILBs or public endpoints | Removes unhealthy VIPs from answers automatically | Watch routing-policy query tier and health-check hourly charges |
+| Routing policy + health checks | Multi-region active/active behind ILBs or public endpoints | Removes unhealthy VIPs from answers automatically | Watch routing-policy query tier and health-check monthly charges |
 
 Anti-patterns usually begin as convenient one-off console clicks—an extra private zone on the marketing apex, a forwarding target aimed at a hostname instead of an IP—that ossify into production architecture and only surface during the first cross-VPC migration or finance review.
 
@@ -826,7 +851,7 @@ With geofencing enabled, Cloud DNS does not automatically fail over to the next 
 <details>
 <summary>8. Finance reports that Cloud DNS spend doubled after a fleet-wide migration even though user traffic is flat. You discover 400 new private managed zones (one per microservice) and geolocation routing policies on high-QPS API names. Which billing dimensions likely moved, and what architectural changes would you propose first?</summary>
 
-Managed-zone charges scale with zone count regardless of queries, so 400 new zones can dominate the bill even when QPS is unchanged—especially as accounts cross published tier breakpoints. Separately, routing-policy queries bill at a higher per-million rate than regular queries, so moving high-QPS names onto GEO/WRR/FAILOVER RRsets increases query-line cost even without more users. Health checks add hourly line items per probed VIP. First fixes: consolidate microservice names into fewer private zones (shared suffix with records per service), reserve routing policies for names that truly need geography or weighted steering, and replace per-service zones with hub-and-spoke peering if many VPCs need the same data.
+Managed-zone charges scale with zone count regardless of queries, so 400 new zones can dominate the bill even when QPS is unchanged—especially as accounts cross published tier breakpoints. Separately, routing-policy queries bill at a higher per-million rate than regular queries, so moving high-QPS names onto GEO/WRR/FAILOVER RRsets increases query-line cost even without more users. Health checks add monthly line items per probed VIP. First fixes: consolidate microservice names into fewer private zones (shared suffix with records per service), reserve routing policies for names that truly need geography or weighted steering, and replace per-service zones with hub-and-spoke peering if many VPCs need the same data.
 </details>
 
 ---
@@ -935,13 +960,13 @@ gcloud dns record-sets list --zone=lab-public-zone \
 # Create a weighted round-robin record to split traffic
 gcloud dns record-sets transaction start --zone=lab-public-zone
 
-gcloud dns record-sets transaction add "34.120.55.200,34.120.55.201" \
+gcloud dns record-sets transaction add \
   --name="api.lab.example.com." \
   --ttl=300 \
   --type=A \
   --zone=lab-public-zone \
   --routing-policy-type=WRR \
-  --routing-policy-data="34.120.55.200=80;34.120.55.201=20"
+  --routing-policy-data="80=34.120.55.200;20=34.120.55.201"
 
 gcloud dns record-sets transaction execute --zone=lab-public-zone
 
@@ -1057,10 +1082,10 @@ gcloud dns policies delete dns-logging --quiet
 
 # Delete record sets (must delete non-default records before zone)
 gcloud dns record-sets transaction start --zone=lab-public-zone
-gcloud dns record-sets transaction remove "34.120.55.200,34.120.55.201" \
+gcloud dns record-sets transaction remove \
   --name="api.lab.example.com." --ttl=300 --type=A --zone=lab-public-zone \
   --routing-policy-type=WRR \
-  --routing-policy-data="34.120.55.200=80;34.120.55.201=20"
+  --routing-policy-data="80=34.120.55.200;20=34.120.55.201"
 gcloud dns record-sets transaction remove "34.120.55.100" \
   --name="web.lab.example.com." --ttl=300 --type=A --zone=lab-public-zone
 gcloud dns record-sets transaction remove "web.lab.example.com." \
@@ -1117,6 +1142,6 @@ Next up: **[Module 2.6: Artifact Registry](../module-2.6-artifact-registry/)** -
 - [Cloud DNS overview](https://cloud.google.com/dns/docs/overview) — Covers the core service model, public versus private zones, anycast serving, and propagation behavior.
 - [Name resolution order](https://cloud.google.com/dns/docs/vpc-name-res-order) — Documents the exact lookup sequence for VMs and GKE nodes, including policies, private zones, peering, and public DNS.
 - [Use Cloud DNS for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/cloud-dns) — Explains Cloud DNS integration modes for GKE, including cluster scope, VPC scope, and how GKE DNS resolution works.
-- [Cloud DNS pricing](https://cloud.google.com/dns/pricing) — Documents managed-zone tiers, regular vs routing-policy query rates, health-check hourly charges, and forwarding-target lookup billing.
+- [Cloud DNS pricing](https://cloud.google.com/dns/pricing) — Documents managed-zone tiers, regular vs routing-policy query rates, health-check monthly charges, and forwarding-target lookup billing.
 - [DNS policies overview](https://cloud.google.com/dns/docs/policies-overview) — Distinguishes server policies, response policies, and routing policies and when each applies.
 - [Manage response policies and rules](https://cloud.google.com/dns/docs/zones/manage-response-policies) — Procedure reference for `gcloud dns response-policies` create/update and bypass behavior.
