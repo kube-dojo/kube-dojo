@@ -59,6 +59,10 @@ flowchart LR
 
 > **Stop and think**: If a GCP VPC spans the globe by default, what happens if an application team in `europe-west1` requests a new subnet with the CIDR block `10.10.0.0/20` when the `us-central1` team is already using that exact range? How does this differ from managing CIDRs across multiple AWS regions?
 
+The global VPC model has deep implications that go beyond the simple convenience of automatic cross-region routing. When you create a subnet in `us-central1` and another in `europe-west1`, both subnets share the same VPC-level route table. Google's software-defined networking fabric automatically installs routes between every subnet in the VPC without you configuring a single route entry, peering connection, or transit gateway. The subnet CIDR ranges become part of the VPC's routing topology immediately upon creation, and every VM in every region learns these routes through the virtual network interface. This means a VM in Tokyo can send a packet to a VM in Sao Paulo using only its private IP address, and the packet never leaves Google's private backbone until it reaches the destination subnet's virtual switch. The latency between these two VMs is determined purely by the speed of light through Google's fiber, not by any overlay tunneling or gateway processing overhead that you would incur with inter-region VPC peering in AWS.
+
+This same property also makes CIDR planning a single-point-of-failure discipline. Since subnets across all regions share one VPC, you cannot have overlapping IP ranges between any two subnets in the same VPC, regardless of how far apart they are geographically. If your Tokyo team accidentally provisions `10.20.0.0/16` and your London team later tries to create `10.20.1.0/24`, the second operation fails because the VPC enforces non-overlapping CIDR ranges globally. In AWS, each regional VPC is an independent IP namespace, so `us-east-1` and `eu-west-1` can both use `10.0.0.0/16` without conflict until you peer them. The GCP model forces you to think about IP allocation as a global resource from day one, which is initially more work but ultimately prevents the painful renumbering projects that happen when AWS organizations grow organically and later try to interconnect overlapping VPCs.
+
 This has massive implications:
 
 | Feature | AWS VPC | GCP VPC |
@@ -125,6 +129,57 @@ gcloud compute networks subnets describe prod-us-central1 \
   --region=us-central1 \
   --format="get(privateIpGoogleAccess)"
 ```
+
+Private Google Access works by installing a special route that directs traffic destined for Google API IP ranges (`199.36.153.4/30` and `199.36.153.8/30`, known as the `private.googleapis.com` and `restricted.googleapis.com` VIP ranges) to remain on Google's internal network rather than following the default internet route. When enabled on a subnet, any VM in that subnet that sends a packet to a Google API domain (like `storage.googleapis.com`) will have that traffic routed through the internal backbone, bypassing the public internet entirely. This is important to understand because Private Google Access does not require Cloud NAT, does not consume NAT gateway capacity, and does not generate internet egress charges for API traffic. However, it only works for Google APIs and services — it does not provide general internet access for package repositories, third-party APIs, or any non-Google endpoint. For those, you still need Cloud NAT. The two features complement each other: enable Private Google Access for Google services, and layer Cloud NAT on top for everything else.
+
+---
+
+## VPC Routes: The Hidden Routing Topology
+
+Every GCP VPC has a route table that determines how packets flow between subnets, to the internet, and to peered networks. Understanding this table is critical because route priority determines which path traffic takes when multiple routes could match a destination.
+
+### Route Types and Priority
+
+GCP routes have a strict priority ordering that you must internalize because it directly affects troubleshooting. When a VM sends a packet, the virtual network interface evaluates all applicable routes and selects the one with the lowest priority value (where lower numbers win). The route categories, from highest to lowest priority, are:
+
+| Priority Range | Route Type | Who Creates It | Example |
+| :--- | :--- | :--- | :--- |
+| **Always wins** | Subnet routes | GCP (automatic) | Route to every subnet CIDR in the VPC |
+| **Custom static** | User-defined static routes | You | Route `10.200.0.0/16` to a VPN tunnel |
+| **Dynamic (BGP)** | Cloud Router-learned routes | Cloud Router | Routes from on-premises via BGP |
+| **System-generated** | Default internet route, Private Google Access | GCP (automatic) | `0.0.0.0/0` → default internet gateway |
+
+Subnet routes are immutable and always take precedence because they represent the VPC's own address space. You cannot override a subnet route with a custom static route — if you try to create a static route to `10.10.0.0/20` when that CIDR is already assigned to an existing subnet, GCP rejects it. This is a safety mechanism that prevents you from accidentally blackholing traffic to your own subnets. Custom static routes come next and are useful for directing specific CIDR blocks to VPN tunnels, interconnect attachments, or third-party virtual appliances. Dynamic routes learned via BGP from Cloud Router come after static routes, giving you the ability to override BGP-advertised routes with manually defined ones. Finally, the system-generated default route (`0.0.0.0/0` with next-hop `default-internet-gateway`) handles all traffic that does not match any more specific route.
+
+```bash
+# View all routes in a VPC (system, custom, and dynamic)
+gcloud compute routes list \
+  --filter="network=prod-vpc" \
+  --format="table(name, destRange, nextHopType, priority, tags)"
+
+# Create a custom static route to send a CIDR block through a VPN tunnel
+gcloud compute routes create route-to-onprem-db \
+  --network=prod-vpc \
+  --destination-range=192.168.100.0/24 \
+  --next-hop-vpn-tunnel=vpn-tunnel-to-onprem \
+  --priority=500 \
+  --tags=needs-onprem-access
+
+# Create a route that sends internet-bound traffic through a third-party firewall appliance
+gcloud compute routes create route-via-nva \
+  --network=prod-vpc \
+  --destination-range=0.0.0.0/0 \
+  --next-hop-instance=firewall-nva \
+  --next-hop-instance-zone=us-central1-a \
+  --priority=800 \
+  --tags=via-firewall
+```
+
+> **Did You Know?** Subnet routes have an effective priority of 0 — but you never see priority 0 in `gcloud compute routes list`. The subnet routes are managed internally by the VPC control plane and are not user-visible as discrete route entries. They are, however, always evaluated first.
+
+### Tags and Route Applicability
+
+Network tags on custom routes let you selectively apply routes to specific VMs. When you attach a tag like `--tags=needs-onprem-access` to a route, only VMs that carry that network tag will install the route. This gives you VM-level routing policy without needing separate VPCs. A common pattern is to use tagged routes for egress inspection: tag your firewall appliance VMs with `via-firewall`, create a tagged default route that sends all their traffic through the appliance, and leave the rest of the VMs using the system-generated default internet route. This keeps the routing table clean and avoids forcing every VM through an unnecessary inspection hop.
 
 ---
 
@@ -291,6 +346,8 @@ gcloud compute firewall-policies associations create \
   --organization=ORGANIZATION_ID
 ```
 
+Hierarchical policies solve a governance problem that VPC-level rules cannot address on their own: the principle of least privilege at the organizational boundary. Without hierarchical policies, every project owner can open any port to the internet by creating a VPC firewall rule with a high priority. With an organization-level `DENY` rule for port 22 from `0.0.0.0/0`, no project-level rule can override it, regardless of priority. This is structurally identical to how AWS Organizations SCPs work at the IAM layer, but applied to the network layer. Large enterprises typically deploy a baseline hierarchical policy that blocks common attack vectors — SSH, RDP, database ports — from the public internet, then selectively allow them through IAP or VPN ranges at the folder level for projects that have a legitimate need.
+
 ---
 
 ## Cloud NAT: Giving Private VMs Internet Access
@@ -305,7 +362,7 @@ flowchart TD
         VM3[VM-3<br/>10.10.0.4<br/>no ext IP]
         CR[Cloud Router<br/>Manages BGP routing]
         NAT[Cloud NAT Gateway<br/>Translates internal IPs<br/>to external NAT IPs]
-        
+
         VM1 --> CR
         VM2 --> CR
         VM3 --> CR
@@ -372,11 +429,15 @@ gcloud compute routers nats update prod-nat \
   --log-filter=ERRORS_ONLY
 ```
 
+### Why Cloud NAT Scales Differently from AWS NAT Gateway
+
+If you are used to AWS NAT Gateway, the Cloud NAT scaling model requires an adjustment. AWS NAT Gateway is a managed instance in your VPC with a fixed bandwidth ceiling (scaling from roughly 5 Gbps to 100 Gbps depending on the number of gateways you deploy), and if you exceed that ceiling, your connections drop. You solve this by provisioning more NAT gateways across availability zones and distributing workloads. Cloud NAT is different because it is not a virtual instance at all — it is a software-defined service in Google's networking fabric that operates outside your VPC. There is no single point of failure, no bandwidth ceiling to provision, and no instance to patch or maintain. Cloud NAT scales its total throughput automatically as your workload grows, limited only by the number of NAT IP addresses and the port allocation per VM. The practical implication is that you never need to provision "bigger" Cloud NAT gateways or add more of them for bandwidth reasons — you only add more NAT IPs if you need more unique external source IPs for allowlisting or if you hit port exhaustion on a single IP. For most workloads, a single NAT gateway with auto-allocated IPs handles all outbound traffic in a region without any tuning.
+
 ---
 
 ## Cloud Router and Hybrid Connectivity
 
-Cloud Router is the BGP speaker that dynamically exchanges routes between your VPC and external networks (on-premises data centers, other clouds, or other VPCs).
+Cloud Router is the BGP speaker that dynamically exchanges routes between your VPC and external networks (on-premises data centers, other clouds, or other VPCs). It also serves as the control plane for Cloud NAT and Cloud Interconnect, making it one of the busiest components in any VPC that connects to external networks.
 
 ### Cloud Router with VPN
 
@@ -417,6 +478,8 @@ gcloud compute networks update prod-vpc \
   --bgp-routing-mode=global
 ```
 
+When you set `--bgp-routing-mode=global`, Cloud Router advertises every subnet in the VPC to your BGP peers, regardless of which region the router itself lives in. This is the preferred mode for multi-region VPCs because it eliminates the need to deploy a Cloud Router in every region just to advertise local subnets. A single Cloud Router in `us-central1` with global routing mode will advertise `10.10.0.0/20` (us-central1), `10.11.0.0/20` (europe-west1), and `10.12.0.0/20` (asia-east1) to your on-premises router. The BGP peer sees the VPC as a single autonomous system with a unified routing table, which matches the reality of the global VPC's internal routing fabric. Regional mode, by contrast, limits the router to advertising only the subnets within its own region, which is useful when you want to implement region-specific network segmentation or when you are using separate VPN tunnels per region for traffic engineering.
+
 ---
 
 ## Shared VPC: Multi-Project Networking
@@ -434,7 +497,7 @@ flowchart TD
             Sub2[Subnet: app-tier<br/>10.10.1.0/24<br/>Region: us-central1]
             Sub3[Subnet: data-tier<br/>10.10.2.0/24<br/>Region: us-central1]
             Sub4[Subnet: europe-web<br/>10.11.0.0/24<br/>Region: europe-west1]
-            
+
             CentralRules[Firewall Rules, Cloud NAT, Cloud Router<br/>centrally managed]
             Sub1 ~~~ Sub2
             Sub3 ~~~ Sub4
@@ -542,6 +605,262 @@ gcloud compute networks peerings create peer-b-to-a \
 
 ---
 
+## Private Service Connect
+
+Private Service Connect (PSC) is GCP's mechanism for privately consuming services — both Google-managed and third-party — without traffic ever leaving Google's network. Think of it as a private endpoint that creates a unidirectional connection from your VPC to a service producer's network, without the full bidirectional routing exposure of VPC peering.
+
+### Why PSC Exists
+
+Before PSC, consuming a managed service privately required either VPC peering (which exposes both networks to each other and creates a bidirectional trust relationship) or routing traffic through the public internet with access controls. Neither option was ideal for service consumption at scale. VPC peering between a consumer and a producer creates an administrative burden for both sides — the producer must manage peering connections with thousands of consumers, and every consumer's VPC learns routes to the producer's entire address space. PSC solves this by creating a one-way forwarding rule in the consumer's VPC that maps a local IP address to the producer's service endpoint. Traffic flows from consumer to producer only, and the producer never sees the consumer's internal IP space or routing topology.
+
+```bash
+# Create a Private Service Connect endpoint for Cloud SQL
+gcloud compute addresses create psql-psc-ip \
+  --region=us-central1 \
+  --subnet=app-tier
+
+gcloud compute forwarding-rules create psql-endpoint \
+  --region=us-central1 \
+  --network=prod-vpc \
+  --address=psql-psc-ip \
+  --target-service-attachment=projects/sql-producer/regions/us-central1/serviceAttachments/psql-sa
+```
+
+### Published vs Connected Services
+
+PSC operates on a producer-consumer model. The service producer creates a **Service Attachment** in their VPC that defines which consumer projects can connect, which subnets the service listens on, and whether the connection requires explicit approval. The consumer creates a **PSC Endpoint** (a forwarding rule with a local IP address) that points to the producer's service attachment. When the endpoint is created, GCP establishes a NAT-like translation between the consumer's local endpoint IP and the producer's actual service IP, but unlike Cloud NAT, this translation is bidirectional within the established connection — return traffic flows back through the same path. This architecture means that the consumer's VPC never contains routes to the producer's subnet, and the producer's VPC never learns routes to the consumer's subnet. The two networks remain fully isolated while the specific service connection works as if they were adjacent on the same switch.
+
+### When to Use PSC vs VPC Peering
+
+The general rule: use PSC when you are consuming a specific service (Cloud SQL, a partner's SaaS API, or a shared internal microservice), and use VPC peering when you need full network-to-network connectivity between two environments that trust each other. PSC gives the consumer the ability to consume a service without exposing their network topology to the producer, and it gives the producer the ability to offer a service without managing thousands of peering connections. This is the networking equivalent of an API contract — the producer defines what the consumer can access, and the consumer connects to that contract without seeing what else exists in the producer's network.
+
+---
+
+## VPC Flow Logs
+
+VPC Flow Logs capture a sampled record of every IP flow (5-tuple: source IP, destination IP, source port, destination port, protocol) entering or leaving a subnet's virtual network interface. They are the fundamental observability tool for GCP network troubleshooting, security forensics, and usage analysis, and they operate at the subnet level — you enable them per subnet, not per VPC or per VM.
+
+### What Flow Logs Capture and What They Do Not
+
+Each flow log record contains the 5-tuple plus metadata: bytes sent, packets sent, the VM instance name that generated the traffic, the VPC network, the region, and whether the traffic matched a firewall rule. Critically, flow logs are sampled — by default, GCP captures roughly one out of every two packets, but the sampling rate is adaptive and can be tuned. Flow logs do not capture the packet payload; they are metadata records, not Deep Packet Inspection. They also do not capture traffic that is dropped by the implied deny rules (the pre-firewall evaluation). If a packet is rejected by a firewall rule that has logging enabled, that rejection appears in firewall logs, not in flow logs — these are complementary data sources.
+
+```bash
+# Enable VPC Flow Logs on a subnet with default settings
+gcloud compute networks subnets update prod-us-central1 \
+  --region=us-central1 \
+  --enable-flow-logs
+
+# Enable with custom aggregation and sampling
+gcloud compute networks subnets update prod-us-central1 \
+  --region=us-central1 \
+  --enable-flow-logs \
+  --flow-sampling=0.5 \
+  --flow-aggregation=SRC_DEST_PORT_PROTO
+
+# Query flow logs to find top talkers by bytes
+gcloud logging read \
+  'resource.type="gce_subnetwork" AND logName:"compute.googleapis.com/vpc_flows"' \
+  --limit=10 \
+  --format="json" \
+  --freshness=1h
+```
+
+### Flow Log Aggregation Options
+
+| Aggregation Level | What's Grouped | When to Use |
+| :--- | :--- | :--- |
+| `SRC_DEST_PORT_PROTO` | All 5-tuple fields | Detailed debugging, security forensics |
+| `SRC_DEST` | Source + destination IP only | Bandwidth analysis, inter-service traffic mapping |
+| `DEST_PORT_PROTO` | Destination port + protocol | Identifying which services receive the most traffic |
+| `SRC_DEST_VM` | Source + destination VM | Per-VM traffic baselines, anomaly detection |
+
+The aggregation level is a cost-versus-granularity tradeoff. `SRC_DEST_PORT_PROTO` generates the most log entries because every unique flow creates a separate record — useful for pinpointing which specific connection caused a problem, but expensive in log volume at scale. `SRC_DEST` aggregates all ports between two IPs into a single record, which is sufficient for understanding bandwidth patterns between services without the per-port noise. For most operational monitoring use cases, `SRC_DEST` at a 50% sampling rate provides enough fidelity to detect anomalies without overwhelming your logging budget.
+
+---
+
+## Cloud Load Balancing in GCP
+
+GCP's load balancing family is unique among cloud providers because it spans both Layer 4 and Layer 7 and is natively global. Unlike AWS, where an Application Load Balancer is regional and requires Route 53 or Global Accelerator for cross-region failover, GCP's external HTTP(S) load balancer is global by default — a single anycast IP address receives traffic at the nearest Google edge point-of-presence and routes it to the closest healthy backend region.
+
+### Load Balancer Family Overview
+
+| Load Balancer | Layer | Scope | Use Case |
+| :--- | :--- | :--- | :--- |
+| **External HTTP(S)** | L7 | Global | Web applications, multi-region failover, URL-based routing |
+| **Internal HTTP(S)** | L7 | Regional | Microservices within a VPC, traffic splitting |
+| **External TCP/UDP Network** | L4 | Regional | Non-HTTP workloads, preserving client IP |
+| **Internal TCP/UDP Network** | L4 | Regional | Internal service discovery, database load balancing |
+| **External SSL Proxy** | L4 (SSL) | Global | SSL-terminated non-HTTP traffic |
+| **External TCP Proxy** | L4 (TCP) | Global | TCP traffic without SSL termination |
+
+```bash
+# Create a global external HTTP(S) load balancer
+gcloud compute url-maps create web-map \
+  --default-service=web-backend
+
+gcloud compute target-http-proxies create web-proxy \
+  --url-map=web-map
+
+gcloud compute forwarding-rules create web-rule \
+  --global \
+  --target-http-proxy=web-proxy \
+  --ports=80
+```
+
+### Why Global Load Balancing Changes Architecture
+
+The global anycast frontend means you do not need DNS-based failover or regional load balancer pairs. A single forwarding rule IP address serves traffic from every Google edge location, and the load balancer's backend service can include instance groups in multiple regions. If the `us-central1` backend group becomes unhealthy, traffic automatically shifts to `europe-west1` without any DNS TTL propagation delay, any configuration change, or any client-side retry logic. The health checks that drive this failover run from each edge location independently, meaning a regional network partition that isolates `us-central1` from the rest of the world is detected by the edge locations within seconds, and traffic is redirected before most clients experience a timeout. This is architecturally simpler than the equivalent AWS setup (ALB + Route 53 failover + health checks at the DNS layer) because the data plane itself handles failover rather than relying on DNS control-plane convergence.
+
+---
+
+## Cost Lens: What GCP Networking Actually Costs
+
+Networking costs in GCP follow patterns that differ significantly from AWS, and understanding these patterns prevents unpleasant billing surprises.
+
+### Internet Egress Pricing Model
+
+GCP charges for data that leaves Google's network to the public internet. Traffic between GCP regions on the same continent is charged at a lower rate than intercontinental egress, and traffic within the same region is free (assuming both endpoints are in the same VPC). The key cost drivers are:
+
+| Traffic Path | Cost Behavior | Typical Monthly Impact |
+| :--- | :--- | :--- |
+| Same region, same zone | Free | Zero |
+| Same region, different zones | Free (within same VPC) | Zero |
+| Inter-region (same continent) | Charged per GB egress | Moderate — ~$0.01/GB |
+| Inter-region (intercontinental) | Charged per GB at higher rate | Significant — ~$0.08-0.12/GB |
+| Internet egress | Charged per GB at highest rate | Largest cost — ~$0.08-0.23/GB depending on volume tier |
+| Google API traffic via Private Google Access | Free (stays on internal network) | Zero |
+
+The most important takeaway: inter-region traffic between subnets in the same global VPC is not free just because it is automatic. The VPC routes the traffic for you without configuration, but GCP still meters and bills inter-region bytes. Teams that migrate from single-region to multi-region architectures often see a 3-5x increase in their networking line item because what was previously free intra-region traffic becomes billable cross-region traffic. You control this by co-locating services that communicate heavily in the same region and using Private Google Access for API calls to avoid routing them through the internet.
+
+### Cloud NAT Costs
+
+Cloud NAT has two cost components: an hourly charge for the NAT gateway itself and a per-GB charge for data processed through it. The NAT gateway is regional — you pay per gateway per region — and the data charge applies to all traffic that passes through the NAT, including traffic that stays within Google's network (unlike Private Google Access, which is free). The practical implication is that you should not use Cloud NAT as a universal egress path when Private Google Access can handle Google API traffic for free. For a moderate-scale deployment processing 10 TB of outbound data monthly through Cloud NAT across two regions, the combined NAT cost is material but not dominant. The cost spike, however, comes from the data processing charge at scale — if your workload begins streaming large volumes of telemetry or log data to an external service through the NAT gateway, the per-GB charge multiplies. Mitigation strategies include using Private Service Connect for Google and partner services (which avoids NAT data charges), co-locating heavy egress workloads in a single region to reduce the number of NAT gateways, and monitoring NAT data volume through Cloud Monitoring to catch unexpected growth before the billing cycle closes.
+
+### Load Balancer Costs
+
+Load balancer pricing is per forwarding rule plus per GB of data processed. Global external HTTP(S) load balancers charge for the first five forwarding rules per project and for data processed through the load balancer's data plane. The per-GB rate is modest, but the cost multiplies when you have many forwarding rules (one per hostname in a multi-tenant setup) or when you are serving high-throughput content like video or large file downloads. Regional network load balancers have a simpler pricing model with lower per-GB rates but lack the global anycast capability. The cost optimization rule is straightforward: use global HTTP(S) load balancers for internet-facing HTTP workloads because the global footprint eliminates the need for regional load balancer pairs and DNS failover infrastructure; use regional network load balancers for internal TCP/UDP traffic or for workloads where you explicitly need to preserve the client's source IP address at Layer 4.
+
+### Cost Optimization Principles
+
+Monitor your Cloud Billing reports for the "Compute Engine Network" line items, which aggregate inter-region egress, internet egress, and NAT data processing. Set budget alerts on these SKUs specifically — they are the ones most likely to grow silently as teams add cross-region service dependencies. For greenfield designs, co-locate services that communicate synchronously within the same region to eliminate inter-region egress, and use Private Google Access and Private Service Connect to keep Google API and partner service traffic off the metered paths entirely.
+
+---
+
+## Patterns and Anti-Patterns
+
+### Proven Patterns
+
+#### Pattern 1: Shared VPC with IAM-Conditioned Subnet Delegation
+
+**What**: Create a single Shared VPC in a dedicated host project with subnets organized by environment tier (web, app, data, management) rather than by team. Grant service projects `compute.networkUser` with IAM conditions that restrict access to only the subnets that team's workloads require.
+
+**Why it works**: This pattern separates the control plane (networking, managed by a small central team) from the data plane (compute, managed by application teams). The IAM conditions enforce least privilege at the network boundary — a developer in the web team cannot accidentally deploy a VM into the database subnet, and a compromised service account cannot expand its network footprint beyond its authorized subnets.
+
+**Scaling note**: As you grow beyond 50 service projects, the host project's IAM policy grows large because every subnet delegation needs a binding. Mitigate this by using IAM groups as members rather than individual service accounts, and by grouping subnets into related sets that can share a single IAM condition expression. At very large scale (200+ service projects), consider using Terraform or Config Connector to manage the IAM bindings rather than `gcloud` commands, so that drift detection and remediation are automated.
+
+#### Pattern 2: Service Account-First Firewalling with Implicit Deny
+
+**What**: Use service accounts as the sole target for all firewall rules, never network tags. Create a dedicated service account for each logical service role (web, app, database, cache, queue) and write firewall rules that reference these service accounts for both source and target. Add an explicit low-priority `DENY all` rule at priority 65000 to make the security baseline visible and auditable.
+
+**Why it works**: Service accounts are IAM-controlled identities — granting a principal the ability to attach a service account to a VM is a separate permission from granting the ability to use the VM. This eliminates the tag-typo and tag-reuse attack vectors described in the firewall section. The explicit DENY rule makes the security posture visible in `gcloud compute firewall-rules list` rather than relying on the invisible implied-deny at priority 65535, which improves auditability.
+
+**Scaling note**: Managing per-role service accounts across dozens of teams requires a naming convention (`svc-{team}-{role}@{project}.iam.gserviceaccount.com`) and automated provisioning. Use Terraform modules that accept a team name and role list and produce the service accounts, IAM bindings, and firewall rules as a unit.
+
+#### Pattern 3: Regional Cloud NAT with Private Google Access
+
+**What**: Deploy one Cloud NAT gateway per region that has private VMs, combined with Private Google Access enabled on every subnet. Route Google API traffic through Private Google Access (free, internal) and all other internet-bound traffic through Cloud NAT. Use `--nat-custom-subnet-ip-ranges` to explicitly list the subnets that need NAT rather than using `--nat-all-subnet-ip-ranges`, so that new subnets do not automatically inherit NAT access.
+
+**Why it works**: Private Google Access offloads Google API traffic from the NAT gateway data processing meter, reducing cost and latency. Explicit subnet range selection creates a conscious opt-in model — when a team creates a new subnet, they must explicitly add it to the NAT configuration, which forces a conversation about whether the subnet's VMs genuinely need internet access.
+
+**Scaling note**: In a multi-region deployment with 5+ regions, the Cloud NAT hourly charges accumulate. If a region only has non-production VMs that need occasional package updates, you can consolidate those workloads into a single region's NAT gateway by routing their traffic through the VPC's internal backbone to the NAT region, though this adds latency and is only appropriate for non-latency-sensitive traffic.
+
+### Anti-Patterns
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+| :--- | :--- | :--- | :--- |
+| **Using the default VPC** | Auto-mode subnets in every region consume massive IP space and conflict with on-premises networks. Firewall rules `default-allow-ssh` and `default-allow-icmp` are open to `0.0.0.0/0` by default. | "It works out of the box" — teams that are new to GCP and want to prototype quickly. | Delete the default VPC on project creation. Use a Terraform module that creates a custom-mode VPC with planned CIDR ranges and no default-allow rules. |
+| **Network tags as the sole firewall mechanism** | A single typo in a tag name creates a silent security hole. Any principal with `setTags` can change a VM's network identity without an audit trail. | Tags are visible in the console and easy to understand. The migration to service accounts requires understanding IAM and the SA lifecycle. | Use service accounts for all new deployments. Create a migration script that inventories existing tag-based firewall rules and generates equivalent SA-based rules. Run it in audit mode first to identify gaps before switching. |
+| **Cloud NAT as a universal egress solution** | All outbound traffic — including Google API calls — goes through the NAT gateway, incurring unnecessary data processing charges. | NAT "just works" for all outbound traffic, and Private Google Access requires an additional configuration step per subnet. | Enable Private Google Access on every subnet first, then layer Cloud NAT on top. Use `--nat-custom-subnet-ip-ranges` to restrict NAT to subnets that need non-Google internet access. |
+| **Per-team VPCs with VPC peering** | Each team builds their own VPC and peers them in a full-mesh. At 5 teams, this requires 10 peering connections; at 20 teams, 190 connections. Peering is non-transitive, so east-west traffic between teams that are not directly peered fails silently. | Teams want autonomy over their network configuration, and VPC peering feels like the natural way to connect independent networks. | Shared VPC with host-managed subnets gives the network team central control while application teams still manage their compute. For cross-organization connectivity where Shared VPC is not possible, use Network Connectivity Center as a hub-and-spoke model instead of full-mesh peering. |
+| **Hard-coded IP addresses in application config** | Services reference each other by internal IP addresses that change when VMs restart or migrate. | IPs feel "static" during development when VMs stay up for days or weeks. The convenience of a hard-coded IP bypasses the need to set up DNS or service discovery. | Use Cloud DNS private zones for service discovery within the VPC. Create A records that point to load balancer IPs or directly to VM IPs (with caution). For GKE workloads, use Kubernetes ClusterIP Services. |
+| **Leaving firewall logging disabled** | When a connection fails, there is no record of whether the packet was dropped by a firewall rule or never reached the VPC. Troubleshooting becomes guesswork. | Logging adds cost and teams do not realize it is off by default until they need it. | Enable firewall logging with at least `--log-metadata=INCLUDE_ALL_METADATA` on critical rules (SSH, database, inter-service). Configure log exclusions to filter high-volume flows and keep logging costs predictable. |
+
+---
+
+## Decision Framework
+
+When designing GCP networking for a new workload or migrating an existing one, the following decision tree and matrix help you select the right combination of connectivity, serving, and access patterns.
+
+```mermaid
+flowchart TD
+    START[New Workload: Need Private VMs?] --> Q_PRIV{Do VMs need<br/>public IPs?}
+    Q_PRIV -->|Yes, inbound from internet| Q_LB{What type<br/>of traffic?}
+    Q_PRIV -->|No, private only| Q_EGRESS{Need internet<br/>egress?}
+
+    Q_LB -->|HTTP/HTTPS| EXT_HTTP[Global external HTTP(S) LB]
+    Q_LB -->|TCP/UDP (non-HTTP)| EXT_TCP[Regional external TCP/UDP Network LB]
+    Q_LB -->|TCP with SSL offload| EXT_SSL[Global external SSL Proxy LB]
+
+    Q_EGRESS -->|Yes, all traffic| NAT[Cloud NAT + Cloud Router]
+    Q_EGRESS -->|Only Google APIs| PGA[Private Google Access only]
+    Q_EGRESS -->|Google + partner services| PSC[Private Service Connect]
+
+    EXT_HTTP --> Q_MULTI{Multi-region?}
+    EXT_TCP --> Q_MULTI
+    EXT_SSL --> Q_MULTI
+
+    Q_MULTI -->|Yes, global LB| GLOBAL_OK[Single global anycast IP<br/>Backends in multiple regions]
+    Q_MULTI -->|No, single region| REG_OK[Regional backend service<br/>Single region]
+
+    NAT --> Q_NAT_MULTI{Multiple regions<br/>with private VMs?}
+    Q_NAT_MULTI -->|Yes| NAT_PER_REGION[One Cloud NAT per region<br/>Consolidate if non-critical]
+    Q_NAT_MULTI -->|No| NAT_SINGLE[Single Cloud NAT gateway]
+
+    PGA --> PGA_OK[Enable on every subnet<br/>No additional cost]
+    PSC --> PSC_OK[Create PSC endpoint per service<br/>Unidirectional, no route exposure]
+```
+
+### Decision Matrix: Shared VPC vs VPC Peering
+
+| Criterion | Shared VPC | VPC Peering |
+| :--- | :--- | :--- |
+| **Administrative boundary** | Single organization | Cross-organization or same org |
+| **Firewall management** | Centralized (host project controls rules) | Decentralized (each VPC has own rules) |
+| **Subnet visibility** | All subnets visible to all service projects | Each VPC sees only its own subnets |
+| **Route propagation** | Automatic (all subnets in one VPC) | Manual (must create peering in both directions) |
+| **IAM integration** | `compute.networkUser` with conditions per subnet | Separate IAM policies per project |
+| **IP overlap tolerance** | None (single VPC = single namespace) | None (peered VPCs must not overlap) |
+| **Transitive routing** | N/A (same network) | Not supported (non-transitive) |
+| **Service project count** | Up to 1,000 per host project | Practical limit ~25 before mesh complexity |
+| **Best for** | Teams in same org needing central network control | Partner orgs, M&A scenarios, temporary connections |
+
+### Decision Matrix: Global vs Regional Load Balancer
+
+| Criterion | Global External HTTP(S) LB | Regional External Network LB |
+| :--- | :--- | :--- |
+| **Frontend IP** | Single anycast IP, serves all regions | Regional IP, serves one region |
+| **Failover** | Automatic cross-region based on health checks | Requires DNS failover or multi-region deployment |
+| **Layer** | 7 (HTTP/HTTPS) | 4 (TCP/UDP) |
+| **SSL termination** | Built-in | Requires SSL Proxy LB or application-level TLS |
+| **Client IP preservation** | Via `X-Forwarded-For` header | Preserved in packet (Layer 4) |
+| **URL/path-based routing** | Yes | No |
+| **Best for** | Web applications, REST APIs, multi-region HTTP | Non-HTTP protocols, gaming, VoIP, preserving source IP |
+
+### When Cloud NAT (and when not)
+
+| Scenario | Recommendation | Reasoning |
+| :--- | :--- | :--- |
+| Private VMs need OS package updates | Cloud NAT | Apt/yum repositories are not Google services |
+| Private VMs access Cloud Storage | Private Google Access | Free, internal, lower latency |
+| Private VMs call a third-party SaaS API | Cloud NAT | External service, not reachable via PGA |
+| Private VMs need to run `kubectl` against GKE API | Private Google Access | GKE API is a Google service |
+| Private VMs pull Docker images from Docker Hub | Cloud NAT | External registry |
+| Private VMs pull from Artifact Registry | Private Google Access | Google service |
+| Private VMs access a partner's PSC-published service | Private Service Connect | PSC endpoints avoid NAT entirely |
+| Batch processing VMs upload results to BigQuery | Private Google Access | Google service, high throughput → avoid NAT data charges |
+
+---
+
 ## Did You Know?
 
 1. **GCP firewall rules have a hidden "implied deny all ingress" rule at priority 65535** and an "implied allow all egress" rule at priority 65535. You cannot see these rules in the console or CLI, but they are always present. This means a brand-new VPC with no custom firewall rules will block all inbound traffic and allow all outbound traffic.
@@ -630,9 +949,9 @@ Build a Shared VPC architecture with a host project and two service projects, us
 
 ### Tasks
 
-**Task 1: Create the Project Structure and VPC**
+Task 1: Create the Project Structure and VPC.
 
-Create a host project with a custom VPC and two subnets.
+In this first task, you establish the foundational networking layer by creating a dedicated host project and building a custom-mode VPC with regionally scoped subnets. The key design decision here is to use custom mode rather than auto mode, which gives you explicit control over your CIDR ranges and prevents GCP from automatically provisioning subnets in regions you do not intend to use. The two subnets you create — web-tier and app-tier — will later be shared across service projects, so choosing non-overlapping, well-documented CIDR ranges now prevents renumbering pain when you add more subnets later.
 
 <details>
 <summary>Solution</summary>
@@ -689,7 +1008,9 @@ gcloud compute networks subnets list \
 ```
 </details>
 
-**Task 2: Enable Shared VPC and Attach Service Projects**
+Task 2: Enable Shared VPC and Attach Service Projects.
+
+Now you activate the Shared VPC capability on the host project and formally associate your two service projects with it. Enabling Shared VPC is a privileged operation that requires Organization-level permissions because it fundamentally changes how the project's network resources are shared across the organization. Once the service projects are attached, their service accounts and VMs gain the ability to reference the host project's subnets, but they still cannot use those subnets until you explicitly grant the `compute.networkUser` IAM role — which you will handle in the next task. This two-step model (associate, then grant) is what enforces least privilege in Shared VPC: being attached is necessary but not sufficient to consume a subnet.
 
 <details>
 <summary>Solution</summary>
@@ -710,7 +1031,9 @@ gcloud compute shared-vpc list-associated-resources $HOST_PROJECT
 ```
 </details>
 
-**Task 3: Create Service Accounts for Firewall Targeting**
+Task 3: Create Service Accounts for Firewall Targeting.
+
+This task implements the service-account-based firewall model that the module advocates over network tags. You create a dedicated service account in each service project — `web-sa` for the web tier in project A, and `app-sa` for the application tier in project B. Then you grant these service accounts the `compute.networkUser` role on the host project, which is the permission that allows VMs running under these identities to attach to the shared subnets. Notice that the service accounts live in the service projects, but the IAM role granting subnet access lives on the host project — this cross-project IAM binding is one of the most common points of confusion when debugging Shared VPC connectivity failures, and getting it right here ensures your firewall rules will work correctly in the next task.
 
 <details>
 <summary>Solution</summary>
@@ -745,7 +1068,9 @@ gcloud projects get-iam-policy $HOST_PROJECT \
 ```
 </details>
 
-**Task 4: Create Service Account-Based Firewall Rules**
+Task 4: Create Service Account-Based Firewall Rules.
+
+Now you define the security perimeter for your shared network using service-account-targeted firewall rules in the host project. The three rules you create implement a defense-in-depth model: public internet traffic reaches only the web tier on ports 80 and 443, web-tier VMs can reach app-tier VMs on port 8080, and SSH access is restricted exclusively to Identity-Aware Proxy tunnel ranges rather than being open to the public internet. The explicit `DENY all` rule at priority 65000 makes your security baseline visible — without it, the implied deny at 65535 is invisible in the console and cannot be audited. Pay attention to how the firewall rules reference service accounts from different projects using the fully qualified email format, which is what makes cross-project service-account firewalling possible under Shared VPC.
 
 <details>
 <summary>Solution</summary>
@@ -801,7 +1126,9 @@ gcloud compute firewall-rules list \
 ```
 </details>
 
-**Task 5: Deploy VMs in Service Projects Using the Shared VPC**
+Task 5: Deploy VMs in Service Projects Using the Shared VPC.
+
+This is where you see the Shared VPC model in action from the application team's perspective. You create a web server VM in service project A and an app server VM in service project B, both referencing the host project's subnets using the fully qualified subnet path format. Neither VM receives a public IP address — the `--no-address` flag enforces the private-only design, and all access goes through the Cloud NAT or Private Google Access paths you studied earlier. The startup scripts install a simple web server and a Python HTTP server so you can immediately validate the firewall rules by verifying that the web server can reach the app server on port 8080 while the reverse direction is blocked.
 
 <details>
 <summary>Solution</summary>
@@ -843,7 +1170,9 @@ gcloud compute ssh web-server-1 \
 ```
 </details>
 
-**Task 6: Clean Up**
+Task 6: Clean Up.
+
+Always tear down lab resources immediately after completing the exercise to avoid unexpected charges. The cleanup sequence matters: you must delete the VMs first because they hold references to the shared subnets, then detach the service projects from the Shared VPC configuration, disable Shared VPC on the host project, and finally delete the projects themselves. If you delete the host project before detaching the service projects, the Shared VPC association becomes orphaned and requires manual intervention through the Cloud Console or a support ticket to resolve. The cleanup script follows this safe ordering so you can run it without worrying about dependency conflicts.
 
 <details>
 <summary>Solution</summary>
@@ -896,3 +1225,13 @@ Next up: **[Module 2.3: Compute Engine](../module-2.3-compute/)** --- Learn mach
 - [VPC firewall rules](https://docs.cloud.google.com/firewall/docs/firewalls) — Covers firewall rule scope, implied rules, priorities, tags, and service-account filtering.
 - [Cloud NAT overview](https://docs.cloud.google.com/nat/docs/overview) — Explains Cloud NAT architecture, outbound-only behavior, availability model, and scaling properties.
 - [Shared VPC](https://docs.cloud.google.com/vpc/docs/shared-vpc) — Best primary doc for host-project and service-project roles, subnet delegation, and centralized networking.
+- [VPC network overview](https://cloud.google.com/vpc/docs/vpc) — Canonical VPC overview including subnet creation, secondary ranges, and VPC network maximums.
+- [VPC routes](https://cloud.google.com/vpc/docs/routes) — System-generated, custom static, and dynamic routes, route priority ordering, and next-hop configuration.
+- [Private Service Connect](https://cloud.google.com/vpc/docs/private-service-connect) — PSC architecture, service attachments, endpoint configuration, and producer-consumer model.
+- [VPC Flow Logs](https://cloud.google.com/vpc/docs/flow-logs) — Flow log record format, sampling, aggregation intervals, and log query examples.
+- [Choose a load balancer](https://cloud.google.com/load-balancing/docs/choosing-load-balancer) — Decision tree for selecting between global and regional, Layer 4 and Layer 7 load balancers.
+- [Cloud Load Balancing overview](https://cloud.google.com/load-balancing/docs/load-balancing-overview) — Global anycast architecture, backend services, health checking, and traffic distribution.
+- [Hierarchical firewall policies](https://cloud.google.com/vpc/docs/firewall-policies) — Organization-level and folder-level firewall policy creation, rule evaluation order, and association.
+- [VPC Network Peering](https://cloud.google.com/vpc/docs/vpc-peering) — Peering requirements, non-transitive behavior, subnet route exchange, and cross-project peering.
+- [Cloud Router overview](https://cloud.google.com/network-connectivity/docs/router/concepts/overview) — BGP routing modes, dynamic route advertisement, and Cloud NAT control-plane role.
+- [VPC network pricing](https://cloud.google.com/vpc/network-pricing) — Internet egress tiers, inter-region rates, and NAT data processing charges.
