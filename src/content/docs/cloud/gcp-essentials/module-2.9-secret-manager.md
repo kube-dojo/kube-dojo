@@ -1,15 +1,16 @@
 ---
-revision_pending: true
 title: "Module 2.9: GCP Secret Manager"
 slug: cloud/gcp-essentials/module-2.9-secret-manager
 sidebar:
   order: 10
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy)
+**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 2.1 (IAM & Resource Hierarchy) — you should be comfortable creating service accounts, granting IAM roles, and enabling GCP APIs before storing production credentials in Secret Manager.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+Secret management is not a one-time setup task—it is an ongoing contract between security, platform engineering, and application teams about where sensitive bytes live, who can read them, and how you prove compliance after an incident. GCP Secret Manager sits at the center of that contract for workloads running on Cloud Run, GKE, Compute Engine, and Cloud Functions because it combines encryption, IAM, versioning, and auditability without asking you to operate a dedicated vault cluster.
+
+After completing this module, you will be able to put the following capabilities into practice on real GCP projects, not just pass a checklist: configure Secret Manager with rotation notifications and IAM-based access control, implement versioning strategies that survive rollouts, inject secrets into Cloud Run and GKE without etcd copies where possible, and design cross-project sharing that auditors can follow.
 
 - **Configure Secret Manager with automatic rotation and IAM-based access control for application secrets**
 - **Implement secret versioning and alias strategies for zero-downtime credential rotation**
@@ -20,11 +21,13 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Hardcoding secrets in Git, Kubernetes objects, local `.env` files, and chat tools can create a wide exposure surface and make emergency credential rotation slow, risky, and outage-prone.
+Hypothetical scenario: a platform team ships a hotfix that embeds a Stripe API key in a Cloud Build substitution variable because “we will move it to Secret Manager next sprint.” Six months later, a contractor clones the build history, an old container image layer still contains the key, and finance sees fraudulent charges before anyone traces the leak back to the build log. The outage is not the payment processor—it is the **blast radius** of a secret that was never centralized, versioned, or rotated on a schedule.
 
-This story is painfully common. Secrets---database passwords, API keys, TLS certificates, encryption keys, OAuth tokens---are the most sensitive data in any organization, yet they are routinely handled with the same care as regular configuration data. They end up in environment variables, ConfigMaps, CI/CD pipelines, and chat messages. Secret Manager exists to solve this problem by providing a **[centralized, versioned, IAM-controlled store for all sensitive data](https://cloud.google.com/secret-manager/docs/overview)**. Secrets are [encrypted at rest and in transit](https://cloud.google.com/secret-manager/docs/encryption), [access is audited through Cloud Audit Logs](https://cloud.google.com/secret-manager/docs/audit-logging), and [rotation can be automated](https://cloud.google.com/secret-manager/docs/secret-rotation).
+Hardcoding secrets in Git, Kubernetes objects, local `.env` files, and chat tools creates exactly that exposure surface and makes emergency credential rotation slow, risky, and outage-prone. Secrets—database passwords, API keys, TLS certificates, encryption keys, OAuth tokens—are the most sensitive data in any organization, yet they are routinely handled with the same care as regular configuration data. They end up in environment variables, ConfigMaps, CI/CD pipelines, and chat messages.
 
-In this module, you will learn how to create and manage secrets, understand the versioning model, configure fine-grained IAM access, integrate secrets with Cloud Run and Compute Engine, and design a rotation strategy that does not cause outages.
+Secret Manager exists to solve this problem by providing a **[centralized, versioned, IAM-controlled store for all sensitive data](https://cloud.google.com/secret-manager/docs/overview)**. Secrets are [encrypted at rest and in transit](https://cloud.google.com/secret-manager/docs/encryption), [access is audited through Cloud Audit Logs](https://cloud.google.com/secret-manager/docs/audit-logging), and [rotation schedules can notify your automation](https://cloud.google.com/secret-manager/docs/secret-rotation) when it is time to rotate—Secret Manager does **not** generate new secret material for you; your subscriber must create versions and roll workloads forward.
+
+In this module, you will learn how to create and manage secrets, understand the versioning model (including aliases), configure fine-grained IAM access, integrate secrets with Cloud Run, Compute Engine, Cloud Functions, and GKE, design replication for residency and availability, and build a rotation strategy that does not cause outages.
 
 ---
 
@@ -32,7 +35,7 @@ In this module, you will learn how to create and manage secrets, understand the 
 
 ### Secrets and Versions
 
-Secret Manager uses a two-level model: **Secrets** and **Versions**.
+Secret Manager uses a two-level model—**Secrets** as administrative containers and **Versions** as immutable payloads—so you can change IAM, labels, rotation schedules, and replication on the secret resource without mutating historical credential bytes that investigators may need to reference later.
 
 ```mermaid
 flowchart TD
@@ -67,9 +70,29 @@ flowchart TD
 | **DISABLED** | Temporarily inaccessible | No (returns error) | Yes |
 | **DESTROYED** | Permanently deleted | No (irrecoverable) | No |
 
+Understanding **why** versions are immutable matters for incident response and compliance. If an attacker exfiltrates version 4, you cannot “edit” version 4 to invalidate the leak—you add version 5 with new material, redeploy consumers, then disable or destroy version 4. Auditors can correlate Cloud Audit Logs (`AccessSecretVersion`, `AddSecretVersion`) to specific version numbers, which is far stronger than overwriting a single blob in a key-value store.
+
+### Version aliases (`latest` and pinned numbers)
+
+When you [access a secret version](https://cloud.google.com/secret-manager/docs/access-secret-version), you pass a version identifier in the resource name: `projects/PROJECT/secrets/SECRET/versions/VERSION`. The identifier can be a numeric version (`3`) or the alias **`latest`**, which always resolves to the highest-numbered **ENABLED** version at access time. Aliases are convenient in development, but production rollouts should treat `latest` as a **moving target**: Cloud Run and many runtimes resolve `latest` at **deploy** time, not on every request, so adding version 6 does not automatically change a running revision until you redeploy or pin explicitly.
+
+For zero-downtime rotation, mature teams keep **two ENABLED versions** during overlap: the database (or upstream API) accepts both credentials while instances restart on different schedules, then disable the old version only after traffic and batch jobs have drained.
+
+### Regional secrets and replication (why location matters)
+
+Every secret has a [replication policy](https://cloud.google.com/secret-manager/docs/choosing-replication) chosen at creation time and **cannot be changed later**—if residency requirements shift, you create a new secret and migrate consumers. **Automatic** replication lets Google Cloud distribute payload data globally for availability; for [billing](https://cloud.google.com/secret-manager/pricing), automatic replication counts as **one location**. **User-managed** replication pins payload copies to regions you select (for example `europe-west1` and `europe-west4` only); each location in that policy is billed separately, and a regional outage during a create/update can fail the whole write so consistency is preserved.
+
+[Customer-managed encryption keys (CMEK)](https://cloud.google.com/secret-manager/docs/cmek) add another layer: secret payloads are encrypted with a Cloud KMS key you control. That helps regulated workloads, but operational responsibility shifts to you—disabling or destroying the KMS key makes secrets inaccessible, which is powerful for compliance and dangerous if runbooks are weak.
+
 ---
 
 ## Creating and Managing Secrets
+
+Day-to-day operations split cleanly into **management** APIs (create secret, update labels, set IAM, configure rotation topics) and **access** APIs (`AccessSecretVersion`). Google Cloud bills access operations and active versions, while management operations are free. That pricing shape should influence how you write applications: creating a secret on every deploy is cheap; reading it thousands of times per minute is not.
+
+Naming secrets is a long-term decision because IAM policies, audit queries, Cloud Run `--set-secrets` bindings, and Terraform state all reference the secret ID string. Prefer stable logical names (`prod-checkout-stripe-webhook`) over ticket numbers (`jira-1234-key`). Labels carry mutable metadata—`cost-center`, `data-classification`, `rotation-policy`—without forcing you to rename resources.
+
+When you store structured material (JSON key files, PKCS#12 bundles, or multi-line certificates), remember the [64 KiB per-version limit](https://cloud.google.com/secret-manager/docs/reference/rest/v1/SecretPayload). Larger artifacts belong in encrypted object storage with a reference pointer stored as a small secret. For TLS, many teams store the certificate chain and private key as separate secrets so rotation can swap the key without touching the public chain consumers cache.
 
 ### Creating Secrets
 
@@ -96,7 +119,7 @@ gcloud secrets create tls-cert \
 gcloud secrets list --format="table(name, createTime, labels)"
 ```
 
-**Important**: The `-n` flag in `echo -n` prevents a trailing newline from being included in the secret data. A common bug is storing a password with a trailing newline, which causes authentication failures.
+When creating secrets from the shell, the `-n` flag in `echo -n` prevents a trailing newline from being included in the secret data, because a common production bug is storing `password\n` and spending hours debugging authentication failures that only appear in automated pipelines. Prefer `printf '%s' "$VALUE"` in scripts that must be POSIX-portable across macOS and Linux build agents.
 
 ### Adding and Accessing Versions
 
@@ -118,7 +141,11 @@ gcloud secrets versions list prod-db-password \
 
 > **Pause and predict**: If you add a new version to a secret but do not explicitly update applications to use the new version, what determines whether they automatically receive the new data?
 
+The answer depends on the consumer: client libraries requesting `latest` resolve at **request time**, while Cloud Run environment variables resolved at deploy time do not. That distinction is why production systems pin versions in deployment manifests and treat `latest` as a development convenience. Operations teams should document, per service, whether restart is required after `add_secret_version` so on-call engineers do not assume uniform behavior across Compute Engine, GKE CSI mounts, and Cloud Run.
+
 ### Disabling and Destroying Versions
+
+Disable when you need an emergency stop that might roll back; destroy when you are certain the material must never return and you want billing to end. Many compliance frameworks ask for evidence that destroyed secrets are unrecoverable—Secret Manager’s destroy semantics satisfy that for the payload stored in Google’s service, but not for copies your application already wrote to disk or logs.
 
 ```bash
 # Disable a version (makes it inaccessible but recoverable)
@@ -151,11 +178,13 @@ gcloud secrets create eu-only-secret \
   --locations="europe-west1,europe-west4"
 ```
 
+User-managed replication is the right tool when legal or contractual rules require data to remain in specific jurisdictions. The tradeoff is operational: you must pick enough regions for availability without multiplying cost—each enabled version in three regions is three billable “locations” for that secret. Automatic replication is Google’s recommended default when you have no residency constraint because it minimizes configuration drift and still delivers strong consistency across replicas.
+
 ---
 
 ## IAM Access Control
 
-Secret Manager supports [fine-grained IAM at both the project level and the individual secret level](https://cloud.google.com/iam/docs/roles-permissions/secretmanager).
+Secret Manager supports [fine-grained IAM at both the project level and the individual secret level](https://cloud.google.com/iam/docs/roles-permissions/secretmanager), which means you can grant an application identity access to `prod-db-password` without implicitly granting access to `stripe-api-key` in the same project. Project-level grants remain valid for break-glass platform roles, but application service accounts should almost always receive secret-scoped bindings generated from infrastructure-as-code templates.
 
 ### Secret Manager Roles
 
@@ -197,11 +226,19 @@ gcloud secrets add-iam-policy-binding prod-db-password \
   --condition="expression=request.time < timestamp('2024-01-16T00:00:00Z'),title=temporary-access,description=On-call access for 24 hours"
 ```
 
+### Cross-project and organization-level access
+
+Secrets live in a **project**, but workloads in other projects routinely need them. The pattern is IAM on the secret (or project) plus a service account from the consumer project: grant `roles/secretmanager.secretAccessor` on `projects/SECRET_PROJECT/secrets/SECRET_ID` to `serviceAccount:CONSUMER@CONSUMER_PROJECT.iam.gserviceaccount.com`. Folder- or organization-level bindings are possible for platform teams that operate a **shared secrets project**, but broad grants defeat least privilege—prefer a dedicated secrets project per environment (prod/nonprod) and per-secret bindings for application identities.
+
+[Secret Manager IAM conditions](https://cloud.google.com/secret-manager/docs/access-control) can restrict by resource name, time, or principal type. Pair **secretVersionAdder** (write-only) with **secretAccessor** (read-only) on different service accounts so rotation automation cannot read existing material, while applications cannot publish new versions.
+
 ---
 
 ## Integrating with Cloud Run
 
-Cloud Run has native integration with Secret Manager. You can [mount secrets as environment variables or files](https://cloud.google.com/run/docs/configuring/services/secrets).
+Cloud Run has first-class integration with Secret Manager because Gen2 services are Cloud Run revisions under the hood. You can [mount secrets as environment variables or files](https://cloud.google.com/run/docs/configuring/services/secrets) without baking credentials into the image, which means you can rebuild containers from public base images and still keep keys out of Artifact Registry layers. The integration resolves secret references when a new revision starts, so secret changes are tied to the same rollout machinery you already use for code—roll back a bad deployment and you roll back the credential pin as well.
+
+From a threat-model perspective, anyone with `run.services.get` and shell access inside the container can still read injected secrets, so pair runtime injection with per-secret IAM, VPC egress controls where needed, and detective controls on `AccessSecretVersion` for the service account. Cloud Run does not magically reduce insider risk; it removes secrets from source control and makes rotation auditable.
 
 ### As Environment Variables
 
@@ -247,13 +284,15 @@ gcloud run deploy my-api \
 | **Latest** | `secret:latest` | Refers to a moving target rather than a fixed version | Dev/test only, with care |
 | **Pinned** | `secret:3` | Refers to version 3 | Production (deterministic) |
 
-**Important**: When a Cloud Run secret is exposed as an environment variable, Cloud Run resolves it at instance startup, not per request. For production, pin a specific version and roll out a new revision when you want workloads to adopt a new secret deliberately.
+When a Cloud Run secret is exposed as an environment variable, Cloud Run resolves it at instance startup rather than on every request, which is why production teams pin a specific version and roll out a new revision when they want workloads to adopt new secret material deliberately instead of inheriting surprise changes at the next cold start.
+
+Environment variables are convenient but appear in process listings and crash dumps; [volume mounts](https://cloud.google.com/run/docs/configuring/services/secrets) reduce accidental logging if applications read files once at startup. Neither approach stops a compromised container from reading the secret—IAM and network controls still matter—but file mounts mirror how TLS keys are traditionally loaded and align with twelve-factor guidance to keep config non-secret in env vars.
 
 ---
 
 ## Integrating with Compute Engine
 
-VMs access secrets through the Secret Manager API using the client libraries or `gcloud`.
+VMs access secrets through the Secret Manager API using the client libraries or `gcloud`, authenticated as the instance service account with appropriate scopes or—preferably—Workload Identity patterns that avoid long-lived JSON keys on disk. Treat startup scripts as bootstrap-only: fetch secrets once, write minimally, and let the application cache with a rotation-aware refresh policy.
 
 ### From a Startup Script
 
@@ -329,6 +368,8 @@ func getSecret(projectID, secretID, versionID string) (string, error) {
 }
 ```
 
+On Compute Engine, the VM’s service account (with `cloud-platform` scope or modern equivalent) calls the Secret Manager API. Startup scripts are simple for boot-time injection but hide failures until instances recycle; long-running apps should use client libraries with retries and cache secrets in memory **only** with a clear refresh policy after rotation. Never write secrets to world-readable paths—`chmod 600` on config files is mandatory, and prefer tmpfs mounts when feasible.
+
 ---
 
 ## Integrating with Cloud Functions
@@ -355,11 +396,85 @@ gcloud functions deploy my-function \
   --set-secrets="/app/certs/tls.crt=tls-cert:latest"
 ```
 
+Gen2 functions share Cloud Run’s secret injection model—[`--set-secrets`](https://cloud.google.com/functions/docs/configuring/secrets) binds Secret Manager resources at deploy time. Event-driven rotators often run as HTTP functions triggered by Pub/Sub push subscriptions, using a dedicated rotator service account with `secretVersionAdder` only.
+
+Cold-start latency for functions that read secrets at import time includes Secret Manager round trips unless you cache values in global variables with a refresh hook. For high-QPS HTTP functions, avoid per-invocation fetches; the access-operation bill and latency add up faster than for long-lived Cloud Run instances with similar code structure.
+
+---
+
+## Integrating with GKE (Secret Manager add-on)
+
+Kubernetes native `Secret` objects store data in etcd (base64-encoded, not encrypted by default at the application layer). For GKE, Google recommends the [Secret Manager add-on](https://cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component): a managed [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/) that mounts Secret Manager payloads as files **without** copying them into a Kubernetes `Secret` object. Pods authenticate via [Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) to call Secret Manager.
+
+Enable the add-on on the cluster, define a `SecretProviderClass` that maps Secret Manager secret/version paths to files, then mount a CSI volume:
+
+```yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: app-db-credentials
+spec:
+  provider: gke
+  parameters:
+    secrets: |
+      - resourceName: "projects/PROJECT_ID/secrets/prod-db-password/versions/latest"
+        path: "db-password"
+```
+
+```yaml
+# Pod excerpt
+volumeMounts:
+  - name: sm-secrets
+    mountPath: "/var/secrets"
+    readOnly: true
+volumes:
+  - name: sm-secrets
+    csi:
+      driver: secrets-store-gke.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: app-db-credentials
+```
+
+**Scaling note**: mounting at pod start avoids cluster-wide secret duplication in etcd, but applications must re-read files if you rely on rotation—many teams still trigger rolling restarts after new versions. For legacy Helm charts that insist on Kubernetes `Secret` objects, optional sync features exist, but that reintroduces etcd copies—evaluate compliance requirements before enabling.
+
+Direct API access from pods (without CSI) is supported but uncommon when the add-on is available: every pod needs credentials, libraries, and error handling for quotas. If you use direct access, enforce workload identity, pin versions in code, and metricize call volume so cost and security teams see spikes early.
+
 ---
 
 ## Secret Rotation
 
-### Manual Rotation Pattern
+### Native rotation schedules (Pub/Sub notifications)
+
+Secret Manager’s [rotation schedule](https://cloud.google.com/secret-manager/docs/secret-rotation) is often misunderstood: the service sends a **`SECRET_ROTATE` message** to Pub/Sub topics attached to the secret at `next_rotation_time` (driven by `rotation_period` or an explicit timestamp). **Secret Manager does not generate passwords, API keys, or certificates for you.** Your subscriber must (1) create new material in the upstream system, (2) `add_secret_version`, (3) redeploy or restart consumers, and (4) disable old versions after validation.
+
+Requirements from Google’s documentation worth designing around: `rotation_period` must be at least one hour; `next_rotation_time` cannot be less than five minutes in the future; in-flight rotations block another until delivery completes (retries up to seven days). [Rotation notifications are billable](https://cloud.google.com/secret-manager/pricing) after the monthly free tier (three notifications per billing account).
+
+```bash
+# Create a secret with rotation schedule and Pub/Sub topic
+gcloud secrets create prod-db-password \
+  --replication-policy="automatic" \
+  --topics="projects/my-project/topics/secret-rotation" \
+  --rotation-period="2592000s" \
+  --next-rotation-time="2026-07-01T03:00:00Z"
+```
+
+```python
+# Pub/Sub subscriber (conceptual): react to SECRET_ROTATE, do NOT expect new data magically
+import base64
+import json
+
+def handle_rotate(event, context):
+    envelope = json.loads(base64.b64decode(event["data"]).decode("utf-8"))
+    if envelope.get("eventType") != "SECRET_ROTATE":
+        return
+    secret_id = envelope["secretId"]
+    # 1) Generate creds in DB/API  2) add_secret_version  3) rollout  4) disable old
+```
+
+### Manual rotation pattern
+
+When you are not ready for Pub/Sub-driven schedules, the manual pattern below is still the backbone of every automated flow: generate material, add a version, update dependents, redeploy, then disable/destroy only after confidence. Skipping the database step while updating Secret Manager is the most common source of “rotation succeeded in GCP but apps are down” incidents.
 
 ```bash
 # Step 1: Generate a new password
@@ -384,6 +499,8 @@ gcloud secrets versions destroy 2 --secret=prod-db-password
 ```
 
 ### Automated Rotation with Cloud Functions
+
+The diagram below shows the **full** rotation responsibility chain: Scheduler triggers your code; your code mutates upstream systems and Secret Manager; Secret Manager never replaces step 2. Treat Cloud Functions (or Cloud Run jobs) as orchestrators with idempotent handlers—Pub/Sub may deliver duplicate `SECRET_ROTATE` messages around retries, and Google documents in-flight rotation guards that skip overlapping schedules while a delivery is pending.
 
 ```mermaid
 flowchart TD
@@ -465,6 +582,34 @@ gcloud scheduler jobs create http rotate-db-password-schedule \
 
 ---
 
+## Security operations playbook
+
+Hypothetical scenario: on-call receives an alert that an unfamiliar service account accessed `prod-db-password` fifty times in ten minutes from a CI project that should only read staging secrets. The difference between a contained incident and a regulatory notification is whether you can answer **who**, **which version**, and **from which principal** without guessing. Secret Manager’s audit story is built for that question when you enable the right log types and retain them outside the compromised project.
+
+**Detect**: export Data Access logs for `google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion` and administrative changes (`CreateSecret`, `AddSecretVersion`, `SetIamPolicy`). Route them to a security project with locked-down IAM, and alert on new principals, cross-project accessors, or access spikes. Correlate Secret Manager reads with Cloud Run revision deploys and GKE rollouts so you know whether a read was legitimate startup behavior or an abnormal loop.
+
+**Respond**: disable the affected version first if exfiltration is suspected—access stops immediately while you preserve the blob for forensics unlike destroy. Rotate by adding a new version, updating upstream systems, redeploying consumers, then destroy the compromised version after the grace window. If the secret lived in git history, Secret Manager rotation alone is insufficient; revoke the credential at the vendor and scan repositories.
+
+**Recover**: document the version timeline (v4 disabled, v5 enabled, v4 destroyed on date) for auditors. Revisit IAM bindings—incidents often reveal project-wide `secretAccessor` shortcuts. For CMEK-backed secrets, include KMS key policy review because key disablement looks like a Secret Manager outage to applications.
+
+**Improve**: run game days that assume Pub/Sub rotation notifications fire while the subscriber is broken; validate paging triggers. Measure access operations monthly—cost spikes frequently precede security findings when a misconfigured poller hammers the API.
+
+---
+
+## Delivery mechanisms compared
+
+Teams debate three delivery channels repeatedly: **environment variables**, **mounted files**, and **direct API access** from application code. None removes the need for IAM, but they change ergonomics, rotation mechanics, and leak surfaces in ways that matter at moderate scale.
+
+Environment variables are the fastest path for twelve-factor apps and match Cloud Run’s `--set-secrets` ergonomics. They propagate into child processes, appear in some observability agents, and encourage treating secrets like configuration. They work when the secret is a short password, the process reads once at boot, and you pin versions deliberately. They work poorly when applications log environment snapshots during debugging or when operators expect hot reload without redeploying revisions.
+
+File mounts—on Cloud Run or via the GKE CSI add-on—mirror how TLS keys and JWT signing material are traditionally loaded. Files reduce accidental exposure in frameworks that print environment blocks, and they nudge developers toward reading secrets once into memory. The tradeoff is path discipline: mount read-only, avoid world-readable directories, and document whether the runtime watches files for rotation (most do not unless you add sidecars).
+
+Direct API access with client libraries offers the most control for long-lived VMs and batch jobs: you can implement exponential backoff, respect quotas, and refresh on schedule. It also makes it easiest to accidentally call Secret Manager on every request, which is both expensive and noisy in audit logs. If you choose API access, cache with a TTL aligned to rotation policy and invalidate cache when your Pub/Sub subscriber completes a rotation.
+
+Kubernetes native `Secret` objects remain common in charts written before CSI add-ons matured. Copying Secret Manager into etcd via sync reintroduces cluster-local copies that etcd backups and RBAC `get secrets` can expose. Prefer CSI mounts for new work; if you must sync, restrict RBAC aggressively and encrypt etcd at rest knowing that defense is layered, not absolute.
+
+---
+
 ## Audit Logging
 
 Secret Manager integrates with Cloud Audit Logs, and methods such as `AccessSecretVersion` are Data Access events that you should enable and monitor explicitly.
@@ -484,6 +629,150 @@ gcloud logging read '
 ' --limit=10 --format=json
 ```
 
+Enable [Data Access audit logs](https://cloud.google.com/secret-manager/docs/audit-logging) for `AccessSecretVersion` in security-sensitive projects. Admin activity logs alone miss the reads that matter during exfiltration investigations. Export high-value secrets’ access logs to a locked-down logging project or SIEM. Alert on new principals and unusual volume.
+
+Hypothetical scenario: a compromised laptop runs `gcloud secrets versions access` using an engineer’s user credential that still has break-glass `secretAccessor` on production. Without data access logs, the team discovers the breach weeks later via vendor fraud, not GCP telemetry. Pair human access with IAM Conditions and just-in-time elevation instead of standing admin rights.
+
+When designing shared secrets projects, document which folders may host secrets and which service accounts may read across project boundaries. Revisit bindings quarterly—microservices rename frequently, but IAM bindings linger. Automated IAM recommender exports help, yet human review still catches intent mismatches machines miss.
+
+---
+
+## Quotas, automation, and CI/CD integration
+
+Secret Manager enforces [per-project quotas](https://cloud.google.com/secret-manager/quotas) on read and write API rates. Most application failures that look like “Secret Manager is down” are actually client-side retry storms after a deployment misconfiguration—hundreds of pods each calling `AccessSecretVersion` on every HTTP request will throttle quickly and inflate bills simultaneously. Platform teams should publish an internal standard: fetch at startup, cache in memory with explicit TTL, refresh on rotation events, and never embed secret fetches inside tight loops.
+
+Infrastructure-as-code is the sustainable way to keep IAM bindings aligned with microservices. Terraform’s `google_secret_manager_secret` and `google_secret_manager_secret_iam_member` resources (or Config Connector equivalents) let you declare secrets, replication policies, rotation topics, and per-service accessors in the same merge request that introduces a new microservice. The anti-pattern is clicking “Grant access” in the console during an incident—that binding never reaches git and becomes orphan debt. For secret **values**, separate concerns: Terraform should reference secret IDs and versions, while values enter via CI/CD (`gcloud secrets versions add`) or a break-glass runbook, not checked into state files.
+
+CI/CD systems (Cloud Build, GitHub Actions with Workload Identity Federation) should authenticate to GCP without long-lived JSON keys. A typical pattern: the pipeline identity receives `secretVersionAdder` on specific secrets, adds a version from a generated artifact, then triggers a deployment that pins the new version number. Storing pipeline variables that mirror Secret Manager duplicates sources of truth—pick one system of record. If you must mirror, automate drift detection that fails builds when versions diverge.
+
+Labels and naming conventions pay off at scale. Enforce labels such as `env`, `service`, `rotation=quarterly`, and `owner=team-payments` so cost allocation and access reviews can group secrets logically. Secret IDs should encode purpose (`prod-payments-stripe-webhook`) rather than implementation (`secret-42`), because IAM policies and audit queries reference IDs for years.
+
+Organization policies may restrict where secrets are created—resource location constraints interact with user-managed replication (each location must be allowed) and with automatic replication (requires `global` allowance). When policies block creation, the error surfaces at secret create time, not at deploy time; test policies in a sandbox folder before rolling out to production folders.
+
+Event notifications beyond rotation exist: attaching Pub/Sub topics can feed security automation when secrets change. Combine with Cloud Asset Inventory exports if you need org-wide inventories for compliance questionnaires. The operational goal is the same as logging: prove who knew what credential when, without relying on engineer memory.
+
+Parameter Manager (a related Google Cloud service) stores configuration parameters that may embed secrets with different pricing and access semantics. If your organization adopts Parameter Manager for non-secret config, keep true credentials in Secret Manager to avoid mixing access patterns—reviewers should not debate whether a database password is “configuration” because the storage product was convenient.
+
+---
+
+## Cost at moderate scale
+
+Secret Manager pricing is consumption-based, not flat per secret. According to [Google Cloud pricing](https://cloud.google.com/secret-manager/pricing) (verify in your currency and region):
+
+| Billable item | Free tier (per billing account / month) | Beyond free tier |
+| :--- | :--- | :--- |
+| **Active secret versions** | 6 version-months | **$0.06 per active version per location per month** |
+| **Access operations** (`AccessSecretVersion`) | 10,000 operations | **$0.03 per 10,000 operations** |
+| **Rotation notifications** (`SECRET_ROTATE` to Pub/Sub) | 3 notifications | **$0.05 per notification** |
+| **Management operations** (create secret, disable version, IAM changes) | — | **Free** |
+| **Destroyed versions** | — | **Free** (no storage charge) |
+
+**Active** includes both ENABLED and DISABLED versions—disabling stops reads but **does not stop storage billing** until you destroy. That is why rotation runbooks should end with `destroy` after a grace period, not leave a pile of disabled versions “just in case.”
+
+Finance teams sometimes ask for “number of secrets” while engineering reports “number of versions.” Align on **active version-locations** as the billing unit, especially with user-managed replication. A single logical secret with ten disabled versions in three regions can be thirty billable locations before you account for access operations at all.
+
+Hypothetical scenario: 40 microservices each mount 5 secrets with automatic replication, keep 8 enabled versions for rollback, and a buggy health check calls `AccessSecretVersion` on every HTTP request (50 RPS). Version storage might look modest (~$19/month for 200 versions in one location), but access operations can exceed **21M/month**, adding roughly **$63** in access charges alone—far more than storage. **Knobs that reduce cost**: destroy obsolete versions, pin versions to avoid accidental re-read loops, cache secrets in memory with TTL instead of per-request API calls, reduce user-managed region count, and fix hot-path polling.
+
+**User-managed replication multiplier**: 10 secrets × 5 versions × 3 regions = 150 billable version-locations before free tier—Google’s pricing example cites **$8.64** for the user-managed portion plus separate automatic-replication secrets. Always model **locations × versions**, not just secret count.
+
+Your organization should replicate this arithmetic quarterly: export active version counts per project, multiply by locations for user-managed secrets, add measured `AccessSecretVersion` volume from Cloud Logging metrics, and add rotation notification counts if schedules are enabled. Finance surprises are almost always disabled versions left for months or health checks hammering access APIs—not the headline $0.06 per version rate alone. Tag secrets with `owner` and `cost-center` labels early so exports map cleanly to teams during chargeback conversations, and so orphaned secrets are obvious when services decommission without cleaning IAM bindings or secret versions.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Proven patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **Per-secret IAM for workload SAs** | Every production service | Limits blast radius to one credential | Automate bindings via Terraform/Config Connector |
+| **Dual-version overlap rotation** | Databases and shared API keys | Old and new creds work during staggered restarts | Requires upstream to accept two passwords temporarily |
+| **Write-only rotator SA** | Scheduled rotation functions | `secretVersionAdder` cannot exfiltrate existing material | Pair with Pub/Sub `SECRET_ROTATE` subscriber |
+| **Pinned versions in prod runtimes** | Cloud Run, Functions, GKE | Deployments are reproducible; rollouts are deliberate | Combine with CI that bumps version number explicitly |
+| **CSI file mounts on GKE** | New clusters on supported versions | Secrets never copied to etcd | Plan rolling restarts or app reload on rotation |
+| **Central secrets project** | Many workloads in shared VPC | One place for audit and CMEK policies | Use separate projects per environment, not one global bucket |
+
+### Anti-patterns
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Project-wide `secretAccessor`** | One compromise leaks all secrets | Faster than per-secret Terraform | Bind accessor on each secret resource |
+| **`latest` in prod without redeploy discipline** | Assumed auto-rotation; old creds remain | Dev behavior copied to prod | Pin version; automate redeploy on new version |
+| **Disabled versions as “archive”** | Storage bill never drops | Fear of irreversible destroy | Destroy after grace; keep audit logs instead |
+| **Per-request Secret Manager fetch** | Access op charges dominate | “Always fresh” myth | Cache with TTL; reload on rotation event |
+| **Storing 64 KiB blobs** | Wrong tool; cost + latency | Treating SM as encrypted GCS | Store ciphertext in GCS; SM holds KMS key name |
+| **Rotation schedule without subscriber** | Pub/Sub fires; nothing changes | Checkbox compliance | Implement idempotent subscriber + alerts on failure |
+| **User-managed single region** | Availability loss blocks writes | Cheapest residency option | At least two regions in same jurisdiction |
+
+Adopting a pattern is not the end of the story—you still need periodic access reviews that compare Secret Manager IAM bindings to what microservices actually deployed. Automated exports of `gcloud secrets get-iam-policy` across a folder catch drift faster than annual audits alone. When a pattern says “per-secret IAM,” enforce it in CI by rejecting Terraform plans that attach `secretAccessor` at project scope to application identities.
+
+---
+
+## Zero-trust alignment and evidence collection
+
+Zero-trust language gets abstract quickly, but Secret Manager gives you concrete control points: strong identity (service accounts and workforce identities), least-privilege authorization (per-secret IAM and conditions), encryption at rest (Google-managed or CMEK), transport security (TLS to the API), and telemetry (Data Access audit logs). Your job as a builder is to wire those controls into how applications actually start, not to treat Secret Manager as a passive vault you set up once.
+
+**Identity**: every consumer should use a dedicated service account or workload identity—not a shared “app-sa” that reads every secret because it was easier five years ago. Rotate user break-glass access with IAM Conditions so contractor accounts expire automatically.
+
+**Authorization**: separate duties between humans who administer secrets, automation that adds versions, and workloads that read versions. Violations of separation of duties show up when the same principal can both read production database passwords and publish new versions without a second approval.
+
+**Encryption**: CMEK is worth the operational overhead when regulators expect customer control of keys. Document who can disable KMS keys and run game days for key disablement because it behaves like a regional Secret Manager outage. Google-managed encryption is appropriate for many internal apps where your threat model focuses on IAM and exfiltration paths, not key custody.
+
+**Telemetry**: export logs to an immutable store. Build detections for `AccessSecretVersion` from unexpected projects, spikes after public CVE announcements, and first-time human access to production secrets. Correlate with VPC Flow Logs only when network exfiltration is in scope—Secret Manager access is an API call, not always visible as traditional egress.
+
+**Evidence for audits**: maintain a rotation calendar, ticket IDs linked to version numbers, and screenshots or terraform plans showing IAM bindings. Auditors ask “how do you know only the payment service read the payment API key?”—per-secret IAM plus logs is the defensible answer.
+
+---
+
+## Decision Framework
+
+Use the flowchart below when choosing **where** secrets live and **how** they replicate, especially during architecture reviews when someone proposes “we will just use environment variables in Kubernetes for now.” The goal is not to mandate Secret Manager everywhere—it is to make tradeoffs explicit about blast radius, cost, residency, and rotation mechanics before production launch.
+
+```mermaid
+flowchart TD
+    Start["Need to store sensitive value?"] --> Q1{"Public or non-sensitive config?"}
+    Q1 -->|Yes| Config["Use env vars, Parameter Manager,<br>or ConfigMap / build-time config"]
+    Q1 -->|No| Q2{"Runtime on GCP managed service?"}
+    Q2 -->|Cloud Run / Functions| SM1["Secret Manager + native --set-secrets<br>Prefer file mount for certs"]
+    Q2 -->|GKE| Q3{"Can use Secret Manager add-on?"}
+    Q3 -->|Yes| SM2["CSI mount secrets-store-gke.csi.k8s.io<br>Workload Identity per namespace"]
+    Q3 -->|No legacy chart| SM3["Init container or ESO sync —<br>understand etcd copy tradeoff"]
+    Q2 -->|Compute Engine| SM4["Client library + SA;<br>avoid world-readable files"]
+    SM1 --> Rep["Replication policy?"]
+    SM2 --> Rep
+    SM3 --> Rep
+    SM4 --> Rep
+    Rep --> Q4{"Data residency required?"}
+    Q4 -->|No| Auto["Automatic replication<br>1 billing location"]
+    Q4 -->|Yes| User["User-managed regions<br>N × versions cost"]
+```
+
+| Decision | Choose Secret Manager | Choose env / Parameter Manager | Tradeoff |
+| :--- | :--- | :--- | :--- |
+| Database password | Yes | Never in plain env in prod | SM adds IAM + audit; needs redeploy on rotation |
+| Feature flag (non-secret) | No | Parameter Manager or config | SM access ops cost without security benefit |
+| TLS private key | Yes (file mount) | — | Mount as file; watch 64 KiB limit |
+| Build-time registry token | Short-lived SM + CI SA | Sometimes CI native secret | SM shines when workloads reuse same cred |
+| Automatic vs user-managed replication | Automatic default | User-managed for EU-only, etc. | Each extra region multiplies $0.06/version |
+
+When two options appear equally valid in the matrix, default to **simpler operations**: automatic replication, per-secret IAM, pinned versions, and explicit redeploys beat exotic automation until you have staffing to run subscribers and game days. Complexity in secret pipelines shows up as outage duration during the first real rotation, not during the architecture slide deck.
+
+---
+
+## Building a rotation runbook
+
+Rotation fails in production when teams treat Secret Manager as the whole workflow instead of one step. A practical runbook lists upstream systems first (database, SaaS API, mutual TLS trust store), then Secret Manager versions, then consumer rollouts. Each step has an owner and a rollback.
+
+**Before rotation**, confirm dual-credential support in the upstream system. Document which consumers read which version pin. Snapshot current version numbers in the change ticket. Verify the rotator service account still has `secretVersionAdder` and that Pub/Sub subscriptions are healthy if you rely on schedules.
+
+**During rotation**, add the new version only after the upstream accepts the new material. Redeploy Cloud Run revisions or roll GKE deployments in waves—not all at once unless you enjoy simultaneous failures. Watch error rates and `AccessSecretVersion` logs for unexpected principals still reading old versions.
+
+**After rotation**, keep the previous version enabled for a documented grace window (often 24–48 hours). Disable when metrics show zero legitimate reads of the old version. Destroy after the window to stop storage billing. Update the change ticket with version IDs for auditors.
+
+**If rotation fails**, disable the new version before disabling the old one if consumers already picked up bad material. Re-deploy pins to the last known good version number. Post-incident, ask whether `latest` aliases or missing subscribers caused the drift.
+
+Hypothetical scenario: a team rotates a TLS cert in Secret Manager but forgets an edge CDN still serving the old cert from a manual upload. Monitoring shows green in GCP while customers hit certificate errors. The runbook must list **all** consumers, not only GCP-native ones.
+
 ---
 
 ## Did You Know?
@@ -500,6 +789,8 @@ gcloud logging read '
 
 ## Common Mistakes
 
+The table below captures mistakes we see repeatedly in reviews of GCP estates. None of these are Secret Manager product bugs—they are process and IAM habits that compile into incidents over months.
+
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Hardcoding secrets in code or ConfigMaps | "Just for now" during development | Prefer Secret Manager, including in dev environments |
@@ -514,6 +805,8 @@ gcloud logging read '
 ---
 
 ## Quiz
+
+Work through these scenario questions after the hands-on lab. Each answer explains **why** the behavior exists, not only what command to type. Scenario questions mirror how Secret Manager appears in incidents, billing reviews, and architecture debates.
 
 <details>
 <summary>1. Scenario: You are auditing the GCP billing report and notice separate line items for Secret Manager related to metadata and stored data. A junior engineer asks you why a single "secret" has different components. How do you explain the architectural difference between a Secret and a Secret Version to clarify this?</summary>
@@ -551,25 +844,36 @@ To prevent downtime, you must use a **dual-version strategy**. First, generate a
 Granting access at the project level would allow the `order-processor` service to read **every** secret in the project, violating the principle of least privilege. If the service is compromised via a vulnerability, the attacker gains access to all databases and external APIs across the entire architecture. By strictly limiting the blast radius of a potential compromise, you ensure that a vulnerability in one microservice does not cascade into a complete environment breach. Instead, apply the `roles/secretmanager.secretAccessor` role directly on the individual secret using `gcloud secrets add-iam-policy-binding SECRET_NAME`. This guarantees the service account can only access the exact keys it needs to function.
 </details>
 
+<details>
+<summary>7. Scenario: You configured Secret Manager rotation with a 30-day `rotation_period` and a Pub/Sub topic, expecting passwords to rotate automatically. After 30 days, Cloud Logging shows `SECRET_ROTATE` messages delivered, but the secret still has only one ENABLED version and applications use the original password. What went wrong architecturally?</summary>
+
+Secret Manager rotation is a **notification contract**, not a credential generator. The `SECRET_ROTATE` event tells your automation that the schedule elapsed; nothing in Secret Manager updates the database or calls `add_secret_version` unless **your subscriber** does. A complete design includes a Cloud Function or Cloud Run job subscribed to the topic that generates new material, updates the upstream system, adds a version, triggers redeployments, and only then disables old versions. Without that pipeline, billing for rotation notifications still occurs while security posture is unchanged—treat missing subscribers as a failed control, not a GCP bug.
+</details>
+
+<details>
+<summary>8. Scenario: Finance asks why Secret Manager costs rose after a “cleanup” that disabled old versions but left them in place. You have 120 secrets with automatic replication, each with 10 DISABLED versions and 2 ENABLED versions. How do you explain the bill and what remediation reduces cost without sacrificing rollback?</summary>
+
+[Pricing](https://cloud.google.com/secret-manager/pricing) bills **active** versions as ENABLED **or** DISABLED—destroyed versions are free. Your cleanup reduced risk surface for access but not storage: 120 secrets × 12 active versions × one automatic location ≈ 1,440 version-months, minus six free, mostly at **$0.06** each. Remediation: after a validated grace window, `destroy` superseded versions; keep at most one disabled version for emergency rollback; export audit logs if compliance requires historical proof. For rollback, rely on version numbers you can re-enable briefly, not an unlimited disabled pile.
+</details>
+
 ---
 
 ## Hands-On Exercise: Secrets Lifecycle with Cloud Run Integration
 
 ### Objective
 
-Create secrets, manage versions, integrate with Cloud Run, and simulate a secret rotation.
+Create secrets, manage versions, integrate with Cloud Run, and simulate a secret rotation. The lab intentionally walks through failure modes you will see in production—trailing newlines, disabled versions, and the gap between “new version exists” and “running revision still serves old material”—so you build muscle memory before an incident.
 
 ### Prerequisites
 
-- `gcloud` CLI installed and authenticated
-- A GCP project with billing enabled
+You need the `gcloud` CLI installed and authenticated to a project where you can enable `secretmanager.googleapis.com`, create service accounts, and deploy Cloud Run services. Billing must be enabled because Secret Manager access operations count against free tier limits; this lab stays within a few dollars if you destroy resources in Task 6. Use a disposable project or lab folder if your organization restricts secret creation in shared environments.
 
 ### Tasks
 
-**Task 1: Create Secrets**
+Work through the six checkpoints below in order; each has a collapsible solution, but you learn more by attempting the `gcloud` commands yourself first and only expanding the answer when stuck.
 
 <details>
-<summary>Solution</summary>
+<summary>Task 1: Create Secrets</summary>
 
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
@@ -600,10 +904,8 @@ echo "API Key: $(gcloud secrets versions access latest --secret=lab-api-key)"
 ```
 </details>
 
-**Task 2: Add Multiple Versions and Manage State**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 2: Add Multiple Versions and Manage State</summary>
 
 ```bash
 # Add version 2 to the database password
@@ -633,10 +935,8 @@ echo "Re-enabled: $(gcloud secrets versions access 1 --secret=lab-db-password)"
 ```
 </details>
 
-**Task 3: Configure IAM for a Service Account**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 3: Configure IAM for a Service Account</summary>
 
 ```bash
 # Create a service account for the application
@@ -659,10 +959,8 @@ gcloud secrets get-iam-policy lab-db-password \
 ```
 </details>
 
-**Task 4: Deploy a Cloud Run Service with Secrets**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 4: Deploy a Cloud Run Service with Secrets</summary>
 
 ```bash
 # Create a simple app that displays (masked) secret info
@@ -730,10 +1028,8 @@ curl -s $SERVICE_URL | python3 -m json.tool
 ```
 </details>
 
-**Task 5: Simulate Secret Rotation**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 5: Simulate Secret Rotation</summary>
 
 ```bash
 # Add a new version (simulating rotation)
@@ -763,10 +1059,8 @@ gcloud secrets versions list lab-db-password \
 ```
 </details>
 
-**Task 6: Clean Up**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 6: Clean Up</summary>
 
 ```bash
 # Delete Cloud Run service
@@ -788,6 +1082,8 @@ echo "Cleanup complete."
 
 ### Success Criteria
 
+If any step fails, stop and fix before continuing—partially configured secrets with wide IAM bindings are worse than a delayed lab. Capture the version list output after Task 2; you will need it to explain rotation behavior in Task 5.
+
 - [ ] Secrets created with correct data (no trailing newlines)
 - [ ] Multiple versions added and version states managed
 - [ ] Per-secret IAM configured for the service account
@@ -799,11 +1095,26 @@ echo "Cleanup complete."
 
 ## Next Module
 
-Next up: **[Module 2.10: Cloud Operations (Monitoring & Logging)](../module-2.10-operations/)** --- Learn Cloud Logging (log routers, sinks, and log-based metrics), Cloud Monitoring (dashboards, PromQL/MQL, alerting), and uptime checks to keep your services observable and reliable.
+Secrets without observability create a false sense of safety—you rotated the credential, but nobody watches whether consumers failed or whether an unknown principal still reads version 3 at midnight. The next module connects operational visibility to the resources you protect here.
+
+Next up: **[Module 2.10: Cloud Operations (Monitoring & Logging)](../module-2.10-operations/)** — Learn Cloud Logging (log routers, sinks, and log-based metrics), Cloud Monitoring (dashboards, PromQL/MQL, alerting), and uptime checks to keep your services observable and reliable. Plan to route Secret Manager Data Access logs into the sinks you configure there, and alert on anomalies that correlate with secret version changes.
 
 ## Sources
 
-- [Secret Manager overview](https://cloud.google.com/secret-manager/docs/overview) — Covers the service model, encryption, versioning, replication, and integration points at the product level.
-- [Access control with IAM](https://cloud.google.com/secret-manager/docs/access-control) — Explains Secret Manager roles, least-privilege access, and IAM Conditions for time-based controls.
-- [Configure secrets for services](https://cloud.google.com/run/docs/configuring/services/secrets) — Documents the exact Cloud Run behaviors for secret environment variables, mounted files, and version selection.
-- [Create rotation schedules in Secret Manager](https://cloud.google.com/secret-manager/docs/secret-rotation) — Shows the native Secret Manager rotation model and how automated rotation notifications work.
+- [Secret Manager overview](https://cloud.google.com/secret-manager/docs/overview) — Service model, encryption, versioning, replication, and integration points.
+- [Secret Manager pricing](https://cloud.google.com/secret-manager/pricing) — Active versions, access operations, rotation notification charges, and free tier limits.
+- [Access control with IAM](https://cloud.google.com/secret-manager/docs/access-control) — Roles, least-privilege patterns, and IAM Conditions.
+- [Choose a secret replication policy](https://cloud.google.com/secret-manager/docs/choosing-replication) — Automatic vs user-managed replication and billing locations.
+- [Create and access secrets](https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets) — Creating secrets, adding versions, and accessing payloads.
+- [Add a secret version](https://cloud.google.com/secret-manager/docs/add-secret-version) — Version states (enabled, disabled, destroyed) and immutability.
+- [Access a secret version](https://cloud.google.com/secret-manager/docs/access-secret-version) — Version aliases including `latest`.
+- [Encryption and CMEK](https://cloud.google.com/secret-manager/docs/encryption) — Google-managed keys and customer-managed encryption.
+- [Customer-managed encryption keys (CMEK)](https://cloud.google.com/secret-manager/docs/cmek) — KMS key requirements and lifecycle impact.
+- [Audit logging](https://cloud.google.com/secret-manager/docs/audit-logging) — Admin vs data access logs for Secret Manager API methods.
+- [Create rotation schedules](https://cloud.google.com/secret-manager/docs/secret-rotation) — Pub/Sub `SECRET_ROTATE` notifications and schedule constraints.
+- [Expiring secrets (TTL)](https://cloud.google.com/secret-manager/docs/creating-and-managing-expiring-secrets) — `--ttl` and automatic deletion behavior.
+- [Configure secrets for Cloud Run](https://cloud.google.com/run/docs/configuring/services/secrets) — Environment variables, volume mounts, version pinning.
+- [Configure secrets for Cloud Functions](https://cloud.google.com/functions/docs/configuring/secrets) — Gen2 secret bindings shared with Cloud Run.
+- [Secret Manager add-on for GKE](https://cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component) — CSI driver `secrets-store-gke.csi.k8s.io` and Workload Identity.
+- [IAM roles for Secret Manager](https://cloud.google.com/iam/docs/roles-permissions/secretmanager) — Predefined role permissions reference.
+- [Secret Manager quotas](https://cloud.google.com/secret-manager/quotas) — Per-project API rate limits for access and management calls.
