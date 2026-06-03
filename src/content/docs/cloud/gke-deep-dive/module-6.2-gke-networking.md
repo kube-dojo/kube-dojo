@@ -421,7 +421,7 @@ gcloud compute forwarding-rules list \
 
 ### Container-native load balancing with Network Endpoint Groups (NEGs)
 
-Classic load balancing to Kubernetes often forwarded traffic to **node IPs** and relied on kube-proxy to forward again to pods—an extra hop and another place where conntrack tables strain under churn. **Container-native load balancing** registers backends as **zonal NEGs pointing at pod IPs**, so the Google Cloud load balancer sends traffic **directly to pods** that match the Service endpoints. [For GKE 1.17 and later, container-native load balancing is the default for Ingress in many configurations](https://cloud.google.com/kubernetes-engine/docs/how-to/container-native-load-balancing); when NEGs are not default, you opt in per Service:
+Classic load balancing to Kubernetes often forwarded traffic to **node IPs** and relied on kube-proxy to forward again to pods—an extra hop and another place where conntrack tables strain under churn. **Container-native load balancing** registers backends as **zonal NEGs pointing at pod IPs**, so the Google Cloud load balancer sends traffic **directly to pods** that match the Service endpoints. On current GKE versions, container-native load balancing (NEG backends that point directly at pod IPs) is the **default** for Ingress; where it is not automatic, you opt in per Service with the `cloud.google.com/neg` annotation. See [container-native load balancing](https://cloud.google.com/kubernetes-engine/docs/how-to/container-native-load-balancing):
 
 ```yaml
 apiVersion: v1
@@ -1039,7 +1039,7 @@ Container-native load balancing registers **Network Endpoint Groups** that point
 </details>
 
 <details>
-<summary>8. Cluster Autoscaler logs show "max node group size reached" while hundreds of pods stay Pending with "failed to allocate IP address" events. The pod secondary range is `/22` and max pods per node is 110 on a regional cluster with 12 nodes already. What is the most likely root cause, and which remediation paths does Google document?</summary>
+<summary>8. Cluster Autoscaler logs show "max node group size reached" while hundreds of pods stay Pending with "failed to allocate IP address" events. The pod secondary range is `/22` and max pods per node is 110 on a regional cluster with four nodes already. What is the most likely root cause, and which remediation paths does Google document?</summary>
 
 With 110 max pods per node, GKE allocates a **`/24` pod slice per node**. A `/22` secondary range only provides four such slices (`2^(24-22)=4` node-sized allocations at that mask relationship—teams often exhaust smaller ranges faster than node CPU limits). The autoscaler cannot add nodes because **no unallocated pod CIDR blocks remain**, not because the cloud quota for VMs is zero. Remediation is not "raise autoscaler max." Documented paths include **planning a larger range at cluster creation**, adding **discontiguous multi-Pod CIDR** if supported for your environment, or **creating a replacement cluster** with recalculated `Q` (max pods) and `DS` (pod prefix) using the sizing formulas in Google's flexible pod CIDR guide. Prevention requires modeling max nodes (`MN`) before the first production deployment.
 </details>
@@ -1080,7 +1080,7 @@ gcloud container clusters create net-demo \
   --enable-ip-alias \
   --release-channel=regular \
   --gateway-api=standard \
-  --workload-pool=$PROJECT_ID.svc.id.goog
+  --workload-pool=$PROJECT_ID.svc.id.goog  # Workload Identity pool — enabled here as a forward reference (covered in Module 6.3); harmless for this networking lab.
 
 # Get credentials
 gcloud container clusters get-credentials net-demo --region=$REGION
@@ -1312,7 +1312,7 @@ spec:
     port: 80
     allowedRoutes:
       namespaces:
-        from: Same
+        from: Same  # from: Same keeps this lab single-namespace; production multi-team setups use from: Selector with namespace labels (see body).
 EOF
 
 # Create an HTTPRoute with canary traffic splitting (90/10)
@@ -1442,7 +1442,7 @@ gcloud container clusters create psc-demo \
   --enable-private-nodes \
   --private-endpoint-subnetwork=psc-subnet \
   --enable-ip-alias \
-  --master-authorized-networks=0.0.0.0/0
+  --master-authorized-networks=0.0.0.0/0  # Lab simplicity ONLY — production must narrow this to your admin/CI CIDRs (see Pre-production checklist).
 
 # Verify the PSC endpoint IP address
 gcloud container clusters describe psc-demo \

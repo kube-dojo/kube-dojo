@@ -206,8 +206,6 @@ For multi-project setups, Fleet Workload Identity Federation extends the same `P
 
 Operationally, fleet WIF is how hub-and-spoke platforms avoid "service account sprawl": one BigQuery dataset in `data-prod` trusts principals from `app-dev`, `app-staging`, and `app-prod` clusters via explicit bindings rather than shared JSON keys checked into Helm values. Document which namespaces in which memberships may assume which roles, because fleet-wide principal sets are powerful—`principalSet` attributes can match many KSAs at once, which is excellent for platform-wide logging agents and dangerous if mis-scoped to `roles/owner`.
 
-For multi-project setups, Fleet Workload Identity Federation allows pods in one project to access resources in another project without creating service accounts in every project.
-
 ```bash
 # Register the cluster with a Fleet
 gcloud container fleet memberships register my-cluster \
@@ -367,7 +365,7 @@ gcloud logging read \
   --limit=5
 ```
 
-**War Story**: A team enabled Binary Authorization in enforce mode on a Friday afternoon. On Monday morning, their CI/CD pipeline had broken because Cloud Build was pushing images but not creating attestations. Every deployment for 48 hours was blocked. Start with `DRYRUN_AUDIT_LOG_ONLY` mode to identify what would be blocked before switching to enforce mode.
+**Hypothetical scenario** (illustrative teaching example only — not a reported real production incident): A team enabled Binary Authorization in enforce mode on a Friday afternoon. On Monday morning, their CI/CD pipeline had broken because Cloud Build was pushing images but not creating attestations. Every deployment for 48 hours was blocked. Start with `DRYRUN_AUDIT_LOG_ONLY` mode to identify what would be blocked before switching to enforce mode.
 
 ### Policy structure: default rule, cluster rules, and attestors
 
@@ -448,8 +446,8 @@ gcloud container node-pools create confidential-pool \
   --num-nodes=1 \
   --enable-confidential-nodes
 
-# Note: Confidential Nodes require N2D machine types (AMD EPYC)
-# and are available in limited regions
+# Note: Confidential Nodes require N2D, C2D, or C3D (AMD SEV) on Standard mode
+# (GKE Autopilot confidential nodes are currently N2D-only); limited regions
 ```
 
 | Feature | Shielded Nodes | Confidential Nodes |
@@ -457,13 +455,13 @@ gcloud container node-pools create confidential-pool \
 | **Boot integrity** | Yes | Yes |
 | **Memory encryption** | No | Yes (AMD SEV) |
 | **Performance impact** | None | ~2-6% overhead |
-| **Machine types** | All | N2D only (AMD) |
+| **Machine types** | All | N2D, C2D, or C3D (AMD SEV); Autopilot confidential nodes N2D-only |
 | **Cost** | No additional cost | ~10% premium |
 | **Use case** | All production clusters | Financial, healthcare, PII |
 
-Shielded GKE Nodes address **boot-time and kernel integrity**: Secure Boot refuses unsigned boot components, vTPM records a measured boot chain, and integrity monitoring alerts when runtime measurements diverge from the baseline. They do not encrypt application memory against a hostile hypervisor or physical attacker with DRAM access. Confidential GKE Nodes add **AMD SEV memory encryption** so guest RAM is encrypted with keys that stay inside the CPU; Google's documentation positions Confidential Nodes for regulated workloads that must protect data **in use**, at the cost of N2D-only machine families, regional availability limits, and roughly single-digit percent CPU overhead plus a node pricing premium.
+Shielded GKE Nodes address **boot-time and kernel integrity**: Secure Boot refuses unsigned boot components, vTPM records a measured boot chain, and integrity monitoring alerts when runtime measurements diverge from the baseline. They do not encrypt application memory against a hostile hypervisor or physical attacker with DRAM access. Confidential GKE Nodes add **AMD SEV memory encryption** so guest RAM is encrypted with keys that stay inside the CPU; Google's documentation positions Confidential Nodes for regulated workloads that must protect data **in use**, at the cost of N2D, C2D, or C3D (AMD SEV) machine families on Standard mode (GKE Autopilot confidential nodes are currently N2D-only), regional availability limits, and roughly single-digit percent CPU overhead plus a node pricing premium.
 
-Operationally, enable Shielded Nodes on every production cluster (default on new clusters) and treat Confidential Nodes as a targeted pool for namespaces that process PCI, PHI, or contractual "encrypted in use" requirements—not as the default for all apps. Mixing both on the same node is possible when machine type and region support Confidential mode; otherwise run sensitive StatefulSets on a dedicated `confidential-pool` and keep general workloads on standard Shielded pools to avoid paying the Confidential premium everywhere.
+Operationally, enable Shielded Nodes on every production cluster (default on new clusters) and treat Confidential Nodes as a targeted pool for namespaces that process PCI, PHI, or contractual "encrypted in use" requirements—not as the default for all apps. Pick `n2d`, `c2d`, or `c3d` machine types per region availability before enabling `--enable-confidential-nodes` on Standard pools. Mixing both on the same node is possible when machine type and region support Confidential mode; otherwise run sensitive StatefulSets on a dedicated `confidential-pool` and keep general workloads on standard Shielded pools to avoid paying the Confidential premium everywhere.
 
 > **Stop and think**: Your compliance team requires that data in use (in memory) must be encrypted. Which node type must you choose, and what specific CPU architecture is required to support this feature?
 
@@ -482,10 +480,11 @@ gcloud container clusters update my-cluster \
   --security-posture=standard \
   --workload-vulnerability-scanning=standard
 
-# Check security posture findings via gcloud
-gcloud container security-posture findings list \
-  --project=$PROJECT_ID \
-  --format="table(finding.severity, finding.category, finding.description)"
+# Security Posture findings surface in the Console (Security > Posture dashboard)
+# and flow to Security Command Center — there is no gcloud container security-posture
+# command group. Query exported findings via SCC (filter by source in the Console if needed):
+gcloud scc findings list "projects/$PROJECT_ID/sources/-" \
+  --format="table(finding.category, finding.severity, finding.state)"
 ```
 
 Security Posture findings group into several themes you should expect in weekly review: **workload configuration** (pods running as root, missing security contexts, privileged containers),
@@ -757,7 +756,7 @@ For Kubernetes **1.35** clusters on GKE regular or stable channels, validate fea
 
 GitOps repositories should encode security baseline as data, not tribal knowledge: cluster create flags (`--workload-pool`, `--enable-shielded-nodes`), namespace labels for PSS, SecretProviderClass manifests, and Binary Authorization policy fragments owned by security with version control. Application charts then only supply `serviceAccountName`, image digests, and resource requests. That separation of duties mirrors how mature organizations implement Terraform for cloud IAM and Helm for workload shape—GKE security features fail operationally when only one team knows the gcloud incantations.
 
-Identity and admission controls also interact with **network policy** and **service mesh** identity, which this module does not configure but platform architects should not ignore. Workload Identity answers Google API authentication; mutual TLS between pods answers east-west trust inside the cluster. A pod with narrowly scoped IAM can still exfiltrate data over plain HTTP if NetworkPolicies allow unrestricted egress. Document which layer mitigates which threat so teams do not treat IAM bindings as a substitute for network segmentation or L7 policy. Workload Identity answers Google API authentication; mTLS between pods answers east-west trust inside the cluster. A pod with perfect Workload Identity scoping can still exfiltrate data over plain HTTP if NetworkPolicies allow it. Document which layer enforces which threat so application teams do not assume IAM bindings replace network segmentation.
+Identity and admission controls also interact with **network policy** and **service mesh** identity, which this module does not configure but platform architects should not ignore. Workload Identity answers Google API authentication; mutual TLS between pods answers east-west trust inside the cluster. A pod with narrowly scoped IAM can still exfiltrate data over plain HTTP if NetworkPolicies allow unrestricted egress. Document which layer mitigates which threat so teams do not treat IAM bindings as a substitute for network segmentation or L7 policy.
 
 Finally, treat Cloud Audit Logs as part of the user interface for these features, not as archival noise. Create saved queries for Binary Authorization denials, breakglass labels, dry-run violations, and `secretmanager.versions.access` from GKE workload identities. Review those queries in weekly platform standups the same way you review application error-rate dashboards so security regressions surface before external auditors or customers do. Dashboard those metrics in your observability stack alongside application SLOs so security regressions page the same on-call rotation that already understands the cluster and its namespaces. When audit volume grows, tune sinks and retention rather than disabling enforcement—high log volume often means policy misconfiguration worth fixing, not evidence that controls failed or should be removed from production clusters.
 
@@ -765,7 +764,7 @@ Finally, treat Cloud Audit Logs as part of the user interface for these features
 
 ## Did You Know?
 
-1. **Before Workload Identity existed, the recommended workaround was to distribute service account JSON key files as Kubernetes Secrets.** This meant private key material was stored in etcd, potentially logged, and visible to anyone with RBAC access to the namespace. Google internal security audits in 2019 found that 34% of GKE clusters in a sample had service account keys stored as Kubernetes Secrets. Workload Identity, launched in 2019, eliminated the need for key files entirely by using short-lived, automatically-rotated tokens.
+1. **Before Workload Identity, the common workaround was distributing service-account JSON keys as Kubernetes Secrets** — which puts long-lived private-key material in etcd, where any namespace RBAC holder or etcd backup can read it. Workload Identity removes the key entirely by exchanging the Kubernetes ServiceAccount token for short-lived Google credentials at runtime, so compromise of a Secret object no longer equals compromise of a multi-year GCP private key. Google introduced Workload Identity in 2019; it reached GA in 2020/2021.
 
 2. **Binary Authorization attestations are immutable and tied to the exact image digest (SHA-256), not the tag.** If someone pushes a new image with the tag `v1.0` (overwriting the old one), the attestation on the original image becomes invalid for the new image because the digest changed. This prevents a supply chain attack where an attacker replaces a trusted image with a malicious one while keeping the same tag. Always deploy by digest in production: `image: us-central1-docker.pkg.dev/proj/repo/app@sha256:abc123...`
 
@@ -854,7 +853,7 @@ This lab consolidates the module's identity and supply-chain threads in one disp
 
 ### Prerequisites
 
-Install and authenticate the `gcloud` CLI, select a GCP project with billing enabled, and enable the Container, Pub/Sub, Binary Authorization, Cloud KMS, and Secret Manager APIs before starting. The lab uses regional clusters in `us-central1` and Kubernetes 1.35-compatible release channels; adjust locations if your org restricts regions. Estimated spend is a few dollars for a single `e2-standard-2` node for under two hours if you delete the cluster in Task 8.
+Install and authenticate the `gcloud` CLI, select a GCP project with billing enabled, and enable the Container, Pub/Sub, Binary Authorization, Cloud KMS, and Secret Manager APIs before starting. The lab uses regional clusters in `us-central1` and Kubernetes 1.35-compatible release channels; adjust locations if your org restricts regions. Estimated spend is three `e2-standard-2` nodes (one per zone in the region) plus the $0.10/hr cluster fee — a few dollars per hour while the cluster runs. Task 1 uses `--num-nodes=1` on a regional cluster, which GKE interprets as one node **per zone**, not one node total; delete the cluster promptly in Task 8 to avoid overnight charges.
 
 ### Tasks
 

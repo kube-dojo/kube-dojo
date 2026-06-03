@@ -113,7 +113,7 @@ gcloud container clusters create dev-cluster \
   --release-channel=rapid
 ```
 
-**War Story**: Regional clusters can create more nodes than teams expect because node counts are distributed across zones. In the default three-zone layout, a `--num-nodes` value applies per zone rather than as a single cluster-wide total, so plan capacity and cost accordingly.
+**Capacity note**: Regional clusters can create more nodes than teams expect because node counts are distributed across zones. In the default three-zone layout, a `--num-nodes` value applies per zone rather than as a single cluster-wide total, so plan capacity and cost accordingly.
 
 ---
 
@@ -172,7 +172,7 @@ Neither image gives Pods the full vCPU count printed on the machine type label. 
 
 ### Spot VMs versus legacy preemptible VMs
 
-Both Spot and preemptible VMs offer steep discounts versus on-demand Compute Engine pricing — [Spot pricing in Autopilot and Standard contexts can reach roughly 60–91% off](https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms) corresponding regular rates, though Spot prices adjust dynamically. The operational difference that matters for batch design: **preemptible VMs expire after 24 hours**, while **Spot VMs have no fixed expiration** and run until Compute Engine reclaims capacity. GKE documentation recommends Spot over preemptible for new node pools. Spot reclamation is involuntary and **not covered by PodDisruptionBudget guarantees**, so fault-tolerant or checkpointed workloads belong on Spot; stateful systems need on-demand pools or careful graceful-shutdown tuning (default 30 seconds, extendable up to 120 seconds on supported Standard versions).
+Both Spot and preemptible VMs offer steep discounts versus on-demand Compute Engine pricing — [Spot pricing in Autopilot and Standard contexts can reach roughly 60–91% off](https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms) corresponding regular rates, though Spot prices adjust dynamically. The operational difference that matters for batch design: **preemptible VMs expire after 24 hours**, while **Spot VMs have no fixed expiration** and run until Compute Engine reclaims capacity. GKE documentation recommends Spot over preemptible for new node pools. Spot reclamation is involuntary and **not covered by PodDisruptionBudget guarantees**, so fault-tolerant or checkpointed workloads belong on Spot; stateful systems need on-demand pools or careful graceful-shutdown tuning (default 30 seconds, extendable up to 120 seconds on supported Standard control-plane versions **(Preview)**).
 
 ### Per-zone versus total node autoscaling flags
 
@@ -254,9 +254,7 @@ graph LR
 # Create an Autopilot cluster
 gcloud container clusters create-auto autopilot-cluster \
   --region=us-central1 \
-  --release-channel=regular \
-  --enable-ip-alias \
-  --workload-pool=$(gcloud config get-value project).svc.id.goog
+  --release-channel=regular
 ```
 
 That single command creates a production-ready regional cluster with VPC-native networking and Workload Identity enabled — no node pool forms to fill out, no machine-type matrix, no cluster-autoscaler min/max tuning. Google provisions right-sized nodes when Pending Pods exist, patches them on Google's cadence, and reclaims capacity when Deployments scale down. You still configure release channels, maintenance policies, and RBAC; you do not SSH to nodes or pick `--machine-type` for general workloads.
@@ -642,9 +640,9 @@ Hypothetical scenario: a team skips the IP capacity review and launches successf
 
 2. **The GKE control plane runs in Google-managed infrastructure** that is separate from your project's worker nodes. That's why customers interact with the control plane through managed endpoints and don't directly access the control plane VMs.
 
-3. **GKE operates at very large scale inside Google Cloud**, which gives Google significant operational experience running Kubernetes for many customers. Avoid uncited deployment-volume rankings or causal claims about patch timing here.
+3. **The GKE cluster management fee is billed per second, not per hour.** At $0.10 per cluster per hour, a cluster you create and delete 20 minutes later costs about $0.033 — which is why ephemeral CI/preview clusters are cheap to spin up and tear down. (Worker-node, Pod, load-balancer, and disk charges are separate.)
 
-4. **Maintenance exclusions are bounded by release-channel support rules**. Short "No upgrades" exclusions are limited to ninety days. Longer exclusions must still end by the minor version's end-of-support date. You cannot postpone upgrades indefinitely while staying on an unsupported Kubernetes minor.
+4. **Maintenance exclusions are bounded by release-channel support rules**. Short "No upgrades" exclusions for the default `no_upgrades` scope are limited to ninety days (the post-end-of-support emergency window); scoped exclusions can run longer, up to the minor's end-of-support. Longer exclusions must still end by the minor version's end-of-support date. You cannot postpone upgrades indefinitely while staying on an unsupported Kubernetes minor.
 
 ---
 
@@ -958,6 +956,7 @@ Next up: **[Module 6.2: GKE Networking (Dataplane V2 and Gateway API)](../module
 ## Sources
 
 - [cloud.google.com: pricing](https://cloud.google.com/kubernetes-engine/pricing) — The GKE pricing page explicitly lists these financially backed availability figures.
+- [GKE SLA](https://cloud.google.com/kubernetes-engine/sla) — The financially-backed 99.95% regional / 99.5% zonal control-plane SLA.
 - [cloud.google.com: regional clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/regional-clusters) — The regional-clusters documentation directly describes replicated control planes and default three-zone worker-node distribution.
 - [cloud.google.com: node auto provisioning](https://cloud.google.com/kubernetes-engine/docs/concepts/node-auto-provisioning) — The node auto-provisioning documentation explicitly says GKE creates node pools for pending workloads and deletes empty auto-created pools.
 - [cloud.google.com: introducing gke autopilot](https://cloud.google.com/blog/products/containers-kubernetes/introducing-gke-autopilot) — Google's launch post provides the February 2021 introduction date and describes the Autopilot management model.
