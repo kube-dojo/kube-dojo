@@ -27,11 +27,9 @@ After completing this rigorous module, you should be able to apply each capabili
 
 ## Why This Module Matters
 
-In March 2017, an engineer at Amazon Web Services was debugging a billing system issue within the Simple Storage Service (S3) in the Northern Virginia region. The intended fix was to execute a routine playbook to remove a small number of servers from an indexing subsystem. Due to a simple typo in a manual operational command, a significantly larger set of servers was forcefully removed than originally intended. This simple human error triggered a cascading failure that took down massive portions of the internet for nearly four hours, resulting in an estimated 150 million dollars in financial impact across companies ranging from Slack to Trello to the Securities and Exchange Commission.
+**Hypothetical scenario:** An on-call engineer runs a routine operational playbook to remove a small number of servers from a capacity pool. A mistyped command removes far more capacity than intended, triggering a cascading failure that takes down dependent services for several hours. The post-incident review rarely blames a single person — it blames imperative, manual operations against production infrastructure without guardrails. One critical safeguard teams adopt afterward is robust tooling around infrastructure changes, ensuring that a single mistyped command cannot immediately cause region-wide catastrophic impact. The industry learned a hard lesson: imperative, manual operations performed directly against production infrastructure are an unacceptable risk profile for modern systems.
 
-AWS later published a highly detailed post-mortem analyzing the root causes and committed to adding extensive systemic safeguards. One of the most critical safeguards emphasized in the aftermath was the necessity of robust tooling around infrastructure changes, ensuring that a single mistyped command cannot immediately cause region-wide catastrophic impact. The industry learned a hard lesson that day: imperative, manual operations performed directly against production infrastructure are an unacceptable risk profile for modern systems.
-
-This is precisely what Infrastructure as Code solves at its foundational core. When your infrastructure is defined explicitly in a text-based template file, changes are forced to go through version control, peer code review, and automated pre-flight validation before they ever touch a production environment. A syntax typo in a CloudFormation template fails safely at validation time, rather than crashing an active system during execution. A dangerous architectural change is caught in a pull request diff, rather than discovered during a four-hour outage post-mortem. Furthermore, rollback is fully automatic—CloudFormation undoes applied changes if a stack update fails halfway through, systematically returning the environment to the last known good configuration state.
+This is precisely what Infrastructure as Code solves at its foundational core. When your infrastructure is defined explicitly in a text-based template file, changes are forced to go through version control, peer code review, and automated pre-flight validation before they ever touch a production environment. A syntax typo in a CloudFormation template fails safely at validation time, rather than crashing an active system during execution. A dangerous architectural change is caught in a pull request diff, rather than discovered during a multi-hour outage post-mortem. Furthermore, rollback is fully automatic—CloudFormation undoes applied changes if a stack update fails halfway through, systematically returning the environment to the last known good configuration state.
 
 On AWS specifically, CloudFormation is the **native** IaC engine: IAM policies, Service Catalog portfolios, Control Tower controls, and numerous service features assume stacks exist with identifiable IDs. That integration is why many enterprises standardize on CloudFormation for landing zones even when application teams prefer Terraform for multi-cloud application dependencies — the platform boundary and the application boundary pick different tools intentionally. Your job as an architect is to place contracts (exports, Parameter Store paths, shared tags) at the boundary so neither side hardcodes the other’s physical IDs.
 
@@ -49,7 +47,7 @@ Templates ship as YAML or JSON. YAML is the human authoring format most teams st
 
 A CloudFormation template is a structured file that declares the desired state of your entire infrastructure. Let us examine the full hierarchical structure of a standard template:
 
-```cloudformation
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "What this template creates and why"
 
@@ -121,7 +119,7 @@ Beyond `String` and `Number`, production templates routinely use AWS-specific ty
 
 Setting `NoEcho: true` on a parameter prevents the value from appearing in stack event history or the console after submission. It does **not** encrypt the value at rest in the stack — for secrets you should prefer [dynamic references to Secrets Manager or SSM Parameter Store](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/dynamic-references.html) so plaintext never lives in the template body or parameter store longer than necessary.
 
-```cloudformation
+```yaml
 Parameters:
   DatabasePassword:
     Type: String
@@ -140,7 +138,7 @@ AWS-specific parameter types, such as `AWS::EC2::KeyPair::KeyName`, are particul
 
 Resources form the absolute center of gravity for your template. Each resource entry must have a logical name (which acts as your internal label), a resource type (dictating the AWS service), and a properties block (providing the specific configuration details).
 
-```cloudformation
+```yaml
 Resources:
   # Logical name: WebServerSecurityGroup
   WebServerSecurityGroup:
@@ -167,7 +165,7 @@ When resources are dynamically named, the best practice for discovering them is 
 
 ### Parameter Examples for Multi-Environment Templates
 
-```cloudformation
+```yaml
 Parameters:
   VPCCidr:
     Type: String
@@ -200,7 +198,7 @@ Parameters:
 
 Outputs serve as the public API of your CloudFormation stack. They expose critical values from your deployed resources, either for direct human consumption in the console or to enable cross-stack references across the broader architecture.
 
-```cloudformation
+```yaml
 Outputs:
   VPCId:
     Description: "The VPC ID"
@@ -237,7 +235,7 @@ The two most common intrinsic functions—`!Ref` and `!GetAtt`—deal with extra
 
 What `!Ref` returns is **resource-type-specific**, not “always the ARN.” For many resources it is the resource ID; for an SSM parameter reference it is the value; for a pseudo-parameter it resolves to the stack or Region string. Guessing causes subtle bugs — for example, passing `!Ref` of an EC2 instance into a user-data script when you needed `!GetAtt MyInstance.PrivateIp`. The [documentation for each `AWS::` resource type](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-template-resource-type-ref.html) lists the `Ref` return value and the attributes available to `Fn::GetAtt`. Senior engineers keep that page open while reviewing templates because it is faster than inferring from failed deploy events.
 
-```cloudformation
+```yaml
 # !Ref returns the resource's primary identifier
 # For an EC2 instance: the instance ID
 # For a parameter: the parameter value
@@ -253,7 +251,7 @@ SecurityGroupId: !GetAtt WebServerSecurityGroup.GroupId
 
 Constructing dynamic strings is necessary for naming conventions, resource tagging, and injection into configuration scripts like EC2 User Data.
 
-```cloudformation
+```yaml
 # Variable substitution in strings
 # ${AWS::StackName} and ${AWS::Region} are pseudo-parameters
 BucketName: !Sub "${AWS::StackName}-artifacts-${AWS::Region}"
@@ -271,7 +269,7 @@ UserData:
 
 Manipulating lists and arrays is a common requirement when dealing with availability zones, subnets, and routing configurations, so CloudFormation provides `!Select`, `!Split`, and `!Join` to compose CIDR math and subnet wiring without hardcoding every value.
 
-```cloudformation
+```yaml
 # Pick an item from a list
 AZ: !Select [0, !GetAZs ""]   # First AZ in the region
 
@@ -287,7 +285,7 @@ SubnetIds: !Join [",", [!Ref Subnet1, !Ref Subnet2, !Ref Subnet3]]
 
 Real-world infrastructure templates must adapt based on the deployment environment. You might want highly available NAT Gateways in production, but completely omit them in development to save extensive costs. Conditionals make this possible without duplicating code.
 
-```cloudformation
+```yaml
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, production]
   CreateNAT: !Equals [!Ref EnableNATGateway, "true"]
@@ -340,7 +338,7 @@ CloudFormation injects **pseudo-parameters** that always resolve in the deployme
 
 `Fn::ImportValue` consumes an export name published by another stack's output. Export names are regional and account-scoped; the import creates a hard dependency that blocks deletion of the exporting stack until consumers release the import. For loosely coupled platform/application boundaries, exports are preferable to copying IDs into parameter files. For tightly coupled parent/child deployments that share one lifecycle, nested stacks pass outputs through `Fn::GetAtt ChildStack.Outputs.OutputName` instead.
 
-```cloudformation
+```yaml
   AppSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -473,8 +471,11 @@ DRIFT_ID=$(aws cloudformation detect-stack-drift \
   --stack-name my-network \
   --query StackDriftDetectionId --output text)
 
-aws cloudformation wait stack-drift-detection-complete \
-  --stack-drift-detection-id "$DRIFT_ID"
+while [ "$(aws cloudformation describe-stack-drift-detection-status \
+  --stack-drift-detection-id "$DRIFT_ID" \
+  --query DetectionStatus --output text)" = "DETECTION_IN_PROGRESS" ]; do
+  sleep 5
+done
 
 aws cloudformation describe-stack-resource-drifts \
   --stack-name my-network \
@@ -482,6 +483,8 @@ aws cloudformation describe-stack-resource-drifts \
   --query 'StackResourceDrifts[*].[LogicalResourceId,PropertyDifferences]' \
   --output table
 ```
+
+Unlike stack create or update operations, drift detection is asynchronous and **does not expose a `aws cloudformation wait` subcommand** — the supported waiters cover change-set creation, stack create/delete/update, import, rollback, and type registration only. Scripts must poll `describe-stack-drift-detection-status` until `DetectionStatus` leaves `DETECTION_IN_PROGRESS`, then call `describe-stack-resource-drifts` to list logical IDs with `MODIFIED`, `DELETED`, or `NOT_CHECKED` status. In automation, wrap the poll loop with a timeout so a stuck detection does not hang a CI job indefinitely; the lab exercise uses the same pattern with a short initial sleep before the first status read.
 
 ### Stack Policies, Termination Protection, and Data Retention
 
@@ -522,7 +525,7 @@ Stack policies evaluate on stack operations initiated through CloudFormation, no
 
 Pair `DeletionPolicy: Retain` on RDS instances, DynamoDB tables, and S3 buckets that hold customer data with runbooks for [re-importing retained resources](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resource-import.html) into a new stack if you rebuild automation around them.
 
-```cloudformation
+```yaml
   ProductionDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
@@ -538,7 +541,7 @@ Pair `DeletionPolicy: Retain` on RDS instances, DynamoDB tables, and S3 buckets 
 
 When an infrastructure footprint grows beyond a few hundred resources, attempting to maintain a single monolithic template file becomes an agonizing operational burden. Nested stacks allow you to break down your architecture, composing multiple independent templates into a cohesive deployment hierarchy.
 
-```cloudformation
+```yaml
 # Parent template: main.yaml
 Resources:
   NetworkStack:
@@ -869,7 +872,7 @@ Develop a robust architectural template that properly declares a VPC alongside f
 
 Save this as `vpc-stack.yaml`:
 
-```cloudformation
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Production VPC with public and private subnets in 2 AZs"
 
