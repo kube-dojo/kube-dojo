@@ -96,7 +96,7 @@ flowchart TD
 | Level | Purpose | Key Facts |
 | :--- | :--- | :--- |
 | **Management Group** | Organize subscriptions into governance hierarchies | [Up to 6 levels deep (excluding root). Max 10,000 MGs per tenant.](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview) |
-| **Subscription** | Billing boundary and access control boundary | [Each subscription trusts exactly one Entra ID tenant.](https://learn.microsoft.com/en-us/azure/cost-management-billing/understand/understand-billing-tenant-relationship) Max ~500 resource groups per sub (soft limit). |
+| **Subscription** | Billing boundary and access control boundary | [Each subscription trusts exactly one Entra ID tenant.](https://learn.microsoft.com/en-us/azure/cost-management-billing/understand/understand-billing-tenant-relationship) Max 980 resource groups per sub. |
 | **Resource Group** | Logical container for related resources | Resources can only exist in one RG. Deleting RG deletes ALL resources inside. |
 | **Resource** | The actual thing (VM, database, storage account) | Inherits RBAC and policy from all levels above. |
 
@@ -228,7 +228,7 @@ az ad app federated-credential create --id "$APP_ID" --parameters '{
 }'
 ```
 
-**War Story**: Exposed client secrets in public repositories can be discovered quickly, and a high-privilege service principal can be abused for costly or destructive activity. The safer pattern is to avoid long-lived secrets by using Managed Identities for Azure workloads and federated workload identity for CI/CD.
+**Security note**: Exposed client secrets in public repositories can be discovered quickly, and a high-privilege service principal can be abused for costly or destructive activity. The safer pattern is to avoid long-lived secrets by using Managed Identities for Azure workloads and federated workload identity for CI/CD.
 
 ### Application Permissions vs Delegated Permissions
 
@@ -320,7 +320,7 @@ sequenceDiagram
     W->>Az: Call API with Bearer token
 ```
 
-For **AKS**, the supported pattern is [Azure Workload Identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity/overview). Enable the OIDC issuer on the cluster first. Create a user-assigned managed identity in the node resource group or a dedicated identity RG. Add a federated credential whose `issuer` is the cluster OIDC URL and whose `subject` is the Kubernetes service account (`system:serviceaccount:<namespace>:<name>`). Annotate the pod service account with `azure.workload.identity/client-id`. The pod receives Entra tokens like a VM managed identity, without mounting secrets. This curriculum targets Kubernetes **1.35**; workload identity is the modern replacement for the deprecated aad-pod-identity addon pattern.
+For **AKS**, the supported pattern is [Azure Workload Identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview). Enable the OIDC issuer on the cluster first. Create a user-assigned managed identity in the node resource group or a dedicated identity RG. Add a federated credential whose `issuer` is the cluster OIDC URL and whose `subject` is the Kubernetes service account (`system:serviceaccount:<namespace>:<name>`). Annotate the pod service account with `azure.workload.identity/client-id`. The pod receives Entra tokens like a VM managed identity, without mounting secrets. This curriculum targets Kubernetes **1.35**; workload identity is the modern replacement for the deprecated aad-pod-identity addon pattern.
 
 For **GitHub Actions**, you create a federated credential on the app registration (as shown earlier with `az ad app federated-credential create`) and use the `azure/login` action with `client-id`, `tenant-id`, and `subscription-id`—no `AZURE_CLIENT_SECRET`. Hypothetical scenario: a platform team runs twenty repositories; rotating twenty secrets quarterly is error-prone, but one federated trust per repo branch pattern scales with policy-as-code reviews.
 
@@ -778,17 +778,16 @@ You should see the resource group with `Succeeded` state.
 
 ### Task 2: Create a Custom RBAC Role (Storage Blob Lister)
 
-Create a custom role that can only list storage accounts and list blobs---but not read, write, or delete blob contents.
+Create a custom role that can list storage accounts and list and read blobs---but cannot write or delete blob contents.
 
 ```bash
 # Create the role definition file
 cat > /tmp/blob-lister-role.json << 'EOF'
 {
   "Name": "Storage Blob Lister",
-  "Description": "Can list storage accounts and enumerate blobs but cannot read or modify blob content",
+  "Description": "Can list storage accounts and enumerate and read blobs but cannot write or delete blob content",
   "Actions": [
     "Microsoft.Storage/storageAccounts/read",
-    "Microsoft.Storage/storageAccounts/listkeys/action",
     "Microsoft.Resources/subscriptions/resourceGroups/read"
   ],
   "DataActions": [
@@ -835,6 +834,15 @@ az storage account create \
   --resource-group "$RG_NAME" \
   --location "$LOCATION" \
   --sku Standard_LRS
+
+STORAGE_ID=$(az storage account show --name "$STORAGE_NAME" --resource-group "$RG_NAME" --query id -o tsv)
+
+# Owner/Contributor grant management-plane rights but NOT blob data access — assign a data role.
+ME=$(az ad signed-in-user show --query id -o tsv)
+az role assignment create --assignee "$ME" --role "Storage Blob Data Contributor" \
+  --scope "$STORAGE_ID"
+# wait ~30s for the role assignment to propagate before the data-plane ops below
+sleep 30
 
 # Create a container
 az storage container create \
