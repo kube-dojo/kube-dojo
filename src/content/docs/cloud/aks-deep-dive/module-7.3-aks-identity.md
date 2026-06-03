@@ -39,6 +39,10 @@ Azure AD Pod Identity (v1) was the original mechanism for giving AKS pods Azure 
 - **Configuration overhead**: Pod Identity required AzureIdentity and AzureIdentityBinding resources, which added extra configuration to manage across namespaces.
 - **Security concerns**: Pod Identity had documented network-path risks and required careful control of IMDS exposure in the cluster.
 
+To understand why these problems were architectural rather than fixable, consider what the NMI DaemonSet actually did. Every IMDS request from every pod on a node --- whether for identity tokens or for instance metadata like VM name and resource group --- had to pass through iptables rules that redirected 169.254.169.254 traffic to the NMI process. That iptables rule was node-global. If the NMI process crashed, was misconfigured, or came into conflict with a CNI plugin manipulating the same iptables chains, every pod on that node lost its Azure identity path simultaneously. Even when the NMI was healthy, the interception model meant any pod on the node could craft a request to IMDS and the NMI had to decide which identity to return --- a decision made by matching the pod's HTTP request headers against `AzureIdentityBinding` selectors. A malformed or deliberately crafted request from a compromised container could attempt to exploit ambiguities in that matching logic to receive a token for a different identity than the one allocated to that namespace.
+
+The deeper problem was the **node-identity blast radius**. Because the NMI ran once per node and its iptables interception was node-wide, every managed identity assigned to any pod on a given node was reachable through the same NMI process. If an attacker compromised a single container on that node --- through a library vulnerability or a misconfigured sidecar --- and managed to understand the NMI's request-routing logic, they could potentially request tokens for identities that belonged to entirely different pods and namespaces on the same host. Workload Identity eliminates this entire class of problem by removing the interception layer: there is no DaemonSet, no iptables rule, and no node-level identity proxy. The projected service account token is signed by the cluster's OIDC issuer and scoped to a specific service account before it ever leaves the pod's filesystem.
+
 Pod Identity was [deprecated in October 2022](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity) and replaced by Entra Workload Identity, which uses an entirely different mechanism based on OIDC federation. If you are still running Pod Identity, migrate now and use the published Microsoft migration guidance, because that code path relies on behavior the platform has signaled should be retired. In practice, the migration effort is typically straightforward for stateless and API-driven workloads, and it removes an entire interception class from the data path between pods and Azure identity.
 
 ```mermaid
@@ -56,13 +60,19 @@ graph TD
     end
 ```
 
-If you skip migration, the long-standing operational burden of interception-based identity and the known isolation constraints remain in place for new releases. For teams already planning a security hardening cycle, this is exactly the kind of dependency you remove while you are still in control of manifests. For most teams, the move to Workload Identity is the foundation that simplifies the rest of AKS security.
+If you skip migration, the long-standing operational burden of interception-based identity and the known isolation constraints remain in place for new releases. For teams already planning a security hardening cycle, this is exactly the kind of dependency you remove while you are still in control of manifests.
+
+The migration from Pod Identity to Workload Identity is not merely a version upgrade --- it is a fundamental change in the trust model. Pod Identity trusted the node's network layer to correctly route identity requests. Workload Identity trusts only the Kubernetes API server's token-signing key and the Entra ID federation contract. This means the security boundary shifts from the node (a broad, multi-tenant boundary) to the individual pod's service account (a narrow, single-workload boundary). For platform teams managing clusters with dozens of tenant namespaces, this shift is the difference between hoping the NMI routes tokens correctly and knowing exactly which service account can request which Azure identity, with Entra ID cryptographically enforcing the contract on every exchange. For most teams, the move to Workload Identity is the foundation that simplifies the rest of AKS security.
 
 ---
 
 ## How Workload Identity Works: The Full Chain
 
 [Entra Workload Identity uses a standards-based OIDC federation flow](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview). No secrets, no DaemonSets, no iptables interception. Here is the complete authentication chain:
+
+Before walking through each step, it is worth pausing on why this architecture is so much stronger than what it replaced. OIDC federation is a standards-based protocol defined by the OpenID Connect specification, which builds on OAuth 2.0. The core idea is that a trusted identity provider --- in this case, the AKS cluster's control plane --- can issue signed JSON Web Tokens (JWTs) that assert the identity of a subject, and a second system (Entra ID) can verify those tokens against the issuer's public keys without ever sharing a secret with the issuer. There is no API key exchanged between AKS and Entra ID. There is no shared secret stored in a Kubernetes Secret that could leak. The trust is established once, declaratively, through the federated credential resource in Azure, and it is enforced cryptographically on every token exchange thereafter.
+
+The entire chain depends on three critical pieces of metadata aligning: the **issuer** (who signed the token --- the AKS OIDC endpoint), the **subject** (which service account the token represents), and the **audience** (what the token is intended for, defaulting to `api://AzureADTokenExchange`). If any of these three do not match the federated credential registered in Entra ID, the token exchange fails with no fallback and no partial success. This design means that even a cluster administrator with full `kubectl` access cannot craft a valid token for an identity they are not authorized to use --- because the token must be signed by the cluster's OIDC issuer, scoped to the correct service account, and presented within its short lifetime (typically one hour, configurable through the `--service-account-token-lifetime` flag on the workload identity webhook). With that foundation in place, here is how each step builds the chain.
 
 ### Step 1: AKS Exposes an OIDC Issuer
 
@@ -82,6 +92,8 @@ OIDC_ISSUER=$(az aks show -g rg-aks-prod -n aks-prod-westeurope \
 echo "OIDC Issuer: $OIDC_ISSUER"
 # Output: https://eastus.oic.prod-aks.azure.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/
 ```
+
+The OIDC issuer URL is more than a configuration value — it points to a standard OIDC discovery document at `{issuer-url}/.well-known/openid-configuration`. This document contains the cluster's public signing keys (in JWKS format), supported token signing algorithms, and the token endpoint. When Entra ID receives a token exchange request, it fetches this discovery document to validate the token's signature against the cluster's current public keys. The AKS control plane automatically rotates these signing keys, and the discovery document always reflects the active keys. This means the federation contract survives key rotation without any manual intervention — there is no certificate renewal process for you to manage.
 
 ### Step 2: Create a Managed Identity in Azure
 
@@ -116,6 +128,10 @@ az identity federated-credential create \
 ```
 
 The `--subject` field is critically important. It follows the format [`system:serviceaccount:{namespace}:{service-account-name}`](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-identity-access). If a pod in a different namespace or using a different service account tries to use this federation, Entra ID will reject the token. This provides namespace-level isolation without any network-based interception.
+
+**Multi-tenant and cross-subscription federation.** A single managed identity can have up to 20 federated credentials, each with a different subject. This allows you to federate the same Azure identity across multiple service accounts in different namespaces, or even across different AKS clusters, as long as each federated credential specifies the correct issuer URL for its cluster. For organizations with hub-and-spoke Azure topologies where the managed identity lives in a central identity subscription but AKS clusters run in spoke subscriptions, [federated credentials are a cross-subscription resource](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview): the managed identity and its federated credentials should reside in the same subscription, but the cluster and its workloads can be in different subscriptions. The key constraint is that the OIDC issuer URL must be reachable from Entra ID's public endpoints — which AKS OIDC issuers always are by design, since they are hosted on the public `oic.prod-aks.azure.com` domain.
+
+**Token lifetime and caching.** The projected service account token injected by the webhook is short-lived — typically one hour — and Kubernetes automatically rotates it before expiry. The Azure SDK caches the Azure access token it receives from Entra ID for its own validity period (also typically one hour). This means your application pays the full OIDC token exchange only once per hour per pod replica under normal operation. When you delete a federated credential in Entra ID, existing cached Azure tokens remain valid until their natural expiry — the pod does not lose access instantly. Plan for a maximum of one hour of residual access after federation revocation. If you need instant credential revocation, combine federation deletion with a pod restart or a Key Vault access policy change at the Azure control plane.
 
 ### Step 4: Create the Kubernetes Service Account with Annotations
 
@@ -153,6 +169,10 @@ When you reference this service account in a pod, the Workload Identity webhook 
 - Environment variables: [`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_FEDERATED_TOKEN_FILE`, `AZURE_AUTHORITY_HOST`](https://github.com/Azure-Samples/azure-ad-workload-identity)
 
 Your application code uses the Azure SDK's `DefaultAzureCredential`, which automatically picks up these environment variables and performs the token exchange. If the service account, identity, and issuer metadata all align, the same code path works for Key Vault, storage, and SQL without extra token plumbing. This is the point where application-level simplicity and platform-level identity governance reinforce each other.
+
+**Audience defaults and alternatives.** The default audience for the federated token exchange is `api://AzureADTokenExchange`. This audience is hardcoded into the Azure SDK's workload identity credential and works for all Azure service endpoints. You do not normally need to change it, but the `--audiences` parameter on `az identity federated-credential create` accepts custom values if your token exchange targets a non-Azure OIDC-compliant service. Changing the audience without also configuring the Azure SDK to request a matching audience will cause token exchange failures — the default SDK behavior expects `api://AzureADTokenExchange`.
+
+**What happens when federation breaks.** If the federated credential is deleted, the issuer URL changes (for example, after a cluster rebuild without preserving the original OIDC issuer), or the service account is removed, the token exchange fails with an Entra ID error — typically `AADSTS7000216: Client assertion includes a subject claim which does not match the federated credential`. The Azure SDK surfaces this as an authentication exception. The pod remains running — it does not crash — but any attempt to acquire a new Azure token fails. Existing tokens in the SDK cache remain valid until expiry, as discussed above. If your application uses `DefaultAzureCredential` with a chained fallback (for example, trying Managed Identity credentials after Workload Identity), the SDK silently moves to the next credential source, which may produce confusing behavior if the fallback succeeds with a different identity than intended. Always explicitly configure the credential chain in production workloads to avoid silent identity switches during federation outages.
 
 > **Pause and predict**: If you delete the federated credential in Entra ID, how quickly will the pod lose access to Azure services? Will it be immediate, or will it take time based on the token expiration?
 
@@ -350,6 +370,26 @@ spec:
 
 When the pod starts, the file `/mnt/secrets/db-connection-string` will contain the secret value. The secret is fetched fresh from Key Vault at pod startup. If you enable auto-rotation (via the [`--rotation-poll-interval`](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options) flag on the add-on), the CSI driver periodically checks Key Vault for updated values and refreshes the mounted files. This keeps rotating secrets available to workloads without changing container images or introducing config-management churn in the same pipeline.
 
+#### The Rotation Story in Detail
+
+Auto-rotation is enabled cluster-wide when you enable the Secrets Store CSI add-on with the `--rotation-poll-interval` flag (for example, `--rotation-poll-interval 2m` sets a two-minute poll). The CSI driver's provider for Azure then periodically queries Key Vault for each `SecretProviderClass` object in the cluster. When it detects a newer version of a secret, it updates the mounted file in the pod's volume **without restarting the pod**. The file contents change in place — the inode remains the same, but the bytes on disk are replaced. This has important implications for application design. If your application reads the secret once at startup and never re-reads the file, it will keep using the old value indefinitely. To benefit from auto-rotation, your application must either re-read the file on each use, watch for filesystem change events (Linux `inotify`), or implement a periodic refresh loop. The CSI driver does not signal the application — it only updates the file. For applications that consume secrets as environment variables via `secretObjects`, the Kubernetes Secret is also updated by the rotation, but pods do not automatically restart to pick up new environment variable values. Environment-variable-based secret consumption and auto-rotation are fundamentally at odds: use mounted files if you need rotation without restarts.
+
+The rotation poll interval is a cluster-wide setting. You cannot set different intervals per `SecretProviderClass`. The minimum supported interval is one minute, but at scale — say, 200 pods each with 10 secrets — a one-minute poll generates 2,000 Key Vault read operations per minute, which can incur significant transaction costs and potentially hit Key Vault service limits. A two-minute or five-minute poll is usually sufficient for most credential rotation policies.
+
+#### The `secretObjects` Tradeoff: Kubernetes Secrets vs etcd Exposure
+
+The `secretObjects` field in a `SecretProviderClass` creates a real Kubernetes Secret resource populated with the values retrieved from Key Vault. This is convenient when your application already reads configuration from Kubernetes Secrets and you want to switch the source of truth to Key Vault without changing the application's secret consumption pattern. However, the Kubernetes Secret is stored in etcd, the cluster's distributed key-value store. By default, [Kubernetes Secrets are stored unencrypted in etcd](https://kubernetes.io/docs/concepts/security/secrets-good-practices/) — only base64-encoded. Anyone with `get` or `list` permissions on Secrets in that namespace can retrieve and decode the value. If your compliance requirement prohibits ever persisting credentials in the cluster's control plane, omit `secretObjects` entirely and use the CSI-mounted files exclusively. The mounted files exist only in the pod's memory-backed `tmpfs` volume and vanish when the pod terminates — they never touch etcd.
+
+#### Key Vault RBAC vs Access Policies
+
+The CSI driver authenticates to Key Vault using the pod's Workload Identity. How you grant that identity access to Key Vault depends on your vault's permission model. Azure Key Vault supports two models: **RBAC** (role-based access control, using Azure RBAC roles like `Key Vault Secrets User`) and **access policies** (the older, vault-specific permission model). Microsoft recommends RBAC for new deployments because it integrates with Azure's unified role assignment system, supports Privileged Identity Management (PIM) for just-in-time access, and provides consistent audit logging through Azure Activity Logs. The older access policy model works but is vault-specific — you manage permissions per vault rather than through Azure RBAC scopes, and it lacks PIM integration.
+
+When you create a Key Vault with `--enable-rbac-authorization` (as shown in the example above), access policies are disabled entirely and all access is governed through Azure RBAC. The `Key Vault Secrets User` role grants `get` and `list` on secrets — exactly what the CSI driver needs to retrieve and rotate secrets. Do not assign `Key Vault Secrets Officer` (which can create and delete secrets) or `Key Vault Administrator` (which can manage access policies and RBAC assignments) to a workload identity unless the workload genuinely needs to write secrets back to the vault. Following least privilege means each managed identity should have exactly the data-plane permissions its workload requires, scoped to the specific vault.
+
+**Why workload-identity-scoped access matters.** Before Workload Identity, a common but dangerous pattern was to assign a single user-assigned managed identity to the entire cluster's node pool (the kubelet identity) and grant that identity broad Key Vault access. Every pod on every node in that pool could then potentially access all secrets in the vault. Workload Identity ties each identity to a specific Kubernetes service account, so the access boundary is the namespace-service-account pair, not the node or node pool. This makes it practical to give each microservice its own managed identity with access only to its own secrets — a pattern that is impossible or dangerously complex with node-scoped identities.
+
+> **Cost note:** Key Vault charges per transaction — approximately $0.03 per 10,000 secret operations for read-heavy workloads. Each secret rotation poll triggers a `get` operation per secret per `SecretProviderClass`. At scale, the combined cost of rotation polling plus the Key Vault secret version storage (each new version of a secret counts as a separate billable secret) should be factored into the operational budget. The cost of centralized secret management in Key Vault is almost always lower than the operational cost of managing secret sprawl across Kubernetes Secrets in multiple clusters, where a single leaked etcd backup can expose every secret in every namespace.
+
 ---
 
 ## Kubernetes RBAC with Entra ID Groups
@@ -375,6 +415,40 @@ roleRef:
 ```
 
 This grants every member of the Entra ID group `edit` privileges within the `payments` namespace. When developers run `az aks get-credentials`, they authenticate through Microsoft Entra and use token-based access to the cluster, which scales better than distributing client certificates. The result is fewer one-off onboarding tickets and clearer teardown boundaries when team composition changes.
+
+### Two Authorization Modes: K8s RBAC with Entra vs Azure RBAC for Kubernetes
+
+AKS supports two distinct authorization modes for Entra ID-authenticated users and groups. Understanding the difference is essential because they solve different organizational problems and cannot be used simultaneously on the same cluster.
+
+**Kubernetes RBAC with Entra ID groups** (the default mode, shown above) uses standard Kubernetes `RoleBinding` and `ClusterRoleBinding` resources. You manage these bindings through `kubectl` or GitOps, referencing Entra ID group Object IDs in the `subjects` field. The Kubernetes RBAC verbs (`get`, `list`, `create`, `delete`, etc.) are enforced by the Kubernetes API server's RBAC authorizer. This mode works well when your platform team is comfortable managing Kubernetes RBAC manifests and you want authorization rules versioned alongside application deployments in Git. It is also the mode that most existing Kubernetes tooling and dashboards expect.
+
+**Azure RBAC for Kubernetes** (enabled with [`--enable-azure-rbac`](https://learn.microsoft.com/en-us/azure/aks/manage-azure-rbac)) replaces Kubernetes-native RBAC with Azure role assignments. Instead of creating `RoleBinding` YAML files, you run `az role assignment create` to assign built-in Azure roles to Entra ID users or groups at the cluster scope. Azure provides four built-in roles purpose-built for AKS:
+
+- **Azure Kubernetes Service RBAC Reader** — read-only access to most cluster resources
+- **Azure Kubernetes Service RBAC Writer** — read and write access to namespaced resources (pods, deployments, services)
+- **Azure Kubernetes Service RBAC Admin** — read and write access to namespaced resources plus limited cluster-scoped reads
+- **Azure Kubernetes Service RBAC Cluster Admin** — full administrative access to the entire cluster
+
+When Azure RBAC is enabled, Kubernetes `RoleBinding` and `ClusterRoleBinding` resources are ignored — all authorization decisions flow through Azure RBAC. This mode is valuable when your organization already manages all Azure permissions through Azure RBAC and Privileged Identity Management, and you want cluster access to appear in the same Azure Policy compliance dashboards as your other Azure resources. It is also the right choice when your security team insists on managing all access assignments through Azure rather than trusting Kubernetes RBAC manifests.
+
+**When to pick which.** Use Kubernetes RBAC with Entra ID if your team already manages cluster configuration through GitOps, you need fine-grained per-namespace role definitions that map to your application topology, or you rely on Kubernetes-native tooling that reads `RoleBinding` resources. Use Azure RBAC for Kubernetes if your organization mandates Azure RBAC as the single authorization plane, you need just-in-time cluster admin access through Entra Privileged Identity Management, or your compliance framework requires all access assignments to be auditable through Azure Activity Logs without translating Kubernetes RBAC events.
+
+**Closing the local-account backdoor.** By default, AKS clusters have a local `cluster-admin` certificate-based account that bypasses Entra ID entirely. Anyone with access to that certificate has unrestricted cluster access regardless of Entra group memberships or Azure role assignments. Enable [`--disable-local-accounts`](https://learn.microsoft.com/en-us/azure/aks/managed-aad) to remove this backdoor. After disabling local accounts, all cluster access — including emergency administrative access — must go through Entra ID authentication. Before disabling local accounts, ensure at least one Entra ID group has the `ClusterRoleBinding` to `cluster-admin` or the Azure RBAC equivalent, or you will lock yourself out of the cluster with no recovery path except an Azure support ticket.
+
+```bash
+# Enable Azure RBAC for Kubernetes and disable local accounts
+az aks update \
+  --resource-group rg-aks-prod \
+  --name aks-prod-westeurope \
+  --enable-azure-rbac \
+  --disable-local-accounts
+
+# Assign a group the Cluster Admin role via Azure RBAC
+az role assignment create \
+  --assignee "<entra-group-object-id>" \
+  --role "Azure Kubernetes Service RBAC Cluster Admin" \
+  --scope "$(az aks show -g rg-aks-prod -n aks-prod-westeurope --query id -o tsv)"
+```
 
 ---
 
@@ -408,6 +482,24 @@ az aks update \
 # Verify the Defender agent is running
 k get pods -n kube-system -l app=microsoft-defender
 ```
+
+### Detection Depth: Runtime, Registry, and Control Plane
+
+Defender for Containers operates across three layers, not just the runtime DaemonSet visible in the cluster. Understanding the full detection surface helps you interpret the alerts you receive in Microsoft Defender for Cloud.
+
+**Runtime detection** (the DaemonSet component) monitors system calls, process creation, network connections, and filesystem activity inside containers and on the underlying node. It compares this telemetry against Microsoft's threat intelligence feed, which is continuously updated with new indicators of compromise, mining pool domains, and known C2 infrastructure. Alerts include the specific process name, command line arguments, parent process tree, and the container image digest — enough forensic detail to trace an alert back to a specific deployment within minutes.
+
+**Registry scanning** integrates with Azure Container Registry (ACR) to scan container images for vulnerabilities before they are deployed. When you push an image to ACR, Defender automatically scans it against a database of known CVEs, updated regularly from public vulnerability databases and Microsoft's own research. The scan results appear in Defender for Cloud under the "Container registry images should have vulnerability findings resolved" recommendation. You can configure the scan trigger to run on push, on a schedule, or continuously. This means a vulnerable base image is flagged before any pod pulls it — a critical control given how many production incidents originate from unpatched CVEs in public base images like `node`, `python`, or `nginx`.
+
+**Control-plane audit** monitors Kubernetes audit logs for anomalous API server activity — for example, a service account suddenly listing all Secrets across all namespaces, or a `kubectl exec` into a container that has never been accessed interactively before. These alerts use machine learning models trained on typical cluster behavior patterns, so they improve as your cluster's baseline stabilizes over time.
+
+### Cost Model
+
+Defender for Containers is priced per vCPU-hour of protected container workload. The list price is approximately $0.0095 per vCPU per hour, which at a cluster running 100 vCPUs across workloads translates to roughly $0.95 per hour or about $684 per month for runtime protection. This is the per-workload-vCPU count (the sum of `requests` or actual usage across all pods), not the node vCPU count. Clusters that overprovision CPU requests pay for the requested vCPUs, not just the utilized ones — making resource right-sizing a cost optimization lever for Defender as well as for your compute bill.
+
+Key cost drivers to watch: large node pools with many small pods (each pod's CPU request counts toward the protected vCPU total), clusters with generous default resource requests, and development clusters that run 24/7 without scaling down overnight. The cost is per-cluster, per-hour, and there is no free tier for runtime protection — the Standard tier is required for any detection beyond basic container security hygiene recommendations.
+
+The Defender agent's own resource consumption on each node is minimal — typically under 50m CPU and 100Mi memory — but this overhead should be included in your node capacity planning, especially on clusters with many small nodes where the agent-per-node overhead adds up.
 
 ### Defender Integration with Azure Policy
 
@@ -466,6 +558,20 @@ az policy state summarize \
 
 When a developer tries to deploy a privileged container, the request is denied by Azure Policy before admission, which protects the cluster from unsafe runtime exposure. This is especially useful when legacy manifests still use broad capabilities and need coordinated remediation.
 
+#### Audit vs Deny: The Safe Rollout Path
+
+Azure Policy for Kubernetes supports two enforcement effects for each policy assignment: `audit` and `deny`. The `audit` effect evaluates every admission request against the policy rules but does not block non-compliant requests — it only reports violations to Azure Policy compliance dashboards. The `deny` effect blocks non-compliant requests at the admission webhook before the resource is persisted to etcd. The critical operational detail is that **existing resources are evaluated for compliance reporting but are not retroactively deleted by switching a policy from audit to deny**. A pod that was admitted before the deny policy existed continues running. The deny effect only applies to new `CREATE` and `UPDATE` operations. If a pod with `privileged: true` is already running and a subsequent rolling update or node drain triggers a pod recreation, that recreation will be denied — causing the deployment to stall until the manifest is fixed.
+
+The safe rollout sequence is: assign policies in `audit` mode, review the compliance dashboard for existing violations, fix all non-compliant manifests, verify the compliance dashboard shows zero violations, then switch to `deny` mode. Skipping the audit phase and going directly to deny is the most common cause of production deployment pipeline failures when introducing Azure Policy to an existing cluster.
+
+#### Policy Exclusions and the Built-in Initiative
+
+Not every policy applies to every namespace. System namespaces (`kube-system`, `gatekeeper-system`, `kube-node-lease`) often run privileged containers by design — the CSI driver, the Defender agent, and CNI plugins all require elevated privileges that a blanket "no privileged containers" policy would block. Azure Policy supports **exclusions** at assignment time through the `--not-scopes` parameter or by configuring the policy assignment's `overrides` to exclude specific namespaces. Always exclude system namespaces from deny-mode policies that would block their required behavior.
+
+The built-in AKS security baseline initiative (`a8640138-9b0a-4a28-b8cb-1666c838647d`) bundles approximately 20 policies covering privileged containers, hostPath volumes, allowed registries, resource limits, read-only root filesystems, and more. Assigning the initiative is faster than assigning individual policies and ensures consistent coverage. However, the initiative includes policies that may be too strict for your environment. Review each policy in the initiative definition before assigning it and exclude namespaces where specific policies would break legitimate system workloads.
+
+The Gatekeeper component that enforces these policies runs as three pods in the `gatekeeper-system` namespace: the audit controller (periodically checks existing resources), the webhook controller (handles admission requests), and the controller manager (reconciles policy definitions). Each policy is translated from Azure Policy's declarative format into an OPA Rego rule. Gatekeeper evaluates all matching policies against each admission request and returns an `allow` or `deny` decision. The latency added by policy evaluation is typically under 50ms per request, but in clusters with dozens of active policies and high API request rates, Gatekeeper can become a bottleneck. Monitor the `gatekeeper-system` pods' CPU and memory usage, especially during deployment storms.
+
 ```bash
 # This will be DENIED by Azure Policy
 k apply -f - <<'EOF'
@@ -496,6 +602,101 @@ EOF
 3. **Azure Policy for AKS evaluates existing resources, not just new ones.** When you assign a policy in "audit" mode, Azure scans all existing resources in the cluster and [reports non-compliant ones in the Azure Policy compliance dashboard](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes). This gives you visibility into your current security posture before switching policies to "deny" mode.
 
 4. **Federated identity credentials [support a maximum of 20 federations per managed identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview).** If you have 20 different service accounts across namespaces that all need the same Azure permissions, you need to either share a service account (not recommended across namespaces) or create multiple managed identities. Plan your identity architecture before hitting this limit.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Proven Patterns
+
+**Pattern 1: One managed identity per microservice, scoped to its own Key Vault prefix.**
+
+Assign each microservice its own user-assigned managed identity and grant it access only to the Key Vault secrets that microservice needs — typically by using a naming convention that maps service names to secret name prefixes. This limits the blast radius of a compromised pod to exactly the secrets that pod was already authorized to read. It also makes audit logs unambiguous: every Key Vault access maps to a specific workload identity rather than a shared cluster-level identity. Scaling note: at 20 federated credentials per managed identity, you can support one identity across up to 20 service accounts in different namespaces or clusters — but for true per-service isolation, create separate managed identities.
+
+**Pattern 2: Audit-first policy rollout for every new Azure Policy assignment.**
+
+Assign every policy in `audit` mode for at least one full deployment cycle before switching to `deny`. During the audit period, monitor the Azure Policy compliance dashboard and fix every non-compliant resource. Only switch to `deny` when the dashboard shows zero violations for the target namespaces. This pattern prevents the most common production outage scenario for AKS policy enforcement: a deny-mode policy blocking a previously compliant deployment that only violates the new policy in a rarely exercised edge case.
+
+**Pattern 3: Workload Identity everywhere, service principals only for cluster provisioning.**
+
+Use managed identities federated through Workload Identity for all runtime workload authentication. Reserve service principals (with client secrets or certificates) for cluster provisioning pipelines, Terraform, and CI/CD tooling that runs outside the cluster. Service principal secrets must be rotated manually or through automation; managed identities have no user-managed secrets at all. Every workload you move from a service principal to Workload Identity removes one credential rotation burden from your operational calendar.
+
+### Anti-Patterns
+
+| Anti-Pattern | Why Teams Fall Into It | Better Alternative |
+|:---|:---|:---|
+| Assigning Key Vault Administrator to workload identities | "It's easier to give broad permissions than figure out exactly which secrets the pod needs" | Grant `Key Vault Secrets User` scoped to the specific vault. If the pod needs to write secrets, use `Key Vault Secrets Officer` on a dedicated secrets-management service account, not the application's own identity |
+| Using `secretObjects` for every secret without understanding etcd exposure | "We want env vars, and the K8s Secret is auto-created for us" | Use CSI-mounted files for compliance-sensitive secrets that must avoid etcd. Reserve `secretObjects` only for secrets where environment variable consumption is a hard application requirement and etcd encryption at rest is enabled |
+| Running Pod Identity (v1) alongside Workload Identity "just in case" | Fear of migration, or following a tutorial that enabled both | Migrate fully to Workload Identity and remove the NMI DaemonSet. Running both architectures simultaneously creates confusion about which identity path a given pod uses and doubles the security surface area |
+| Assigning Azure Policy in `deny` mode during initial rollout | "We want security, and audit mode doesn't actually block anything" | Start with `audit` for at least one deployment cycle. Skipping the audit phase has caused production outages when previously compliant deployments are denied on their next rollout |
+| Sharing a single federated managed identity across all namespaces | "One identity is simpler than twenty" | Create per-namespace or per-microservice managed identities. A shared identity means every pod can access every secret the identity is authorized for — the opposite of least privilege |
+
+---
+
+## Decision Framework
+
+Choosing between the identity, secret management, and authorization options covered in this module depends on your organization's operational maturity and compliance requirements. The following decision matrix captures the primary tradeoffs.
+
+### Identity: Workload Identity vs Managed Identity (Pod Identity) vs Service Principal
+
+| Criterion | Workload Identity (WI) | Pod Identity (v1) | Service Principal |
+|:---|:---|:---|:---|
+| Secret management | None — OIDC federation | Managed by Azure (no user secret), but NMI DaemonSet required | Client secret or certificate must be stored and rotated |
+| Security boundary | Pod service account | Node (NMI intercepts IMDS, node-identity blast radius) | Cluster or namespace (wherever the Secret is stored) |
+| AKS support | GA, actively maintained | Deprecated October 2022 | Supported but not recommended for in-cluster workloads |
+| Multi-cluster | Yes, via federated credential per cluster | Yes, per-cluster identity assignments | Yes, same service principal in multiple Secrets |
+| Use case | All in-cluster workloads accessing Azure services | Legacy clusters awaiting migration | Cluster provisioning pipelines and CI/CD tooling running outside AKS |
+
+**Decision rule:** If the workload runs inside AKS, use Workload Identity. There is no reason to deploy a new workload with Pod Identity, and service principals should only be used for automation that authenticates from outside the cluster.
+
+### Secret Delivery: Secrets Store CSI (mounted files) vs CSI (synced K8s Secret) vs External Secrets vs Sealed Secrets
+
+| Criterion | CSI Mounted Files | CSI synced K8s Secret | External Secrets Operator | Sealed Secrets |
+|:---|:---|:---|:---|:---|
+| Secret stored in etcd | No | Yes | Yes (creates K8s Secret) | Yes (SealedSecret decrypted to K8s Secret) |
+| Auto-rotation | Yes, with application re-read | Yes, but requires pod restart for env vars | Yes, via sync interval | No (re-encrypt and re-apply) |
+| Azure-native integration | Yes (Key Vault provider) | Yes (Key Vault provider) | Yes (Key Vault provider available) | No (Kubernetes-native encryption) |
+| Application changes needed | Read from file instead of env var | None (env var from Secret) | None (env var from Secret) | None (SealedSecret unwrapped to Secret) |
+| Compliance simplicity | Highest — never in cluster state | Medium — Secret exists, must enable etcd encryption | Medium — Secret exists | Lower — Secret exists, rotation is manual |
+
+**Decision rule:** Use CSI mounted files for all secrets where compliance prohibits etcd storage or where auto-rotation is required. Use CSI synced Secrets or External Secrets only when the application hard-depends on environment variables and cannot be modified to read files. Reserve Sealed Secrets for GitOps workflows in non-Azure environments or where the GitOps pipeline is the only deployment path and Azure-native tooling is not available.
+
+### Cluster Authorization: Kubernetes RBAC with Entra vs Azure RBAC for Kubernetes
+
+| Criterion | K8s RBAC with Entra | Azure RBAC for Kubernetes |
+|:---|:---|:---|
+| Authorization location | Kubernetes API server (RoleBinding, ClusterRoleBinding) | Azure Resource Manager (role assignments) |
+| GitOps friendliness | High — YAML alongside application manifests | Lower — Azure role assignments must be managed through Azure CLI/Terraform |
+| Just-in-time access | No native PIM support (requires workaround) | Yes, through Entra Privileged Identity Management |
+| Unified Azure audit | Partial — K8s audit logs separate from Azure Activity Logs | Full — all access decisions in Azure Activity Logs |
+| Fine-grained RBAC | Full K8s RBAC verb control | Limited to four built-in roles |
+| Local account backdoor | Must separately disable with `--disable-local-accounts` | Must separately disable with `--disable-local-accounts` |
+
+**Decision rule:** Use Kubernetes RBAC with Entra ID groups if you manage cluster configuration through GitOps and need fine-grained per-namespace permissions. Use Azure RBAC for Kubernetes if your organization mandates all access assignments through Azure RBAC, requires just-in-time cluster admin access through PIM, or needs cluster access events in the same audit stream as Azure resource management operations. These modes are mutually exclusive — choose one per cluster.
+
+```mermaid
+flowchart TD
+    A[New AKS workload needs<br>Azure resource access] --> B{Running inside AKS?}
+    B -->|Yes| C[Use Workload Identity<br>with federated credentials]
+    B -->|No| D[Use Service Principal<br>with client secret/certificate]
+    C --> E{Secret needs to avoid<br>etcd storage?}
+    E -->|Yes| F[CSI mounted files<br>omit secretObjects]
+    E -->|No| G{Application hard-depends<br>on env vars?}
+    G -->|Yes| H[CSI synced K8s Secret<br>with etcd encryption]
+    G -->|No| F
+    C --> I{Org requires all auth<br>via Azure RBAC?}
+    I -->|Yes| J[Azure RBAC for Kubernetes<br>with --disable-local-accounts]
+    I -->|No| K[K8s RBAC with Entra groups<br>+ RoleBinding manifests<br>+ --disable-local-accounts]
+    F --> L{Need runtime threat<br>detection?}
+    H --> L
+    J --> L
+    K --> L
+    L -->|Yes| M[Enable Defender for Containers<br>Standard tier]
+    L -->|No| N[Basic security hygiene<br>recommendations only]
+    M --> O[Assign Azure Policy<br>in audit mode first]
+    N --> O
+    O --> P[Review compliance,<br>fix violations,<br>switch to deny]
+```
 
 ---
 
@@ -870,4 +1071,8 @@ echo "Security boundary verified: pods without proper service account cannot acc
 - [learn.microsoft.com: azure ad rbac](https://learn.microsoft.com/en-us/azure/aks/azure-ad-rbac) — Microsoft’s AKS RBAC guidance describes Microsoft Entra authentication, RBAC based on group membership, and RoleBinding examples that use the group object ID.
 - [learn.microsoft.com: defender for containers azure overview](https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-containers-azure-overview) — Microsoft describes runtime threat detection for AKS and documents the Defender DaemonSet/sensor components in Defender for Containers on Azure.
 - [learn.microsoft.com: policy for kubernetes](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes) — The Azure Policy for Kubernetes concept page explicitly says Azure Policy extends Gatekeeper v3 and reports auditing and compliance details back to Azure Policy.
-- [learn.microsoft.com: rbac guide](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) — Microsoft’s Key Vault RBAC guide distinguishes the full data-plane permissions of Key Vault Administrator from the read-only secret-content scope of Key Vault Secrets User.
+- [learn.microsoft.com: rbac guide](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) — Microsoft's Key Vault RBAC guide distinguishes the full data-plane permissions of Key Vault Administrator from the read-only secret-content scope of Key Vault Secrets User.
+- [learn.microsoft.com: manage azure rbac](https://learn.microsoft.com/en-us/azure/aks/manage-azure-rbac) — Microsoft documents Azure RBAC for Kubernetes, the four built-in AKS RBAC roles, and how role assignments replace Kubernetes-native RoleBinding resources when enabled.
+- [learn.microsoft.com: managed aad](https://learn.microsoft.com/en-us/azure/aks/managed-aad) — Microsoft describes AKS-managed Entra ID integration, including the `--disable-local-accounts` flag and the local-account backdoor removal.
+- [azure.microsoft.com: defender for cloud pricing](https://azure.microsoft.com/en-us/pricing/details/defender-for-cloud/) — Azure pricing page documents the per-vCPU-hour pricing model for Defender for Containers and the Standard tier requirement for runtime threat detection.
+- [azure.microsoft.com: key vault pricing](https://azure.microsoft.com/en-us/pricing/details/key-vault/) — Azure pricing page documents per-transaction costs for Key Vault secret operations and secret version storage pricing.
