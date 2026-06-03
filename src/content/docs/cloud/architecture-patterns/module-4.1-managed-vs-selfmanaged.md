@@ -207,12 +207,12 @@ Support tickets differ by cloud: providers remediate **their** plane outages doc
 
 | Feature | EKS | GKE | AKS |
 |---------|-----|-----|-----|
-| Control Plane Cost | $0.10/hr ($73/mo) | Free (Autopilot) or $0.10/hr (Standard) | Free (no SLA) or $0.10/hr (SLA) |
+| Control Plane Cost | $0.10/hr ($73/mo) | $0.10/hr (all modes); 1 free zonal/Autopilot cluster/mo via $74.40 credit | Free (no SLA) or $0.10/hr (SLA) |
 | Control Plane SLA | 99.95% | 99.95% (Regional) | 99.95% (Standard tier) |
 | Max Pods per Node | 110 (default ENI limits) | 110 (default), 256 (GKE) | 250 |
 | K8s Version Lag | ~2-3 months behind upstream | ~1-2 months behind upstream | ~2-3 months behind upstream |
 | etcd Access | None | None | None |
-| Autopilot Mode | Fargate (serverless pods) | GKE Autopilot (full cluster) | Virtual nodes via ACI |
+| Autopilot Mode | EKS Auto Mode (full-cluster node automation); Fargate for serverless pods | GKE Autopilot (full cluster) | Virtual nodes via ACI |
 | Private Cluster | Yes (API endpoint in VPC) | Yes (Private cluster) | Yes (Private AKS) |
 | Workload → cloud IAM | IRSA / EKS Pod Identity | Workload Identity Federation | Entra Workload ID |
 
@@ -397,11 +397,11 @@ gantt
     axisFormat  %Y-%m
     
     section v1.33
-    Supported : active, 2025-01, 2026-04
-    section v1.34
     Supported : active, 2025-04, 2026-07
+    section v1.34
+    Supported : active, 2025-08, 2026-11
     section v1.35
-    Supported : active, 2025-07, 2026-10
+    Supported : active, 2025-12, 2027-03
 ```
 
 Provider policies differ in how aggressively they pull you forward. **EKS** adds versions two to three months after upstream, warns before forced upgrades, and sells extended support for another twelve months at a premium. **GKE** ships versions quickly and auto-upgrades according to your release channel (Rapid, Regular, or Stable). **AKS** supports an N-2 window—the latest minor plus the two previous—and exposes preview builds earlier for testing.
