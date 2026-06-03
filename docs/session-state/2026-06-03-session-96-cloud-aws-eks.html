@@ -7,7 +7,7 @@ th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em;
 .tl{background:#eef6ff;border-left:4px solid #2b7;padding:.6rem .9rem;border-radius:4px}.warn{color:#a40}</style></head><body>
 <h1>Session 96 — Cloud track: AWS Essentials + EKS Deep Dive (expand-to-floor + cross-family review)</h1>
 <p class="tl"><strong>Date:</strong> 2026-06-03 · <strong>Branch:</strong> main (clean, pushed) · <strong>Orchestrator:</strong> Claude Opus 4.8 · No-codex roster · User AFK (~6h).<br>
-<strong>TL;DR.</strong> Review-axis <strong>475 → 492 done (+17)</strong>. Two complete cloud sub-tracks: <strong>AWS Essentials 1.1–1.13 (13/13)</strong> and <strong>EKS Deep Dive 5.1–5.5 (5/5)</strong>, via 6 merged PRs (#1762–#1767). Each thin module (below the 5000-word prose floor) EXPANDED to floor → cross-family reviewed (opus 4.8 / cursor / deepseek) → orchestrator ground-checked & web-verified → consolidated cursor fix → CI → rebase-merge → finalize.</p>
+<strong>TL;DR.</strong> Review-axis <strong>475 → 504 done (+29)</strong>. Three complete cloud sub-tracks: <strong>AWS Essentials 1.1–1.13 (13/13)</strong>, <strong>EKS Deep Dive 5.1–5.5 (5/5)</strong>, and <strong>GCP Essentials 2.1–2.12 (12/12)</strong>, via 10 merged PRs (#1762–#1771). Each thin module (below the 5000-word prose floor) EXPANDED to floor → cross-family reviewed (opus 4.8 / cursor / deepseek) → orchestrator ground-checked & web-verified → consolidated cursor fix → CI → rebase-merge → finalize.</p>
 
 <h2>What shipped</h2>
 <table><tr><th>Wave / PR</th><th>Modules</th><th>Result</th></tr>
@@ -16,7 +16,11 @@ th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em;
 <tr><td>3 · #1764</td><td>AWS 1.7 ECS-Fargate, 1.8 Lambda, 1.9 Secrets (expand)</td><td>done</td></tr>
 <tr><td>4 · #1765</td><td>AWS 1.10 CloudWatch, 1.11 CICD, 1.12 CloudFormation (expand) — completes AWS Essentials</td><td>done</td></tr>
 <tr><td>5a · #1766</td><td>EKS 5.1 Architecture, 5.2 Networking, 5.3 Identity (expand)</td><td>done</td></tr>
-<tr><td>5b · #1767</td><td>EKS 5.4 Storage (expand), 5.5 Production (gate-fix) — completes EKS Deep Dive</td><td>done</td></tr></table>
+<tr><td>5b · #1767</td><td>EKS 5.4 Storage (expand), 5.5 Production (gate-fix) — completes EKS Deep Dive</td><td>done</td></tr>
+<tr><td>6a · #1768</td><td>GCP 2.1 IAM, 2.2 VPC, 2.3 Compute (expand)</td><td>done</td></tr>
+<tr><td>6b · #1769</td><td>GCP 2.4 GCS, 2.5 DNS, 2.6 Artifact Registry (expand; 2.5 re-done after deepseek truncation)</td><td>done</td></tr>
+<tr><td>6c · #1770</td><td>GCP 2.7 Cloud Run (review-flip), 2.8 Functions, 2.9 Secret Manager (expand)</td><td>done</td></tr>
+<tr><td>6d · #1771</td><td>GCP 2.10 Ops, 2.11 Cloud Build, 2.12 Patterns (expand) — completes GCP Essentials</td><td>done</td></tr></table>
 <p>Decision (user, this session, via AskUserQuestion): cloud modules below the 5000w floor → <strong>expand to floor</strong> (not review-flip), in curriculum order. 80/93 cloud modules were sub-floor.</p>
 
 <h2>Notable correctness saves (verifier-blind; caught by cross-family review + web-verify)</h2>
@@ -35,7 +39,8 @@ th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em;
 
 <h2>NEXT (curriculum order)</h2>
 <ul>
-<li><strong>GCP Essentials 2.1–2.12</strong> (next sub-track; mostly sub-floor, 3 needs_rewrite — density-check live first). Then GKE Deep Dive 6.1–6.5 · Azure Essentials 3.1–3.17 · AKS Deep Dive 7.1–7.5 · Architecture Patterns 4.1–4.4 · Advanced Ops 8.1–8.10 · Managed Services 9.1–9.10 · Enterprise &amp; Hybrid 10.1–10.11. (Cloud remaining: 62 shipped_unreviewed + 6 needs_rewrite.)</li>
+<li><strong>GKE Deep Dive 6.1–6.5</strong> (next sub-track) — then Azure Essentials 3.1–3.17 · AKS Deep Dive 7.1–7.5 · Architecture Patterns 4.1–4.4 · Advanced Ops 8.1–8.10 · Managed Services 9.1–9.10 (3 needs_rewrite here) · Enterprise &amp; Hybrid 10.1–10.11. (Cloud remaining: 53 shipped_unreviewed + 3 needs_rewrite; cloud 36/93 done.) Density-check each module live first; expect most sub-floor. Same proven loop + `logs/remediation/briefs/session96/` artifacts (review-template-cloud.md, _shared-expand-rules.md, expand-*.md, fix-w1..w6d.md, WORKING-STATE.md).</li>
+<li><strong>GCP also had:</strong> recurring `gcloud add-iam-binding`→`add-iam-policy-binding` (2.1/2.8/2.9/2.11); fabricated GCP features (`$_PUBSUB_PAYLOAD`, Flow-Logs "aggregation levels", webhook-HMAC, Cloud Build 10-min default timeout→really 60); inverted virtual-repo priority (security); deepseek 2.5 truncation + 2.11 most-error-laden — all opus-caught + web-verified. <strong>deepseek had 2 hard authoring failures this session (5.2 gutter, 2.5 truncation) → prefer cursor as primary author, deepseek for review/2nd-opinion.</strong></li>
 <li>Rosetta Stone (<code>cloud/hyperscaler-rosetta-stone.md</code>) is sub-floor too but not a board module; expand opportunistically (it was leak-clean).</li>
 <li>4 needs_review stragglers (on-prem Private MLOps, on-prem Multi-Cluster, toolkits SST, toolkits Grafana — score 5.0, later in curriculum order).</li>
 <li>Carryover leak-cleanup: <code>platform/.../mlops/module-5.6-ml-pipelines.md</code>.</li>
