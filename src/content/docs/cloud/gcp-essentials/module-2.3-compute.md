@@ -8,7 +8,7 @@ sidebar:
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to deploy Compute Engine resources with confidence, balance pricing and reliability choices, and apply repeatable OS Login and lifecycle controls at team scale.
+After completing this module, you will be able to deploy Compute Engine resources with confidence, balance pricing and reliability choices, and apply repeatable OS Login and lifecycle controls at team scale. You will also be able to explain why GCP's automatic sustained-use discounts change FinOps sequencing compared with clouds where reservations are the first lever, and how that interacts with Spot and committed-use paths on the same fleet.
 
 - **Deploy Compute Engine instances with custom machine types, preemptible VMs, and managed instance groups**
 - **Configure instance templates and autoscaling policies for self-healing compute clusters on GCP**
@@ -21,15 +21,23 @@ After completing this module, you will be able to deploy Compute Engine resource
 
 Teams that run fixed pools of Compute Engine VMs without autoscaling can be overwhelmed by sudden traffic spikes, turning slow boot times and manual scaling into lost revenue because demand often rises faster than response times. In production, this delay is usually what hurts you: queues grow, error budgets shrink, and users perceive the service as unstable.
 
+**Hypothetical scenario:** A product team launches a regional web API on three hand-built `e2-standard-4` VMs in a single zone. Traffic doubles over a weekend, but nobody changes capacity until Monday. Latency climbs, the database connection pool saturates, and on-call spends hours manually cloning VMs and editing firewall rules. A regional Managed Instance Group behind an external Application Load Balancer would have absorbed the spike by adding replicas in zones that still had capacity, while sustained-use discounts would have quietly reduced the bill for VMs that ran all month—without anyone purchasing a commitment.
+
 This module captures why Compute Engine is more than "just VMs." Choosing the right machine family, configuring instance templates, using Managed Instance Groups with autoscaling, and setting up global load balancing are the difference between an architecture that handles traffic spikes gracefully and one that collapses under load. Compute Engine is a foundational GCP compute service, and understanding it helps you reason about how many Google Cloud workloads are executed.
 
-In this module, you will learn how to select the right machine family for your workload, leverage preemptible and Spot VMs for massive cost savings, build golden images with custom images, configure Managed Instance Groups for automatic scaling and self-healing, and tie everything together with Cloud Load Balancing.
+On GCP, compute cost is a **stack of automatic and deliberate choices**, not a single on-demand rate. Sustained-use discounts apply automatically after roughly 25% of a billing month for eligible series; committed-use discounts trade flexibility for predictable savings on steady cores; Spot VMs trade interruption tolerance for discounts of up to 91% off on-demand pricing for many machine types. That combination is materially different from clouds where you must buy Savings Plans or Reserved Instances to see comparable baseline discounts—here, long-running VMs often get cheaper by simply staying up, which changes how you right-size before you commit.
+
+In this module, you will learn how to select the right machine family for your workload, leverage Spot VMs and committed-use discounts, build golden images with custom images and startup scripts, configure Managed Instance Groups for automatic scaling and self-healing, compare zonal versus regional MIG tradeoffs, and tie everything together with Cloud Load Balancing—while keeping a clear cost lens on what spikes your bill and which knobs pull it back down.
 
 ---
 
 ## Machine Families: Choosing the Right Hardware
 
 Compute Engine offers several machine families; this module focuses on four common categories for learning purposes. Selecting the wrong family is one of the most common ways to overspend. For real-world planning, hardware choice is about expected throughput, memory pressure, and predictability, so the default response is to align workload shape with the family before you benchmark pricing.
+
+Think of machine families as **hardware menus**, not a single slider labeled "size." Each menu optimizes a different bottleneck: general-purpose balances vCPU and RAM for web and microservices; compute-optimized maximizes per-core performance; memory-optimized maximizes RAM per socket for in-memory engines; accelerator-optimized attaches GPUs for parallel work. The billing system then layers discounts on top—E2 is inexpensive but ineligible for sustained-use discounts on the same terms as N2, while N2 running all month may accrue automatic SUD credits you never asked for. That is why a literal size-for-size comparison with another cloud's "m5" equivalent can mislead you: GCP rewards **duration and series choice**, not just vCPU count.
+
+When you evaluate a family, collect three numbers from a representative week: p95 CPU utilization, p95 memory utilization, and p95 disk IOPS. If CPU is low but memory is pegged, a custom high-memory N2 shape beats jumping to M-series. If CPU is pegged but memory is idle, C3 or a smaller predefined type may win. If both are low, the rightsizing recommender is telling you the truth—downsize before you finance a CUD.
 
 ### The Four Families
 
@@ -44,6 +52,8 @@ flowchart TD
 ```
 
 ### [General Purpose: The Workhorse](https://cloud.google.com/compute/docs/general-purpose-machines)
+
+General-purpose series are where most teams should start and often stay. **E2** is the cost leader for dev/test and bursty internal tools: shared-core shapes (`e2-micro` through `e2-medium`) trade CPU burst fairness for hourly savings, while standard E2 sizes scale to 32 vCPUs with a 1:4 vCPU:memory ratio. **N2** and **N2D** are production workhorses on Intel and AMD respectively; they support custom machine types and sustained-use discounts on vCPU and memory, but not every discount stacks with CUD-covered usage. **T2D** targets scale-out fleets that benefit from AMD price-performance. **N1** remains for legacy lift-and-shift only—new designs should default to N2/N2D/E2 unless a dependency forces N1.
 
 | Series | CPU | vCPU:Memory Ratio | Best For | Notes |
 | :--- | :--- | :--- | :--- | :--- |
@@ -95,9 +105,12 @@ gcloud compute instances create high-mem-vm \
 ```
 
 Rules for custom machine types exist for a reason: you must stay within series-specific constraints, or provisioning can fail unexpectedly; for this reason, validate vCPU counts and memory boundaries before running any `--custom-cpu` or `--custom-memory` command.
+
 - Allowed vCPU counts depend on the machine series; check the current custom-machine-type limits for the series you selected.
 - Allowed memory ranges depend on the machine series, and extended-memory limits are defined per series rather than by one universal GB-per-vCPU rule.
 - Extended memory costs more per GB than standard memory.
+
+The `--custom-extensions` flag unlocks extended memory ratios on supported series (commonly N2) when your workload needs more RAM per vCPU than the default shape allows—think large Java heaps or caching layers. That flexibility is not free: extended memory GB pricing is higher, so you should still attempt a predefined highmem shape first. Custom types also affect MIG instance flexibility: wildly exotic shapes may reduce the pool of zones where Google can place replacements during scale-out events.
 
 ### Shared-Core Machines
 
@@ -108,6 +121,40 @@ For lightweight workloads that do not need a full vCPU, E2 offers shared-core op
 | `e2-micro` | 0.25 shared | 1 GB | Micro-services, tiny APIs | Lower-cost than `e2-medium` |
 | `e2-small` | 0.5 shared | 2 GB | Low-traffic web, dev | Lower-cost than `e2-medium` |
 | `e2-medium` | 1 shared | 4 GB | Moderate web, Jenkins agents | Baseline |
+
+### Compute-Optimized, Memory-Optimized, and Accelerator Families
+
+Beyond general-purpose shapes, production platforms routinely land on specialized families when a single dimension—CPU throughput, RAM, or accelerators—dominates the bottleneck. The compute-optimized **C2**, **C2D**, and newer **C3** / **C3D** series target HPC, gaming backends, and numeric batch jobs where you want high vCPU performance per dollar rather than the widest memory envelope. Memory-optimized **M1**, **M2**, and **M3** machines exist for in-memory databases and SAP-scale footprints; Google documents M3 configurations up to very large vCPU and memory counts for workloads that cannot shard cheaply. Accelerator-optimized **A2**, **A3**, and **G2** families attach NVIDIA GPUs for ML training and inference; Spot pricing extends to GPUs, but preemption and maintenance behavior differ from standard VMs, so treat GPU pools as interruption-aware capacity.
+
+| Series | Processor / accelerator | Typical workload | Cost note |
+| :--- | :--- | :--- | :--- |
+| **C3 / C3D** | Intel / AMD latest gen | Latency-sensitive APIs, simulation | Compare against N2/N2D in-region; CUDs may apply where SUDs do not |
+| **M2 / M3** | High memory per vCPU | SAP HANA, large caches | Hourly rates are high—justify with residency needs, not default choice |
+| **A2 / A3 / G2** | NVIDIA GPUs | Training, inference, video | Spot can discount GPU hours; live migration not available on Spot |
+| **T2D / T2A** | AMD / Arm | Scale-out Linux fleets | Good when software stack is Arm-ready; benchmark before mass migration |
+
+### Custom Machine Types and Sole-Tenant Nodes
+
+Custom machine types let you pick vCPU and memory independently within a series, which is how you stop paying for RAM you never touch or vCPUs that sit idle while memory is pegged. Extended-memory custom shapes cost more per GB above the standard ratio for that series, so the billing signal should push you back toward predefined types when you are only slightly off-size. **Sole-tenant nodes** dedicate physical hosts to your project—useful for license compliance, noisy-neighbor isolation, or colocation-style placement. You pay for the entire node capacity, so sole-tenant is a deliberate premium unless regulation or performance isolation demands it; it is not a default cost-optimization path.
+
+```bash
+# List sole-tenant node types available in a zone
+gcloud compute sole-tenancy node-types list --zone=us-central1-a
+
+# Create a node group (reserves physical capacity)
+gcloud compute sole-tenancy node-groups create analytics-hosts \
+  --node-type=n2-node-96-240 \
+  --node-count=1 \
+  --zone=us-central1-a
+
+# Create a VM on that node group
+gcloud compute instances create isolated-db \
+  --node-group=analytics-hosts \
+  --zone=us-central1-a \
+  --machine-type=n2-custom-16-65536 \
+  --image-family=debian-12 \
+  --image-project=debian-cloud
+```
 
 ---
 
@@ -125,6 +172,8 @@ GCP offers three pricing tiers for the same hardware, and each tier optimizes a 
 | **Preemptible (legacy)** | 60-91% | 24 hours max | Preempted at 24h, or earlier | Use Spot instead (superset) |
 
 [**Spot VMs** replaced Preemptible VMs as the recommended ephemeral option. They offer the same discount but without the 24-hour maximum lifetime. Both can be preempted at any time with a 30-second warning.](https://cloud.google.com/compute/docs/instances/preemptible)
+
+When architects compare GCP Spot to AWS Spot, the important difference is operational shape, not the headline percent-off. GCP Spot has no legacy 24-hour cap; AWS Spot instances can run until interrupted but with different capacity pools and savings-plan interactions. On GCP, combine Spot MIGs with load balancer-backed services only if your app tier tolerates member loss; frontends should drain connections using connection draining and health checks, while workers should checkpoint. Premium operating systems on Spot still bill licensing rules when stopped—Spot saves compute, not necessarily Windows/SQL license minimums documented in the Spot guide.
 
 ```bash
 # Create a Spot VM
@@ -151,6 +200,10 @@ gcloud compute instances create legacy-worker \
 
 ### Handling Preemption Gracefully
 
+Spot preemption is a contract, not a surprise outage. Google signals preemption through instance metadata (`preempted=TRUE`) and then begins a shutdown window—historically up to 30 seconds for the ACPI soft-off path, with optional longer notice durations on newer Spot configurations documented in the Spot VM guide. Your job is to **drain work**: flush queues, checkpoint to Cloud Storage, remove the VM from load balancer backends, and exit cleanly. MIGs will recreate Spot VMs when capacity returns, but they will not replay unfinished business logic unless you designed idempotent workers.
+
+Batch systems should shard work into tasks smaller than median time-between-preemptions in your zone, and should use Spot MIGs with `instance-termination-action=DELETE` only when local disk state is disposable. Use `STOP` when you want a chance to restart the same disk identity after preemption if capacity returns—helpful for long downloads or resumable transforms.
+
 ```bash
 # Inside the VM: check if a preemption notice has been issued
 # (the metadata server returns a termination timestamp 30s before preemption)
@@ -174,6 +227,10 @@ gcloud compute instances create batch-worker \
 
 For steady-state production workloads, CUDs offer significant savings without any preemption risk. This model is strongest when you can tolerate a long commitment and can confidently forecast utilization across the relevant machines. If workloads drop unexpectedly, it is still useful to re-evaluate commitments during billing cycles because commitment math changes with team growth.
 
+Resource-based commitments attach to vCPU and memory in a region—you are promising capacity, not a specific VM name. Spend-based commitments discount broader eligible spend on the billing account, which helps heterogeneous fleets but requires finance alignment on what counts toward the commitment. Neither type replaces architecture discipline: if you commit to 200 N2 vCPUs while the fleet migrates to C3, you may pay for unused commitment until the term ends or you sell reshaping options your contract allows.
+
+Operationally, pair CUD purchases with **autoscaling bounds**: commitments cover the baseline; autoscaler handles peaks above baseline on on-demand or Spot. Document that split so engineers do not cap `max-num-replicas` at committed cores during incidents. FinOps hub and billing export show realized savings from CUDs, rightsizing, and idle resource removal—use those reports to justify the next commitment tranche instead of guessing from a spreadsheet.
+
 | Commitment | Duration | Discount |
 | :--- | :--- | :--- |
 | **Resource-based** | 1 year | Varies by eligible resource and current pricing model |
@@ -195,6 +252,35 @@ gcloud compute commitments list --region=us-central1
 
 Sustained Use Discounts (SUDs) apply automatically to eligible machine families---no commitment required. After 25% of monthly use, Google Cloud applies incremental discounts, and the maximum discount depends on the machine series and resource type. This means you can stack behavior-based savings with workload rightsizing, and you should compare SUD and CUD impacts before changing a migration plan.
 
+### GCP Compute Cost Model (and How It Differs from "Buy a Reservation First")
+
+Understanding GCP pricing starts with what happens **without** anyone filing a purchase order. For eligible N1/N2/N2D/C2/M-series vCPU and memory—and some sole-tenant premium components—[sustained-use discounts](https://cloud.google.com/compute/docs/sustained-use-discounts) accrue automatically once a resource runs more than 25% of a billing month. Discounts step at 25%, 50%, 75%, and 100% utilization thresholds, reaching up to **30% net discount** on many N-family shapes and up to **20%** on several C2 resources. SUDs do **not** apply to E2, nor to usage already covered by committed-use discounts, which is why FinOps reviews often show E2 for bursty tiers and N2/N2D for always-on cores.
+
+Committed-use discounts (CUDs) are the deliberate mirror image: you commit to vCPU, memory, or spend for one or three years and receive lower rates in exchange for forecast risk. Resource-based CUDs attach to machine families; spend-based CUDs attach to billing-account spend. A common mistake is buying a three-year CUD for a fleet you plan to migrate to a different series next quarter—commitment savings evaporate if the workload moves off eligible SKUs. Spot VMs sit at the opposite end of the flexibility spectrum: [up to 91% off on-demand](https://cloud.google.com/compute/docs/instances/spot) for many machine types, no minimum or maximum runtime (unlike legacy preemptible's 24-hour cap), but preemption can happen anytime with as little as a 30-second shutdown window by default.
+
+| Pricing lever | Who turns it on | Interruption risk | Best when |
+| :--- | :--- | :--- | :--- |
+| On-demand | Default | None | Unknown shape, short-lived sandboxes |
+| SUD (automatic) | Google Cloud after ~25% monthly use | None | Steady VMs on eligible families without CUD |
+| CUD (1y / 3y) | You purchase commitment | None if you stay on committed SKUs | Baseline production cores with stable forecasts |
+| Spot | `--provisioning-model=SPOT` | Preemption anytime | Batch, CI, stateless workers with checkpoints |
+
+**Cost lens — what spikes unexpectedly:** Autoscaled MIGs growing `max-num-replicas` during an attack or viral event; premium OS licenses still billing when Spot VMs stop; Hyperdisk provisioned IOPS/throughput above baseline; GPUs left attached to stopped VMs; and **orphaned persistent disks** after instance deletes (disk charges continue). **Knobs that pull spend down:** rightsizing via the [VM machine type recommender](https://cloud.google.com/compute/docs/instances/apply-machine-type-recommendations-for-instances), stopping [idle VMs](https://cloud.google.com/compute/docs/instances/idle-vm-recommendations-overview) flagged by Recommender, deleting disks surfaced by the idle disk recommender, moving fault-tolerant tiers to Spot, and layering CUDs only after SUD-eligible baselines are visible in billing export.
+
+```bash
+# Inspect rightsizing recommendations (8-day utilization window by default)
+gcloud recommender recommendations list \
+  --project="${PROJECT_ID}" \
+  --location=us-central1 \
+  --recommender=google.compute.instance.MachineTypeRecommender
+
+# Inspect idle VM recommendations
+gcloud recommender recommendations list \
+  --project="${PROJECT_ID}" \
+  --location=us-central1 \
+  --recommender=google.compute.instance.IdleResourceRecommender
+```
+
 > **Pause and predict**: You are designing a video rendering pipeline. If a rendering job is interrupted, it must start over from the beginning. Some jobs take up to 36 hours. Should you use Spot VMs to save costs here?
 
 ---
@@ -204,6 +290,10 @@ Sustained Use Discounts (SUDs) apply automatically to eligible machine families-
 ### Why Custom Images Matter
 
 Every time you create a VM from a public image (like `debian-12`), you start with a bare OS. Installing your application, dependencies, and configuration on every new VM wastes time and creates inconsistency. Custom images solve this by baking your software into a reusable image.
+
+The operational win is **time-to-ready**: autoscaling adds capacity during incidents, and boot latency becomes part of your incident budget. Golden images also shrink drift—two VMs created from the same family name should have identical packages, reducing "works on VM-3 only" mysteries. The tradeoff is process: you need a pipeline to rebuild images when CVEs land, deprecate old versions safely, and prove smoke tests before a family pointer moves. Teams that skip this pipeline often panic-patch individual VMs, which MIG self-healing will undo on the next health failure anyway.
+
+Public image families (`debian-12`, `ubuntu-2204-lts`) remain the right boot source for generic Linux; custom families are for **your** software stack. Document which family each environment uses (dev/stage/prod) so Terraform modules do not accidentally point staging at a bleeding-edge builder image.
 
 ```bash
 # Step 1: Create a VM and configure it
@@ -263,6 +353,27 @@ gcloud compute images deprecate my-app-v1-1 \
 
 > **Pause and predict**: You need to apply a critical security patch to an OS used by 50 VMs. If you're using image families, what steps must you take to ensure all VMs run the patched OS?
 
+### Startup Scripts, Metadata, and Golden-Image Hygiene
+
+Instance metadata is how Compute Engine injects configuration at boot without rebaking an image for every change. A **startup script** runs on first boot (and on reboot when configured) and is ideal for registering with a config service, formatting data disks, or pulling secrets from Secret Manager. Keep scripts idempotent where possible: MIG recreates and rolling updates will execute them again on fresh VMs. For secrets, prefer workload identity and Secret Manager over long-lived keys in metadata, because metadata is visible to anyone with `compute.instances.get` on the instance.
+
+```bash
+# Startup script via metadata on create
+gcloud compute instances create app-node \
+  --zone=us-central1-a \
+  --metadata=startup-script='#!/bin/bash
+    set -euo pipefail
+    apt-get update && apt-get install -y nginx
+    systemctl enable --now nginx' \
+  --image-family=debian-12 \
+  --image-project=debian-cloud
+
+# View startup-script output when debugging
+gcloud compute instances get-serial-port-output app-node --zone=us-central1-a
+```
+
+Golden images capture everything that is **slow or risky** to install live (compilers, agents, baseline sysctl). Startup scripts capture everything that should stay **dynamic** (version pins, feature flags). Mixing the two without discipline produces "snowflake" VMs that pass health checks once and fail after the next template rollout.
+
 ---
 
 ## Instance Templates and Managed Instance Groups
@@ -270,6 +381,10 @@ gcloud compute images deprecate my-app-v1-1 \
 ### Instance Templates
 
 An instance template is a blueprint that defines the machine type, image, disks, network, and other settings for a VM. [Templates are **immutable**---to change a setting, you create a new template.](https://cloud.google.com/compute/docs/instance-templates) That immutability is important because every scale or replacement event can use the same known-good definition, which is much easier to audit than manually configured one-off VM launches.
+
+Templates should encode the **non-negotiables**: service account, network tags, shielded options, disk types, and metadata keys your org policy requires. Keep application version drift in image families or startup scripts, not in one-off `gcloud` flags. Version templates in names (`web-template-v3`) so rollbacks are unambiguous in change tickets. When you adopt Spot in a MIG, the template sets `provisioning-model=SPOT` and termination action—every recreated VM inherits the same interruption contract, which is safer than mixing Spot and standard instances in one group.
+
+Disks declared in templates deserve the same scrutiny as machine types: a template that always attaches 500 GB `pd-ssd` will multiply waste across autoscale events. Prefer smaller boot disks plus separately managed data disks when state must persist, and mark ephemeral disks `auto-delete=yes` unless you have a recovery workflow.
 
 ```bash
 # Create an instance template
@@ -309,6 +424,10 @@ gcloud compute instance-templates create web-template-v2 \
 ### Managed Instance Groups (MIGs)
 
 A MIG is a group of identical VMs created from an instance template. [MIGs provide autoscaling, self-healing, rolling updates, and load balancer integration.](https://cloud.google.com/compute/docs/instance-groups) In practice, the combination of identity by template and lifecycle by controller gives you consistency under scale, because all replacement VMs inherit the same contract.
+
+**Stateful versus stateless** is the line that decides whether a MIG is appropriate. Stateless app tiers—web APIs, workers with external queues—fit MIGs well because replacement means "boot template and join pool." Stateful tiers—single-primary databases, license-bound appliances—need attached disks, failover orchestration, or managed services instead of naive recreate semantics. For stateful data on VMs, use retained disks, startup scripts that mount by device name, and health checks that validate database readiness, not just port open.
+
+**Instance flexibility** (optional advanced feature) lets a regional MIG choose among several machine types in a family to reduce preemption or capacity errors—especially valuable for Spot fleets where Google can shift shapes toward available inventory. You still standardize on a template per software generation; flexibility is about hardware fallback, not about mixing Debian and Ubuntu in one group.
 
 ```bash
 # Create a regional MIG (recommended: spans all zones in a region)
@@ -391,6 +510,43 @@ gcloud compute instance-groups managed rolling-action start-update web-mig \
 | `--minimal-action=REPLACE` | Replace entire VM | When image/template changes |
 | `--minimal-action=RESTART` | Just restart existing VM | When only metadata changes |
 
+### Regional vs Zonal MIGs
+
+A **zonal MIG** keeps all VMs in one zone. It is simpler and sometimes required for legacy designs, but it is a single blast-radius if that zone degrades. A **regional MIG** spreads VMs across zones in a region, which is the default recommendation for production web tiers because autoscaler can add capacity wherever spare host inventory exists. Regional MIGs pair naturally with global external Application Load Balancers: each regional backend registers its own instance group, and the front end steers users to healthy endpoints.
+
+Tradeoffs matter at update time: regional rolling updates coordinate replacements across zones, which can take longer but preserve zone diversity. Zonal MIGs update faster in one place yet concentrate risk. For stateful workloads that cannot tolerate multiple live copies, neither MIG shape fixes data gravity—you still need external durable storage and a real failover story.
+
+```bash
+# Zonal MIG (single zone — use only with eyes open)
+gcloud compute instance-groups managed create batch-zonal \
+  --template=web-template-v1 \
+  --size=3 \
+  --zone=us-central1-a
+
+# Regional MIG (multi-zone — preferred for HA web)
+gcloud compute instance-groups managed create web-mig-regional \
+  --template=web-template-v1 \
+  --size=3 \
+  --region=us-central1 \
+  --distribution-policy-zones=us-central1-a,us-central1-b,us-central1-f
+```
+
+### Autoscaling Signals Beyond CPU
+
+CPU target utilization is the default autoscaling signal because it is universally available, but production systems often scale on **HTTP load**, **custom metrics** exported to Cloud Monitoring, or **schedules** for predictable cron-shaped traffic. Load-based scaling ties replica count to request pressure seen by the load balancer, which tracks user-visible work better than OS CPU alone for I/O-heavy APIs. Scheduled scaling adds replicas before a known event (payroll run, product launch) and sheds them afterward—cheaper than leaving peak capacity running 24/7.
+
+```bash
+# Schedule-based scaling: scale out before business hours
+gcloud compute instance-groups managed update-autoscaling web-mig \
+  --region=us-central1 \
+  --set-schedule=scale-up-morning \
+  --schedule-cron='30 6 * * Mon-Fri' \
+  --schedule-duration-sec=3600 \
+  --schedule-time-zone='America/Chicago' \
+  --schedule-min-required-replicas=10 \
+  --schedule-description='Weekday morning scale-out'
+```
+
 ### Self-Healing
 
 When a health check fails, the MIG automatically recreates the unhealthy VM. This is the simplest form of self-healing in GCP. It protects request handling by replacing only the failed instance and then letting the control plane drive it back to healthy state through the same template.
@@ -416,6 +572,12 @@ flowchart LR
 
 > **Stop and think**: If you manually SSH into a VM managed by a MIG and update a configuration file, what will happen if the VM fails a health check later that day?
 
+### Observability: What to Watch in Production
+
+Managed platforms only reduce toil if signals are visible. For MIGs, monitor `instance_group_manager/instance_count`, autoscaler recommended size versus current size, and rolling update progress fields in `describe` output during deploys. For load balancers, alert on backend unhealthy fraction and elevated latency on the backend service—those often precede user-facing outages. For Spot fleets, track preemption rate indirectly via task retry counts and MIG recreate churn.
+
+Logging agents on VMs should ship nginx/app logs to Cloud Logging with `resource.type=gce_instance` labels so you can correlate a bad canary revision with request failures. Uptime checks against the global LB IP validate the path users actually traverse, not just per-VM `/health` on internal IPs. Cost anomalies belong on the same dashboard: sudden vCPU hour spikes often correlate with autoscaler max raised for a launch, while disk spend spikes may be orphaned volumes—not mysterious "Google tax."
+
 ---
 
 ## Cloud Load Balancing
@@ -423,6 +585,12 @@ flowchart LR
 GCP offers multiple load balancer types, but the most common is the **External Application Load Balancer** (formerly known as the External HTTP(S) Load Balancer). We use this layer for production-like web endpoints because it pairs naturally with MIG-managed targets and provides consistent global request distribution for HTTPS traffic.
 
 The key point is not only scale, but operational velocity: with a shared frontend plus managed backends, most rollout events become routine capacity transitions instead of one-off networking edits.
+
+External Application Load Balancers terminate HTTP(S) close to users via Google's anycast edge, then forward to regional backends you register—usually regional MIGs. That separation matters for cost and reliability: you pay for load balancing and egress on their own curves, while compute autoscaling can react per region. **Connection draining** lets you remove a backend VM without dropping in-flight sessions during rolling updates, which is why MIG updates and LB configuration should be designed together. **Session affinity** can stick users to a VM when your app still has local state, but affinity fights horizontal scale; prefer externalized sessions unless you are mid-migration.
+
+Internal Application Load Balancers cover east-west microservice traffic inside a VPC without exposing services publicly. Network load balancers handle TCP/UDP when you are not in HTTP land—gaming UDP, legacy TLS on TCP, or protocols that do not fit URL maps. Choosing the wrong layer creates expensive glue: do not force non-HTTP protocols through HTTP proxies; do not expose internal-only admin APIs on a global external frontend when an internal LB plus IAP would shrink attack surface.
+
+From a cost angle, load balancers add fixed hourly components plus processing charges depending on rules and traffic. The savings story is indirect: better utilization of fewer, right-sized VMs behind the LB, fewer emergency scale-ups from uneven backends, and fewer incidents that cause human overtime. Pair LB metrics (backend latency, unhealthy host count) with MIG autoscaler signals so you scale on user-visible pain, not CPU alone.
 
 ### Load Balancer Types
 
@@ -522,6 +690,10 @@ gcloud compute instance-groups managed set-named-ports web-mig-eu \
 
 Storage policy should match workload behavior, because disks are not interchangeable once you are in steady production. Logs and backups tolerate latency more than metadata-heavy databases, and that distinction affects whether `pd-balanced` is enough or `pd-ssd` is required. Treat disk selection as part of the same design conversation as machine type, or you may optimize compute and lose at the storage layer.
 
+Persistent disks are **network-attached block devices**: they survive VM stop/start, can be snapshotted for backup, and can be resized in many cases without rebuilding the instance. Local SSDs are **physically colocated** with the host: they deliver lower latency for scratch, shuffle, or cache layers, but data is ephemeral relative to host maintenance and Spot preemption rules. A classic cost mistake is putting terabytes of cold logs on `pd-ssd` because "databases use SSD"—those logs belong on `pd-standard` or Nearline/Archive in Cloud Storage once they age out.
+
+Snapshots and snapshot schedules (shown earlier) are cheap insurance compared to rebuilding data. Remember snapshot storage bills separately; lifecycle policies that delete stale snapshots are part of FinOps hygiene. When you delete a VM but keep disks, you will still see disk line items—Recommender's idle persistent disk insights exist to catch exactly that pattern.
+
 | Disk Type | IOPS (Read) | Throughput | Use Case | Cost |
 | :--- | :--- | :--- | :--- | :--- |
 | **pd-standard** | 0.75 per GiB | 0.12 MiB/s per GiB | Bulk storage, logs | Lowest |
@@ -552,11 +724,38 @@ gcloud compute resource-policies create snapshot-schedule daily-snapshot \
   --daily-schedule
 ```
 
+### Hyperdisk and the Next Generation of Block Storage
+
+[Hyperdisk](https://cloud.google.com/compute/docs/disks/hyperdisks) is Google's recommended durable block storage for new Compute Engine workloads that need higher performance than classic Persistent Disk. Types include **Hyperdisk Balanced** (default for most apps), **Hyperdisk Extreme** (highest IOPS for databases), **Hyperdisk Throughput** (bandwidth-heavy analytics), and **Hyperdisk Balanced High Availability** (synchronous replication across two zones in a region). You provision IOPS and throughput explicitly on many Hyperdisk SKUs, which is powerful but also a **cost spike vector**: provisioned performance bills even when the VM is idle, and Hyperdisk is **not eligible for SUDs or resource-based CUDs** per Google's disk pricing docs.
+
+| Storage choice | Durability | Performance control | Cost caution |
+| :--- | :--- | :--- | :--- |
+| pd-balanced / pd-ssd | Zonal PD | Size-based IOPS curves | Cheaper idle; may bottleneck DBs |
+| Hyperdisk Balanced | Zonal/regional options | Provisioned IOPS + throughput | Pay for provisioned caps monthly |
+| local-ssd | Ephemeral on host | Lowest latency | Data lost on host maintenance; no Spot live migration |
+| Hyperdisk Balanced HA | Cross-zone sync replica | HA within region | ~2× storage cost vs single-zone Balanced |
+
+```bash
+# Create a Hyperdisk Balanced data volume (performance defaults scale with size)
+gcloud compute disks create orders-db-data \
+  --zone=us-central1-a \
+  --size=500GB \
+  --type=hyperdisk-balanced
+
+gcloud compute instances attach-disk app-db \
+  --zone=us-central1-a \
+  --disk=orders-db-data
+```
+
+Pair disk choice with machine series support: not every machine type accepts every Hyperdisk variant, and very large databases may need **Hyperdisk Extreme** or **pd-extreme** instead of balanced tiers. Right-sizing disks is as important as right-sizing vCPU—Recommender's idle disk insights exist precisely because orphaned volumes are a silent budget leak.
+
 ---
 
 ## Securing Access: OS Login and SSH Keys
 
 Historically, accessing a Linux VM involved generating an SSH key pair and pasting the public key into the project or instance metadata. This approach does not scale well: when an employee leaves, you must hunt down and remove their keys across all instances. It is exactly this manual cleanup burden that leads to stale keys and access drift as teams and environments grow.
+
+Project-wide SSH keys in metadata also complicate compliance: auditors cannot easily map a key fingerprint to a human identity, and break-glass keys tend to linger for years. OS Login stores keys in an identity-linked profile, rotates them automatically for `gcloud compute ssh` sessions, and respects IAM deny policies. For break-glass, use time-bound IAM grants plus logged IAP sessions instead of shared private keys in a ticket attachment.
 
 [OS Login solves this by linking SSH access to IAM (Identity and Access Management). Instead of managing individual SSH keys, you assign IAM roles (`roles/compute.osLogin` or `roles/compute.osAdminLogin`) to users or groups.](https://cloud.google.com/compute/docs/oslogin/set-up-oslogin)
 
@@ -572,6 +771,114 @@ gcloud projects add-iam-policy-binding my-project \
 ```
 
 When a user connects using `gcloud compute ssh`, GCP automatically generates a short-lived SSH key, pushes it to their OS Login profile, and allows them to log in. When IAM access is removed, future OS Login SSH connections are denied across VMs that use OS Login. For VMs that do not have external IPs, you combine OS Login with [Identity-Aware Proxy (IAP) TCP forwarding](https://cloud.google.com/iap/docs/using-tcp-forwarding) to securely tunnel SSH traffic without exposing ports to the internet.
+
+### Shielded VM, Confidential VM, and Defense in Depth
+
+**Shielded VMs** harden the boot chain with Secure Boot, virtual TPM (vTPM), and integrity monitoring so tampered bootloaders or kernels are detectable before they become persistent compromise. New Debian and many marketplace images ship Shielded-compatible; organizations can enforce Shielded creation via the `compute.requireShieldedVm` org policy. Shielded VM addresses **boot integrity**, not encryption of data while it is being processed in RAM.
+
+**Confidential VMs** add hardware memory encryption so data in use is protected from the hypervisor and other tenants on the host. They target regulated workloads and multi-tenant concerns about insider access to memory. Confidential VMs cannot run on sole-tenant node groups, so you choose isolation model upfront: physical sole-tenancy versus cryptographic confidentiality—not both on the same instance shape.
+
+```bash
+# Create a Shielded VM (secure boot + vTPM enabled on supported images)
+gcloud compute instances create hardened-api \
+  --zone=us-central1-a \
+  --image-family=debian-12 \
+  --image-project=debian-cloud \
+  --shielded-secure-boot \
+  --shielded-vtpm \
+  --shielded-integrity-monitoring
+
+# Create a Confidential VM (requires supported machine type + image)
+gcloud compute instances create conf-worker \
+  --zone=us-central1-a \
+  --machine-type=n2d-standard-4 \
+  --confidential-compute \
+  --maintenance-policy=TERMINATE \
+  --image-family=debian-12 \
+  --image-project=debian-cloud
+```
+
+For compliance-heavy platforms, the practical pattern is Shielded + OS Login + no external IP + IAP for admin access, adding Confidential VM only where contracts require encryption-in-use. Each layer adds operational constraints (maintenance policies, supported machine types, disk types), so document which tier each workload class must use before engineers freestyle instance flags.
+
+---
+
+## Patterns & Anti-Patterns
+
+Production Compute Engine designs succeed when templates, MIGs, and load balancers encode assumptions explicitly: stateless VMs, immutable templates, externalized durable state, and interruption-aware batch tiers. Weak designs treat VMs like pets, disable health checks to silence alerts, or buy three-year CUDs before rightsizing—then wonder why spend still climbs.
+
+| Pattern | When to use it | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| Template + regional MIG + global LB | Public HTTP APIs needing zone redundancy | Autoscaler adds zones with capacity; LB drains unhealthy backends | Set `min-num-replicas` ≥ 2 per active region |
+| Image family + rolling update | Frequent app releases | Canary flags limit blast radius; rollback is template pointer change | Keep old template until error budget recovers |
+| Spot worker pool + checkpointing | Batch/CI with restartable work | Up to 91% discount without 24h preemptible cap | Use MIG to recreate Spot VMs; handle metadata preemption signal |
+| OS Login + IAP, no external IP | Admin access to private tiers | Access tracks IAM lifecycle, not scattered SSH keys | Firewall allow IAP range only |
+| Custom machine type after metrics | Steady CPU/memory mismatch on N2 | Pay for shape you use; avoids oversized predefined types | Revisit when workload changes—rightsizing recommender helps |
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| Single-zone MIG for revenue APIs | Zone outage = full region down | Zonal MIG tutorials are shorter | Regional MIG + multi-zone distribution policy |
+| CUD before rightsizing | Pay for committed wrong size | Finance wants savings now | Run recommender; commit after 30–60 days stable |
+| Ignoring SUD on eligible cores | Over-buying CUD coverage | AWS habits don't transfer | Let SUD apply; CUD only on baseline above SUD |
+| Manual SSH keys in project metadata | Offboarding misses keys | Quick demo access | OS Login + IAM groups |
+| pd-standard boot disk on OLTP DB | Latency spikes under load | Cost table sorted by price | pd-ssd or Hyperdisk Balanced with measured IOPS |
+| Spot for jobs without checkpoint | Repeated full restarts | Spot price looks irresistible | Checkpoint to GCS or use standard VMs |
+
+---
+
+## Decision Framework
+
+Use the flows below when choosing machine family, pricing model, and MIG scope. They are not substitutes for benchmarking—they prevent obviously expensive mismatches early.
+
+```mermaid
+flowchart TD
+    Start["New Compute Engine workload"] --> Q1{"Latency-sensitive<br/>in-memory DB?"}
+    Q1 -->|Yes| M["M-series or custom high-mem N2"]
+    Q1 -->|No| Q2{"Needs GPU/TPU?"}
+    Q2 -->|Yes| A["A2/A3/G2 + check Spot/CUD rules"]
+    Q2 -->|No| Q3{"Steady web/API traffic?"}
+    Q3 -->|Yes| GP["E2 dev / N2 or N2D prod + regional MIG"]
+    Q3 -->|No| Q4{"Batch tolerant to loss?"}
+    Q4 -->|Yes| Spot["Spot VM or Spot MIG"]
+    Q4 -->|No| GP
+```
+
+### Machine family quick matrix
+
+| Signal | Lean toward | Avoid |
+| :--- | :--- | :--- |
+| Cost-sensitive dev/test | E2 shared-core or `e2-small` | N1 legacy, oversized custom types |
+| General production API | N2, N2D, or C3 after benchmark | Defaulting to M-series "just in case" |
+| GPU ML training | A3 + Spot if fault-tolerant | Standard VM without GPU quota planning |
+| License isolation | Sole-tenant node group | Sole-tenant for every app (cost) |
+
+### Spot vs CUD vs on-demand
+
+| Question | If mostly "yes" | Choose |
+| :--- | :--- | :--- |
+| Can the job restart from checkpoint without SLA breach? | Spot (or Spot MIG) |
+| Will vCPU/memory run >25% of month on N2/N2D/C2/M? | On-demand + automatic SUD first |
+| Is baseline core count stable 12+ months? | Add resource-based CUD on that baseline |
+| Does preemption break revenue path? | On-demand or CUD, not Spot |
+
+### Regional vs zonal MIG
+
+| Requirement | Regional MIG | Zonal MIG |
+| :--- | :--- | :--- |
+| Survive single zone failure | Preferred | Poor fit |
+| Lowest complexity lab | Acceptable overhead | Fine |
+| Stateful single-copy workload | Still need external HA design | May be forced, but plan outage |
+
+### End-to-end platform checklist
+
+Before declaring a Compute Engine slice production-ready, walk this checklist with your team. It ties together patterns, pricing, and security without introducing new tools.
+
+1. **Capacity** — Regional MIG, min replicas ≥ 2, autoscaling signal matches traffic shape (CPU, LB, or schedule), health checks reflect real readiness not just `sshd`.
+2. **Cost** — Rightsizing recommender reviewed; idle VM/disk recommendations addressed; Spot only on fault-tolerant tiers; CUD purchased only on measured baseline; SUD-eligible series used for always-on cores where appropriate.
+3. **Release** — Instance templates versioned; rolling update with surge and max-unavailable documented; canary percentage defined; rollback is template revert, not SSH surgery.
+4. **Data** — Boot vs data disks separated; snapshots scheduled; Hyperdisk provisioned performance matches measured p95; no orphaned disks after deletes.
+5. **Access** — OS Login enabled; external IPs removed where possible; IAP path tested; Shielded/Confidential requirements documented per tier.
+
+This checklist is deliberately boring—boring platforms survive traffic spikes without heroics, and FinOps reviews stop being archaeology on mystery disks.
 
 ---
 
@@ -591,14 +898,14 @@ When a user connects using `gcloud compute ssh`, GCP automatically generates a s
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| Using N1 machines for new workloads | N1 appears first in old tutorials | Use N2, N2D, or E2---they offer better price-performance |
 | Not using Managed Instance Groups | Individual VMs seem simpler initially | Use MIGs for most production VM workloads; they provide autoscaling and self-healing |
 | Setting autoscaler min to 1 | Want to minimize cost | Min should be 2+ for high availability across zones |
 | Not configuring health checks | Assumed MIG "just knows" when VMs are unhealthy | Create HTTP health checks with appropriate thresholds |
 | Using external IPs on every VM | Easier to SSH directly | Use IAP tunneling; VMs should not have external IPs unless they serve public traffic |
-| Ignoring Sustained Use Discounts | Assuming CUDs are the only option | SUDs apply automatically; check billing reports to see your effective discount |
-| Choosing pd-standard for databases | It is the cheapest disk type | Use pd-ssd for any workload with latency requirements; pd-standard IOPS scales with disk size |
-| Not setting shutdown scripts on Spot VMs | Assuming preemption never happens | Implement graceful shutdown so Spot VMs can save state and deregister from services when interrupted |
+| Ignoring SUD or buying CUD too early | Treating GCP like "reservations first" clouds | Let automatic SUD apply on eligible cores; buy CUD only after rightsizing baseline |
+| Choosing pd-standard for databases | It is the cheapest disk type | Use pd-ssd or Hyperdisk with measured IOPS; pd-standard is for throughput-oriented bulk data |
+| Not setting shutdown scripts on Spot VMs | Assuming preemption never happens | Implement graceful shutdown; watch `preempted` metadata and use STOP vs DELETE deliberately |
+| Using N1 for new workloads | N1 appears first in older material | Default to N2, N2D, or E2; migrate N1 only when required |
 
 ---
 
@@ -646,6 +953,12 @@ You shouldn't worry because standard Compute Engine VMs benefit from a feature c
 When OS Login is enabled at the project level, Compute Engine completely bypasses local SSH key files like `~/.ssh/authorized_keys` and exclusively relies on IAM policies to authorize access. With OS Login, a user's ability to SSH into a VM is directly tied to their Google Cloud identity and IAM roles (like `roles/compute.osLogin`). Once the departed developer's Google Workspace account is suspended or their IAM role is revoked, their SSH access is typically cut off across all VMs in the project. This eliminates the operational nightmare of hunting down and deleting rogue public keys scattered across individual instances.
 </details>
 
+<details>
+<summary>8. Your FinOps lead sees rising Hyperdisk bills after a database migration, even though query latency improved. The disks show high provisioned IOPS but average observed IOPS stayed flat. What likely happened, and what would you change first?</summary>
+
+Hyperdisk Balanced and Extreme bill for **provisioned** IOPS and throughput caps, not just allocated size. During migration someone probably set provisioned performance generously to de-risk cutover, which is rational for a weekend—but expensive if left in place once steady state returns. Because Hyperdisk does not receive sustained-use or resource-based CUD discounts, those provisioned caps become pure monthly cost until you tune them. First step is compare provisioned versus observed performance in Monitoring, then step down IOPS/throughput to headroom above p95, or revert to pd-ssd if requirements do not justify Hyperdisk. Rightsizing disks is the same discipline as rightsizing machine types: measure, then dial knobs down.
+</details>
+
 ---
 
 ## Hands-On Exercise: Globally Load-Balanced App Across Two Regions
@@ -653,6 +966,10 @@ When OS Login is enabled at the project level, Compute Engine completely bypasse
 ### Objective
 
 Build a production-like architecture with MIGs in two regions behind a global HTTPS load balancer. Use this exercise to connect the concepts from this module: template-driven instances, regional redundancy, autoscaling policy, and endpoint load distribution through a single global IP. The goal is to complete a repeatable rollout that you can adapt into a real environment when your test and verification steps are in place.
+
+As you work, notice how **each layer assumes the one below is boring**: the VPC and firewall rules must allow health check ranges; templates must expose `/health`; MIGs must pass health checks before backends go green; the URL map must point at the correct backend service. A failure at any layer looks like "load balancer broken," but the root cause is often a missing named port or an autoscaler still at zero in one region. That dependency chain is exactly how production platforms are debugged—from the edge inward, not by restarting random VMs.
+
+**Hypothetical scenario:** During Task 5 you see only one hostname in responses despite four healthy backends. Before blaming the load balancer, verify backend balancing mode, named ports, and that each VM returns distinct metadata in its HTML—otherwise you may be caching at a browser or hitting a single zone because firewall rules blocked three subnets.
 
 ### Prerequisites
 
@@ -932,6 +1249,8 @@ echo "Cleanup complete."
 
 Next up: **[Module 2.4: Cloud Storage (GCS)](../module-2.4-gcs/)** --- Master storage classes, lifecycle management, versioning, signed URLs, and the gsutil/gcloud commands you will use every day.
 
+You now have the vocabulary to read a GCP architecture diagram critically: which tier is stateless behind a MIG, which disks are ephemeral versus durable, whether Spot or CUD economics match the SLA, and whether SSH access is governed by IAM instead of scattered keys. Carry that lens into storage and networking modules—compute choices echo through egress, snapshot, and identity bills long after the VM boots. Revisit this module when you design autoscaling policies or FinOps reviews; the tradeoffs compound quickly at scale, and small template mistakes replicate across every zone in a regional MIG during the next incident, major product launch, or your team's next quarterly cost review.
+
 ## Sources
 
 - [cloud.google.com: general purpose machines](https://cloud.google.com/compute/docs/general-purpose-machines) — Google Cloud's general-purpose machine-family documentation is the primary source for these series characteristics.
@@ -947,3 +1266,11 @@ Next up: **[Module 2.4: Cloud Storage (GCS)](../module-2.4-gcs/)** --- Master st
 - [cloud.google.com: live migration process](https://cloud.google.com/compute/docs/instances/live-migration-process) — The live migration process documentation directly states that disruption is typically much less than one second.
 - [cloud.google.com: setting vm host options](https://cloud.google.com/compute/docs/instances/setting-vm-host-options) — The host maintenance policy documentation is the primary source for default maintenance behavior.
 - [Application Load Balancer overview](https://cloud.google.com/load-balancing/docs/application-load-balancer) — This gives the current product model for Google Cloud application load balancers and their global and regional modes.
+- [cloud.google.com: sustained use discounts](https://cloud.google.com/compute/docs/sustained-use-discounts) — Documents automatic 25–100% monthly thresholds and up to 30% net SUD on eligible machine families.
+- [cloud.google.com: hyperdisks](https://cloud.google.com/compute/docs/disks/hyperdisks) — Hyperdisk types, provisioned performance, and SUD/CUD ineligibility.
+- [cloud.google.com: scaling schedules](https://cloud.google.com/compute/docs/autoscaler/scaling-schedules) — Cron-based MIG capacity schedules and `update-autoscaling` flags.
+- [cloud.google.com: idle VM recommendations](https://cloud.google.com/compute/docs/instances/idle-vm-recommendations-overview) — How Recommender classifies low CPU/network VMs over 1–14 days.
+- [cloud.google.com: machine type recommendations](https://cloud.google.com/compute/docs/instances/apply-machine-type-recommendations-for-instances) — Rightsizing recommender behavior and gcloud apply flow.
+- [cloud.google.com: shielded VM](https://cloud.google.com/compute/shielded-vm/docs/shielded-vm) — Secure Boot, vTPM, and integrity monitoring features.
+- [cloud.google.com: about confidential VM](https://cloud.google.com/compute/docs/about-confidential-vm) — Encryption-in-use model and operational constraints.
+- [cloud.google.com: recommender catalog](https://cloud.google.com/recommender/docs/recommenders) — IDs for idle VM, idle disk, and MIG machine-type recommenders.
