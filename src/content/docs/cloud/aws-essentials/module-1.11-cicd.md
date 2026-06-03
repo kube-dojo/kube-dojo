@@ -37,18 +37,6 @@ In this module, you will learn the AWS Code Suite -- CodeBuild for building and 
 
 ---
 
-## Did You Know?
-
-- **AWS CodePipeline became generally available in July 2015.** Before AWS-native managed CI/CD services were widely used, many teams ran tools such as Jenkins on EC2 instances.
-
-- **CodeBuild runs on managed compute** and charges for build usage rather than requiring you to keep a dedicated build server running. In a small setup, that can be much cheaper than operating an always-on Jenkins host, depending on build volume and infrastructure choices.
-
-- **OIDC federation for GitHub Actions** avoids storing long-lived IAM access keys in GitHub. GitHub Actions can request short-lived identity tokens, and AWS can trust those tokens to issue temporary credentials for a tightly scoped IAM role.
-
-- **Blue/green deployments on ECS** can be implemented with CodeDeploy, while the ECS deployment circuit breaker handles rollback for rolling deployments. AWS has also added newer ECS-native deployment strategies, so check the current ECS deployment documentation before choosing an approach.
-
----
-
 ## CodeBuild: Building and Testing Code
 
 CodeBuild is a fully managed build service. You give it source code, a build specification file (`buildspec.yml`), and a compute environment. It runs your build, publishes artifacts, and reports success or failure.
@@ -232,6 +220,70 @@ The [`privilegedMode: true` flag is required when building Docker images inside 
 | BUILD_GENERAL1_2XLARGE | 72 | 144 GiB | See current AWS pricing |
 
 Most application builds work fine on SMALL. Use MEDIUM or LARGE for heavy compilation (C++, Rust) or large test suites.
+### Local Caching vs S3 Caching
+
+CodeBuild offers two caching modes that trade off speed against consistency. **Local caching** stores the cache on the build host itself, which means it is only reusable when your next build lands on the same host. This works well for Docker layer caching (the `docker` cache mode) and for dependency directories like `node_modules` that you rebuild infrequently. Because local cache access is essentially disk-speed, it adds negligible latency to the build.
+
+**S3 caching** writes the cache tarball to an S3 bucket at the end of a successful build and downloads it at the start of the next one. This guarantees cache availability across different build hosts, which matters when your build fleet scales up or down between runs. The trade-off is time: uploading and downloading a cache tarball adds latency to every build cycle. S3 caching is the right default for teams running fewer than 20 builds per day on a stable dependency graph, and for any build that uses the ARM compute type (since ARM and x86 hosts are drawn from separate pools, making local cache reuse less predictable).
+
+> **Stop and think**: If your buildspec caches `/root/.cache/pip/**/*` with S3 caching and you update `requirements.txt` to pin a newer version of a library, does the S3 cache invalidate automatically? What happens when pip sees the stale cached wheel but the lockfile demands a newer version?
+
+### Batch Builds
+
+When a single commit touches multiple modules that can be built independently, running them sequentially wastes time. **Batch builds** let you define a `batch` section in `buildspec.yml` that splits the build into parallel tasks. Each task runs in its own compute environment with its own phase sequence, so they execute concurrently without interfering with each other.
+
+```yaml
+batch:
+  fast-fail: false
+  build-list:
+    - identifier: frontend
+      buildspec: frontend/buildspec.yml
+    - identifier: backend
+      buildspec: backend/buildspec.yml
+    - identifier: e2e_tests
+      buildspec: tests/buildspec.yml
+      depend-on:
+        - frontend
+        - backend
+```
+
+The `depend-on` field controls task ordering: a task only starts after its dependencies complete successfully. Set `fast-fail: true` to abort all remaining tasks the moment any one fails. Batch builds multiply your per-minute cost because each task runs on a separate compute environment, so verify that the wall-clock savings justify the parallel spend before enabling batch mode on every pipeline run.
+
+### Build Reports
+
+CodeBuild can surface test results directly in the AWS Console without you needing to parse XML files in CloudWatch Logs. The `reports` section in `buildspec.yml` tells CodeBuild where to find test output files and what format they use:
+
+```yaml
+reports:
+  unit-tests:
+    files:
+      - "reports/unit-tests.xml"
+    file-format: JUNITXML
+  coverage:
+    files:
+      - "coverage/cobertura.xml"
+    file-format: COBERTURAXML
+```
+
+Supported formats include JUnit XML, Cucumber JSON, and Cobertura XML. When a build completes, the CodeBuild console shows pass/fail counts, trend lines across recent builds, and per-test-case details. These reports are retained for 30 days by default and can be exported to S3 for longer archival. Because reports are generated from the build output artifacts, they require that your test runner writes results to the expected file path inside the build container.
+
+### VPC Builds
+
+By default, CodeBuild runs in an AWS-managed VPC with internet access. When your build needs to reach resources inside your own VPC — an RDS database for integration tests, an internal package registry, or an ElastiCache cluster — you must configure the CodeBuild project to run inside that VPC.
+
+```bash
+aws codebuild create-project \
+  --name myapp-build \
+  --vpc-config '{
+    "vpcId": "vpc-0abc123def456",
+    "subnets": ["subnet-0a1b2c3d4e5f6", "subnet-0a1b2c3d4e5f7"],
+    "securityGroupIds": ["sg-0a1b2c3d4e5f6"]
+  }' \
+  # ... other parameters
+```
+
+Three constraints matter here. First, the build loses internet access unless the VPC has a NAT gateway or VPC endpoint for the AWS services it calls (ECR, S3, CloudWatch Logs). Second, the subnets you choose must have enough available IP addresses for the build fleet; a /28 subnet with only 11 usable IPs can throttle build concurrency during peak CI load. Third, the security group must allow outbound traffic on the ports your build needs — ECR requires 443, a database might need 5432 or 3306, and package registries vary.
+
 
 ---
 
@@ -340,6 +392,72 @@ aws deploy create-deployment-group \
 This is powerful: deploy with canary at 10%, wait 5 minutes, and if the `5xx-errors-high` alarm fires during that window, automatically roll back. No human intervention is needed for the first layer of response, which reduces mean-time-to-recover during peak-hours events.
 
 ---
+### In-Place vs Blue/Green: When Each Makes Sense
+
+CodeDeploy supports two fundamentally different deployment models, and choosing the wrong one for your workload is a common source of production incidents.
+
+**In-place deployments** stop the existing application on each instance, install the new version, and restart it. This preserves the instance's IP address, EBS volume attachments, and any local state, which matters for legacy applications that depend on instance identity. The downside is downtime: each instance stops serving traffic during the update window. For EC2 auto-scaling groups, CodeDeploy can perform a rolling in-place update that takes instances out of the load balancer, updates them, and returns them one batch at a time. In-place is the right choice when your application requires local instance state to persist across deployments, when you cannot afford the additional infrastructure cost of a parallel fleet, or when you are deploying to on-premises servers that lack the load balancer integration required for blue/green.
+
+**Blue/green deployments** provision an entirely new, identical environment (the "green" fleet) alongside the existing one (the "blue" fleet). Traffic shifts from blue to green through the load balancer, which means the old fleet stays healthy and untouched until traffic has fully migrated. If the green fleet shows problems, traffic shifts back immediately — a rollback that takes seconds rather than the minutes required to re-deploy the old version in-place. Blue/green is the right choice for production workloads where downtime is unacceptable, for deployments that need a validation window with real traffic before full cutover, and for any application that runs on ECS or Lambda (where replacing the entire compute surface is the natural deployment pattern).
+
+The infrastructure cost of blue/green — essentially doubling your fleet size during the deployment window — is its main drawback. For teams running 2-4 production tasks on ECS Fargate, this cost is negligible. For teams running hundreds of EC2 instances, the temporary fleet duplication can be significant, though it lasts only as long as the deployment plus the configured termination wait period on the original tasks.
+
+### Deployment Configurations Deep-Dive
+
+CodeDeploy's deployment configs control the pace and shape of traffic shifting. Choosing a config means deciding how much risk your team can absorb per unit time and how quickly you need new code to reach all users.
+
+| Config | Behavior | Risk Profile | Best For |
+|--------|----------|--------------|----------|
+| `CodeDeployDefault.AllAtOnce` | Shift 100% traffic instantly | Highest risk, fastest delivery | Dev/staging environments only |
+| `CodeDeployDefault.OneAtATime` | Deploy to one instance at a time | Moderate, per-instance validation | EC2 in-place, small fleets |
+| `CodeDeployDefault.HalfAtATime` | Deploy to half the fleet, then the other half | Balanced speed and safety | EC2 in-place, medium fleets |
+| `CodeDeployDefault.ECSCanary10Percent5Minutes` | 10% traffic for 5 min, then 100% | Low — blast radius is 10% | Production ECS with alarm monitoring |
+| `CodeDeployDefault.ECSCanary10Percent15Minutes` | 10% traffic for 15 min, then 100% | Very low — extended canary window | High-value production workloads |
+| `CodeDeployDefault.ECSLinear10PercentEvery1Minute` | 10% increments every minute | Low — gradual shift with observation | Teams wanting progressive cutover |
+| `CodeDeployDefault.ECSLinear10PercentEvery3Minutes` | 10% increments every 3 minutes | Very low — extended observation per step | Regulated industries, critical paths |
+
+The key design principle: **canary configs expose a small subset of users to the new version and hold there**, which limits blast radius to the canary group if a latent bug surfaces. **Linear configs never hold — they keep stepping forward**, which is better for teams that trust their pre-deployment validation and want the deployment to complete within a predictable window. Canary is the safer default when you are unsure about the release quality. Linear is appropriate when you have strong confidence from staging but still want progressive traffic shift to observe system behavior under increasing load.
+
+### Compute Platforms
+
+CodeDeploy operates across three compute platforms, each with different deployment primitives and operational trade-offs. Understanding which platform your application runs on determines which deployment strategies are available.
+
+**EC2/On-Premises** deployments use the CodeDeploy agent running on each instance. The agent polls CodeDeploy for commands, downloads the revision from S3 or GitHub, and executes the deployment lifecycle hooks defined in `appspec.yml`. This platform supports in-place and blue/green (with an Auto Scaling Group). The agent model means instances need outbound internet access or a VPC endpoint for `codedeploy` commands, and the agent version must stay current to receive lifecycle hook updates.
+
+**ECS** deployments work at the task level rather than the instance level. CodeDeploy manages the ECS service's task definition, target groups, and traffic shifting through the Application Load Balancer. You get blue/green with configurable traffic shifting and CloudWatch alarm integration. CodeDeploy creates a replacement task set for the green fleet, shifts a test listener to it, runs validation hooks, then shifts production traffic. No agent runs inside the tasks themselves — the ECS control plane handles orchestration.
+
+**Lambda** deployments shift traffic between function versions using the Lambda traffic-shifting API. CodeDeploy can canary-deploy a new Lambda version with a configurable percentage and interval, and the deployment hooks include `BeforeAllowTraffic` and `AfterAllowTraffic` that let you run pre-traffic and post-traffic validation functions. The same CloudWatch alarm rollback applies: if the new version of your Lambda function starts erroring during the canary window, the deployment rolls back automatically.
+
+### Lifecycle Hooks in Detail
+
+The `appspec.yml` hooks define a deployment's execution contract. Each hook fires at a precise point in the deployment lifecycle, and if a hook function fails (returns a failure status to CodeDeploy), the deployment fails at that stage. Here is when each hook fires during a blue/green ECS deployment:
+
+```
+DEPLOYMENT START
+  │
+  ├─ BeforeInstall          ← Runs before anything is deployed.
+  │                           Use: pre-flight checks, database state validation
+  │
+  ├─ Install                ← (Managed by CodeDeploy) Creates green task set
+  │
+  ├─ AfterInstall           ← Green tasks exist but receive no traffic.
+  │                           Use: warm-up requests, cache hydration
+  │
+  ├─ AfterAllowTestTraffic  ← Test listener routes to green tasks.
+  │                           Use: integration tests, synthetic checks
+  │
+  ├─ BeforeAllowTraffic     ← Production traffic still 100% blue.
+  │                           Use: final validation gate, manual sign-off
+  │
+  ├─ AllowTraffic           ← (Managed by CodeDeploy) Shifts production traffic
+  │
+  └─ AfterAllowTraffic      ← Production traffic now flowing to green.
+      (DELAY configured)      Use: smoke tests against live traffic, metrics check
+                              If alarm fires → rollback begins
+```
+
+Each hook references a Lambda function that CodeDeploy invokes synchronously. The function must return a success/failure payload within the Lambda invocation timeout. If a hook times out, CodeDeploy treats it as a deployment failure, and whether automatic rollback triggers depends on the deployment group's rollback configuration. A common pitfall is setting Lambda timeouts too short for hooks that perform real validation work — a `BeforeAllowTraffic` hook that runs a full integration suite needs a timeout measured in minutes, not seconds.
+
 
 ## CodePipeline: Orchestrating the Full Workflow
 
@@ -515,6 +633,40 @@ Why CodeStar Connections over webhook-based integrations matters because it cent
 
 ---
 
+
+
+### V2 Pipelines
+
+CodePipeline introduced the V2 pipeline type with several improvements over the original V1 model. V2 pipelines are the current default in the AWS Console and offer features that matter for production-grade delivery workflows:
+
+- **Trigger filters**: V2 pipelines can filter source triggers by branch name, tag pattern, or file path glob. A single repository can now have separate pipelines for different branch patterns — `main` triggers the production pipeline, `feature/*` triggers a lighter CI-only pipeline, and `release/*` triggers the full promotion pipeline with approval gates.
+- **Pipeline execution modes**: V2 supports `QUEUED` and `SUPERSEDED` execution modes. QUEUED (the default) processes every trigger sequentially, which is appropriate when every commit must be built. SUPERSEDED cancels any in-progress execution when a new trigger arrives and starts fresh — this saves compute cost in fast-commit workflows where only the latest revision matters.
+- **GitHub source trigger via webhook**: V2 pipelines can receive push events directly from GitHub via webhook rather than polling, reducing the latency between a push and pipeline start from roughly 60 seconds (polling interval) to under 5 seconds.
+- **Pipeline variables**: V2 allows namespace-level variables that propagate across all actions in a stage, reducing the need to pass output artifact references through JSON configuration.
+
+To create a V2 pipeline, set `"pipelineType": "V2"` in the pipeline definition or select "V2" in the Console wizard. Existing V1 pipelines continue to work, but new pipelines should default to V2 unless you need a specific V1-only feature that has not yet been migrated.
+
+### Artifact Handling and Stage Transitions
+
+Pipeline artifacts are the mechanism that passes data between stages. When the Source stage completes, it produces an output artifact — a zip archive of the repository contents stored in the pipeline's S3 artifact bucket. The Build stage consumes that artifact as input, runs the build, and produces a new output artifact containing the build's outputs (the `imagedefinitions.json`, `appspec.yml`, and any other files listed in the buildspec's `artifacts` section). The Deploy stage then consumes the Build output artifact.
+
+This artifact chain has two important properties. First, artifacts are immutable once produced — the Deploy stage always receives exactly the artifact that the Build stage produced, which means the deployment cannot drift between build and deploy. Second, the default S3 artifact encryption uses SSE-S3, but you can enable KMS encryption on the artifact bucket for compliance scenarios where build outputs must be encrypted at rest with a customer-managed key.
+
+Artifact size matters for pipeline performance. Large artifacts (over 100 MB) slow down stage transitions because CodePipeline must upload and download them from S3 between each stage. If your repository includes large binary files that are not needed for the build, exclude them in the source action configuration or use a `.gitignore`-style exclusion file so the source artifact stays lean.
+
+### Pipeline Triggers and Execution Modes
+
+Beyond the source-driven trigger (push to branch), V2 pipelines support additional trigger types. A **schedule trigger** runs the pipeline on a cron expression — useful for nightly integration tests that build and deploy to a long-running staging environment. A **CloudWatch Event trigger** starts the pipeline when a specific AWS event occurs, such as a new ECR image being pushed or a parameter change in SSM. A **manual trigger** lets you start the pipeline from the CLI or Console without a source change, which is useful for re-running a deployment that failed because of a transient service error rather than a code problem.
+
+```bash
+# Start a pipeline execution manually (V2)
+aws codepipeline start-pipeline-execution \
+  --name myapp-pipeline \
+  --source-revisions '[{"actionName":"GitHub-Source","revisionType":"COMMIT_ID","revisionValue":"abc123def456"}]'
+```
+
+Execution modes interact with concurrency. A pipeline set to QUEUED mode that sees a burst of 10 commits will process all 10 sequentially — the earlier executions run first, and later ones queue up. This ensures every commit gets built but can create a backlog. SUPERSEDED mode would process only the latest commit and discard the intermediate ones, keeping the pipeline queue empty at the cost of skipping some revisions.
+
 ## OIDC Federation for GitHub Actions
 
 If your team already uses GitHub Actions for CI and only needs AWS for deployment, you can simplify the control plane by configuring OIDC federation so GitHub Actions can assume an IAM role directly. This still lets you keep your existing CI patterns, but it shifts artifact handling and runtime credentials into AWS-native service boundaries.
@@ -689,23 +841,179 @@ The critical trust policy condition is `StringLike` on the `sub` claim. [This re
 
 ---
 
-## Decision Matrix: CodePipeline vs GitHub Actions
 
-| Factor | CodePipeline + CodeBuild | GitHub Actions + OIDC |
-|--------|-------------------------|----------------------|
-| All-AWS stack | Best fit | Extra config needed |
-| Already using GitHub Actions | Redundant | Natural extension |
-| Blue/green ECS deploys | CodeDeploy integration native | Requires custom scripting |
-| Build caching | S3-based, manual config | GitHub Cache action, simpler |
-| Cost (small team) | ~$5-20/month | Free tier generous (2,000 min/month) |
-| Cost (large team) | Scales linearly | Can get expensive on private repos |
-| Secrets management | SSM/SecretsManager native | GitHub Secrets + OIDC for AWS |
-| Approval gates | Built-in manual approval stage | Environment protection rules |
-| Visibility | AWS Console only | GitHub PR integration |
 
-There is no single right answer because tooling constraints and team maturity differ by organization. Many teams use a hybrid: GitHub Actions for CI (build + test) and CodeDeploy for production deployment (blue/green with alarm rollback), then keep deployment policy in one place where reliability and compliance checks are strongest.
+## Source Integration: CodeArtifact
 
----
+While CodePipeline and CodeBuild handle the CI/CD orchestration, **AWS CodeArtifact** addresses a related problem: dependency management at scale. CodeArtifact is a fully managed artifact repository that stores and serves software packages — Python packages from PyPI, npm packages from the npm registry, Maven artifacts from Maven Central, and generic artifacts — inside your AWS account.
+
+In a CI/CD pipeline context, CodeArtifact serves three roles. First, it acts as a **caching proxy** for upstream public registries: your CodeBuild projects pull dependencies from CodeArtifact instead of directly from PyPI or npm, which reduces external network dependency during builds and speeds up repeated fetches. Second, it acts as a **private package registry** where your team can publish internal libraries that are consumed by multiple microservices — the pipeline builds the library, publishes it to CodeArtifact, and downstream service builds pull the latest version. Third, it provides an **audit trail** through CloudTrail that records every package download and publish event, which satisfies compliance requirements for software supply chain tracking.
+
+Connecting CodeArtifact to your pipeline involves adding a login step in the `install` phase of `buildspec.yml`:
+
+```bash
+aws codeartifact login \
+  --tool pip \
+  --domain my-domain \
+  --domain-owner $(aws sts get-caller-identity --query Account --output text) \
+  --repository my-repo
+```
+
+This configures pip (or npm, or twine) to resolve packages through CodeArtifact for the remainder of the build. The IAM role used by CodeBuild needs `codeartifact:GetAuthorizationToken`, `codeartifact:GetRepositoryEndpoint`, and `codeartifact:ReadFromRepository` permissions. For teams using the same build role across multiple CodeBuild projects, CodeArtifact provides a single point of policy control over which package versions are approved for use in builds.
+
+
+
+## Decision Framework: Choosing Your CI/CD Model on AWS
+
+When you are starting a new project or evaluating an existing pipeline, the tooling choice shapes your team's delivery cadence and operational overhead for years. The decision is rarely one-dimensional — it involves trade-offs across team familiarity, AWS integration depth, compliance requirements, and cost structure.
+
+### Decision Flowchart
+
+```mermaid
+flowchart TD
+    START["Starting a new pipeline?"] --> Q1{"Team already invested<br/>in GitHub Actions / GitLab CI?"}
+
+    Q1 -->|"Yes, GHA"| Q2{"Need blue/green ECS deploys<br/>with alarm rollback?"}
+    Q1 -->|"Yes, GitLab CI"| Q3{"Self-hosted or SaaS runners?"}
+    Q1 -->|"No, starting fresh"| Q4{"All infrastructure on AWS?"}
+
+    Q2 -->|"Yes"| HYBRID["Hybrid: GitHub Actions for CI<br/>+ CodeDeploy for production deploy"]
+    Q2 -->|"No"| GHA_OIDC["GitHub Actions + OIDC<br/>Direct ECS deploy from workflow"]
+
+    Q3 -->|"Self-hosted on EC2"| Q5{"Need deep AWS service<br/>integration in pipeline?"}
+    Q3 -->|"SaaS"| GITLAB_OIDC["GitLab CI + OIDC to AWS<br/>Use GitLab's native AWS integration"]
+
+    Q5 -->|"Yes"| HYBRID_GL["Hybrid: GitLab CI for build/test<br/>+ CodePipeline for deploy stages"]
+    Q5 -->|"No"| GITLAB_DIRECT["GitLab CI with OIDC<br/>Manage AWS resources from .gitlab-ci.yml"]
+
+    Q4 -->|"Yes"| AWS_NATIVE["AWS Native: CodePipeline<br/>+ CodeBuild + CodeDeploy"]
+    Q4 -->|"Mixed cloud"| Q6{"Which cloud hosts production?"}
+
+    Q6 -->|"Primarily AWS"| AWS_NATIVE
+    Q6 -->|"Multi-cloud"| AGNOSTIC["Cloud-agnostic CI<br/>(GitHub Actions / GitLab CI)<br/>+ cloud-specific deploy scripts"]
+```
+
+### Comparison Matrix
+
+| Factor | CodePipeline + CodeBuild + CodeDeploy | GitHub Actions + OIDC | GitLab CI + OIDC |
+|--------|--------------------------------------|----------------------|-------------------|
+| **AWS integration depth** | Deepest — native IAM role chaining, CloudWatch alarm rollback, SSM/Secrets Manager in build phases | Good — OIDC federation, aws-actions suite, but no native deployment orchestration | Good — OIDC support, but fewer prebuilt AWS deployment primitives |
+| **Deployment strategies** | Blue/green with canary/linear traffic shifting, automated alarm rollback, lifecycle hooks | Rolling update via aws-actions/ecs-deploy; blue/green requires custom scripting | Same as GHA — rolling update native, blue/green needs custom logic |
+| **Approval gates** | Built-in Manual Approval action, SNS notification | Environment protection rules, required reviewers | Manual job per environment, protected branches |
+| **Build compute** | Managed (2-72 vCPU, x86 or ARM), VPC-capable | GitHub-hosted (2-4 vCPU) or self-hosted runners | SaaS runners (2-4 vCPU) or self-hosted on EC2/K8s |
+| **Secrets management** | SSM Parameter Store + Secrets Manager natively | GitHub Secrets + OIDC for AWS access | GitLab CI Variables + OIDC for AWS access |
+| **Cost (small team)** | ~$1/pipeline/month + ~$0.005/build-minute (SMALL) | 2,000 min/month free, then $0.008/min (Linux) | 400 min/month free, then $0.01/min |
+| **Cost (large team)** | Scales linearly with build minutes; pipelines are flat $1/mo each | Can get expensive on private repos beyond free tier | Requires paid tier for advanced features; runner cost extra |
+| **Visibility** | AWS Console only | Native GitHub PR integration, status checks | Native GitLab MR integration, merge train support |
+| **Compliance boundary** | All within AWS account — CloudTrail everywhere | GitHub side audited via GitHub audit log; AWS side via CloudTrail | GitLab audit events; AWS side via CloudTrail |
+
+### Deployment Strategy Decision
+
+Once you have chosen your pipeline platform, the next decision is the deployment strategy. The choice depends on your tolerance for user-facing errors and how much infrastructure overhead you can accept:
+
+| Factor | Rolling Update (ECS) | In-Place (EC2) | Blue/Green (CodeDeploy) |
+|--------|---------------------|----------------|------------------------|
+| **Downtime** | None (tasks replaced one at a time) | Per-batch during update | None |
+| **Rollback speed** | Slow — re-deploy previous task definition | Slow — re-deploy to each instance | Instant — shift traffic back to blue |
+| **Infrastructure cost** | No additional cost | No additional cost | Double fleet during deployment |
+| **Validation window** | None — tasks enter service immediately | None — instances come back into LB | Test traffic → canary traffic → full traffic |
+| **Alarm-based rollback** | ECS circuit breaker (stops, doesn't roll back) | Not available | Native CloudWatch alarm integration |
+| **Best for** | Frequent, low-risk updates; dev/staging | Legacy EC2 apps with instance state | Production, regulated workloads, high-value services |
+
+The **canary vs linear** choice within blue/green deployments is primarily about risk posture. A canary strategy says: "Shift a small amount, hold, observe, then go to 100%." This limits blast radius to the canary group if an error occurs during the hold window but extends the total deployment time. A linear strategy says: "Shift in equal steps at fixed intervals and do not stop until complete." This completes faster but exposes an increasing percentage of users to a bad deployment at each step. Choose canary when the cost of a production error is high and the deployment window is generous. Choose linear when you trust your staging validation and want the deployment to finish within a known time bound.
+
+
+
+## Patterns & Anti-Patterns
+
+Patterns are proven approaches that work repeatedly across teams and codebases. Anti-patterns are approaches that feel natural in the moment but create durable problems. Recognizing both is how experienced teams avoid re-learning lessons that are already well understood.
+
+### Proven Patterns
+
+**1. Separate build and deploy stages with artifact promotion**
+Build once, store the artifact, and promote that same artifact through environments. Your staging deployment and production deployment run the exact same container image, built from the exact same commit. This eliminates the "it worked in staging" class of incident where a re-build introduces a dependency drift between environments. CodePipeline enforces this by design — the output artifact from the Build stage is the same object consumed by every subsequent Deploy stage. If you use GitHub Actions or GitLab CI, implement this by pushing the built image to ECR with a unique tag (the commit SHA) and deploying by referencing that tag, never by re-building.
+
+**2. Alarm-gated production deployments**
+Every production deployment group in CodeDeploy should have at least two CloudWatch alarms attached: one for application errors (HTTP 5xx rate) and one for latency (p99 or p95 response time). The alarms create an automated safety net that does not depend on a human watching a dashboard during the deployment. If the new code starts erroring or slowing down during the canary window, the deployment rolls back before most users are affected. This pattern works because it closes the gap between deployment and observation — the same mechanism that deploys the code also watches it.
+
+**3. Branch-per-environment pipeline topology**
+Map pipeline stages to Git branches, not to manual parameters. A push to `main` triggers the full pipeline: build → staging deploy → approval → production deploy. A push to `feature/*` triggers only build + test (optionally deploy to a per-branch ephemeral environment). This pattern scales because the branch name carries the deployment intent, and developers cannot accidentally deploy a feature branch to production. In V2 pipelines, trigger filters on the source action implement this pattern natively.
+
+**4. Immutable pipeline configuration**
+Define your pipeline — CodeBuild projects, CodeDeploy applications, CodePipeline definitions — as CloudFormation or CDK templates, not as CLI commands. When the pipeline itself is infrastructure-as-code, recovering from a misconfiguration is a `git revert` away, and the pipeline definition is peer-reviewed before it changes. This also means you can clone the entire pipeline for a new environment by changing a CloudFormation parameter rather than re-running 15 CLI commands.
+
+**5. Pre-traffic validation hooks as quality gate**
+Use the `AfterAllowTestTraffic` lifecycle hook to run a full integration test suite against the green fleet before any production traffic reaches it. The test traffic listener routes synthetic requests to the new tasks, and the hook function validates that every critical endpoint returns a successful response. If the hook fails, production traffic never shifts. This pattern moves the quality gate from "hope staging caught it" to "prove it with real infrastructure before users see it."
+
+### Anti-Patterns
+
+**1. Builds that push to production directly without an approval gate**
+A pipeline that goes Source → Build → Production Deploy with no pause or manual approval is a pipeline that deploys every commit — including broken ones — to production. The absence of a gate means that a developer pushing on Friday at 5 PM can cause a production outage with no opportunity for anyone to intercept it. Always insert at least one approval stage between staging and production, and consider requiring two approvers for business-critical services.
+
+**2. Hardcoding account IDs, regions, and resource ARNs in buildspec.yml**
+Copy-pasting account IDs from documentation examples into your buildspec creates a pipeline that fails silently when cloned to another account or region. The build succeeds in one context and breaks in another with no indication of why. Use `aws sts get-caller-identity` at runtime to discover the account ID, use `$AWS_DEFAULT_REGION` or `$AWS_REGION` instead of hardcoded region strings, and reference resources through SSM parameters or pipeline variables that are environment-scoped.
+
+**3. Running one CodePipeline per microservice per environment without a module strategy**
+A team with 20 microservices across 3 environments (dev, staging, prod) would need 60 separate pipelines if each service-environment pair gets its own. This creates a configuration management nightmare where a small change to the pipeline pattern must be applied 60 times. Instead, use a parameterized pipeline definition deployed by CloudFormation or CDK, where the pipeline structure is a module and the service name and environment are parameters. Better yet, consider a single pipeline per service with promotion through environments, reducing the pipeline count from 60 to 20.
+
+**4. Omitting the branch restriction on the OIDC trust policy**
+An OIDC trust policy that trusts `repo:myorg/*` allows any repository in the organization to assume the production deployment role. A compromised internal tool repo, a disgruntled former employee's fork, or a misconfigured third-party integration can all assume the role and deploy arbitrary code to production. The fix is a specific `sub` claim condition: `repo:myorg/myapp:ref:refs/heads/main`. Never use wildcard repo patterns in a trust policy that grants production access.
+
+**5. Using `post_build` for artifact publishing without checking build success**
+CodeBuild always runs the `post_build` phase, even when `build` fails. If your `post_build` phase pushes a Docker image to ECR unconditionally, a failed test suite still produces and pushes an image — and downstream stages may deploy it. Guard every publish step in `post_build` with a check on `$CODEBUILD_BUILD_SUCCEEDING` (which is `1` on success, `0` on failure). Alternatively, move publish commands to the end of the `build` phase, which halts on the first non-zero exit code.
+
+**6. Running blue/green deployments without CloudWatch alarms**
+A blue/green deployment without alarm monitoring is a traffic shift without a safety net. If the green tasks start returning 500 errors the moment production traffic hits them, the deployment continues shifting traffic because nothing tells it to stop. The deployment "succeeds" from a pipeline perspective but the application is down. Always pair blue/green production deployments with alarm configuration, and test the alarms periodically by triggering them in staging to verify the rollback behavior.
+
+
+
+## Cost Lens
+
+CI/CD costs on AWS are driven primarily by build minutes and pipeline count. Understanding the cost structure helps you make deliberate trade-offs between speed, safety, and spend — and prevents the unpleasant surprise of a monthly bill that exceeds your expectations.
+
+### Service Pricing (2026, US East)
+
+**CodeBuild** charges per build-minute, with the rate determined by the compute type you select. There is no charge for idle time — you pay only for the minutes your builds actively run.
+
+| Compute Type | vCPU | Memory | Cost per Build-Minute |
+|-------------|------|--------|----------------------|
+| `BUILD_GENERAL1_SMALL` | 2 | 4 GiB | $0.005 |
+| `BUILD_GENERAL1_MEDIUM` | 4 | 8 GiB | $0.010 |
+| `BUILD_GENERAL1_LARGE` | 8 | 16 GiB | $0.020 |
+| `BUILD_GENERAL1_2XLARGE` | 72 | 144 GiB | $0.120 |
+| `BUILD_GENERAL1_SMALL` (ARM) | 2 | 4 GiB | $0.0034 |
+
+ARM-based compute types are roughly 32% cheaper per minute than equivalent x86 types. If your application builds on ARM (increasingly common with Graviton-based ECS tasks), switching your CodeBuild environment to ARM reduces your build spend by nearly a third with no change to your pipeline logic.
+
+A team running 200 builds per month, each averaging 4 minutes on SMALL x86: 200 x 4 x $0.005 = $4.00/month on CodeBuild. The same team on MEDIUM: 200 x 4 x $0.010 = $8.00/month. Batch builds multiply this by the number of parallel tasks; a 3-task batch build on SMALL for 4 minutes costs 3 x 4 x $0.005 = $0.06 per push.
+
+**CodePipeline** charges $1.00 per active pipeline per month. An active pipeline is one that has run at least once in the month. Pipelines that exist but have never executed incur no charge. The pipeline cost is flat — it does not scale with the number of executions. A team with 15 pipelines (one per microservice) pays $15/month for pipeline orchestration regardless of whether they run 10 or 10,000 builds through those pipelines.
+
+**CodeDeploy** is free for deployments to EC2, on-premises instances, and Lambda. There is no per-deployment charge for these compute platforms. For ECS blue/green deployments, there is also no additional charge beyond the underlying ECS and ALB costs. The compute resources for the green fleet during the deployment window are the primary cost driver — you temporarily double your task count, which doubles your Fargate or EC2 cost for the duration of the deployment plus the termination wait period.
+
+### Cost Drivers and Optimization
+
+The two biggest cost drivers in a typical CI/CD setup are **build minutes** (CodeBuild) and **idle resource time** (ECS tasks during blue/green deployment windows).
+
+**Build minute optimization**: The most impactful change is reducing build duration. S3 caching saves minutes on dependency installation by avoiding repeated downloads. Docker layer caching (local cache mode) saves time on image rebuilds when only application code changes. Using a larger compute type to finish builds faster sounds counterintuitive for cost, but if MEDIUM (2x the per-minute rate) finishes a build in half the time of SMALL, the total cost per build is identical — and your developers get feedback twice as fast.
+
+**Pipeline count optimization**: At $1/pipeline/month, the pipeline count itself is rarely the cost problem. But each pipeline carries IAM role complexity, connection management overhead, and monitoring surface area. Consolidating pipelines where possible — for example, one pipeline that builds and deploys multiple services from a monorepo — reduces operational overhead more than it reduces cost.
+
+**Blue/green fleet cost**: The green fleet doubles your task count for the deployment window. On ECS Fargate with 4 tasks using a `Linear10PercentEvery3Minutes` config plus a 5-minute termination wait, this means roughly 35 minutes of doubled capacity. For a 1 vCPU / 2 GB task, that is approximately $0.10 per deployment in additional Fargate cost. This is almost always justified by the zero-downtime and instant-rollback benefits, but it is worth knowing the number so you can explain it to a cost-conscious finance team.
+
+**Unexpected cost spikes** come from three common sources. First, a misconfigured poll-based source action in V1 pipelines that triggers a build on every branch push — including feature branches — can drive build volume 10x beyond expectations. Use V2 trigger filters to scope builds to specific branches. Second, a long-running build that hangs (due to a network timeout or a test that never terminates) consumes build minutes until the CodeBuild timeout (default 60 minutes) kills it. Set a per-project build timeout that reflects your actual build duration plus a reasonable buffer. Third, a pipeline loop where a deployment updates a resource that triggers another pipeline execution can cause cascading builds. Avoid self-referential triggers by excluding pipeline-managed resources from source action monitoring.
+
+
+
+## Did You Know?
+
+- **AWS CodePipeline became generally available in July 2015.** Before AWS-native managed CI/CD services were widely used, many teams ran tools such as Jenkins on EC2 instances and managed their own build-fleet scaling, plugin upgrades, and credential rotation.
+
+- **CodeBuild runs on managed compute** and charges per build-minute rather than requiring you to keep a dedicated build server running. The ARM compute type (Graviton) is approximately 32% cheaper per minute than the equivalent x86 type, which adds up to meaningful savings when build volumes cross 1,000 minutes per month.
+
+- **OIDC federation for GitHub Actions avoids storing long-lived IAM access keys in GitHub.** GitHub Actions requests short-lived identity tokens, AWS validates them cryptographically against the configured OIDC provider, and STS issues temporary credentials scoped to a tightly defined IAM role. There is no static secret to leak, rotate, or accidentally commit.
+
+- **CodeDeploy integrates with CloudWatch Alarms for automatic rollback.** If a canary deployment triggers an alarm during the observation window — such as a spike in HTTP 5xx errors or a latency threshold breach — CodeDeploy stops the deployment and shifts traffic back to the original fleet without human intervention. This automated response turns minutes of incident detection time into seconds.
 
 ## Common Mistakes
 
