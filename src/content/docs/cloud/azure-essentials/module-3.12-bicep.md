@@ -731,7 +731,9 @@ az stack group create \
   --name my-production-stack \
   --resource-group myRG \
   --template-file main.bicep \
-  --deny-settings-mode denyDelete
+  --action-on-unmanage detachAll \
+  --deny-settings-mode denyDelete \
+  --yes
 ```
 
 Stacks complement incremental deployments; they do not replace Git review. A stack tracks which resources belong to the managed set. Removing a resource from the template without updating the stack action can leave orphans or surprise deletes depending on `actionOnUnmanage`. Document whether your organization uses `deleteResources` or `detachResources` for non-production stacks. Detach is safer when experimenting. Delete enforces strict parity at the cost of data loss risk.
@@ -786,13 +788,15 @@ The what-if output uses color-coded symbols so you can scan a large deployment q
 What-If Results:
 
 + Create    (new resource will be created)
-~ Modify    (existing resource will be modified)
-- Delete    (resource will be removed, if using complete mode)
-* No change (resource exists and matches template)
-! Ignore    (resource type not supported for what-if)
+~ Modify    (existing resource properties will change)
+- Delete    (resource will be removed — complete mode or omitted from template)
+= NoChange  (resource exists and matches template; may redeploy without property changes)
+* Ignore    (resource exists but is not in the template, or what-if could not expand it)
+! Deploy    (ResourceIdOnly format — resource will redeploy; property changes unknown)
 
 Example output:
 Resource and property changes are indicated with these symbols:
+  - Delete
   + Create
   ~ Modify
 
@@ -816,8 +820,9 @@ What-if output uses symbols documented on Learn. Train reviewers to treat `~ Mod
 | `+` | Create | Is this resource net-new spend? |
 | `~` | Modify | Does SKU, redundancy, or retention change monthly cost? |
 | `-` | Delete | Is data loss possible (storage, SQL, DNS)? |
-| `*` | No change | Confirms template matches live for that resource |
-| `!` | Ignore | Resource type not fully modeled in what-if |
+| `=` | NoChange | Confirms template matches live for that resource |
+| `*` | Ignore | Resource not in template or what-if could not expand it |
+| `!` | Deploy | ResourceIdOnly format — redeploy expected; property diff unknown |
 
 Array properties on resources such as subnets deserve extra care. Incremental deployments may not delete portal-added array elements that the template omits. What-if helps surface that class of drift before you assume parity.
 
@@ -1327,13 +1332,16 @@ param location string = resourceGroup().location
 @description('Base name for resources')
 param baseName string = 'kubedojo'
 
+@description('Deployment timestamp tag')
+param deployedAt string = utcNow('yyyy-MM-dd')
+
 // Computed values
 var prefix = '${baseName}-${environment}'
 var tags = {
   environment: environment
   project: baseName
   managedBy: 'bicep'
-  deployedAt: utcNow('yyyy-MM-dd')
+  deployedAt: deployedAt
 }
 
 // Environment-specific configuration
@@ -1356,7 +1364,7 @@ var envConfig = {
 module storage 'modules/storage.bicep' = {
   name: 'storage-${environment}'
   params: {
-    name: '${replace(prefix, '-', '')}store'
+    name: take('${replace(prefix, '-', '')}st${uniqueString(resourceGroup().id)}', 24)
     location: location
     skuName: envConfig[environment].storageSku
     tags: tags
@@ -1367,8 +1375,8 @@ module storage 'modules/storage.bicep' = {
 module appService 'modules/appservice.bicep' = {
   name: 'appservice-${environment}'
   params: {
-    planName: '${prefix}-plan'
-    appName: '${prefix}-web'
+    planName: '${prefix}-plan-${uniqueString(resourceGroup().id)}'
+    appName: '${prefix}-web-${uniqueString(resourceGroup().id)}'
     location: location
     skuName: envConfig[environment].appSku
     tags: tags

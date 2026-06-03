@@ -167,12 +167,13 @@ To create a Workload Identity Federation service connection in Azure DevOps, use
 # Manual setup: Create app registration with federated credential for Azure DevOps
 az ad app create --display-name "azure-devops-cicd"
 APP_ID=$(az ad app list --display-name "azure-devops-cicd" --query '[0].appId' -o tsv)
+APP_OBJECT_ID=$(az ad app list --display-name "azure-devops-cicd" --query '[0].id' -o tsv)
 
 # Create service principal
 az ad sp create --id "$APP_ID"
 
 # Add federated credential for Azure DevOps
-az ad app federated-credential create --id "$APP_ID" --parameters '{
+az ad app federated-credential create --id "$APP_OBJECT_ID" --parameters '{
   "name": "azure-devops-federation",
   "issuer": "https://vstoken.dev.azure.com/YOUR_ORG_ID",
   "subject": "sc://YOUR_ORG/YOUR_PROJECT/YOUR_SERVICE_CONNECTION",
@@ -182,7 +183,8 @@ az ad app federated-credential create --id "$APP_ID" --parameters '{
 # Grant the service principal appropriate RBAC
 SP_OBJECT_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv)
 az role assignment create \
-  --assignee "$SP_OBJECT_ID" \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
   --role Contributor \
   --scope "/subscriptions/<sub-id>/resourceGroups/myRG"
 ```
@@ -432,11 +434,16 @@ SP_OBJECT_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv)
 
 # ACR push access
 ACR_ID=$(az acr show -n myacr --query id -o tsv)
-az role assignment create --assignee "$SP_OBJECT_ID" --role AcrPush --scope "$ACR_ID"
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role AcrPush \
+  --scope "$ACR_ID"
 
 # Container Apps contributor access
 az role assignment create \
-  --assignee "$SP_OBJECT_ID" \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
   --role Contributor \
   --scope "/subscriptions/<sub-id>/resourceGroups/myRG"
 ```
@@ -978,13 +985,13 @@ Manual CLI deploys bypass environment approvals, omit audit correlation with pul
 
 In this exercise, you will set up OIDC authentication between GitHub Actions and Azure, build a container image with ACR Tasks, and deploy it to Container Apps. The sequence mirrors what many teams adopt in production: provision registry and runtime infrastructure, establish federated trust between GitHub and Entra ID, then wire a workflow that builds on every push to main without storing Azure passwords in GitHub.
 
-You need the Azure CLI, a GitHub repository, and optionally the `gh` CLI for setting repository secrets from your terminal. Work through the tasks in order because later steps reference resource names and object IDs created earlier.
+You need the Azure CLI, a GitHub repository, and optionally the `gh` CLI for setting repository secrets from your terminal. Install the Container Apps extension if needed: `az extension add --name containerapp`. Work through the tasks in order because later steps reference resource names and object IDs created earlier.
 
 ### Troubleshooting common lab failures
 
 If `azure/login` fails with an OIDC error, verify three items in order: the workflow declares `permissions: id-token: write`, the federated credential `subject` exactly matches your repository and branch or environment, and the three identifier secrets contain no trailing whitespace. Entra ID rejects tokens when the subject claim differs by even one character from the registered value.
 
-If `az acr build` succeeds but Container Apps still serves an old image, confirm the deploy step references the same tag the build pushed and that the app has permission to pull from ACR via managed identity or admin credentials configured earlier. Container Apps creates a new revision only when the template image reference changes; pushing `latest` without updating the app template may leave traffic on an older revision.
+If `az acr build` succeeds but Container Apps still serves an old image, confirm the deploy step references the same tag the build pushed and that the app has permission to pull from ACR via the managed identity configured in Task 1. Container Apps creates a new revision only when the template image reference changes; pushing `latest` without updating the app template may leave traffic on an older revision.
 
 If the GitHub workflow never triggers, check that the default branch name in `on.push.branches` matches your repository and that Actions is enabled under repository Settings. Organization policies can disable Actions for new repositories until an administrator allowlists them.
 
@@ -1014,6 +1021,15 @@ az containerapp create \
   --target-port 80 \
   --ingress external \
   --min-replicas 1
+
+# Give the Container App a system-assigned identity and let it pull from ACR
+az containerapp identity assign -g "$RG" -n "$APP_NAME" --system-assigned
+APP_MI_PRINCIPAL=$(az containerapp identity show -g "$RG" -n "$APP_NAME" --query principalId -o tsv)
+ACR_ID=$(az acr show -n "$ACR_NAME" --query id -o tsv)
+az role assignment create --assignee-object-id "$APP_MI_PRINCIPAL" \
+  --assignee-principal-type ServicePrincipal --role AcrPull --scope "$ACR_ID"
+az containerapp registry set -g "$RG" -n "$APP_NAME" \
+  --server "$ACR_NAME.azurecr.io" --identity system
 
 APP_URL=$(az containerapp show -g "$RG" -n "$APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)
 echo "App URL: https://$APP_URL"
@@ -1052,11 +1068,19 @@ az ad app federated-credential create --id "$APP_OBJECT_ID" --parameters '{
 
 # Grant RBAC: ACR Push
 ACR_ID=$(az acr show -n "$ACR_NAME" --query id -o tsv)
-az role assignment create --assignee "$SP_OBJECT_ID" --role AcrPush --scope "$ACR_ID"
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role AcrPush \
+  --scope "$ACR_ID"
 
 # Grant RBAC: Container Apps Contributor
 RG_ID=$(az group show -n "$RG" --query id -o tsv)
-az role assignment create --assignee "$SP_OBJECT_ID" --role Contributor --scope "$RG_ID"
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role Contributor \
+  --scope "$RG_ID"
 
 # Output the values you need for GitHub secrets
 TENANT_ID=$(az account show --query tenantId -o tsv)
