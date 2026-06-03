@@ -26,7 +26,7 @@ After completing this module, you will be able to design and operate a productio
 
 ## Why This Module Matters
 
-In July 2019, a major financial services company experienced a 14-hour outage that cost them an estimated $12 million in lost transactions. The root cause was a memory leak in a Java microservice running on EC2. The leak took roughly 6 hours to exhaust available memory, at which point the application began throwing `OutOfMemoryError` exceptions. The operations team did not notice the issue for another 3 hours because they only monitored CPU utilization—the default CloudWatch metric for EC2. Memory usage, application-level errors, and garbage collection pauses were completely invisible to them. By the time a customer complaint finally triggered a manual investigation, cascading failures had already spread to three downstream payment services. The system was completely paralyzed, and engineers had to comb through raw text logs manually via SSH to find the failure point, losing precious hours during the highest traffic window of the week. The post-incident review rarely blames "lack of monitoring tools" — AWS already emitted free CPU and status-check metrics — but rather the absence of OS-level memory telemetry, structured log centralization, and alarms tied to JVM heap or disk pressure that would have fired hours before user-visible failure.
+**Hypothetical scenario:** A payment platform runs a Java microservice on EC2 with a slow-burn memory leak. Over several hours, heap usage climbs while CPU stays flat. The team monitors only the default EC2 CPU metric, so memory pressure, application errors, and garbage-collection pauses stay invisible until `OutOfMemoryError` exceptions appear. Customer complaints finally trigger investigation, but by then cascading failures have spread to downstream services. Engineers SSH into instances and grep raw log files because nothing was centralized in CloudWatch Logs. The post-incident review rarely blames "lack of monitoring tools" — AWS already emitted free CPU and status-check metrics — but rather the absence of OS-level memory telemetry, structured log centralization, and alarms tied to JVM heap or disk pressure that would have fired long before user-visible failure.
 
 Had they installed the CloudWatch Agent to collect memory and disk metrics, configured a custom metric for JVM heap usage, and set an alarm at 80% memory utilization, they would have received an automated alert 6 hours before the outage occurred. A simple auto-scaling policy tied to memory pressure could have launched fresh instances automatically to mitigate the leak. The total cost of prevention would have been roughly $3 per month in CloudWatch custom metrics. In this module, you will learn the full CloudWatch observability stack to prevent these exact scenarios.
 
@@ -186,12 +186,15 @@ If your application writes structured JSON logs, CloudWatch can automatically ex
 ```python
 import json
 import sys
+import time
 
 def emit_metric(metric_name, value, unit="Count", dimensions=None):
     """Emit a CloudWatch metric via Embedded Metric Format."""
     emf = {
         "_aws": {
-            "Timestamp": 1711267200000,  # epoch ms
+            # Use current time in epoch ms; CloudWatch rejects datapoints more than
+            # ~2 weeks in the past or ~2 hours in the future.
+            "Timestamp": int(time.time() * 1000),
             "CloudWatchMetrics": [
                 {
                     "Namespace": "MyApp/Production",
@@ -385,9 +388,10 @@ Logs Insights provides a purpose-built query language to scan terabytes of log e
 
 ```bash
 # Find the 20 slowest requests in the last hour
+# macOS: date -u -v-1H '+%s'  |  Linux: date -u -d '1 hour ago' '+%s'
 aws logs start-query \
   --log-group-name "/myapp/production/api" \
-  --start-time $(date -u -v-1H '+%s') \
+  --start-time $(date -u -d '1 hour ago' '+%s' 2>/dev/null || date -u -v-1H '+%s') \
   --end-time $(date -u '+%s') \
   --query-string '
     fields @timestamp, @message
@@ -398,9 +402,10 @@ aws logs start-query \
   '
 
 # Count errors by type in the last 24 hours
+# macOS: date -u -v-24H '+%s'  |  Linux: date -u -d '24 hours ago' '+%s'
 aws logs start-query \
   --log-group-name "/myapp/production/api" \
-  --start-time $(date -u -v-24H '+%s') \
+  --start-time $(date -u -d '24 hours ago' '+%s' 2>/dev/null || date -u -v-24H '+%s') \
   --end-time $(date -u '+%s') \
   --query-string '
     fields @timestamp, @message
@@ -488,8 +493,8 @@ sudo yum install -y amazon-cloudwatch-agent
 wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
 sudo dpkg -i amazon-cloudwatch-agent.deb
 
-# Verify installation
-amazon-cloudwatch-agent-ctl -a status
+# Verify installation (binary is not on PATH by default after yum install)
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 ```
 
 ### Configuration
@@ -660,7 +665,7 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -c ssm:AmazonCloudWatch-linux-config
 
 # Check agent status
-amazon-cloudwatch-agent-ctl -a status
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 ```
 
 ### Required IAM Policy
@@ -893,7 +898,7 @@ At moderate scale — dozens of EC2 instances, a few Lambda services, central lo
 
 ## Did You Know?
 
-- **CloudWatch ingests over a trillion metrics per day** across all AWS customers. Launched in May 2009 — about three years after EC2 (2006) — it has grown from a simple CPU-monitoring tool into a massive, globally distributed observability platform.
+- **CloudWatch ingests an enormous volume of metrics globally** across all AWS customers (AWS does not publish a precise daily rate). Launched in May 2009 — about three years after EC2 (2006) — it has grown from a simple CPU-monitoring tool into a massive, globally distributed observability platform.
 - **EC2 standard metrics have a 5-minute resolution** by default and are completely free. Enabling "detailed monitoring" bumps this to 1-minute resolution but costs approximately $2.10 per instance per month (7 metrics at $0.30 each). Most production workloads strictly require 1-minute resolution to catch transient spikes.
 - **CloudWatch Logs Insights can query terabytes of logs in seconds** using a purpose-built query language. It was released in November 2018 and has largely eliminated the need for teams to ship logs to complex external search clusters just for ad-hoc querying. You only pay $0.005 per GB of data scanned.
 - **The CloudWatch Agent replaced three older tools**: the CloudWatch Monitoring Scripts (Perl-based `mon-put-instance-data.pl`), the SSM CloudWatch Plugin (on Windows), and the older CloudWatch Logs Agent (`awslogs`). If you encounter legacy tutorials referencing these components, they are outdated.
@@ -1033,6 +1038,7 @@ ssh -i your-key.pem ec2-user@$INSTANCE_PUBLIC_IP
 # Run on the EC2 instance (after the ssh prompt opens):
 # Install the CloudWatch Agent
 sudo yum install -y amazon-cloudwatch-agent
+export PATH=$PATH:/opt/aws/amazon-cloudwatch-agent/bin
 
 # Verify installation
 amazon-cloudwatch-agent-ctl -a status
@@ -1132,7 +1138,7 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -c file:/opt/aws/amazon-cloudwatch-agent/etc/custom-config.json
 
 # Verify it is running
-amazon-cloudwatch-agent-ctl -a status
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 # Should show: "status": "running"
 ```
 </details>

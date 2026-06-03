@@ -31,7 +31,7 @@ After completing this module, you will be able to design, reason about, and oper
 
 Manual production deployments and unreviewed database migrations can cause severe customer-facing failures, data inconsistencies, and expensive cleanup work because checks that should happen before release are deferred until users become part of the test loop. CI/CD pipelines reduce that risk by making deployments repeatable, testable, and easier to roll back, which turns incident response from “recovery by instinct” into response by process. In practice, this gives teams a reliable mechanism for catching failures earlier and for narrowing blast radius when failures still occur.
 
-A CI/CD pipeline would have caught this in minutes, not hours. Automated tests would have validated the migration against staging, and a blue/green rollout would have added a controlled safety net by limiting traffic during verification. Code review enforced by the pipeline would have flagged outdated migration logic before it reached production, while deployment guardrails would have prevented risky manual hotfixes on a Friday.
+**Hypothetical scenario:** A schema migration reaches production without automated validation against staging. The change corrupts rows that downstream services depend on, and engineers spend hours tracing the failure while debating whether to roll forward or back. A CI/CD pipeline would have caught the mismatch in minutes: automated tests against a staging clone, a blue/green rollout limiting blast radius, code review enforced before merge, and deployment guardrails that block promotion when quality gates fail — instead of relying on risky manual hotfixes under time pressure.
 
 In this module, you will learn the AWS Code Suite -- CodeBuild for building and testing code, CodeDeploy for deployment strategies, and CodePipeline for orchestrating the full workflow. You will also learn how to connect GitHub and GitLab repositories to AWS using [OIDC federation, which is the modern, secure alternative to storing long-lived access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html), and how to decide when this integration model is the right fit for your team.
 
@@ -312,10 +312,10 @@ flowchart TD
     end
 ```
 
-**Traffic shift strategies** control how quickly customer traffic follows the new ECS task set, so choose them based on blast radius tolerance rather than migration speed alone:
-- **AllAtOnce**: 0% --> 100% instantly
-- **Canary10Percent5Minutes**: 10% for 5 min, then 100%
-- **Linear10PercentEvery1Minute**: 10%, 20%, 30%... every minute
+**Traffic shift strategies** (ECS deployment configs use the `CodeDeployDefault.ECS*` prefix) control how quickly customer traffic follows the new ECS task set, so choose them based on blast radius tolerance rather than migration speed alone:
+- **`CodeDeployDefault.ECSAllAtOnce`**: 0% --> 100% instantly
+- **`CodeDeployDefault.ECSCanary10Percent5Minutes`**: 10% for 5 min, then 100%
+- **`CodeDeployDefault.ECSLinear10PercentEvery1Minute`**: 10%, 20%, 30%... every minute
 
 Blue/green is the gold standard for production ECS deployments because it provides explicit separation between the canary and stable fleets, which makes rollback behavior easy to reason about:
 1. **Instant rollback** -- just shift traffic back to the blue target group
@@ -404,13 +404,21 @@ The infrastructure cost of blue/green — essentially doubling your fleet size d
 
 ### Deployment Configurations Deep-Dive
 
-CodeDeploy's deployment configs control the pace and shape of traffic shifting. Choosing a config means deciding how much risk your team can absorb per unit time and how quickly you need new code to reach all users.
+CodeDeploy's deployment configs control the pace and shape of traffic shifting. Choosing a config means deciding how much risk your team can absorb per unit time and how quickly you need new code to reach all users. Config names are **platform-specific** — do not mix EC2/on-premises names with ECS names.
+
+**EC2 and on-premises (in-place deployments):**
 
 | Config | Behavior | Risk Profile | Best For |
 |--------|----------|--------------|----------|
-| `CodeDeployDefault.AllAtOnce` | Shift 100% traffic instantly | Highest risk, fastest delivery | Dev/staging environments only |
+| `CodeDeployDefault.AllAtOnce` | Update all instances at once | Highest risk, fastest delivery | Dev/staging environments only |
 | `CodeDeployDefault.OneAtATime` | Deploy to one instance at a time | Moderate, per-instance validation | EC2 in-place, small fleets |
 | `CodeDeployDefault.HalfAtATime` | Deploy to half the fleet, then the other half | Balanced speed and safety | EC2 in-place, medium fleets |
+
+**ECS (blue/green traffic shifting):**
+
+| Config | Behavior | Risk Profile | Best For |
+|--------|----------|--------------|----------|
+| `CodeDeployDefault.ECSAllAtOnce` | Shift 100% traffic instantly | Highest risk, fastest delivery | Dev/staging ECS only |
 | `CodeDeployDefault.ECSCanary10Percent5Minutes` | 10% traffic for 5 min, then 100% | Low — blast radius is 10% | Production ECS with alarm monitoring |
 | `CodeDeployDefault.ECSCanary10Percent15Minutes` | 10% traffic for 15 min, then 100% | Very low — extended canary window | High-value production workloads |
 | `CodeDeployDefault.ECSLinear10PercentEvery1Minute` | 10% increments every minute | Low — gradual shift with observation | Teams wanting progressive cutover |
@@ -476,6 +484,10 @@ flowchart LR
 ### Creating a Pipeline with CLI
 
 ```bash
+# Resolve account and connection identifiers before templating the pipeline JSON
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+CONNECTION_ARN="arn:aws:codestar-connections:us-east-1:${ACCOUNT_ID}:connection/YOUR_CONNECTION_ID"
+
 # Create the artifact bucket
 aws s3 mb s3://myapp-pipeline-artifacts-${ACCOUNT_ID}
 
@@ -491,15 +503,15 @@ aws iam create-role \
     }]
   }'
 
-# The pipeline definition (save as pipeline.json)
-cat > /tmp/pipeline.json <<'EOF'
+# The pipeline definition — shell variables are expanded in the heredoc below
+cat > /tmp/pipeline.json <<EOF
 {
   "pipeline": {
     "name": "myapp-pipeline",
-    "roleArn": "arn:aws:iam::ACCOUNT_ID:role/codepipeline-myapp-role",
+    "roleArn": "arn:aws:iam::${ACCOUNT_ID}:role/codepipeline-myapp-role",
     "artifactStore": {
       "type": "S3",
-      "location": "myapp-pipeline-artifacts-ACCOUNT_ID"
+      "location": "myapp-pipeline-artifacts-${ACCOUNT_ID}"
     },
     "stages": [
       {
@@ -514,7 +526,7 @@ cat > /tmp/pipeline.json <<'EOF'
               "version": "1"
             },
             "configuration": {
-              "ConnectionArn": "arn:aws:codestar-connections:us-east-1:ACCOUNT_ID:connection/CONNECTION_ID",
+              "ConnectionArn": "${CONNECTION_ARN}",
               "FullRepositoryId": "YOUR_ORG/myapp",
               "BranchName": "main",
               "OutputArtifactFormat": "CODE_ZIP"
@@ -574,7 +586,7 @@ cat > /tmp/pipeline.json <<'EOF'
               "version": "1"
             },
             "configuration": {
-              "NotificationArn": "arn:aws:sns:us-east-1:ACCOUNT_ID:pipeline-approvals",
+              "NotificationArn": "arn:aws:sns:us-east-1:${ACCOUNT_ID}:pipeline-approvals",
               "CustomData": "Review staging deployment before promoting to production"
             }
           }
@@ -701,6 +713,8 @@ flowchart LR
 
 ```bash
 # Step 1: Create the OIDC identity provider in IAM
+# AWS has ignored the thumbprint for token.actions.githubusercontent.com since 2023;
+# the value below is optional and retained only for older CLI examples.
 aws iam create-open-id-connect-provider \
   --url "https://token.actions.githubusercontent.com" \
   --client-id-list "sts.amazonaws.com" \
@@ -917,7 +931,7 @@ Once you have chosen your pipeline platform, the next decision is the deployment
 | **Rollback speed** | Slow — re-deploy previous task definition | Slow — re-deploy to each instance | Instant — shift traffic back to blue |
 | **Infrastructure cost** | No additional cost | No additional cost | Double fleet during deployment |
 | **Validation window** | None — tasks enter service immediately | None — instances come back into LB | Test traffic → canary traffic → full traffic |
-| **Alarm-based rollback** | ECS circuit breaker (stops, doesn't roll back) | Not available | Native CloudWatch alarm integration |
+| **Alarm-based rollback** | ECS deployment circuit breaker can roll back to the last completed deployment when `deploymentCircuitBreaker = { enable: true, rollback: true }` (stops failed rollouts; does not shift ALB traffic like CodeDeploy) | Not available | Native CloudWatch alarm integration during canary/linear traffic shifts |
 | **Best for** | Frequent, low-risk updates; dev/staging | Legacy EC2 apps with instance state | Production, regulated workloads, high-value services |
 
 The **canary vs linear** choice within blue/green deployments is primarily about risk posture. A canary strategy says: "Shift a small amount, hold, observe, then go to 100%." This limits blast radius to the canary group if an error occurs during the hold window but extends the total deployment time. A linear strategy says: "Shift in equal steps at fixed intervals and do not stop until complete." This completes faster but exposes an increasing percentage of users to a bad deployment at each step. Choose canary when the cost of a production error is high and the deployment window is generous. Choose linear when you trust your staging validation and want the deployment to finish within a known time bound.
@@ -987,7 +1001,9 @@ ARM-based compute types are roughly 32% cheaper per minute than equivalent x86 t
 
 A team running 200 builds per month, each averaging 4 minutes on SMALL x86: 200 x 4 x $0.005 = $4.00/month on CodeBuild. The same team on MEDIUM: 200 x 4 x $0.010 = $8.00/month. Batch builds multiply this by the number of parallel tasks; a 3-task batch build on SMALL for 4 minutes costs 3 x 4 x $0.005 = $0.06 per push.
 
-**CodePipeline** charges $1.00 per active pipeline per month. An active pipeline is one that has run at least once in the month. Pipelines that exist but have never executed incur no charge. The pipeline cost is flat — it does not scale with the number of executions. A team with 15 pipelines (one per microservice) pays $15/month for pipeline orchestration regardless of whether they run 10 or 10,000 builds through those pipelines.
+**CodePipeline (V1)** charges $1.00 per **active** pipeline per month. A pipeline is active when it has existed for more than 30 days **and** had at least one source change or manual execution during that calendar month — merely creating a pipeline or running it once in its first month does not automatically make it billable under this definition. Pipelines that exist but have never qualified as active incur no V1 charge.
+
+**CodePipeline (V2)** — the recommended default for new pipelines — bills per **action execution minute** at approximately **$0.002/minute**, with a free tier that covers a baseline of action minutes each month (see [CodePipeline pricing](https://aws.amazon.com/codepipeline/pricing/) for current free-tier limits). V2 cost scales with how many stage actions run and how long they take, not with a flat per-pipeline fee. A team with 15 V2 pipelines pays primarily for build/deploy action minutes across those pipelines, not $15/month flat regardless of activity.
 
 **CodeDeploy** is free for deployments to EC2, on-premises instances, and Lambda. There is no per-deployment charge for these compute platforms. For ECS blue/green deployments, there is also no additional charge beyond the underlying ECS and ALB costs. The compute resources for the green fleet during the deployment window are the primary cost driver — you temporarily double your task count, which doubles your Fargate or EC2 cost for the duration of the deployment plus the termination wait period.
 
@@ -997,7 +1013,7 @@ The two biggest cost drivers in a typical CI/CD setup are **build minutes** (Cod
 
 **Build minute optimization**: The most impactful change is reducing build duration. S3 caching saves minutes on dependency installation by avoiding repeated downloads. Docker layer caching (local cache mode) saves time on image rebuilds when only application code changes. Using a larger compute type to finish builds faster sounds counterintuitive for cost, but if MEDIUM (2x the per-minute rate) finishes a build in half the time of SMALL, the total cost per build is identical — and your developers get feedback twice as fast.
 
-**Pipeline count optimization**: At $1/pipeline/month, the pipeline count itself is rarely the cost problem. But each pipeline carries IAM role complexity, connection management overhead, and monitoring surface area. Consolidating pipelines where possible — for example, one pipeline that builds and deploys multiple services from a monorepo — reduces operational overhead more than it reduces cost.
+**Pipeline count optimization**: V1's flat $1/active-pipeline/month model makes pipeline count itself rarely the cost problem, but each pipeline carries IAM role complexity, connection management overhead, and monitoring surface area. V2 shifts cost to action execution minutes — consolidating stages or using SUPERSEDED execution mode on fast-commit repos can matter more than reducing pipeline count. Consolidating pipelines where possible — for example, one pipeline that builds and deploys multiple services from a monorepo — reduces operational overhead more than it reduces cost.
 
 **Blue/green fleet cost**: The green fleet doubles your task count for the deployment window. On ECS Fargate with 4 tasks using a `Linear10PercentEvery3Minutes` config plus a 5-minute termination wait, this means roughly 35 minutes of doubled capacity. For a 1 vCPU / 2 GB task, that is approximately $0.10 per deployment in additional Fargate cost. This is almost always justified by the zero-downtime and instant-rollback benefits, but it is worth knowing the number so you can explain it to a cost-conscious finance team.
 
@@ -1025,7 +1041,7 @@ The two biggest cost drivers in a typical CI/CD setup are **build minutes** (Cod
 | Over-scoping the OIDC trust policy with `repo:org/*` | "It's easier to manage one role" | Create per-repo or per-team roles; a compromised repo should not access all your AWS resources |
 | Using rolling updates instead of blue/green for production | "It's simpler" and the default | Blue/green gives instant rollback; rolling updates cannot undo a bad deployment without redeploying |
 | Not adding CloudWatch Alarms to CodeDeploy | Not knowing about alarm-based rollback | Configure deployment group with alarm monitoring; automated rollback catches issues humans miss at 3 AM |
-| Hardcoding account IDs in buildspec.yml | Copy-paste from examples | Use `aws sts get-caller-identity` or CodeBuild environment variables like `$AWS_ACCOUNT_ID` |
+| Hardcoding account IDs in buildspec.yml | Copy-paste from examples | Use `aws sts get-caller-identity --query Account --output text`, parse `CODEBUILD_BUILD_ARN`, or set an explicit `env.variables` entry in buildspec |
 | Forgetting `imagedefinitions.json` format for ECS | Subtle format differences | ECS standard deploy needs `[{"name":"container","imageUri":"..."}]`; CodeDeploy ECS needs `appspec.yml` + `taskdef.json` |
 
 ---
@@ -1063,9 +1079,9 @@ The `imagedefinitions.json` file is a required artifact for the standard CodePip
 </details>
 
 <details>
-<summary>6. Your e-commerce site is launching a major checkout page redesign. Management is terrified of a bug preventing all users from checking out, but they want to deploy during business hours. How does choosing a `Canary10Percent5Minutes` strategy over an `AllAtOnce` strategy specifically mitigate their concerns?</summary>
+<summary>6. Your e-commerce site is launching a major checkout page redesign. Management is terrified of a bug preventing all users from checking out, but they want to deploy during business hours. How does choosing a `CodeDeployDefault.ECSCanary10Percent5Minutes` strategy over `CodeDeployDefault.ECSAllAtOnce` specifically mitigate their concerns?</summary>
 
-A canary deployment reduces the blast radius by initially routing only a small fraction of customer traffic (e.g., 10%) to the new checkout page, rather than exposing all users simultaneously. During the 5-minute canary window, CodeDeploy actively monitors predefined CloudWatch Alarms for issues like HTTP 500 errors or elevated latency. If a critical bug is present, only the 10% of users in the canary group will experience the failure, and CodeDeploy will automatically halt the deployment and roll traffic back to the stable version. In contrast, an `AllAtOnce` deployment would immediately subject 100% of your business traffic to the bug, maximizing the financial impact and customer frustration before a manual rollback could be initiated.
+A canary deployment reduces the blast radius by initially routing only a small fraction of customer traffic (e.g., 10%) to the new checkout page, rather than exposing all users simultaneously. During the 5-minute canary window, CodeDeploy actively monitors predefined CloudWatch Alarms for issues like HTTP 500 errors or elevated latency. If a critical bug is present, only the 10% of users in the canary group will experience the failure, and CodeDeploy will automatically halt the deployment and roll traffic back to the stable version. In contrast, `CodeDeployDefault.ECSAllAtOnce` would immediately subject 100% of your business traffic to the bug, maximizing the financial impact and customer frustration before a manual rollback could be initiated.
 </details>
 
 ---
@@ -1127,10 +1143,16 @@ phases:
       - docker tag ${ECR_URI}/cicd-lab:${IMAGE_TAG} ${ECR_URI}/cicd-lab:latest
   post_build:
     commands:
-      - docker push ${ECR_URI}/cicd-lab:${IMAGE_TAG}
-      - docker push ${ECR_URI}/cicd-lab:latest
-      # NOTE: The name "cicd-lab" below must EXACTLY match the container name in your ECS task definition
-      - printf '[{"name":"cicd-lab","imageUri":"%s"}]' ${ECR_URI}/cicd-lab:${IMAGE_TAG} > imagedefinitions.json
+      - |
+        if [ "$CODEBUILD_BUILD_SUCCEEDING" -eq 1 ]; then
+          docker push ${ECR_URI}/cicd-lab:${IMAGE_TAG}
+          docker push ${ECR_URI}/cicd-lab:latest
+          # NOTE: The name "cicd-lab" below must EXACTLY match the container name in your ECS task definition
+          printf '[{"name":"cicd-lab","imageUri":"%s"}]' ${ECR_URI}/cicd-lab:${IMAGE_TAG} > imagedefinitions.json
+        else
+          echo "Build failed — skipping ECR push and imagedefinitions.json"
+          exit 1
+        fi
 
 artifacts:
   files:
