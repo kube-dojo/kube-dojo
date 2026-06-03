@@ -69,7 +69,7 @@ Right-sizing is an iterative process, not a single decision made at deployment t
 
 4. **Select the generation**: Newer generations, indicated by a higher `_v` number, typically offer better price-performance ratios and newer hardware features such as faster networking or support for larger local disks. A `Standard_D4s_v6` may offer 15 to 20 percent better performance per dollar than `Standard_D4s_v5` at a similar or identical per-hour price.
 
-5. **Monitor and iterate**: After resizing, continue monitoring because workloads change. A size that was well-matched six months ago may be oversized or undersized today. Azure Advisor provides automated right-sizing recommendations based on observed usage patterns over a rolling 14-day window.
+5. **Monitor and iterate**: After resizing, continue monitoring because workloads change. A size that was well-matched six months ago may be oversized or undersized today. Azure Advisor provides automated right-sizing recommendations based on observed usage patterns over a rolling 7-day window (configurable up to 90 days).
 
 > **Stop and think**: Your team runs a web application on `Standard_D2s_v5` VMs. Metrics show 92% CPU utilization at peak but only 30% memory consumption. The application latency spikes during peak hours. Would you scale up to `Standard_D4s_v5` or scale out to more `Standard_D2s_v5` instances? What factors beyond raw CPU numbers would influence your choice?
 
@@ -81,7 +81,7 @@ Once you pick a family, the size name itself encodes tier, vCPU count, disk capa
 ```text
     Standard_D4s_v5
 
-    Standard   = VM tier (Standard or Basic)
+    Standard   = VM tier (Standard)
     D          = Family (General Purpose)
     4          = vCPUs
     s          = Premium SSD capable
@@ -90,7 +90,7 @@ Once you pick a family, the size name itself encodes tier, vCPU count, disk capa
     Other suffixes:
     a = AMD processor      (Standard_D4as_v5)
     d = Local temp disk     (Standard_D4ds_v5)
-    i = Isolated (dedicated host)
+    i = Isolated (isolated to dedicated hardware)
     l = Low memory
     p = ARM-based (Ampere)  (Standard_D4ps_v5)
 ```
@@ -99,11 +99,11 @@ Once you pick a family, the size name itself encodes tier, vCPU count, disk capa
 
 ```bash
 # List all available VM sizes in a region
-az vm list-sizes --location eastus2 -o table
+az vm list-skus --location eastus2 --resource-type virtualMachines -o table
 
 # Filter for D-series v5 sizes
-az vm list-sizes --location eastus2 \
-  --query "[?starts_with(name, 'Standard_D') && contains(name, 'v5')].{Name:name, vCPUs:numberOfCores, MemoryGB:memoryInMB}" \
+az vm list-skus --location eastus2 --resource-type virtualMachines \
+  --query "[?starts_with(name, 'Standard_D') && contains(name, 'v5')].{Name:name, vCPUs:capabilities[?name=='vCPUs'].value | [0], MemoryGB:capabilities[?name=='MemoryGB'].value | [0]}" \
   -o table
 
 # Check what sizes are available for a specific VM (for resizing)
@@ -150,13 +150,14 @@ graph LR
 
         Z1 --- Z2
         Z2 --- Z3
-        note over Z1,Z3: Low-latency interconnect (<2ms)
+        Interconnect["Low-latency interconnect (<2ms)"]
+        Z2 --- Interconnect
     end
 ```
 
 ### Availability Sets
 
-[An Availability Set distributes VMs across **Fault Domains** (separate physical racks) and **Update Domains** (groups that Azure reboots sequentially during maintenance).](https://learn.microsoft.com/en-us/azure/virtual-machines/availability-set-overview) Availability Sets provide a [**99.95% SLA**](https://learn.microsoft.com/en-us/azure/virtual-machines/availability).
+[An Availability Set distributes VMs across **Fault Domains** (separate physical racks) and **Update Domains** (groups that Azure reboots sequentially during maintenance).](https://learn.microsoft.com/en-us/azure/virtual-machines/availability-set-overview) Availability Sets provide a [**99.95% SLA**](https://learn.microsoft.com/en-us/azure/virtual-machines/availability). During platform maintenance, Azure reboots one Update Domain at a time—UD0, then UD1, then UD2—so not every VM in the set is offline simultaneously.
 
 ```mermaid
 graph TD
@@ -165,13 +166,11 @@ graph TD
         FD1[("Fault Domain 1<br>Rack 2")]
         FD2[("Fault Domain 2<br>Rack 3")]
 
-        FD0 --- VM1(VM-1 (UD0))
-        FD0 --- VM4(VM-4 (UD3))
-        FD1 --- VM2(VM-2 (UD1))
-        FD1 --- VM5(VM-5 (UD4))
-        FD2 --- VM3(VM-3 (UD2))
-
-        note over FD0,FD2: During maintenance, Azure reboots one Update Domain (UD) at a time: UD0, then UD1, then UD2, etc.
+        FD0 --- VM1["VM-1 (UD0)"]
+        FD0 --- VM4["VM-4 (UD3)"]
+        FD1 --- VM2["VM-2 (UD1)"]
+        FD1 --- VM5["VM-5 (UD4)"]
+        FD2 --- VM3["VM-3 (UD2)"]
     end
 ```
 
@@ -260,9 +259,9 @@ Every Azure VM needs at least one disk: the **OS disk**. Most production VMs als
 | :--- | :--- | :--- | :--- | :--- |
 | **Standard HDD** | 500 | 60 MB/s | Backups, dev/test, infrequent access | ~$5/month |
 | **Standard SSD** | 6,000 | 750 MB/s | Web servers, light databases | ~$10/month |
-| **Premium SSD** | 7,500 | 250 MB/s | Production databases, high IOPS | ~$19/month |
+| **Premium SSD** | 20,000 | 900 MB/s | Production databases, high IOPS | ~$19/month |
 | **Premium SSD v2** | 80,000 | 1,200 MB/s | Tier-1 databases, demanding workloads | ~$10+/month (pay per IOPS/throughput) |
-| **Ultra Disk** | 160,000 | 4,000 MB/s | SAP HANA, transaction-heavy databases | ~$67+/month |
+| **Ultra Disk** | 400,000 | 10,000 MB/s | SAP HANA, transaction-heavy databases | ~$67+/month |
 
 > **Pause and predict**: Your application team reports slow database queries. You investigate and find the database VM's disk queue length is consistently high. The VM is currently using a Standard SSD for its data disk. What's your immediate recommendation, and why?
 
@@ -347,7 +346,7 @@ A fast disk cannot deliver its full performance if the VM it is attached to cann
 
 For example, a `Standard_D2s_v5` VM has a maximum uncached disk throughput of roughly 85 MB/s and a maximum of approximately 3,750 IOPS. Attaching a Premium SSD P30 that can deliver 5,000 IOPS and 200 MB/s does not give you 5,000 IOPS because the VM caps any disk at its own lower limit. When you diagnose disk performance problems, measure both the disk metrics, to check if the disk is hitting its provisioned ceiling, and the VM metrics, to check if the VM is hitting its own IOPS or throughput cap. The bottleneck can sit on either side, and replacing the disk when the VM is the constraint wastes time and money.
 
-Use `az vm list-sizes --location <region>` and inspect the `maxDataDiskCount` and resource disk fields to compare against your provisioned disk performance. Right-sizing is a combined exercise: the VM and its disks form a single performance envelope, and you must size both together rather than independently.
+Use `az vm list-skus --location <region> --resource-type virtualMachines` and inspect the `maxDataDiskCount` and resource disk fields to compare against your provisioned disk performance. Right-sizing is a combined exercise: the VM and its disks form a single performance envelope, and you must size both together rather than independently.
 
 
 
@@ -438,7 +437,7 @@ az vm extension list -g myRG --vm-name web-vm -o table
 
 ## VM Scale Sets (VMSS): Horizontal Auto-Scaling
 
-[A VM Scale Set is a group of identical, load-balanced VMs that can automatically scale in and out based on demand or a schedule.](https://learn.microsoft.com/en-us/azure/virtual-machines/availability) Think of it as a fleet of VMs managed as a single resource: you define an image, SKU, and capacity bounds once, and Azure creates or removes instances while keeping them behind a load balancer and optional zone placement rules.
+[A VM Scale Set is a group of identical, load-balanced VMs that can automatically scale in and out based on demand or a schedule.](https://learn.microsoft.com/en-us/azure/virtual-machine-scale-sets/overview) Think of it as a fleet of VMs managed as a single resource: you define an image, SKU, and capacity bounds once, and Azure creates or removes instances while keeping them behind a load balancer and optional zone placement rules.
 
 ### VMSS Architecture
 
@@ -675,11 +674,11 @@ A team with 50 deallocated VMs, each carrying a 128 GiB Premium SSD OS disk at a
 
 ### What Drives Managed Disk Cost
 
-Managed disk cost breaks down into three components. First, the disk tier sets the base rate: Standard HDD costs approximately $0.05 per GiB per month, while Premium SSD costs approximately $0.15 per GiB per month and Ultra Disk costs around $0.33 per GiB per month for the storage capacity alone. Second, the provisioned capacity determines the monthly charge regardless of how much data you actually store. A 1 TiB disk costs the same whether it holds 100 GiB or 900 GiB of data. Third, for Premium SSD v2 and Ultra Disk, you pay separately for provisioned IOPS and throughput on top of the capacity charge. Ultra Disk charges roughly $0.06 per provisioned IOPS and $0.01 per MB/s of throughput per month, which means a disk configured for 10,000 IOPS and 500 MB/s adds approximately $600 per month in IOPS charges and $250 per month in throughput charges before the capacity cost.
+Managed disk cost breaks down into three components. First, the disk tier sets the base rate: Standard HDD costs approximately $0.05 per GiB per month, while Premium SSD costs approximately $0.15 per GiB per month and Ultra Disk costs around $0.33 per GiB per month for the storage capacity alone. Second, the provisioned capacity determines the monthly charge regardless of how much data you actually store. A 1 TiB disk costs the same whether it holds 100 GiB or 900 GiB of data. Third, for Premium SSD v2 and Ultra Disk, you pay separately for provisioned IOPS and throughput on top of the capacity charge. Ultra Disk charges roughly $0.06 per provisioned IOPS and $0.01 per MB/s of throughput per month, which means a disk configured for 10,000 IOPS and 500 MB/s adds approximately $600 per month in IOPS charges and $5 per month in throughput charges before the capacity cost.
 
 Transaction costs add another layer. Premium SSD and Standard SSD bill per I/O operation beyond a monthly free threshold, while Standard HDD bills approximately $0.0005 per 10,000 disk operations after the first 10 million free operations each month. For a VM that handles millions of small database queries per day, transaction charges can become the dominant cost component even if the disk capacity charge appears modest. Measure your workload's typical I/O profile before committing to a disk tier, because a workload with many small transactions may cost less on a higher-tier disk with fewer per-transaction charges than on a lower-tier disk that bills aggressively per operation.
 
-The cost scaling is not linear across disk tiers. A 512 GiB Premium SSD (P20) costs roughly five times as much per month as a 128 GiB Premium SSD (P10) for four times the capacity and roughly four times the baseline IOPS. When performance dictates the disk choice more than capacity, Premium SSD v2 often delivers better cost efficiency because you can provision exactly the IOPS and throughput you need on a smaller-capacity disk. Achieving 5,000 IOPS with standard Premium SSD requires a 1 TiB P30 disk at approximately $195 per month for capacity you may not need, while Premium SSD v2 can deliver the same 5,000 IOPS on a 32 GiB disk at a fraction of the capacity cost because you pay only for the provisioned IOPS you actually use.
+The cost scaling is not linear across disk tiers. A 512 GiB Premium SSD (P20) costs roughly four times as much per month as a 128 GiB Premium SSD (P10) for four times the capacity and roughly four times the baseline IOPS. When performance dictates the disk choice more than capacity, Premium SSD v2 often delivers better cost efficiency because you can provision exactly the IOPS and throughput you need on a smaller-capacity disk. Achieving 5,000 IOPS with standard Premium SSD requires a 1 TiB P30 disk at approximately $195 per month for capacity you may not need, while Premium SSD v2 can deliver the same 5,000 IOPS on a 32 GiB disk at a fraction of the capacity cost because you pay only for the provisioned IOPS you actually use.
 
 ### Cost Strategy Comparison
 
@@ -974,26 +973,43 @@ az network nsg rule create \
   --source-address-prefixes Internet \
   --destination-port-ranges 80
 
-# Update the LB health probe to use HTTP
-LB_PROBE=$(az network lb probe list -g "$RG" --lb-name web-lb --query '[0].name' -o tsv)
-az network lb probe update \
+# Update the LB health probe to use HTTP (VMSS creates the LB and backend pool)
+LB_POOL=$(az network lb address-pool list -g "$RG" --lb-name web-lb --query '[0].name' -o tsv)
+LB_FRONTEND=$(az network lb frontend-ip list -g "$RG" --lb-name web-lb --query '[0].name' -o tsv)
+
+az network lb probe create \
   --resource-group "$RG" \
   --lb-name web-lb \
-  --name "$LB_PROBE" \
+  --name http-probe \
   --protocol Http \
   --port 80 \
   --path /health
+
+# Create port-80 load-balancing rule so curl http://$LB_IP reaches the VMSS backends
+az network lb rule create \
+  --resource-group "$RG" \
+  --lb-name web-lb \
+  --name http \
+  --protocol Tcp \
+  --frontend-port 80 \
+  --backend-port 80 \
+  --frontend-ip-name "$LB_FRONTEND" \
+  --backend-pool-name "$LB_POOL" \
+  --probe-name http-probe
 ```
 
 <details>
 <summary>Verify Task 4</summary>
 
 ```bash
-az network lb probe show -g "$RG" --lb-name web-lb -n "$LB_PROBE" \
+az network lb probe show -g "$RG" --lb-name web-lb -n http-probe \
   --query '{Protocol:protocol, Port:port, Path:requestPath}' -o table
+
+az network lb rule show -g "$RG" --lb-name web-lb -n http \
+  --query '{FrontendPort:frontendPort, BackendPort:backendPort, Probe:probe.id}' -o table
 ```
 
-You should see HTTP probe on port 80 with path /health.
+You should see HTTP probe on port 80 with path /health, plus an http rule forwarding frontend port 80 to backend port 80.
 </details>
 
 ### Task 5: Configure Autoscale Rules
