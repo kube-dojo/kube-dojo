@@ -33,7 +33,7 @@ Azure Monitor is not a single service—it is a platform composed of interconnec
 
 ### Designing centralized monitoring
 
-Enterprise landing zones typically designate a **monitoring subscription** that hosts Log Analytics workspaces, action groups, and alert rules. Spoke subscriptions hold applications with diagnostic settings and DCR associations pointing at the hub workspace. [Azure Policy](https://learn.microsoft.com/en-us/azure/azure-monitor/platform/policy-reference) can deploy diagnostic settings and AMA associations automatically so new resources do not ship without telemetry. Tag resources with `environment`, `cost-center`, and `owner` so KQL can filter `AzureActivity` and `AzureResourceGraph` results during incidents.
+Enterprise landing zones typically designate a **monitoring subscription** that hosts Log Analytics workspaces, action groups, and alert rules. Spoke subscriptions hold applications with diagnostic settings and DCR associations pointing at the hub workspace. [Azure Policy](https://learn.microsoft.com/en-us/azure/azure-monitor/policy-reference) can deploy diagnostic settings and AMA associations automatically so new resources do not ship without telemetry. Tag resources with `environment`, `cost-center`, and `owner` so KQL can filter `AzureActivity` and `AzureResourceGraph` results during incidents.
 
 Cross-subscription visibility does not require moving resources—only correct routing and RBAC. Readers need `Log Analytics Reader` on the workspace; alert rule authors need `Monitoring Contributor` on scopes they manage. Document which workspace holds production security data versus production application data before an incident forces ad-hoc merging.
 
@@ -136,7 +136,7 @@ When you design monitoring, draw two arrows from every critical resource: one to
 
 ### Network monitoring and high-volume logs
 
-Network Watcher [NSG flow logs](https://learn.microsoft.com/en-us/azure/network-watcher/nsg-flow-logs-overview) and [traffic analytics](https://learn.microsoft.com/en-us/azure/network-watcher/traffic-analytics) can generate very large log volume. Treat them as a deliberate cost decision: flow logs to Storage or Event Hub for security analytics, not always to Analytics tables unless security operations queries them daily. [Azure Monitor for networks](https://learn.microsoft.com/en-us/azure/azure-monitor/insights/network-insights-overview) provides curated views when NSG diagnostics and topology data are enabled.
+Network Watcher **[VNet flow logs](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-flow-logs-overview)** are the current path for virtual-network traffic visibility. Legacy [NSG flow logs](https://learn.microsoft.com/en-us/azure/network-watcher/nsg-flow-logs-overview) retire **2027-09-30**, and **new NSG flow logs can no longer be created after 2025-06-30**—plan migrations to VNet flow logs. [Traffic analytics](https://learn.microsoft.com/en-us/azure/network-watcher/traffic-analytics) can generate very large log volume. Treat flow logging as a deliberate cost decision: flow logs to Storage or Event Hub for security analytics, not always to Analytics tables unless security operations queries them daily. [Azure Monitor for networks](https://learn.microsoft.com/en-us/azure/azure-monitor/insights/network-insights-overview) provides curated views when network diagnostics and topology data are enabled.
 
 For Azure Kubernetes Service, control plane metrics remain platform-managed while workload telemetry flows through Container Insights or OpenTelemetry collectors. Align with your platform team on whether container stdout belongs in `ContainerLogV2` on Analytics or Auxiliary—verbose application logging from dozens of pods is a common reason production workspaces exceed ingestion forecasts.
 
@@ -179,7 +179,7 @@ az monitor metrics list \
   -o table
 ```
 
-Common metrics you should usually monitor are your first line of defense in day-two operations. Platform metrics appear in Metrics Explorer within about a minute for many resource types, which is why on-call starts charts before KQL during a sev-1. **Custom metrics** let applications emit business KPIs (orders queued, jobs failed) via the [Metrics REST API](https://learn.microsoft.com/en-us/azure/azure-monitor/metrics/custom-metrics) or OpenTelemetry—useful when infrastructure looks healthy but the business pipeline is stuck.
+Common metrics you should usually monitor are your first line of defense in day-two operations. Platform metrics appear in Metrics Explorer within about a minute for many resource types, which is why on-call starts charts before KQL during a sev-1. **Custom metrics** let applications emit business KPIs (orders queued, jobs failed) via the [Metrics REST API](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/metrics-custom-overview) or OpenTelemetry—useful when infrastructure looks healthy but the business pipeline is stuck.
 
 **Multi-dimensional metrics** let one alert rule split on dimension values (for example HTTP status code on App Service). Each dimension value can become a billed time series in large scopes, so prefer focused scopes or fewer dimensions when cost matters. **Metric namespaces** separate platform metrics (`Microsoft.Compute/virtualMachines`) from guest OS and custom namespaces; verify you alert on the namespace that actually receives data after AMA or diagnostic settings are configured.
 
@@ -204,7 +204,7 @@ A [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monito
 
 ### Workspace architecture across subscriptions
 
-Platform teams often deploy **one workspace per environment** (production, staging, development) rather than per application. Resources in any subscription can send data to a workspace in another subscription as long as RBAC and network rules allow it. That pattern supports centralized monitoring for enterprise landing zones: hub subscriptions host the workspace, spoke subscriptions host workloads with diagnostic settings pointed at the hub. Use [Azure Monitor scoped configuration](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/scoped-configurations) and workspace permissions so application teams query only their tables or resource sets.
+Platform teams often deploy **one workspace per environment** (production, staging, development) rather than per application. Resources in any subscription can send data to a workspace in another subscription as long as RBAC and network rules allow it. That pattern supports centralized monitoring for enterprise landing zones: hub subscriptions host the workspace, spoke subscriptions host workloads with diagnostic settings pointed at the hub. Use [Azure Monitor workspace access management](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/manage-access) and workspace permissions so application teams query only their tables or resource sets.
 
 When Microsoft Sentinel or Defender for Cloud is enabled on a workspace, billing and data mix change—Sentinel charges apply to security tables, and operational data may need a separate workspace to avoid paying Sentinel rates on routine VM performance logs. The [workspace design guidance](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/workspace-design) documents tradeoffs between single workspace simplicity and multi-workspace isolation.
 
@@ -476,8 +476,8 @@ az monitor scheduled-query create \
   --description "More than 10 errors in 15 minutes" \
   --severity 1 \
   --scopes "$WORKSPACE_ID" \
-  --condition "count 'AzureDiagnostics | where Category == \"AuditEvent\" | where ResultType == \"Failure\"' > 10" \
-  --condition-query "AzureDiagnostics | where Category == 'AuditEvent' | where ResultType == 'Failure'" \
+  --condition "count 'Failures' > 10 resource id _ResourceId at least 1 violations out of 1 aggregated points" \
+  --condition-query Failures="AzureDiagnostics | where Category == 'AuditEvent' | where ResultType == 'Failure'" \
   --window-size 15m \
   --evaluation-frequency 5m \
   --action-groups "$ACTION_GROUP_ID"
@@ -674,7 +674,7 @@ az monitor data-collection rule create \
       "samplingFrequencyInSeconds": 60,
       "counterSpecifiers": [
         "\\Processor(_Total)\\% Processor Time",
-        "\\Memory\\Available Bytes",
+        "\\Memory\\Available MBytes Memory",
         "\\LogicalDisk(_Total)\\% Free Space",
         "\\LogicalDisk(_Total)\\Disk Reads/sec",
         "\\LogicalDisk(_Total)\\Disk Writes/sec"
@@ -722,11 +722,11 @@ Workspace-based Application Insights stores all telemetry in linked workspace ta
 
 ### Metric alerts, log alerts, and hidden volume drivers
 
-Metric alerts bill per rule and can bill per monitored time series when dimensions multiply scopes. Log alerts bill based on scanned data during each evaluation—wide time ranges and unfiltered tables increase cost and latency. The silent budget killer is **verbose logging**: DEBUG-level application logs, NSG flow logs on every rule, and full HTTP body logging can push a single VM from a few gigabytes per month to tens of gigabytes. Pair diagnostic settings with table plan selection and ingestion transforms to drop noise before it lands in Analytics tables.
+Metric alerts bill per rule and can bill per monitored time series when dimensions multiply scopes. Log alerts bill based on scanned data during each evaluation—wide time ranges and unfiltered tables increase cost and latency. The silent budget killer is **verbose logging**: DEBUG-level application logs, legacy NSG flow logs (retiring 2027-09-30—prefer VNet flow logs), and full HTTP body logging can push a single VM from a few gigabytes per month to tens of gigabytes. Pair diagnostic settings with table plan selection and ingestion transforms to drop noise before it lands in Analytics tables.
 
 | Cost driver | What spikes the bill | Mitigation |
 | :--- | :--- | :--- |
-| Analytics ingestion | NSG flow logs, verbose app logs, all pods at DEBUG | Basic/Auxiliary plans, transforms, log level discipline |
+| Analytics ingestion | VNet/NSG flow logs, verbose app logs, all pods at DEBUG | Basic/Auxiliary plans, transforms, log level discipline |
 | Retention | 365+ day retention on high-volume tables | Per-table retention, long-term tier, export to Storage |
 | App Insights | High RPS without sampling | Adaptive sampling, filter health-check traffic |
 | Log alerts | Broad KQL every 5 minutes | Tight `TimeGenerated` filters, metric alerts where possible |
@@ -735,7 +735,7 @@ Metric alerts bill per rule and can bill per monitored time series when dimensio
 
 ### Estimating ingestion before enablement
 
-Use the workspace **Usage and estimated costs** view and [Analyze usage in a Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/analyze-usage) to identify top tables before enabling NSG flow logs or DEBUG logging fleet-wide. Multiply per-VM estimates by instance count: a modest 2 GB/month per VM becomes 200 GB/month at 100 VMs. Commitment tiers help only when sustained volume is predictable—spiky debug logging does not fit a fixed daily commit.
+Use the workspace **Usage and estimated costs** view and [Analyze usage in a Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/analyze-usage) to identify top tables before enabling VNet flow logs or DEBUG logging fleet-wide. Multiply per-VM estimates by instance count: a modest 2 GB/month per VM becomes 200 GB/month at 100 VMs. Commitment tiers help only when sustained volume is predictable—spiky debug logging does not fit a fixed daily commit.
 
 ---
 
@@ -811,7 +811,7 @@ Need cheap multi-year archive or SIEM stream?
 
 ### Governance with Azure Policy and automation
 
-At scale, manual portal configuration drifts. [Azure Policy initiatives for monitoring](https://learn.microsoft.com/en-us/azure/azure-monitor/platform/policy-reference) deploy diagnostic settings, deploy AMA with DCR associations, and enforce tagging that KQL relies on. Pair policy with remediation tasks so existing resources backfill telemetry without a human opening each blade. Logic Apps triggered from action groups can open ServiceNow tickets, post to Teams, or run safe automation (scale out, restart app) when alerts fire—keep automation idempotent and bounded so flapping alerts do not loop scale operations.
+At scale, manual portal configuration drifts. [Azure Policy initiatives for monitoring](https://learn.microsoft.com/en-us/azure/azure-monitor/policy-reference) deploy diagnostic settings, deploy AMA with DCR associations, and enforce tagging that KQL relies on. Pair policy with remediation tasks so existing resources backfill telemetry without a human opening each blade. Logic Apps triggered from action groups can open ServiceNow tickets, post to Teams, or run safe automation (scale out, restart app) when alerts fire—keep automation idempotent and bounded so flapping alerts do not loop scale operations.
 
 Export selected tables to Storage or Event Hub when compliance requires immutable copies outside the workspace. [Data export rules](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-data-export-rules) run continuously per table; test export filters so you do not duplicate entire workspace firehoses into storage accounts without lifecycle policies.
 
@@ -825,7 +825,7 @@ Export selected tables to Storage or Event Hub when compliance requires immutabl
 
 3. **Azure Monitor can detect anomalies automatically using machine learning.** The `series_decompose_anomalies()` KQL function analyzes time-series data and flags data points that deviate significantly from the expected pattern. You do not need to set static thresholds---the model learns what "normal" looks like and alerts on deviations. This catches issues like "response time gradually increased 40% over 3 days" that static thresholds miss.
 
-4. **Application Insights sampling reduces data volume without losing visibility.** By default, adaptive sampling kicks in when your application generates more than 5 events per second per server. It intelligently drops redundant telemetry (like 1000 identical successful requests) while preserving anomalies (errors, slow requests). A team generating 100 GB of App Insights data per month reduced it to 8 GB with adaptive sampling, with zero loss in diagnostic capability.
+4. **Application Insights sampling reduces data volume without losing visibility.** By default, adaptive sampling kicks in when your application generates more than 5 events per second per server. It intelligently drops redundant telemetry (like 1000 identical successful requests) while preserving anomalies (errors, slow requests). High-traffic estates often cut App Insights ingestion by 80–90% with adaptive sampling while retaining errors and slow requests for diagnosis.
 
 ---
 
@@ -1009,7 +1009,7 @@ az monitor data-collection rule create \
       "samplingFrequencyInSeconds": 30,
       "counterSpecifiers": [
         "\\Processor(_Total)\\% Processor Time",
-        "\\Memory\\Available Bytes",
+        "\\Memory\\Available MBytes Memory",
         "\\Memory\\% Used Memory",
         "\\LogicalDisk(_Total)\\% Free Space"
       ]
@@ -1044,13 +1044,15 @@ az monitor data-collection rule association list --resource "$VM_ID" \
 ### Task 4: Generate Load and Wait for Data
 
 ```bash
-# Generate some CPU load on the VM
+# Generate CPU load (stress-ng is not preinstalled on Ubuntu 22.04 images)
 az vm run-command invoke -g "$RG" -n monitor-lab-vm \
   --command-id RunShellScript \
-  --scripts "stress-ng --cpu 2 --timeout 120 &" 2>/dev/null || \
+  --scripts "sudo apt-get update -qq && sudo apt-get install -y stress-ng && stress-ng --cpu 2 --timeout 120"
+
+# Fallback if apt fails: yes-loop CPU burn
 az vm run-command invoke -g "$RG" -n monitor-lab-vm \
   --command-id RunShellScript \
-  --scripts "for i in \$(seq 1 4); do yes > /dev/null & done; sleep 120; kill %1 %2 %3 %4 2>/dev/null"
+  --scripts "for i in \$(seq 1 4); do yes > /dev/null & done; sleep 120; kill \$(jobs -p) 2>/dev/null; true"
 
 echo "Generating CPU load... Waiting 5 minutes for data to appear in Log Analytics."
 echo "(Data ingestion typically takes 3-8 minutes)"
@@ -1195,6 +1197,6 @@ Link workspace-based Application Insights to the same workspace and deploy a sam
 - [VM insights](https://learn.microsoft.com/en-us/azure/azure-monitor/vm/vminsights-overview) — Curated VM monitoring experience atop AMA.
 - [Container Insights overview](https://learn.microsoft.com/en-us/azure/azure-monitor/containers/container-insights-overview) — AKS and Kubernetes monitoring solution.
 - [Availability tests](https://learn.microsoft.com/en-us/azure/azure-monitor/app/availability-overview) — Synthetic URL monitoring and alerts.
-- [Azure Monitor policy samples](https://learn.microsoft.com/en-us/azure/azure-monitor/platform/policy-reference) — Policy definitions for diagnostic settings and agents.
+- [Azure Monitor policy samples](https://learn.microsoft.com/en-us/azure/azure-monitor/policy-reference) — Policy definitions for diagnostic settings and agents.
 - [Logs data export rules](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-data-export-rules) — Continuous export from workspace tables to Storage or Event Hub.
 - [Analyze workspace usage](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/analyze-usage) — Find top ingestion tables and cost drivers.

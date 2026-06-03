@@ -62,7 +62,7 @@ graph TD
         K[Keys<br/>- data-encrypt<br/>- signing-key<br/>- wrapping-key]
         C[Certificates<br/>- api-tls<br/>- mtls-cert<br/>- code-sign]
     end
-    F[Features:<br/>• HSM-backed FIPS 140-2 Level 2<br/>• Versioned updates<br/>• Audit logged access<br/>• Soft delete & purge protection<br/>• Private endpoint support]
+    F[Features:<br/>• HSM-backed FIPS 140-2 L2 / 140-3 L3 (HSM Platform 2, current default)<br/>• Versioned updates<br/>• Audit logged access<br/>• Soft delete & purge protection<br/>• Private endpoint support]
     Azure Key Vault --- F
     style F text-align:left
 ```
@@ -164,17 +164,19 @@ az keyvault key create \
 
 # Encrypt data (the key never leaves Key Vault)
 echo -n "sensitive data" | base64 > /tmp/plaintext.b64
-az keyvault key encrypt \
+CIPHERTEXT=$(az keyvault key encrypt \
   --vault-name kubedojo-vault \
   --name "data-encryption-key" \
   --algorithm RSA-OAEP \
-  --value "$(cat /tmp/plaintext.b64)"
+  --value "$(cat /tmp/plaintext.b64)" \
+  -o tsv --query result)
 
 # Decrypt data
 az keyvault key decrypt \
   --vault-name kubedojo-vault \
   --name "data-encryption-key" \
   --algorithm RSA-OAEP \
+  --data-type base64 \
   --value "$CIPHERTEXT"
 ```
 
@@ -320,13 +322,16 @@ az keyvault create \
 # Grant read-only access to secrets for a managed identity
 VAULT_ID=$(az keyvault show -n kubedojo-vault --query id -o tsv)
 az role assignment create \
-  --assignee "$MANAGED_IDENTITY_PRINCIPAL_ID" \
+  --assignee-object-id "$MANAGED_IDENTITY_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
   --role "Key Vault Secrets User" \
   --scope "$VAULT_ID"
 
 # Grant secret management access to a specific secret
+ALICE_OBJECT_ID="<alice-entra-object-id>"
 az role assignment create \
-  --assignee "alice@company.com" \
+  --assignee-object-id "$ALICE_OBJECT_ID" \
+  --assignee-principal-type User \
   --role "Key Vault Secrets Officer" \
   --scope "$VAULT_ID/secrets/db-password"
 ```
@@ -456,7 +461,7 @@ When using multiple vaults, your CI/CD pipeline or a dedicated synchronization f
 
 ## Integrating Key Vault with Applications
 
-Applications should treat Key Vault as an **upstream dependency** with latency, quotas, and availability characteristics—not as a local file. Plan retries, circuit breaking, and health checks that distinguish “vault unreachable” from “identity misconfigured.” For VMs without managed identity legacy paths, install the [Azure Instance Metadata Service identity endpoint](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview-for-developers) via VM extensions; ARM templates and `az vm identity assign` attach the same principals Container Apps use.
+Applications should treat Key Vault as an **upstream dependency** with latency, quotas, and availability characteristics—not as a local file. Plan retries, circuit breaking, and health checks that distinguish “vault unreachable” from “identity misconfigured.” Azure VMs reach managed identity tokens through the always-present **IMDS** endpoint at `169.254.169.254`; `az vm identity assign` attaches the identity—no VM extension is required. Container Apps and other PaaS hosts expose a different token endpoint via `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` environment variables (see Task 5 in the lab).
 
 **AKS workload identity (modern):** replaces pod identity with federated credentials to Entra ID; the CSI provider documentation aligns with managed identity client IDs. Whichever identity model you choose, the vault firewall must see the caller’s egress path and RBAC must reference the same principal ID you pass to `az role assignment create`.
 
@@ -626,13 +631,13 @@ az network private-endpoint create \
 
 Key Vault billing is **operation-centric** for vaults, not capacity-based. Microsoft’s [pricing page](https://azure.microsoft.com/en-us/pricing/details/key-vault/) charges **$0.03 per 10,000 transactions** for most secret, software key, and certificate API calls in both Standard and Premium. That sounds negligible until you multiply by microservice instance count and request rate.
 
-**Secrets hot path:** An API tier with 200 pods, each handling 50 requests/second, that calls `get_secret` once per request generates 100,000 secret GETs per second—orders of magnitude above the [4,000 GETs per 10 seconds](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) limit. You pay twice: throttling outages plus billable operations if you somehow stayed under the cap. **Knobs that reduce cost:** in-memory cache with TTL (5–15 minutes is common), startup-only fetch, batching configuration reads, and fewer secrets per vault (reuse references, not duplicate copies).
+**Secrets hot path:** An API tier with 200 pods, each handling 50 requests/second, that calls `get_secret` once per request generates **10,000** secret GETs per second—orders of magnitude above the [4,000 GETs per 10 seconds](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) limit. You pay twice: throttling outages plus billable operations if you somehow stayed under the cap. **Knobs that reduce cost:** in-memory cache with TTL (5–15 minutes is common), startup-only fetch, batching configuration reads, and fewer secrets per vault (reuse references, not duplicate copies).
 
 **Premium HSM keys:** Each active HSM key version can incur **$1/month (2048-bit RSA)** plus operations, with higher monthly charges for advanced key sizes on the pricing table. Idle versions you never use may avoid the monthly HSM key fee, but **each version counts separately** if it was used in the last 30 days—rotation without retiring old versions increases steady cost.
 
 **Certificates:** Ordinary certificate API operations bill like secrets; **renewal requests** bill **$3 per renewal** (not the $0.03/10k bucket). Automated TLS with frequent renewals across dozens of hostnames adds up—consolidate SAN certs where policy allows.
 
-**Automated key rotation policy:** Scheduled rotations on vault keys are **$1 per scheduled rotation** per the pricing page—cheaper than manual runbooks only if rotation frequency is sane.
+**Automated key rotation policy:** Each rotation produces a new key **version**; you pay for active HSM key versions and the operations they generate—not a flat per-rotation fee. Keep rotation frequency sane so version sprawl does not inflate monthly HSM key charges.
 
 **Managed HSM pools:** Billed per **hour per HSM pool** (e.g., Standard B1 at $3.20/hour on the US pricing page at time of writing—verify region/currency in the calculator). Economical when you need many HSM operations on dedicated hardware; expensive for a handful of secrets—use a Premium **vault** instead.
 
@@ -814,7 +819,8 @@ az keyvault create \
 USER_ID=$(az ad signed-in-user show --query id -o tsv)
 VAULT_ID=$(az keyvault show -n "$VAULT_NAME" --query id -o tsv)
 az role assignment create \
-  --assignee "$USER_ID" \
+  --assignee-object-id "$USER_ID" \
+  --assignee-principal-type User \
   --role "Key Vault Secrets Officer" \
   --scope "$VAULT_ID"
 ```
@@ -872,7 +878,8 @@ IDENTITY_CLIENT=$(az identity show -g "$RG" -n "$IDENTITY_NAME" --query clientId
 
 # Grant the managed identity Key Vault Secrets User role
 az role assignment create \
-  --assignee "$IDENTITY_PRINCIPAL" \
+  --assignee-object-id "$IDENTITY_PRINCIPAL" \
+  --assignee-principal-type ServicePrincipal \
   --role "Key Vault Secrets User" \
   --scope "$VAULT_ID"
 
@@ -933,33 +940,25 @@ az containerapp show -g "$RG" -n secret-reader-app \
 You should see the user-assigned identity attached to the Container App.
 </details>
 
-### Task 5: Verify Secret Access from the Container App
+### Task 5: Verify Managed Identity Token from the Container App
 
 ```bash
-# Get the Container App's FQDN
-APP_FQDN=$(az containerapp show -g "$RG" -n secret-reader-app \
-  --query properties.configuration.ingress.fqdn -o tsv)
-echo "App URL: https://$APP_FQDN"
-
-# Test that the managed identity can read secrets using az CLI inside the container
-# (In a real app, you'd use the Azure SDK with DefaultAzureCredential)
+# Container Apps use IDENTITY_ENDPOINT + IDENTITY_HEADER — not the VM IMDS URL.
+# Request an Entra token for Key Vault using the user-assigned managed identity:
 az containerapp exec \
   --resource-group "$RG" \
   --name secret-reader-app \
-  --command "curl -s -H 'Metadata: true' 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2019-08-01&resource=https://vault.azure.net&client_id=$IDENTITY_CLIENT'" 2>/dev/null | head -1 || \
-echo "Note: exec may not be available on quickstart image. Testing via CLI instead."
-
-# Verify from outside: use Azure CLI to confirm the identity has access
-az keyvault secret show \
-  --vault-name "$VAULT_NAME" \
-  --name "db-connection-string" \
-  --query '{Name:name, Value:value}' -o table
+  --command 'curl -s "$IDENTITY_ENDPOINT?resource=https://vault.azure.net&api-version=2019-08-01&client_id=$AZURE_CLIENT_ID" -H "X-IDENTITY-HEADER: $IDENTITY_HEADER"' \
+  2>/dev/null | head -c 200 || \
+echo "Note: exec may not be available on the quickstart image. Use the SDK pattern in Verify Task 5 below."
 ```
 
 <details>
 <summary>Verify Task 5</summary>
 
-The secret should be readable. In a production scenario, your application code would use the Azure SDK:
+A successful response includes an `"access_token"` field—this proves the **managed identity** can authenticate to Key Vault. It does **not** use your signed-in user's RBAC.
+
+In production, your application code uses the Azure SDK with the same identity:
 
 ```python
 from azure.identity import DefaultAzureCredential
@@ -971,7 +970,7 @@ secret = client.get_secret("db-connection-string")
 # Use secret.value to configure your database connection
 ```
 
-The `AZURE_CLIENT_ID` environment variable tells `DefaultAzureCredential` which user-assigned managed identity to use.
+The `AZURE_CLIENT_ID` environment variable tells `DefaultAzureCredential` which user-assigned managed identity to use. To confirm secret **content** after SDK integration, log only the secret name—not the value—or query Key Vault audit logs for `SecretGet` from the identity's object ID.
 </details>
 
 ### Task 6: Test Soft Delete and Recovery
@@ -1014,7 +1013,7 @@ az group delete --name "$RG" --yes --no-wait
 - [ ] Two secrets stored (db-connection-string and api-key)
 - [ ] User-assigned Managed Identity created and granted Key Vault Secrets User role
 - [ ] Container App deployed with the managed identity attached
-- [ ] Verified that the identity can read secrets from Key Vault
+- [ ] Managed identity token request via Container Apps `IDENTITY_ENDPOINT` returns an `access_token` (or SDK path documented)
 - [ ] Soft delete tested: secret deleted, found in deleted list, and recovered
 
 ---
