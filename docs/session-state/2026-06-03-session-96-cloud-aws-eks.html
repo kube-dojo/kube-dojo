@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Session 96 — Cloud: AWS Essentials + EKS Deep Dive (expand-to-floor + review)</title>
+<style>body{font:15px/1.55 system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+code{background:#f3f3f3;padding:.1em .3em;border-radius:3px;font-size:.9em}table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em;vertical-align:top}th{background:#f6f6f6}
+.tl{background:#eef6ff;border-left:4px solid #2b7;padding:.6rem .9rem;border-radius:4px}.warn{color:#a40}</style></head><body>
+<h1>Session 96 — Cloud track: AWS Essentials + EKS Deep Dive (expand-to-floor + cross-family review)</h1>
+<p class="tl"><strong>Date:</strong> 2026-06-03 · <strong>Branch:</strong> main (clean, pushed) · <strong>Orchestrator:</strong> Claude Opus 4.8 · No-codex roster · User AFK (~6h).<br>
+<strong>TL;DR.</strong> Review-axis <strong>475 → 492 done (+17)</strong>. Two complete cloud sub-tracks: <strong>AWS Essentials 1.1–1.13 (13/13)</strong> and <strong>EKS Deep Dive 5.1–5.5 (5/5)</strong>, via 6 merged PRs (#1762–#1767). Each thin module (below the 5000-word prose floor) EXPANDED to floor → cross-family reviewed (opus 4.8 / cursor / deepseek) → orchestrator ground-checked & web-verified → consolidated cursor fix → CI → rebase-merge → finalize.</p>
+
+<h2>What shipped</h2>
+<table><tr><th>Wave / PR</th><th>Modules</th><th>Result</th></tr>
+<tr><td>1 · #1762</td><td>AWS 1.1 IAM (expand), 1.2 VPC (review-flip), 1.3 EC2 (expand)</td><td>done</td></tr>
+<tr><td>2 · #1763</td><td>AWS 1.4 S3, 1.5 Route53, 1.6 ECR (expand)</td><td>done</td></tr>
+<tr><td>3 · #1764</td><td>AWS 1.7 ECS-Fargate, 1.8 Lambda, 1.9 Secrets (expand)</td><td>done</td></tr>
+<tr><td>4 · #1765</td><td>AWS 1.10 CloudWatch, 1.11 CICD, 1.12 CloudFormation (expand) — completes AWS Essentials</td><td>done</td></tr>
+<tr><td>5a · #1766</td><td>EKS 5.1 Architecture, 5.2 Networking, 5.3 Identity (expand)</td><td>done</td></tr>
+<tr><td>5b · #1767</td><td>EKS 5.4 Storage (expand), 5.5 Production (gate-fix) — completes EKS Deep Dive</td><td>done</td></tr></table>
+<p>Decision (user, this session, via AskUserQuestion): cloud modules below the 5000w floor → <strong>expand to floor</strong> (not review-flip), in curriculum order. 80/93 cloud modules were sub-floor.</p>
+
+<h2>Notable correctness saves (verifier-blind; caught by cross-family review + web-verify)</h2>
+<ul>
+<li><strong>Resolved cold-start carryover</strong>: eks-5.3 taught credential-chain precedence BACKWARDS ("Pod Identity takes precedence") — corrected to AWS's documented behavior: <strong>IRSA (web identity) is earlier in the SDK chain and wins when both present</strong>; migration works by removing the IRSA annotation. Verified the merged 1.1 IAM did NOT carry the error.</li>
+<li><strong>deepseek invented numbers</strong> (all corrected): gp3 max 16k→<strong>80k/2k</strong> (Sep-2025), Graviton "40%"→"20% lower cost", Lambda arm64 Graviton3→Graviton2-only, ECR "replication free"→billed + wrong pull-through URLs + missing credential-arn, Inspector "15+ langs"→8, Savings-Plan invented "$0.01/hr min", CodeDeployDefault.ECS* config names, 5.4 IRSA/Pod-Identity trust-vs-install mismatch (AccessDenied), 5.5 bin-pack prices (2xlarge priced as xlarge), AMP ingestion-vs-storage unit.</li>
+<li><strong>WEB-VERIFY reverse-saves</strong> (reviewers' ~Jan-2026 cutoff false-flagged REAL recent AWS features — kept): Regional NAT GW (Nov-2025), gp3 80k/2k (Sep-2025), Object-Lock-on-existing-bucket (Nov-2023), geoproximity-standalone (Jan-2024), CloudWatch OTel/PromQL/Query-Studio (Apr-2026).</li>
+<li><strong>Anti-fab openers</strong>: both cursor & deepseek fabricate a dated/$-quantified "Why This Module Matters" opener without the <code>Hypothetical scenario:</code> label (Capital-One-2019 anonymized retelling in 1.1; July-2019 $12M in 1.10; Dec-2022 fintech in 1.9; etc.) — all relabeled/de-fingerprinted.</li>
+<li><strong>Build-hygiene</strong>: 1.12 had 13× <code>```cloudformation</code> fences (not a Shiki lang) → <code>```yaml</code>; 5.5 had 14 cursor-introduced FUSED fences (<code>```bashaws…</code> strips first render line, incl. lab manifests) → un-fused deterministically. 1.12 non-existent <code>stack-drift-detection-complete</code> CLI waiter → poll.</li>
+<li><strong>deepseek gutter-corruption</strong>: 5.2 came back with line-number gutters embedded as literal text → reset + re-expanded with cursor.</li>
+</ul>
+<p>See memory <code>feedback_cloud_expand_authoring_failure_modes</code> for the durable agent-failure-mode + web-verify-reverse-save lessons.</p>
+
+<h2>The proven loop (reusable for the rest of cloud)</h2>
+<p>Per wave of ≤3 (curriculum order): expand thin→5000w (cursor primary, deepseek 2nd, ≤3 concurrent, own worktree) → <code>verify_module.py</code> → cross-family review (deepseek-authored→cursor/opus; cursor-authored→opus; opus = strongest, web-verifies; deepseek-authored needs HARDEST ground-check) → orchestrator web-verifies every cloud fact → consolidated cursor <code>edit</code> fix in an integration worktree (cherry-pick expansions first) → verify + <code>incident_dedup_gate.py --mode absolute --base origin/main</code> (fetch first) → push + <code>gh pr create</code> (single-line Learner-check, no md-bold/pipes) → CI → <code>gh pr merge --rebase</code> → pull primary → finalize (<code>.pipeline/reviews/&lt;key&gt;.md</code> + <code>reset-stage COMMITTED</code>; <code>git add -f</code> records + <code>docs(reviews)</code> commit + push) → cleanup worktrees. Artifacts: <code>logs/remediation/briefs/session96/</code> (review-template-cloud.md, _shared-expand-rules.md, expand-*.md, fix-w1..w5b.md, WORKING-STATE.md).</p>
+
+<h2>NEXT (curriculum order)</h2>
+<ul>
+<li><strong>GCP Essentials 2.1–2.12</strong> (next sub-track; mostly sub-floor, 3 needs_rewrite — density-check live first). Then GKE Deep Dive 6.1–6.5 · Azure Essentials 3.1–3.17 · AKS Deep Dive 7.1–7.5 · Architecture Patterns 4.1–4.4 · Advanced Ops 8.1–8.10 · Managed Services 9.1–9.10 · Enterprise &amp; Hybrid 10.1–10.11. (Cloud remaining: 62 shipped_unreviewed + 6 needs_rewrite.)</li>
+<li>Rosetta Stone (<code>cloud/hyperscaler-rosetta-stone.md</code>) is sub-floor too but not a board module; expand opportunistically (it was leak-clean).</li>
+<li>4 needs_review stragglers (on-prem Private MLOps, on-prem Multi-Cluster, toolkits SST, toolkits Grafana — score 5.0, later in curriculum order).</li>
+<li>Carryover leak-cleanup: <code>platform/.../mlops/module-5.6-ml-pipelines.md</code>.</li>
+<li>Process note for future briefs: bake the OPENER anti-fab rule + "ground-check deepseek numbers / web-verify recent AWS features" into every expansion brief (now in _shared-expand-rules.md).</li>
+</ul>
+</body></html>
