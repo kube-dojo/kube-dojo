@@ -24,7 +24,7 @@ The operational cost of not having fleet-level coordination shows up in quiet, e
 
 Before diving into the mechanics, it is crucial to understand *when* you actually need Fleet Manager, because multi-cluster architectures introduce operational complexity that you should not take on until a single-cluster model genuinely stops working. A small team in one region with modest node counts can usually satisfy blast-radius and tenancy needs with namespaces, RBAC, and network policies, especially if an external GitOps controller already coordinates releases across a handful of independent clusters. Fleet Manager becomes valuable when the coordination problem is bigger than the deployment tool. It is not just another way to run `kubectl apply`; it is a way to represent clusters, placement choices, update waves, and member state as first-class fleet objects.
 
-The usual single-cluster ceiling is not only the documented node limit. AKS Standard and Premium tiers support production-scale clusters with a 5,000-node cluster limit, while the Free tier is for experiments and smaller non-SLA workloads. In practice, most teams split clusters long before they hit a numeric maximum. They split because regional latency matters, because one tenant should not share control-plane risk with another, because a regulated workload needs different network boundaries, or because upgrade coordination becomes too risky when every workload depends on one API server. Fleet Manager is useful when the split is intentional and repeated. If the team merely created many clusters because provisioning was easy, Fleet will expose that fragmentation rather than fix the underlying ownership problem.
+The usual single-cluster ceiling is not only the documented node limit. AKS Standard and Premium tiers support production-scale clusters with a 5,000-node cluster limit, while the Free tier supports up to 1,000 nodes but carries no financially-backed SLA, and Standard and Premium tiers support up to 5,000 nodes with an SLA. In practice, most teams split clusters long before they hit a numeric maximum. They split because regional latency matters, because one tenant should not share control-plane risk with another, because a regulated workload needs different network boundaries, or because upgrade coordination becomes too risky when every workload depends on one API server. Fleet Manager is useful when the split is intentional and repeated. If the team merely created many clusters because provisioning was easy, Fleet will expose that fragmentation rather than fix the underlying ownership problem.
 
 ### When a Single Cluster or Independent Clusters Are Enough
 
@@ -100,7 +100,7 @@ graph TD
 
 The most important hub objects are not Deployments or Services; they are Fleet APIs. A `MemberCluster` resource represents each joined cluster on the hub. A `ClusterResourcePlacement` chooses cluster-scoped resources or entire namespaces and places them on selected members. A `ResourcePlacement` provides finer-grained namespace-scoped placement for selected resources, with current Microsoft documentation marking the namespace-scoped API as preview. A `ClusterResourceOverride` changes selected cluster-scoped resources before propagation, while `ResourceOverride` changes namespace-scoped resources. A `ClusterStagedUpdateRun` is used for staged rollout of placed resources, separate from Azure Fleet update runs for AKS cluster and node image upgrades.
 
-The current API-version rule is simple enough to remember, but important enough to check before writing manifests. For the common GA path that places a namespace and its child resources, use `apiVersion: placement.kubernetes-fleet.io/v1` for `ClusterResourcePlacement`. Microsoft Learn examples for `PickAll`, `PickFixed`, `PickN`, rolling update strategy, and overrides all use `v1` for the GA placement fields shown in this module. Preview-only fields, such as `selectionScope: NamespaceOnly`, use `placement.kubernetes-fleet.io/v1beta1`. Namespace-scoped `ResourcePlacement` is documented as preview in current Microsoft Learn text, even though some examples on the same page show `v1`; when you use preview-specific `ResourcePlacement` examples, verify the version against the current page and your installed Fleet extension before applying it.
+The current API-version rule is simple enough to remember, but important enough to check before writing manifests. For the common GA path that places a namespace and its child resources, use `apiVersion: placement.kubernetes-fleet.io/v1` for `ClusterResourcePlacement`. Microsoft Learn examples for `PickAll`, `PickFixed`, `PickN`, rolling update strategy, and overrides all use `v1` for the GA placement fields shown in this module. Preview-only fields (verify against the current API reference) use `placement.kubernetes-fleet.io/v1beta1`. Namespace-scoped `ResourcePlacement` is documented as preview in current Microsoft Learn text, even though some examples on the same page show `v1`; when you use preview-specific `ResourcePlacement` examples, verify the version against the current page and your installed Fleet extension before applying it.
 
 ### Joining a Cluster to a Fleet
 
@@ -156,7 +156,7 @@ Use `PickN` when you need a number of clusters selected from an eligible pool. T
 
 ### Example: Propagating a Frontend App
 
-Suppose a frontend application lives in the `frontend-app` namespace on the Hub and you want that namespace and every namespaced object inside it on all member clusters labeled `region: westeurope`. The placement object below selects the namespace and applies a `PickAll` policy filtered by cluster labels, which is the usual pattern for regional active-active footprints. The `ClusterResourcePlacement` uses `placement.kubernetes-fleet.io/v1`, because this example uses GA namespace placement behavior rather than preview-only `selectionScope` behavior.
+Suppose a frontend application lives in the `frontend-app` namespace on the Hub and you want that namespace and every namespaced object inside it on all member clusters labeled `region: westeurope`. The placement object below selects the namespace and applies a `PickAll` policy filtered by cluster labels, which is the usual pattern for regional active-active footprints. The `ClusterResourcePlacement` uses `placement.kubernetes-fleet.io/v1`, because this example uses GA namespace placement behavior rather than preview-only field behavior.
 
 ```yaml
 apiVersion: placement.kubernetes-fleet.io/v1
@@ -317,14 +317,21 @@ Update groups are member metadata, not merely labels in a spreadsheet. You can a
 A reusable `FleetUpdateStrategy` captures the wave pattern so every Kubernetes minor bump follows the same safety rails instead of retyping stage JSON under pressure.
 
 ```bash
+cat <<'EOF' > safe-rollout-stages.json
+{
+  "stages": [
+    { "name": "Stage1-Dev",    "groups": [{"name": "dev-group"}],    "afterStageWaitInSeconds": 3600 },
+    { "name": "Stage2-Canary", "groups": [{"name": "canary-group"}], "afterStageWaitInSeconds": 86400 },
+    { "name": "Stage3-Prod",   "groups": [{"name": "prod-east"}, {"name": "prod-west"}] }
+  ]
+}
+EOF
+
 az fleet updatestrategy create \
     --resource-group my-fleet-rg \
     --fleet-name global-app-fleet \
     --name safe-rollout-strategy \
-    --stages \
-      '{"name": "Stage1-Dev", "groups": [{"name": "dev-group"}], "afterStageWaitInSeconds": 3600}' \
-      '{"name": "Stage2-Canary", "groups": [{"name": "canary-group"}], "afterStageWaitInSeconds": 86400}' \
-      '{"name": "Stage3-Prod", "groups": [{"name": "prod-east"}, {"name": "prod-west"}]}'
+    --stages safe-rollout-stages.json
 ```
 
 In the strategy above, the `dev-group` upgrades first, the platform waits one hour so automated alerts can surface regressions, the `canary-group` upgrades next, a twenty-four-hour bake window runs, and only then do the `prod-east` and `prod-west` groups upgrade concurrently. You start the real version change by creating an Update Run that references the strategy and target Kubernetes version:
@@ -484,7 +491,7 @@ You are designing placement for a production service that should run in exactly 
 Which statement best describes the current API-version guidance for the placement examples in this module?
 
 - [ ] A) All Fleet placement resources should use `placement.kubernetes-fleet.io/v1alpha1`.
-- [ ] B) GA `ClusterResourcePlacement` examples that place namespaces should use `placement.kubernetes-fleet.io/v1`, while preview-only fields such as `selectionScope: NamespaceOnly` require `v1beta1`.
+- [ ] B) GA `ClusterResourcePlacement` examples that place namespaces should use `placement.kubernetes-fleet.io/v1`, while preview-only fields (verify against the current API reference) require `v1beta1`.
 - [ ] C) `ClusterResourcePlacement` is only available through the Azure Resource Manager API and has no Kubernetes API version.
 - [ ] D) The API version is irrelevant because Fleet rewrites every manifest before applying it.
 
@@ -493,7 +500,7 @@ Which statement best describes the current API-version guidance for the placemen
 
 **Correct Answer: B**
 
-Current Microsoft Learn placement examples use `placement.kubernetes-fleet.io/v1` for common `ClusterResourcePlacement` policies such as `PickAll`, `PickFixed`, `PickN`, and rolling update strategy. The docs call out preview-only fields, such as `selectionScope`, as requiring `v1beta1`. Mixing those versions without understanding the field being used can create confusing apply failures. Always check the current Learn page and your Fleet extension version before using preview fields.
+Current Microsoft Learn placement examples use `placement.kubernetes-fleet.io/v1` for common `ClusterResourcePlacement` policies such as `PickAll`, `PickFixed`, `PickN`, and rolling update strategy. The docs call out preview-only fields (verify against the current API reference) as requiring `v1beta1`. Mixing those versions without understanding the field being used can create confusing apply failures. Always check the current Learn page and your Fleet extension version before using preview fields.
 </details>
 
 ### Scenario 6
@@ -775,6 +782,12 @@ Goal: Build a two-cluster AKS Fleet, propagate an application from the Fleet hub
   ```bash
   az fleet updatestrategy show --resource-group "${GROUP}" --fleet-name "${FLEET}" --name "${STRATEGY}" -o yaml
   az aks get-upgrades --resource-group "${GROUP}" --name "${CLUSTER_EAST}" -o table
+```
+
+- [ ] Tear down the lab to stop billing. Deleting the resource group removes the Fleet hub, both member clusters, and the `FL_`/`MC_FL_` managed resource groups.
+
+  ```bash
+  az group delete --name "${GROUP}" --yes --no-wait
   ```
 
 The lab is complete when all of the following success criteria are true:
