@@ -4,7 +4,7 @@ slug: cloud/azure-essentials/module-3.4-blob
 sidebar:
   order: 5
 ---
-**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 3.1 (Entra ID & RBAC). You should be comfortable assigning Entra ID RBAC roles and running `az` commands with `--auth-mode login` before starting.
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 3.1 (Entra ID & RBAC). You should be comfortable assigning Entra ID RBAC roles and running `az` commands with `--auth-mode login` before starting.
 
 ## What You'll Be Able to Do
 
@@ -19,11 +19,11 @@ After completing this module, you will be able to apply the patterns below in pr
 
 ## Why This Module Matters
 
-Poor tiering and missing lifecycle policies can quietly drive Azure storage bills far above expectations when large volumes of logs and intermediate data remain in hot storage for months.
+Poor tiering and missing lifecycle policies can quietly drive Azure storage bills far above expectations. Large volumes of logs and intermediate data often remain in Hot tier for months without anyone noticing.
 
-Azure Blob Storage is the foundation of data storage in Azure. It handles everything from serving website assets and storing application logs to backing enterprise data lakes and machine learning datasets. It is deceptively simple on the surface---you create a storage account, upload files, and they are stored. But beneath that simplicity lies a system with multiple access tiers, sophisticated access control mechanisms, replication options, and lifecycle management that can mean the difference between a reasonable bill and a financial disaster.
+Azure Blob Storage is the foundation of data storage in Azure. It serves website assets, application logs, enterprise data lakes, and machine learning datasets. The surface API looks simple: create a storage account, upload files, and read them back. Under that simplicity sits a layered system of access tiers, replication SKUs, authorization models, and lifecycle automation. Operators who ignore those layers often discover the cost impact only after a finance review.
 
-In this module, you will learn how Azure Storage Accounts work, how to choose the right access tier for your data, how SAS tokens and identity-based access control secure your blobs, and how Azure Data Lake Storage Gen2 extends Blob Storage for big data workloads. By the end, you will understand how to design a storage strategy that balances cost, performance, and security.
+In this module, you will learn how storage accounts scope redundancy and default tiers. You will choose access tiers and lifecycle rules that match real access patterns. You will apply SAS tokens, Entra ID RBAC, and network controls without falling back to account keys. You will also see how Data Lake Storage Gen2 extends Blob Storage for analytics workloads. By the end, you can design storage that balances cost, durability, and security deliberately rather than by accident.
 
 ---
 
@@ -41,6 +41,10 @@ A **Storage Account** is the top-level resource for Azure Storage. It provides a
 | **Premium page blobs** | Page blobs only | Premium (SSD-backed) | VM disk storage (unmanaged disks---legacy) |
 
 For the vast majority of workloads, **Standard general-purpose v2** is the right choice. Premium accounts are for specialized scenarios where you need consistently low latency or very high transaction rates.
+
+**Performance tier** (Standard vs Premium) is separate from **access tier** (Hot/Cool/Cold/Archive). Standard accounts store blob data on HDD-backed media unless you choose Premium block blob accounts for SSD-backed block blobs. Premium block blob (`BlockBlobStorage` kind) does not support the same lifecycle tiering to Archive as general-purpose v2. [Premium block blob accounts support LRS and ZRS in select regions](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy). Plan premium accounts for IOPS-sensitive workloads, not for cheap long-term archive.
+
+**Naming and limits** matter at scale. Storage account names are globally unique, 3–24 characters, lowercase letters and numbers only. A single account can hold up to [5 PiB by default](https://learn.microsoft.com/en-us/azure/storage/common/scalability-targets-standard-account) with high request rates when partitioned well. Many teams use one account per environment (dev/stage/prod) or per data domain (media, logs, analytics) so firewall rules, private endpoints, and lifecycle policies stay understandable.
 
 To translate this theory into practice, here is how you would provision both a standard and a premium storage account using the Azure CLI, ensuring secure defaults are set from the start:
 
@@ -94,11 +98,35 @@ The table above shows durability tiers; the bullets below illustrate how redunda
 
 > **Stop and think**: If your primary region suffers a complete outage, how does your application know to read from the secondary region in an RA-GRS setup? (Hint: Azure provides a distinct secondary endpoint URL, appended with `-secondary`, that your application logic must actively switch to during a failover event.)
 
+### Redundancy in depth: blast radius, durability, and failover
+
+[Microsoft documents six redundancy options for storage accounts](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy). Each option trades monthly storage cost against the failures it can survive. Think in three layers: disk or server failure inside one datacenter, loss of an entire datacenter or availability zone, and loss of an entire Azure region.
+
+**Locally redundant storage (LRS)** keeps three synchronous copies inside one physical datacenter in your chosen region. LRS targets at least **99.999999999% (11 nines)** annual durability for objects. It protects against drive, rack, and server failures. It does not protect against a datacenter-wide disaster such as fire or flooding. LRS is the lowest-cost option and the narrowest blast-radius protection.
+
+**Zone-redundant storage (ZRS)** spreads three synchronous copies across separate availability zones in the primary region. Each zone has independent power, cooling, and networking. ZRS targets at least **99.9999999999% (12 nines)** durability. Writes return success only after all available zones acknowledge the data. ZRS is Microsoft's recommended default for high availability within a single region, including [Data Lake workloads](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy).
+
+**Geo-redundant storage (GRS)** and **geo-zone-redundant storage (GZRS)** add asynchronous replication to a paired secondary region hundreds of miles away. GRS uses LRS in the primary region; GZRS uses ZRS in the primary. The secondary region always uses LRS internally. Both GRS and GZRS target at least **99.99999999999999% (16 nines)** durability. Replication is asynchronous, so the secondary can lag the primary during heavy write load. That lag defines your **recovery point objective (RPO)** if the primary region fails.
+
+**Read-access geo-redundant storage (RA-GRS)** and **read-access geo-zone-redundant storage (RA-GZRS)** are the same geo-replicated configurations with read access to the secondary endpoint enabled before failover. Your application can read from `accountname-secondary.blob.core.windows.net` while the primary is healthy. That pattern supports warm DR testing and read-heavy DR architectures. [Azure Files does not support RA-GRS or RA-GZRS](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy).
+
+The **RA** distinction matters operationally. Standard GRS and GZRS keep the secondary write-only until you fail over. RA variants let you serve read traffic from the secondary during a primary outage without waiting for DNS failover to complete. You still need application logic—or Traffic Manager, Front Door, or custom routing—to send writes to whichever endpoint is primary after failover.
+
+**Failover and RPO** are separate concerns from durability on paper. [Customer-managed planned failover](https://learn.microsoft.com/en-us/azure/storage/common/storage-disaster-recovery-guidance) swaps primary and secondary when both regions are healthy. Microsoft expects **no data loss** during planned failover when endpoints stay available throughout the process. **Customer-managed unplanned failover** is for primary-region endpoint outages. It promotes the secondary and typically causes **some data loss** for writes not yet replicated. After unplanned failover, the account becomes **LRS** in the new primary until you re-enable geo-redundancy. Check the **Last Sync Time** property on the account to estimate how far behind the secondary was before you fail over.
+
+**Archive tier constraint**: [Archive tier is supported only on LRS, GRS, and RA-GRS accounts today](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview). It is not supported on ZRS, GZRS, or RA-GZRS. If you plan heavy Archive use with zone redundancy in the primary region, validate redundancy and tier compatibility before you ingest petabytes.
+
+Hypothetical scenario: A team stores compliance archives in GRS with RA-GRS enabled. They rehearse quarterly reads from the secondary endpoint. When a regional outage blocks the primary blob endpoint, their app already points read paths at `-secondary`. Failover then becomes a controlled promotion rather than an improvised DNS change under incident pressure.
+
 ---
 
 ## Blob Storage: Containers and Blobs
 
 Blob (Binary Large Object) storage is organized into **containers** within a storage account. Think of containers as top-level directories. A critical architectural constraint to remember is that standard Blob Storage is [fundamentally flat---there are no actual subdirectories, only virtual prefixes](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-namespace).
+
+Containers also carry policy boundaries in mature estates. You attach **immutable policies** at container scope. **Private endpoints** can target the blob sub-resource for an entire account, but IAM assignments often narrow to specific containers for pipeline identities. **Lifecycle prefixMatch** filters almost always start from container name or a path prefix inside it (`logs/2024/`). Naming containers after workload and environment (`prod-exports`, `dev-exports`) keeps automation readable when dozens of rules accumulate.
+
+Hot paths for performance sometimes use **block blob size and partition key** strategies. Extremely high request rates may require spreading blobs across multiple accounts because throttling limits apply per account. [Scalability targets document per-second limits](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets). When telemetry shows throttling, split by container prefix into additional accounts before chasing Premium tier spend.
 
 ```mermaid
 graph TD
@@ -190,6 +218,12 @@ az storage blob download \
 
 Azure Blob Storage offers four access tiers with radically different cost profiles. The foundational economic principle of cloud storage applies here: **storage cost and access cost are inversely related**. The cheaper a gigabyte is to store, the more expensive it will be to read.
 
+Tier choice is a product decision, not only a storage admin task. Application owners should answer three questions before upload defaults are set: How often is this object read? How fast must first byte return? What happens financially if we delete early? Hot optimizes for frequent access. Cool and Cold trade lower capacity rates for higher read and transaction charges. Archive optimizes capacity cost at the price of offline data and rehydration delay.
+
+Block blobs support tiering; append and page blobs do not use these access tiers the same way. [Access tier settings apply to block blobs in general-purpose v2 and Blob Storage accounts](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview). Page blobs backing legacy unmanaged disks follow different pricing models. When architects say "move logs to Cool," they mean block blobs in object containers, not VM disks.
+
+Availability SLAs differ slightly by tier. Hot targets higher read availability than Cool, Cold, or Archive on the same redundancy SKU. For many batch workloads the SLA difference does not matter. For customer-facing assets served directly from blob without CDN, Hot plus redundancy matching your uptime target is the usual starting point.
+
 | Tier | Storage Cost (per GB) | Read Cost (per 10K ops) | Min Retention | Access Latency | Best For |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Hot** | Highest storage cost | Lowest read cost | None | Milliseconds | Frequently accessed data |
@@ -271,6 +305,24 @@ az storage account management-policy create \
 
 This JSON policy instructs Azure's background services to evaluate the `logs/` prefix periodically after the policy takes effect. Blobs age smoothly into Cool tier, then Archive, and are ultimately purged from the system after a year---greatly reducing the chance that you end up as the subject of the financial disaster war story from the introduction.
 
+### Access tiers and lifecycle in depth
+
+[Hot, Cool, and Cold are online tiers](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview). Applications can read and write them with millisecond latency. **Archive is offline**. Reads and writes against archived blobs fail until you rehydrate to an online tier. Archive is for data you rarely touch and can tolerate hours of latency.
+
+**Minimum retention and early deletion** apply when you tier down or delete too soon. Cool requires **30 days** minimum on general-purpose v2 accounts. Cold requires **90 days**. Archive requires **180 days**. If you delete or move a blob before the minimum elapses, Azure charges a **prorated early deletion fee** based on the remaining days at that tier's storage rate. Overwriting a blob via Put Blob, Put Block List, or Copy Blob within the window can also trigger the fee. With **soft delete** enabled, a blob counts as deleted only after the soft-delete retention expires, so soft-deleted blobs are not subject to early deletion penalties during the retention window.
+
+**Blob-level vs account-level tiering** solves different problems. Each storage account has a **default access tier** (Hot, Cool, or Cold—not Archive). New block blobs without an explicit tier inherit that default. The portal may label them **Hot (inferred)** or **Cool (inferred)** when the tier comes from the account setting. You can override tier per blob at upload or with `az storage blob set-tier`. Changing the account default tier re-prices every blob that still has an inferred tier. Moving the default to a cooler tier bills **write operations per 10,000** for those blobs. Moving the default warmer bills **read operations and per-GB retrieval** from the source tier. Set explicit tiers on long-lived datasets so a blanket account change does not surprise finance.
+
+**Lifecycle management** automates tier transitions and expirations with JSON rules. [Rules can filter by prefix, blob index tags, and blob type](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview). Conditions use **last modified time**, **creation time**, and optionally **last accessed time** when access tracking is enabled. Actions include tier-to-cool, tier-to-cold, tier-to-archive, and delete for base blobs, versions, and snapshots. Policy changes can take up to **24 hours** to apply; the first run may start after that delay. Lifecycle policies are **free**; you pay standard **Set Blob Tier** and delete operation charges. Lifecycle **cannot rehydrate** Archive to an online tier—you must use Set Blob Tier or Copy Blob for that path.
+
+**Last-accessed tracking** lets rules tier down idle data even when last-modified time stays old. Each last-access time update can bill as an **other operation** at most once per 24 hours per object. Enable tracking only when lifecycle rules actually use last-accessed conditions, or you pay tracking overhead without savings.
+
+**Rehydration from Archive** uses Standard or High priority. [Microsoft documents up to 15 hours for Standard priority](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview). High priority is faster for urgent restores but costs more. While rehydration runs, capacity billing stays at Archive rates until the blob lands in the target online tier. Plan restore runbooks before auditors or regulators ask for immediate access to cold records.
+
+**Smart tier** (where enabled) automatically moves data among Hot, Cool, and Cold based on usage. It is a managed alternative to hand-tuned lifecycle rules for variable access patterns. Whether you use Smart tier or explicit lifecycle rules, the design question is the same: match tier to measured access frequency, not to how long ago the file was created.
+
+Objects smaller than **128 KiB** in Cool, Cold, or Archive may bill as **128 KiB** minimum objects on accounts created after Microsoft's staged rollout dates documented in the access tiers overview. Packaging tiny telemetry files into larger aggregate blobs before tiering down avoids silent minimum-size billing surprises.
+
 ---
 
 ## Data Protection and Compliance
@@ -287,6 +339,10 @@ Versioning automatically maintains previous states of a blob each time it is [mo
 Write-Once, Read-Many (WORM) policies ensure data cannot be modified or deleted by *anyone*---not even users with full administrative privileges or Microsoft support---for a user-specified interval. 
 *   **Time-based retention policies:** Lock data for a specific duration (e.g., 7 years for financial records).
 *   **Legal holds:** Lock data indefinitely until the hold is explicitly removed (used during litigation).
+
+Versioning and immutability interact with operations teams daily. Versioning preserves history when applications overwrite blobs. Immutability prevents tampering even when someone has Owner rights. Together they support ransomware recovery narratives: restore a known-good version, while locked containers block attacker encryption from replacing compliance evidence. Operators must still plan **storage growth**: each version is billable capacity until lifecycle deletes old versions. Immutable containers reject lifecycle delete actions on protected blobs, so retention policies need explicit owners and calendar reviews.
+
+Change feed, point-in-time restore, and object replication build on similar blob-change tracking primitives. If you enable those features for operational backup, read [disaster recovery guidance](https://learn.microsoft.com/en-us/azure/storage/common/storage-disaster-recovery-guidance) for failover caveats. Unplanned failover can reset earliest restore points and introduce consistency considerations when change feed is enabled.
 
 ```bash
 # Enable versioning on a storage account
@@ -391,6 +447,10 @@ When you build a SAS URI, combine permission flags to grant only what the client
 | `t` | Tags |
 | `x` | Execute |
 
+**Account SAS** spans multiple services in the account (blob, file, queue, table) when signed with account keys. **Service SAS** scopes to a single service (blob) but still uses account keys unless you switch to user delegation. Service SAS is common in legacy apps. **User delegation SAS** scopes to blob resources and ties to Entra ID. For new integrations, default to user delegation with `--auth-mode login --as-user` as shown earlier.
+
+Operational hygiene for SAS URLs: never log complete URLs in application logs; treat query strings as secrets. Prefer HTTPS only. When a vendor integration is decommissioned, revoke delegation keys if user delegation SAS might still circulate. For account-key SAS, rotation requires regenerating every outstanding token when keys roll.
+
 ### 3. Identity-Based Access (Recommended)
 
 The gold standard for authorization is using Entra ID identities combined with Azure Role-Based Access Control (RBAC). By leveraging Managed Identities, you completely eliminate the need to generate, rotate, or secure credentials in application code.
@@ -454,11 +514,35 @@ az network private-endpoint create \
 
 > **Stop and think**: If you disable public network access and rely exclusively on a Private Endpoint, how will developers working from their local laptops access the storage account to upload test data? (Hint: They will need a VPN connection to the VNet, Azure Bastion, or a carefully configured Storage Firewall exception for their specific IP addresses.)
 
+### Security and access control in depth
+
+Authorization and network isolation work together. **Who** may call the data plane is separate from **where** requests may originate. Production designs usually tighten both.
+
+**Account keys** remain full-power secrets. [Each storage account has two 512-bit keys](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage). Either key grants complete control over blobs, queues, tables, and files in that account. Keys leak through logs, tickets, and backups. Prefer Entra ID, managed identities, and user delegation SAS for application access. Rotate keys only when legacy integrations still require them.
+
+**SAS types** differ by signing material. **Account SAS** and **service SAS** are signed with storage account keys. **User delegation SAS** is signed with a key obtained through Entra ID. Microsoft recommends user delegation SAS when possible. The signing identity needs a role that includes **Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey**, such as **Storage Blob Data Contributor**. [User delegation keys are valid up to seven days](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-user-delegation-sas-create-cli). Set SAS expiry within that window even if you want a longer calendar lifetime. Revoke compromised delegation keys with `az storage account revoke-delegation-keys`; cache delays may apply before old SAS URLs fail.
+
+**Entra ID RBAC on the data plane** assigns roles at subscription, resource group, storage account, container, or blob scope. **Storage Blob Data Reader** covers read and list. **Storage Blob Data Contributor** adds write and delete. **Storage Blob Data Owner** adds ACL management needed for Data Lake Gen2 paths. **Storage Blob Delegator** allows generating user delegation SAS without broad data write rights. Scope assignments narrowly: a CI pipeline that uploads build artifacts needs Contributor on one container, not on the whole account.
+
+**Service endpoints vs private endpoints vs firewall rules** solve different network problems. [Storage firewall rules](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security) restrict which public IPs and which VNet subnets may reach the **public** storage endpoints. **Service endpoints** route traffic from your subnet to Azure Storage over the Microsoft backbone while the account still has a public endpoint. **Private endpoints** place a private IP in your VNet via Azure Private Link. Blob traffic then stays off the public internet for clients that resolve the private DNS name. Many production accounts combine **default-action Deny** on the firewall with selected subnet rules for PaaS services, plus private endpoints for application tiers inside the VNet. `--public-network-access Disabled` blocks the public endpoint entirely; only private endpoint paths remain.
+
+**Blob versioning** keeps prior versions when blobs are overwritten or deleted. Each version is a separate billable object until you delete it. Versioning pairs well with lifecycle rules that tier or delete **previous versions** on a schedule. Without lifecycle on versions, overwrite-heavy workloads can grow storage silently.
+
+**Soft delete** for blobs and containers retains deleted objects for **1 to 365 days** before permanent removal. Restore with undelete APIs during the window. Soft delete is cheap insurance against operator mistakes and buggy automation.
+
+**Immutability (WORM)** supports **time-based retention** and **legal holds** on containers. Locked policies prevent overwrite and delete even for administrators until retention expires or legal hold clears. Immutable containers block lifecycle **delete** actions on protected blobs. Plan immutability for audit logs and regulatory archives where tamper evidence matters more than day-to-day agility.
+
+Hypothetical scenario: An export service runs on AKS with a managed identity. It receives Contributor on `exports/` only. Partner downloads use one-hour user delegation SAS on individual blobs. The account denies public access and accepts traffic only from the cluster subnet and a private endpoint in the production VNet. Keys exist for break-glass only and rotate on a calendar owned by security.
+
 ---
 
 ## Azure Data Lake Storage Gen2
 
 Azure Data Lake Storage Gen2 (ADLS Gen2) is [not a separate physical service---it is an architectural capability built natively onto Blob Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-introduction). When you toggle the **hierarchical namespace** feature upon creation, you gain true directory semantics, POSIX-like access control lists (ACLs), and atomic directory operations. This capability transforms Blob Storage into an enterprise analytics engine tailored for tools like Apache Spark, Databricks, and Synapse Analytics.
+
+The **DFS endpoint** (`dfs.core.windows.net`) exposes file-system semantics that Spark and Synapse prefer. The **blob endpoint** still exists for tools that speak classic blob APIs. Permissions combine **RBAC** (coarse, Azure control plane aligned) with **POSIX ACLs** on paths (fine-grained for data lake folders). **Storage Blob Data Owner** is required when pipelines set ACLs programmatically. Misaligned ACLs are a common reason jobs can list a path but fail to write parquet files underneath.
+
+[Hierarchical namespace is enabled only at account creation](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-namespace). Upgrading a flat account later is not a casual toggle. If analytics is on the roadmap within 12 months, enabling HNS up front avoids painful migrations. If the workload is only object PUT/GET with no directory renames, flat blob storage remains simpler and fully sufficient.
 
 To utilize these big data features, you must enable the namespace during creation and interact via the file system (`fs`) commands rather than the `blob` commands:
 
@@ -501,6 +585,110 @@ Choosing between flat Blob Storage and ADLS Gen2 is not about price---both use t
 
 ---
 
+## Patterns and Anti-Patterns
+
+Blob storage patterns turn one-off console choices into repeatable architecture. The goal is not perfect storage on day one. The goal is to make expensive mistakes boring: tiers match access, keys stay out of code, redundancy matches blast radius, and lifecycle runs without a human spreadsheet.
+
+| Pattern | When to use it | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| Lifecycle rules on day one | Any container with logs, backups, or exports | Tier-down and delete happen automatically as data ages | Add prefix filters per team; cap rule count (10 prefixes per rule) |
+| Explicit blob tiers for long-lived datasets | Data with known access frequency | Account default changes do not surprise you with inference charges | Tag blobs in CMDB with tier and retention owner |
+| ZRS in primary for production app data | Workloads needing zone fault tolerance within a region | Survives single-zone loss without regional failover | Pair with GZRS when regional DR is required |
+| RA-GZRS plus tested secondary reads | Business-critical blobs with DR read paths | Secondary endpoint is readable before failover | Application must use `-secondary` hostname in DR tests |
+| User delegation SAS for external sharing | Partners need time-bound read without Entra accounts | Signing ties to Entra identity; revoke via delegation keys | Hours-long expiry, single-blob scope, read-only when possible |
+| Managed identity plus scoped RBAC | Azure-hosted apps (AKS, Functions, VMs) | No secrets in config; platform rotates credentials | Scope to container, not whole account |
+| Private endpoint plus firewall default Deny | Production data planes inside VNets | Removes broad internet exposure to public endpoint | Document break-glass IP rules for on-call engineers |
+| Soft delete plus versioning | User-facing or compliance-sensitive blobs | Accidental delete and overwrite are recoverable | Add lifecycle on previous versions to control version sprawl |
+| ADLS Gen2 at create time for analytics | Spark, Synapse, Databricks lakehouses | Atomic directory ops and POSIX ACLs | Cannot casually flip namespace later; plan up front |
+
+Anti-patterns look efficient until the first incident or invoice.
+
+| Anti-pattern | What goes wrong | Better alternative |
+| :--- | :--- | :--- |
+| Leaving everything in Hot tier | Storage GB-month dominates; finance asks why logs cost like databases | Lifecycle to Cool/Cold/Archive by prefix and age |
+| Frequent reads on Archive-tier data | Retrieval and rehydration charges exceed storage savings | Keep quarterly-access data in Cold; reserve Archive for true cold compliance |
+| Account keys in app settings or pipelines | One leak compromises entire account | Managed identity and RBAC, or user delegation SAS |
+| Year-long container SAS with full permissions | Stolen URL grants broad long-lived access | Short expiry, minimum permissions, blob-scoped user delegation SAS |
+| LRS for irreplaceable customer data | Datacenter loss means data loss | ZRS minimum; GRS/GZRS when regional DR is required |
+| GRS without failover runbooks | Team discovers RPO and DNS steps during outage | Planned failover tests; monitor Last Sync Time |
+| Public blob access for "quick sharing" | Anonymous internet reads and crawlers | Disable public access; share with SAS or Entra |
+| Enabling ADLS Gen2 for simple object upload apps | Extra complexity without analytics benefit | Flat blob namespace until directory semantics are required |
+| Immutability on dev containers | Deletes blocked; storage grows forever | Separate immutable production containers with named owners |
+| Disabling network rules because Private Link is "done" | Misconfigured DNS still exposes public path | Set `public-network-access` explicitly; test both paths |
+
+---
+
+## Decision Framework
+
+Use two decisions in sequence: **redundancy SKU** (how much failure to survive) and **access tier** (how often data is read). Cost and operations follow from those choices.
+
+```mermaid
+flowchart TD
+    A[New blob dataset] --> B{Can you recreate all data from upstream?}
+    B -->|Yes, cheaply| C[LRS or ZRS in one region]
+    B -->|No| D{Need survive full region loss?}
+    D -->|No| E[ZRS in primary region]
+    D -->|Yes| F{Need read from secondary before failover?}
+    F -->|No| G[GRS or GZRS]
+    F -->|Yes| H[RA-GRS or RA-GZRS]
+    A --> I{How often is data read?}
+    I -->|Daily or weekly| J[Hot tier]
+    I -->|Monthly| K[Cool tier]
+    I -->|Quarterly| L[Cold tier]
+    I -->|Rarely, hours OK| M[Archive tier]
+    M --> N{Archive on ZRS account?}
+    N -->|Yes| O[Use LRS/GRS account for archive path or split accounts]
+```
+
+### Redundancy decision matrix
+
+| Requirement | Choose | Avoid |
+| :--- | :--- | :--- |
+| Dev/test blobs, easy rebuild | LRS | GZRS for cost reasons only |
+| Production app blobs, zone tolerance | ZRS | LRS when SLA expects zone survival |
+| Must survive regional disaster | GRS or GZRS | LRS or ZRS alone |
+| DR app reads secondary during outage | RA-GRS or RA-GZRS | GRS without read access |
+| Heavy Archive + zone primary | Separate accounts or LRS/GRS for archive | Archive on ZRS/GZRS account |
+| Lowest monthly storage $/GB | LRS Hot | RA-GZRS when you never test secondary |
+
+### Access tier decision matrix
+
+| Access pattern | Tier | Watch-out |
+| :--- | :--- | :--- |
+| Active read/write | Hot | Highest $/GB-month, lowest read cost |
+| Touch about monthly | Cool | 30-day minimum; read charges higher than Hot |
+| Touch about quarterly | Cold | 90-day minimum; do not use Archive if reads are quarterly |
+| Compliance, years, rare restore | Archive | Rehydration hours; 180-day minimum; offline until rehydrated |
+| Unknown or bursty | Smart tier or lifecycle from Hot | Measure before locking Archive |
+
+Worked example: Application logs land in Hot for seven days, then lifecycle moves them to Cool at day 30, Cold at day 90, and Archive at day 180. The storage account uses **ZRS** because zone outage should not stop ingestion. Customer profile images use **Hot** with **LRS** in a separate account because they are CDN-backed and reproducible from the app database. Neither choice is "best" globally—they match blast radius and access frequency.
+
+---
+
+## Cost Lens
+
+Blob economics are four meters: **capacity (GB-month by tier)**, **transactions (per 10,000 operations)**, **data retrieval (per GB on cooler tiers)**, and **egress (per GB leaving the region)**. [Block blob pricing](https://azure.microsoft.com/en-us/pricing/details/storage/blobs/) varies by region and redundancy SKU. Always model your region and redundancy, not a generic blog estimate.
+
+**Capacity** drops as tiers get cooler. Hot costs the most per GB-month. Archive costs the least. Redundancy multiplies the storage line: ZRS costs more than LRS; GRS and GZRS cost more than single-region options. Geo-replication also adds **geo-replication vNet/data transfer** between regions on write-heavy accounts.
+
+**Transactions** rise as tiers get cooler. Listing and reading Cold or Archive data costs more per 10,000 operations than Hot. A telemetry pipeline that scans Archive blobs daily can spend more on reads than it saved on storage.
+
+**Retrieval charges** apply per GB when you read Cool, Cold, or Archive data. Archive adds **rehydration** priority charges. The surprise bill pattern is "cheap Archive storage" plus "frequent partial reads" from indexing or antivirus scans.
+
+**Early deletion** fees punish tier mistakes. Moving 50 TB to Archive and deleting it after 30 days still bills roughly **150 days** of Archive storage equivalent (180-day minimum minus 30 days held). Test retention assumptions on a pilot prefix before bulk tier changes.
+
+**Lifecycle** policy execution is free. You pay underlying Set Blob Tier and delete operations. [Last-accessed tracking](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview) can add other-operation charges when enabled. Disable tracking unless rules use last-accessed conditions.
+
+**Egress** to the internet or other regions is often the dominant cost for CDN-less public downloads. Put Azure CDN or Front Door in front of hot objects served globally. Keep bulk analytics ingress on private endpoints in the same region as compute when possible.
+
+**Cost control knobs** that actually work: lifecycle and prefix filters; right-sizing redundancy (do not use RA-GZRS for disposable logs); user delegation SAS instead of wide-open containers; monitoring **capacity by tier** in Cost Management; alerting on Archive read spikes; versioning lifecycle for overwrite-heavy apps; and reserving Hot only for data touched in the last week.
+
+Hypothetical scenario: A 20 TB log bucket stays in Hot for a year at roughly $360/month storage in East US (illustrative—verify current rates). The same data in Cool might land near $120/month storage but fails if operators run weekly grep jobs across all objects because retrieval and read operations climb. Lifecycle to Cold after 90 days without reads, plus blocking scans on archived prefixes, aligns spend with the original "write once, read never" intent.
+
+Monitor **Capacity** metrics in Azure Monitor and Cost Management views split by tier when available. Review those charts monthly with application owners. A sudden jump in Hot capacity after enabling versioning usually means overwrite-heavy apps without version lifecycle rules. A jump in Archive capacity with flat Hot often means lifecycle is working; a matching jump in transaction costs may mean something is reading archived data too often.
+
+---
+
 ## Did You Know?
 
 1. **A single Azure Storage Account can handle up to 20,000 requests per second** and store up to 5 PiB of data. If you need to serve a very popular file to many concurrent clients, put Azure CDN in front of the storage account instead of relying on the storage account alone.
@@ -513,15 +701,16 @@ Choosing between flat Blob Storage and ADLS Gen2 is not about price---both use t
 
 ---
 
+
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| Storing all data in Hot tier indefinitely | Hot is the default and "just works" | Implement lifecycle management policies on day one. Most logs and backups should move to Cool after 30 days. |
+| Storing all data in Hot tier indefinitely | Hot is the default and "just works" | Implement lifecycle management policies on day one. Most logs and backups should move to Cool after 30 days. Model egress if you serve large downloads without CDN. |
 | Using storage account keys in application code | Keys are the first thing shown in tutorials | Use Managed Identities and RBAC for Azure-hosted apps. Use SAS tokens with short expiry for external access. |
 | Creating SAS tokens with long expiry and broad permissions | Developers want tokens that "just work" without renewal | Generate SAS tokens scoped to specific containers/blobs with minimum permissions and short expiry (hours, not months). |
 | Not enabling soft delete on blob storage | It seems like an unnecessary precaution until someone deletes production data | Enable soft delete with a 14-30 day retention period. It costs almost nothing but saves you from accidental deletions. |
-| Choosing LRS for data that cannot be recreated | LRS is the cheapest option | Use ZRS minimum for any data that has no backup. Use GRS or RA-GRS for business-critical data like customer records. |
+| Choosing LRS for data that cannot be recreated | LRS is the cheapest option | Use ZRS minimum for any data that has no backup. Use GRS or RA-GRS for business-critical data like customer records. Rehearse reading from `-secondary` when using RA variants. |
 | Enabling public anonymous access on containers | Quick demos and testing leave public access enabled | Set `--allow-blob-public-access false` at the account level. Use SAS tokens or RBAC for legitimate sharing needs. |
 | Not planning the storage account naming scheme | Storage account names must be [globally unique and 3-24 characters](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview) | Adopt a naming convention early: `<company><env><region><purpose>`, e.g., `acmeprodeus2data`. |
 | Using Blob Storage when Data Lake (hierarchical namespace) is needed | Teams start with blob storage and later discover they need Spark/Databricks compatibility | Decide upfront if you need analytics workloads, and review Azure's current upgrade guidance and compatibility impacts before enabling hierarchical namespace later. |
@@ -592,7 +781,11 @@ To satisfy the network security mandate, you must disable public network access 
 
 In this exercise, you will create a storage account, configure lifecycle management, upload blobs to different tiers, practice generating scoped SAS tokens, and provision a Data Lake Gen2 namespace for big data.
 
+Treat the lab as a miniature production rollout. After each task, note which cost meters you touched: capacity (containers and blobs), transactions (upload and list), and potential retrieval (if you tier down and read back). That habit makes Azure Cost Management charts readable when this account moves from sandbox to shared team use.
+
 **Prerequisites**: Install and authenticate the Azure CLI (`az login`), and ensure your signed-in identity has **Storage Blob Data Contributor** (or Owner) on the subscription or resource group you use for the lab.
+
+**Tip**: Run `az storage account show -n "$STORAGE_NAME" -g "$RG" --query '{sku:sku.name, tier:accessTier, publicAccess:publicNetworkAccess}' -o json` after Task 1. You will reuse those fields when explaining redundancy and default tier choices to reviewers.
 
 ### Task 1: Create a Storage Account
 *[Maps to Learning Outcome: Implement storage account security with private endpoints, SAS tokens, and Entra ID-based RBAC access]*
@@ -872,3 +1065,7 @@ az group delete --name "$RG" --yes --no-wait
 - [learn.microsoft.com: storage](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage) — The Azure built-in roles page is the authoritative source for these storage RBAC roles.
 - [learn.microsoft.com: storage private endpoints](https://learn.microsoft.com/en-us/azure/storage/common/storage-private-endpoints) — Microsoft Learn documents both the default public-endpoint model and private endpoint network path.
 - [learn.microsoft.com: data lake storage introduction](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-introduction) — Azure's ADLS introduction directly describes Gen2 as Blob-based capabilities unlocked by hierarchical namespace.
+- [learn.microsoft.com: lifecycle management overview](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview) — Documents rule structure, billing for tier operations, last-accessed tracking, and policy execution delays.
+- [learn.microsoft.com: storage disaster recovery guidance](https://learn.microsoft.com/en-us/azure/storage/common/storage-disaster-recovery-guidance) — Covers planned vs unplanned failover, RPO, Last Sync Time, and post-failover redundancy state.
+- [learn.microsoft.com: storage network security](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security) — Explains firewall default action, virtual network rules, and public network access settings.
+- [learn.microsoft.com: grant limited access with SAS](https://learn.microsoft.com/en-us/azure/storage/common/storage-sas-overview) — Compares account, service, and user delegation SAS and Microsoft guidance to prefer Entra-backed SAS.
