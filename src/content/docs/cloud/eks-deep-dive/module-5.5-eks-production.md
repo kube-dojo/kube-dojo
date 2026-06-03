@@ -85,7 +85,8 @@ When you read this table during a design review, focus on the columns that chang
 
 Installing Karpenter requires specific IAM roles so the controller can create and terminate EC2 instances, pass instance profiles to nodes, and tag subnets and security groups for discovery. Those permissions are not optional shortcuts; without them the controller will loop on authorization errors while pods stay Pending. Once IAM is established, installation is handled natively via Helm targeting the modern OCI registry shown below, and you should treat the cluster name and API endpoint values as mandatory wiring so Karpenter can register nodes against the correct control plane.
 
-```bash# Install Karpenter using Helm
+```bash
+# Install Karpenter using Helm
 # Install Karpenter v1.x from OCI registry (charts.karpenter.sh is deprecated)
 # Karpenter needs specific IAM roles and instance profiles
 # (Simplified here -- see Karpenter docs for full IAM setup)
@@ -395,7 +396,8 @@ Visibility into the Kubernetes control plane is non-negotiable for security fore
 
 Control plane logging is configured at the cluster object level, so treat enablement like any other infrastructure change with a change ticket and a rollback plan. Enabling all five types at once is convenient for a short proof of concept but expensive for a busy production API server; start with the minimal set in the table, expand during incidents, and document who disabled high-volume types when the incident closes.
 
-```bashaws eks update-cluster-config --name my-cluster \
+```bash
+aws eks update-cluster-config --name my-cluster \
   --logging '{"clusterLogging":[{"types":["api","audit","authenticator","controllerManager","scheduler"],"enabled":true}]}'
 ```
 
@@ -439,7 +441,8 @@ While control plane logs reveal *what* happened at the API layer, performance me
 
 Container Insights is not a separate daemon you install by hand on every node when you use the managed add-on path; AWS packages the agents and wires them to CloudWatch on your behalf. That reduces day-one friction but still requires an IAM role for the service account so agents can publish metrics. Plan a short validation window after enablement where you compare Container Insights node graphs with `kubectl top` and with Prometheus node exporters if both exist, so you know the signals agree before you wire alarms.
 
-```bash# Install via the EKS add-on
+```bash
+# Install via the EKS add-on
 aws eks create-addon \
   --cluster-name my-cluster \
   --addon-name amazon-cloudwatch-observability \
@@ -473,7 +476,8 @@ While Container Insights offers a seamless zero-ops experience, high-cardinality
 
 Amazon Managed Prometheus (AMP) provides a serverless ingestion and query backend, allowing you to use PromQL without operating Cortex or Thanos storage clusters yourself. You still run collectors—typically Prometheus agents or the full stack in-cluster—but AMP absorbs long-term retention and federated query load, which is why many production EKS platforms remote-write from in-cluster Prometheus to AMP and keep Grafana as the visualization layer.
 
-```bash# Create a workspace
+```bash
+# Create a workspace
 WORKSPACE_ID=$(aws amp create-workspace \
   --alias eks-production \
   --query 'workspaceId' --output text)
@@ -488,7 +492,8 @@ Treat AMP as the long-term store and Grafana as the lens, not as a replacement f
 
 Deploying Prometheus via the `kube-prometheus-stack` Helm chart configures ServiceMonitor-driven scraping of the Kubernetes control plane and kubelets. It ships Grafana dashboards and can remote-write samples to AMP when you set the `remoteWrite` URL and SigV4 region on the Prometheus custom resource. The first install block below is suitable for labs that keep metrics inside the cluster for fifteen days. The second block shows the minimal AMP wiring you would enable in production after creating a workspace.
 
-```bash# Install the Prometheus stack using Helm
+```bash
+# Install the Prometheus stack using Helm
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
@@ -557,7 +562,8 @@ Kubernetes abstractly pools resources, which creates a tragedy-of-the-commons dy
 
 OpenCost maps real-time AWS billing data—including Spot price feeds when configured—to pod usage telemetry so you can aggregate cost by namespace, label, or controller. The Helm values below enable the UI for exploratory reviews and wire Spot pricing buckets when you want interruption-aware amortization instead of assuming every node hour cost the same On-Demand rate.
 
-```bash# Install OpenCost
+```bash
+# Install OpenCost
 helm repo add opencost https://opencost.github.io/opencost-helm-chart
 helm repo update
 
@@ -576,7 +582,8 @@ A monthly FinOps review with either tool should follow the same agenda every tim
 
 Kubecost packages the same class of allocation queries with opinionated dashboards, savings recommendations, and multi-cluster views that larger enterprises often standardize on. The install mirrors OpenCost in complexity: you point it at Prometheus metrics with a `cluster_id` label and let it correlate utilization to cloud bills. Teams frequently run OpenCost for transparency in platform namespaces and Kubecost where finance wants certified showback reports.
 
-```bashhelm repo add kubecost https://kubecost.github.io/cost-analyzer
+```bash
+helm repo add kubecost https://kubecost.github.io/cost-analyzer
 helm repo update
 
 helm install kubecost kubecost/cost-analyzer \
@@ -857,7 +864,8 @@ Work through the tasks in order because each step assumes the previous artifacts
 <details>
 <summary>Solution</summary>
 
-```bash# Check if Cluster Autoscaler is running
+```bash
+# Check if Cluster Autoscaler is running
 kubectl get deployment cluster-autoscaler -n kube-system 2>/dev/null
 
 # If present, remove it
@@ -878,7 +886,8 @@ Tag discovery consistently across every subnet and security group the NodePool m
 <details>
 <summary>Solution</summary>
 
-```bash# Tag your subnets for Karpenter discovery
+```bash
+# Tag your subnets for Karpenter discovery
 CLUSTER_NAME="my-cluster"
 SUBNET_IDS=$(aws eks describe-cluster --name $CLUSTER_NAME \
   --query 'cluster.resourcesVpcConfig.subnetIds[]' --output text)
@@ -919,7 +928,8 @@ kubectl logs -n kube-system -l app.kubernetes.io/name=karpenter --tail=20
 <details>
 <summary>Solution</summary>
 
-```bashcat <<'EOF' | kubectl apply -f -
+```bash
+cat <<'EOF' | kubectl apply -f -
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
@@ -999,7 +1009,8 @@ kubectl get nodepool general-purpose
 <details>
 <summary>Solution</summary>
 
-```bashcat <<'EOF' | kubectl apply -f -
+```bash
+cat <<'EOF' | kubectl apply -f -
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -1057,7 +1068,8 @@ While the Job runs, watch for Spot nodes appearing with diversified instance typ
 <details>
 <summary>Solution</summary>
 
-```bashkubectl create namespace batch
+```bash
+kubectl create namespace batch
 
 cat <<'EOF' | kubectl apply -f -
 apiVersion: batch/v1
@@ -1139,7 +1151,8 @@ OpenCost needs a few minutes of steady traffic before allocation APIs return sta
 <details>
 <summary>Solution</summary>
 
-```bash# Install OpenCost
+```bash
+# Install OpenCost
 helm repo add opencost https://opencost.github.io/opencost-helm-chart
 helm repo update
 
@@ -1177,7 +1190,8 @@ curl -s http://127.0.0.1:9003/allocation/compute \
 
 Deleting NodePools before uninstalling Helm ensures Karpenter drains and terminates nodes it created, which is faster and safer than orphaning EC2 instances that still appear healthy in the AWS console but no longer match your desired cluster state.
 
-```bashkubectl delete namespace batch
+```bash
+kubectl delete namespace batch
 kubectl delete job video-encode-batch -n batch 2>/dev/null
 helm uninstall opencost -n opencost
 kubectl delete namespace opencost
