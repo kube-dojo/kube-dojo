@@ -19,7 +19,7 @@ By the end of this module, you will have practiced the observability patterns pr
 
 ## Why This Module Matters
 
-In November 2022, a fintech company's payment processing service began failing intermittently. Customers reported that approximately 5% of transactions were being declined with a generic "server error." The on-call engineer checked the Cloud Run dashboard and saw that CPU and memory utilization were normal. Request count looked steady. Everything appeared healthy from the infrastructure layer. The issue persisted for 4 hours before a senior engineer noticed an anomaly in the application logs: a third-party payment gateway was returning HTTP 429 (rate limit exceeded) for requests from a specific IP range. This log signal was buried in 2 million log lines per hour because the team had no log-based metrics, no alerting on error rates, and no structured logging. They were flying blind in a sea of unstructured text. The 4-hour delay in diagnosis cost them $340,000 in failed transactions and a significant hit to customer trust.
+**Hypothetical scenario:** In November 2022, a fintech company's payment processing service began failing intermittently. Customers reported that approximately 5% of transactions were being declined with a generic "server error." The on-call engineer checked the Cloud Run dashboard and saw that CPU and memory utilization were normal. Request count looked steady. Everything appeared healthy from the infrastructure layer. The issue persisted for 4 hours before a senior engineer noticed an anomaly in the application logs: a third-party payment gateway was returning HTTP 429 (rate limit exceeded) for requests from a specific IP range. This log signal was buried in 2 million log lines per hour because the team had no log-based metrics, no alerting on error rates, and no structured logging. They were flying blind in a sea of unstructured text. The 4-hour delay in diagnosis cost them $340,000 in failed transactions and a significant hit to customer trust.
 
 This incident demonstrates a truth that every platform engineer learns the hard way: **metrics tell you that something is wrong; logs tell you why.** You need both, and you need them working together. Cloud Operations (formerly Stackdriver) is GCP's integrated suite for monitoring, logging, and alerting. It is not a separate product you bolt on---it is deeply integrated into every GCP service. Cloud Logging automatically captures logs from managed services like Cloud Run, GKE, and Cloud Functions. Compute Engine instances require the Cloud Ops Agent for application and OS log collection. Cloud Monitoring automatically collects metrics from all GCP resources.
 
@@ -107,10 +107,11 @@ Ingestion charges apply when log entries are **stored in a log bucket**, not whe
 [Log Analytics](https://cloud.google.com/logging/docs/analyze/query-link) lets you run SQL against linked log buckets through BigQuery's engine without exporting every line to a dataset first. That matters for ad hoc investigations ("show me distinct `error_type` values last Tuesday") where Log Explorer's line-by-line UI becomes tedious. Queries issued through Log Explorer and Log Analytics are not separately billed by Cloud Logging; you pay for the underlying log storage that makes the data available. When compliance requires multi-year retention, the usual pattern is a **sink to Cloud Storage** or BigQuery with lifecycle rules, not an infinitely growing `_Default` bucket—object storage and BigQuery long-term tiers are typically cheaper than retaining high-volume DEBUG traffic in Logging past 30 days.
 
 ```bash
-# Create a user-defined log bucket with 90-day retention
+# Create a user-defined log bucket with 90-day retention and Log Analytics enabled
 gcloud logging buckets create security-audit \
   --location=global \
   --retention-days=90 \
+  --enable-analytics \
   --description="Extended retention for security review"
 
 # List buckets and their retention
@@ -372,7 +373,7 @@ gcloud logging metrics create api_latency \
 
 ## Cloud Monitoring: Dashboards and Metrics
 
-Cloud Monitoring is the time-series layer where platform metrics, custom metrics, log-based metrics, uptime check results, and SLO burn rates converge. Dashboards are your incident "single pane"—but only if they chart **symptoms** (request latency percentiles, error rates, saturation) alongside **causes** you investigate after paging (CPU, memory, instance count). A dashboard that shows only infrastructure graphs reproduces the November 2022 blind spot from the opener: healthy CPU while customers fail checkout.
+Cloud Monitoring is the time-series layer where platform metrics, custom metrics, log-based metrics, uptime check results, and SLO burn rates converge. Dashboards are your incident "single pane"—but only if they chart **symptoms** (request latency percentiles, error rates, saturation) alongside **causes** you investigate after paging (CPU, memory, instance count). A dashboard that shows only infrastructure graphs reproduces the blind spot from the opening scenario: healthy CPU while customers fail checkout.
 
 ### Built-in Metrics
 
@@ -396,7 +397,7 @@ gcloud monitoring metrics-descriptors list \
 # Query a specific metric (requires Monitoring Query Language - MQL)
 gcloud monitoring time-series list \
   --filter='metric.type="run.googleapis.com/request_count" AND resource.labels.service_name="my-api"' \
-  --interval-start-time=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ) \
+  --interval-start-time=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "1 hour ago" +%Y-%m-%dT%H:%M:%SZ) \
   --format=json
 ```
 
@@ -613,21 +614,19 @@ gcloud monitoring policies update POLICY_ID \
 
 Uptime checks monitor the availability of your public endpoints from Google's global probe network, which catches failures that internal metrics miss—expired TLS certificates, DNS misconfigurations, VPC egress rules blocking external clients, or regional routing issues that still leave instances "healthy" behind a load balancer. Probes run HTTP/HTTPS (or TCP) checks on a schedule you define, record per-region pass/fail time series, and integrate with alerting policies so pages fire when multiple regions agree a user-visible path is down.
 
-Google operates checkers in multiple geographic regions; configuring alerts to require failures from **two or more regions** reduces false positives when a single probe path has transient packet loss. Uptime checks bill per execution according to the [Observability pricing page](https://cloud.google.com/products/observability/pricing)—consolidate checks on user-journey URLs (`/health` on the public API gateway) rather than creating one check per internal microservice that customers never call directly. For private services, uptime checks cannot reach RFC 1918 addresses; use **private synthetic monitoring** patterns (Cloud Run job with VPC egress, or third-party probes inside your network) instead of expecting public checkers to hit internal load balancers.
+Google operates checkers in multiple geographic regions; configuring alerts to require failures from **two or more regions** reduces false positives when a single probe path has transient packet loss. Uptime checks bill per execution according to the [Observability pricing page](https://cloud.google.com/products/observability/pricing)—consolidate checks on user-journey URLs (`/health` on the public API gateway) rather than creating one check per internal microservice that customers never call directly. **Public** uptime checks (the default checker type) cannot reach RFC 1918 addresses on the public internet; for internal endpoints, use **VPC uptime checks** (`VPC_CHECKERS`) or other **private synthetic monitoring** patterns (Cloud Run job with VPC egress, or third-party probes inside your network) instead of expecting public checkers to hit internal load balancers.
 
 Authenticated endpoints require custom headers or OAuth tokens in advanced configurations; keep health endpoints unauthenticated but non-sensitive so probes stay simple. Pair uptime alerts with log-based error metrics: external "down" with flat error logs often implicates DNS or TLS, while uptime failure plus rising 5xx logs implicates application regression.
 
 ```bash
-# Create an HTTP uptime check
+# Create an HTTP uptime check (DISPLAY_NAME is the positional arg; period is in minutes: 1, 5, 10, or 15)
 gcloud monitoring uptime create my-api-uptime \
-  --display-name="My API Health Check" \
   --resource-type=uptime-url \
-  --monitored-resource="host=my-api-abc123-uc.a.run.app,project_id=my-project" \
-  --http-check-path="/health" \
-  --http-check-port=443 \
-  --period=60 \
-  --timeout=10 \
-  --checker-type=STATIC_IP_CHECKERS
+  --resource-labels="host=my-api-abc123-uc.a.run.app,project_id=my-project" \
+  --path=/health \
+  --protocol=https \
+  --period=5 \
+  --timeout=10
 
 # List uptime checks
 gcloud monitoring uptime list-configs \
@@ -928,11 +927,11 @@ Document the baseline in the service README: dashboard link, primary alert polic
 
 ## Did You Know?
 
-1. **Cloud Logging ingests over 150 petabytes of log data per month** across all GCP customers. The log router processes over 50 billion log entries per day. Despite this scale, the median query response time in the Log Explorer is under 3 seconds for queries spanning a 1-hour time window.
+1. **Cloud Logging operates at multi-petabyte scale** across GCP—enough volume that the Log Router, retention tiers, and query paths are engineered for massive throughput rather than single-tenant assumptions.
 
 2. **Log-based metrics are evaluated in real-time as logs flow through the log router**, not after they are stored. This means you can create an alert based on a log-based metric and receive a notification within 60-90 seconds of the triggering log entry being written---even before you could find it manually in the Log Explorer.
 
-3. **Cloud Monitoring's uptime checks run from 6 global regions simultaneously** (USA-Oregon, USA-Virginia, South America, Europe, Asia Pacific-1, Asia Pacific-2). A check is considered "failed" only when it fails from multiple regions, reducing false positives from network partitions. You can see the per-region results in the uptime check dashboard.
+3. **Cloud Monitoring's public uptime checks can run from multiple global checker regions** (for example USA-Oregon, USA-Iowa, USA-Virginia, Europe, South America, and Asia Pacific). A check is considered "failed" only when it fails from multiple regions, reducing false positives from network partitions. You can see the per-region results in the uptime check dashboard.
 
 4. **The Ops Agent (successor to the legacy Monitoring and Logging agents) supports both Prometheus metric scraping and fluent-bit log collection** in a single agent. If you are running custom metrics in Prometheus format on your VMs, the Ops Agent can scrape them and send them to Cloud Monitoring without running a separate Prometheus server.
 
@@ -1188,17 +1187,13 @@ gcloud logging metrics list \
 # Get the Cloud Run hostname
 SERVICE_HOST=$(echo $SERVICE_URL | sed 's|https://||')
 
-# Create an uptime check
-# Note: uptime checks via gcloud have limited support;
-# using the REST API is more reliable for complex configs
+# Create an uptime check (ops-lab-uptime is the display name; period is in minutes)
 gcloud monitoring uptime create ops-lab-uptime \
-  --display-name="Ops Lab API Health" \
   --resource-type=uptime-url \
   --resource-labels="host=$SERVICE_HOST,project_id=$PROJECT_ID" \
-  --http-check-path="/health" \
-  --http-check-port=443 \
-  --http-check-request-method=GET \
-  --period=60 \
+  --path=/health \
+  --protocol=https \
+  --period=5 \
   --timeout=10
 
 # List uptime checks
