@@ -4,11 +4,11 @@ slug: cloud/gke-deep-dive/module-6.1-gke-architecture
 sidebar:
   order: 2
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: GCP Essentials, Cloud Architecture Patterns
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: GCP Essentials, Cloud Architecture Patterns — expect to run real `gcloud` commands against a billing-enabled project and delete clusters when finished.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to design and operate GKE clusters with explicit tradeoffs rather than default settings:
 
 - **Configure GKE Standard and Autopilot clusters with release channels, regional topology, and node auto-provisioning**
 - **Evaluate GKE Standard vs Autopilot mode for workload requirements including GPU, DaemonSet, and cost constraints**
@@ -19,21 +19,21 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A team can still suffer upgrade-related outages on a managed Kubernetes service if they choose an aggressive release cadence and don't test their manifests against the next Kubernetes version before production rollouts.
+Hypothetical scenario: a platform team provisions a regional GKE cluster for a new product launch, selects the Rapid release channel to "stay current," and skips maintenance windows because upgrades are supposed to be automatic anyway. Two weeks later, a minor Kubernetes version bump lands during business hours, a deprecated API their Helm chart still references starts failing admission, and on-call engineers discover they cannot roll back the control plane — only reschedule node upgrades and fix manifests forward. The outage was not caused by GKE being "unmanaged"; it was caused by architectural choices the team did not understand.
 
-This story captures the central tension of GKE: Google manages massive amounts of infrastructure for you, but you still need to understand what decisions GKE is making on your behalf. The choice between Standard and Autopilot mode, the selection of a release channel, the configuration of regional versus zonal clusters, and the behavior of auto-upgrades and auto-repair all have direct consequences for your application's availability, cost, and security posture.
+A team can still suffer upgrade-related outages on a managed Kubernetes service if they choose an aggressive release cadence and don't test their manifests against the next Kubernetes version before production rollouts. GKE removes toil around etcd backups, control-plane patching, and node OS hardening, but it does not remove the need for deliberate decisions about topology, billing model, IP planning, and upgrade policy. Those decisions compound: a zonal dev cluster misconfigured for production teaches the wrong mental model, and a Standard cluster sized for peak traffic without Spot or bin-packing discipline can quietly cost more than Autopilot would for the same workload shape.
 
-In this module, you will learn the GKE architecture from the ground up: how the control plane and node pools work, the fundamental differences between Standard and Autopilot modes, how release channels govern your upgrade lifecycle, and how to make informed decisions about cluster topology. By the end, you will deploy the same application to both Standard and Autopilot clusters and compare the operational experience.
+This story captures the central tension of GKE: Google manages massive amounts of infrastructure for you, but you still need to understand what decisions GKE is making on your behalf. The choice between Standard and Autopilot mode, the selection of a release channel, the configuration of regional versus zonal clusters, and the behavior of auto-upgrades and auto-repair all have direct consequences for your application's availability, cost, and security posture. When you internalize those mechanics, you stop treating "managed Kubernetes" as a black box and start designing clusters that match how your organization actually ships software.
+
+In this module, you will learn the GKE architecture from the ground up: how the control plane and node pools work, the fundamental differences between Standard and Autopilot modes, how release channels govern your upgrade lifecycle, and how to make informed decisions about cluster topology. By the end, you will deploy the same application to both Standard and Autopilot clusters and compare the operational experience, including the billing and scheduling differences that only become visible once workloads are running.
 
 ---
 
 ## GKE Architecture Fundamentals
 
-Before choosing between Standard and Autopilot, you need to understand what GKE actually provisions when you create a cluster.
+Before choosing between Standard and Autopilot, you need to understand what GKE actually provisions when you create a cluster. A GKE cluster is not a single VM — it is a contract between Google-managed control-plane components and customer-visible worker capacity (Standard) or Pod-scheduled compute (Autopilot). The Kubernetes version you select at create time (today's curriculum target is **1.35**) flows through release channels and upgrade policies for the life of the cluster, so architectural choices you make on day one constrain what you can change without rebuilding.
 
-### Control Plane and Node Architecture
-
-Every GKE cluster consists of two layers: the **control plane** (managed entirely by Google) and the **nodes** (where your workloads run).
+Every GKE cluster consists of two layers: the **control plane** (managed entirely by Google) and the **nodes** (where your workloads run). In Standard mode you see and bill for nodes directly; in Autopilot mode Google creates and destroys nodes in response to Pod schedules while you interact only with Kubernetes objects. Both modes expose the same Kubernetes API, which is why application manifests largely port between them — but operational tooling, cost models, and security boundaries diverge sharply beneath that API surface.
 
 ```mermaid
 graph TD
@@ -60,16 +60,30 @@ graph TD
     CP -- "Managed VPN / Private Endpoint" --> Customer
 ```
 
-Key facts about the GKE control plane:
+### Control Plane and Node Architecture
 
-- **Cluster fee and free tier**: GKE charges a cluster management fee, and the free tier provides monthly credits equivalent to one free Autopilot or zonal Standard cluster per billing account; regional cluster fees aren't covered by that credit.
-- **SLA-backed**: [Regional clusters provide a 99.95% SLA for the control plane. Zonal clusters offer 99.5%.](https://cloud.google.com/kubernetes-engine/pricing)
-- **Invisible**: You cannot SSH into the control plane. You interact with it exclusively through the Kubernetes API.
-- **Auto-scaled**: Google automatically scales control plane resources based on the number of nodes, pods, and API request volume.
+The control plane and node layers communicate exclusively through Kubernetes APIs — kubelet registration, Pod scheduling, Service endpoints, and Node status heartbeats. [Shielded GKE Nodes](https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-architecture) verify node identity during registration by default, reducing the risk of rogue VMs joining your cluster. Worker nodes run kubelet, containerd, and GKE-managed DaemonSets for logging and networking; what differs by mode is whether **you** pick the machine type and image or **Google** picks them from your Pod requests.
+
+The following control-plane facts apply to every cluster you operate, regardless of mode, and show up on every FinOps review whether or not your workloads are Autopilot:
+
+- **Cluster fee and free tier**: GKE charges a flat [cluster management fee of $0.10 per cluster per hour](https://cloud.google.com/kubernetes-engine/pricing) (billed per second), regardless of Standard versus Autopilot, zonal versus regional, or fleet size. The [GKE free tier](https://cloud.google.com/kubernetes-engine/pricing) provides $74.40 in monthly credits per billing account — enough to offset one zonal Standard cluster or one Autopilot cluster for a full month. Regional Standard cluster management fees are **not** covered by that credit, which surprises teams that promote a zonal dev cluster to regional production without revisiting the fee line item.
+- **SLA-backed**: [Regional clusters provide a 99.95% SLA for the control plane. Zonal clusters offer 99.5%.](https://cloud.google.com/kubernetes-engine/pricing) Autopilot multi-zone Pods carry a separate 99.9% availability SLA. These numbers describe control-plane/API availability, not your application's uptime — you still need PodDisruptionBudgets, multi-zone node pools, and health checks for workload resilience.
+- **Invisible**: You cannot SSH into the control plane. You interact with it exclusively through the Kubernetes API via `kubectl`, client libraries, or the Google Cloud console.
+- **Auto-scaled**: Google automatically scales control plane resources based on the number of nodes, pods, and API request volume in your cluster. Large fleets with heavy API churn (many controllers, frequent object churn) consume more control-plane headroom than small dev clusters, still without any line item you tune manually.
+
+Together, the management fee and SLAs describe Google's side of the bargain: highly available etcd/API for regional production, or cheaper zonal control planes acceptable only when brief API gaps during upgrades are tolerable for the workloads involved.
+
+### Control plane internals: etcd, state storage, and upgrade behavior
+
+The GKE control plane runs the Kubernetes API server, scheduler, and controller manager on Google-managed VMs you never see. [Cluster state](https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-architecture) — every Deployment, Secret, ConfigMap, and Node object — is persisted in a highly available key-value store. GKE serves the etcd API to the Kubernetes API server. Depending on cluster configuration, the backing store may be etcd replicas on control-plane VMs or Spanner. Your operational interface remains the same Kubernetes API either way.
+
+For **regional** clusters, GKE replicates the control plane across three zones in the region. During a control-plane upgrade, replicas roll one at a time. The API remains reachable for `kubectl apply`, new Deployments, and autoscaling events. For **zonal** clusters, a single control-plane replica means the API can be unavailable for several minutes during upgrades. That window is long enough to block a hotfix Deployment. **Already-running Pods on worker nodes keep serving traffic** during zonal control-plane gaps. That distinction matters in incident response. Zonal clusters can look "healthy" in a dashboard of running Pods while the control plane rejects writes.
+
+The per-cluster management fee covers this managed control-plane lifecycle: creation, automatic version upgrades (when enrolled in a release channel), scaling of control-plane capacity, and deletion. It does **not** include worker-node Compute Engine charges (Standard), Pod-request charges (Autopilot general-purpose billing), load balancers, persistent disks, or egress. At fleet scale — say 40 production clusters — the management fee alone is roughly $0.10 × 40 × 730 ≈ **$2,920/month** before any nodes or Pods exist, which is why platform teams consolidate non-production environments or share clusters with namespace isolation rather than provisioning one cluster per microservice by default.
 
 ### [Regional vs Zonal Clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/regional-clusters)
 
-This is one of the first decisions you make when creating a GKE cluster, and it has significant implications.
+Topology is the first architectural fork because it affects control-plane SLA, default node spread, and how `--num-nodes` arithmetic shows up on your invoice. Zonal clusters keep the control plane and default node pool in one zone — simpler and cheaper, but a zone outage takes down both API and workers unless you manually add multi-zonal node pools. Regional clusters replicate the control plane across three zones and spread default nodes across those zones, trading cost for survivability during single-zone failures and control-plane upgrades.
 
 | Aspect | Zonal Cluster | Regional Cluster |
 | :--- | :--- | :--- |
@@ -105,7 +119,7 @@ gcloud container clusters create dev-cluster \
 
 ## Standard Mode: Full Control
 
-Standard mode is the original GKE experience. You manage node pools, choose machine types, configure autoscaling, and handle node-level operations. Google manages only the control plane.
+Standard mode is the original GKE experience. You manage node pools, choose machine types, configure autoscaling, and handle node-level operations while Google manages only the control plane. Standard remains the right default when you need GPUs with custom drivers, privileged security agents, sole-tenant nodes, fine-grained Spot economics, or compliance regimes that require demonstrable control over the worker OS. It is also the mode where operational mistakes — wrong autoscaling flags, exhausted Pod CIDRs, mixed-version node pools — show up on your team's runbooks rather than being absorbed silently by Google.
 
 ### Node Pools
 
@@ -146,9 +160,39 @@ gcloud container node-pools create spot-pool \
   --node-taints=cloud.google.com/gke-spot=true:NoSchedule
 ```
 
+### Machine families, node images, and allocatable capacity
+
+Standard mode gives you direct control over Compute Engine machine selection. GKE node pools commonly use **E2** (cost-optimized general purpose), **N2/N2D** (balanced performance, N2D on AMD), **C3** (compute-optimized), or **T2D** (scale-out Arm) families depending on workload profile. GPU and high-memory variants (for example `n2-highmem-8`, `a2` accelerators) live in dedicated pools with taints so general microservices never land on expensive hardware.
+
+[Node images](https://cloud.google.com/kubernetes-engine/docs/concepts/node-images) split along operational philosophy. **Container-Optimized OS with containerd** (`cos_containerd`) is Google's hardened, minimal image — the default for Autopilot and the recommended choice for most Standard pools because Google patches it quickly and the read-only root filesystem reduces attack surface. **Ubuntu with containerd** (`ubuntu_containerd`) supports packages like CephFS clients or XFS tooling that COS cannot host natively; choose it when your node-level dependencies genuinely require `apt-get`, not because it feels familiar.
+
+Neither image gives Pods the full vCPU count printed on the machine type label. GKE reserves **system** and **kube** components on every node. The kubelet, container runtime, eviction thresholds, and DaemonSets such as logging agents consume CPU and memory before the scheduler calculates **allocatable** capacity. On a four-vCPU `e2-standard-4`, `kubectl describe node` typically shows roughly 3.9 allocatable CPUs and noticeably less than 16 GiB of allocatable memory. That is not a billing bug. It is capacity planning math you must account for when sizing pools. Overcommitting requests against raw machine specs causes pending Pods even when nodes look "empty" in the cloud console.
+
+**Taints and labels** implement isolation beyond machine type. Production patterns combine `node-labels=tier=database` with matching `node-taints=workload=database:NoSchedule` so only Pods with the corresponding toleration schedule onto database nodes. [Spot VM pools](https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms) should always carry the `cloud.google.com/gke-spot=true:NoSchedule` taint so critical control-plane-adjacent workloads never land on interruptible capacity.
+
+### Spot VMs versus legacy preemptible VMs
+
+Both Spot and preemptible VMs offer steep discounts versus on-demand Compute Engine pricing — [Spot pricing in Autopilot and Standard contexts can reach roughly 60–91% off](https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms) corresponding regular rates, though Spot prices adjust dynamically. The operational difference that matters for batch design: **preemptible VMs expire after 24 hours**, while **Spot VMs have no fixed expiration** and run until Compute Engine reclaims capacity. GKE documentation recommends Spot over preemptible for new node pools. Spot reclamation is involuntary and **not covered by PodDisruptionBudget guarantees**, so fault-tolerant or checkpointed workloads belong on Spot; stateful systems need on-demand pools or careful graceful-shutdown tuning (default 30 seconds, extendable up to 120 seconds on supported Standard versions).
+
+### Per-zone versus total node autoscaling flags
+
+Regional clusters multiply node counts by zone, and autoscaling flags inherit that behavior unless you opt out. [`--min-nodes` and `--max-nodes`](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-autoscaler) apply **per zone**; in GKE 1.24 and later, [`--total-min-nodes` and `--total-max-nodes`](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-autoscaler) express cluster-wide bounds and are mutually exclusive with the per-zone pair. Use total flags when finance expects "10–60 nodes in us-central1," not "10–60 nodes in **each** of three zones."
+
+```bash
+# Regional pool: 10–60 nodes TOTAL across three zones (not per zone)
+gcloud container node-pools create batch-pool \
+  --cluster=standard-cluster \
+  --region=us-central1 \
+  --machine-type=e2-standard-8 \
+  --spot \
+  --enable-autoscaling \
+  --total-min-nodes=0 \
+  --total-max-nodes=60
+```
+
 ### Cluster Autoscaler vs Node Auto-Provisioning
 
-Standard mode offers two approaches to scaling nodes:
+Standard mode offers two complementary approaches to scaling nodes, and mature platforms often run **both**: fixed pools with cluster autoscaler for baseline services, plus NAP or ComputeClass auto-creation for bursty GPU or Spot shapes.
 
 | Feature | Cluster Autoscaler | Node Auto-Provisioning (NAP) |
 | :--- | :--- | :--- |
@@ -171,14 +215,24 @@ gcloud container clusters update standard-cluster \
 
 With NAP enabled, if a pod requests a GPU and no GPU node pool exists, [GKE will automatically create one. When the pod finishes and the pool is idle, GKE scales it back to zero and eventually removes it.](https://cloud.google.com/kubernetes-engine/docs/concepts/node-auto-provisioning)
 
+### Node Auto-Provisioning in depth
+
+[Node pool auto-creation](https://cloud.google.com/kubernetes-engine/docs/concepts/node-auto-provisioning) extends the cluster autoscaler: instead of only adding VMs to predefined pools, GKE provisions **entire new node pools** when pending Pods need hardware no existing pool provides. You scope blast radius with **cluster-level resource limits** (`--autoprovisioning-max-cpu`, `--autoprovisioning-max-memory`, GPU caps) that apply to the sum of all node capacity including manually created pools — breaching a limit leaves Pods pending rather than silently overspending.
+
+Machine-family selection follows a precedence chain documented by Google: Pod or ComputeClass selectors win, then cluster-level NAP defaults, then platform defaults (often E2 when unspecified). NAP cannot set a minimum node count above zero for auto-created pools; if you need always-on baseline capacity, keep at least one manually managed on-demand pool and let NAP handle burst shapes (GPUs, highmem, Spot batch) that would otherwise require a combinatorial explosion of static pools.
+
+Scale-to-zero is a feature, not a failure mode: when the last Pod leaves an auto-created pool, GKE drains, consolidates, removes nodes, and deletes the empty pool. That interacts cleanly with the cluster autoscaler but requires you to tolerate brief scheduling latency when a new GPU or Spot shape appears — the first Pod in a new job type pays the node-provisioning tax. Newer GKE versions also support workload-level enablement via ComputeClasses with `nodePoolAutoCreation.enabled: true`, reducing the need for cluster-wide NAP when only one team needs dynamic hardware.
+
+```bash
+# Inspect autoprovisioning limits and defaults
+gcloud container clusters describe standard-cluster \
+  --region=us-central1 \
+  --format="yaml(autoscaling)"
+```
+
 ### What You Manage in Standard Mode
 
-- Node pool sizing and machine types
-- OS image selection (Container-Optimized OS vs Ubuntu)
-- Node security patches (auto-upgrade handles this if enabled)
-- System pod resource reservations
-- Network policies and firewall rules
-- Pod resource requests and limits (optional but strongly recommended)
+Standard operators own the full worker stack. Node pool sizing and machine types determine both performance ceiling and invoice baseline. OS image selection (`cos_containerd` versus `ubuntu_containerd`) locks in patch cadence and package flexibility. Auto-upgrade and auto-repair policies (enabled by default on many pools) decide whether Google replaces bad nodes and whether those replacements happen inside your maintenance windows. System and kube reservations on each node reduce allocatable CPU and memory below the machine spec. Network policies, firewall rules, and Pod resource requests remain your responsibility — GKE provides the network path, but not optimal bin-packing unless you configure requests, limits, and Horizontal Pod Autoscaler targets deliberately.
 
 > **Stop and think**: If you create a Standard cluster with a spot node pool for batch processing, but also need a few guaranteed nodes for your control applications, how would you ensure the control pods don't get scheduled on the preemptible spot nodes?
 
@@ -186,7 +240,7 @@ With NAP enabled, if a pod requests a GPU and no GPU node pool exists, [GKE will
 
 ## Autopilot Mode: Google Manages the Nodes
 
-[Autopilot is GKE's fully managed mode, introduced in 2021. Google manages everything except your workloads: the control plane, the nodes, the node pools, the OS patches, and the security hardening.](https://cloud.google.com/blog/products/containers-kubernetes/introducing-gke-autopilot) You only define pods.
+[Autopilot is GKE's fully managed mode, introduced in 2021. Google manages everything except your workloads: the control plane, the nodes, the node pools, the OS patches, and the security hardening.](https://cloud.google.com/blog/products/containers-kubernetes/introducing-gke-autopilot) You only define Pods, Services, and higher-level objects — never node pools in the console unless you are inspecting what Google created on your behalf. Autopilot's value proposition is velocity for teams that would otherwise spend sprint capacity right-sizing pools, patching COS, and chasing underutilized nodes; its cost proposition is strongest when workload footprint varies over time and explicit resource requests reflect real needs rather than padded guesses.
 
 ### How Autopilot Works
 
@@ -205,11 +259,11 @@ gcloud container clusters create-auto autopilot-cluster \
   --workload-pool=$(gcloud config get-value project).svc.id.goog
 ```
 
-That single command creates a production-ready cluster. No node pools to configure, no machine types to choose, no autoscaling to tune.
+That single command creates a production-ready regional cluster with VPC-native networking and Workload Identity enabled — no node pool forms to fill out, no machine-type matrix, no cluster-autoscaler min/max tuning. Google provisions right-sized nodes when Pending Pods exist, patches them on Google's cadence, and reclaims capacity when Deployments scale down. You still configure release channels, maintenance policies, and RBAC; you do not SSH to nodes or pick `--machine-type` for general workloads.
 
 ### Autopilot Billing Model
 
-This is the most important difference for budgeting. Standard mode charges for the VMs (nodes) whether or not pods are using them. Autopilot charges for the **pod resource requests** only.
+Budget conversations should start here because Autopilot and Standard diverge on the invoice line items finance teams reconcile. Standard mode charges for the VMs (nodes) whether or not pods are using them. Autopilot charges for **pod resource requests** on general-purpose compute classes, which decouples your bill from idle node headroom but couples it tightly to manifest hygiene.
 
 | Billing Dimension | Standard Mode | Autopilot Mode |
 | :--- | :--- | :--- |
@@ -250,7 +304,7 @@ spec:
 
 ### Autopilot Restrictions
 
-[Autopilot enforces security best practices by restricting certain operations](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-security):
+[Autopilot enforces security best practices by restricting certain operations](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-security). The table below summarizes the most common migration blockers teams discover when moving from Standard — treat it as an admission-control checklist, not an exhaustive API list:
 
 | Restriction | Reason | Workaround |
 | :--- | :--- | :--- |
@@ -262,13 +316,34 @@ spec:
 | Resource requests strongly influence billing and scheduling | GKE uses or adjusts requests when sizing infrastructure | Explicitly specify requests so Autopilot doesn't rely on defaults or automatic adjustments |
 | Pods per node are pre-configured by GKE | Scheduling density depends on the selected node configuration | You can't directly tune this setting in Autopilot |
 
+Autopilot restrictions are not arbitrary friction — they encode Google's ability to patch, rotate, and bin-pack nodes safely. Privileged containers and host namespaces would let workloads undermine the shared node boundary Google guarantees. Restricted DaemonSets prevent agents from requiring root on every node Google owns. When a manifest violates these rules, admission fails fast at apply time rather than silently weakening cluster security. Teams migrating from Standard should run `kubectl apply --dry-run=server` on critical DaemonSets and GPU Jobs before cutover day.
+
 > **Pause and predict**: If you deploy a DaemonSet to an Autopilot cluster that requires privileged access to the host network namespace to monitor traffic, what will happen when you apply the manifest?
+
+### Workload Identity at cluster creation
+
+Both Standard and Autopilot examples in this module pass `--workload-pool=PROJECT_ID.svc.id.goog`, enabling [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) so Kubernetes service accounts map to Google service accounts without exporting node metadata credentials. Enabling the pool at **create** time wires IAM trust once; pods then use `iam.gke.io/gke-service-account` annotations to assume least-privilege Google identities. Retrofitting Workload Identity on legacy clusters requires enabling the pool, recreating node pools, updating every Deployment's service account bindings, and auditing applications that still read the node's metadata server — workable, but expensive enough that the anti-pattern table flags it explicitly. Pair Workload Identity with per-workload Google service accounts rather than reusing the default Compute Engine service account attached to nodes.
 
 ---
 
 ## Standard vs Autopilot: The Decision Framework
 
-This is the question every GKE user faces. Here is a decision framework based on real-world patterns.
+This is the question every GKE user faces, and the answer rarely stays fixed for the entire life of a product. Here is a decision framework based on real-world patterns that platform teams revisit when utilization, headcount, or compliance requirements change.
+
+```mermaid
+flowchart TD
+    START["New GKE cluster needed"] --> Q1{"Need privileged containers,<br/>hostNetwork, custom kernel,<br/>or SSH to nodes?"}
+    Q1 -->|Yes| STD["Standard mode"]
+    Q1 -->|No| Q2{"Need fine-grained Spot bin-packing,<br/>sole-tenant nodes, or<br/>compliance-mandated node controls?"}
+    Q2 -->|Yes| STD
+    Q2 -->|No| Q3{"Team capacity to operate<br/>node pools, upgrades, and<br/>allocatable math?"}
+    Q3 -->|Low| AUTO["Autopilot mode"]
+    Q3 -->|High| Q4{"Sustained node utilization<br/>consistently above ~70%?"}
+    Q4 -->|Yes| STD
+    Q4 -->|No| AUTO
+    STD --> TOP["Pair with: regional topology,<br/>Regular/Stable channel,<br/>maintenance windows"]
+    AUTO --> TOP2["Pair with: explicit resource requests,<br/>Regular channel, PDBs for<br/>voluntary disruption only"]
+```
 
 ### Choose Autopilot When
 
@@ -300,13 +375,63 @@ graph TD
 
 The math can flip when utilization is consistently high. If your Standard cluster is tightly tuned and uses capacity efficiently, Standard can sometimes be cheaper than Autopilot.
 
+### Autopilot request rounding and fleet-scale cost surprises
+
+Autopilot's Pod-based billing model has subtle knobs that inflate bills when teams treat requests as "set and forget." [Google documents](https://cloud.google.com/kubernetes-engine/pricing) that Autopilot applies **default requests** when you omit them, **raises values below minimums or invalid CPU-to-memory ratios**, and bills Running or ContainerCreating Pods per requested vCPU, GiB, and ephemeral storage — not actual usage. A Deployment copied from a dev cluster with `cpu: 100m` requests on a service that actually needs 250m may get rounded upward; conversely, omitting requests entirely can land you on class defaults larger than necessary. Right-sizing requests is both a performance task and a FinOps task.
+
+Hardware-specific Autopilot workloads (GPU selectors, certain machine series) switch to **node-based billing** plus an Autopilot management premium, meaning you pay for the whole provisioned VM shape — often larger than the Pod strictly requested. That is appropriate for ML training but expensive if you under-utilize the node. Spot Pods in Autopilot inherit the same dynamic [60–91% discount band](https://cloud.google.com/kubernetes-engine/docs/concepts/spot-vms) as Spot node pools, but only for fault-tolerant workloads that tolerate involuntary eviction outside PDB semantics.
+
+Remember the **$0.10/hour/cluster management fee** applies to every Autopilot cluster too; it is not absorbed into Pod pricing. A platform running 25 regional Autopilot clusters for hard multi-tenant isolation pays ~$1,825/month in management fees alone before Pod charges — sometimes more than consolidating tenants into fewer clusters with namespace quotas and NetworkPolicies would cost in aggregate.
+
 > **Stop and think**: A team runs a fleet of 50 microservices that have highly variable traffic patterns, frequently scaling from 2 to 50 replicas and back down. They currently use Standard mode and struggle to keep node utilization above 30%. Would Autopilot be a good fit for them?
+
+---
+
+## Immutable cluster properties and migration paths
+
+Several GKE choices are **immutable** or effectively irreversible without rebuilding the cluster. Treat them as architecture review checkpoints before the first `gcloud container clusters create` succeeds.
+
+**Cluster mode (Standard versus Autopilot)** cannot be toggled in place. Autopilot clusters use different node provisioning, admission policies, and billing integrations than Standard clusters. Migration means standing up a parallel cluster, validating manifests (resource requests, DaemonSet compatibility, GPU selectors), shifting traffic with DNS or service mesh, and decommissioning the old cluster — often a multi-sprint program, not a weekend flag change.
+
+**Regional versus zonal** topology is set at create time. You cannot convert a zonal control plane to regional without creating a new cluster and migrating workloads. Likewise, **VPC-native Pod CIDR sizing** is fixed at creation for practical purposes; expanding exhausted Pod ranges requires discontiguous multi-Pod CIDR features or a new cluster with a larger `--cluster-ipv4-cidr`. Network teams should treat the sizing worksheet in the networking section as a capacity contract signed before production launch.
+
+**Release channel enrollment** can be changed, but dropping from a channel to a static version pin removes access to scoped maintenance exclusions that depend on channel end-of-support tracking. **Workload Identity** can be enabled later, but every workload using node credential paths must be retested. Document these constraints in your internal cluster request form so application teams know which decisions require platform-architect approval versus which can be changed with a `gcloud container clusters update`.
+
+When planning brownfield migrations, sequence work as: (1) inventory DaemonSets and privileged Pods, (2) right-size Autopilot requests or Standard pool shapes in staging, (3) validate IP and identity requirements, (4) cut over with rollback DNS, (5) compare management fee plus compute line items for thirty days. Hypothetical scenario: a team skips step one and discovers their legacy APM agent requires hostPath mounts only after the Autopilot cluster is production — the rollback becomes an emergency rebuild of the Standard cluster they just deleted.
+
+---
+
+## Patterns and Anti-Patterns
+
+Production GKE architectures repeat a handful of proven shapes — and a handful of expensive mistakes. The table below captures patterns worth copying and anti-patterns worth auditing in your own fleet.
+
+### Proven patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **Autopilot for small platform teams / stateless services** | Fewer than two FTEs for cluster ops; microservices with clear CPU/memory requests | Google owns node lifecycle, patching, and bin-packing; Pod-based billing tracks scale-to-zero traffic | GPU or privileged workloads may force Standard or hardware-billed Autopilot — validate before committing |
+| **Regional Standard + Spot batch pool + on-demand baseline pool** | Mixed latency-sensitive and fault-tolerant workloads | On-demand pool holds PDB-protected services; Spot pool runs Jobs and batch with taints/tolerations | Use `--total-max-nodes` so regional multiplication does not triple Spot ceilings unexpectedly |
+| **Regular channel + maintenance window + bounded exclusions** | Production clusters that must upgrade predictably | Upgrades concentrate in low-traffic windows; exclusions freeze holidays but cannot exceed minor version [end-of-support dates](https://cloud.google.com/kubernetes-engine/docs/how-to/maintenance-windows-and-exclusions) | Require ≥48 hours of maintenance availability in any rolling 32-day window |
+| **VPC-native IP plan before first cluster** | Any cluster expected to grow past a handful of nodes | Secondary Pod CIDR size caps maximum nodes; fixing exhaustion later requires expansion or new cluster | Work through sizing **before** Shared VPC handoffs — host-project admins must pre-create ranges |
+| **Workload Identity at create time** | Every new cluster | `--workload-pool=PROJECT.svc.id.goog` binds Kubernetes SA to Google SA without long-lived node keys | Retrofitting Workload Identity on legacy clusters is possible but touches every workload identity path |
+
+### Anti-patterns
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Zonal cluster for production** | Single-zone control plane and nodes; 99.5% API SLA; upgrade blips block `kubectl` | Dev cluster "worked fine" and was copied to prod | Regional cluster with multi-zonal node pools |
+| **Rapid channel in production** | Earliest minor versions; undiscovered upstream bugs | Desire for newest features (service mesh APIs, alpha gates) | Regular or Stable channel; use Rapid only in CI/staging |
+| **`--num-nodes` surprise on regional clusters** | Finance sees 3× expected VMs (per-zone multiplication) | Flag name sounds cluster-wide | `--total-min-nodes` / `--total-max-nodes` or explicit per-zone documentation |
+| **Disabling auto-upgrade entirely** | Clusters drift to unsupported minors; emergency forced upgrades | Fear of surprise reboots | Keep auto-upgrade; constrain **when** with maintenance windows and scoped exclusions |
+| **Over-requesting Autopilot resources "for headroom"** | Bill scales linearly with requests, not usage | Copy-paste requests from load tests | Right-size from production metrics; use HPA on real utilization |
+| **Retrofitting Workload Identity under pressure** | Node SA keys linger; partial migration breaks auth | Identity was deferred at create time | Enable `--workload-pool` on new clusters; migrate workloads deliberately |
+| **Single Spot-only node pool** | Spot reclamation evicts system-critical Pods; PDBs cannot block involuntary preemption | Cost optimization without architecture | Always retain on-demand pool for system and latency-sensitive tiers |
 
 ---
 
 ## Release Channels and Upgrade Strategy
 
-GKE uses release channels to manage Kubernetes version upgrades. Understanding these is critical for production stability.
+GKE uses release channels to manage Kubernetes version upgrades, coupling your cluster to Google's tested version cadence instead of a self-managed minor pin. Understanding channel timing is critical for production stability because channel enrollment also enables scoped maintenance exclusions tied to end-of-support dates.
 
 ### [The Three Channels](https://cloud.google.com/kubernetes-engine/docs/concepts/release-channels)
 
@@ -335,7 +460,7 @@ gcloud container clusters describe conservative-cluster \
 
 ### Auto-Upgrade Behavior
 
-[When enrolled in a release channel, GKE automatically upgrades both the control plane and nodes.](https://cloud.google.com/kubernetes-engine/docs/concepts/release-channels)
+[When enrolled in a release channel, GKE automatically upgrades both the control plane and nodes.](https://cloud.google.com/kubernetes-engine/docs/concepts/release-channels) You choose the channel's risk profile; Google chooses patch timing within your maintenance policy. Manual one-off upgrades remain available when you need to jump ahead of the channel schedule for a critical fix.
 
 ```mermaid
 flowchart LR
@@ -343,7 +468,7 @@ flowchart LR
     DNP -->|1-2 weeks<br/>after default| ONP["Other Node Pools<br/>(Automatic, rolling)"]
 ```
 
-You can influence **when** upgrades happen with maintenance windows and exclusions:
+You can influence **when** upgrades happen — not whether enrolled channels eventually upgrade — with maintenance windows and exclusions configured cluster-wide:
 
 ```bash
 # Set a maintenance window (upgrades only during this time)
@@ -362,9 +487,44 @@ gcloud container clusters update prod-cluster \
   --add-maintenance-exclusion-scope=no_upgrades
 ```
 
+### Node upgrade strategies: surge versus blue-green
+
+Control-plane upgrades and node-pool upgrades are separate timelines. After the control plane moves to a new minor version, GKE rolls worker nodes — and **how** those rolls happen determines blast radius for stateful workloads and PDBs.
+
+**Surge upgrades** (default for many pools) create temporary extra nodes (`--max-surge-upgrade`) while cordoning and draining old nodes up to `--max-unavailable-upgrade` at a time. Surge trades **temporary cost** (you pay for burst nodes during the roll) for **speed** and continuous capacity. Tight surge settings (`max-surge=0`, `max-unavailable=1`) serialize upgrades and lengthen maintenance windows — acceptable for small pools, painful for large ones.
+
+**Blue-green node pool upgrades** provision an entire parallel "green" node pool on the new version, validate workloads, then drain the "blue" pool in configurable batches with soak time between batches. [Google's documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/node-pool-upgrade-strategies) exposes `--enable-blue-green-upgrade`, batch sizes (`batch-node-count` or `batch-percent`), `batch-soak-duration`, and `node-pool-soak-duration` (default one hour) so you can pause between drain phases and watch error budgets. Blue-green fits stateful services where a bad node image should not take down half the pool at once — you pay for doubled nodes during soak, but you gain a rollback surface (stop the rollout before draining blue).
+
+**Autoscaled blue-green** (control plane ≥ 1.34.0-gke.2201000 with cluster autoscaler enabled) cordons the blue pool and waits up to seven days (default three days) before draining, giving autoscaler time to grow the green pool organically — useful when surge capacity is hard to pre-provision.
+
+```bash
+# Surge: allow one extra node per zone during upgrade, zero unavailable
+gcloud container node-pools update default-pool \
+  --cluster=prod-cluster \
+  --region=us-central1 \
+  --max-surge-upgrade=1 \
+  --max-unavailable-upgrade=0
+
+# Blue-green with 25% batch drains and 30-minute pool soak
+gcloud container node-pools update stateful-pool \
+  --cluster=prod-cluster \
+  --region=us-central1 \
+  --enable-blue-green-upgrade \
+  --standard-rollout-policy=batch-percent=0.25,batch-soak-duration=600s \
+  --node-pool-soak-duration=1800s
+```
+
+**PodDisruptionBudget interaction**: PDBs constrain *voluntary* evictions during drains. Surge and blue-green upgrades use voluntary evictions, so a strict `minAvailable` PDB slows node drains until spare capacity exists — plan surge headroom or temporarily relax PDBs during maintenance windows. **Spot preemption** is involuntary; PDBs cannot prevent Spot reclamation, which is why Spot tiers belong on fault-tolerant work only.
+
+### Maintenance windows versus maintenance exclusions
+
+[Maintenance windows](https://cloud.google.com/kubernetes-engine/docs/how-to/maintenance-windows-and-exclusions) restrict **when** GKE may start automatic upgrades — you must provide at least 48 hours of eligible maintenance time in any rolling 32-day window, in contiguous blocks of four hours or more. **Maintenance exclusions** temporarily forbid upgrades (scopes include `no_upgrades`, `no_minor_upgrades`, or `no_minor_or_node_upgrades`). Exclusions on release-channel clusters cannot extend past the enrolled minor version's **end-of-support date** — you can freeze Black Friday, but you cannot freeze forever without upgrading. Scoped exclusions (`no_minor_upgrades`) require release-channel enrollment; static-version clusters only allow full `no_upgrades` exclusions.
+
+If an upgrade outlasts the maintenance window, GKE may pause and resume in the next window, leaving nodes on mixed versions until completion — another reason to monitor node version skew after long weekends.
+
 ### [Auto-Repair](https://cloud.google.com/kubernetes-engine/docs/how-to/node-auto-repair)
 
-Separate from auto-upgrade, auto-repair monitors node health and replaces unhealthy nodes automatically. A node is considered unhealthy if:
+Separate from auto-upgrade, auto-repair monitors node health and replaces unhealthy nodes automatically without waiting for a scheduled maintenance window. A node is considered unhealthy when any of the following persist long enough for automation to act:
 
 - It reports a `NotReady` status for more than approximately 10 minutes
 - It has no disk space
@@ -390,7 +550,7 @@ gcloud container node-pools describe default-pool \
 
 ## Cluster Networking Basics
 
-Every GKE cluster needs IP addresses for nodes, pods, and services. GKE strongly recommends **VPC-native clusters** (alias IP mode), [which is the default for all new clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips).
+Every GKE cluster needs IP addresses for nodes, pods, and services. GKE strongly recommends **VPC-native clusters** (alias IP mode), [which is the default for all new clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips). VPC-native networking matters for architecture decisions in this module because **Pod CIDR sizing caps how large your cluster can ever grow**, independent of how many nodes you can afford in Compute Engine.
 
 ```bash
 # Create a VPC-native cluster with explicit secondary ranges
@@ -427,6 +587,53 @@ graph TD
     end
 ```
 
+### VPC-native IP sizing: a worked example
+
+[Google's alias IP documentation](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips) explains the coupling between secondary Pod range size, `max-pods-per-node`, and maximum node count. Unless you override it, GKE allocates a **/24 per node** from the Pod secondary range and supports up to **110 Pods per node** on Standard clusters (Autopilot defaults differ — Autopilot fixes max Pods per node at **32** for sizing formulas).
+
+Suppose you create a Standard regional cluster with `--cluster-ipv4-cidr=10.4.0.0/17` (a /17 Pod range) and default 110 Pods per node. The /17 range provides 2^(32-17) = **32,768** Pod IP addresses at the subnet level, but each node consumes a /24 (256 addresses) slice. Maximum nodes ≈ 32,768 / 256 = **128 nodes** before Pod IP exhaustion — even if your primary subnet could fit more VM primary IPs. If you later enable autoscaling toward 200 nodes, scheduling succeeds until the Pod CIDR fills, then you see `IP space ... is exhausted` errors despite spare CPU in the project.
+
+The primary subnet range separately limits nodes: a /24 primary range supports on the order of **250 usable node IPs** per Google's sizing table, minus reserved addresses. **Both** limits apply simultaneously — plan the tighter bound. For Services, GKE 1.29+ Standard and 1.27+ Autopilot default to the GKE-managed `34.118.224.0/20` Service range, reducing the need for a user-managed Services secondary range in many greenfield designs.
+
+```text
+Worked sizing checklist (Standard, /17 Pod CIDR, 110 max Pods/node):
+  Pod secondary /17  → ~128 nodes max (256 IPs reserved per node)
+  Primary subnet /24 → ~250 nodes max
+  Binding constraint → ~128 nodes before Pod IP exhaustion wins
+
+Action: If you need 200+ nodes, widen Pod CIDR at create time (/16 or discontiguous multi-Pod CIDR) — retrofits are painful.
+```
+
+Shared VPC environments require host-project Network Admins to pre-create secondary ranges; GKE cannot auto-expand on your behalf in that model, which makes the worked math above a joint exercise between platform and network teams before the first `gcloud container clusters create`.
+
+### Routes-based clusters (legacy)
+
+Older GKE clusters could operate in **routes-based** mode, programming static routes for Pod CIDRs instead of alias IPs. VPC-native clusters are now the default on all surfaces, and features such as network endpoint groups and many firewall granularities require alias mode. If you inherit a routes-based cluster, plan migration rather than expanding it — greenfield architecture in this module assumes `--enable-ip-alias` (default) and explicit secondary ranges in Shared VPC.
+
+---
+
+---
+
+## Production readiness checklist
+
+Before declaring a GKE cluster production-ready, walk through this checklist with your platform and application owners. Each item connects to a section in this module.
+
+**Topology and availability.** Confirm the cluster is regional for production user traffic. Verify node pools span at least two zones for worker resilience even when the control plane is already regional. Document the `--num-nodes` or `--total-min-nodes` math in the runbook so on-call engineers do not misread capacity during incidents.
+
+**Upgrade policy.** Enroll in Regular or Stable channel unless you have a dedicated test environment on Rapid. Configure a maintenance window with at least forty-eight hours of availability per rolling thirty-two-day window. Add holiday exclusions with explicit end dates. Pick surge or blue-green node upgrade strategy per pool based on PDB strictness.
+
+**Identity and security.** Enable Workload Identity at create time. Bind each Deployment to a dedicated Google service account with least-privilege IAM. Audit DaemonSets for Autopilot compatibility before cutover. Ensure Spot-only pools carry taints and that on-demand baseline capacity exists.
+
+**Network and IP capacity.** Validate Pod secondary CIDR supports planned max nodes given `/24`-per-node allocation. Confirm Shared VPC secondary ranges exist before cluster create. Document primary subnet expansion procedure if node count may grow past initial estimates.
+
+**Cost controls.** Tag clusters for cost allocation. Right-size Autopilot requests from metrics, not guesses. Model management fees at fleet scale. Use Spot for fault-tolerant tiers only. Review free-tier credit consumption monthly so dev clusters do not silently exhaust the single-cluster credit.
+
+**Observability baseline.** Ensure logging and metrics DaemonSets comply with mode restrictions. Test that `kubectl` access paths work during simulated maintenance windows. Record current control-plane and node versions after every upgrade wave.
+
+Hypothetical scenario: a team skips the IP capacity review and launches successfully with ten nodes. Six months later autoscaling tries to reach eighty nodes and scheduling fails with Pod IP exhaustion while CPU quota remains unused. The fix requires network redesign or cluster rebuild — exactly the failure mode the worked sizing example prevents when applied at design time.
+
+**Version alignment.** Record `currentMasterVersion` and node pool node versions after each maintenance window. Mixed-version states during long upgrades are normal briefly. They become incidents when application APIs removed in the new minor break Deployments that were never tested in staging on that minor. Pair channel enrollment with a staging cluster on the same channel that upgrades first. Run kubeconform or policy checks in CI against the next channel version before production maintenance windows execute. Document who approves emergency exclusions when a zero-day patch arrives outside the normal window. Keep that approver on-call rotation separate from application on-call so upgrade policy decisions do not stall behind unrelated incidents. Rehearse the rollback path — DNS revert or mesh traffic shift — at least once per quarter so cluster rebuilds are not your only escape hatch.
+
 ---
 
 ## Did You Know?
@@ -437,7 +644,7 @@ graph TD
 
 3. **GKE operates at very large scale inside Google Cloud**, which gives Google significant operational experience running Kubernetes for many customers. Avoid uncited deployment-volume rankings or causal claims about patch timing here.
 
-4. **Maintenance exclusions are bounded by release-channel support rules**. Short "No upgrades" exclusions are limited, and longer exclusions must still end by the minor version's end-of-support date, so you can't postpone upgrades indefinitely.
+4. **Maintenance exclusions are bounded by release-channel support rules**. Short "No upgrades" exclusions are limited to ninety days. Longer exclusions must still end by the minor version's end-of-support date. You cannot postpone upgrades indefinitely while staying on an unsupported Kubernetes minor.
 
 ---
 
@@ -500,23 +707,27 @@ The team should enable Node Auto-Provisioning (NAP) to replace their complex web
 This plan will fail because a cluster's mode (Standard or Autopilot) is a fundamental, immutable architectural property set at creation time and cannot be toggled or converted later. Autopilot clusters are built with different underlying infrastructure assumptions and security boundaries that prevent an in-place conversion from a Standard cluster. The correct approach is to provision a brand-new Autopilot cluster side-by-side with the existing one. The team must then audit their manifests to ensure compatibility (e.g., adding explicit resource requests, removing unsupported privileged access), deploy the workloads to the new cluster, and carefully shift traffic over before decommissioning the old Standard cluster.
 </details>
 
+<details>
+<summary>8. Your platform team must upgrade a 30-node Standard node pool running stateful Redis instances with a strict `PodDisruptionBudget` of `minAvailable: 28`. Surge upgrades with `max-unavailable=1` are taking longer than the Saturday maintenance window allows, and last month a rushed surge left two nodes on the old version for a week. Which upgrade strategy should they evaluate, and what tradeoff should they expect?</summary>
+
+They should evaluate **blue-green node pool upgrades** with explicit batch soak durations rather than relying on default surge settings alone. Blue-green creates a parallel green pool on the target version, validates Redis replicas on new nodes, then drains the blue pool in batches (`batch-percent` or `batch-node-count`) with `node-pool-soak-duration` between phases — giving time to confirm replication lag and memory stability before continuing. The tradeoff is **temporary double capacity cost** during soak (both pools exist) versus surge's smaller incremental cost but higher risk of prolonged mixed-version states when PDBs throttle drains. PDBs still apply to voluntary evictions during blue-green drains, so the team must ensure green pool capacity can satisfy `minAvailable: 28` before each batch — often by temporarily scaling replicas or loosening PDBs only inside an approved maintenance exclusion scoped to `no_minor_upgrades` rather than disabling upgrades entirely.
+</details>
+
 ---
 
 ## Hands-On Exercise: Deploy to Standard and Autopilot
 
 ### Objective
 
-Create both a GKE Standard and Autopilot cluster, deploy the same application to each, and compare the operational experience, billing model, and scheduling behavior.
+Create both a GKE Standard and Autopilot cluster, deploy the same application to each, and compare the operational experience, billing model, and scheduling behavior. The exercise reinforces that identical Deployment YAML often **schedules** differently — Standard places Pods on the machine type you chose, while Autopilot provisions nodes matched to aggregated requests — and that regional Standard clusters always multiply baseline node counts by zone unless you use total autoscaling flags.
 
 ### Prerequisites
 
-- `gcloud` CLI installed and authenticated
-- A GCP project with billing enabled and the GKE API enabled
-- `kubectl` installed
+You need the `gcloud` CLI authenticated to a billing-enabled project with the Kubernetes Engine API enabled, plus a local `kubectl` binary matched to a supported version for GKE 1.35 clusters. Pick a single region (the solutions use `us-central1`) and delete both clusters afterward so free-tier credits are not consumed by forgotten management fees.
 
 ### Tasks
 
-**Task 1: Enable APIs and Set Up Variables**
+**Task 1: Enable APIs and Set Up Variables** — confirm your project can create GKE clusters before spending time on cluster provisioning that fails at the API gate.
 
 <details>
 <summary>Solution</summary>
@@ -536,7 +747,7 @@ gcloud services list --enabled --filter="name:container" \
 ```
 </details>
 
-**Task 2: Create a GKE Standard Cluster**
+**Task 2: Create a GKE Standard Cluster** — observe how `--num-nodes=1` on a regional cluster still produces three worker VMs (one per zone by default).
 
 <details>
 <summary>Solution</summary>
@@ -565,7 +776,7 @@ kubectl version
 ```
 </details>
 
-**Task 3: Create a GKE Autopilot Cluster**
+**Task 3: Create a GKE Autopilot Cluster** — note the absence of node-pool prompts and compare create time to Standard.
 
 <details>
 <summary>Solution</summary>
@@ -588,7 +799,7 @@ kubectl get nodes -o wide
 ```
 </details>
 
-**Task 4: Deploy the Same Application to Both Clusters**
+**Task 4: Deploy the Same Application to Both Clusters** — the identical YAML validates that your manifests are portable; differences appear in scheduling and node labels.
 
 <details>
 <summary>Solution</summary>
@@ -658,7 +869,7 @@ kubectl get svc gke-demo
 ```
 </details>
 
-**Task 5: Compare Node Behavior and Resource Allocation**
+**Task 5: Compare Node Behavior and Resource Allocation** — inspect allocatable resources on Standard nodes versus Autopilot-provisioned shapes for the same Pod requests.
 
 <details>
 <summary>Solution</summary>
@@ -707,7 +918,7 @@ MEM_REQ:.spec.containers[0].resources.requests.memory
 ```
 </details>
 
-**Task 6: Clean Up**
+**Task 6: Clean Up** — delete both clusters asynchronously so management fees stop accruing; verify deletion with `gcloud container clusters list`.
 
 <details>
 <summary>Solution</summary>
@@ -757,3 +968,8 @@ Next up: **[Module 6.2: GKE Networking (Dataplane V2 and Gateway API)](../module
 - [cloud.google.com: node auto repair](https://cloud.google.com/kubernetes-engine/docs/how-to/node-auto-repair) — The node auto-repair guide documents both the default setting and the repair criteria with these approximate thresholds.
 - [cloud.google.com: alias ips](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips) — The VPC-native clusters documentation explicitly states that VPC-native is the default mode for new GKE clusters.
 - [Compare features in Autopilot and Standard clusters](https://cloud.google.com/kubernetes-engine/docs/resources/autopilot-standard-feature-comparison) — This comparison page is the fastest way to verify which cluster mode supports specific operational or security features.
+- [cloud.google.com: node images](https://cloud.google.com/kubernetes-engine/docs/concepts/node-images) — Documents COS versus Ubuntu image tradeoffs and Autopilot's mandatory `cos_containerd` image.
+- [cloud.google.com: cluster autoscaler](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-autoscaler) — Documents `--total-min-nodes` / `--total-max-nodes` versus per-zone min/max flags.
+- [cloud.google.com: node pool upgrade strategies](https://cloud.google.com/kubernetes-engine/docs/how-to/node-pool-upgrade-strategies) — Surge versus blue-green upgrade configuration and soak parameters.
+- [cloud.google.com: maintenance windows and exclusions](https://cloud.google.com/kubernetes-engine/docs/how-to/maintenance-windows-and-exclusions) — Maintenance window availability requirements and exclusion scope/end-of-support rules.
+- [cloud.google.com: workload identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) — Enabling `--workload-pool` and binding Kubernetes service accounts to Google identities.
