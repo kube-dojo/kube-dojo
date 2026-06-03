@@ -174,6 +174,12 @@ spec:
       storage: 1Ti
 ```
 
+### Azure Blob storage CSI: when object storage beats disks
+
+The blob CSI driver (`blob.csi.azure.com`) mounts Azure Blob containers through BlobFuse or NFS 3.0. It fits read-heavy, sequentially accessed datasets — log archives, model checkpoints, rendered media — where POSIX semantics matter less than cost per terabyte. Blob-backed volumes support expansion without remounting in many configurations and avoid provisioning premium block IOPS you will not consume.
+
+Blob is not a drop-in replacement for PostgreSQL data directories or low-latency transactional stores. Latency and consistency models differ from Azure Disks; treat blob mounts as shared read-mostly filesystems, not as HA database storage. Enable the driver with `az aks update --enable-blob-driver` when ML or analytics pods need multi-terabyte shared paths without NFS share limits.
+
 ### Shared Disks for High Availability
 
 In extremely specific edge cases, you may need multiple pods to write to the same block storage device concurrently. Azure Shared Disks allow a single Premium SSD or Ultra Disk to be attached to multiple nodes simultaneously. This is designed for cluster-aware applications, like SQL Server Failover Cluster Instances, that implement their own SCSI persistent reservation commands to coordinate writes.
@@ -206,6 +212,51 @@ volumeBindingMode: WaitForFirstConsumer
 | **Windows support** | Yes | Yes | Yes | No |
 | **Best for** | Databases, stateful apps | High-IOPS databases | Shared config, CMS | ML data, media |
 | **Cost** | $$$ | $$$$ | $$ | $$$ |
+
+### The CSI driver model on AKS
+
+AKS exposes Azure storage through three out-of-tree CSI drivers registered with the Kubernetes API. The disk driver (`disk.csi.azure.com`, historically called azuredisk-csi) provisions block volumes for `ReadWriteOnce` workloads. The file driver (`file.csi.azure.com`, azurefile-csi) provisions SMB or NFS shares for `ReadWriteMany`. The blob driver (`blob.csi.azure.com`) mounts object storage through BlobFuse or NFS 3.0 when you need massive unstructured datasets without paying for block-tier IOPS you will never use.
+
+Choosing the wrong driver is expensive in two ways at once. A team that mounts a 2 TiB Premium SSD just to share static assets pays block prices for file semantics. A team that puts a PostgreSQL data directory on Azure Files NFS pays latency and protocol overhead for access patterns that require local block I/O. The decision is not “which Azure product sounds best” but which Kubernetes access mode your pod spec actually requires.
+
+| Driver | Provisioner | Access modes | Caching on data disks | Typical mistake |
+| :--- | :--- | :--- | :--- | :--- |
+| Azure Disk CSI | `disk.csi.azure.com` | RWO (RWX only via shared disks + cluster-aware app) | Premium SSD v1/v2: host cache options; Ultra and PremiumV2_LRS: `None` only | Using `Immediate` binding on multi-zone clusters |
+| Azure Files CSI | `file.csi.azure.com` | RWX | N/A (network file protocol) | Picking SMB for Linux-only high-throughput ML reads |
+| Azure Blob CSI | `blob.csi.azure.com` | RWX (fuse or NFS mount) | N/A | Expecting database-grade latency from object-backed mounts |
+
+### StorageClass parameters that shape performance and placement
+
+Your StorageClass `parameters` block is the contract between Kubernetes scheduling and Azure billing. For disks, `skuName` selects the managed disk SKU (`Premium_LRS`, `StandardSSD_LRS`, `PremiumV2_LRS`, `UltraSSD_LRS`, or zone-redundant variants like `Premium_ZRS`). Premium SSD v2 and Ultra disks must use `cachingMode: None` because host caching would fight independently tuned IOPS and sub-millisecond latency targets.
+
+`volumeBindingMode: WaitForFirstConsumer` delays Azure disk creation until the scheduler picks a node, which is why it is the default recommendation for zonal AKS node pools. `allowVolumeExpansion: true` lets you grow PVC capacity online; for Premium SSD v1, expanding disk size can also raise the IOPS tier because performance is capacity-coupled. Premium SSD v2 and Ultra disks let you change IOPS and throughput independently (with limits on how often you can resize performance per day), so expansion and performance tuning are separate operational levers.
+
+```yaml
+# Premium SSD v1 — IOPS still tied to provisioned GiB (P30 = 5,000 base IOPS at 1 TiB)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: premium-ssd-v1-sized
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Premium_LRS
+  cachingMode: ReadOnly
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+```
+
+### Premium SSD v2 versus Ultra Disk in production
+
+Both tiers decouple capacity from performance, but they target different economics. Premium SSD v2 offers up to 80,000 IOPS and 2,000 MB/s throughput with a 3,000 IOPS baseline included on every disk; additional IOPS scale at 500 per GiB above 6 GiB. Ultra Disk scales to 400,000 IOPS and 10,000 MB/s on large disks, with performance adjustable at runtime up to four times per 24-hour window. Ultra also carries a VM reservation fee when Ultra capability is enabled on a node without an attached Ultra disk, which surprises teams during cost reviews.
+
+For a 50 GiB database needing 15,000 sustained IOPS, Premium SSD v1 fails without massively over-provisioning capacity (a 64 GiB P6 disk delivers only 240 base IOPS). Premium SSD v2 or Ultra is required. Ultra wins when you need the highest ceilings or sub-millisecond latency guarantees at scale; Premium SSD v2 often wins on price-performance for general production databases that still need tunable IOPS without Ultra’s regional and VM SKU constraints.
+
+### Volume expansion, snapshots, and reclaim policy
+
+Enable the AKS snapshot controller alongside CSI drivers so you can take `VolumeSnapshot` objects for backup and clone workflows. Snapshots bill for used data size, not the full provisioned disk, which matters when you snapshot thick databases that only partially fill their PVCs. Pair `reclaimPolicy: Retain` on production StorageClasses so accidental PVC deletion does not destroy the underlying Azure disk; use `Delete` only in lab namespaces where automation should tear down storage with the workload.
+
+When expanding a PVC, verify the filesystem inside the pod grows after the volume resize completes. The CSI driver expands the Azure disk, but ext4/xfs growth still requires node-level steps unless your container image runs a resize utility on restart. Document this in runbooks so on-call engineers do not assume “PVC says Bound at 512 GiB” means the database file already uses the space.
 
 ---
 
@@ -295,6 +346,35 @@ data:
 k apply -f container-insights-config.yaml
 ```
 
+### Container Insights versus Managed Prometheus: who owns which signal
+
+Production AKS observability is intentionally split across two cost models and two query languages. Container Insights is the log-and-inventory plane: it ships container stdout/stderr, Kubernetes events, and selected performance tables into Log Analytics, where you pay primarily for ingestion gigabytes and retention days. Managed Prometheus is the metrics plane: it scrapes Prometheus endpoints (including kube-state and your app `/metrics`) into an Azure Monitor workspace, where you pay for metric samples ingested and PromQL queries executed, with eighteen months of retention included at no separate storage charge.
+
+Neither replaces the other during an incident. Disk I/O saturation often appears first in Container Insights `InsightsMetrics` or platform metrics, while queue-depth-driven scaling decisions belong in Prometheus or KEDA triggers. Teams that disable Container Insights “because we have Grafana” still lack correlated container logs unless they route logs elsewhere deliberately.
+
+| Layer | Primary store | Best for | Cost spike trigger |
+| :--- | :--- | :--- | :--- |
+| Container Insights | Log Analytics workspace | Log triage, KubeEvents, inventory views | Unfiltered stdout from noisy namespaces |
+| Managed Prometheus | Azure Monitor workspace | SLO metrics, custom app metrics, recording rules | High-cardinality labels on high-frequency scrapes |
+| Managed Grafana | Linked to AM workspace | Dashboards combining AM metrics + optional LA queries | Seat/licensing (service) plus underlying data costs |
+| Platform metrics | Azure Monitor metrics DB | Node/pod CPU memory at no extra collection cost | Usually low unless you export everything to LA |
+
+### Log Analytics cost control: caps, tiers, and DCR grouping
+
+Beyond namespace exclusions in the agent ConfigMap, use workspace-level daily cap (`--quota-gb` on workspace create) as a circuit breaker so a logging storm cannot consume an entire month's observability budget in hours. For AKS control plane resource logs, Microsoft recommends resource-specific diagnostic mode so audit data lands in dedicated tables (`AKSAudit`, `AKSAuditAdmin`, `AKSControlPlane`) instead of the monolithic `AzureDiagnostics` table, and configure high-volume audit tables as **Basic logs** where policy allows — Basic logs trade reduced query features for materially lower ingestion cost on verbose audit streams.
+
+Container insights also supports Data Collection Rule (DCR) groupings that limit which tables ingest (for example, **Performance** only without full **Logs and events**). Selecting a reduced grouping disables some default Container insights portal blades, which is an acceptable trade when Managed Prometheus already covers golden signals and you only need selective log capture for application namespaces.
+
+```bash
+# Set a daily ingestion cap on the workspace (example: 5 GB/day)
+az monitor log-analytics workspace create \
+  --resource-group rg-aks-prod \
+  --workspace-name law-aks-prod \
+  --location westeurope \
+  --retention-in-days 90 \
+  --quota-gb 5
+```
+
 ---
 
 ## Managed Prometheus and Grafana: Cloud-Native Monitoring
@@ -303,7 +383,9 @@ Container Insights is fantastic for log aggregation and infrastructural health, 
 
 > **Stop and think**: If you rely strictly on Container Insights for everything, what happens when your application needs to expose a custom business metric like "active_user_sessions"? Why is Managed Prometheus a better fit for this?
 
-Prometheus operates on a "pull" model, actively scraping metrics endpoints natively exposed by your microservices. Azure provides a fully managed implementation of Prometheus, completely eliminating the operational burden of managing persistent volumes, remote write configurations, and Thanos/Cortex scaling for long-term retention. 
+Prometheus operates on a "pull" model, actively scraping metrics endpoints natively exposed by your microservices. Azure provides a fully managed implementation of Prometheus, completely eliminating the operational burden of managing persistent volumes, remote write configurations, and Thanos/Cortex scaling for long-term retention.
+
+On AKS, enabling Managed Prometheus creates a data collection rule that installs the `ama-metrics` agent in `kube-system` and forwards scraped series into your Azure Monitor workspace. Prebuilt recording rules ship with the service to reduce query cost on dashboards. When you outgrow default scrape configs, customize targets through ConfigMaps documented for the managed service so you do not run a second in-cluster Prometheus HA pair “just for one extra metric” — that pattern duplicates samples and doubles ingestion charges without adding retention value. 
 
 ### Setting Up Managed Prometheus
 
@@ -432,6 +514,20 @@ spec:
       annotations:
         summary: "Payment service is down"
 ```
+
+### Remote write, recording rules, and three alert pathways
+
+Managed Prometheus stores recording and alert rule groups in the Azure Monitor workspace itself, not on cluster-local Prometheus PVCs. Recording rules pre-aggregate expensive PromQL (for example, per-pod rates rolled up to deployment-level series) so dashboards and alerts query smaller cardinalities at lower cost. You can still use **remote_write** from a self-managed Prometheus scraper during migration, sending duplicate series into the same workspace until you decommission in-cluster Prometheus HA pairs.
+
+Choose the alert pathway based on what question you are answering:
+
+| Alert type | Data source | Fires when | Good fit |
+| :--- | :--- | :--- | :--- |
+| Prometheus alert rules (`PrometheusRuleGroup`) | Azure Monitor workspace metrics | PromQL threshold breached for `for:` duration | SLO latency, error rate, `up==0` |
+| Metric alerts (Azure Monitor) | Platform or custom metrics in AM | ARM metric condition on resource ID | Service Bus depth, node NotReady counts |
+| Log query alerts | Log Analytics KQL | Scheduled KQL returns rows | Rare stderr patterns, audit anomalies |
+
+Metric alerts on Azure resources (like Service Bus `ActiveMessages`) do not require Prometheus instrumentation and complement KEDA-driven scaling: KEDA reacts continuously, while alerts wake humans when automation hits `maxReplicaCount` or queue depth exceeds business thresholds. Log query alerts remain the right tool when the signal only exists in Container Insights tables (for example, stack traces in `ContainerLogV2` that you never exported as Prometheus counters).
 
 ---
 
@@ -580,6 +676,68 @@ sequenceDiagram
     CA->>CA: Removing 4 underutilized nodes
 ```
 
+### How KEDA, HPA, VPA, and Cluster Autoscaler layer
+
+Think in four planes: **metrics source**, **pod count**, **pod size**, and **node count**. KEDA watches external signals (queues, Prometheus queries, Azure Monitor metrics) and writes desired replica counts into an HPA object it manages. Standard HPA without KEDA only sees CPU/memory/custom metrics from the metrics server. Vertical Pod Autoscaler (VPA) recommends or mutates container requests/limits based on historical usage — it does not replace KEDA for queue depth. Cluster Autoscaler (or node autoprovisioning / Karpenter on AKS) adds/removes VMs when pending pods cannot schedule.
+
+Microsoft documents that you should not attach a separate HPA to the same workload KEDA already scales; they compete because KEDA already owns an HPA under the hood. Operational order during a spike: KEDA raises replicas → scheduler places what fits → pending pods trigger CA → new nodes accept backlog consumers.
+
+| Component | Scales | Scale-to-zero | Typical coupling |
+| :--- | :--- | :--- | :--- |
+| KEDA | Deployment/StatefulSet replicas via external metrics | Yes (`minReplicaCount: 0`) | Service Bus, Event Hubs, Prometheus |
+| HPA (alone) | Replicas on CPU/memory/custom metrics | No (minimum 1) | Web APIs with steady baseline |
+| VPA | CPU/memory requests (and limits in Auto mode) | N/A | Right-sizing before CA over-provisions nodes |
+| Cluster Autoscaler | Node pool VM count | N/A | Reacts to unschedulable pods |
+
+### Activation threshold, polling interval, and cooldown
+
+KEDA scalers distinguish **activation** from **scaling**. Activation is the gate that wakes a scaled-to-zero deployment: until the metric crosses `activation*` metadata (for example, `activationMessageCount` on Service Bus), KEDA keeps replicas at zero even if scaling thresholds would otherwise demand pods. Scaling thresholds (`messageCount`, Prometheus `threshold`, etc.) determine how many replicas to run once active.
+
+`pollingInterval` controls how often KEDA queries Azure APIs or Prometheus (your lab uses 10–15 seconds). Shorter intervals react faster but increase API call volume and cost on large fleets. `cooldownPeriod` prevents flapping: after the metric drops, KEDA waits before scaling in, which is why scale-to-zero in Task 7 takes roughly sixty to ninety seconds even after the queue is empty.
+
+### Multi-scaler strategies: `max`, `min`, and `average`
+
+When a `ScaledObject` lists multiple triggers, `spec.advanced.scalingModifiers.strategy` chooses how to combine desired counts. **max** takes the highest replica recommendation (aggressive scale-out for multi-signal safety). **min** takes the lowest (conservative). **average** blends them. Use **max** when any single saturated signal (queue depth OR high CPU) should drive capacity; use **min** when all signals must agree before adding cost.
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: order-processor-multi
+  namespace: orders
+spec:
+  scaleTargetRef:
+    name: order-processor
+  pollingInterval: 15
+  cooldownPeriod: 120
+  minReplicaCount: 0
+  maxReplicaCount: 50
+  advanced:
+    scalingModifiers:
+      strategy: max
+  triggers:
+    - type: azure-servicebus
+      metadata:
+        queueName: incoming-orders
+        namespace: sb-prod-westeurope
+        messageCount: "10"
+        activationMessageCount: "1"
+      authenticationRef:
+        name: servicebus-auth
+    - type: prometheus
+      metadata:
+        serverAddress: "https://prometheus-prod-xxx.prometheus.monitor.azure.com"
+        metricName: order_processing_lag_seconds
+        query: "max(order_processing_lag_seconds)"
+        threshold: "30"
+```
+
+`TriggerAuthentication` with `podIdentity.provider: azure-workload` (as in your lab) keeps queue credentials off etcd; enable the workload identity add-on before KEDA so operator pods receive `AZURE_FEDERATED_TOKEN_FILE` and related environment variables.
+
+### Scale-to-zero and cold-start tradeoffs
+
+Scale-to-zero eliminates compute charges for idle queue consumers, but the first message after idle pays a **cold-start tax**: KEDA poll interval, image pull, init containers, Service Bus session establishment, and possibly Cluster Autoscaler node boot time stack serially. For latency-sensitive APIs, set `minReplicaCount: 1` (or higher) and use KEDA only for burst scaling above that floor. For batch ETL and order processors, scale-to-zero is often the highest ROI cost lever in the cluster when paired with spot burst pools.
+
 ---
 
 ## Cost Optimization: Spot Instances and Right-Sizing
@@ -635,7 +793,9 @@ spec:
 
 > **Stop and think**: If your entire web frontend is running on a Spot node pool and Azure experiences a sudden surge in demand for that VM size in your region, what happens to your application? How should you architect a production deployment to utilize Spot savings without risking downtime?
 
-Avoid running primary database tiers or essential API gateways entirely on Spot hardware. The optimal approach is running your baseline required replicas on standard On-Demand instances, and using KEDA to burst onto Spot VMs specifically to process sudden traffic spikes. 
+Avoid running primary database tiers or essential API gateways entirely on Spot hardware. The optimal approach is running your baseline required replicas on standard On-Demand instances, and using KEDA to burst onto Spot VMs specifically to process sudden traffic spikes.
+
+Set `spot-max-price` deliberately: `-1` means the instance is not evicted based on price alone (you pay the lower of Spot or standard rate while capacity exists). A positive cap (up to five decimal places in USD) evicts when Spot price exceeds your ceiling — useful for batch fleets with hard unit economics. Pair `eviction-policy Delete` (default) when pods should disappear with the node, or `Deallocate` only when you accept stopped VMs still counting against quota and complicating upgrades. 
 
 ### Workload Right-Sizing
 
@@ -653,6 +813,131 @@ resources:
     memory: "256Mi" # Equal to request to prevent OOM
     cpu: "500m"     # Allowed to burst up to half a core
 ```
+
+### Vertical Pod Autoscaler: recommend versus auto
+
+Install VPA when Cluster Autoscaler keeps adding nodes while actual CPU usage stays flat — that pattern almost always means requests are inflated, not that you need more hardware. VPA's **Off** mode only recommends changes (safe for learning). **Initial** applies recommendations on pod creation. **Auto** evicts and recreates pods to apply new requests, which can disrupt stateful workloads if you do not coordinate with PodDisruptionBudgets.
+
+Run VPA in recommend mode first, feed results into your GitOps requests, and only enable Auto on stateless Deployments after you validate eviction behavior during a maintenance window. VPA does not shrink Azure disks attached to StatefulSets; it only adjusts CPU/memory requests that influence scheduling and CA math.
+
+```bash
+# Install VPA (upstream components) — verify compatibility with your AKS version
+kubectl apply -f https://github.com/kubernetes/autoscaler/releases/latest/download/vertical-pod-autoscaler-release.yaml
+
+# Example VPA in recommendation-only mode
+kubectl apply -f - <<EOF
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: order-processor-vpa
+  namespace: orders
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-processor
+  updatePolicy:
+    updateMode: "Off"
+EOF
+```
+
+### AKS cost analysis add-on (OpenCost-based showback)
+
+AKS cost analysis maps Azure invoice lines to Kubernetes namespaces and assets using an OpenCost-based agent. Enable it on Standard or Premium tier clusters with managed identity; it cannot run on Free tier without upgrading. The agent consumes roughly 200 MB plus about 0.5 MB per container (Microsoft documents support for on the order of seven thousand containers per cluster at the current memory limit).
+
+```bash
+az aks update \
+  --resource-group rg-aks-prod \
+  --name aks-prod-westeurope \
+  --enable-cost-analysis
+```
+
+Portal views expose **idle** charges (capacity no workload uses), **system** charges (AKS reserved kubelet/runtime overhead), and **unallocated** charges (resources not attributed to a namespace). Use this for showback conversations: a namespace with tiny CPU usage but huge persistent volumes often drives cost through Premium disks, not through pod requests.
+
+---
+
+## Production Cost Lens
+
+Hypothetical scenario: a platform team budgets $18,000/month for a three-node production AKS footprint and discovers a $31,000 invoice. The overrun is rarely one line item — it is stacked leaks across storage, logs, metrics, and scheduler behavior.
+
+**Disk and PVC economics.** Managed disks bill for provisioned GiB whether the filesystem fills them or not. Premium SSD v1 forces larger disks when you need IOPS, so a 50 GiB database on P30-sized storage pays for 1 TiB of provisioned capacity. Premium SSD v2 and Ultra let you pay for performance dimensions directly, but Ultra VM reservation fees apply when nodes enable Ultra capability without attached Ultra volumes. Orphan PVCs with `Retain` policies leave premium disks billing after the workload namespace was deleted.
+
+**Log Analytics ingestion and retention.** Container Insights defaults can ingest hundreds of gigabytes per day on chatty clusters. Ingestion is priced per GB with retention multiplying storage cost; workspace daily caps and namespace exclusions are mandatory guardrails, not optimizations. Control plane audit logs (`kube-audit`) are another spike source — prefer `kube-audit-admin` and Basic log tier where appropriate.
+
+**Managed Prometheus samples.** Pricing follows ingestion and query volume, not workspace storage (eighteen-month retention is included). High-cardinality labels (`pod`, `url_path`, `user_id`) on metrics scraped every fifteen seconds explode sample counts. Use recording rules to drop cardinality before dashboards and alerts query the data.
+
+**Spot versus on-demand mix.** Spot VMs commonly discount up to roughly ninety percent versus pay-as-you-go for the same SKU, balanced against thirty-second eviction notices. Safe spot candidates: batch workers, KEDA-driven burst consumers with checkpointing, CI jobs. Unsafe: synchronous API gateways without on-demand baseline replicas, StatefulSets without graceful shutdown, or workloads that cannot tolerate `kubernetes.azure.com/scalesetpriority=spot` taints.
+
+**Over-provisioned requests and idle premium disks.** Cluster Autoscaler provisions nodes to satisfy **requests**, not actual usage. Inflated CPU requests cause extra D8s nodes while metrics show ten percent utilization. KEDA scale-to-zero removes pod compute but not PVCs — verify unused Premium disks monthly.
+
+| Knob | What it reduces | Watch-out |
+| :--- | :--- | :--- |
+| `WaitForFirstConsumer` + right SKU | Failed scheduling retries, wrong-zone disks | Still pay for provisioned IOPS tier |
+| Log exclusions + DCR table groups | Log Analytics GB/day | Some Container insights blades disappear |
+| Prometheus recording rules + scrape interval | Sample ingestion charges | Coarser alerts if you over-aggregate |
+| Spot pool + on-demand baseline | Compute $/core-hour | Evictions during regional capacity crunches |
+| VPA recommend → GitOps requests | CA node count | Auto mode evicts pods during rightsizing |
+
+---
+
+## Patterns and Anti-Patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| Zone-aware disk + `WaitForFirstConsumer` | StatefulSets on multi-AZ AKS | Disk and pod stay collocated in the same zone | Survives node loss; disk does not follow pod across zones |
+| Metrics/logs split (AM workspace + LA workspace) | Any production cluster | Right tool per signal; avoids shipping all metrics as logs | Managed Prometheus handles high-cardinality time series cheaper than log conversion |
+| KEDA queue scaler + on-demand floor + spot burst | Async order pipelines | Business metric drives scale; spot absorbs peaks | Set `maxReplicaCount` and metric alerts above KEDA ceiling |
+| Premium SSD v2 for right-sized DB IOPS | Databases under 200 GiB needing tunable IOPS | Avoids terabyte-sized Premium v1 disks | Expand IOPS without dummy capacity |
+| Cost analysis + Retain disks audit | FinOps monthly review | Namespaces reveal who owns orphaned premium disks | Agent memory scales with container count |
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| CPU-only HPA on queue workers | Backlog grows while CPU stays low | HPA is familiar from web tiers | KEDA on queue depth with sensible `messageCount` |
+| Container Insights alone for SLOs | No `/metrics` golden signals | Enabled at cluster create by default | Add Managed Prometheus + Grafana dashboards |
+| Shared disk + ext4 for static assets | Filesystem corruption | Mistaking block sharing for NFS | Azure Files RWX or blob CSI for read-heavy assets |
+| Scale-to-zero on user-facing APIs | Multi-second cold starts after idle | Chasing empty-queue savings | `minReplicaCount >= 1` with KEDA for bursts only |
+| Giant PVC requests “just in case” | CA adds nodes; disk GB billed unused | Fear of OOM or disk full | VPA recommend + volume expansion alerts |
+| Dual HPA + KEDA on same Deployment | Flapping replicas, conflicting targets | Different teams own different YAML | Single ScaledObject owner per workload |
+
+---
+
+## Decision Framework
+
+Use this flow when multiple valid Azure options exist; it complements the storage table earlier and ties observability and scaling choices together.
+
+```mermaid
+flowchart TD
+    A[Workload needs persistent data?] -->|No| Z[Ephemeral disk / emptyDir]
+    A -->|Yes| B{Multiple pods write concurrently?}
+    B -->|Yes, file semantics| C[Azure Files CSI — NFS for Linux throughput]
+    B -->|Yes, block semantics| D[Shared Disk + cluster-aware app only]
+    B -->|No, single pod| E{IOPS tied to small capacity?}
+    E -->|Yes| F[Premium SSD v2 or Ultra + cachingMode None]
+    E -->|No, moderate| G[Premium SSD v1 or Standard SSD]
+    F --> H[Set WaitForFirstConsumer on zonal clusters]
+
+    I[Need autoscaling signal?] --> J{External queue/event?}
+    J -->|Yes| K[KEDA + workload identity auth]
+    J -->|No, HTTP CPU-bound| L[HPA on CPU/memory or Prometheus custom metric]
+    K --> M{Latency SLA under 1s?}
+    M -->|Yes| N[minReplicaCount >= 1 + CA headroom]
+    M -->|No batch| O[minReplicaCount 0 + spot burst pool optional]
+
+    P[Need observability?] --> Q[Logs/events → Container Insights LA]
+    P --> R[Metrics/SLOs → Managed Prometheus AM workspace]
+    R --> S[Dashboards/alerts → Managed Grafana + rule groups]
+```
+
+| Decision | Choose A when | Choose B when | Cost tradeoff |
+| :--- | :--- | :--- | :--- |
+| Disk vs Files vs Blob | Single RWO database pod | Many RWX readers | Blob cheapest GB; disk highest IOPS |
+| Premium SSD v2 vs Ultra | <80k IOPS, cost-sensitive DB | >80k IOPS or sub-ms latency SLA | Ultra adds VM reservation if enabled without disk |
+| Container Insights vs Managed Prometheus only | Need stdout/KubeEvents correlation | Metrics-only microservices | Logs GB ingestion vs metric samples |
+| HPA vs KEDA | CPU/memory tracks demand | Queue/event lag drives work | KEDA enables scale-to-zero savings |
+| Spot vs on-demand | Fault-tolerant batch/burst | APIs / StatefulSets with SLA | Spot discount vs eviction risk |
+| VPA Auto vs recommend | Stateless, PDB-tested | Stateful / unsure blast radius | Auto evictions vs manual GitOps tuning |
+
+During incident response, walk the framework top to bottom: confirm storage metrics (disk saturation before replica adds), confirm observability path (logs in LA, SLO metrics in AM workspace), then confirm scaling layer (KEDA desired replicas, pending pods, CA node group limits). Skipping a layer reproduces the failure mode from the module opener — scaling compute while the bottleneck remains I/O or while dashboards lack the metric that proves it.
 
 ---
 
@@ -729,6 +1014,10 @@ The team misunderstood the difference between block storage and file storage; Az
 ## Hands-On Exercise: KEDA + Azure Service Bus Queue Scaling + Monitor Alerts
 
 In this exercise, you will set up event-driven autoscaling where a consumer deployment scales from zero to many replicas based on Azure Service Bus queue depth, with monitoring alerts that fire when the queue exceeds a threshold. You will also create a zone-aware StorageClass to properly deploy stateful workloads.
+
+The lab intentionally chains all three production pillars from this module. Task 1 exercises disk topology and performance parameters (`PremiumV2_LRS`, `WaitForFirstConsumer`) so you feel why PVCs stay Pending until a consumer exists. Tasks 2–5 wire the event-driven scaling path Microsoft documents for AKS KEDA: managed identity to Service Bus, `ScaledObject` thresholds, and observable HPA objects KEDA creates. Task 6 adds an Azure Monitor metric alert on `ActiveMessages`, which is the operational backstop when KEDA hits `maxReplicaCount` but the business queue is still growing. Task 7 validates scale-to-zero economics and cooldown behavior — the same knobs that save money in batch clusters but would violate an API latency SLO if copied blindly to synchronous services.
+
+Treat the exercise namespace (`orders`) as a template for platform teams: isolate identities per workload, keep TriggerAuthentication beside ScaledObjects, and document expected replica counts for given queue depths so on-call engineers can tell “KEDA broken” from “consumers too slow.”
 
 ### Prerequisites
 
@@ -1117,12 +1406,21 @@ echo "az group delete --name rg-aks-prod --yes --no-wait"
 
 ## Next Module
 
-This is the final module in the AKS Deep Dive series. You now have the knowledge to architect, secure, network, observe, and scale production AKS clusters using industry-standard features from Kubernetes v1.35. 
+This is the final module in the AKS Deep Dive series. You now have the knowledge to architect, secure, network, observe, and scale production AKS clusters using industry-standard features from Kubernetes v1.35. Carry forward the habit of validating storage IOPS, log ingestion, and scaler thresholds in staging with the same observability stack you run in production — gates pass in CI only when those signals exist before traffic arrives. 
 
 For further learning, explore the [Platform Engineering Track](/platform/) to deepen your understanding of continuous deployment configurations, advanced SRE resilience strategies, and cutting-edge DevSecOps pipelines that continue to build on this powerful infrastructure foundation.
 
 ## Sources
 
-- [Azure Disk CSI Driver on AKS](https://learn.microsoft.com/en-us/Azure/aks/azure-disk-csi) — Authoritative reference for AKS disk provisioning, topology-aware binding, and Azure Disk CSI behavior.
-- [Monitor AKS](https://learn.microsoft.com/en-us/azure/aks/monitor-aks) — Microsoft's overview for AKS observability, including Container insights, managed Prometheus, and Managed Grafana.
-- [KEDA on AKS](https://learn.microsoft.com/en-us/azure/aks/keda-about) — Explains what the AKS KEDA add-on supports and when to use event-driven autoscaling instead of basic HPA patterns.
+- [Use CSI drivers on AKS](https://learn.microsoft.com/en-us/azure/aks/azure-disk-csi) — Azure Disk, Files, and Blob CSI drivers, migration from in-tree plugins, and enablement flags.
+- [Create a PV with Azure Disks on AKS](https://learn.microsoft.com/en-us/azure/aks/azure-disk-volume) — StorageClasses, `WaitForFirstConsumer`, and PVC patterns for block storage.
+- [Azure managed disk types](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types) — Premium SSD v1/v2, Ultra Disk IOPS/throughput limits and SKU behavior.
+- [Monitor Azure Kubernetes Service (AKS)](https://learn.microsoft.com/en-us/azure/aks/monitor-aks) — Observability stack split: platform metrics, Container insights, Managed Prometheus, Grafana.
+- [Azure Monitor managed service for Prometheus overview](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/prometheus-metrics-overview) — Ingestion/query pricing model, eighteen-month retention, recording and alert rules.
+- [Collect Prometheus metrics from an AKS cluster](https://learn.microsoft.com/en-us/azure/azure-monitor/containers/prometheus-metrics-enable) — Enabling `--enable-azure-monitor-metrics` and Azure Monitor workspace linkage.
+- [Kubernetes Event-driven Autoscaling (KEDA) add-on](https://learn.microsoft.com/en-us/azure/aks/keda-about) — Architecture, workload identity auth, and HPA interaction constraints.
+- [Deploy and manage KEDA on AKS](https://learn.microsoft.com/en-us/azure/aks/keda-deploy) — Enable add-on via Azure CLI and operational guidance.
+- [AKS cost analysis](https://learn.microsoft.com/en-us/azure/aks/cost-analysis) — OpenCost-based add-on, namespace showback, and `--enable-cost-analysis`.
+- [Understand AKS usage and costs](https://learn.microsoft.com/en-us/azure/aks/understand-aks-costs) — Idle/system/unallocated charge definitions and Cost Management integration.
+- [Use spot VMs on AKS](https://learn.microsoft.com/en-us/azure/aks/spot-node-pool) — Spot node pools, eviction policy, taints, and workload suitability.
+- [Scale application workloads with KEDA (tutorial)](https://learn.microsoft.com/en-us/azure/aks/tutorial-keda-scaling) — Service Bus scaler with managed identity patterns aligned to this module's lab.
