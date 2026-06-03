@@ -4,7 +4,7 @@ slug: cloud/aks-deep-dive/module-7.3-aks-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/). This is the practical security baseline module before you scale AKS identity and policy controls across teams.
+**Complexity**: [ADVANCED] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 7.1: AKS Architecture & Node Management](../module-7.1-aks-architecture/). This is the practical security baseline module before you scale AKS identity and policy controls across teams.
 
 ## What You'll Be Able to Do
 
@@ -72,7 +72,7 @@ The migration from Pod Identity to Workload Identity is not merely a version upg
 
 Before walking through each step, it is worth pausing on why this architecture is so much stronger than what it replaced. OIDC federation is a standards-based protocol defined by the OpenID Connect specification, which builds on OAuth 2.0. The core idea is that a trusted identity provider --- in this case, the AKS cluster's control plane --- can issue signed JSON Web Tokens (JWTs) that assert the identity of a subject, and a second system (Entra ID) can verify those tokens against the issuer's public keys without ever sharing a secret with the issuer. There is no API key exchanged between AKS and Entra ID. There is no shared secret stored in a Kubernetes Secret that could leak. The trust is established once, declaratively, through the federated credential resource in Azure, and it is enforced cryptographically on every token exchange thereafter.
 
-The entire chain depends on three critical pieces of metadata aligning: the **issuer** (who signed the token --- the AKS OIDC endpoint), the **subject** (which service account the token represents), and the **audience** (what the token is intended for, defaulting to `api://AzureADTokenExchange`). If any of these three do not match the federated credential registered in Entra ID, the token exchange fails with no fallback and no partial success. This design means that even a cluster administrator with full `kubectl` access cannot craft a valid token for an identity they are not authorized to use --- because the token must be signed by the cluster's OIDC issuer, scoped to the correct service account, and presented within its short lifetime (typically one hour, configurable through the `--service-account-token-lifetime` flag on the workload identity webhook). With that foundation in place, here is how each step builds the chain.
+The entire chain depends on three critical pieces of metadata aligning: the **issuer** (who signed the token --- the AKS OIDC endpoint), the **subject** (which service account the token represents), and the **audience** (what the token is intended for, defaulting to `api://AzureADTokenExchange`). If any of these three do not match the federated credential registered in Entra ID, the token exchange fails with no fallback and no partial success. This design means that even a cluster administrator with full `kubectl` access cannot craft a valid token for an identity they are not authorized to use --- because the token must be signed by the cluster's OIDC issuer, scoped to the correct service account, and presented within its short lifetime (typically one hour, configurable through the ServiceAccount annotation `azure.workload.identity/service-account-token-expiration` in seconds, default 3600, range 3600–86400). With that foundation in place, here is how each step builds the chain.
 
 ### Step 1: AKS Exposes an OIDC Issuer
 
@@ -143,8 +143,6 @@ metadata:
   namespace: payments
   annotations:
     azure.workload.identity/client-id: "<CLIENT_ID>"
-  labels:
-    azure.workload.identity/use: "true"
 ```
 
 ```bash
@@ -156,8 +154,6 @@ metadata:
   namespace: payments
   annotations:
     azure.workload.identity/client-id: "$CLIENT_ID"
-  labels:
-    azure.workload.identity/use: "true"
 EOF
 ```
 
@@ -172,7 +168,7 @@ Your application code uses the Azure SDK's `DefaultAzureCredential`, which autom
 
 **Audience defaults and alternatives.** The default audience for the federated token exchange is `api://AzureADTokenExchange`. This audience is hardcoded into the Azure SDK's workload identity credential and works for all Azure service endpoints. You do not normally need to change it, but the `--audiences` parameter on `az identity federated-credential create` accepts custom values if your token exchange targets a non-Azure OIDC-compliant service. Changing the audience without also configuring the Azure SDK to request a matching audience will cause token exchange failures — the default SDK behavior expects `api://AzureADTokenExchange`.
 
-**What happens when federation breaks.** If the federated credential is deleted, the issuer URL changes (for example, after a cluster rebuild without preserving the original OIDC issuer), or the service account is removed, the token exchange fails with an Entra ID error — typically `AADSTS7000216: Client assertion includes a subject claim which does not match the federated credential`. The Azure SDK surfaces this as an authentication exception. The pod remains running — it does not crash — but any attempt to acquire a new Azure token fails. Existing tokens in the SDK cache remain valid until expiry, as discussed above. If your application uses `DefaultAzureCredential` with a chained fallback (for example, trying Managed Identity credentials after Workload Identity), the SDK silently moves to the next credential source, which may produce confusing behavior if the fallback succeeds with a different identity than intended. Always explicitly configure the credential chain in production workloads to avoid silent identity switches during federation outages.
+**What happens when federation breaks.** If the federated credential is deleted, the issuer URL changes (for example, after a cluster rebuild without preserving the original OIDC issuer), or the service account is removed, the token exchange fails with an Entra ID error — typically `AADSTS70021: No matching federated identity record found for presented assertion subject`. The Azure SDK surfaces this as an authentication exception. The pod remains running — it does not crash — but any attempt to acquire a new Azure token fails. Existing tokens in the SDK cache remain valid until expiry, as discussed above. If your application uses `DefaultAzureCredential` with a chained fallback (for example, trying Managed Identity credentials after Workload Identity), the SDK silently moves to the next credential source, which may produce confusing behavior if the fallback succeeds with a different identity than intended. Always explicitly configure the credential chain in production workloads to avoid silent identity switches during federation outages.
 
 > **Pause and predict**: If you delete the federated credential in Entra ID, how quickly will the pod lose access to Azure services? Will it be immediate, or will it take time based on the token expiration?
 
@@ -191,6 +187,7 @@ spec:
     metadata:
       labels:
         app: payment-service
+        azure.workload.identity/use: "true"
     spec:
       serviceAccountName: payment-service-sa
       containers:
@@ -262,6 +259,12 @@ az keyvault create \
   --name kv-aks-prod-we \
   --location westeurope \
   --enable-rbac-authorization
+
+# RBAC-mode vaults grant no data-plane access until you assign a role
+az role assignment create \
+  --role "Key Vault Secrets Officer" \
+  --assignee "$(az ad signed-in-user show --query id -o tsv)" \
+  --scope "$(az keyvault show --name kv-aks-prod-we --query id -o tsv)"
 
 # Store a secret
 az keyvault secret set \
@@ -338,6 +341,7 @@ spec:
     metadata:
       labels:
         app: payment-service
+        azure.workload.identity/use: "true"
     spec:
       serviceAccountName: payment-service-sa
       containers:
@@ -368,13 +372,13 @@ spec:
               secretProviderClass: "kv-payment-secrets"
 ```
 
-When the pod starts, the file `/mnt/secrets/db-connection-string` will contain the secret value. The secret is fetched fresh from Key Vault at pod startup. If you enable auto-rotation (via the [`--rotation-poll-interval`](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options) flag on the add-on), the CSI driver periodically checks Key Vault for updated values and refreshes the mounted files. This keeps rotating secrets available to workloads without changing container images or introducing config-management churn in the same pipeline.
+When the pod starts, the file `/mnt/secrets/db-connection-string` will contain the secret value. The secret is fetched fresh from Key Vault at pod startup. If you enable auto-rotation with [`--enable-secret-rotation`](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options) on the add-on (and optionally tune cadence with `--rotation-poll-interval`), the CSI driver periodically checks Key Vault for updated values and refreshes the mounted files. This keeps rotating secrets available to workloads without changing container images or introducing config-management churn in the same pipeline.
 
 #### The Rotation Story in Detail
 
-Auto-rotation is enabled cluster-wide when you enable the Secrets Store CSI add-on with the `--rotation-poll-interval` flag (for example, `--rotation-poll-interval 2m` sets a two-minute poll). The CSI driver's provider for Azure then periodically queries Key Vault for each `SecretProviderClass` object in the cluster. When it detects a newer version of a secret, it updates the mounted file in the pod's volume **without restarting the pod**. The file contents change in place — the inode remains the same, but the bytes on disk are replaced. This has important implications for application design. If your application reads the secret once at startup and never re-reads the file, it will keep using the old value indefinitely. To benefit from auto-rotation, your application must either re-read the file on each use, watch for filesystem change events (Linux `inotify`), or implement a periodic refresh loop. The CSI driver does not signal the application — it only updates the file. For applications that consume secrets as environment variables via `secretObjects`, the Kubernetes Secret is also updated by the rotation, but pods do not automatically restart to pick up new environment variable values. Environment-variable-based secret consumption and auto-rotation are fundamentally at odds: use mounted files if you need rotation without restarts.
+Auto-rotation is enabled cluster-wide when you enable the Secrets Store CSI add-on with `--enable-secret-rotation` (for example, `az aks addon update ... --addon azure-keyvault-secrets-provider --enable-secret-rotation --rotation-poll-interval 2m`). The poll-interval flag only sets cadence after rotation is enabled; it does not turn rotation on by itself. The CSI driver's provider for Azure then periodically queries Key Vault for each `SecretProviderClass` object in the cluster. When it detects a newer version of a secret, it updates the mounted file in the pod's volume **without restarting the pod**. The file contents change in place — the inode remains the same, but the bytes on disk are replaced. This has important implications for application design. If your application reads the secret once at startup and never re-reads the file, it will keep using the old value indefinitely. To benefit from auto-rotation, your application must either re-read the file on each use, watch for filesystem change events (Linux `inotify`), or implement a periodic refresh loop. The CSI driver does not signal the application — it only updates the file. For applications that consume secrets as environment variables via `secretObjects`, the Kubernetes Secret is also updated by the rotation, but pods do not automatically restart to pick up new environment variable values. Environment-variable-based secret consumption and auto-rotation are fundamentally at odds: use mounted files if you need rotation without restarts.
 
-The rotation poll interval is a cluster-wide setting. You cannot set different intervals per `SecretProviderClass`. The minimum supported interval is one minute, but at scale — say, 200 pods each with 10 secrets — a one-minute poll generates 2,000 Key Vault read operations per minute, which can incur significant transaction costs and potentially hit Key Vault service limits. A two-minute or five-minute poll is usually sufficient for most credential rotation policies.
+The rotation poll interval is a cluster-wide setting. You cannot set different intervals per `SecretProviderClass`. At scale — say, 200 pods each with 10 secrets — a short poll such as 2m still generates substantial Key Vault read volume (2,000 reads per poll cycle in that example), which can incur significant transaction costs and potentially hit Key Vault service limits. A two-minute or five-minute poll is usually sufficient for most credential rotation policies.
 
 #### The `secretObjects` Tradeoff: Kubernetes Secrets vs etcd Exposure
 
@@ -597,7 +601,7 @@ EOF
 
 1. **The projected Kubernetes service account token used by Workload Identity is short-lived by default and rotated automatically.** Kubernetes refreshes projected tokens before expiry, and AKS Workload Identity exposes configuration for that token lifetime. This reduces exposure compared with long-lived static credentials.
 
-2. **The Secrets Store CSI Driver can auto-rotate secrets without restarting pods.** When you enable rotation with [`--rotation-poll-interval 2m`](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options), the driver checks Key Vault for updated secret versions every 2 minutes and updates the mounted files in place. Your application can watch for file changes (using inotify on Linux) and reload secrets without a deployment rollout.
+2. **The Secrets Store CSI Driver can auto-rotate secrets without restarting pods.** When you enable rotation with [`--enable-secret-rotation`](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options) (default poll interval 2m, customizable via `--rotation-poll-interval`), the driver checks Key Vault for updated secret versions on that cadence and updates the mounted files in place. Your application can watch for file changes (using inotify on Linux) and reload secrets without a deployment rollout.
 
 3. **Azure Policy for AKS evaluates existing resources, not just new ones.** When you assign a policy in "audit" mode, Azure scans all existing resources in the cluster and [reports non-compliant ones in the Azure Policy compliance dashboard](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes). This gives you visibility into your current security posture before switching policies to "deny" mode.
 
@@ -724,7 +728,7 @@ The developer is ignoring the inherent fragility and security risks of the Pod I
 </details>
 
 <details>
-<summary>2. You have deployed a new payment processing pod with Workload Identity configured. However, the pod's logs show an "AADSTS700024: Client assertion is not within its valid time range" or "Subject mismatch" error when trying to access Azure SQL. You verified the Managed Identity has the correct SQL permissions. What configuration mistake likely caused this failure?</summary>
+<summary>2. You have deployed a new payment processing pod with Workload Identity configured. However, the pod's logs show `AADSTS70021: No matching federated identity record found for presented assertion subject` when trying to access Azure SQL. You verified the Managed Identity has the correct SQL permissions. What configuration mistake likely caused this failure?</summary>
 
 This failure is almost certainly caused by a mismatch in the federated identity credential's subject string. When the Azure SDK attempts to exchange the Kubernetes service account token for an Azure access token, Entra ID strictly validates the token's subject claim against the configured federation. If there is even a minor typo in the namespace or service account name (e.g., using `default` instead of `payments`), Entra ID rejects the exchange. You must ensure the subject format exactly matches `system:serviceaccount:{namespace}:{service-account-name}`.
 </details>
@@ -765,6 +769,11 @@ In this exercise, you will set up a complete zero-credential architecture where 
 - Azure CLI authenticated with Contributor access
 - kubectl configured for the cluster
 
+```bash
+# shorthand used throughout the exercise
+alias k=kubectl
+```
+
 ### Task 1: Enable the Required Add-ons
 
 Ensure your cluster has the OIDC issuer, Workload Identity, and Secrets Store CSI Driver enabled before moving to identity and secret wiring. This prerequisite check prevents confusing runtime failures where pods or SDK calls fail later for infrastructure reasons, which makes the exercise debugging loop much harder.
@@ -804,15 +813,20 @@ Set up a Key Vault with test secrets that you can use throughout the exercise fo
 <summary>Solution</summary>
 
 ```bash
+KV_NAME="kv-aks-lab-$(openssl rand -hex 4)"
+
 # Create the Key Vault
 az keyvault create \
   --resource-group rg-aks-prod \
-  --name kv-aks-lab-$(openssl rand -hex 4) \
+  --name "$KV_NAME" \
   --location westeurope \
   --enable-rbac-authorization
 
-# Store the vault name
-KV_NAME=$(az keyvault list -g rg-aks-prod --query "[0].name" -o tsv)
+# RBAC-mode vaults grant no data-plane access until you assign a role
+az role assignment create \
+  --role "Key Vault Secrets Officer" \
+  --assignee "$(az ad signed-in-user show --query id -o tsv)" \
+  --scope "$(az keyvault show --name "$KV_NAME" --query id -o tsv)"
 
 # Add test secrets
 az keyvault secret set --vault-name "$KV_NAME" \
@@ -889,8 +903,6 @@ metadata:
   namespace: demo-secrets
   annotations:
     azure.workload.identity/client-id: "$CLIENT_ID"
-  labels:
-    azure.workload.identity/use: "true"
 EOF
 
 # Create the SecretProviderClass
@@ -935,6 +947,8 @@ kind: Pod
 metadata:
   name: secret-test
   namespace: demo-secrets
+  labels:
+    azure.workload.identity/use: "true"
 spec:
   serviceAccountName: secret-reader-sa
   containers:
@@ -1047,7 +1061,7 @@ echo "Security boundary verified: pods without proper service account cannot acc
 - [ ] Key Vault created with RBAC authorization and three test secrets
 - [ ] Managed Identity created with "Key Vault Secrets User" role (not Administrator)
 - [ ] Federated credential links the correct namespace and service account
-- [ ] Service account has both the `client-id` annotation and `use: "true"` label
+- [ ] Service account has the `client-id` annotation; pod template has the `use: "true"` label
 - [ ] Pod successfully mounts all three secrets as files at `/mnt/secrets/`
 - [ ] Environment variable API_KEY is populated from the synced Kubernetes Secret
 - [ ] Workload Identity environment variables (AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_FEDERATED_TOKEN_FILE) are present
