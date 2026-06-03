@@ -4,9 +4,11 @@ slug: cloud/aws-essentials/module-1.9-secrets
 sidebar:
   order: 10
 ---
-**Complexity:** `[MEDIUM]` | **Time to Complete:** 1.5 hours | **Track:** AWS DevOps Essentials. Before starting this module, ensure you have:
+**Complexity:** `[MEDIUM]` | **Time to Complete:** 1.5 hours | **Track:** AWS Essentials
 
 ## Prerequisites
+
+Before starting this module, ensure you have:
 
 - Completed [Module 1.1: IAM & Access Management](../module-1.1-iam/) (IAM policies, roles, trust relationships)
 - An AWS account with admin access (or scoped permissions for SSM, Secrets Manager, KMS)
@@ -27,9 +29,11 @@ After completing this module, you will be able to configure AWS Secrets Manager 
 
 ## Why This Module Matters
 
-In December 2022, a developer at a mid-sized fintech company committed a database connection string to a public GitHub repository. The string contained the master username, password, and RDS endpoint for their production PostgreSQL database. Automated bots that scrape GitHub for leaked credentials found it within 14 minutes. Within the hour, attackers had exfiltrated 2.3 million customer records including names, emails, and partial payment data. The breach cost the company $4.1 million in regulatory fines, incident response, and customer notification -- not counting the reputational damage that saw their B2B client pipeline dry up for two quarters.
+**Hypothetical scenario:** A developer at a mid-sized fintech company committed a database connection string to a public GitHub repository. The string contained the master username, password, and RDS endpoint for their production PostgreSQL database. Automated bots that scrape GitHub for leaked credentials discovered it quickly. Attackers used the live credentials to reach production data, triggering regulatory scrutiny, incident response, customer notification, and lasting reputational damage.
 
 This was entirely preventable. AWS provides purpose-built services for storing, rotating, and injecting secrets into your applications. The developer could have stored that connection string in AWS Secrets Manager, configured automatic rotation every 30 days, and had the application retrieve it at runtime. No credential ever touches source code. No password stays valid long enough to be useful if leaked. The organizational lesson is not "ban developers" but **remove the easy wrong path**: pre-commit hooks, CI secret scanning, and platform-provided secret ARNs in deployment templates so the secure route is also the fastest route.
+
+In production, treat leaked credentials as a **rotation and blast-radius** problem, not only a repo hygiene problem. Revoke or rotate the exposed secret immediately, review CloudTrail for `GetSecretValue` and database login anomalies, and confirm whether the same password was reused across environments. Pair technical controls (Secrets Manager rotation, CMK-backed SecureStrings, ECS/Lambda injection via `secrets` rather than plaintext `environment`) with process controls (break-glass access reviews, quarterly access attestation on secret read APIs).
 
 In this module, you will learn how AWS approaches secrets management across the stack -- from the low-level encryption primitives in KMS, to the two competing secret-storage services (SSM Parameter Store and Secrets Manager), to the practical patterns for injecting secrets into EC2 instances, ECS tasks, and Lambda functions. By the end, you should be much less tempted to put a password in an environment variable file or a Docker image.
 
@@ -187,7 +191,7 @@ AWS Systems Manager Parameter Store is the workhorse for configuration managemen
 | `StringList` | None | 4 KB | 8 KB | Free (Standard) |
 | `SecureString` | KMS | 4 KB | 8 KB | Free (Standard) |
 
-**Standard parameters** are free for up to 10,000 per account per region. **Advanced parameters** cost $0.05 per parameter per month, support up to 8 KB values, and parameter policies (TTL, expiration notifications). Higher throughput (up to 10,000 TPS) is an account-level setting available for both Standard and Advanced parameters. The real power of Parameter Store is its path-based hierarchy, which is why this approach works best when you structure your parameters like a filesystem:
+**Standard parameters** are free for up to 10,000 per account per region. **Advanced parameters** cost $0.05 per parameter per month, support up to 8 KB values, and parameter policies (TTL, expiration notifications). Higher throughput (up to 10,000 TPS) is an account-level setting available for both Standard and Advanced parameters.
 
 ### Hierarchical Naming
 
@@ -260,8 +264,6 @@ aws ssm get-parameter-history \
 ```
 
 > **Pause and predict**: You need to store an API key that changes once a year and is read thousands of times per second by your application. Based on the features and pricing of SSM Parameter Store versus Secrets Manager, which service is more cost-effective for this specific workload?
-
-This is invaluable for debugging. When someone says "the app broke after the config change," you can see exactly what changed and when.
 
 ### Standard vs Advanced Tier in Practice
 
@@ -507,7 +509,7 @@ ECS has native integration with both SSM Parameter Store and Secrets Manager. Yo
         },
         {
           "name": "DB_USERNAME",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:myapp/production/db-credentials:username::"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:myapp/production/db-credentials-a1b2c3:username::"
         },
         {
           "name": "LOG_LEVEL",
@@ -758,9 +760,9 @@ FinOps reviewers should ask two questions on every secrets design review: how ma
 
 ## Did You Know?
 
-- **AWS Secrets Manager rotates over 100 million secrets per month** across its customer base. The service launched in April 2018 specifically because AWS saw how many customers were storing credentials in plaintext in S3 buckets, EC2 user data, and environment variables.
+- **AWS Secrets Manager** rotates credentials at very large scale across its customer base. The service launched in April 2018 specifically because AWS saw how many customers were storing credentials in plaintext in S3 buckets, EC2 user data, and environment variables.
 
-- **KMS processes over 1 trillion API calls per year**, making it one of the most-called AWS services. When you read an encrypted SSM parameter or retrieve a Secrets Manager secret, KMS is typically involved behind the scenes -- you usually do not see it directly.
+- **KMS** is one of the most-called AWS services in practice. When you read an encrypted SSM parameter or retrieve a Secrets Manager secret, KMS is typically involved behind the scenes — you usually do not see it directly.
 
 - **SSM Parameter Store's free tier supports up to 10,000 parameters per account per region**, while Secrets Manager charges $0.40 per secret per month. This cost difference drives many teams to use Parameter Store for non-rotating configuration and Secrets Manager only for credentials that need automatic rotation.
 
@@ -779,7 +781,7 @@ FinOps reviewers should ask two questions on every secrets design review: how ma
 | Using the same secret across all environments | "We'll rotate it later" shortcuts | Use path-based naming (`/myapp/dev/...`, `/myapp/prod/...`) and separate secrets per environment |
 | Storing secrets in ECS task definition environment variables | Confusing `environment` (plaintext) with `secrets` (resolved at launch) | Use the `secrets` block in container definitions, not the `environment` block for sensitive values |
 | Forgetting execution role permissions for ECS secret injection | Task role has permissions but execution role does not | The execution role (not task role) needs `secretsmanager:GetSecretValue` for secret injection at launch |
-| Assuming CMK rotation re-encrypts Secrets Manager payloads | Confusing KMS key material rotation with secret value rotation | Old ciphertext remains decryptable with retained key material versions | Run Secrets Manager rotation for credentials; CMK rotation is separate hygiene |
+| Assuming CMK rotation re-encrypts Secrets Manager payloads | Confusing KMS key material rotation with secret value rotation | Run Secrets Manager rotation for credentials; CMK rotation is separate key hygiene — old ciphertext stays decryptable via retained key-material versions |
 
 ---
 

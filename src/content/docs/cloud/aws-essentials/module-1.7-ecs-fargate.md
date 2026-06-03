@@ -31,9 +31,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In December 2020, a major US airline was running its booking system on a fleet of EC2 instances managed by a custom deployment pipeline. During a holiday travel surge, traffic spiked 3x beyond projections. The operations team scrambled to launch new instances, but the bootstrapping process -- installing dependencies, pulling container images, registering with the load balancer -- took 8 minutes per instance. For 8 minutes, customers saw timeout errors. Bookings were lost. The post-incident review estimated $2.3 million in missed revenue during that single scaling event.
+**Hypothetical scenario:** A major airline was running its booking system on a fleet of EC2 instances managed by a custom deployment pipeline. During a holiday travel surge, traffic spiked well beyond projections. The operations team scrambled to launch new instances, but the bootstrapping process — installing dependencies, pulling container images, registering with the load balancer — took many minutes per instance. While capacity lagged behind demand, customers saw timeout errors and bookings were lost. The lesson: slow host bootstrap directly translates into lost serving capacity during spikes.
 
-They migrated to ECS on Fargate six weeks later. The next holiday surge came, and Fargate launched new containers in under 15 seconds. No EC2 instances to bootstrap. No AMIs to maintain. No capacity planning for unpredictable peaks. The traffic spike was 4x that year. Nobody noticed.
+They migrated to ECS on Fargate. On the next holiday surge, new tasks still needed a realistic cold start (image pull, ENI attach — typically 45–90 seconds), but there were no EC2 instances to bootstrap, no AMIs to maintain, and no separate host fleet to scale. Capacity tracked task demand instead of instance boot time. The traffic spike was larger that year, and operations stayed ahead of the curve.
 
 Amazon Elastic Container Service (ECS) is AWS's native container orchestration platform, purpose-built for the operational reality that most teams do not want to manage container hosts. If Kubernetes is the Swiss Army knife of container orchestration, ECS is a purpose-built surgical tool for running containers on AWS. It is deeply integrated with every relevant AWS service -- IAM, VPC, ALB, CloudWatch, Secrets Manager, and dozens more. Combined with Fargate (serverless compute for containers), ECS lets you focus on your application rather than the infrastructure running it. You describe what your application needs — CPU, memory, networking, IAM permissions — in a declarative task definition, and AWS handles the rest: placing containers on healthy capacity, replacing failed tasks, scaling in response to load, and rolling out new versions without downtime.
 
@@ -133,7 +133,7 @@ ECS supports four network modes. Your choice fundamentally shapes security bound
 
 This is the only network mode available on Fargate and the recommended mode for all EC2 production workloads. Every task receives its own Elastic Network Interface (ENI) — a dedicated virtual network card with a private IP address from your VPC subnet. Security groups attach per-task, not per-host. Two containers within the same task share the ENI and reach each other at `localhost`, just as containers in the same Kubernetes pod share a network namespace.
 
-The architectural constraint that catches teams off guard: **every single task consumes one IP address from its subnet.** Run 500 tasks in a `/24` subnet (254 usable addresses), and you exhaust your IP space long before running out of compute. Plan your VPC CIDR blocks accordingly — `/19` (8,191 addresses) or `/20` (4,095 addresses) subnets are common for large ECS deployments. Also budget for ENI attachment during rolling deployments: with `maximumPercent: 200` and a desired count of 50, ECS temporarily provisions 100 ENIs during a rolling update.
+The architectural constraint that catches teams off guard: **every single task consumes one IP address from its subnet.** Run 500 tasks in a `/24` subnet (~251 usable addresses per AZ — AWS reserves five addresses per subnet), and you exhaust your IP space long before running out of compute. Plan your VPC CIDR blocks accordingly — `/19` (8,191 addresses) or `/20` (4,095 addresses) subnets are common for large ECS deployments. Also budget for ENI attachment during rolling deployments: with `maximumPercent: 200` and a desired count of 50, ECS temporarily provisions 100 ENIs during a rolling update.
 
 ### bridge (EC2 only)
 
@@ -222,8 +222,10 @@ Task definitions are where you describe exactly how your containers should run. 
       "essential": true,
       "portMappings": [
         {
+          "name": "api-port",
           "containerPort": 8080,
-          "protocol": "tcp"
+          "protocol": "tcp",
+          "appProtocol": "http"
         }
       ],
       "environment": [
@@ -401,7 +403,7 @@ aws ecs describe-task-definition \
 
 The `awslogs` log driver (shown in the task definition above) sends container logs directly to CloudWatch Logs. It works, it is simple, and it is sufficient for most use cases. But teams with multi-destination logging requirements — shipping the same log stream to CloudWatch for operational dashboards AND to OpenSearch for full-text search AND to S3 for long-term archival — need a more flexible approach.
 
-**FireLens** is ECS's log router. Under the hood, it is a managed Fluent Bit or Fluentd sidecar container that ECS injects into your task automatically. Instead of each container shipping its own logs, every container writes to `stdout` or `stderr`, and FireLens picks up the output, transforms it, and routes it to one or more destinations simultaneously.
+**FireLens** is ECS's log router. Under the hood, it is a managed Fluent Bit or Fluentd sidecar container that you declare explicitly in the task definition with `firelensConfiguration` (typically `name: log_router`). ECS wires application containers that use the `awsfirelens` log driver to that sidecar — it does not silently inject a log router for you. Instead of each container shipping its own logs, every container writes to `stdout` or `stderr`, and FireLens picks up the output, transforms it, and routes it to one or more destinations simultaneously.
 
 FireLens supports these destinations natively:
 
@@ -507,7 +509,7 @@ Inject the parameter path as an environment variable and resolve the correct sec
 
 **Secret rotation**: Secrets Manager supports automatic rotation via Lambda functions. When a secret rotates, the new value is available to new tasks immediately (the execution role fetches it at task start). Running tasks continue using the old value until they restart. For long-running tasks, poll Secrets Manager periodically or handle connection failures by re-fetching credentials.
 
-**Never put secrets in the `environment` array**: The `environment` field is visible in plaintext to anyone with `ecs:DescribeTaskDefinition` permission and appears in CloudTrail logs. Always use the `secrets` array with `valueFrom`.
+**Never put secrets in the `environment` array**: The `environment` field is returned in plaintext by `ecs:DescribeTaskDefinition` and `ecs:RegisterTaskDefinition` to principals with those IAM permissions — a real exposure risk for CI roles and auditors with read access, even though CloudTrail does not guarantee full task-definition payloads in every account configuration. Always use the `secrets` array with `valueFrom`.
 
 
 ---
@@ -640,6 +642,25 @@ aws application-autoscaling put-scaling-policy \
     "ScaleOutCooldown": 60
   }'
 
+# Scale when average memory utilization exceeds 70%
+aws application-autoscaling put-scaling-policy \
+  --service-namespace ecs \
+  --resource-id service/production/api-service \
+  --scalable-dimension ecs:service:DesiredCount \
+  --policy-name memory-target-tracking \
+  --policy-type TargetTrackingScaling \
+  --target-tracking-scaling-policy-configuration '{
+    "TargetValue": 70.0,
+    "PredefinedMetricSpecification": {
+      "PredefinedMetricType": "ECSServiceAverageMemoryUtilization"
+    },
+    "ScaleInCooldown": 300,
+    "ScaleOutCooldown": 60
+  }'
+
+# Custom CloudWatch metrics (queue depth, business KPIs): use TargetTrackingScaling
+# with CustomizedMetricSpecification instead of a PredefinedMetricType.
+
 # Also scale based on ALB request count
 aws application-autoscaling put-scaling-policy \
   --service-namespace ecs \
@@ -667,19 +688,34 @@ Note the asymmetric cooldowns: 60 seconds for scale-out (react quickly to load) 
 ECS integrates with AWS Cloud Map for DNS-based service discovery. This allows services to find each other by name without hardcoding IP addresses or using a separate load balancer for internal communication. Cloud Map maintains a registry of service instances and their IP addresses, updating DNS records within seconds when tasks start or stop. Every other service in the VPC can resolve the service name to a set of IP addresses, enabling direct service-to-service communication without routing through an external load balancer — which reduces latency and eliminates the cost of internal ALBs for service mesh traffic.
 
 ```bash
-# Create a Cloud Map namespace
-NAMESPACE_ID=$(aws servicediscovery create-private-dns-namespace \
+# Create a Cloud Map namespace (returns an OperationId, not the namespace ID yet)
+OPERATION_ID=$(aws servicediscovery create-private-dns-namespace \
   --name production.internal \
   --vpc vpc-0abc123 \
   --query 'OperationId' --output text)
 
-# Wait for the namespace to be created
-aws servicediscovery get-operation --operation-id ${NAMESPACE_ID}
+# Poll until the namespace creation succeeds
+while true; do
+  STATUS=$(aws servicediscovery get-operation \
+    --operation-id "${OPERATION_ID}" \
+    --query 'Operation.Status' --output text)
+  if [ "${STATUS}" = "SUCCESS" ]; then
+    NAMESPACE_ID=$(aws servicediscovery get-operation \
+      --operation-id "${OPERATION_ID}" \
+      --query 'Operation.Targets.NAMESPACE' --output text)
+    break
+  fi
+  if [ "${STATUS}" = "FAIL" ]; then
+    echo "Namespace creation failed" >&2
+    exit 1
+  fi
+  sleep 2
+done
 
 # Create a service discovery service
 DISCOVERY_SERVICE_ID=$(aws servicediscovery create-service \
   --name api \
-  --namespace-id ns-abcdef1234567890 \
+  --namespace-id "${NAMESPACE_ID}" \
   --dns-config '{
     "DnsRecords": [{"Type": "A", "TTL": 10}]
   }' \
@@ -729,20 +765,20 @@ This is how microservices communicate in ECS without external load balancers for
 
 Cloud Map (covered above) has been the ECS service discovery mechanism since 2018. It works — register a service, get DNS records — but it requires managing separate Cloud Map namespaces and services outside of ECS, and DNS TTLs mean discovery is eventually consistent under rapid change.
 
-**ECS Service Connect**, launched at AWS re:Invent 2022, is a built-in alternative that removes the need for separate Cloud Map resources entirely. Service Connect integrates directly into the ECS service configuration and provides:
+**ECS Service Connect**, launched at AWS re:Invent 2022, is a built-in alternative that wires service discovery through ECS instead of you creating separate Cloud Map *services* by hand. Service Connect still uses a Cloud Map **namespace** (ECS can create and manage it for you). Service Connect integrates directly into the ECS service configuration and provides:
 
-- **Automatic DNS-based discovery**: Services resolve each other by name with no Cloud Map namespace registration required.
-- **Mutual TLS (mTLS) encryption**: Traffic between services is encrypted in transit without configuring certificates — Service Connect handles it automatically using TLS 1.3.
+- **Automatic DNS-based discovery**: Services resolve each other by short names within the Service Connect namespace — ECS registers instances for you.
+- **Optional TLS in transit**: Plain HTTP routing works out of the box. **Mutual TLS (mTLS) is opt-in**: enable TLS in `serviceConnectConfiguration` with an AWS Private CA (PCA) resource, an infrastructure IAM role, and optional KMS encryption for PCA private keys — not automatic on every deployment.
 - **Client-side load balancing**: Each task maintains a local connection pool to peer tasks, distributing requests without a central proxy.
-- **Configurable timeouts and retries**: Define idle timeout, per-request timeout, and per-try timeout at the service level.
+- **Configurable timeouts**: The ECS API exposes a nested `timeout` object with `idleTimeoutSeconds` and `perRequestTimeoutSeconds` at the service level.
 - **Circuit breaking**: Service Connect can detect failing upstream tasks and eject them from the connection pool.
 
 ### Cloud Map vs. Service Connect
 
 | Aspect | AWS Cloud Map | ECS Service Connect |
 |---|---|---|
-| Setup complexity | Requires separate namespace, service, and DNS config | Configured directly in ECS service definition |
-| Encryption | None (you bring your own TLS) | Built-in mTLS (TLS 1.3) |
+| Setup complexity | Requires separate namespace, service, and DNS config | Configured directly in ECS service definition (namespace still backed by Cloud Map) |
+| Encryption | None (you bring your own TLS) | Optional mTLS via PCA when enabled in `serviceConnectConfiguration` |
 | Load balancing | DNS round-robin only (client must re-resolve) | Client-side connection pool with health-aware routing |
 | Observability | CloudWatch metrics on DNS queries | CloudWatch metrics on connections, requests, errors, and TLS handshakes |
 | Non-ECS consumers | Yes — any client in the VPC can resolve DNS names | ECS tasks only (Service Connect is ECS-native) |
@@ -750,7 +786,7 @@ Cloud Map (covered above) has been the ECS service discovery mechanism since 201
 
 **When to use Cloud Map**: You have non-ECS consumers that need DNS-based discovery (Lambda functions in a VPC, EC2-based services, third-party appliances), or you need a solution with a longer track record in production.
 
-**When to use Service Connect**: You are building a greenfield ECS microservice architecture and all service consumers are ECS tasks. The built-in mTLS alone eliminates an entire class of security configuration work.
+**When to use Service Connect**: You are building a greenfield ECS microservice architecture and all service consumers are ECS tasks. Optional PCA-backed mTLS can eliminate manual certificate distribution when you enable it — but it is a deliberate configuration choice, not on by default.
 
 ### Enabling Service Connect
 
@@ -780,7 +816,7 @@ aws ecs create-service \
   }'
 ```
 
-Any other ECS service in the same Service Connect namespace can now reach this service at `http://api:8080` — with automatic mTLS encryption, no certificate management, and no Cloud Map resources to maintain.
+Any other ECS service in the same Service Connect namespace can now reach this service at `http://api:8080` using ECS-managed discovery wiring. Enable TLS in `serviceConnectConfiguration` with a PCA when you need encrypted service-to-service traffic — that is separate from the DNS alias shown here.
 
 
 ---
@@ -791,7 +827,7 @@ ECS Exec lets you run commands inside a running Fargate container -- similar to 
 
 ### Prerequisites for ECS Exec
 
-Your task role needs SSM permissions, and the service must be created with `--enable-execute-command`:
+Your task role needs SSM permissions, the **operator** invoking `execute-command` needs `ecs:ExecuteCommand` on the task/service, and the service must be created with `--enable-execute-command`:
 
 ```bash
 # Add SSM permissions to the task role
@@ -1091,7 +1127,7 @@ Fargate tasks run in private subnets with no public IPs. ECR image pulls, CloudW
 | **Symmetric auto-scaling cooldowns** | Setting `ScaleInCooldown: 60` and `ScaleOutCooldown: 60` causes rapid scale-in during traffic dips followed by panic scale-out when traffic returns — a flapping pattern that degrades performance and increases cost from constant task churn. | Use asymmetric cooldowns: 30 to 60 seconds for scale-out (react quickly to load), 300 to 600 seconds for scale-in (avoid flapping during variable traffic). |
 | **Manual EC2 fleet management without capacity providers** | You manage EC2 instances through Auto Scaling groups that know nothing about ECS task placement. Tasks fail to place because instances are the wrong type, in the wrong AZ, or missing required attributes. | Use EC2 ASG capacity providers with managed scaling enabled so ECS manages the instance fleet based on task requirements. |
 | **Not enabling Container Insights** | Without Container Insights, you have no aggregated view of task-level CPU, memory, network, and storage utilization across your cluster. Debugging a slow service requires parsing raw CloudWatch metrics or SSHing into individual instances on EC2. | Enable Container Insights on every cluster. The per-cluster cost in CloudWatch custom metrics ingestion is negligible compared to the debugging time it saves. |
-| **Hardcoding secrets in task definition environment variables** | The `environment` array is visible in plaintext to anyone with `ecs:DescribeTaskDefinition` permission. It also appears in CloudTrail logs when task definitions are registered. | Use the `secrets` array with `valueFrom` pointing to Secrets Manager or SSM Parameter Store. |
+| **Hardcoding secrets in task definition environment variables** | The `environment` array is returned in plaintext by `ecs:DescribeTaskDefinition` / `ecs:RegisterTaskDefinition` to any principal with those IAM permissions. | Use the `secrets` array with `valueFrom` pointing to Secrets Manager or SSM Parameter Store. |
 
 ## Decision Framework: Choosing Your Container Strategy
 
@@ -1162,7 +1198,7 @@ The majority of teams new to ECS should start with Fargate. The operational simp
 
 ## Did You Know?
 
-1. **ECS predates Kubernetes' public release.** Amazon launched ECS in April 2015, just months after Kubernetes 1.0 was released in July 2015. While Kubernetes won the industry mindshare war, ECS runs more containers on AWS than EKS does. Many of the largest AWS customers -- including Amazon.com itself -- use ECS internally rather than Kubernetes. AWS's own retail platform processes millions of transactions using ECS.
+1. **ECS predates Kubernetes' public release.** Amazon launched ECS in April 2015, just months after Kubernetes 1.0 was released in July 2015. While Kubernetes won the industry mindshare war, ECS remains one of the most widely used container orchestration services on AWS. Many large AWS customers — including Amazon.com itself — use ECS internally rather than Kubernetes for specific workloads.
 
 2. **Fargate's "serverless" containers are not actually serverless in the way Lambda is.** Each Fargate task runs on a dedicated Firecracker microVM -- the same virtualization technology that powers Lambda. Firecracker can launch a microVM in under 125 milliseconds, which is why Fargate cold starts are so fast. But unlike Lambda, Fargate tasks run continuously and you pay per-second, not per-invocation.
 
@@ -1229,13 +1265,13 @@ You should run this workload entirely on Fargate Spot, which provides up to a 70
 <details>
 <summary>7. Scenario: Your team runs 15 ECS services in production. Every service stores its database credentials in the `environment` array of the task definition JSON. During a routine security audit, the auditor asks: "Who has access to read these credentials?" Your team responds that only people with IAM access can view task definitions. The auditor then shows you a CloudTrail log entry from last week where `ecs:DescribeTaskDefinition` was called by an automated CI/CD pipeline, and the full task definition — including the plaintext DATABASE_URL — was logged. What architectural change do you need to make, and which IAM role is involved in the fix?</summary>
 
-The `environment` array in a task definition is visible in plaintext to anyone with `ecs:DescribeTaskDefinition` permission, and it appears in CloudTrail logs when the API is called — which means your CI/CD pipeline, monitoring tools, and anyone with read access to CloudTrail can see your database credentials. The fix is to move all secrets from the `environment` array to the `secrets` array using `valueFrom`, which references Secrets Manager or SSM Parameter Store ARNs instead of embedding the value. The **execution role** (not the task role) is responsible for fetching these secrets — ECS calls `secretsmanager:GetSecretValue` and `ssm:GetParameters` at task startup and injects the resolved values into the container as environment variables. The task definition itself contains only ARN references, never the actual secret values. Additionally, enable secret rotation in Secrets Manager and configure your application to reload secrets on connection failures so long-running tasks pick up rotated credentials without requiring a redeployment.
+The `environment` array in a task definition is returned in plaintext to anyone with `ecs:DescribeTaskDefinition` or `ecs:RegisterTaskDefinition` IAM permission — which means your CI/CD pipeline, deployment tools, and anyone with those read APIs can retrieve the full task definition including credentials. The fix is to move all secrets from the `environment` array to the `secrets` array using `valueFrom`, which references Secrets Manager or SSM Parameter Store ARNs instead of embedding the value. The **execution role** (not the task role) is responsible for fetching these secrets — ECS calls `secretsmanager:GetSecretValue` and `ssm:GetParameters` at task startup and injects the resolved values into the container as environment variables. The task definition itself contains only ARN references, never the actual secret values. Additionally, enable secret rotation in Secrets Manager and configure your application to reload secrets on connection failures so long-running tasks pick up rotated credentials without requiring a redeployment.
 </details>
 
 <details>
 <summary>8. Scenario: Your ECS service uses Service Connect for internal communication between the `orders-api` and `payments-api` services. The `payments-api` experiences a spike in latency due to a slow downstream dependency, and requests from `orders-api` start piling up, exhausting connection pools. You need requests to `payments-api` to time out after 2 seconds so that `orders-api` can fail fast and return an error to the client instead of hanging indefinitely. How do you configure this in ECS, and why does Service Connect handle this better than Cloud Map DNS-based discovery?</summary>
 
-Service Connect allows you to configure per-request timeouts at the service level through the `timeoutConfiguration` in the ECS service definition — specifically `idleTimeoutInSeconds` (how long an idle connection stays open), `perRequestTimeoutInSeconds` (maximum time for a single request-response cycle), and `perTryTimeoutInSeconds` (timeout per individual connection attempt before retrying). Setting `perRequestTimeoutInSeconds: 2` means any request to `payments-api` that takes longer than 2 seconds is terminated by Service Connect's sidecar, and the calling application receives an immediate error. This is fundamentally different from Cloud Map DNS-based discovery — with DNS, the `orders-api` resolves `payments-api.production.internal` to an IP address and opens a TCP connection, but DNS has no concept of request timeouts. The application itself must implement timeout logic, connection pooling, and retry policies. Service Connect moves timeout enforcement into the infrastructure layer, so even applications that do not implement client-side timeouts are protected against hanging upstream dependencies. Combined with Service Connect's circuit breaking, a single slow `payments-api` task is ejected from the connection pool rather than degrading every request.
+Service Connect allows you to configure timeouts at the service level through the nested `timeout` object in `serviceConnectConfiguration` — specifically `idleTimeoutSeconds` (how long an idle connection stays open) and `perRequestTimeoutSeconds` (maximum time for a single request-response cycle). Setting `perRequestTimeoutSeconds: 2` means any request to `payments-api` that takes longer than 2 seconds is terminated by Service Connect's proxy, and the calling application receives an immediate error. This is fundamentally different from Cloud Map DNS-based discovery — with DNS, the `orders-api` resolves `payments-api.production.internal` to an IP address and opens a TCP connection, but DNS has no concept of request timeouts. The application itself must implement timeout logic, connection pooling, and retry policies. Service Connect moves timeout enforcement into the infrastructure layer, so even applications that do not implement client-side timeouts are protected against hanging upstream dependencies. Combined with Service Connect's circuit breaking, a single slow `payments-api` task is ejected from the connection pool rather than degrading every request.
 </details>
 
 
@@ -1454,7 +1490,7 @@ curl http://${ALB_DNS}/health
 
 ### Task 5: Debug with ECS Exec
 
-Use ECS Exec to get an interactive shell inside a running task.
+ECS Exec is the supported way to troubleshoot a running Fargate task when logs are not enough — you get an interactive shell without baking SSH into the image. Your IAM user or role needs `ecs:ExecuteCommand` in addition to the task role's SSM channel permissions.
 
 <details>
 <summary>Solution</summary>
@@ -1484,7 +1520,7 @@ aws ecs execute-command \
 
 ### Task 6: Configure Service Auto Scaling
 
-Configure the service to automatically scale out when average CPU utilization exceeds 50%.
+Target tracking on CPU is the usual first policy because it reacts to compute pressure without custom metrics. Configure the service to scale out when average CPU utilization exceeds 50%, with asymmetric cooldowns so scale-in does not flap during brief traffic dips.
 
 <details>
 <summary>Solution</summary>
@@ -1523,7 +1559,7 @@ aws application-autoscaling describe-scaling-policies \
 
 ### Task 7: Prepare for Blue/Green Deployments
 
-To perform a CodeDeploy Blue/Green deployment, you need a secondary Target Group and a CodeDeploy Application setup.
+CodeDeploy blue/green for ECS shifts traffic between two target groups so you can validate a new task set before cutover. To perform that deployment style, you need a secondary target group and a CodeDeploy application wired to the service.
 
 <details>
 <summary>Solution</summary>
