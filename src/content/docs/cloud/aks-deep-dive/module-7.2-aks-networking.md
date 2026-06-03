@@ -1052,6 +1052,17 @@ kubectl exec -n kube-system -l k8s-app=cilium -- cilium monitor --type policy-ve
 
 ## Sources
 
+- [AKS networking concepts](https://learn.microsoft.com/en-us/azure/aks/concepts-network) — Canonical overview of AKS CNI models, network policy engines, and outbound type selection, supporting the four-model comparison in Part 1.
 - [Overview of Azure CNI Overlay networking in AKS](https://learn.microsoft.com/en-us/azure/aks/concepts-network-azure-cni-overlay) — Best current Microsoft reference for overlay architecture, scale limits, and the kubenet comparison.
+- [Configure kubenet networking in AKS](https://learn.microsoft.com/en-us/azure/aks/configure-kubenet) — Documents kubenet UDR behavior, max-pod limits, and subnet sizing constraints referenced in the Kubenet section.
+- [Configure Azure CNI in AKS](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni) — Covers standard Azure CNI dynamic IP allocation, pod subnet decoupling, and capacity planning for direct VNet integration.
 - [Configure Azure CNI Powered by Cilium in AKS](https://learn.microsoft.com/en-us/azure/aks/azure-cni-powered-by-cilium) — Documents current Cilium support boundaries, kube-proxy behavior, and AKS-specific limitations.
+- [Network policies in AKS](https://learn.microsoft.com/en-us/azure/aks/use-network-policies) — Microsoft guidance on Azure NPM, Calico, and Cilium policy engine selection and the irreversible creation-time decision.
+- [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Upstream API reference for the NetworkPolicy resource used in the east-west traffic control examples.
+- [Cilium Kubernetes network policy](https://docs.cilium.io/en/stable/network/kubernetes/policy/) — Cilium L7 policy, DNS-based egress filtering, and CiliumNetworkPolicy CRD documentation supporting the advanced policy section.
+- [Application Gateway Ingress Controller overview](https://learn.microsoft.com/en-us/azure/application-gateway/ingress-controller-overview) — AGIC architecture, WAF integration, and managed ingress model referenced in the ingress comparison.
+- [Web application routing add-on for AKS](https://learn.microsoft.com/en-us/azure/aks/web-app-routing) — Managed NGINX ingress with Key Vault TLS integration, supporting the Web Application Routing section.
+- [Manage outbound traffic with NAT Gateway on AKS](https://learn.microsoft.com/en-us/azure/aks/nat-gateway) — Static egress IP, SNAT port sizing, and NAT Gateway association with AKS node subnets.
+- [AKS outbound type and egress control](https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype) — Outbound type comparison (load balancer, NAT Gateway, UDR) and Azure Firewall egress configuration.
+- [Azure Private Link overview](https://learn.microsoft.com/en-us/azure/private-link/private-link-overview) — Private Endpoint architecture, private DNS, and hub-and-spoke integration for private AKS clusters.
 - [Create a private AKS cluster](https://learn.microsoft.com/en-us/azure/aks/private-clusters) — Covers Private Link, private DNS behavior, and operational constraints for private control-plane access.
