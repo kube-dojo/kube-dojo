@@ -53,7 +53,7 @@ Google documents two generations of Cloud Run functions, and the differences bel
 | **Recommendation** | Legacy only | Use for all new functions |
 
 ```bash
-# Deploy a Gen 2 function (default since late 2023)
+# Deploy a Gen 2 function (opt in with --gen2; recommended for new work)
 gcloud functions deploy my-function \
   --gen2 \
   --runtime=python312 \
@@ -127,7 +127,7 @@ Every function runs as a **service account** identity. The default compute servi
 
 Ingress settings on the underlying Cloud Run service control whether traffic must arrive through internal Google networks, VPC, or the public internet. **Direct VPC egress** and **VPC connectors** let functions reach private RFC1918 resources such as on-prem databases via hybrid connectivity; choose Direct VPC when you want the simpler modern path documented for Cloud Run, and retain connectors only when operational standards require the older connector model. Egress to the internet for third-party APIs remains default for many setups, which is why exfiltration reviews still matter even for “serverless” functions.
 
-Secrets belong in [Secret Manager](https://cloud.google.com/functions/docs/configuring/secrets), mounted as environment variables or volumes on the Cloud Run service backing your function. Avoid baking API keys into source tarballs uploaded to Cloud Build. Rotate secrets by versioning in Secret Manager and redeploying or updating the service binding so new revisions pick up `latest` or a pinned version intentionally. Environment variables remain appropriate for non-secret configuration such as topic names, feature flags, and project IDs discovered via `GOOGLE_CLOUD_PROJECT`.
+Secrets belong in [Secret Manager](https://cloud.google.com/functions/docs/configuring/secrets), mounted as environment variables or volumes on the Cloud Run service backing your function. Avoid baking API keys into source tarballs uploaded to Cloud Build. Rotate secrets by versioning in Secret Manager and redeploying or updating the service binding so new revisions pick up `latest` or a pinned version intentionally. Environment variables remain appropriate for non-secret configuration such as topic names and feature flags. For project ID, read from the [metadata server](https://cloud.google.com/compute/docs/metadata/default-metadata-values) (`project-id`), or set an env var you control explicitly—`GOOGLE_CLOUD_PROJECT` is not auto-injected on gen2 the way it was on gen1.
 
 ### Production Rollouts on the Cloud Run Service Behind Your Function
 
@@ -614,8 +614,7 @@ gcloud functions deploy my-function \
   --entry-point=process_upload \
   --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
   --trigger-event-filters="bucket=my-bucket" \
-  --retry
-  # Use --no-retry to disable retries
+  --no-retry
 ```
 
 ### Idempotency: The Golden Rule
@@ -629,6 +628,7 @@ Side effects that cannot be rolled back—charging money, shipping physical good
 ```python
 # BAD: Not idempotent (counter increments on every retry)
 def process_event(cloud_event):
+    event_id = cloud_event["id"]
     db.execute("UPDATE counters SET count = count + 1 WHERE id = ?", event_id)
 
 # GOOD: Idempotent (uses event ID to deduplicate)
@@ -754,7 +754,7 @@ The table below collects issues that survive code review because they only appea
 | Not using concurrency on Gen 2 | Default settings are not always a good fit | Tune concurrency for the workload, especially for I/O-bound functions |
 | Ignoring cold start impact | Works fine in testing | Set `--min-instances=1` for latency-sensitive functions |
 | Hardcoding project ID in function code | Works in development | Use environment variables or the metadata server for project ID |
-| Not creating a dedicated service account | [Default SA has Editor role](https://cloud.google.com/functions/docs/concepts/iam) | Create a function-specific SA with minimal permissions |
+| Not creating a dedicated service account | [Default compute SA historically had broad access; org policies may block the default Editor grant](https://cloud.google.com/functions/docs/concepts/iam) | Create a function-specific SA with minimal permissions |
 
 Review the table during design reviews, not after launch week. Many mistakes are policy and topology issues invisible in unit tests until retries and loops appear under real traffic. Region mismatches belong on the same checklist: when your bucket lives in `europe-west1` but the function defaults to `us-central1`, you pay latency and cross-region egress while debugging “slow uploads” that are actually physics and billing, not application logic. Treat that checklist like a pre-merge template for every new function PR so reviewers can reject incomplete operational stories before they reach production projects. The habit takes minutes per change and prevents the expensive rework cycles that begin when finance notices runaway invocations or compliance finds over-broad service accounts. That discipline is part of operating event-driven GCP platforms responsibly now at true production scale every week you ship changes to customers.
 
@@ -785,7 +785,7 @@ The function created an infinite loop because saving the resized image back to t
 <details>
 <summary>4. Your security team requires a Cloud Function to run and notify a Slack channel whenever a new IAM policy is applied or a Cloud SQL instance is restarted anywhere in your GCP project. Standard Cloud Functions triggers (HTTP, GCS, Pub/Sub) do not support these services directly. Which GCP service must you use to route these events to your function, and how does it integrate with them?</summary>
 
-You must use Eventarc to route these complex events to your Cloud Function. Eventarc acts as a unified event router that can trigger functions based on actions from over 120 GCP services by hooking into Cloud Audit Logs. Whenever an action (like an IAM change or SQL restart) writes an entry to Cloud Audit Logs, Eventarc captures it and forwards it as a standardized CloudEvent to your function. You can use Eventarc's filtering capabilities to ensure the function only triggers for the specific resource types and methods the security team cares about.
+You must use Eventarc to route these complex events to your Cloud Function. Eventarc acts as a unified event router that can trigger functions based on actions from many GCP services (100+) by hooking into Cloud Audit Logs. Whenever an action (like an IAM change or SQL restart) writes an entry to Cloud Audit Logs, Eventarc captures it and forwards it as a standardized CloudEvent to your function. You can use Eventarc's filtering capabilities to ensure the function only triggers for the specific resource types and methods the security team cares about.
 </details>
 
 <details>
@@ -816,7 +816,7 @@ Build an event-driven pipeline: uploading a file to Cloud Storage triggers a Clo
 
 ### Tasks
 
-**Task 1: Create the infrastructure** — Enable the APIs, create the upload bucket and Pub/Sub topic, and provision a least-privilege service account with Eventarc receiver permissions. This foundation prevents mysterious deploy failures later when Eventarc cannot impersonate your runtime identity.
+**Task 1: Create the infrastructure** — Enable the APIs, create the upload bucket and Pub/Sub topic, grant the Cloud Storage service agent `roles/pubsub.publisher` (required before storage-finalized Eventarc triggers work), and provision a least-privilege service account with Eventarc receiver permissions. This foundation prevents mysterious deploy failures later when Eventarc cannot impersonate your runtime identity or when GCS cannot publish notification events.
 
 <details>
 <summary>Solution</summary>
@@ -853,18 +853,24 @@ gcloud iam service-accounts create func-processor \
 export FUNC_SA="func-processor@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Grant permissions
-gcloud projects add-iam-binding $PROJECT_ID \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$FUNC_SA" \
   --role="roles/storage.objectViewer"
 
-gcloud projects add-iam-binding $PROJECT_ID \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$FUNC_SA" \
   --role="roles/pubsub.publisher"
 
 # Grant Eventarc permissions
-gcloud projects add-iam-binding $PROJECT_ID \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$FUNC_SA" \
   --role="roles/eventarc.eventReceiver"
+
+# GCS → Eventarc: the Cloud Storage service agent must publish to Pub/Sub
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gs-project-accounts.iam.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
 ```
 </details>
 

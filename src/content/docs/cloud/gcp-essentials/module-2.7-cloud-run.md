@@ -1,5 +1,4 @@
 ---
-revision_pending: false
 title: "Module 2.7: GCP Cloud Run (Serverless Containers)"
 slug: cloud/gcp-essentials/module-2.7-cloud-run
 sidebar:
@@ -19,9 +18,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In early 2023, a health-tech startup ran its patient-facing API on a Kubernetes cluster managed by a two-person platform team. The cluster was not unusually large, but it still demanded node upgrades, autoscaler tuning, certificate renewal work, security patching, and incident response. When one engineer left, the remaining engineer tried to keep the platform stable while also supporting product delivery. A routine GKE node pool upgrade failed on a weekend, the patient portal stayed unavailable for 6 hours, and the incident review estimated that the team had been spending roughly 70% of its engineering time on infrastructure care instead of application features.
+**Hypothetical scenario:** a health-tech startup runs its patient-facing API on a small GKE cluster managed by a two-person platform team. The cluster is not unusually large, but it still demands node upgrades, autoscaler tuning, certificate renewal work, security patching, and incident response. When one engineer leaves, the remaining engineer tries to keep the platform stable while also supporting product delivery. A routine node pool upgrade goes wrong on a weekend, the patient portal is unavailable for hours, and the incident review surfaces how much engineering time went to infrastructure care instead of application features.
 
-The company did not need a bespoke cluster for that API. The workload was stateless, packaged as a container, and exposed through HTTPS, while traffic nearly disappeared overnight and spiked sharply during launches. The team migrated the API services to Cloud Run in three weeks, kept the same container packaging flow through Artifact Registry, and removed most of the operational surface that had been consuming the platform team. Their monthly compute bill decreased by about 40% because idle services could scale to zero, and a later product launch produced a 25x traffic spike without manual node scaling or weekend cluster surgery.
+The company does not need a bespoke cluster for that API. The workload is stateless, packaged as a container, and exposed through HTTPS, while traffic nearly disappears overnight and spiked sharply during launches. The team migrates the API services to Cloud Run over a few sprints, keeps the same container packaging flow through Artifact Registry, and removes most of the operational surface that had been consuming the platform team. Idle services can scale to zero, which lowers steady-state compute cost, and later product launches can spike without manual node scaling or weekend cluster surgery.
 
 Cloud Run matters because it changes the question from "how do we operate this container platform?" to "what contract must this container satisfy so the platform can operate it for us?" That distinction is the whole lesson. Cloud Run is built on Knative ideas such as services, immutable revisions, routes, and scale-to-zero autoscaling, but Google manages the control plane, load balancing, TLS, instance lifecycle, and regional serving infrastructure. You still need engineering judgment around concurrency, cold starts, VPC access, custom domains, observability, rollout safety, and when a full Kubernetes 1.35+ cluster is the better fit. You just make those decisions at the service boundary rather than by managing nodes.
 
@@ -297,9 +296,9 @@ Concurrency tuning is also a resilience control. Suppose a revision has concurre
 
 Cloud Run and GKE can coexist in the same architecture. A platform team might keep shared stateful services, service mesh experiments, custom controllers, or batch systems on GKE, while moving stateless APIs, webhooks, internal admin UIs, and scheduled jobs to Cloud Run. That split can reduce cluster pressure and let teams choose the operational model per workload. The mistake is turning the decision into identity politics. The useful question is which platform exposes the fewest failure modes while meeting the service's needs.
 
-War story: a retail team moved a promotion API from a small GKE node pool to Cloud Run before a seasonal sale. They set high concurrency because load tests looked efficient, then discovered that the real database connection pool saturated when multiple instances warmed at once. Cloud Run scaled exactly as configured, but the database could not absorb the shape of traffic. The fix was not to abandon Cloud Run. The fix was to lower concurrency, cap max instances, increase database pool discipline, and add dashboards that showed revision-level latency alongside database saturation.
+**Hypothetical scenario:** a retail team moves a promotion API from a small GKE node pool to Cloud Run before a seasonal sale. They set high concurrency because load tests looked efficient, then discover that the database connection pool saturates when multiple instances warm at once. Cloud Run scales exactly as configured, but the database cannot absorb the shape of traffic. The fix is not to abandon Cloud Run. The fix is to lower concurrency, cap max instances, increase database pool discipline, and add dashboards that show revision-level latency alongside database saturation.
 
-The same team later found that Cloud Run simplified the parts of operations they had previously postponed. Because revisions were explicit, release notes could point to exact images and traffic percentages. Because service accounts were per workload, audit findings were easier to close. Because scaling was configured per service, product teams could own cost and latency trade-offs without asking the platform group to resize node pools. The migration was not magic; it forced configuration decisions into a smaller, reviewable surface. That smaller surface is one of Cloud Run's underrated advantages.
+In the same hypothetical rollout, Cloud Run could simplify parts of operations the team had previously postponed. Because revisions are explicit, release notes can point to exact images and traffic percentages. Because service accounts are per workload, audit findings are easier to close. Because scaling is configured per service, product teams can own cost and latency trade-offs without asking the platform group to resize node pools. The migration is not magic; it forces configuration decisions into a smaller, reviewable surface. That smaller surface is one of Cloud Run's underrated advantages.
 
 ## Patterns & Anti-Patterns
 
@@ -366,7 +365,7 @@ When the data is ambiguous, choose the option that is easiest to observe and rev
 - Cloud Run services can scale a revision down to zero instances by default, which is why an idle service can avoid compute charges while still keeping a stable HTTPS endpoint.
 - Every Cloud Run deployment that changes serving configuration creates an immutable revision, so rollback can be a traffic routing operation rather than a new build.
 - Cloud Run's container contract requires the ingress container to listen on `0.0.0.0` and the configured `PORT`, with `8080` used by default when no custom port is set.
-- In October 2023, Cloud Run added support for multi-container services generally, making sidecar-style patterns practical without moving the workload to a cluster.
+- Cloud Run supports multi-container revisions (sidecar-style patterns) without moving the workload to a separate GKE cluster—see the [containers configuration](https://cloud.google.com/run/docs/configuring/services/containers) docs for limits and rollout notes.
 
 ## Common Mistakes
 
@@ -655,6 +654,25 @@ Success criteria:
 - [ ] A Serverless VPC Access connector is attached to the service.
 - [ ] Traffic can be shifted between revisions and rolled back to the previous version.
 - [ ] You can explain whether this workload belongs on Cloud Run, GKE, Cloud Functions, or Cloud Run jobs.
+
+### Lab cleanup
+
+If you ran the hands-on exercise in a real project, delete lab resources so connectors, services, and images do not keep billing:
+
+```bash
+# Delete Cloud Run service and revisions
+gcloud run services delete "${SERVICE}" --region "${REGION}" --quiet
+
+# Delete Serverless VPC Access connector
+gcloud compute networks vpc-access connectors delete "${CONNECTOR}" \
+  --region "${REGION}" --quiet
+
+# Optional: remove lab image tags from Artifact Registry (keep the repo if shared)
+gcloud artifacts docker images delete "${IMAGE}:v1" --delete-tags --quiet 2>/dev/null || true
+
+# Remove local lab directory
+rm -rf /tmp/cloud-run-lab
+```
 
 ## Next Module
 

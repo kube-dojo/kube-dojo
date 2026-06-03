@@ -74,7 +74,7 @@ Understanding **why** versions are immutable matters for incident response and c
 
 ### Version aliases (`latest` and pinned numbers)
 
-When you [access a secret version](https://cloud.google.com/secret-manager/docs/access-secret-version), you pass a version identifier in the resource name: `projects/PROJECT/secrets/SECRET/versions/VERSION`. The identifier can be a numeric version (`3`) or the alias **`latest`**, which always resolves to the highest-numbered **ENABLED** version at access time. Aliases are convenient in development, but production rollouts should treat `latest` as a **moving target**: Cloud Run and many runtimes resolve `latest` at **deploy** time, not on every request, so adding version 6 does not automatically change a running revision until you redeploy or pin explicitly.
+When you [access a secret version](https://cloud.google.com/secret-manager/docs/access-secret-version), you pass a version identifier in the resource name: `projects/PROJECT/secrets/SECRET/versions/VERSION`. The identifier can be a numeric version (`3`) or the alias **`latest`**, which always resolves to the highest-numbered **ENABLED** version at access time. Aliases are convenient in development, but production rollouts should treat `latest` as a **moving target**: Cloud Run resolves `latest` when each **container instance starts**, not on every request, so adding version 6 does not automatically change running instances until new instances start (after scale-up or a new revision rollout) or you pin explicitly.
 
 For zero-downtime rotation, mature teams keep **two ENABLED versions** during overlap: the database (or upstream API) accepts both credentials while instances restart on different schedules, then disable the old version only after traffic and batch jobs have drained.
 
@@ -141,7 +141,7 @@ gcloud secrets versions list prod-db-password \
 
 > **Pause and predict**: If you add a new version to a secret but do not explicitly update applications to use the new version, what determines whether they automatically receive the new data?
 
-The answer depends on the consumer: client libraries requesting `latest` resolve at **request time**, while Cloud Run environment variables resolved at deploy time do not. That distinction is why production systems pin versions in deployment manifests and treat `latest` as a development convenience. Operations teams should document, per service, whether restart is required after `add_secret_version` so on-call engineers do not assume uniform behavior across Compute Engine, GKE CSI mounts, and Cloud Run.
+The answer depends on the consumer: client libraries requesting `latest` resolve at **request time**, while Cloud Run environment variables resolved at **instance startup** do not change on every request. That distinction is why production systems pin versions in deployment manifests and treat `latest` as a development convenience. Operations teams should document, per service, whether a new revision or instance recycle is required after `add_secret_version` so on-call engineers do not assume uniform behavior across Compute Engine, GKE CSI mounts, and Cloud Run.
 
 ### Disabling and Destroying Versions
 
@@ -211,7 +211,7 @@ gcloud secrets add-iam-policy-binding prod-db-password \
 gcloud secrets get-iam-policy prod-db-password
 
 # Grant access to all secrets in a project (less recommended)
-gcloud projects add-iam-binding my-project \
+gcloud projects add-iam-policy-binding my-project \
   --member="serviceAccount:my-api@my-project.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 ```
@@ -236,7 +236,7 @@ Secrets live in a **project**, but workloads in other projects routinely need th
 
 ## Integrating with Cloud Run
 
-Cloud Run has first-class integration with Secret Manager because Gen2 services are Cloud Run revisions under the hood. You can [mount secrets as environment variables or files](https://cloud.google.com/run/docs/configuring/services/secrets) without baking credentials into the image, which means you can rebuild containers from public base images and still keep keys out of Artifact Registry layers. The integration resolves secret references when a new revision starts, so secret changes are tied to the same rollout machinery you already use for code—roll back a bad deployment and you roll back the credential pin as well.
+Cloud Run has first-class integration with Secret Manager. You can [mount secrets as environment variables or files](https://cloud.google.com/run/docs/configuring/services/secrets) without baking credentials into the image, which means you can rebuild containers from public base images and still keep keys out of Artifact Registry layers. The integration resolves secret references when each container instance starts, so secret changes are tied to the same rollout machinery you already use for code—roll back a bad deployment and you roll back the credential pin as well.
 
 From a threat-model perspective, anyone with `run.services.get` and shell access inside the container can still read injected secrets, so pair runtime injection with per-secret IAM, VPC egress controls where needed, and detective controls on `AccessSecretVersion` for the service account. Cloud Run does not magically reduce insider risk; it removes secrets from source control and makes rotation auditable.
 
@@ -253,7 +253,7 @@ gcloud run deploy my-api \
 gcloud run deploy my-api \
   --image=us-central1-docker.pkg.dev/my-project/docker-repo/my-api:v1.0.0 \
   --region=us-central1 \
-  --set-secrets="DB_PASSWORD=prod-db-password:latest,API_KEY=api-key:latest,TLS_CERT=tls-cert:3"
+  --set-secrets="DB_PASSWORD=prod-db-password:latest,API_KEY=api-key:latest,TLS_CERT=tls-cert:latest"
 
 # Pin to a specific version (recommended for production)
 gcloud run deploy my-api \
@@ -396,7 +396,7 @@ gcloud functions deploy my-function \
   --set-secrets="/app/certs/tls.crt=tls-cert:latest"
 ```
 
-Gen2 functions share Cloud Run’s secret injection model—[`--set-secrets`](https://cloud.google.com/functions/docs/configuring/secrets) binds Secret Manager resources at deploy time. Event-driven rotators often run as HTTP functions triggered by Pub/Sub push subscriptions, using a dedicated rotator service account with `secretVersionAdder` only.
+Gen2 functions share Cloud Run’s secret injection model—[`--set-secrets`](https://cloud.google.com/functions/docs/configuring/secrets) resolves Secret Manager references at **instance startup** on the underlying Cloud Run service. Event-driven rotators often run as HTTP functions triggered by Pub/Sub push subscriptions, using a dedicated rotator service account with `secretVersionAdder` only.
 
 Cold-start latency for functions that read secrets at import time includes Secret Manager round trips unless you cache values in global variables with a refresh hook. For high-QPS HTTP functions, avoid per-invocation fetches; the access-operation bill and latency add up faster than for long-lived Cloud Run instances with similar code structure.
 
@@ -461,14 +461,13 @@ gcloud secrets create prod-db-password \
 
 ```python
 # Pub/Sub subscriber (conceptual): react to SECRET_ROTATE, do NOT expect new data magically
-import base64
-import json
+# Rotation metadata arrives on Pub/Sub message attributes, not in the data payload.
 
 def handle_rotate(event, context):
-    envelope = json.loads(base64.b64decode(event["data"]).decode("utf-8"))
-    if envelope.get("eventType") != "SECRET_ROTATE":
+    attrs = event.get("attributes") or {}
+    if attrs.get("eventType") != "SECRET_ROTATE":
         return
-    secret_id = envelope["secretId"]
+    secret_id = attrs.get("secretId")
     # 1) Generate creds in DB/API  2) add_secret_version  3) rollout  4) disable old
 ```
 
@@ -547,14 +546,15 @@ def rotate_secret(request):
     # TODO: Update the actual database password here
     # update_database_password(new_password)
 
-    # Disable the previous version (version N-1)
+    # Disable the previous ENABLED version (skip if already DESTROYED)
     prev_version = str(int(new_version) - 1)
     if int(prev_version) >= 1:
         version_name = f"{parent}/versions/{prev_version}"
-        client.disable_secret_version(
-            request={"name": version_name}
-        )
-        print(f"Disabled version: {prev_version}")
+        try:
+            client.disable_secret_version(request={"name": version_name})
+            print(f"Disabled version: {prev_version}")
+        except Exception as exc:
+            print(f"Skip disable {prev_version}: {exc}")
 
     return f"Rotated to version {new_version}", 200
 ```
@@ -671,9 +671,9 @@ Secret Manager pricing is consumption-based, not flat per secret. According to [
 
 Finance teams sometimes ask for “number of secrets” while engineering reports “number of versions.” Align on **active version-locations** as the billing unit, especially with user-managed replication. A single logical secret with ten disabled versions in three regions can be thirty billable locations before you account for access operations at all.
 
-Hypothetical scenario: 40 microservices each mount 5 secrets with automatic replication, keep 8 enabled versions for rollback, and a buggy health check calls `AccessSecretVersion` on every HTTP request (50 RPS). Version storage might look modest (~$19/month for 200 versions in one location), but access operations can exceed **21M/month**, adding roughly **$63** in access charges alone—far more than storage. **Knobs that reduce cost**: destroy obsolete versions, pin versions to avoid accidental re-read loops, cache secrets in memory with TTL instead of per-request API calls, reduce user-managed region count, and fix hot-path polling.
+Hypothetical scenario: **10** microservices each mount **5** secrets with automatic replication and keep **4** ENABLED versions for rollback (10 × 5 × 4 = **200** active version-months in one billing location). After the six free version-months, storage is about **200 × $0.06 ≈ $12/month**—not $19 for a mismatched count. Separately, one service whose health check calls `AccessSecretVersion` on every HTTP request at **8 RPS** generates roughly **21M** access operations per month (~**$63** beyond the 10k free tier). The same anti-pattern at **50 RPS** would exceed **130M** ops and roughly **$390**—always multiply **RPS × 86,400 × days** before quoting access charges. **Knobs that reduce cost**: destroy obsolete versions, pin versions to avoid accidental re-read loops, cache secrets in memory with TTL instead of per-request API calls, reduce user-managed region count, and fix hot-path polling.
 
-**User-managed replication multiplier**: 10 secrets × 5 versions × 3 regions = 150 billable version-locations before free tier—Google’s pricing example cites **$8.64** for the user-managed portion plus separate automatic-replication secrets. Always model **locations × versions**, not just secret count.
+**User-managed replication multiplier**: 10 secrets × 5 versions × 3 regions = 150 billable version-locations before free tier—Google’s pricing example cites **~$8.64** for the user-managed portion plus separate automatic-replication secrets. Always model **locations × versions**, not just secret count.
 
 Your organization should replicate this arithmetic quarterly: export active version counts per project, multiply by locations for user-managed secrets, add measured `AccessSecretVersion` volume from Cloud Logging metrics, and add rotation notification counts if schedules are enabled. Finance surprises are almost always disabled versions left for months or health checks hammering access APIs—not the headline $0.06 per version rate alone. Tag secrets with `owner` and `cost-center` labels early so exports map cleanly to teams during chargeback conversations, and so orphaned secrets are obvious when services decommission without cleaning IAM bindings or secret versions.
 
@@ -817,7 +817,7 @@ A **Secret** is a named container (like `prod-db-password`) that holds metadata,
 <details>
 <summary>2. Scenario: Your production Cloud Run application accesses its database using a secret pinned to the `latest` alias (`--set-secrets="DB_PASSWORD=prod-db-password:latest"`). During an emergency credential rotation, you add a new version to the Secret Manager. Five minutes later, the application is still failing to connect to the database. Why is the service not using the new password, and what must you do to fix it?</summary>
 
-When using `latest`, Cloud Run resolves the version at **deployment time**, not at runtime. The service continues using the version that was "latest" when it was last deployed, preventing untested secret changes from automatically propagating to production services and causing surprise outages. This design choice prioritizes operational stability over automatic propagation. By requiring an explicit deployment, GCP ensures that changes to sensitive configuration follow the same rollout and rollback procedures as application code. To pick up the new secret version, you must **redeploy** the service (or run `gcloud run services update` with the same `--set-secrets` flag) so the container fetches the newly created version during its launch sequence.
+When using `latest`, Cloud Run resolves the alias when each **container instance starts**, not on every request. Existing instances keep the secret material they loaded at startup until they are replaced, which prevents untested secret changes from automatically propagating to every in-flight request. This design prioritizes operational stability over automatic propagation. To pick up a new secret version everywhere, roll out a **new revision** (or otherwise recycle instances) so new containers start and resolve the current `latest` alias—or pin an explicit version number and bump it deliberately. A running revision does not re-fetch Secret Manager on each HTTP call.
 </details>
 
 <details>
@@ -1035,7 +1035,7 @@ curl -s $SERVICE_URL | python3 -m json.tool
 # Add a new version (simulating rotation)
 echo -n "brand-N3w-Rot@ted-P@ss!" | gcloud secrets versions add lab-db-password --data-file=-
 
-# The running service still uses the old version (resolved at deploy time)
+# The running service still uses the old version (resolved at instance startup)
 echo "=== Before redeployment (still old version) ==="
 curl -s $SERVICE_URL | python3 -m json.tool
 
