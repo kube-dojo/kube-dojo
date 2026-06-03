@@ -441,17 +441,28 @@ az network firewall network-rule create \
   --destination-addresses "10.1.0.0/16" "10.2.0.0/16" \
   --destination-ports "*"
 
-# Create an application rule (allow outbound HTTPS to specific FQDNs)
+# Create an application rule (allow AKS service endpoints via FQDN tag)
 az network firewall application-rule create \
   --resource-group myRG \
   --firewall-name hub-firewall \
   --collection-name "allowed-websites" \
   --priority 300 \
   --action Allow \
-  --name "allow-updates" \
+  --name "allow-aks" \
   --protocols Https=443 \
   --source-addresses "10.1.0.0/16" "10.2.0.0/16" \
-  --fqdn-tags "AzureKubernetesService" \
+  --fqdn-tags "AzureKubernetesService"
+
+# Separate rule for OS update FQDNs (cannot mix --fqdn-tags and --target-fqdns)
+az network firewall application-rule create \
+  --resource-group myRG \
+  --firewall-name hub-firewall \
+  --collection-name "allowed-websites" \
+  --priority 301 \
+  --action Allow \
+  --name "allow-os-updates" \
+  --protocols Https=443 \
+  --source-addresses "10.1.0.0/16" "10.2.0.0/16" \
   --target-fqdns "*.ubuntu.com" "packages.microsoft.com"
 ```
 
@@ -475,7 +486,7 @@ When you need to connect Azure VNets to an on-premises data center or to a partn
 | **Encryption** | Built-in IPSec | Not encrypted by default (add MACsec or VPN) |
 | **Cost** | Lower (~$140-1,250/month for gateway) | Higher ($200-10,000+/month for circuit) |
 | **Setup time** | Minutes to hours | Weeks (requires provider provisioning) |
-| **SLA** | 99.9% (single) / 99.95% (active-active) | 99.95% (standard) / 99.99% (premium) |
+| **SLA** | 99.9% (single) / 99.95% (active-active) | 99.95% (Premium extends global reach, not the SLA) |
 | **Best for** | Dev/test, small offices, quick setup | Production, compliance, high-throughput |
 
 ```bash
@@ -558,7 +569,7 @@ The items below are easy to overlook during design reviews because they do not b
 
 1. **VNet peering traffic should be priced explicitly during design.** Azure bills peering traffic according to the current Virtual Network pricing page, and cross-region replication can create meaningful networking costs if you do not model them up front. A spoke that chatters continuously to a hub monitoring collector in another region can accrue egress-style charges even though the traffic never leaves Microsoft's network, so capacity planning should include bytes per day estimates the same way you would for internet egress.
 
-2. **Azure reserves exactly 5 IP addresses in every subnet**, regardless of size. In a /28 subnet (16 addresses), you lose 5 to Azure, leaving only 11 usable. The reserved addresses are: the network address (.0), Azure's default gateway (.1), Azure DNS mapping (.2 and .3), and the broadcast address (last address). This is more than AWS reserves (which takes only the first 4 and the last 1), so teams migrating multi-cloud should not copy AWS prefix habits verbatim without recalculating usable space.
+2. **Azure reserves exactly 5 IP addresses in every subnet**, regardless of size. In a /28 subnet (16 addresses), you lose 5 to Azure, leaving only 11 usable. The reserved addresses are: the network address (.0), Azure's default gateway (.1), Azure DNS mapping (.2 and .3), and the broadcast address (last address). This matches AWS, which also reserves 5 (the first four addresses and the last); the positions differ slightly, so don't assume an Azure subnet has more usable space than the same-sized AWS subnet.
 
 3. **Network flow logs can generate substantial data and ingestion costs.** In busy environments, leaving flow logs enabled continuously can create noticeable Log Analytics charges if you do not scope retention and collection carefully. Sampling, filtering to security-relevant subnets, and aligning retention with compliance rather than default thirty-day storage often reduces cost more than disabling logs entirely and flying blind during an incident.
 
@@ -579,7 +590,7 @@ Most Azure networking outages in mature tenants trace back to a small set of rep
 | Not associating NSGs with subnets (relying only on NIC-level NSGs) | NIC-level NSGs seem more granular and therefore "better" | Subnet-level NSGs provide a consistent security baseline. Use ASGs for per-VM differentiation within a subnet. NIC-level NSGs should be the exception, not the rule. |
 | Forgetting to create the return peering (only creating one direction) | VNet peering requires a link in both directions, but Azure does not warn you until traffic fails | Always create peering in pairs. Script it so both sides are created in the same deployment. |
 | Relying on implicit outbound internet access in production | Default outbound behavior and subnet defaults can change, so explicit outbound design is safer | In production, choose an explicit outbound pattern such as a firewall/NVA, NAT Gateway, or private subnets with the routes you need |
-| Not planning DNS resolution across connected VNets | Name resolution across connected VNets usually requires explicit DNS design, such as Private DNS Zones linked to the relevant VNets or a centralized resolver in the hub |
+| Not planning DNS resolution across connected VNets | Cross-VNet name resolution isn't automatic — VNets default to Azure-provided DNS scoped to themselves | Link a Private DNS Zone to each VNet that must resolve the names, or run a central DNS resolver in the hub |
 
 ---
 
@@ -874,7 +885,7 @@ az vm run-command invoke -g "$RG" -n spoke1-vm \
 # Verify traffic goes through the NVA by checking traceroute
 az vm run-command invoke -g "$RG" -n spoke1-vm \
   --command-id RunShellScript \
-  --scripts "traceroute -n -m 5 $SPOKE2_PRIVATE_IP"
+  --scripts "sudo apt-get update -qq && sudo apt-get install -y traceroute && traceroute -n -m 5 $SPOKE2_PRIVATE_IP"
 ```
 
 <details>
