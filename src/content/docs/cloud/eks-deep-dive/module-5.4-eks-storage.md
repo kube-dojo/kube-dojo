@@ -82,6 +82,7 @@ Amazon Elastic Block Store (EBS) provides persistent, high-performance block-lev
 [The EBS CSI driver is managed as an EKS Add-on. To interact with the AWS API, the driver's controller pods require precise IAM permissions.](https://docs.aws.amazon.com/eks/latest/userguide/workloads-add-ons-available-eks.html) We use standard IAM Roles for Service Accounts (IRSA) or EKS Pod Identity to grant these privileges.
 
 ```bash
+alias k=kubectl
 # Create IAM role for the EBS CSI driver
 cat > /tmp/ebs-trust.json << 'EOF'
 {
@@ -100,11 +101,19 @@ aws iam create-role --role-name AmazonEKS_EBS_CSI_DriverRole \
 aws iam attach-role-policy --role-name AmazonEKS_EBS_CSI_DriverRole \
   --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
 
-# Install the add-on
+EBS_ROLE_ARN=arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/AmazonEKS_EBS_CSI_DriverRole
+
+# Install the add-on (Pod Identity — do not pass --service-account-role-arn)
 aws eks create-addon \
   --cluster-name my-cluster \
-  --addon-name aws-ebs-csi-driver \
-  --service-account-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/AmazonEKS_EBS_CSI_DriverRole
+  --addon-name aws-ebs-csi-driver
+
+# Bind the controller service account via EKS Pod Identity
+aws eks create-pod-identity-association \
+  --cluster-name my-cluster \
+  --namespace kube-system \
+  --service-account ebs-csi-controller-sa \
+  --role-arn $EBS_ROLE_ARN
 
 # Verify
 k get pods -n kube-system -l app.kubernetes.io/name=aws-ebs-csi-driver
@@ -127,8 +136,8 @@ provisioner: ebs.csi.aws.com
 parameters:
   type: gp3
   fsType: ext4
-  iops: "3000"       # baseline (free), up to 16000
-  throughput: "125"   # baseline (free), up to 1000 MiB/s
+  iops: "3000"       # baseline (free), up to 80000 (16000 on Outposts)
+  throughput: "125"   # baseline (free), up to 2000 MiB/s (1000 on Outposts)
   encrypted: "true"
   kmsKeyId: alias/eks-ebs-key   # optional: customer-managed KMS key
 reclaimPolicy: Delete
@@ -145,8 +154,6 @@ The `volumeBindingMode: WaitForFirstConsumer` parameter is arguably the most cri
 > **Pause and predict**: If you forget to set `volumeBindingMode: WaitForFirstConsumer` and leave it as the default `Immediate`, and your EKS cluster spans 3 Availability Zones, what is the mathematical probability that your pod will successfully mount its newly provisioned EBS volume on the first try without node affinity rules? With uniform random AZ selection for both volume and pod, success is roughly one-in-three on the first scheduling attempt—and retry loops do not fix a bound PV already pinned to the wrong zone without reprovisioning.
 
 ### Using EBS Volumes in Pods
-
-### End-to-end: what happens when a pod claims EBS storage
 
 Tracing one successful mount clarifies why configuration mistakes are so painful. Suppose a StatefulSet pod `postgres-0` starts in namespace `database` with a `volumeClaimTemplate` referencing `ebs-gp3`:
 
@@ -288,6 +295,7 @@ spec:
 Scaling storage is a common operational necessity. [Because our `StorageClass` includes `allowVolumeExpansion: true`, we can dynamically resize EBS volumes without terminating the pod or suffering downtime.](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-modify-volume.html) 
 
 ```bash
+alias k=kubectl
 # Edit the PVC to request more storage
 k patch pvc data-postgres-0 -n database \
   --type merge \
@@ -332,11 +340,18 @@ aws iam create-role --role-name AmazonEKS_EFS_CSI_DriverRole \
 aws iam attach-role-policy --role-name AmazonEKS_EFS_CSI_DriverRole \
   --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy
 
-# Install the EFS CSI add-on
+EFS_ROLE_ARN=arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/AmazonEKS_EFS_CSI_DriverRole
+
+# Install the EFS CSI add-on (Pod Identity — do not pass --service-account-role-arn)
 aws eks create-addon \
   --cluster-name my-cluster \
-  --addon-name aws-efs-csi-driver \
-  --service-account-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/AmazonEKS_EFS_CSI_DriverRole
+  --addon-name aws-efs-csi-driver
+
+aws eks create-pod-identity-association \
+  --cluster-name my-cluster \
+  --namespace kube-system \
+  --service-account efs-csi-controller-sa \
+  --role-arn $EFS_ROLE_ARN
 
 # Create an EFS filesystem
 EFS_ID=$(aws efs create-file-system \
@@ -462,7 +477,7 @@ At filesystem creation time you choose a **performance mode** (`generalPurpose` 
 
 **EFS Infrequent Access (IA)** and **Archive** storage classes (with lifecycle policies) reduce $/GB for cold blobs at the cost of retrieval latency and per-GB read charges when data is accessed again—excellent for log archives and ML feature stores that are mostly idle.
 
-> **Stop and think**: EFS is a regional service, meaning your 5 `cms-web` replicas can be scheduled across 3 different Availability Zones and still read/write to the same filesystem. But what is the hidden cost of this convenience? Consider how data actually flows when a pod in AZ-a reads a file that was physically written by a pod in AZ-b, and what AWS charges for network traffic that crosses AZ boundaries.
+> **Stop and think**: EFS is a regional service, meaning your 5 `cms-web` replicas can be scheduled across 3 different Availability Zones and still read/write to the same filesystem. With a mount target in each AZ, pods normally connect to the **local** mount target in their subnet—reads and writes do not cross AZ boundaries for that path. Cross-AZ **data transfer** charges apply when a pod lands in an AZ **without** a mount target and NFS traffic hairpins to a remote target. What mount-target coverage would you require before declaring the CMS tier production-ready?
 
 ---
 
@@ -494,11 +509,18 @@ graph LR
 [Mountpoint for S3 is not meant for dynamic provisioning; it is strictly designed to map existing S3 buckets into pods.](https://docs.aws.amazon.com/eks/latest/userguide/s3-csi.html) Thus, you must manually construct a `PersistentVolume` targeting the bucket so the driver has a concrete object to mount. In practice, this means you treat each existing bucket as a pre-provided data source and keep namespace and access controls explicit at the Kubernetes storage layer.
 
 ```bash
-# Install the Mountpoint for S3 CSI add-on
+S3_ROLE_ARN=arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/S3MountpointRole
+
+# Install the Mountpoint for S3 CSI add-on (Pod Identity — do not pass --service-account-role-arn)
 aws eks create-addon \
   --cluster-name my-cluster \
-  --addon-name aws-mountpoint-s3-csi-driver \
-  --service-account-role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/S3MountpointRole
+  --addon-name aws-mountpoint-s3-csi-driver
+
+aws eks create-pod-identity-association \
+  --cluster-name my-cluster \
+  --namespace kube-system \
+  --service-account s3-csi-driver-sa \
+  --role-arn $S3_ROLE_ARN
 ```
 
 ```yaml
@@ -609,7 +631,7 @@ The external-attacher creates `VolumeAttachment` objects linking a PV to a node 
 
 ## Stateful Workloads Across Availability Zones
 
-The fundamental lesson learned by the ad-tech company was that high availability at the application layer means nothing if the storage layer acts as a strict geographical anchor. They had multiple application pods that could move between zones, yet recovery still stalled when the volume could not follow that movement quickly. That failure path proved that resilience requires alignment between scheduler strategy and storage topology, not just pod-level replication.
+Hypothetical scenario: a recurring failure pattern in ad-tech-style deployments is that high availability at the application layer means nothing if the storage layer acts as a strict geographical anchor. Application pods may reschedule freely across zones, yet recovery still stalls when an EBS volume cannot follow that movement. That failure path proves that resilience requires alignment between scheduler strategy and storage topology, not just pod-level replication.
 
 ### The Problem
 
@@ -633,7 +655,7 @@ graph TD
 
 ### Instance store and ephemeral volumes (when not to use CSI)
 
-Some workloads need the fastest local NVMe on the instance itself. **Instance store** volumes are exposed via `emptyDir` with `medium: Memory` for tmpfs or via direct hostPath/instance-store patterns on bare metal–backed instance types; they are not managed by the EBS CSI driver and disappear when the instance terminates. Use them for scratch caches, shuffle-heavy Spark executors, or temporary sort buffers—not for anything you expect to survive pod rescheduling. The decision framework above deliberately routes durable state to EBS/EFS/S3 CSI paths.
+Some workloads need the fastest local I/O on a node. **`emptyDir` with `medium: Memory`** provides a RAM-backed tmpfs scratch space—it is fast but counts against pod memory limits and disappears when the pod is removed. **Instance store** NVMe volumes are physically attached on many EC2 families (for example m6id, i4i, m5d, c5d, r5d, and bare-metal variants); expose them via supported `emptyDir` volume configurations or hostPath patterns on those instance types, not through the EBS CSI driver. Both tmpfs and instance store are ephemeral: data vanishes when the pod or instance goes away. Use them for scratch caches, shuffle-heavy Spark executors, or temporary sort buffers—not for state that must survive rescheduling. The decision framework above deliberately routes durable state to EBS/EFS/S3 CSI paths.
 
 ### Solution 1: Topology-Aware Scheduling
 
@@ -823,7 +845,7 @@ Suppose three StatefulSet databases each hold 500 GiB gp3 with default 3,000 IOP
 
 ### EFS — shared media at 2 TiB Standard
 
-Two tebibytes on EFS Standard at about **$0.30/GB-month** is on the order of **$600/month** for capacity alone, plus Elastic throughput charges for data read/written and **$0.01/GB** cross-AZ traffic when pods in different zones hit the same files frequently. Moving cold assets to **EFS IA** (roughly **$0.016/GB-month** in many Regions, plus per-GB read fees when accessed) can cut steady-state storage if lifecycle policies match real access patterns. Cost spikes when Provisioned Throughput is left pegged high after a one-time migration, or when IA objects are read continuously (paying retrieval surcharges).
+Two tebibytes on EFS Standard at about **$0.30/GB-month** is on the order of **$600/month** for capacity alone, plus Elastic throughput charges for data read/written. **Cross-AZ data transfer** ($0.01/GB in many Regions) applies when pods connect to a mount target outside their AZ—not when each AZ has a local mount target serving local reads from EFS's regional replication. Moving cold assets to **EFS IA** (roughly **$0.016/GB-month** in many Regions, plus per-GB read fees when accessed) can cut steady-state storage if lifecycle policies match real access patterns. Cost spikes when Provisioned Throughput is left pegged high after a one-time migration, or when IA objects are read continuously (paying retrieval surcharges).
 
 ### S3 + Mountpoint — 5 TiB training corpus
 
@@ -902,7 +924,7 @@ When you present options to product teams, translate technical constraints into 
 
 3. EFS Infrequent Access can be much cheaper than EFS Standard for cold data, and EFS Lifecycle Management can automatically transition files after configurable inactivity windows such as 7, 14, 30, 60, or 90 days.
 
-4. Mountpoint for S3 is implemented in Rust and optimized for high-throughput sequential reads of large S3 datasets; `ReadWriteOncePod` (RWOP) on EBS prevents two pods on the same node from double-mounting a block volume during rollouts—a corruption mode that plain `ReadWriteOnce` still permits on Kubernetes 1.27+ when the CSI driver advertises RWOP support.
+4. Mountpoint for S3 is implemented in Rust and optimized for high-throughput sequential reads of large S3 datasets; `ReadWriteOncePod` (RWOP) on EBS prevents two pods on the same node from double-mounting a block volume during rollouts—a corruption mode that plain `ReadWriteOnce` still permits when the CSI driver advertises RWOP support (beta in Kubernetes 1.27, stable since 1.29).
 
 ---
 
@@ -910,13 +932,13 @@ When you present options to product teams, translate technical constraints into 
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| **Missing `WaitForFirstConsumer` in StorageClass** | Using default `Immediate` binding mode. PVC creates volume in wrong AZ. Use `volumeBindingMode: WaitForFirstConsumer` for EBS StorageClasses unless you have a specific reason not to. This is not optional. |
+| **Missing `WaitForFirstConsumer` in StorageClass** | Using default `Immediate` binding mode creates the volume before the pod is scheduled, often in the wrong AZ. | Set `volumeBindingMode: WaitForFirstConsumer` on every EBS StorageClass unless you have a documented exception. |
 | **Running StatefulSet with no nodes in volume's AZ** | Auto Scaler scales down nodes in one AZ, leaving orphaned volumes. | Set minimum node counts per AZ. Configure Cluster Autoscaler or Karpenter to respect `topologySpreadConstraints`. |
 | **Using EBS for shared storage between pods** | Not knowing EFS exists, or assuming EBS can be mounted RWX. | Use EFS when multiple pods across nodes need shared read/write storage. If you need strict single-pod attachment semantics, use `ReadWriteOncePod` on a Kubernetes version that supports it. |
 | **Not encrypting EBS volumes** | Forgetting to add `encrypted: "true"` in the StorageClass parameters. | Add `encrypted: "true"` to your StorageClass. For compliance, use a customer-managed KMS key via `kmsKeyId`. |
 | **EFS without mount target in node's AZ** | Creating EFS mount targets in only one AZ, but nodes run in multiple AZs. | Create a mount target in every AZ where your EKS nodes run. Without a local mount target, pods either fail to mount or route NFS through cross-AZ traffic. |
 | **Using Mountpoint S3 for random writes** | Treating S3 like a filesystem. Attempting appends or overwrites. | Mountpoint S3 supports sequential writes to new files only. For read-modify-write patterns, use the S3 SDK directly or use EFS. |
-| **Not setting resource requests on storage-heavy pods** | Database pods getting OOM-killed because no memory limits were set. Set explicit memory requests on database pods, and use memory limits only when they are carefully tuned. PostgreSQL, MySQL, and Redis all benefit from explicit memory allocation. |
+| **Not setting resource requests on storage-heavy pods** | Database pods get OOM-killed or evicted because requests/limits were omitted; the scheduler treats them as BestEffort. | Set explicit memory (and CPU) requests on database pods; tune limits only after observing working-set metrics. |
 | **Ignoring EBS modification timing or snapshot restore drills** | Assuming volumes can be shrunk, or that untested snapshots guarantee RTO. | Expand-only online; combine block snapshots with DB-native backup/restore tests in staging quarterly. |
 
 ---
@@ -956,7 +978,7 @@ When AZ-1b fails, the node hosting the replica becomes unreachable, and after th
 <details>
 <summary>Question 6: During a rolling update of a critical database StatefulSet, you notice that two database pods briefly end up running on the exact same node and both attempt to mount the same EBS volume, leading to data corruption. How does the distinction between `ReadWriteOnce` and `ReadWriteOncePod` apply to this scenario?</summary>
 
-The `ReadWriteOnce` (RWO) access mode guarantees that a volume is mounted as read-write by a single node, but it explicitly allows multiple pods on that specific node to mount the volume concurrently. In your scenario, the rolling update placed both the terminating pod and the new pod on the same physical host, allowing both to write to the data directory simultaneously and corrupting the database. To prevent this, you should use `ReadWriteOncePod` (RWOP), which was introduced in Kubernetes 1.27. RWOP strictly limits volume access to a single pod across the entire cluster, regardless of node placement. By using RWOP, the new pod would be blocked from mounting the volume until the old pod had completely terminated and released its lock.
+The `ReadWriteOnce` (RWO) access mode guarantees that a volume is mounted as read-write by a single node, but it explicitly allows multiple pods on that specific node to mount the volume concurrently. In your scenario, the rolling update placed both the terminating pod and the new pod on the same physical host, allowing both to write to the data directory simultaneously and corrupting the database. To prevent this, you should use `ReadWriteOncePod` (RWOP), which reached GA in Kubernetes 1.29 (beta in 1.27). RWOP strictly limits volume access to a single pod across the entire cluster, regardless of node placement. By using RWOP, the new pod would be blocked from mounting the volume until the old pod had completely terminated and released its lock.
 </details>
 
 <details>
@@ -1010,6 +1032,7 @@ Your first step is to establish the fundamental storage integrations. Using stan
 <summary>Solution</summary>
 
 ```bash
+alias k=kubectl
 # Create IAM roles (using Pod Identity trust)
 cat > /tmp/csi-trust.json << 'EOF'
 {
@@ -1035,15 +1058,28 @@ aws iam attach-role-policy --role-name EKS_EFS_CSI_Role \
   --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy
 
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+EBS_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/EKS_EBS_CSI_Role
+EFS_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/EKS_EFS_CSI_Role
 
-# Install add-ons
+# Install add-ons (Pod Identity — do not pass --service-account-role-arn)
 aws eks create-addon --cluster-name my-cluster \
-  --addon-name aws-ebs-csi-driver \
-  --service-account-role-arn arn:aws:iam::${ACCOUNT_ID}:role/EKS_EBS_CSI_Role
+  --addon-name aws-ebs-csi-driver
 
 aws eks create-addon --cluster-name my-cluster \
-  --addon-name aws-efs-csi-driver \
-  --service-account-role-arn arn:aws:iam::${ACCOUNT_ID}:role/EKS_EFS_CSI_Role
+  --addon-name aws-efs-csi-driver
+
+# Bind controller service accounts via EKS Pod Identity
+aws eks create-pod-identity-association \
+  --cluster-name my-cluster \
+  --namespace kube-system \
+  --service-account ebs-csi-controller-sa \
+  --role-arn $EBS_ROLE_ARN
+
+aws eks create-pod-identity-association \
+  --cluster-name my-cluster \
+  --namespace kube-system \
+  --service-account efs-csi-controller-sa \
+  --role-arn $EFS_ROLE_ARN
 
 # Verify both drivers are running
 k get pods -n kube-system -l 'app.kubernetes.io/name in (aws-ebs-csi-driver,aws-efs-csi-driver)'
@@ -1058,6 +1094,7 @@ Next, construct the `StorageClass` primitives in sequence. You must ensure `Wait
 <summary>Solution</summary>
 
 ```bash
+alias k=kubectl
 # Create the EBS gp3 StorageClass
 cat <<'EOF' | k apply -f -
 apiVersion: storage.k8s.io/v1
@@ -1131,6 +1168,7 @@ Bind an EBS block device strictly to a stateful PostgreSQL database. This gives 
 <summary>Solution</summary>
 
 ```bash
+alias k=kubectl
 k create namespace cms
 
 # Create database secret
@@ -1227,6 +1265,7 @@ Distribute a lightweight NGINX fleet across the cluster. The crucial capability 
 <summary>Solution</summary>
 
 ```bash
+alias k=kubectl
 cat <<'EOF' | k apply -f -
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -1318,10 +1357,16 @@ Test disaster preparedness and operational scale together. First, freeze the blo
 <summary>Solution</summary>
 
 ```bash
-# Install snapshot CRDs (if not already installed)
-k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
-k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
-k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/master/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
+alias k=kubectl
+SNAPSHOTTER_VERSION=v8.2.0
+
+# Install VolumeSnapshot CRDs (pin release tag — do not apply from master)
+k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/${SNAPSHOTTER_VERSION}/client/config/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
+k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/${SNAPSHOTTER_VERSION}/client/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
+k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/${SNAPSHOTTER_VERSION}/client/config/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
+
+# EKS aws-ebs-csi-driver bundles the csi-snapshotter sidecar, not the cluster controller
+k apply -f https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/${SNAPSHOTTER_VERSION}/deploy/kubernetes/snapshot-controller/setup-snapshot-controller.yaml
 
 # Create VolumeSnapshotClass
 cat <<'EOF' | k apply -f -
@@ -1372,6 +1417,7 @@ Ensure your system obeys strict geographical boundaries and that failures in one
 <summary>Solution</summary>
 
 ```bash
+alias k=kubectl
 # Check which AZ the PostgreSQL pod and volume are in
 PG_NODE=$(k get pod postgres-0 -n cms -o jsonpath='{.spec.nodeName}')
 PG_AZ=$(k get node $PG_NODE -o jsonpath='{.metadata.labels.topology\.kubernetes\.io/zone}')
@@ -1405,11 +1451,27 @@ done
 ### Clean Up
 
 ```bash
+alias k=kubectl
 k delete namespace cms
 k delete volumesnapshotclass ebs-snapshot-class
 k delete storageclass ebs-gp3 efs-sc
-# Delete EFS filesystem and mount targets
+
+# Delete EFS mount targets, then the filesystem and security group
+for MT in $(aws efs describe-mount-targets --file-system-id $EFS_ID \
+  --query 'MountTargets[].MountTargetId' --output text); do
+  aws efs delete-mount-target --mount-target-id $MT
+done
+sleep 30
 aws efs delete-file-system --file-system-id $EFS_ID
+aws ec2 delete-security-group --group-id $EFS_SG
+
+# Detach policies and delete Task 1 IAM roles
+aws iam detach-role-policy --role-name EKS_EBS_CSI_Role \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+aws iam delete-role --role-name EKS_EBS_CSI_Role
+aws iam detach-role-policy --role-name EKS_EFS_CSI_Role \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy
+aws iam delete-role --role-name EKS_EFS_CSI_Role
 ```
 
 ### Success Checklist

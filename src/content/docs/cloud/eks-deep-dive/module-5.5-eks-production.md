@@ -92,11 +92,13 @@ Installing Karpenter requires specific IAM roles so the controller can create an
 helm install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --namespace kube-system \
   --set settings.clusterName=my-cluster \
-  --set clusterEndpoint=$(aws eks describe-cluster --name my-cluster --query 'cluster.endpoint' --output text) \
+  --set settings.clusterEndpoint=$(aws eks describe-cluster --name my-cluster --query 'cluster.endpoint' --output text) \
   --set settings.isolatedVPC=false \
   --version 1.1.0 \
   --wait
 ```
+
+For production Spot workloads, also wire `settings.interruptionQueue` to an SQS queue fed by EventBridge interruption events so Karpenter can drain nodes before EC2 reclaims them.
 
 After Helm reports a ready release, confirm the controller pod is running and watch its logs during a deliberate scale-up test. You should see reconciliation loops when unschedulable pods appear, followed by EC2 launch activity in CloudTrail or the EC2 console. If launches fail, the error is usually IAM-related (missing `ec2:CreateFleet`) or discovery-related (subnets missing `karpenter.sh/discovery`), and those failures surface in controller logs long before Kubernetes events explain the symptom.
 
@@ -198,11 +200,11 @@ Pending Pods:
   Pod C: requests 4 CPU, 4Gi memory
 
 Karpenter evaluates:
-  Option 1: 3x m6i.large (2 CPU, 8Gi each) = $0.288/hr → 1 pod per node
-  Option 2: 1x m6i.2xlarge (8 CPU, 32Gi) = $0.192/hr → all 3 pods on 1 node
-  Option 3: 1x c6i.2xlarge (8 CPU, 16Gi) = $0.170/hr → all 3 pods, tighter fit
+  Option 1: 3x m6i.large (2 CPU, 8Gi each) = $0.288/hr → cannot host Pod C (4 CPU); infeasible
+  Option 2: 1x m6i.2xlarge (8 CPU, 32Gi) = $0.384/hr → all 3 pods fit
+  Option 3: 1x c6i.2xlarge (8 CPU, 16Gi) = $0.34/hr → all 3 pods fit (12 GiB memory used)
 
-Karpenter selects Option 3 (cheapest that satisfies all pod requirements)
+Karpenter selects Option 3 (cheapest feasible option that satisfies all pod requirements)
 ```
 
 In production you will rarely see only three pending pods, but the decision rule scales the same way: simulate feasible instance types, respect topology spread and affinity rules, then minimize cost among feasible options. When teams complain that Karpenter “always picks compute-optimized instances,” the fix is usually requirements that exclude memory-optimized families, not a bug in the provisioner.
@@ -531,8 +533,8 @@ sum(rate(kube_pod_container_status_restarts_total[1h])) by (namespace, pod) > 0
 # Node not Ready duration
 sum(kube_node_status_condition{condition="Ready", status="true"} == 0) by (node)
 
-# Karpenter provisioning latency (p99)
-histogram_quantile(0.99, sum(rate(karpenter_provisioner_scheduling_duration_seconds_bucket[5m])) by (le))
+# Karpenter provisioning latency (p99; v1 metric name)
+histogram_quantile(0.99, sum(rate(karpenter_scheduler_scheduling_duration_seconds_bucket[5m])) by (le))
 ```
 
 After you install scraping, validate each query in Grafana with a known load test. Namespace CPU ratios above one hundred percent usually mean requests are set too low, not that magic extra CPU exists. Memory working-set-over-limit ratios highlight OOM risk before Kubernetes kills containers. Restart rates decoupled from node utilization often point to misconfigured liveness probes or application panics, which matches the troubleshooting narrative in the pause-and-predict callout above. Karpenter latency histograms close the loop on autoscaling SLOs: if p99 provisioning drifts from under ninety seconds toward minutes, revisit NodePool constraints before blaming application code.
@@ -619,7 +621,6 @@ kind: ClusterPolicy
 metadata:
   name: require-cost-labels
 spec:
-  validationFailureAction: Enforce
   rules:
     - name: check-cost-labels
       match:
@@ -630,6 +631,7 @@ spec:
                 - StatefulSet
                 - DaemonSet
       validate:
+        failureAction: Enforce
         message: "All workloads must have 'team' and 'cost-center' labels."
         pattern:
           metadata:
@@ -752,7 +754,7 @@ Start with **OpenCost** when platform engineers need transparent namespace attri
 
 The facts below are worth revisiting after you run the hands-on exercise, because they connect autoscaling math, logging bills, Spot statistics, and industry utilization benchmarks to the dashboards you will actually see.
 
-1. Karpenter evaluates over 600 EC2 instance types when deciding what to launch. For each set of pending pods, it simulates packing them onto every compatible instance type, calculates the cost, and selects the cheapest option. This evaluation happens in milliseconds thanks to an in-memory instance type database that Karpenter refreshes from the EC2 pricing API every 6 hours.
+1. Karpenter evaluates a large set of EC2 instance types (hundreds of SKUs across allowed families) when deciding what to launch. For each batch of pending pods, it simulates packing them onto compatible instance types, estimates hourly cost from its pricing cache, and selects a feasible low-cost option. That evaluation is fast because Karpenter maintains an in-memory instance catalog refreshed periodically from AWS pricing APIs (refresh cadence varies by version and configuration—check your controller metrics if cost decisions look stale).
 
 2. EKS control plane audit logs can record API requests, including the request body and response at the most detailed audit level. For a cluster with 500 pods and active HPA/VPA controllers, the audit log volume can reach 10-15 GB per day. At CloudWatch's $0.50/GB ingestion rate, that is $5-7.50/day or $150-225/month just for audit log storage. Many teams filter audit logs to only capture write operations and authentication events, reducing volume by 80%.
 
@@ -820,7 +822,7 @@ When a Spot interruption notice arrives, Karpenter (or the AWS Node Termination 
 <details>
 <summary>Question 6: Your startup just launched and needs robust EKS monitoring. The platform team is debating between enabling CloudWatch Container Insights or deploying a self-managed Prometheus stack. What scenario or cluster characteristics would make Prometheus the better choice?</summary>
 
-**Container Insights** sends metrics to CloudWatch as custom metrics. It provides pre-built dashboards, integrates with CloudWatch Alarms, and requires no infrastructure to run (just the agent DaemonSet). However, it charges per-metric ($0.30/metric/month) and can become expensive for large clusters ($1,500-3,000/month). **Prometheus** is an open-source metrics system that stores metrics locally (or in AMP) with powerful PromQL querying. It is free to run (self-managed) or lower-cost (AMP charges $0.03/10M samples). Use Container Insights for small clusters (under 20 nodes) or teams that want zero-ops monitoring. Use Prometheus for larger clusters, teams that need custom metrics, or organizations with existing Grafana dashboards.
+**Container Insights** sends metrics to CloudWatch as custom metrics. It provides pre-built dashboards, integrates with CloudWatch Alarms, and requires no infrastructure to run (just the agent DaemonSet). However, it charges per-metric ($0.30/metric/month) and can become expensive for large clusters ($1,500-3,000/month). **Prometheus** is an open-source metrics system that stores metrics locally (or in AMP) with powerful PromQL querying. Self-managed Prometheus is free to operate; **AMP** bills ingestion separately from storage—roughly **$0.90 per 10 million samples ingested** (first tier, Region-dependent) plus **~$0.03/GB-month** for long-term metric storage. Use Container Insights for small clusters (under 20 nodes) or teams that want zero-ops monitoring. Use Prometheus for larger clusters, teams that need custom metrics, or organizations with existing Grafana dashboards.
 </details>
 
 <details>
@@ -892,19 +894,18 @@ CLUSTER_SG=$(aws eks describe-cluster --name $CLUSTER_NAME \
 aws ec2 create-tags --resources $CLUSTER_SG \
   --tags Key=karpenter.sh/discovery,Value=$CLUSTER_NAME
 
-# Install Karpenter via Helm
+# Install Karpenter v1.x from OCI registry (charts.karpenter.sh is deprecated)
 CLUSTER_ENDPOINT=$(aws eks describe-cluster --name $CLUSTER_NAME \
   --query 'cluster.endpoint' --output text)
 
-helm repo add karpenter https://charts.karpenter.sh
-helm repo update
-
-helm install karpenter karpenter/karpenter \
+helm install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --namespace kube-system \
-  --set clusterName=$CLUSTER_NAME \
-  --set clusterEndpoint=$CLUSTER_ENDPOINT \
+  --set settings.clusterName=$CLUSTER_NAME \
+  --set settings.clusterEndpoint=$CLUSTER_ENDPOINT \
   --version 1.1.0 \
   --wait
+
+# Production Spot clusters: set settings.interruptionQueue to your SQS queue for EC2 interruption events
 
 # Verify Karpenter is running
 kubectl get pods -n kube-system -l app.kubernetes.io/name=karpenter
@@ -1151,19 +1152,20 @@ helm install opencost opencost/opencost \
 # Wait for OpenCost to be ready
 kubectl wait --for=condition=Ready pods -l app.kubernetes.io/name=opencost -n opencost --timeout=120s
 
-# Port-forward to access the UI
-kubectl port-forward -n opencost svc/opencost 9090:9090 &
+# Port-forward UI (9090) and allocation model API (9003 are separate listeners)
+kubectl port-forward -n opencost svc/opencost 9090:9090 9003:9003 &
 
-echo "OpenCost UI available at: http://localhost:9090"
+echo "OpenCost UI: http://127.0.0.1:9090"
+echo "Allocation API: http://127.0.0.1:9003/allocation/compute"
 
-# Query cost allocation via API
-curl -s http://localhost:9090/allocation/compute \
+# Query cost allocation via API (model port 9003, not the UI port)
+curl -s http://127.0.0.1:9003/allocation/compute \
   -d window=1d \
   -d aggregate=namespace \
   -d accumulate=true | jq '.data[0] | to_entries[] | {namespace: .key, totalCost: .value.totalCost}'
 
 # Check cost by team label
-curl -s http://localhost:9090/allocation/compute \
+curl -s http://127.0.0.1:9003/allocation/compute \
   -d window=1d \
   -d aggregate=label:team \
   -d accumulate=true | jq '.data[0] | to_entries[] | {team: .key, totalCost: .value.totalCost}'
