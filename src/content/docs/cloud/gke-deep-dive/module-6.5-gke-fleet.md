@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In November 2023, a ride-sharing company with 12 GKE clusters across 4 regions discovered a critical vulnerability in their payment service. The CVE had been patched in the latest image, but only 3 of the 12 clusters were running the fixed version. The other 9 clusters had drifted---some were still on images built two months earlier, and two clusters had deployment configurations that differed from the canonical Helm chart. The security team spent 11 days identifying which clusters were affected, which versions were deployed where, and how to roll out the fix consistently. During that time, they disclosed the vulnerability window to their payment processor, triggering a PCI compliance review that took six months to close. The CTO's post-mortem conclusion: "We had 12 clusters, but no way to see or manage them as a single fleet. Each cluster was its own island."
+**Hypothetical scenario:** Consider a company with many GKE clusters across several regions. It discovers a critical vulnerability in its payment service. The patched image exists in the registry, but only a fraction of clusters run it. The rest have drifted from the canonical Helm chart or lag on older image builds. Without fleet-wide visibility, remediation becomes a slow, cluster-by-cluster hunt for versions and configuration deltas. Compliance reviews drag on while exposure windows stay open. The teaching point is operational: **many clusters with no fleet lens behave like islands**—you need centralized membership, observability, and GitOps/policy hooks to see and change them consistently.
 
 This story captures the operational reality of multi-cluster Kubernetes: without centralized observability and fleet management, every additional cluster multiplies your operational burden. You need consistent monitoring across clusters, a way to enforce configuration policies at scale, cross-cluster service discovery, and visibility into where your money is going. GKE addresses these challenges through Cloud Operations Suite for observability, Managed Prometheus (GMP) for metrics, Fleet management for multi-cluster governance, Multi-Cluster Services for cross-cluster communication, and cost allocation for chargeback.
 
@@ -82,7 +82,7 @@ gcloud container clusters update my-cluster \
 # Enable comprehensive monitoring
 gcloud container clusters update my-cluster \
   --region=us-central1 \
-  --monitoring=SYSTEM,WORKLOAD,API_SERVER,SCHEDULER,CONTROLLER_MANAGER,POD,DEPLOYMENT,DAEMONSET,STATEFULSET,HPA
+  --monitoring=SYSTEM,API_SERVER,SCHEDULER,CONTROLLER_MANAGER,POD,DEPLOYMENT,DAEMONSET,STATEFULSET,HPA
 ```
 
 > **Stop and think**: If you enable logging for all workloads in a large cluster with noisy debug logs, what are the direct financial implications and how might you mitigate them without losing visibility into critical application errors?
@@ -99,14 +99,36 @@ gcloud logging metrics create app-error-rate \
     resource.labels.namespace_name="production"
     severity>=ERROR'
 
-# Create an alerting policy based on the metric
+# Create an alerting policy from a version-stable JSON file
+cat <<'EOF' > alert-policy.json
+{
+  "displayName": "High Application Error Rate",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Error rate > 10/min",
+      "conditionThreshold": {
+        "filter": "resource.type=\"k8s_container\" AND metric.type=\"logging.googleapis.com/user/app-error-rate\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 10,
+        "duration": "60s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_RATE"
+          }
+        ]
+      }
+    }
+  ],
+  "notificationChannels": [
+    "projects/PROJECT_ID/notificationChannels/CHANNEL_ID"
+  ]
+}
+EOF
+
 gcloud alpha monitoring policies create \
-  --display-name="High Application Error Rate" \
-  --condition-display-name="Error rate > 10/min" \
-  --condition-filter='resource.type="k8s_container" AND metric.type="logging.googleapis.com/user/app-error-rate"' \
-  --condition-threshold-value=10 \
-  --condition-threshold-duration=60s \
-  --notification-channels=projects/$PROJECT_ID/notificationChannels/CHANNEL_ID
+  --policy-from-file=alert-policy.json
 ```
 
 ### GKE Dashboard in Cloud Console
@@ -436,15 +458,13 @@ applySpecVersion: 1
 spec:
   configSync:
     enabled: true
-    sourceFormat: unstructured
-    git:
-      repo: https://github.com/my-org/fleet-configs
-      branch: main
-      dir: /clusters/common
-      auth: token
-      secretType: token
-    preventDrift: true
     sourceType: git
+    sourceFormat: unstructured
+    syncRepo: https://github.com/my-org/fleet-configs
+    syncBranch: main
+    policyDir: /clusters/common
+    secretType: token
+    preventDrift: true
   policyController:
     enabled: true
     referentialRulesEnabled: true
@@ -457,10 +477,10 @@ EOF
 ### Policy Controller (Fleet-Wide OPA Gatekeeper)
 
 ```yaml
-# Enforce that all containers must have resource requests
+# Enforce that all containers must have resource requests (Policy Controller library template)
 # This policy is applied Fleet-wide through Config Sync
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sRequiredResources
+kind: K8sContainerRequests
 metadata:
   name: require-resource-requests
 spec:
@@ -473,8 +493,8 @@ spec:
     - production
     - staging
   parameters:
-    requiredResources:
-    - requests
+    cpu: required
+    memory: required
 ```
 
 ---
@@ -503,7 +523,7 @@ flowchart TD
         sb --- pb2
     end
     
-    mcs["<b>MCS Controller</b><br/>Creates ServiceImport in both clusters<br/><br/><b>DNS:</b> api.ns.svc.clusterset.local<br/>(resolves to pods in BOTH clusters)"]
+    mcs["<b>MCS Controller</b><br/>Creates ServiceImport in both clusters<br/><br/><b>DNS:</b> api.ns.svc.clusterset.local<br/>(ClusterSetIP VIP fronts cross-cluster endpoints)"]
     
     cluster_a --> mcs
     cluster_b --> mcs
@@ -563,7 +583,7 @@ kubectl get serviceimport -n backend
 
 # Pods in Cluster B can now reach the Service using:
 # api.backend.svc.clusterset.local
-# This resolves to pods in BOTH clusters
+# This resolves to the ClusterSetIP VIP (see ServiceImport TYPE column)
 
 # Test cross-cluster connectivity from Cluster B
 kubectl run curl-test --rm -it --restart=Never \
@@ -575,9 +595,9 @@ kubectl run curl-test --rm -it --restart=Never \
 
 ### The ServiceExport-to-ServiceImport Flow in Detail
 
-The curl test above demonstrates that cross-cluster DNS works, but the mechanics underneath it are worth understanding because they explain both MCS's strengths and its boundaries. When you create a ServiceExport in one cluster, the MCS controller in that cluster does not directly push anything to other clusters. Instead, it registers the exported Service in a fleet-level registry maintained by the GKE Hub, which is the same infrastructure that synchronizes fleet membership information. Every other cluster in the fleet runs an MCS importer component that watches this registry for changes. When the importer in Cluster B sees that Cluster A has exported the `api` Service in the `backend` namespace, it creates a corresponding `ServiceImport` resource in Cluster B's `backend` namespace. That ServiceImport resource in turn creates a headless Service endpoint in Cluster B whose endpoints are the pod IPs from Cluster A.
+The curl test above demonstrates that cross-cluster DNS works. The mechanics underneath explain both MCS strengths and its boundaries. When you create a ServiceExport in one cluster, the MCS controller in that cluster does not directly push anything to other clusters. Instead, it registers the exported Service in a fleet-level registry maintained by the GKE Hub, which is the same infrastructure that synchronizes fleet membership information. Every other cluster in the fleet runs an MCS importer component that watches this registry for changes. When the importer in Cluster B sees that Cluster A has exported the `api` Service in the `backend` namespace, it creates a corresponding `ServiceImport` resource in Cluster B's `backend` namespace. With GKE's default **ClusterSetIP** type (see the `TYPE` column in `kubectl get serviceimport`), that ServiceImport allocates a single **ClusterSetIP virtual IP** and aggregates **EndpointSlices** from every exporting cluster—DNS does not return a weighted list of pod IPs.
 
-The `clusterset.local` domain ties this together. When a pod in Cluster B resolves `api.backend.svc.clusterset.local`, the DNS query goes to CoreDNS, which has been configured by the MCS controller to handle the `clusterset.local` zone. CoreDNS returns the IP addresses of every healthy pod across all clusters that have exported the Service, weighted by the number of healthy replicas in each cluster. If Cluster A has six healthy backend pods and Cluster B has two, the DNS response will contain eight endpoints with weights that favor Cluster A's pods. This is not round-robin load balancing at the DNS level---the client's DNS resolver receives all the endpoints and the pod network handles routing. If all of Cluster A's pods become unhealthy, the MCS controller detects the health change through readiness probes, updates the ServiceImport, and CoreDNS stops returning those IPs on the next TTL expiry, typically within thirty seconds.
+The `clusterset.local` domain ties this together. When a pod in Cluster B resolves `api.backend.svc.clusterset.local`, CoreDNS returns the **ClusterSetIP**—for example `10.112.0.15` in the sample output above. Client traffic to that VIP is load-balanced by the **data plane** (kube-proxy or Dataplane V2). Distribution uses healthy backends in the aggregated EndpointSlices from all member clusters. If backends in one cluster become unhealthy, the MCS controller updates EndpointSlices and the VIP stops forwarding to those endpoints; DNS continues to answer with the same ClusterSetIP. **Headless MCS** (`ServiceImport` type headless) is the alternative model where DNS can return multiple A records—distinct from the default ClusterSetIP path documented here.
 
 An important boundary to understand is that MCS works at the Service level, not the Ingress level. MCS is designed for east-west traffic: pod-to-pod communication within and across clusters. For north-south traffic---external clients reaching your services from the internet---you need Multi-Cluster Ingress or Multi-Cluster Gateway. MCS does not replace a service mesh; it provides service discovery and cross-cluster reachability without the sidecar proxies and mutual TLS management that a mesh like Istio adds. If you already need mesh features like traffic splitting, retry policies, or end-to-end encryption between services, you would layer those on top of MCS rather than replacing MCS itself.
 
@@ -671,7 +691,7 @@ flowchart TD
     Compute["<b>Compute (nodes) [~60-70%]</b><br/>• On-demand VMs<br/>• Spot VMs<br/>• Committed Use Discounts"]
     Networking["<b>Networking [~15-25%]</b><br/>• Load balancer hours + data processed<br/>• Inter-zone egress ($0.01/GB)<br/>• Internet egress ($0.08-0.12/GB)<br/>• Cloud NAT (if private cluster)"]
     Storage["<b>Storage [~5-10%]</b><br/>• Persistent Disks<br/>• Filestore<br/>• Snapshots/backups"]
-    Mgmt["<b>Management fee [~5%]</b><br/>• $0.10/hr per cluster (Standard)<br/>• Autopilot: included in pod pricing"]
+    Mgmt["<b>Management fee [~5%]</b><br/>• $0.10/hr per cluster (Standard & Autopilot)<br/>• One free Autopilot or zonal Standard cluster per billing account (~$74.40/mo credit)<br/>• Autopilot still bills per pod for compute; management fee is separate"]
     
     Cost --- Compute
     Cost --- Networking
@@ -756,11 +776,11 @@ gcloud recommender recommendations list \
 
 ## Did You Know?
 
-1. **Google Cloud Managed Prometheus stores metrics in Monarch**, the same system that monitors all of Google's production services (Search, Gmail, YouTube, Cloud). Monarch ingests over 2 billion time series and processes over 4 trillion metric points per day. When you send a metric to GMP, it is stored with the same durability and query performance that Google relies on for its own SRE operations. This is why GMP can offer 24-month retention without the capacity planning headaches of self-managed Prometheus.
+1. **Google Cloud Managed Prometheus stores metrics in Monarch**, the same in-memory time-series system that monitors Google's own production services. When you send a metric to GMP, it is stored with the same durability and query performance Google relies on for SRE operations—this is why GMP can offer 24-month retention without the capacity planning headaches of self-managed Prometheus.
 
-2. **Multi-Cluster Services DNS resolution uses a special domain: `.svc.clusterset.local`.** This domain is separate from the standard `.svc.cluster.local` used for intra-cluster DNS. When a pod looks up `api.backend.svc.clusterset.local`, CoreDNS forwards the request to the MCS controller, which returns endpoints from all clusters that have exported that Service. The endpoints are weighted by the number of healthy pods in each cluster, so traffic naturally flows to the cluster with the most available capacity.
+2. **Multi-Cluster Services DNS resolution uses a special domain: `.svc.clusterset.local`.** This domain is separate from the standard `.svc.cluster.local` used for intra-cluster DNS. With the default **ClusterSetIP** `ServiceImport` type, `api.backend.svc.clusterset.local` resolves to a single **ClusterSetIP virtual IP**; kube-proxy or Dataplane V2 distributes traffic across aggregated EndpointSlices from every exporting cluster—DNS does not return weighted pod IPs.
 
-3. **Inter-zone egress within a GKE cluster costs $0.01 per GB**, and this can add up fast. A regional cluster with nodes in 3 zones incurs inter-zone charges for every pod-to-pod call that crosses zone boundaries. For a microservice architecture with 50 services making 1,000 requests per second with 10KB payloads, inter-zone traffic can cost several hundred dollars per month. Using topology-aware routing (`topologySpreadConstraints` or Service `internalTrafficPolicy: Local`) can reduce this by keeping traffic within the same zone.
+3. **Inter-zone egress within a GKE cluster costs $0.01 per GB**, and this can add up fast. A regional cluster with nodes in 3 zones incurs inter-zone charges for every pod-to-pod call that crosses zone boundaries. For a microservice architecture with 50 services making 1,000 requests per second with 10KB payloads, inter-zone traffic can cost several hundred dollars per month. **`topologySpreadConstraints`** influence **pod placement** only. **`internalTrafficPolicy: Local`** routes to node-local endpoints and **drops** traffic when none exist—there is no cross-zone fallback. For in-zone preference **with** fallback, use **Topology Aware Routing** (`service.kubernetes.io/topology-mode: Auto`).
 
 4. **Fleet workload identity allows a single Kubernetes ServiceAccount identity to be recognized across all clusters in the Fleet.** This means you can register a ServiceAccount in Cluster A and have it authenticated in Cluster B without creating duplicate IAM bindings. The identity format is `PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]`, and it works the same regardless of which Fleet member the pod runs in. This is the foundation for zero-trust networking across a multi-cluster architecture.
 
@@ -773,7 +793,7 @@ gcloud recommender recommendations list \
 | Enabling WORKLOAD logging without understanding volume | All container stdout goes to Cloud Logging | Set log exclusion filters or reduce application verbosity; Cloud Logging charges per GB ingested |
 | Not enabling cost allocation | Assuming billing breakdown is automatic | Enable `--enable-cost-allocation` on the cluster; without it, costs are aggregated at the project level |
 | Running Prometheus alongside GMP | Not realizing GMP replaces self-managed Prometheus | Migrate scrape configs to PodMonitoring CRDs; remove the self-managed Prometheus deployment |
-| Ignoring inter-zone egress costs | Not aware that cross-zone traffic is billed | Use topology-aware routing; co-locate tightly-coupled services in the same zone |
+| Ignoring inter-zone egress costs | Not aware that cross-zone traffic is billed | Use Topology Aware Routing (`topology-mode: Auto`) or co-locate tightly-coupled services; do not assume `internalTrafficPolicy: Local` falls back across zones |
 | Registering clusters in a Fleet without Workload Identity | Fleet features require WIF for authentication | Enable `--workload-pool` on the cluster and `--enable-workload-identity` during Fleet registration |
 | Deploying MultiClusterIngress to all clusters | Only the config cluster processes MCI resources | Deploy MCI and MCS resources only to the designated config cluster |
 | Not setting resource requests (affecting cost allocation) | Pods without requests cannot be attributed to cost centers | Require resource requests via Policy Controller; Autopilot enforces this automatically |
@@ -839,7 +859,7 @@ When designing observability and fleet management for GKE, you face a set of arc
 | :--- | :--- | :--- |
 | **Traffic direction** | East-west (pod-to-pod, service-to-service within the fleet) | North-south (external clients to services across clusters) |
 | **DNS-based discovery** | Yes---pods resolve `svc.clusterset.local` | No---external clients use a single anycast IP or hostname |
-| **Load balancing scope** | Per-request DNS resolution weighted by healthy endpoint count | Geographic load balancing with latency-based routing at the Google Cloud Load Balancer layer |
+| **Load balancing scope** | ClusterSetIP VIP with data-plane distribution across aggregated EndpointSlices | Geographic load balancing with latency-based routing at the Google Cloud Load Balancer layer |
 | **Complexity** | Low---a ServiceExport and the MCS controller handle everything | Medium---requires a config cluster, MultiClusterIngress, and MultiClusterService resources |
 | **Use case** | Internal microservices that need to call each other across clusters | User-facing APIs that need global high availability with automatic failover between regions |
 | **Combined use** | MCS and Multi-Cluster Gateway are complementary, not alternatives; deploy both when you need cross-cluster internal communication and external ingress |
@@ -887,13 +907,13 @@ The most likely failure modes are, in order of probability: (1) the affected clu
 <details>
 <summary>3. Your organization runs a high-traffic e-commerce platform across three regional GKE clusters. Currently, each cluster has its own independent Istio service mesh, which is causing significant operational overhead and high latency for cross-cluster database calls. You want to simplify cross-cluster service discovery and routing without the complexity of a full mesh. What is the most appropriate Fleet feature to solve this, and how does it change the traffic flow?</summary>
 
-The most appropriate solution is to enable Multi-Cluster Services (MCS) and export the database services using `ServiceExport`. MCS directly addresses the operational overhead by replacing the complex multi-cluster Istio mesh with simple, native DNS-based service discovery using the `svc.clusterset.local` domain. When a frontend pod queries this domain, CoreDNS resolves it to endpoints across all clusters where the service is exported. This approach eliminates the need for sidecar proxies and complex gateway configurations, reducing both latency and operational burden while still providing robust, cross-cluster connectivity.
+The most appropriate solution is to enable Multi-Cluster Services (MCS) and export the database services using `ServiceExport`. MCS directly addresses the operational overhead by replacing the complex multi-cluster Istio mesh with native DNS using the `svc.clusterset.local` domain. With the default **ClusterSetIP** model, CoreDNS returns a single virtual IP that fronts aggregated backends in every exporting cluster; kube-proxy or Dataplane V2 handles distribution. This eliminates sidecar proxies and complex gateway configurations for east-west calls while still providing robust, cross-cluster connectivity.
 </details>
 
 <details>
 <summary>4. The CFO of your company reviews the monthly GCP bill and notices that a regional GKE cluster running a distributed cache has unexpectedly high network charges, specifically for inter-zone egress. The pods are evenly distributed across three zones, but the cost is eating into the project's margin. What architectural changes should you implement to reduce these specific charges while maintaining high availability?</summary>
 
-To reduce these inter-zone network costs, you should implement topology-aware routing by setting `internalTrafficPolicy: Local` on the cache Services or by configuring topology spread constraints to co-locate clients with the cache nodes. In a regional GKE cluster, traffic crossing availability zones incurs a $0.01 per GB charge, which becomes extremely expensive for high-volume chatty workloads like distributed caches. By forcing the network traffic to stay within the same zone where the requesting pod resides, you completely bypass the cross-zone billing meter. The cluster still maintains high availability because if an entire zone fails, the routing policy will gracefully fall back to routing traffic to the remaining healthy zones.
+To reduce these inter-zone network costs, enable **Topology Aware Routing** on the cache Services (`metadata.annotations.service.kubernetes.io/topology-mode: Auto`) so kube-proxy prefers endpoints in the same zone as the client but **falls back** to other zones when local backends are unavailable. Use **`topologySpreadConstraints`** to spread pods across zones for HA; use **`internalTrafficPolicy: Local`** only when you explicitly want node-local endpoints with **no** cross-zone fallback (traffic is dropped or times out if no local backend exists). In a regional GKE cluster, cross-zone traffic incurs $0.01/GB—expensive for chatty caches—so in-zone preference with graceful fallback is the usual compromise between cost and availability.
 </details>
 
 <details>
@@ -1041,8 +1061,7 @@ spec:
     spec:
       containers:
       - name: echo
-        image: hashicorp/http-echo
-        args: ["-text=Hello from cluster-us", "-listen=:8080"]
+        image: quay.io/brancz/prometheus-example-app:v0.6.0
         ports:
         - name: http
           containerPort: 8080
@@ -1091,8 +1110,7 @@ spec:
     spec:
       containers:
       - name: echo
-        image: hashicorp/http-echo
-        args: ["-text=Hello from cluster-eu", "-listen=:8080"]
+        image: quay.io/brancz/prometheus-example-app:v0.6.0
         ports:
         - name: http
           containerPort: 8080
@@ -1148,9 +1166,9 @@ done
 # This should reach pods in BOTH clusters
 kubectl run curl-test --rm -it --restart=Never \
   -n backend --image=curlimages/curl -- \
-  sh -c 'for i in $(seq 1 8); do curl -s http://echo.backend.svc.clusterset.local:8080; echo; done'
+  sh -c 'for i in $(seq 1 8); do curl -s -o /dev/null -w "%{http_code}\n" http://echo.backend.svc.clusterset.local:8080/metrics; done'
 
-# You should see responses from both cluster-us and cluster-eu
+# You should see HTTP 200 from the ClusterSetIP VIP (backends in both clusters)
 ```
 </details>
 
@@ -1278,7 +1296,7 @@ You have completed the GKE Deep Dive series. From here, consider exploring:
 - [Cloud Monitoring for GKE](https://cloud.google.com/kubernetes-engine/docs/concepts/about-monitoring) --- Architecture and configuration of system and workload monitoring in GKE.
 - [Configuring Log Routing and Exclusions](https://cloud.google.com/logging/docs/routing/overview) --- Log bucket routing, log sinks, and exclusion filter syntax for controlling log ingestion volume.
 - [GMP Rule Evaluation](https://cloud.google.com/stackdriver/docs/managed-prometheus/rule-evaluation) --- Managed recording rules and alerting rules evaluated server-side in Cloud Monitoring.
-- [Fleet Management Overview](https://cloud.google.com/anthos/fleet-management/docs/fleet-management-overview) --- Fleet concepts, fleet host project, membership registration, and fleet feature enablement.
-- [Connect Gateway](https://cloud.google.com/anthos/multicluster-management/gateway) --- Unified kubectl access to fleet members through the Connect gateway.
-- [Config Sync Overview](https://cloud.google.com/anthos-config-management/docs/config-sync-overview) --- GitOps-based configuration synchronization across fleet members.
+- [Fleet management overview](https://cloud.google.com/kubernetes-engine/fleet-management/docs/fleet-management-overview) --- Fleet concepts, fleet host project, membership registration, and fleet feature enablement.
+- [Connect gateway](https://cloud.google.com/kubernetes-engine/fleet-management/docs/connect-gateway) --- Unified kubectl access to fleet members through the Connect gateway.
+- [Config Sync overview](https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/config-sync-overview) --- GitOps-based configuration synchronization across fleet members.
 - [GKE Cost Optimization Guide](https://cloud.google.com/kubernetes-engine/docs/concepts/cost-optimization) --- Best practices for reducing GKE costs across compute, networking, and operations.
