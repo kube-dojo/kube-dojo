@@ -6,7 +6,7 @@ sidebar:
 ---
 ## What You'll Be Able to Do
 
-This module is rated **[MEDIUM]** complexity with roughly **2.5 hours** of reading and lab time. You should be comfortable with [AWS Essentials](../aws-essentials/) networking and IAM basics plus general [Cloud Architecture Patterns](../architecture-patterns/) before diving into EKS control-plane design. After completing the module, you will be able to:
+This module is rated **[MEDIUM]** complexity with roughly **2.5 hours** of reading and lab time. You should be comfortable with [AWS Essentials](../../aws-essentials/) networking and IAM basics plus general [Cloud Architecture Patterns](../../architecture-patterns/) before diving into EKS control-plane design. After completing the module, you will be able to:
 
 - **Configure EKS clusters with private API endpoints, managed node groups, and Fargate profiles for production workloads**
 - **Design EKS control plane connectivity (public, private, dual-stack) based on security and availability requirements**
@@ -75,12 +75,12 @@ The cross-account ENI design has critical implications for subnet sizing, securi
 - The subnets you provide during cluster creation must have enough free IP addresses for these ENIs
 - Security Groups attached to these ENIs control traffic between the control plane and your nodes
 - If you delete or modify these ENIs, your cluster will lose control plane connectivity
-- The ENIs appear in your account tagged with `kubernetes.io/cluster/<cluster-name>`
+- The ENIs appear in your account with description `Amazon EKS <cluster-name>` (the legacy `kubernetes.io/cluster/<name>=owned` tag applied only on clusters running Kubernetes 1.14 or earlier)
 
 ```bash
 # View the cross-account ENIs in your VPC
 aws ec2 describe-network-interfaces \
-  --filters "Name=tag:kubernetes.io/cluster/my-cluster,Values=owned" \
+  --filters "Name=description,Values=Amazon EKS my-cluster" \
   --query 'NetworkInterfaces[*].{ENI:NetworkInterfaceId, SubnetId:SubnetId, PrivateIp:PrivateIpAddress, SG:Groups[0].GroupId}' \
   --output table
 ```
@@ -397,7 +397,7 @@ Every EKS cluster depends on a small set of platform add-ons; the table below li
 | `adot` | AWS Distro for OpenTelemetry | No |
 | `amazon-cloudwatch-observability` | Container Insights | No |
 
-The `eks-pod-identity-agent` add-on is increasingly part of modern baselines because it enables [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) without per-cluster OIDC provider plumbing. This module focuses on cluster architecture and authentication entries; [Module 5.3](../module-5.3-eks-identity/) covers IRSA versus Pod Identity migration in depth, and [AWS Essentials Module 1.1 (IAM)](../aws-essentials/module-1.1-iam/) explains the underlying IAM role trust models you will attach to service accounts.
+The `eks-pod-identity-agent` add-on is increasingly part of modern baselines because it enables [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) without per-cluster OIDC provider plumbing. This module focuses on cluster architecture and authentication entries; [Module 5.3](../module-5.3-eks-identity/) covers IRSA versus Pod Identity migration in depth, and [AWS Essentials Module 1.1 (IAM)](../../aws-essentials/module-1.1-iam/) explains the underlying IAM role trust models you will attach to service accounts.
 
 ### Managed add-ons versus self-managed manifests
 
@@ -1146,7 +1146,7 @@ done
 
 # Check the cross-account ENIs
 aws ec2 describe-network-interfaces \
-  --filters "Name=tag:kubernetes.io/cluster/$CLUSTER_NAME,Values=owned" \
+  --filters "Name=description,Values=Amazon EKS $CLUSTER_NAME" \
   --query 'NetworkInterfaces[*].{ENI:NetworkInterfaceId, PrivateIp:PrivateIpAddress, Subnet:SubnetId}' \
   --output table
 ```
