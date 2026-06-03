@@ -4,11 +4,11 @@ slug: cloud/gke-deep-dive/module-6.2-gke-networking
 sidebar:
   order: 3
 ---
-**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture)
+**Complexity**: [COMPLEX] | **Time to Complete**: 3h | **Prerequisites**: Module 6.1 (GKE Architecture). Expect to reason about CIDR math, Google Cloud load balancer objects, and Kubernetes policy objects in the same narrative—this is integrative networking design, not a single-feature checklist.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+This module assumes you already understand regional GKE topology and release channels from Module 6.1. Here you move from cluster shape into packet paths: how alias IPs are carved out of VPC secondary ranges, how Dataplane V2 enforces policy, and how Google Cloud load balancers attach to pods. After completing the material and lab, you will be able to:
 
 - **Configure GKE Dataplane V2 (Cilium-based) with network policies and network policy logging**
 - **Implement Gateway API on GKE for traffic splitting and header-based routing**
@@ -23,13 +23,15 @@ Teams sometimes discover too late that creating `NetworkPolicy` objects is not e
 
 GKE networking is where Kubernetes meets Google's global network infrastructure. The decisions you make about cluster networking---VPC-native mode, Dataplane V2, load balancing strategy, and Gateway API configuration---determine your application's performance, security, and cost. A misconfigured network can leave your pods exposed, introduce unnecessary latency, or rack up egress charges that dwarf your compute costs.
 
-In this module, you will learn how VPC-native clusters use alias IPs to give pods routable addresses, how Dataplane V2 replaces iptables with eBPF for faster and more observable networking, how Cloud Load Balancing integrates with GKE, and how the Gateway API provides a more expressive routing model than Ingress. By the end, you will configure Dataplane V2 network policies and set up a Gateway API canary deployment.
+**Hypothetical scenario:** A platform team launches forty microservices behind separate `LoadBalancer` Services because each squad owns its Helm chart. Finance later flags a line item for dozens of forwarding rules and backend services, while SRE sees elevated latency on the oldest cluster still on kube-proxy iptables. Neither problem is mysterious once you map Kubernetes objects to the Google Cloud resources they create; both were predictable from API choices made at bootstrap.
+
+In this module, you will learn how VPC-native clusters use alias IPs to give pods routable addresses, how Dataplane V2 replaces iptables with eBPF for faster and more observable networking, how Cloud Load Balancing integrates with GKE through container-native NEGs, and how the Gateway API provides a more expressive routing model than Ingress. You will also practice diagnosing pod scheduling failures caused by IP exhaustion and designing private clusters that still pull images and admit CI safely. By the end, you will configure Dataplane V2 network policies and set up a Gateway API canary deployment.
 
 ---
 
 ## VPC-Native Clusters and Alias IPs
 
-Every modern GKE cluster should be VPC-native. [This is the default since GKE 1.21](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips) and is required for features like Dataplane V2, Private Google Access for pods, and VPC flow logs for pod traffic.
+Every modern GKE cluster should be VPC-native. [This is the default since GKE 1.21](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips) and is required for features like Dataplane V2, Private Google Access for pods, and VPC flow logs for pod traffic. Routes-based clusters remain in brownfield estates, but new work should assume alias IPs and plan secondary ranges before any workload ships.
 
 ### How Alias IPs Work
 
@@ -62,6 +64,8 @@ graph TD
 
 ### Why This Matters for Networking
 
+VPC-native routing is the foundation for every other feature in this module: without alias IPs, you do not get consistent pod IPs in VPC flow logs, Private Google Access for pods, or the IP planning model that Dataplane V2 and multi-Pod CIDR expansion assume. Legacy routes-based clusters still appear in migration backlogs, but new GKE clusters should be treated as VPC-native by default.
+
 | Feature | VPC-Native (Alias IPs) | Routes-Based (Legacy) |
 | :--- | :--- | :--- |
 | **Pod IPs routable in VPC** | Yes (directly) | No (requires custom routes) |
@@ -87,7 +91,19 @@ gcloud container clusters describe my-cluster \
 
 > **Stop and think**: If a VPC-native cluster uses alias IPs directly from the VPC, what happens if your VPC doesn't have [a large enough secondary range for your planned number of nodes and pods at maximum scale](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr)?
 
-Poor IP planning is the number one networking regret for teams that scale. [You cannot resize secondary ranges after cluster creation](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr).
+Poor IP planning is the number one networking regret for teams that scale. [You cannot resize secondary ranges after cluster creation](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr). Treat the worksheet below as a conversation with finance and network architects before the first `gcloud container clusters create` call, because the secondary range is effectively permanent.
+
+**Workbook steps (Standard cluster):**
+
+1. Estimate peak node count `N` per region (include autoscaling headroom and blue/green pools).
+2. Choose `Q` = max pods per node (110 default, or lower to fit more nodes in the same range).
+3. Read the per-node mask table in Google’s flexible pod CIDR documentation (`/24` at 110 pods, `/26` at 64, and so on).
+4. Compute how many node slices fit in your pod secondary prefix `DS` (for `/21` and `/24` per node, you get eight nodes).
+5. Compare `N` against that fit; if `N` is larger, widen `DS` at creation or plan [discontiguous multi-Pod CIDR](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-pod-cidr) up front.
+6. Allocate a services range (`/20` is common) for ClusterIP growth; services do not consume node slices but still need RFC1918 space.
+7. Document the decision in your cluster runbook so autoscaler incidents are triaged as IP events, not mystery “quota” events.
+
+Teams that run platform-wide node pools with different density profiles sometimes create **pools with different `--max-pods-per-node`** values. Each pool still draws from the same cluster secondary range unless you assign a **custom pod range per pool**, which is an advanced escape hatch for IP-starved Shared VPC subnets.
 
 ```mermaid
 graph TD
@@ -118,6 +134,38 @@ gcloud container clusters create large-cluster \
 # needs a /26 instead of a /24, saving IP space
 ```
 
+### Secondary ranges, max pods per node, and the node ceiling
+
+VPC-native scheduling is not only about routable pod IPs; it is also a **capacity contract** between three numbers you set at cluster creation: the **pod secondary range prefix length**, the **default or per-pool maximum pods per node**, and the **number of nodes** you intend to run. [GKE allocates each node a pod CIDR slice whose size depends on max pods per node](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr)—for example, the default of 110 pods per node maps to a `/24` per node (256 addresses, with headroom above the pod limit). You **cannot change max pods per node after a cluster or node pool is created**, so treating “we will lower density later” as a migration path is a planning mistake.
+
+The relationship between pod range size and node count is multiplicative. With a `/21` pod secondary range and 110 max pods per node, each node consumes a `/24`, so the cluster supports roughly **eight nodes** before the secondary range is exhausted (`2^(24-21) = 8` node-sized slices). Lowering max pods per node to 64 shrinks each node’s slice to `/26`, which fits **32 nodes** in the same `/21`—same IP budget, different tradeoff between **pods per node** and **total nodes**. For Standard clusters you can configure up to **256** pods per node; Autopilot picks a value in a supported range based on expected workload density (commonly discussed around 32 in planning examples).
+
+| Max pods per node (examples) | Per-node pod CIDR | Addresses per node | Planning lever |
+| :--- | :--- | :--- | :--- |
+| 8 | `/28` | 16 | Maximize node count in a small pod range |
+| 64 | `/26` | 64 | Balance density and node scale |
+| 110 (default) | `/24` | 256 | Default GKE density |
+| 256 (Standard max) | `/23` | 512 | Highest per-node density; consumes range faster |
+
+When creating node pools on an existing cluster, **`--max-pods-per-node` on the pool overrides the cluster default**, which lets you add a “dense” pool and a “wide” pool only if you planned separate ranges up front—secondary range size for the cluster remains immutable.
+
+### IP exhaustion: symptoms, diagnosis, and remedies
+
+**Hypothetical scenario:** A regional cluster with three zones grows from six to forty nodes over a year. New pods stay `Pending` with events mentioning insufficient IP addresses, Cluster Autoscaler stops adding nodes, and existing workloads cannot scale out—even though CPU and memory requests fit on paper.
+
+That pattern usually means the **pod secondary range is full** or each new node cannot receive a fresh pod CIDR slice. Confirm with `kubectl describe node` events, cluster autoscaler logs, and `gcloud container clusters describe` fields under `ipAllocationPolicy`. Remediation paths are constrained: you **cannot resize** the original pod secondary range, so teams either **add discontiguous multi-Pod CIDR** ranges (supported for expanding pod IP space on existing clusters), **reduce max pods per node in new node pools** on a replacement cluster, or **recreate the cluster** with a larger `--cluster-ipv4-cidr` planned using the official sizing formulas. Prevention beats surgery: model `MN` (max nodes) and `MP` (max pods) from [Google’s pod-range sizing guidance](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr) using your expected `Q` (max pods per node) and `DS` (pod subnet prefix).
+
+```bash
+# Check how much of the pod range is in use (illustrative fields vary by version)
+gcloud container clusters describe my-cluster \
+  --region=us-central1 \
+  --format="yaml(ipAllocationPolicy,currentNodeCount)"
+
+# List pending pods stuck on networking
+kubectl get pods -A --field-selector=status.phase=Pending \
+  -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,EVENTS:.status.conditions[-1].message
+```
+
 ---
 
 ## Dataplane V2: eBPF-Powered Networking
@@ -126,7 +174,15 @@ Dataplane V2 is GKE's modern networking stack, [built on **Cilium** and **eBPF**
 
 ### Why eBPF Changes Everything
 
-Traditional Kubernetes networking uses iptables rules for service routing and kube-proxy for load balancing. This works, but it has fundamental limitations:
+Traditional Kubernetes networking uses iptables rules for service routing. kube-proxy maintains those rules on every node. The model works for small clusters. It degrades as Service counts grow.
+
+Each new Service adds iptables entries. Packets may traverse thousands of rules before a match. CPU cost rises. Latency becomes visible in tail percentiles. Debugging requires conntrack literacy and node-level tcpdump skills.
+
+eBPF programs attach at the kernel hook points Dataplane V2 owns. Lookup tables map destination IP and port to backends in roughly constant time. Policy decisions can reference Kubernetes labels without repeated userspace copies. That is why Dataplane V2 pairs well with dense microservice estates and with default-deny policy programs.
+
+Autopilot clusters enable Dataplane V2 by default. Standard clusters require `--enable-dataplane-v2` at create time. If your organization still operates legacy Standard clusters on Calico iptables policy, schedule a migration program instead of layering more annotations onto kube-proxy-era paths.
+
+Traditional Kubernetes networking still illustrates the contrast:
 
 ```mermaid
 graph TD
@@ -174,6 +230,18 @@ graph TD
 | **Observability** | Basic conntrack | Rich eBPF flow logs |
 | **Scale limit** | ~5,000 services practical | 25,000+ services tested |
 | **FQDN-based policies** | Not supported | Supported |
+
+### Dataplane V2 versus the legacy Calico dataplane
+
+GKE’s **legacy dataplane** implements Kubernetes networking with **Calico** as the CNI and **`iptables` for NetworkPolicy enforcement**, while **kube-proxy** programs service VIP routing through iptables chains on each node. **Dataplane V2** is implemented with **Cilium** semantics: the **`anetd`** DaemonSet in `kube-system` watches Kubernetes objects and loads **eBPF programs** that handle forwarding, load balancing, and policy in the kernel. [Google documents that NetworkPolicy is always available on Dataplane V2 clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/dataplane-v2) without installing Calico as an add-on, which closes the gap where teams authored policies that were never enforced.
+
+The operational differences matter at scale and during incidents. Legacy clusters hit practical limits when iptables rule counts grow with Services; Dataplane V2’s service map uses **eBPF maps** (with documented aggregate backend limits such as **260,000 endpoints** across services—exceeding documented limits can cause undefined behavior). Dataplane V2 also **replaces kube-proxy** for service implementation on supported versions, so new upstream Service features may land in kube-proxy first; plan upgrade notes accordingly. **Custom eBPF programs** on DPv2 nodes are unsupported because they can collide with GKE’s programs—treat observability agents that install eBPF as compatibility risks until validated.
+
+**Critical constraint:** [Dataplane V2 can only be enabled when creating a new cluster](https://cloud.google.com/kubernetes-engine/docs/concepts/dataplane-v2); you cannot flip an existing legacy dataplane cluster in place. Migration is a **new cluster + workload move**, not a weekend flag.
+
+### FQDN-based policies and observability (Dataplane V2)
+
+Where your security model names **external SaaS endpoints** by DNS rather than static CIDRs, Dataplane V2’s Cilium lineage supports **FQDN-aware policy patterns** that are impractical with pure IP-based NetworkPolicy on legacy iptables enforcement. Pair FQDN policies with **explicit DNS egress** rules to CoreDNS, because name resolution still flows through the cluster DNS path you allow. For day-two operations, enable [**network policy logging**](https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy-logging) to emit allow/deny records to Cloud Logging—this capability is tied to the Dataplane V2 policy pipeline, not legacy Calico-only clusters. Tune log sinks and filters before broad production deny rules; denied health checks and mis-scoped selectors can generate sustained log volume.
 
 ### Enabling Dataplane V2
 
@@ -261,7 +329,7 @@ spec:
 
 ### Network Policy Logging
 
-Dataplane V2 can [log allowed and denied connections](https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy-logging), which is invaluable for debugging and compliance.
+[Network policy logging on Dataplane V2](https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy-logging) emits structured allow and deny records to Cloud Logging, which makes it practical to prove compliance and to debug policies before you widen a default-deny posture across an entire namespace.
 
 ```bash
 # Enable network policy logging on the cluster
@@ -278,11 +346,27 @@ gcloud logging read \
 
 **War Story**: Network policy logging can generate much more data than teams expect, especially when broad agents or probes repeatedly hit denied paths. Before enabling logging in production, test in a staging environment and review the projected log volume.
 
+Dataplane V2 observability also includes flow visibility features documented under GKE Dataplane V2 observability guides; use them alongside VPC Flow Logs when you need to correlate pod-level denies with subnet-level drops. Treat `anetd` CPU spikes as a signal of connection churn (rapid TCP open/close) and stabilize workloads with HTTP keep-alives or pooling where possible.
+
 ---
 
 ## Cloud Load Balancing Integration
 
-GKE integrates tightly with Google Cloud Load Balancing. When you create a Kubernetes Service or Ingress, GKE provisions the corresponding Google Cloud load balancer components automatically.
+GKE integrates tightly with Google Cloud Load Balancing. When you create a Kubernetes Service or Ingress, GKE provisions the corresponding Google Cloud load balancer components automatically. Understanding the mapping prevents surprise bills and explains why deleting a Service sometimes leaves forwarding rules behind until finalizers complete.
+
+### How Kubernetes Services become Google Cloud resources
+
+A `ClusterIP` Service only allocates a virtual IP from the **services secondary range**; kube-proxy or Dataplane V2 programs node datapaths so traffic to that VIP reaches ready endpoints. A `type: LoadBalancer` Service adds a **Google Cloud Network Load Balancer** (external or internal depending on annotations) with forwarding rules and firewall rules tied to the Service UID. **Ingress** and **Gateway API** objects instead drive **Application Load Balancers**: URL maps, target proxies, backend services, health checks, and—when container-native—**zonal NEGs** that list pod endpoints. The GKE controllers run in Google's management plane (Gateway) or as in-cluster reconcilers (Ingress), but the billable artifacts always land in your project.
+
+```text
+HTTPRoute / Ingress  →  GKE controller  →  URL map + proxy + forwarding rule
+                                              ↓
+                                         Backend service
+                                              ↓
+                                         zonal NEG (pod IP:port)  OR  instance group (node)
+```
+
+When debugging “502 from the load balancer but pods are Ready,” walk the chain **health check → backend healthy count → endpoints → pod readiness → NetworkPolicy**. A healthy Deployment with zero endpoints on the Service still yields an empty NEG.
 
 ### Service Types and Their Load Balancers
 
@@ -304,6 +388,8 @@ graph LR
 | **Internal Ingress** | L7 | Regional | Internal HTTP routing |
 
 ### External Network Load Balancer (L4)
+
+External passthrough Network Load Balancers remain the right tool when you need **non-HTTP protocols** or raw TCP/UDP forwarding without URL maps. Game servers, legacy TLS on custom ports, and some gRPC deployments still use `type: LoadBalancer`. Each Service requests its own Google Cloud forwarding path, so platform teams should gate L4 exposure with naming conventions and automated inventory scans. Internal L4 Services use annotations such as `networking.gke.io/load-balancer-type: Internal` (see the [service load balancer](https://cloud.google.com/kubernetes-engine/docs/concepts/service-load-balancer) documentation for current annotation keys and regional behavior).
 
 > **Stop and think**: If you expose an internal gRPC service that requires L7 routing and TLS termination, which GKE service type or ingress method should you choose instead of a standard LoadBalancer?
 
@@ -331,6 +417,43 @@ kubectl get svc game-server -o wide
 # View the underlying GCP forwarding rule
 gcloud compute forwarding-rules list \
   --filter="description~game-server"
+```
+
+### Container-native load balancing with Network Endpoint Groups (NEGs)
+
+Classic load balancing to Kubernetes often forwarded traffic to **node IPs** and relied on kube-proxy to forward again to pods—an extra hop and another place where conntrack tables strain under churn. **Container-native load balancing** registers backends as **zonal NEGs pointing at pod IPs**, so the Google Cloud load balancer sends traffic **directly to pods** that match the Service endpoints. [For GKE 1.17 and later, container-native load balancing is the default for Ingress in many configurations](https://cloud.google.com/kubernetes-engine/docs/how-to/container-native-load-balancing); when NEGs are not default, you opt in per Service:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: ClusterIP   # recommended backend type for Ingress/NEG; avoid LoadBalancer-as-backend
+  selector:
+    app: api
+  ports:
+  - port: 8080
+    targetPort: 8080
+```
+
+| Mode | Backend target | Latency / scale | When to prefer |
+| :--- | :--- | :--- | :--- |
+| Instance group (legacy) | Node VM IP + NodePort/kube-proxy | Extra hop; kube-proxy cost | Legacy clusters only |
+| Container-native (NEG) | Pod IP endpoints | Direct to pod; better endpoint churn handling | HTTP(S) Ingress, Gateway API, modern GKE |
+| `type: LoadBalancer` Service | NLB forwarding rule to nodes/pods depending on implementation | Per-Service L4 LB | Non-HTTP protocols, UDP, simple L4 |
+
+When GKE reconciles an Ingress or Gateway, it creates **Google Cloud backend services** wired to NEGs that track ready endpoints. Adding the NEG annotation to an existing Service can **recreate backend services** and cause brief disruption—stage changes. For internal HTTP, use **`gce-internal`** Ingress class or GatewayClasses such as **`gke-l7-rilb`** instead of bolting internal annotations onto external L7 paths.
+
+```bash
+# Inspect NEGs created for a Service (name patterns include cluster/namespace/service)
+gcloud compute network-endpoint-groups list \
+  --filter="name~'k8s.*api'"
+
+gcloud compute backend-services list \
+  --filter="description~'k8s'"
 ```
 
 ### GKE Ingress (L7)
@@ -373,6 +496,8 @@ spec:
               number: 80
 ```
 
+**Managed certificates and static IPs** still flow through annotations on Ingress (`networking.gke.io/managed-certificates`, `kubernetes.io/ingress.global-static-ip-name`). The Ingress controller creates health checks against your pod readiness unless you tune `BackendConfig` CRDs for custom thresholds and timeouts. When you later migrate the same hostname to Gateway API, map those frontend settings to **`GCPGatewayPolicy`** and backend settings to **`GCPBackendPolicy`** or `HealthCheckPolicy` so health check behavior does not regress during the cutover.
+
 ---
 
 ## Gateway API: The Future of Kubernetes Routing
@@ -403,9 +528,17 @@ graph TD
     end
 ```
 
+### Operating Gateway API on shared platforms
+
+Platform teams usually publish **one external Gateway per environment** (for example `infra/external-gateway`) with TLS materials and listener ports owned centrally. Application teams receive namespace labels such as `gateway-access=true` and deploy HTTPRoutes in their own namespaces. This mirrors how enterprises ran shared Ingress controllers, but Gateway API makes the split explicit in RBAC: cluster admins hold `GatewayClass` and `Gateway` write access, while developers hold `HTTPRoute` write access in permitted namespaces only.
+
+Rollout discipline matters because Gateways provision real billable load balancers. Stage a **new Gateway + HTTPRoute** on a canary hostname before moving production DNS. Use **ReferenceGrant** when routes must reference Services or Secrets across namespaces; without grants, status conditions explain the denial clearly. Keep a runbook entry for orphaned forwarding rules when teams delete HTTPRoutes but not Gateways—`gcloud compute forwarding-rules list` filtered by cluster name remains the source of truth.
+
+Google documents that **Ingress resources convert cleanly** to Gateway plus HTTPRoute equivalents for GKE. Treat conversion as a migration factory: generate routes per namespace, validate weights and hostnames in staging, then repoint DNS. Running both APIs against the same public hostname during migration is a common outage source; use separate hostnames or internal-only Gateways until validation finishes.
+
 ### GKE Gateway Classes
 
-GKE provides several [pre-installed GatewayClasses](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api):
+[GKE ships multiple GatewayClasses](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api) so platform teams can select the load balancer product that matches exposure, scope, and fleet layout without relearning annotation dialects from the Ingress era.
 
 | GatewayClass | Load Balancer Type | Scope | Use Case |
 | :--- | :--- | :--- | :--- |
@@ -413,6 +546,14 @@ GKE provides several [pre-installed GatewayClasses](https://cloud.google.com/kub
 | `gke-l7-regional-external-managed` | Regional external ALB | Regional | Region-specific apps |
 | `gke-l7-rilb` | Regional internal ALB | Regional | Internal microservices |
 | `gke-l7-gxlb` | Classic global external ALB | Global | Legacy, avoid for new |
+| `gke-l7-global-external-managed-mc` | Multi-cluster global external ALB | Global fleet | Same hostname across clusters/regions |
+| `gke-l7-rilb-mc` | Multi-cluster regional internal ALB | Fleet internal | Private multi-cluster HTTP |
+
+### Choosing a GatewayClass (and when Ingress still appears)
+
+Use **`gke-l7-global-external-managed`** for new public HTTP(S) apps that need Google’s global external Application Load Balancer features (CDN integration, managed certs, global anycast frontends). Pick **`gke-l7-regional-external-managed`** when data residency, blast radius, or compliance requires the frontend and backends to stay in **one region** even if the GKE cluster is regional. Use **`gke-l7-rilb`** for **VPC-internal** HTTP routing between microservices—pairs naturally with private nodes and private DNS. Reserve **`gke-l7-gxlb`** only when you must match an existing **classic external HTTP(S) load balancer**; Google positions managed GatewayClasses as the forward path. Enable multi-cluster classes (`*-mc`) when a **fleet** should share one hostname across clusters with [multi-cluster Gateway](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api) controllers; that adds fleet registration and Multi Cluster Ingress API setup beyond single-cluster Gateway.
+
+Cross-namespace routing requires **bidirectional attachment**: Gateway `allowedRoutes` must permit the HTTPRoute namespace, and HTTPRoutes must reference a Gateway that exists. For secrets and Services in other namespaces, add **`ReferenceGrant`** objects in the target namespace—without them, Gateway status reports reference grant errors.
 
 ```bash
 # List available GatewayClasses in your cluster
@@ -496,7 +637,7 @@ spec:
 
 ### Canary Deployments with Gateway API
 
-The Gateway API natively supports [traffic splitting by weight](https://cloud.google.com/kubernetes-engine/docs/concepts/traffic-management)---something that required Istio or custom annotations with Ingress.
+[Traffic splitting by weight](https://cloud.google.com/kubernetes-engine/docs/concepts/traffic-management) is a first-class Gateway API feature on GKE, which means canary releases do not require a service mesh sidecar in the data path for HTTP workloads fronted by Google Cloud L7 load balancers.
 
 ```yaml
 # Canary: send 90% to stable, 10% to canary
@@ -526,7 +667,7 @@ spec:
       weight: 10
 ```
 
-To gradually shift traffic, update the weights:
+To gradually shift traffic during a release, patch the HTTPRoute `backendRefs` weights and wait for the external load balancer to reconcile—there is no separate canary CRD on GKE managed Gateways.
 
 ```bash
 # Move to 50/50
@@ -557,7 +698,7 @@ kubectl patch httproute store-api-canary -n store --type=merge -p '{
 
 ### Header-Based Routing
 
-Gateway API also supports [routing based on HTTP headers](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api), which is useful for testing in production.
+[Header-based matches](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api) let operators steer internal testers to canary backends while production clients hit stable rules on the same hostname, which is safer than exposing a second public DNS name for experiments.
 
 ```yaml
 # Route requests with X-Canary: true header to canary service
@@ -593,11 +734,21 @@ spec:
       port: 8080
 ```
 
+### Multi-cluster Gateway and fleet-scale routing
+
+When applications run in **multiple GKE clusters** (disaster recovery, locality, or team boundaries), single-cluster Gateways still provision **one load balancer per Gateway**. Multi-cluster GatewayClasses (for example `gke-l7-global-external-managed-mc`) let platform teams publish **one frontend IP/DNS name** while HTTPRoutes reference **multi-cluster Services** that span fleet membership. The GKE Gateway controller for multi-cluster is **Google-hosted** (not on your control plane) and reconciles Cloud Load Balancing from fleet-aware APIs—data plane traffic still flows through Google’s L7 load balancers, not through the controller itself. Operational cost: multi-cluster Gateways have **separate pricing** from single-cluster Gateways (see Google’s Multi Cluster Gateway pricing documentation linked from the Gateway API overview). Start with a **shared Gateway per namespace** pattern on one cluster before adopting fleet-wide shared Gateways, so teams learn HTTPRoute ownership without cross-cluster failure domains on day one.
+
 ---
 
 ## Private Service Connect for GKE
 
 Private Service Connect (PSC) allows you to access the GKE control plane through [a private endpoint within your VPC](https://cloud.google.com/kubernetes-engine/docs/concepts/private-service-connect), eliminating exposure to the public internet.
+
+Legacy private clusters consumed **VPC peering** slots between your VPC and Google’s managed control plane VPC. Peering is non-transitive. On-premises networks could not always reach the control plane through your existing Interconnect paths without extra design. PSC publishes a **consumer endpoint IP** in your subnet. You route to that IP like any internal service. Large enterprises adopt PSC to preserve peering quota for application networks and to let CI runners in hybrid data centers reach the API without public IPs.
+
+Private **nodes** are orthogonal. You can run private nodes with a public control plane endpoint (common in labs) or lock down both planes (typical regulated production). Each combination changes firewall rules, DNS, and CI patterns. Document the combination your security team approved so application teams do not assume kubectl works from laptops when only bastion paths are allowed.
+
+**Authorized networks** on the control plane restrict which CIDRs may call the Kubernetes API when an endpoint is reachable from broader corporate networks. Treat overly wide entries as temporary. Pair narrow CIDRs with Identity-Aware Proxy or VPN where humans need access. Automation should use dedicated service accounts and private connectivity (Cloud Build private pools, Cloud Deploy, or in-VPC runners).
 
 ```bash
 # Create a private cluster with PSC
@@ -658,6 +809,160 @@ gcloud compute routers nats create nat-config \
   --nat-all-subnet-ip-ranges
 ```
 
+### Private nodes, private control-plane endpoint, and authorized networks
+
+**Private nodes** (`--enable-private-nodes`) remove public IPs from worker VMs; outbound image pulls and external APIs then require **Private Google Access**, **Cloud NAT**, or private endpoints to Artifact Registry and other Google APIs. **Private control-plane endpoint** (`--enable-private-endpoint` or PSC-based private endpoint subnetwork) restricts Kubernetes API access to RFC1918 paths you route—this is separate from whether workloads are public. **`--enable-master-authorized-networks`** (legacy private clusters) and PSC endpoint policies both implement **who may call the API server**; misconfiguration shows up as `kubectl` timeouts from CI systems that still use public egress IPs.
+
+| Control | What it isolates | Typical failure if skipped |
+| :--- | :--- | :--- |
+| Private nodes | Workload VMs from the internet | Image pull failures without NAT/PGA |
+| Private endpoint | Kubernetes API from public internet | CI/CD cannot reach API without VPN/Interconnect/Cloud Build private pool |
+| Authorized networks / endpoint policy | API server clients by CIDR | Over-broad `0.0.0.0/0` negates private endpoint benefits |
+| Cloud NAT | Egress from private nodes to internet APIs | Egress stalls; SNAT port exhaustion at high connection churn |
+
+**Hypothetical scenario:** A platform team enables private nodes but forgets NAT before rolling out a wave of Deployments that pull public container images. Pods remain `ImagePullBackOff` while the nodes themselves are healthy—networking tickets spike even though the application manifest is unchanged. The fix is outbound path design (NAT or private registries), not restarting kubelet.
+
+For PSC-based clusters, allocate a **dedicated `/28` (or larger) subnetwork** for the private endpoint as Google recommends in PSC cluster guides; treat that subnet like any other immovable foundation resource.
+
+---
+
+## Diagnosing pod-to-service and east-west failures
+
+North-south load balancers get the glory, but most incident time burns on **east-west** paths: Pod A calls `http://api.production.svc.cluster.local` and receives timeouts, `connection refused`, or NXDOMAIN. A disciplined checklist separates DNS, Service endpoints, dataplane programming, and policy.
+
+**DNS layer:** CoreDNS must be reachable. Deny-all egress policies without UDP/TCP 53 to `kube-dns` break resolution before any Service VIP is contacted. Test with `kubectl run -it --rm debug --image=busybox:1.36 -- nslookup api.production.svc.cluster.local`. Intermittent failures on large responses indicate missing TCP 53 fallback.
+
+**Service and Endpoints layer:** `kubectl get endpoints api -n production` must list pod IPs matching ready pods. If endpoints are empty while pods run, selector labels on the Deployment do not match the Service `spec.selector`. Headless Services (`clusterIP: None`) return pod A records directly—clients must handle multiple backends.
+
+**Dataplane layer:** On Dataplane V2, Service VIP handling is implemented without kube-proxy iptables chains. On legacy clusters, stale iptables rules or conntrack exhaustion still appear in older runbooks. Compare behavior on a known-good namespace before blaming application code.
+
+**Policy layer:** NetworkPolicy is directional. A policy in namespace `production` affects ingress to pods there; egress from the client namespace also needs allow rules. Use Dataplane V2 logging to see denies with source/destination pod metadata.
+
+**Hypothetical scenario:** After a platform team enables default-deny ingress everywhere, the checkout service reports 503s calling `payments` by ClusterIP. Payments pods are healthy and the Service has endpoints. The missing piece is an ingress allow from the checkout namespace label to the payments pods—DNS and VIP routing were never the fault.
+
+| Symptom | Likely layer | First commands |
+| :--- | :--- | :--- |
+| `NXDOMAIN` / lookup timeout | DNS / policy blocking 53 | `nslookup` from client pod; check DNS NetworkPolicy |
+| Connection timeout to ClusterIP | NetworkPolicy or wrong namespace | `kubectl get networkpolicy -A`; logging denies |
+| Connection refused | No endpoints or pod not listening | `kubectl get endpoints`; `kubectl logs` target pod |
+| Works by IP, fails by name | DNS only | Compare `curl http://10.x:8080` vs Service DNS name |
+| LB 502, in-cluster OK | GCLB health check / NEG drift | Backend health in console; pod readiness path |
+
+```bash
+# End-to-end path check from a client pod
+kubectl run netshoot --rm -it --image=nicolaka/netshoot --restart=Never -- \
+  sh -c 'nslookup api.production.svc.cluster.local;
+         curl -v --connect-timeout 3 http://api.production.svc.cluster.local:8080/healthz'
+```
+
+Document baseline latency and success for these probes after every NetworkPolicy change so regressions are obvious in CI staging clusters. When a symptom appears only from outside the cluster but in-cluster probes succeed, escalate to load balancer health checks and NEG endpoint lists before restarting application pods.
+
+---
+
+## Patterns & Anti-Patterns
+
+Production GKE networking succeeds when teams treat IP ranges, load balancers, and policy enforcement as **joint capacity planning**, not as three unrelated tickets. The patterns below are observed behaviors from teams operating regional clusters on Dataplane V2 with managed Gateways; adapt them to your compliance tier and IP address plan.
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **Container-native LB (NEG) for HTTP(S)** | Ingress or Gateway API fronts Services with churning pod endpoints | Load balancer targets pod IPs directly, avoiding kube-proxy/node double hops | NEGs track endpoints per zone; ensure health checks match readiness probes |
+| **Default-deny NetworkPolicy + DPv2 logging** | Regulated namespaces (payments, PHI, admin) | Policies actually enforce on Dataplane V2; logging proves intent before wide deny | Sample logging in staging; filter deny noise before production |
+| **Shared Gateway API with namespace-scoped HTTPRoutes** | Many teams, one domain or shared IP | Platform owns TLS/listeners; apps own routes and canary weights | One GCLB per Gateway—not per microservice Service |
+| **Right-sized pod secondary range + tuned max pods** | Clusters expected to exceed ~20 nodes | Buys node headroom without rebuilding VPC | Use discontiguous multi-Pod CIDR if growth exceeds initial math |
+| **Private nodes + NAT + private Google APIs** | Internet-isolated workloads that still pull images | Keeps nodes off public internet while preserving controlled egress | Monitor NAT gateway throughput and port usage |
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Undersized pod CIDR** | Pending pods, blocked autoscaling, unrecoverable without new range/cluster | “/24 is enough for now” on regional multi-zone clusters | Model max nodes with official formulas; start `/21` or larger when unsure |
+| **iptables/kube-proxy at very large Service counts** | Latency climbs with Service count; policy blind spots on legacy dataplane | Older clusters never migrated | New clusters on Dataplane V2; plan blue/green migration |
+| **Public control plane without tight authorized networks** | API server reachable from broad internet | Quick lab clusters promoted to prod | Private endpoint + PSC or narrow authorized CIDRs + Identity-Aware Proxy patterns |
+| **`type: LoadBalancer` per microservice** | One forwarding rule + backend per Service; cost and quota sprawl | Ingress/Gateway learning curve | Consolidate HTTP(S) behind Gateway API; reserve L4 LB for true non-HTTP needs |
+| **NetworkPolicy without DNS egress** | Crash loops after deny-all egress | Copy-paste PCI templates | Always allow kube-dns:53 when apps use cluster DNS |
+| **Mixing Ingress and Gateway on same hostname** | Duplicate GCLB assets, conflicting certs | Incremental migration without ownership | Pick one L7 API per hostname; migrate with temporary separate hosts |
+
+---
+
+## Decision Framework
+
+Use this flow when choosing north-south exposure and dataplane features. It complements the tables above for day-to-day design reviews.
+
+```mermaid
+flowchart TD
+  START["Need to expose workload outside the cluster?"] -->|No| INTERNAL["ClusterIP only or mesh east-west"]
+  START -->|Yes| PROTO{"Protocol & routing needs?"}
+  PROTO -->|TCP/UDP non-HTTP| L4["Service type LoadBalancer<br>or internal L4"]
+  PROTO -->|HTTP/S with path/host/header/canary| L7{"New platform standard?"}
+  L7 -->|Greenfield / multi-team| GW["Gateway API + GatewayClass<br>(managed external or rilb)"]
+  L7 -->|Legacy only / single owner| ING["GKE Ingress (gce / gce-internal)"]
+  GW --> NEGQ{"Container-native NEG default?"}
+  ING --> NEGQ
+  NEGQ -->|Yes on GKE 1.17+| NEGON["Ensure Service endpoints healthy;<br>annotate NEG if required"]
+  NEGQ -->|Legacy IG backend| NEGOFF["Explicit cloud.google.com/neg<br>or accept node hop"]
+  INTERNAL --> POL{"Need L3/L4 policy enforcement?"}
+  POL -->|Yes| DP2{"Cluster on Dataplane V2?"}
+  DP2 -->|Yes| LOG["NetworkPolicy + optional<br>policy logging in staging"]
+  DP2 -->|No| MIG["Plan new DPv2 cluster;<br>legacy Calico add-on path"]
+```
+
+| Decision | Choose A | Choose B | Tradeoffs |
+| :--- | :--- | :--- | :--- |
+| **L7 API** | **Gateway API** (`gke-l7-*-managed`) | **Ingress** (`gce` / `gce-internal`) | Gateway: role split, native weights/headers; Ingress: mature samples, annotation-heavy advanced routing |
+| **External vs internal HTTP** | `gke-l7-global-external-managed` | `gke-l7-rilb` | External: public clients; RILB: private RFC1918 clients only |
+| **Regional vs global external** | `gke-l7-regional-external-managed` | `gke-l7-global-external-managed` | Regional: smaller blast radius; Global: anycast, multi-region clients |
+| **LB backend mode** | **NEG (container-native)** | **Instance group / node-target** | NEG: direct to pod; legacy: simpler mentally, worse at scale |
+| **Policy logging** | Enable DPv2 logging before broad deny | Policies only | Logging costs Cloud Logging ingest; invaluable for proving compliance |
+| **Control-plane privacy** | **PSC private endpoint** | Legacy VPC-peered private cluster | PSC avoids peering slot limits; requires endpoint subnet + routing design |
+
+---
+
+## Networking cost lens
+
+GKE networking spend often surprises finance teams because **load balancers and egress are billed separately from node pools**. At moderate scale (tens of microservices, multi-zone clusters, one public HTTP surface), watch these levers:
+
+**Application Load Balancers (Ingress/Gateway):** Each external managed Gateway or Ingress front end creates forwarding rules, proxies, and URL maps in your project. Consolidating many HTTPRoutes under one Gateway typically costs less than provisioning a `type: LoadBalancer` Service per Deployment. Those per-Service L4 paths mint discrete forwarding rules. Data processing and rule charges still apply to bytes through L7 load balancers. See [Cloud Load Balancing pricing](https://cloud.google.com/load-balancing/docs/pricing) for current SKUs. Global and regional frontends bill differently.
+
+**Cloud NAT:** Private nodes that use NAT for outbound internet pay for NAT gateway processing plus egress on translated traffic. Sudden spikes often trace to verbose logging agents or unbounded image pulls. SNAT port exhaustion can also cause retry storms. Right-size NAT gateways. Prefer private Artifact Registry in the same region to keep pulls off the public internet path.
+
+**Inter-zone traffic:** Regional clusters spread pods across zones for HA. Pod-to-pod traffic that crosses zones incurs standard VPC pricing between zones in the same region. Prefer topology-aware routing when the application tolerates it. Do not assume “same region” means free east-west traffic.
+
+**Logging:** Dataplane V2 network policy logging and verbose L7 access logs can dominate observability spend. Enable logging in staging first. Measure ingest rate. Then promote filters to production namespaces.
+
+### Autopilot networking defaults (what you do not configure)
+
+Autopilot hides node-level networking knobs, but the outcomes still matter for your designs. Autopilot runs VPC-native alias IP clusters with Dataplane V2 and enforces workload security constraints that influence host networking. You do not SSH to nodes to debug iptables chains. You reason about Services, Routes, and policies instead.
+
+Autopilot also pre-selects max pods per node from a supported band based on expected density. You cannot tune that integer the way Standard clusters do. IP exhaustion therefore shows up as scheduling failures while the control plane still looks healthy. The same secondary-range planning rules apply; only the levers move to cluster CIDR choice and multi-Pod CIDR expansion.
+
+Gateway API on Autopilot follows the same GatewayClass matrix as Standard. Google manages nodes and repair, while you still own DNS, certificates, and HTTPRoute ownership boundaries. Platform teams should publish approved GatewayClasses per environment so application teams do not accidentally provision classic `gke-l7-gxlb` fronts that lack modern feature parity.
+
+| Cost driver | What makes it spike | Knobs that usually help |
+| :--- | :--- | :--- |
+| Many L4 `LoadBalancer` Services | Each Service → forwarding rule/backends | Gateway API consolidation, internal services stay ClusterIP |
+| Multi-Gateway sprawl | Duplicate managed L7 fronts per team | Shared Gateway per environment + HTTPRoute ownership |
+| NAT + wide egress | Pulling public images/binaries from private nodes | Regional Artifact Registry, Private Google Access |
+| Cross-zone chatter | Anti-affinity spreading chatty workloads | Zone-aware scheduling, colocate dependents |
+| Policy/access logs | Broad deny rules + INFO everywhere | Filter denies, scope logging to pilot namespaces |
+
+---
+
+## Pre-production networking checklist
+
+Use this checklist during architecture review before the first production deploy. It does not replace your organization’s security standards, but it catches the failures that recur across GKE networking incidents.
+
+**IP and cluster shape:** Confirm the pod secondary range size using max nodes, max pods per node, and the official mask table. Record whether discontiguous multi-Pod CIDR is approved if growth exceeds the initial range. Verify the services range supports expected ClusterIP count. Ensure the subnet primary range has enough node IPs for all zones in regional clusters.
+
+**Dataplane and policy:** Create production clusters with Dataplane V2 if policy enforcement and logging are required. Validate that staging clusters mirror production dataplane choice. Draft default-deny policies with explicit DNS egress and kube-system exceptions documented. Enable network policy logging in staging, measure log volume, and define Cloud Logging filters before production enforcement.
+
+**North-south exposure:** Choose Gateway API for new HTTP(S) surfaces unless a hard dependency on legacy Ingress annotations exists. Pick GatewayClass deliberately (global external managed vs regional external vs internal RILB). Plan one Gateway per environment instead of per microservice. Confirm container-native NEG backends for Ingress and Gateway paths. Document DNS, TLS, and certificate ownership (Google-managed certs vs pre-shared certs).
+
+**Private access:** If nodes are private, confirm Cloud NAT or private Google APIs for image pulls. If the control plane is private, confirm CI/CD connectivity (Cloud Build private pools, VPN, or Interconnect) and narrow authorized networks. For PSC, verify the endpoint subnet routing from on-premises and cloud bastions.
+
+**Cost and operations:** Estimate forwarding rule count from Services and Gateways. Model NAT throughput for peak egress. Note cross-zone traffic for chatty microservices. Assign owners for orphaned load balancer cleanup after namespace deletes.
+
+**Runbook hooks:** Store `gcloud container clusters describe` IP allocation output with the cluster record. Store baseline `kubectl get endpoints` and in-cluster `curl` checks for critical Service paths. Link this module’s troubleshooting table for on-call engineers.
+
+Reviewers should reject cluster creates that skip this checklist when the workload handles regulated data or internet-facing HTTP. The checklist is lightweight compared to rebuilding a cluster because the pod range was sized for six nodes instead of sixty. Treat Gateway and Ingress objects as infrastructure-as-code artifacts with the same review bar as firewall rules, because they create Google Cloud resources outside Kubernetes RBAC. Re-run the checklist after major autoscaling events or fleet expansions, not only at day zero. Save the signed checklist with the cluster’s infrastructure-as-code pull request for auditability and on-call context after security approval.
+
 ---
 
 ## Did You Know?
@@ -669,6 +974,8 @@ gcloud compute routers nats create nat-config \
 3. **The Gateway API was designed as a role-oriented Kubernetes API.** One of its core ideas is to separate infrastructure concerns from application routing through resources such as GatewayClass, Gateway, and HTTPRoute.
 
 4. **Google Cloud load balancing is built on several underlying systems, and the exact technology depends on the load balancer type rather than a single implementation for every product.**
+
+The Gateway API’s role-oriented model is why Google recommends it for new GKE HTTP(S) work. Ingress remains supported and convertible, but shared platforms benefit when listeners and certificates are owned separately from application path rules. Multi-cluster GatewayClasses extend that separation across fleets when applications must stay available during regional failures without duplicating public DNS entries per cluster.
 
 ---
 
@@ -682,7 +989,7 @@ gcloud compute routers nats create nat-config \
 | Forgetting DNS egress in NetworkPolicy | Writing a deny-all egress policy without DNS exception | Usually include a rule allowing [UDP/TCP port 53 to kube-dns pods](https://kubernetes.io/docs/concepts/services-networking/network-policies/) when workloads rely on cluster DNS |
 | Using Ingress annotations for advanced routing | Trying to do canary/header routing with GKE Ingress | Switch to Gateway API which natively supports traffic splitting and header matching |
 | Not enabling Cloud NAT for private clusters | [Private nodes cannot reach the internet](https://cloud.google.com/kubernetes-engine/docs/how-to/legacy/network-isolation) | Configure Cloud NAT on the VPC router before creating private clusters |
-| Mixing GKE Ingress and Gateway API on the same cluster | Both controllers can provision load balancer resources | Avoid exposing the same application path through both during normal operation; use a clear migration plan if you run both |
+| Mixing GKE Ingress and Gateway API on the same cluster | Both controllers can provision load balancer resources | Avoid exposing the same application path through both; delete HTTPRoutes before Gateways to prevent orphan forwarding rules |
 | Ignoring network policy logging | Deploying policies without validation | Enable network policy logging and review denied connections before enforcing broadly |
 
 ---
@@ -698,7 +1005,7 @@ iptables-based routing uses a linear chain of rules that the kernel evaluates se
 <details>
 <summary>2. You deploy a strict `deny-all` egress NetworkPolicy to your `payments` namespace to meet PCI compliance. Suddenly, all pods in the namespace start crash-looping, reporting that they cannot connect to the internal database service `db.backend.svc.cluster.local`, even though you added an egress rule explicitly allowing traffic to the database's IP range. What critical rule is missing?</summary>
 
-When you create a NetworkPolicy with `policyTypes: ["Egress"]` and no egress rules, you implicitly block all outbound traffic from the selected pods, including DNS resolution. Pods resolve service names (like `db.backend.svc.cluster.local`) by querying the kube-dns (CoreDNS) pods on UDP port 53. Without a DNS exception, pods cannot resolve any service names to IP addresses, meaning your application cannot even attempt the connection to the database. The critical missing rule is an explicit egress rule allowing traffic to kube-dns pods on both UDP and TCP port 53. TCP is required as a fallback for DNS responses larger than 512 bytes.
+A `policyTypes: ["Egress"]` policy without broad egress rules blocks all outbound traffic from selected pods. That includes DNS. Pods resolve `db.backend.svc.cluster.local` through CoreDNS on UDP port 53. Without an egress allow to kube-dns, name resolution fails before TCP to the database starts. The fix is an explicit egress rule to kube-dns pods on UDP and TCP port 53. TCP covers large DNS responses above the traditional 512-byte UDP limit. This is a classic pod-to-service failure that looks like a database outage but is really policy.
 </details>
 
 <details>
@@ -708,7 +1015,7 @@ The Gateway API uses a three-tier resource model designed specifically for role-
 </details>
 
 <details>
-<summary>4. A junior engineer provisions a new regional GKE cluster (spanning 3 zones, 2 nodes per zone) and assigns a `/24` CIDR block for the pod secondary range. During the deployment of the first application, several pods remain in a `Pending` state, and the cluster autoscaler fails to add new nodes. What is the root cause of this failure?</summary>
+<summary>4. How do you diagnose IP exhaustion when a regional GKE cluster (three zones, two nodes per zone) uses a `/24` pod secondary range and new pods stay Pending while the cluster autoscaler cannot add nodes?</summary>
 
 A /24 CIDR block provides only 256 IP addresses for the entire pod network. In a VPC-native cluster, each node is allocated its own /24 slice by default to support up to 110 pods. Because a regional cluster with 3 zones and 2 nodes per zone requires 6 nodes in total, it would need at least a /21 for the pod range to accommodate them. The cluster creation will initially succeed, but you will hit scheduling failures and autoscaling blocks when the pod CIDR is quickly exhausted and new pods cannot be assigned IPs. This situation is unrecoverable, as secondary ranges cannot be resized, requiring a full cluster recreation.
 </details>
@@ -723,6 +1030,18 @@ Gateway API supports traffic splitting natively through the `weight` field on `b
 <summary>6. Your enterprise network team mandates that all new GKE clusters must be private, but they have exhausted the 25 VPC Peering connections limit on the central shared VPC. They also require that the GKE control plane be accessible via a specific private IP address on your on-premises network through Cloud Interconnect. Why is Private Service Connect (PSC) the only viable architecture for this requirement?</summary>
 
 The legacy private cluster model relies on VPC peering between your VPC and the Google-managed VPC hosting the control plane. VPC peering is non-transitive, meaning peered networks cannot reach each other through your VPC, and it consumes a strict peering slot limit per VPC. Private Service Connect (PSC) instead creates a forwarding rule in your VPC that routes traffic to the control plane through a localized endpoint. This completely bypasses VPC peering, freeing up peering slots, and crucially supports transitive connectivity so on-premises networks can access the endpoint via Cloud Interconnect. PSC is the modern, scalable approach for private control plane access.
+</details>
+
+<details>
+<summary>7. After enabling container-native load balancing for an Ingress-backed Service, you notice brief 502 errors during rolling deployments even though readiness probes pass. Pods terminate gracefully, but the external Application Load Balancer still sends traffic to terminating endpoints for a short window. Which GKE integration feature are you benefiting from, and what operational practices reduce user-visible errors?</summary>
+
+Container-native load balancing registers **Network Endpoint Groups** that point at **pod IPs** rather than routing through node ports alone. During rollouts, endpoints churn quickly; the load balancer health checks and endpoint sync must track **ready** pods only. You are benefiting from NEG-backed backends tied to the Service endpoints controller. Reduce 502s by ensuring **readiness probes** truly reflect application readiness (not just process start), using **`preStop` hooks** and adequate `terminationGracePeriodSeconds` so endpoints drain before SIGTERM, and verifying **BackendConfig / health check** intervals match rollout speed. For Gateway API, attach **HealthCheckPolicy** resources so Google Cloud health checks align with pod readiness semantics.
+</details>
+
+<details>
+<summary>8. Cluster Autoscaler logs show "max node group size reached" while hundreds of pods stay Pending with "failed to allocate IP address" events. The pod secondary range is `/22` and max pods per node is 110 on a regional cluster with 12 nodes already. What is the most likely root cause, and which remediation paths does Google document?</summary>
+
+With 110 max pods per node, GKE allocates a **`/24` pod slice per node**. A `/22` secondary range only provides four such slices (`2^(24-22)=4` node-sized allocations at that mask relationship—teams often exhaust smaller ranges faster than node CPU limits). The autoscaler cannot add nodes because **no unallocated pod CIDR blocks remain**, not because the cloud quota for VMs is zero. Remediation is not "raise autoscaler max." Documented paths include **planning a larger range at cluster creation**, adding **discontiguous multi-Pod CIDR** if supported for your environment, or **creating a replacement cluster** with recalculated `Q` (max pods) and `DS` (pod prefix) using the sizing formulas in Google's flexible pod CIDR guide. Prevention requires modeling max nodes (`MN`) before the first production deployment.
 </details>
 
 ---
@@ -740,6 +1059,8 @@ Create a GKE cluster with Dataplane V2, enforce network policies between namespa
 - `kubectl` installed
 
 ### Tasks
+
+The lab walks through seven tasks in order: cluster bootstrap with Dataplane V2 and Gateway API, sample microservices in two namespaces, default-deny NetworkPolicy with a targeted allow, Gateway-based canary weights, traffic promotion, a PSC private cluster exercise, and resource cleanup. Open each solution block when you are ready to run the commands; deleting clusters at the end avoids orphaned forwarding rules.
 
 **Task 1: Create a GKE Cluster with Dataplane V2 and Gateway API**
 
@@ -772,7 +1093,7 @@ kubectl get gatewayclass
 ```
 </details>
 
-**Task 2: Deploy Two Namespaces with Applications**
+**Task 2: Deploy Two Namespaces with Applications** — Create `frontend` and `backend` namespaces with labeled Deployments and ClusterIP Services so later NetworkPolicy and HTTPRoute rules have stable and canary backends to target.
 
 <details>
 <summary>Solution</summary>
@@ -911,7 +1232,7 @@ kubectl get pods -n backend
 ```
 </details>
 
-**Task 3: Enforce Network Policies with Dataplane V2**
+**Task 3: Enforce Network Policies with Dataplane V2** — Apply default-deny ingress in `backend`, prove cross-namespace traffic fails, then allow only the frontend namespace on TCP 8080 and confirm unauthorized namespaces remain blocked.
 
 <details>
 <summary>Solution</summary>
@@ -970,7 +1291,7 @@ kubectl delete namespace attacker
 ```
 </details>
 
-**Task 4: Set Up Gateway API with Canary Traffic Splitting**
+**Task 4: Set Up Gateway API with Canary Traffic Splitting** — Provision a `gke-l7-global-external-managed` Gateway and an HTTPRoute that sends weighted traffic between stable and canary Services, then poll the external IP until the Google Cloud load balancer finishes programming.
 
 <details>
 <summary>Solution</summary>
@@ -1037,7 +1358,7 @@ done | sort | uniq -c | sort -rn
 ```
 </details>
 
-**Task 5: Shift Canary Traffic to 50/50 and Then Promote**
+**Task 5: Shift Canary Traffic to 50/50 and Then Promote** — Patch HTTPRoute weights to validate gradual rollout, observe distribution with repeated `curl` calls, and finally send one hundred percent of traffic to the canary Service before decommissioning stable.
 
 <details>
 <summary>Solution</summary>
@@ -1102,7 +1423,7 @@ done
 ```
 </details>
 
-**Task 6: Provision a Private Cluster with Private Service Connect (PSC)**
+**Task 6: Provision a Private Cluster with Private Service Connect (PSC)** — Create a dedicated PSC subnet and a private cluster that exposes the control plane through a private endpoint so you can compare PSC routing with the public Gateway lab cluster.
 
 <details>
 <summary>Solution</summary>
@@ -1130,7 +1451,7 @@ gcloud container clusters describe psc-demo \
 ```
 </details>
 
-**Task 7: Clean Up**
+**Task 7: Clean Up** — Delete both demo clusters, remove the PSC subnet, and list forwarding rules to confirm no load balancer artifacts remain billing in the project after the exercise.
 
 <details>
 <summary>Solution</summary>
@@ -1169,19 +1490,24 @@ gcloud compute target-http-proxies list --filter="description~net-demo"
 
 ## Next Module
 
-Next up: **[Module 6.3: GKE Workload Identity and Security](../module-6.3-gke-identity/)** --- Learn how to securely connect pods to GCP services without storing credentials, enforce binary authorization for trusted images, and leverage GKE's security posture dashboard.
+Next up: **[Module 6.3: GKE Workload Identity and Security](../module-6.3-gke-identity/)** --- Learn how to securely connect pods to GCP services without storing credentials, enforce binary authorization for trusted images, and leverage GKE's security posture dashboard. Networking choices in this module pair directly with Workload Identity and private control-plane access patterns covered there.
 
 ## Sources
 
 - [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Explains that NetworkPolicy behavior depends on the cluster's networking implementation and covers common policy constraints such as DNS egress.
 - [VPC-native clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips) — Authoritative GKE reference for alias IPs, Pod routability, and network-mode defaults.
 - [Flexible Pod CIDR](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr) — Documents per-node Pod CIDR sizing and why Pod secondary range planning must be done before cluster creation.
+- [Add Pod IP addresses (discontiguous multi-Pod CIDR)](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-pod-cidr) — Explains expanding pod IP space on existing clusters when the original secondary range is exhausted.
 - [GKE Dataplane V2](https://cloud.google.com/kubernetes-engine/docs/concepts/dataplane-v2) — Explains how Dataplane V2 works, its Cilium/eBPF basis, and its built-in policy enforcement model.
 - [Network policy logging](https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy-logging) — Covers Dataplane V2 network policy logging and the allowed or denied connection records it can emit.
+- [Container-native load balancing](https://cloud.google.com/kubernetes-engine/docs/how-to/container-native-load-balancing) — Describes NEG-backed backends, the `cloud.google.com/neg` annotation, and Ingress integration.
 - [GKE Ingress](https://cloud.google.com/kubernetes-engine/docs/concepts/ingress) — Describes how GKE Ingress provisions Google Cloud HTTP(S) load balancing resources for Kubernetes workloads.
 - [Service load balancers](https://cloud.google.com/kubernetes-engine/docs/concepts/service-load-balancer) — Explains how `Service` objects of type `LoadBalancer` map to Google Cloud load balancer resources on GKE.
 - [About Gateway API](https://cloud.google.com/kubernetes-engine/docs/concepts/gateway-api) — Covers GKE GatewayClasses, the Gateway and HTTPRoute model, and GKE's migration guidance from Ingress.
 - [GKE traffic management](https://cloud.google.com/kubernetes-engine/docs/concepts/traffic-management) — Documents weighted backend references and related traffic-splitting features for Gateway API on GKE.
 - [About Private Service Connect](https://cloud.google.com/kubernetes-engine/docs/concepts/private-service-connect) — Explains PSC-based control plane access and the private-endpoint networking model for modern GKE clusters.
+- [Private clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/private-cluster-concept) — Contrasts private nodes, private endpoints, and control-plane access patterns.
+- [Cloud NAT overview](https://cloud.google.com/nat/docs/overview) — Documents outbound NAT for private instances and nodes without public IPs.
+- [Cloud Load Balancing pricing](https://cloud.google.com/load-balancing/docs/pricing) — Reference for forwarding-rule and data-processing cost components tied to GCLB.
 - [Access private GKE clusters with Cloud Build private pools](https://cloud.google.com/build/docs/private-pools/accessing-private-gke-clusters-with-cloud-build-private-pools) — Shows how private connectivity is required for CI/CD systems that need to reach a private GKE control plane.
 - [Network isolation in GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/legacy/network-isolation) — Describes private-cluster networking behavior, including the lack of external IPs on private nodes and the need for outbound access planning.
