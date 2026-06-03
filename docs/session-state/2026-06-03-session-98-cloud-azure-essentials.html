@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Session 98 — Cloud: Azure Essentials complete (expand-to-floor + review)</title>
+<style>body{font:15px/1.55 system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+code{background:#f3f3f3;padding:.1em .3em;border-radius:3px;font-size:.9em}table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em;vertical-align:top}th{background:#f6f6f6}
+.tl{background:#eef6ff;border-left:4px solid #2b7;padding:.6rem .9rem;border-radius:4px}.warn{color:#a40}</style></head><body>
+<h1>Session 98 — Cloud track: Azure Essentials complete (expand-to-floor + cross-family review)</h1>
+<p class="tl"><strong>Date:</strong> 2026-06-03 · <strong>Branch:</strong> main (clean, pushed) · <strong>Orchestrator:</strong> Claude Opus 4.8 · No-codex roster · continues sessions 96/97 cloud workstream.<br>
+<strong>TL;DR.</strong> Review-axis <strong>509 → 521 done (+12)</strong>. <strong>Azure Essentials 3.1–3.17 → 17/17 done</strong> via five consolidated PRs (<strong>#1774</strong> 3.1/3.4/3.5 · <strong>#1775</strong> 3.3/3.6/3.7 · <strong>#1778</strong> 3.8/3.9/3.10 · <strong>#1776</strong> 3.11/3.12 (+3.13 gate fix) · <strong>#1777</strong> 3.2). 12 modules were <code>shipped_unreviewed</code>; the other 5 (3.13–3.17) were already <code>done</code> from a prior session (board recalibration — see Process). Same proven loop: expand sub-floor → cross-family review (opus 4.8) → orchestrator web-verifies every Azure fact → consolidated cursor fix → CI → rebase-merge → finalize. <strong>Cloud track now 53/92 done.</strong></p>
+
+<h2>What shipped</h2>
+<table><tr><th>PR</th><th>Modules</th><th>Type</th><th>Author → Reviewer</th></tr>
+<tr><td>#1774</td><td>3.1 Entra ID/RBAC, 3.4 Blob, 3.5 DNS</td><td>expand</td><td>cursor → opus</td></tr>
+<tr><td>#1775</td><td>3.3 VMs/VMSS, 3.6 ACR, 3.7 ACI/ACA</td><td>expand</td><td>cursor + deepseek(3.3) → opus</td></tr>
+<tr><td>#1778</td><td>3.8 Functions, 3.9 Key Vault, 3.10 Monitor</td><td>expand</td><td>cursor → opus</td></tr>
+<tr><td>#1776</td><td>3.11 CI/CD, 3.12 Bicep (+ 3.13 App Gateway verifier-gate fix)</td><td>expand + gate</td><td>cursor → opus</td></tr>
+<tr><td>#1777</td><td>3.2 VNet</td><td>at-floor review-flip</td><td>(back-catalog) → opus</td></tr></table>
+<p>11 sub-floor modules (637–2374 prose words) were expanded to the 5000-word floor with genuine Azure depth + the two standard sections (Patterns &amp; Anti-Patterns; Decision Framework) + sources ≥10. 3.2 was already at floor (review fixes only). 3.13 was already <code>done</code> on the review axis but T3 on structural gates (quiz 4, outcomes 3) — fixed to T0 (quiz 7, outcomes 5) and rode along in #1776. All 17 final modules T0 PASS, all density/structure gates green.</p>
+
+<h2>Notable correctness saves (verifier-blind; caught by cross-family review + web-verify)</h2>
+<ul>
+<li><strong>deepseek invented disk-table maxes</strong> (3.3): Premium SSD listed <code>7,500 IOPS / 250 MB/s</code> (250 was even <em>below</em> the Standard SSD row) and Ultra <code>160,000 / 4,000</code>, contradicting the module's own body — web-verified and corrected to <strong>Premium SSD 20,000/900</strong>, <strong>Ultra 400,000/10,000</strong>. Plus a 50× Ultra-throughput cost inconsistency and Advisor lookback 14→<strong>7</strong> days.</li>
+<li><strong>Docker Content Trust taught as current best practice</strong> (3.6): DCT is <strong>deprecated</strong> (deprecation began 2025-03-31, removed 2028-03-31, no longer enable-able) — orchestrator web-verified against learn.microsoft.com and pivoted the signing guidance to <strong>Notary Project (notation) + Azure Key Vault</strong>.</li>
+<li><strong>False ABAC capability claim</strong> (3.6): "Entra managed identities cannot receive repository-scoped ABAC" — web-verified FALSE; ACR repository <strong>ABAC is GA</strong> ("RBAC Registry + ABAC Repository Permissions" mode) and assignable to AKS/ACA/ACI managed identities via Container Registry Repository Reader/Writer/Contributor. Corrected.</li>
+<li><strong>NSG flow logs presented as current</strong> (3.10): web-verified they retire <strong>2027-09-30</strong> and cannot be newly created after <strong>2025-06-30</strong> → flagged on the retirement track, named <strong>VNet flow logs</strong> as the successor.</li>
+<li><strong>Three dead lab CLI commands</strong>: 3.5 <code>az network dns-resolver</code> (wrong group → <code>az dns-resolver</code> extension + <code>--id</code>); 3.7 <code>az storage queue show</code> (no such subcommand → <code>queue metadata show</code>); 3.8 <code>az cosmosdb sql query</code> (control-plane group has no <code>query</code>) — all would fail copy-paste.</li>
+<li><strong>Bicep compile error breaking the whole lab</strong> (3.12): <code>utcNow()</code> inside a <code>var</code> is illegal (only valid as a parameter default) → moved to a <code>param</code>; plus fixed <code>kubedojo</code>-prefixed resource names that would collide globally → added <code>uniqueString(resourceGroup().id)</code>.</li>
+<li><strong>Wrong managed-identity endpoint</strong> (3.9): lab used the VM IMDS endpoint <code>169.254.169.254</code> for a Container App → web-verified the correct path is <code>IDENTITY_ENDPOINT</code> + <code>X-IDENTITY-HEADER</code>; the "verification" step actually read with the operator's RBAC, never the MI.</li>
+<li><strong>Functions plan/scale facts</strong> (3.8): false "Durable 7-day Consumption cap" (no cap — checkpoint/replay), Flex timeout 30 min→Unbounded, Premium "scale-to-zero" (never does), Linux Consumption cap 200→<strong>100</strong>, Premium plan missing <code>--is-linux</code> for a Python deploy.</li>
+<li><strong>Lab data-path / runnability gaps</strong>: 3.2 firewall rule mixed <code>--fqdn-tags</code>+<code>--target-fqdns</code> (split); 3.2 + 3.10 <code>traceroute</code>/<code>stress-ng</code> not preinstalled on Ubuntu2204; 3.3 VMSS lab missing a port-80 LB rule; 3.11 Container App never granted ACR pull (added system-MI + AcrPull + <code>registry set --identity</code>); 3.1 lab <code>--auth-mode login</code> fails for Owner (added <code>Storage Blob Data Contributor</code>).</li>
+<li><strong>Factual table/quiz errors</strong>: 3.2 ExpressRoute SLA "99.99% (premium)"→<strong>99.95%</strong> (Premium extends reach, not SLA); 3.2 "Azure reserves more than AWS"→both reserve <strong>5</strong> IPs; 3.4 SAS <code>x</code>="Execute"→<strong>Delete version</strong>; 3.5 Quiz#2 auto-registration is <strong>per-VNet</strong> not per-zone; 3.1 RG-per-sub ~500→<strong>980</strong>.</li>
+</ul>
+
+<h2>Ground-check reverse-saves (reviewers' ~Jan-2026 cutoff false-flagged REAL recent features — KEPT)</h2>
+<ul>
+<li>3.4 Blob <strong>Smart tier</strong> (GA Apr-2026) and the <strong>128 KiB minimum billable object size</strong> (new accounts from 2026-07-01) — opus initially suspected both, web-verified them as real, and KEPT them. The cloud-expand reverse-save working as designed.</li>
+<li>3.14 App Service <strong>Premium v4</strong> (GA) and <code>serverfarms@2025-03-01</code> — opus web-verified both current (3.14 was already <code>done</code>; APPROVE 4.5/5).</li>
+</ul>
+
+<h2>Process notes</h2>
+<ul>
+<li><strong class="warn">Board recalibration (key lesson):</strong> the review-flip batch was planned as 3.2/3.13/3.14/3.15/3.16/3.17, but a board query revealed <strong>3.13–3.17 were already <code>done</code></strong> (status=done while stage=UNAUDITED — review axis is independent of verifier tier). Only one needless confirming review (3.14) was spent before catching it. <strong>Lesson: query <code>/api/quality/board</code> review-axis status to scope which modules actually need flipping BEFORE dispatching reviews — don't assume a whole sub-track is <code>shipped_unreviewed</code>.</strong></li>
+<li><strong>Pipelined loop held throughput high:</strong> 3 cursor authors + 3 opus reviews ran concurrently; authoring (cursor ~4 min/module, deepseek ~20 min) was the long pole, reviews the bottleneck. Consolidated fixes (one cursor dispatch per ~3-module PR) then PR→merge→finalize per wave.</li>
+<li><strong>Reusable artifacts:</strong> <code>logs/remediation/briefs/session98/</code> — <code>_shared-expand-rules.md</code> + <code>review-template-azure.md</code> (Azure-adapted from GKE: gcloud→az, cloud.google.com→learn.microsoft.com), <code>expand-3.*.md</code>, <code>fix-pr1..pr5.md</code>. Directly reusable for AKS (swap Essentials→Deep-Dive framing).</li>
+<li><strong>Finalize:</strong> <code>reset-stage &lt;DASHED-slug&gt; COMMITTED</code> + a <code>.pipeline/reviews/cloud__azure-essentials__module-X.md</code> record (double-underscore path segments) with last line <code>## ts — REVIEW — APPROVE</code>. <code>.pipeline/</code> is gitignored; review records are force-added (<code>git add -f</code>) and committed directly to main (bookkeeping, matching session 97).</li>
+<li>All five PRs: site-health link check + incident-dedup + CodeQL + gemini-3.1-pro cross-family review all green; no gemini false-positives this wave.</li>
+</ul>
+
+<h2>Next</h2>
+<p>Per the established cloud order (each cloud's Essentials + its Deep Dive): <strong>AKS Deep Dive 7.1–7.5</strong> (5 modules) → Architecture Patterns 4.x (4) → Advanced Ops 8.x (10) → Managed Services 9.x (10, includes 3 needs_rewrite) → Enterprise &amp; Hybrid 10.x (10). Cloud 53/92 → target 92/92. Then ai-ml-eng → on-prem → platform. Same expand-to-floor + review-first loop; reuse <code>session98/</code> templates (swap learn.microsoft.com AKS docs). Carryover leak-cleanup still pending: <code>cloud/hyperscaler-rosetta-stone.md</code> (sub-floor, not a board module) + <code>platform/.../mlops/module-5.6-ml-pipelines.md</code>.</p>
+</body></html>
