@@ -211,8 +211,8 @@ flowchart TD
     end
 
     subgraph Alias [Alias Record]
-        A_DNS[app.example.com] -->|Alias Record| A_Res[Azure Resource ID\nweb-lb-pip]
-        A_Res -.->|Azure DNS automatically\nresolves current IP| A_IP[Current IP]
+        A_DNS[app.example.com] -->|Alias Record| A_Res[Azure Resource ID<br/>web-lb-pip]
+        A_Res -.->|Azure DNS automatically<br/>resolves current IP| A_IP[Current IP]
     end
 ```
 
@@ -230,7 +230,7 @@ Private zones implement **split-horizon DNS** when paired with a public zone for
 
 Every VNet link to a private zone is either **resolution-only** or **registration-enabled**. Resolution links allow VMs in that VNet to query records in the zone. Registration links additionally create and maintain A records for VMs based on their Azure resource names.
 
-Only **one registration-enabled link is allowed per VNet per zone** to prevent two zones from fighting over the same VM hostname. Hub VNets that host shared infrastructure commonly enable registration so databases and middleware register automatically. Spoke VNets that run stateless application tiers typically use resolution-only links so they can look up shared services without polluting the zone with ephemeral pod-like names.
+A VNet can have auto-registration enabled on **only one** private DNS zone; a single zone can accept auto-registration from many VNets. Hub VNets that host shared infrastructure commonly enable registration so databases and middleware register automatically. Spoke VNets that run stateless application tiers typically use resolution-only links so they can look up shared services without polluting the zone with ephemeral pod-like names.
 
 When a VNet uses **Azure-provided DNS** (the default), [linked private zones are consulted before Azure-provided recursive resolution](https://learn.microsoft.com/en-us/azure/dns/private-dns-privatednszone). If you configure **custom DNS servers** on the VNet or NIC, that automatic chain stops. Custom DNS must forward queries for private zones to Azure, usually via conditional forwarders to **168.63.129.16** or via Azure DNS Private Resolver inbound endpoints.
 
@@ -252,33 +252,33 @@ Custom DNS servers on domain controllers or Linux BIND instances must still forw
 
 ```bash
 # Create a Private Resolver in the hub VNet (subnets must be delegated to Microsoft.Network/dnsResolvers)
-az network dns-resolver create \
+az dns-resolver create \
   --resource-group myRG \
   --name hub-resolver \
-  --virtual-network hub-vnet \
+  --id "/subscriptions/<sub>/resourceGroups/myRG/providers/Microsoft.Network/virtualNetworks/hub-vnet" \
   --location eastus
 
 # Inbound endpoint for on-premises to query Azure private zones
-az network dns-resolver inbound-endpoint create \
+az dns-resolver inbound-endpoint create \
   --resource-group myRG \
   --dns-resolver-name hub-resolver \
   --name inbound \
   --ip-configurations '[{"subnet":{"id":"/subscriptions/.../subnets/snet-inbound"},"privateIpAddress":"10.0.0.4"}]'
 
 # Outbound endpoint plus ruleset for conditional forwarding to on-premises
-az network dns-resolver outbound-endpoint create \
+az dns-resolver outbound-endpoint create \
   --resource-group myRG \
   --dns-resolver-name hub-resolver \
   --name outbound \
   --ip-configurations '[{"subnet":{"id":"/subscriptions/.../subnets/snet-outbound"},"privateIpAddress":"10.0.0.20"}]'
 
-az network dns-resolver forwarding-ruleset create \
+az dns-resolver forwarding-ruleset create \
   --resource-group myRG \
   --name onprem-rules \
-  --dns-resolver-outbound-endpoints "[$(az network dns-resolver outbound-endpoint show -g myRG --dns-resolver-name hub-resolver -n outbound --query id -o tsv)]" \
+  --dns-resolver-outbound-endpoints "[$(az dns-resolver outbound-endpoint show -g myRG --dns-resolver-name hub-resolver -n outbound --query id -o tsv)]" \
   --location eastus
 
-az network dns-resolver forwarding-rule create \
+az dns-resolver forwarding-rule create \
   --resource-group myRG \
   --ruleset-name onprem-rules \
   --name corp-forward \
@@ -286,11 +286,11 @@ az network dns-resolver forwarding-rule create \
   --target-dns-servers '[{"ipAddress":"192.168.1.2","port":53}]'
 
 # Link ruleset to spoke VNet so VMs forward corp.contoso.com via outbound endpoint
-az network dns-resolver vnet-link create \
+az dns-resolver vnet-link create \
   --resource-group myRG \
   --ruleset-name onprem-rules \
   --name spoke1-link \
-  --virtual-network spoke1-vnet
+  --id "/subscriptions/<sub>/resourceGroups/myRG/providers/Microsoft.Network/virtualNetworks/spoke1-vnet"
 ```
 
 Each resolver supports up to five inbound and five outbound endpoints per instance, with [10,000 queries per second per endpoint](https://learn.microsoft.com/en-us/azure/dns/dns-private-resolver-overview) under documented limits. Rulesets can hold up to 1,000 forwarding rules and link to hundreds of VNets in the same region, which makes hub-and-spoke designs practical without maintaining BIND clusters.
@@ -304,16 +304,16 @@ Centralized DNS architecture guidance from Microsoft recommends placing resolver
 ```mermaid
 flowchart TD
     subgraph Zone [Private DNS Zone: internal.example.com]
-        Records[db → 10.0.2.10\ncache → 10.0.2.20\napi → 10.0.1.15]
+        Records[db → 10.0.2.10<br/>cache → 10.0.2.20<br/>api → 10.0.1.15]
     end
 
     Hub[hub-vnet] -- "Linked (Auto-registration ON)" --> Zone
     Spoke1[spoke1-vnet] -- "Linked (Resolution ONLY)" --> Zone
     Spoke2[spoke2-vnet] -- "Linked (Resolution ONLY)" --> Zone
 
-    HubVMs[VMs auto-register\nDNS names] -.-> Hub
-    SpokeVMs1[VMs can resolve\nbut do not register] -.-> Spoke1
-    SpokeVMs2[VMs can resolve\nbut do not register] -.-> Spoke2
+    HubVMs[VMs auto-register<br/>DNS names] -.-> Hub
+    SpokeVMs1[VMs can resolve<br/>but do not register] -.-> Spoke1
+    SpokeVMs2[VMs can resolve<br/>but do not register] -.-> Spoke2
 ```
 
 ```bash
@@ -409,7 +409,7 @@ Split-horizon effects appear during troubleshooting: a developer's laptop on the
 
 ## Azure Traffic Manager: DNS-Based Global Load Balancing
 
-[Traffic Manager is a DNS-based traffic routing service that distributes traffic across global endpoints](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-overview). It works at the DNS layer (Layer 7 of DNS, technically)---when a client resolves your domain, Traffic Manager returns the IP of the most appropriate endpoint based on the routing method you configure.
+[Traffic Manager is a DNS-based traffic routing service that distributes traffic across global endpoints](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-overview). It operates at the DNS / application layer---when a client resolves your domain, Traffic Manager returns the IP of the most appropriate endpoint based on the routing method you configure.
 
 ### How Traffic Manager Works
 
@@ -582,13 +582,13 @@ flowchart TD
         direction LR
         C1[Client] -- "1. DNS Query" --> T[Traffic Manager]
         T -- "2. Returns IP" --> C1
-        C1 -- "3. Direct Connect\n(Not in data path)" --> O1[Origin Server]
+        C1 -- "3. Direct Connect<br/>(Not in data path)" --> O1[Origin Server]
     end
 
     subgraph FD [Azure Front Door - Layer 7]
         direction LR
-        C2[Client] -- "HTTPS" --> F[Front Door PoP Edge\n- SSL Offload\n- WAF\n- Caching\n- Routing]
-        F -- "HTTPS\n(In data path)" --> O2[Origin Server]
+        C2[Client] -- "HTTPS" --> F[Front Door PoP Edge<br/>- SSL Offload<br/>- WAF<br/>- Caching<br/>- Routing]
+        F -- "HTTPS<br/>(In data path)" --> O2[Origin Server]
     end
 ```
 
@@ -690,7 +690,7 @@ TTL is a cost knob. Cutting TTL from 300 seconds to 30 seconds can multiply recu
 
 ### Private Resolver Endpoints
 
-Hybrid designs using [Azure DNS Private Resolver](https://azure.microsoft.com/en-us/pricing/details/dns/) pay **$180 per month per inbound endpoint** and **$180 per month per outbound endpoint**, prorated hourly, plus **$2.50 per month per forwarding ruleset**. A hub with one inbound and one outbound endpoint therefore starts near **$362.50/month** before VNet data transfer. That is often cheaper than operating highly available BIND pairs, but it is not free compared with simple conditional forwarders to 168.63.129.16 on a single custom DNS VM.
+Hybrid designs using [Azure DNS Private Resolver](https://azure.microsoft.com/en-us/pricing/details/dns/) pay **$180 per month per inbound endpoint** and **$180 per month per outbound endpoint**, prorated hourly, plus **$2.50 per month per forwarding ruleset** (verify current pricing on the Azure DNS pricing page). A hub with one inbound and one outbound endpoint therefore starts near **$362.50/month** before VNet data transfer. That is often cheaper than operating highly available BIND pairs, but it is not free compared with simple conditional forwarders to 168.63.129.16 on a single custom DNS VM.
 
 Scale resolver endpoints when you approach the documented **10,000 QPS per endpoint** limit. Additional inbound endpoints add monthly fixed cost but increase headroom for on-premises forwarders during peak login storms.
 
@@ -792,7 +792,7 @@ When both services appear viable for a web property, run a decision workshop wit
 
 2. **[Traffic Manager health probes come from specific well-known IP ranges](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-monitoring)** published by Microsoft. If your backend has IP-based firewall rules, you must whitelist these IPs or your health probes will fail and Traffic Manager will mark your endpoint as degraded. The IP ranges are published in the Azure IP Ranges JSON file, under the `AzureTrafficManager` service tag.
 
-3. **Azure Front Door has over [192 edge locations (Points of Presence)](https://learn.microsoft.com/en-us/azure/frontdoor/edge-locations-by-region)** across 109 metro areas worldwide as of 2025. When a user in Tokyo accesses your app through Front Door, the TLS handshake terminates at a Tokyo PoP. This can substantially reduce TLS setup latency for users by terminating TLS at a nearby edge location instead of at a distant origin. The PoP then maintains a persistent, optimized connection to your origin backend.
+3. **Azure Front Door has over [190+ edge locations (Points of Presence)](https://learn.microsoft.com/en-us/azure/frontdoor/edge-locations-by-region)** across 100+ metro areas worldwide as of 2025. When a user in Tokyo accesses your app through Front Door, the TLS handshake terminates at a Tokyo PoP. This can substantially reduce TLS setup latency for users by terminating TLS at a nearby edge location instead of at a distant origin. The PoP then maintains a persistent, optimized connection to your origin backend.
 
 4. **Private DNS Zone auto-registration has a limit of one registration-enabled link per VNet.** A VNet can be linked to multiple Private DNS Zones for resolution, but [only one zone can have auto-registration enabled](https://learn.microsoft.com/en-us/azure/dns/private-dns-autoregistration). This prevents conflicts where multiple zones try to register the same VM name. If you need records in multiple zones, use one zone for auto-registration and manually create records in the others.
 
@@ -824,7 +824,7 @@ A standard A record requires a static IP; recreating the Load Balancer would ass
 <details>
 <summary>2. <strong>Scenario</strong>: You are designing a hub-and-spoke network architecture with one hub VNet (containing shared databases) and two spoke VNets (containing web APIs). You create a Private DNS Zone `internal.corp` to resolve internal hostnames. If you enable auto-registration for the hub VNet, how should you configure the links for the spoke VNets, and why?</summary>
 
-You must link the Private DNS Zone to the spoke VNets with auto-registration disabled (resolution-only). Azure only allows one VNet to have auto-registration enabled per Private DNS Zone to prevent naming conflicts. By enabling auto-registration on the hub, the shared databases automatically register their DNS records. The resolution-only links on the spokes ensure the web APIs can successfully look up those database hostnames without attempting to register their own potentially conflicting names into the shared zone.
+You must link the Private DNS Zone to the spoke VNets with auto-registration disabled (resolution-only). A VNet can enable auto-registration on only one zone, and you don't want stateless spoke app-tier VMs polluting the shared-services zone with ephemeral names. By enabling auto-registration on the hub, the shared databases automatically register their DNS records. The resolution-only links on the spokes ensure the web APIs can successfully look up those database hostnames without attempting to register their own potentially conflicting names into the shared zone.
 </details>
 
 <details>
@@ -836,7 +836,7 @@ The customer could experience over 6 minutes of downtime. First, Traffic Manager
 <details>
 <summary>4. <strong>Scenario</strong>: A financial startup is launching a global trading platform. They need to ensure that European traffic stays in Europe, all connections enforce TLS 1.3, static assets like charts are cached at edge locations, and any malicious SQL injection attempts are blocked before reaching the application servers. Why is Traffic Manager insufficient for this architecture, and what service must they use instead?</summary>
 
-Traffic Manager operates strictly at the DNS layer (Layer 7 of DNS) and is not in the data path, meaning it cannot inspect or modify HTTP traffic. It cannot terminate TLS, cache content, or provide Web Application Firewall (WAF) protections against SQL injections. The startup must use Azure Front Door. Front Door acts as a Layer 7 global reverse proxy in the data path, terminating TLS at the edge, caching static assets at local Points of Presence (PoPs), and inspecting traffic with its built-in WAF before forwarding it to the backend.
+Traffic Manager operates at the DNS / application layer and is not in the data path, meaning it cannot inspect or modify HTTP traffic. It cannot terminate TLS, cache content, or provide Web Application Firewall (WAF) protections against SQL injections. The startup must use Azure Front Door. Front Door acts as a Layer 7 global reverse proxy in the data path, terminating TLS at the edge, caching static assets at local Points of Presence (PoPs), and inspecting traffic with its built-in WAF before forwarding it to the backend.
 </details>
 
 <details>

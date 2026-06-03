@@ -303,7 +303,7 @@ az storage account management-policy create \
   }'
 ```
 
-This JSON policy instructs Azure's background services to evaluate the `logs/` prefix periodically after the policy takes effect. Blobs age smoothly into Cool tier, then Archive, and are ultimately purged from the system after a year---greatly reducing the chance that you end up as the subject of the financial disaster war story from the introduction.
+This JSON policy instructs Azure's background services to evaluate the `logs/` prefix periodically after the policy takes effect. Blobs age smoothly into Cool tier, then Archive, and are ultimately purged from the system after a year---greatly reducing the chance that you end up as the subject of the surprise-bill scenario described in the introduction.
 
 ### Access tiers and lifecycle in depth
 
@@ -445,7 +445,8 @@ When you build a SAS URI, combine permission flags to grant only what the client
 | `d` | Delete |
 | `l` | List |
 | `t` | Tags |
-| `x` | Execute |
+| `x` | Delete version |
+| `e` | Execute (ADLS Gen2) |
 
 **Account SAS** spans multiple services in the account (blob, file, queue, table) when signed with account keys. **Service SAS** scopes to a single service (blob) but still uses account keys unless you switch to user delegation. Service SAS is common in legacy apps. **User delegation SAS** scopes to blob resources and ties to Entra ID. For new integrations, default to user delegation with `--auth-mode login --as-user` as shown earlier.
 
@@ -548,8 +549,9 @@ To utilize these big data features, you must enable the namespace during creatio
 
 ```bash
 # Create a storage account with hierarchical namespace (Data Lake)
+DATALAKE_NAME="kubedojodatalake$(openssl rand -hex 4)"
 az storage account create \
-  --name "kubedojodatalake$(openssl rand -hex 4)" \
+  --name "$DATALAKE_NAME" \
   --resource-group myRG \
   --location eastus2 \
   --sku Standard_LRS \
@@ -669,7 +671,7 @@ Worked example: Application logs land in Hot for seven days, then lifecycle move
 
 Blob economics are four meters: **capacity (GB-month by tier)**, **transactions (per 10,000 operations)**, **data retrieval (per GB on cooler tiers)**, and **egress (per GB leaving the region)**. [Block blob pricing](https://azure.microsoft.com/en-us/pricing/details/storage/blobs/) varies by region and redundancy SKU. Always model your region and redundancy, not a generic blog estimate.
 
-**Capacity** drops as tiers get cooler. Hot costs the most per GB-month. Archive costs the least. Redundancy multiplies the storage line: ZRS costs more than LRS; GRS and GZRS cost more than single-region options. Geo-replication also adds **geo-replication vNet/data transfer** between regions on write-heavy accounts.
+**Capacity** drops as tiers get cooler. Hot costs the most per GB-month. Archive costs the least. Redundancy multiplies the storage line: ZRS costs more than LRS; GRS and GZRS cost more than single-region options. Geo-replication also adds **geo-replication data transfer (egress between regions)** on write-heavy accounts.
 
 **Transactions** rise as tiers get cooler. Listing and reading Cold or Archive data costs more per 10,000 operations than Hot. A telemetry pipeline that scans Archive blobs daily can spend more on reads than it saved on storage.
 
@@ -724,7 +726,7 @@ Monitor **Capacity** metrics in Azure Monitor and Cost Management views split by
 
 *[Maps to Learning Outcome: Configure Azure Blob Storage with access tiers and lifecycle management policies]*
 
-They should be in Cold tier. Hot tier costs $0.018/GB/month, leading to $10,800/year, whereas Cold tier reduces this to $2,700/year, saving approximately $8,100 annually. Cool tier would also offer significant savings, but since the data is accessed only quarterly, Cold tier's 90-day minimum retention perfectly aligns with the access pattern. Archive tier would save even more on storage, but the steep $5 per 10,000 read operations and hours-long rehydration time make it operationally impractical for data that still requires guaranteed quarterly access.
+They should be in Cold tier. Hot tier costs $0.018/GB/month (illustrative), leading to $10,800/year, whereas Cold tier reduces this to $2,700/year (illustrative), saving approximately $8,100 annually. Cool tier would also offer significant savings, but since the data is accessed only quarterly, Cold tier's 90-day minimum retention perfectly aligns with the access pattern. Archive tier would save even more on storage, but the steep $5 per 10,000 read operations and hours-long rehydration time make it operationally impractical for data that still requires guaranteed quarterly access.
 </details>
 
 <details>
@@ -1014,7 +1016,7 @@ echo "data" > /tmp/data.csv
 az storage fs file upload --source /tmp/data.csv --path "2024/sales/report.csv" --file-system "analytics-raw" --account-name "$DL_NAME" --auth-mode login
 
 # Perform an atomic rename of the directory (not possible in standard blob storage without copying all files)
-az storage fs directory move --name "2024/sales" --new-directory "2024/archived-sales" --file-system "analytics-raw" --account-name "$DL_NAME" --auth-mode login
+az storage fs directory move --name "2024/sales" --new-directory "analytics-raw/2024/archived-sales" --file-system "analytics-raw" --account-name "$DL_NAME" --auth-mode login
 ```
 
 <details>
