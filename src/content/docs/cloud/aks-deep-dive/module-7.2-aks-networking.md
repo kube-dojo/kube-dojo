@@ -18,11 +18,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In early 2023, a massive European e-commerce organization handling billions in transaction volume embarked on an ambitious migration. They were transitioning from a monolithic legacy system to a modern microservices architecture hosted entirely on Azure Kubernetes Service (AKS). Eager to get started and lacking deep Kubernetes networking expertise, the platform engineering team opted for the default Kubenet networking plugin. It seemed like the simplest choice, primarily because it required very few IP addresses from their meticulously guarded corporate Azure Virtual Network (VNet). During the staging phase, which consisted of roughly a dozen microservices, everything operated flawlessly. Network latency was virtually undetectable, and pod-to-pod communication was seamless.
+> **Hypothetical scenario:** Consider a European e-commerce organization handling billions in transaction volume embarking on an ambitious migration. The organization is transitioning from a monolithic legacy system to a modern microservices architecture hosted entirely on Azure Kubernetes Service (AKS). Eager to get started and lacking deep Kubernetes networking expertise, the platform engineering team opted for the default Kubenet networking plugin. It seemed like the simplest choice, primarily because it required very few IP addresses from their meticulously guarded corporate Azure Virtual Network (VNet). During the staging phase, which consisted of roughly a dozen microservices, everything operated flawlessly. Network latency was virtually undetectable, and pod-to-pod communication was seamless.
 
 However, the reality of production hit them violently three months later. The architecture had expanded to encompass 85 distinct microservices, all chattering constantly with one another. During a high-traffic promotional event, the platform began suffering from intermittent, seemingly inexplicable 5-second delays on inter-service API calls. The delays compounded, cascading into widespread transaction timeouts. The engineering team spent two frantic weeks investigating the application code, optimizing database queries, and scaling up pod replicas, but the latency persisted. Finally, an external network architect uncovered the catastrophic root cause: Kubenet relies on user-defined routes (UDRs) and a local bridge network on each node. Every time a pod communicated with a pod on a different node, the packet had to traverse the Azure route table. With 85 services generating tens of thousands of cross-node requests per second, the Azure UDR update limits and routing overhead became a massive bottleneck, resulting in those mysterious 5-second propagation delays.
 
-The remediation was excruciating. Because the Container Network Interface (CNI) cannot be changed on a running cluster, the organization was forced to execute a complete cluster rebuild using Azure CNI Overlay. The migration consumed three weeks of engineering effort, caused numerous maintenance windows, and resulted in an estimated $350,000 in lost revenue and engineering costs. This incident underscores a brutal truth about Kubernetes: networking is the architectural decision you make earliest and pay for latest. The choice between Kubenet, Azure CNI, CNI Overlay, and CNI Powered by Cilium directly dictates your scaling limitations, your network security posture, and your overall system resilience. In this module, we will dissect every facet of AKS networking, equipping you to make these critical decisions correctly from day one.
+The remediation was excruciating. Because the Container Network Interface (CNI) cannot be changed on a running cluster, the organization was forced to execute a complete cluster rebuild using Azure CNI Overlay. The migration consumed three weeks of engineering effort, caused numerous maintenance windows, and resulted in substantial lost revenue and weeks of engineering cost. This incident underscores a brutal truth about Kubernetes: networking is the architectural decision you make earliest and pay for latest. The choice between Kubenet, Azure CNI, CNI Overlay, and CNI Powered by Cilium directly dictates your scaling limitations, your network security posture, and your overall system resilience. In this module, we will dissect every facet of AKS networking, equipping you to make these critical decisions correctly from day one.
 
 Notice what the team in that story did not do: they tested only application correctness before validating platform constraints under realistic scale. A healthy module can run dozens of microservices with near-zero latency, and still fail at enterprise scale because control-plane assumptions never held once node and service counts increased. That pattern is not an application bug; it is a platform architecture bug with predictable symptoms. When you build a networking strategy in AKS, you are choosing the rules that every packet must follow for the life of the cluster, so the strategy should be reviewed before workloads grow and before third-party integrations become coupled to unstable pathways.
 
@@ -108,7 +108,6 @@ az aks create \
   --resource-group rg-aks-prod \
   --name aks-cni-dynamic \
   --network-plugin azure \
-  --network-plugin-mode overlay \
   --vnet-subnet-id "/subscriptions/{sub}/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/aks-nodes" \
   --pod-subnet-id "/subscriptions/{sub}/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/aks-pods" \
   --zones 1 2 3
@@ -532,8 +531,7 @@ az apim create \
   --publisher-name "Contoso" \
   --publisher-email "platform@contoso.com" \
   --sku-name Developer \
-  --virtual-network Internal \
-  --virtual-network-type Internal
+  --virtual-network Internal
 
 # Import an API from your AKS service
 az apim api import \
