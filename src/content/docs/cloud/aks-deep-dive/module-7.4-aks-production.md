@@ -21,11 +21,11 @@ After completing this module, you will be able to evaluate which storage, monito
 
 ## Why This Module Matters
 
-In November 2023, an online retailer running on AKS experienced a catastrophic failure during their Black Friday sale. Their order processing service used Azure Premium SSD disks for a write-ahead log. When traffic spiked to 15x normal levels, the disk IOPS ceiling was hit and writes started queuing. The application had no metrics on disk I/O latency—their observability stack only monitored CPU and memory. Without visibility into the real bottleneck, the on-call engineer scaled the deployment from 6 to 30 replicas, which made things dramatically worse: 30 pods now competed for the same disk's IOPS budget. The queue grew, timeouts cascaded, and the entire order pipeline froze for 90 minutes during peak sales hours. Post-incident analysis estimated $4.2 million in lost revenue.
+Hypothetical scenario: an online retailer running on AKS experiences a catastrophic failure during a peak sale. Their order processing service uses Azure Premium SSD disks for a write-ahead log. When traffic spikes to 15x normal levels, the disk IOPS ceiling is hit and writes start queuing. The application has no metrics on disk I/O latency—their observability stack only monitors CPU and memory. Without visibility into the real bottleneck, the on-call engineer scales the deployment from 6 to 30 replicas, which makes things dramatically worse: 30 pods now compete for the same disk's IOPS budget. The queue grows, timeouts cascade, and the entire order pipeline freezes for 90 minutes during peak sales hours, creating a material revenue hit without revealing the storage bottleneck until after the incident.
 
 This story illustrates a pattern that repeats across organizations: storage, observability, and scaling are treated as afterthoughts during initial cluster setup, then become the root cause of the most painful production incidents. The three topics are deeply interconnected. Without proper observability, you cannot make informed scaling decisions. Without proper scaling, your storage layer gets overwhelmed. Without proper storage, your observability pipeline loses data during the exact moments you need it most. When systems fail, they rarely fail in isolation; a bottleneck in one subsystem masks the symptoms of another, leading responders down the wrong diagnostic path.
 
-In this module, grounded in Kubernetes v1.35 best practices, you will learn how to choose between Azure Disks and Azure Files for different workload patterns, configure Container Insights with Managed Prometheus and Grafana for full-stack observability, and implement event-driven autoscaling with the KEDA add-on. The fix for the retailer was straightforward: migrate to Ultra Disks with provisioned IOPS, add disk I/O metrics to their Grafana dashboards, and implement KEDA-based scaling that responded to queue depth rather than CPU utilization. By the end of this module, you will have a cluster that monitors itself, scales based on real business signals, and stores data on the right tier for each workload.
+In this module, grounded in Kubernetes v1.35 best practices, you will learn how to choose between Azure Disks and Azure Files for different workload patterns, configure Container Insights with Managed Prometheus and Grafana for full-stack observability, and implement event-driven autoscaling with the KEDA add-on. The fix in the scenario is straightforward: migrate to Ultra Disks with provisioned IOPS, add disk I/O metrics to the Grafana dashboards, and implement KEDA-based scaling that responds to queue depth rather than CPU utilization. By the end of this module, you will have a cluster that monitors itself, scales based on real business signals, and stores data on the right tier for each workload.
 
 ---
 
@@ -43,7 +43,7 @@ graph TD
         HDD["<b>Standard HDD</b><br/>Max IOPS: 2000<br/>Max BW: 500MB/s<br/>Latency: ~10ms<br/><br/>Use: backups, cold data<br/>Cost: $"]
         SSD["<b>Standard SSD</b><br/>Max IOPS: 6000<br/>Max BW: 750MB/s<br/>Latency: ~4ms<br/><br/>Use: dev/test, light workloads<br/>Cost: $$"]
         Premium["<b>Premium SSD</b><br/>Max IOPS: 20k<br/>Max BW: 900MB/s<br/>Latency: ~1ms<br/><br/>Use: most production databases<br/>Cost: $$$"]
-        Ultra["<b>Ultra Disk</b><br/>Max IOPS: 160,000<br/>Max BW: 4GB/s<br/>Latency: sub-ms<br/><br/>Use: high-perf DBs, real-time analytics<br/>Cost: $$$$"]
+        Ultra["<b>Ultra Disk</b><br/>Max IOPS: 400,000<br/>Max BW: 10,000 MB/s<br/>Latency: sub-ms<br/><br/>Use: high-perf DBs, real-time analytics<br/>Cost: $$$$"]
     end
 ```
 
@@ -206,7 +206,7 @@ volumeBindingMode: WaitForFirstConsumer
 | Criteria | Azure Disk (Premium) | Azure Disk (Ultra) | Azure Files (SMB) | Azure Files (NFS) |
 | :--- | :--- | :--- | :--- | :--- |
 | **Access mode** | RWO | RWO | RWX | RWX |
-| **Max IOPS** | 20,000 | 160,000 | 10,000 | 100,000 |
+| **Max IOPS** | 20,000 | 400,000 | Premium share tier/size-driven | Premium share tier/size-driven |
 | **Cross-zone** | No (zone-locked) | No (zone-locked) | Yes (ZRS available) | Yes (ZRS available) |
 | **Latency** | ~1ms | Sub-ms | ~5-10ms | ~2-5ms |
 | **Windows support** | Yes | Yes | Yes | No |
@@ -274,7 +274,7 @@ az monitor log-analytics workspace create \
   --resource-group rg-aks-prod \
   --workspace-name law-aks-prod \
   --location westeurope \
-  --retention-in-days 90
+  --retention-time 90
 
 WORKSPACE_ID=$(az monitor log-analytics workspace show \
   -g rg-aks-prod -n law-aks-prod --query id -o tsv)
@@ -361,7 +361,7 @@ Neither replaces the other during an incident. Disk I/O saturation often appears
 
 ### Log Analytics cost control: caps, tiers, and DCR grouping
 
-Beyond namespace exclusions in the agent ConfigMap, use workspace-level daily cap (`--quota-gb` on workspace create) as a circuit breaker so a logging storm cannot consume an entire month's observability budget in hours. For AKS control plane resource logs, Microsoft recommends resource-specific diagnostic mode so audit data lands in dedicated tables (`AKSAudit`, `AKSAuditAdmin`, `AKSControlPlane`) instead of the monolithic `AzureDiagnostics` table, and configure high-volume audit tables as **Basic logs** where policy allows — Basic logs trade reduced query features for materially lower ingestion cost on verbose audit streams.
+Beyond namespace exclusions in the agent ConfigMap, use workspace-level daily cap (`--quota` on workspace create) as a circuit breaker so a logging storm cannot consume an entire month's observability budget in hours. For AKS control plane resource logs, Microsoft recommends resource-specific diagnostic mode so audit data lands in dedicated tables (`AKSAudit`, `AKSAuditAdmin`, `AKSControlPlane`) instead of the monolithic `AzureDiagnostics` table, and configure high-volume audit tables as **Basic logs** where policy allows — Basic logs trade reduced query features for materially lower ingestion cost on verbose audit streams.
 
 Container insights also supports Data Collection Rule (DCR) groupings that limit which tables ingest (for example, **Performance** only without full **Logs and events**). Selecting a reduced grouping disables some default Container insights portal blades, which is an acceptable trade when Managed Prometheus already covers golden signals and you only need selective log capture for application namespaces.
 
@@ -371,8 +371,8 @@ az monitor log-analytics workspace create \
   --resource-group rg-aks-prod \
   --workspace-name law-aks-prod \
   --location westeurope \
-  --retention-in-days 90 \
-  --quota-gb 5
+  --retention-time 90 \
+  --quota 5
 ```
 
 ---
@@ -435,7 +435,15 @@ az grafana show -g rg-aks-prod -n grafana-aks-prod --query "properties.endpoint"
 
 ### Custom Prometheus Metrics from Your Application
 
-Once your ecosystem is established, getting your custom metrics ingested is as simple as adding standard Prometheus annotations to your Pod specifications. The Managed Prometheus agent will automatically discover these endpoints and begin scraping.
+Once your ecosystem is established, getting your custom metrics ingested requires two steps: enable pod-annotation scraping for the namespace in `ama-metrics-settings-configmap`, then add standard Prometheus annotations to the Pod specification. The Managed Prometheus agent discovers annotated endpoints only after `podannotationnamespaceregex` includes the namespace, which prevents accidental scraping from every annotated pod in a large cluster.
+
+```yaml
+# ama-metrics-settings-configmap data fragment
+prometheus-collector-settings: |-
+  cluster-metrics: |-
+    pod-annotation-based-scraping: |-
+      podannotationnamespaceregex = "payments"
+```
 
 ```yaml
 apiVersion: apps/v1
@@ -476,44 +484,56 @@ spec:
 
 Dashboards are meaningless if nobody is looking at them during an incident. Alerting ensures that operational boundaries trigger actionable notifications.
 
-```bash
-# Create a Prometheus alert rule for high error rate
-az monitor metrics alert create \
-  --resource-group rg-aks-prod \
-  --name "payment-high-error-rate" \
-  --scopes "$MONITOR_WORKSPACE_ID" \
-  --condition "avg http_requests_total{status=~'5..',service='payment-service'} by (service) / avg http_requests_total{service='payment-service'} by (service) > 0.05" \
-  --description "Payment service error rate exceeds 5%" \
-  --severity 1 \
-  --window-size 5m \
-  --evaluation-frequency 1m
+PromQL alerts for Managed Prometheus are Azure ARM resources, not `kubectl apply` resources and not Azure metric-alert mini-language rules. Keep these rule groups in Bicep, ARM JSON, Terraform, or Azure Service Operator if your platform supports that CRD path; then let GitOps promote the IaC artifact rather than pretending the rule group is a native Kubernetes object.
+
+```bicep
+param azureMonitorWorkspaceName string = 'amw-aks-prod'
+param location string = resourceGroup().location
+
+resource workspace 'Microsoft.Monitor/accounts@2023-04-03' existing = {
+  name: azureMonitorWorkspaceName
+}
+
+resource paymentAlerts 'Microsoft.AlertsManagement/prometheusRuleGroups@2023-03-01' = {
+  name: 'payment-alerts'
+  location: location
+  properties: {
+    description: 'Payment service Prometheus alert rules'
+    enabled: true
+    interval: 'PT1M'
+    scopes: [
+      workspace.id
+    ]
+    rules: [
+      {
+        alert: 'PaymentServiceHighErrorRate'
+        enabled: true
+        expression: 'sum(rate(http_requests_total{status=~"5..",service="payment-service"}[5m])) by (service) / sum(rate(http_requests_total{service="payment-service"}[5m])) by (service) > 0.05'
+        for: 'PT5M'
+        severity: 1
+        labels: {
+          team: 'payments'
+        }
+        annotations: {
+          summary: 'Payment service error rate exceeds 5%'
+        }
+      }
+      {
+        alert: 'PaymentServiceHighLatency'
+        enabled: true
+        expression: 'histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="payment-service"}[5m])) by (le, service)) > 2'
+        for: 'PT3M'
+        severity: 2
+        annotations: {
+          summary: 'Payment service p99 latency exceeds 2 seconds'
+        }
+      }
+    ]
+  }
+}
 ```
 
-You can also codify complex Alertmanager-style configurations using native Kubernetes custom resources. This keeps alert rules version controlled alongside other platform manifests, so operational policies can be promoted, audited, and rolled back with the same Git workflow as your application infrastructure.
-
-```yaml
-# PrometheusRuleGroup for custom alerts
-apiVersion: alerts.monitor.azure.com/v1
-kind: PrometheusRuleGroup
-metadata:
-  name: payment-alerts
-spec:
-  rules:
-    - alert: PaymentServiceHighLatency
-      expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{service="payment-service"}[5m])) > 2
-      for: 3m
-      labels:
-        severity: warning
-      annotations:
-        summary: "Payment service p99 latency exceeds 2 seconds"
-    - alert: PaymentServiceDown
-      expr: up{job="payment-service"} == 0
-      for: 1m
-      labels:
-        severity: critical
-      annotations:
-        summary: "Payment service is down"
-```
+Use `az monitor metrics alert create` for platform or ARM metrics, such as the Service Bus `ActiveMessages` alerts in the hands-on exercise. That command's `--condition` language understands metric names and aggregations, not raw PromQL expressions.
 
 ### Remote write, recording rules, and three alert pathways
 
@@ -695,9 +715,9 @@ KEDA scalers distinguish **activation** from **scaling**. Activation is the gate
 
 `pollingInterval` controls how often KEDA queries Azure APIs or Prometheus (your lab uses 10–15 seconds). Shorter intervals react faster but increase API call volume and cost on large fleets. `cooldownPeriod` prevents flapping: after the metric drops, KEDA waits before scaling in, which is why scale-to-zero in Task 7 takes roughly sixty to ninety seconds even after the queue is empty.
 
-### Multi-scaler strategies: `max`, `min`, and `average`
+### Combining multiple KEDA triggers safely
 
-When a `ScaledObject` lists multiple triggers, `spec.advanced.scalingModifiers.strategy` chooses how to combine desired counts. **max** takes the highest replica recommendation (aggressive scale-out for multi-signal safety). **min** takes the lowest (conservative). **average** blends them. Use **max** when any single saturated signal (queue depth OR high CPU) should drive capacity; use **min** when all signals must agree before adding cost.
+When a `ScaledObject` lists multiple triggers without `scalingModifiers`, KEDA exposes the trigger metrics to the HPA and the HPA chooses the highest desired replica count across those metrics. That default is already the safe "scale out if any signal is saturated" behavior; KEDA does not provide a strategy enum for selecting a combiner. Use `spec.advanced.scalingModifiers` only when you intentionally want one composite metric, and then provide named triggers, a `formula`, and a `target`.
 
 ```yaml
 apiVersion: keda.sh/v1alpha1
@@ -714,9 +734,13 @@ spec:
   maxReplicaCount: 50
   advanced:
     scalingModifiers:
-      strategy: max
+      formula: "queue_depth > lag_pressure ? queue_depth : lag_pressure"
+      target: "10"
+      activationTarget: "1"
+      metricType: "AverageValue"
   triggers:
     - type: azure-servicebus
+      name: queue_depth
       metadata:
         queueName: incoming-orders
         namespace: sb-prod-westeurope
@@ -725,11 +749,12 @@ spec:
       authenticationRef:
         name: servicebus-auth
     - type: prometheus
+      name: lag_pressure
       metadata:
         serverAddress: "https://prometheus-prod-xxx.prometheus.monitor.azure.com"
         metricName: order_processing_lag_seconds
-        query: "max(order_processing_lag_seconds)"
-        threshold: "30"
+        query: "max(order_processing_lag_seconds) / 3"
+        threshold: "10"
 ```
 
 `TriggerAuthentication` with `podIdentity.provider: azure-workload` (as in your lab) keeps queue credentials off etcd; enable the workload identity add-on before KEDA so operator pods receive `AZURE_FEDERATED_TOKEN_FILE` and related environment variables.
@@ -821,8 +846,14 @@ Install VPA when Cluster Autoscaler keeps adding nodes while actual CPU usage st
 Run VPA in recommend mode first, feed results into your GitOps requests, and only enable Auto on stateless Deployments after you validate eviction behavior during a maintenance window. VPA does not shrink Azure disks attached to StatefulSets; it only adjusts CPU/memory requests that influence scheduling and CA math.
 
 ```bash
-# Install VPA (upstream components) — verify compatibility with your AKS version
-kubectl apply -f https://github.com/kubernetes/autoscaler/releases/latest/download/vertical-pod-autoscaler-release.yaml
+# Prefer the managed AKS VPA add-on for production clusters
+az aks update \
+  --resource-group rg-aks-prod \
+  --name aks-prod-westeurope \
+  --enable-vpa
+
+# Upstream fallback for non-AKS labs — verify compatibility with your Kubernetes version
+kubectl apply -f https://github.com/kubernetes/autoscaler/releases/latest/download/vertical-pod-autoscaler.yaml
 
 # Example VPA in recommendation-only mode
 kubectl apply -f - <<EOF
@@ -1025,6 +1056,11 @@ Treat the exercise namespace (`orders`) as a template for platform teams: isolat
 - Azure CLI authenticated
 - Workload Identity configured (from Module 7.3)
 
+```bash
+# shorthand used throughout
+alias k=kubectl
+```
+
 ### Task 1: Create a Zone-Aware StorageClass and PVC
 
 Before setting up scaling, provision a Premium SSD v2 StorageClass that correctly handles availability zones, and create a PersistentVolumeClaim.
@@ -1096,13 +1132,6 @@ az servicebus queue create \
   --max-size 1024 \
   --default-message-time-to-live "PT1H"
 
-# Get the connection string for the producer script
-SB_CONNECTION=$(az servicebus namespace authorization-rule keys list \
-  --resource-group rg-aks-prod \
-  --namespace-name "$SB_NAMESPACE" \
-  --name RootManageSharedAccessKey \
-  --query primaryConnectionString -o tsv)
-
 echo "Service Bus Namespace: $SB_NAMESPACE"
 ```
 
@@ -1138,6 +1167,14 @@ az role assignment create \
   --assignee-object-id "$SB_PRINCIPAL_ID" \
   --assignee-principal-type ServicePrincipal \
   --role "Azure Service Bus Data Receiver" \
+  --scope "$SB_ID"
+
+# Grant sender rights only for the temporary lab producer Job.
+# In production, use a separate producer identity instead of broadening the consumer identity.
+az role assignment create \
+  --assignee-object-id "$SB_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Azure Service Bus Data Sender" \
   --scope "$SB_ID"
 
 # Create federated credential
@@ -1262,7 +1299,7 @@ k get hpa -n orders
 
 ### Task 5: Send Messages and Observe Scaling
 
-Flood the queue with messages and watch KEDA scale the consumer. You should see the deployment move from `0` to higher replica counts as backlog rises, then trend back toward the configured minimum as backlog drains and the poller reflects reduced demand.
+Flood the queue with messages and watch KEDA scale the consumer. You should see the deployment move from `0` to higher replica counts as backlog rises. In a real consumer application the pods would receive and complete messages; this lab keeps the consumer simple, then clears the queue explicitly in Task 7 so you can observe scale-in without relying on a fake receiver.
 
 <details>
 <summary>Solution</summary>
@@ -1271,14 +1308,73 @@ Flood the queue with messages and watch KEDA scale the consumer. You should see 
 # Verify current state: 0 replicas
 k get deployment order-processor -n orders
 
-# Send 100 messages to the queue
-for i in $(seq 1 100); do
-  az servicebus queue message send \
-    --resource-group rg-aks-prod \
-    --namespace-name "$SB_NAMESPACE" \
-    --queue-name incoming-orders \
-    --body "{\"orderId\": \"ORD-$i\", \"amount\": $((RANDOM % 1000 + 1))}"
-done
+# Send 100 messages from an in-cluster Python Job using Workload Identity.
+# This uses the SDK because Azure CLI has no Service Bus data-plane send command and avoids shared keys.
+k delete job servicebus-order-producer -n orders --ignore-not-found
+
+k apply -f - <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: servicebus-order-producer
+  namespace: orders
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: order-processor-sa
+      restartPolicy: Never
+      containers:
+        - name: sender
+          image: python:3.12-slim
+          env:
+            - name: SERVICEBUS_FQDN
+              value: "${SB_NAMESPACE}.servicebus.windows.net"
+            - name: SERVICEBUS_QUEUE
+              value: incoming-orders
+            - name: MESSAGE_COUNT
+              value: "100"
+          command:
+            - bash
+            - -lc
+          args:
+            - |
+              pip install --no-cache-dir --quiet azure-servicebus azure-identity
+              python - <<'PY'
+              import json
+              import os
+              import random
+
+              from azure.identity import DefaultAzureCredential
+              from azure.servicebus import ServiceBusClient, ServiceBusMessage
+
+              count = int(os.environ["MESSAGE_COUNT"])
+              queue_name = os.environ["SERVICEBUS_QUEUE"]
+              namespace = os.environ["SERVICEBUS_FQDN"]
+
+              messages = [
+                  ServiceBusMessage(
+                      json.dumps({"orderId": f"ORD-{i}", "amount": random.randint(1, 1000)})
+                  )
+                  for i in range(1, count + 1)
+              ]
+
+              credential = DefaultAzureCredential()
+              with ServiceBusClient(namespace, credential=credential) as client:
+                  sender = client.get_queue_sender(queue_name=queue_name)
+                  with sender:
+                      for start in range(0, count, 20):
+                          sender.send_messages(messages[start:start + 20])
+
+              print(f"Sent {count} messages to {queue_name}")
+              PY
+EOF
+
+k wait --for=condition=complete job/servicebus-order-producer -n orders --timeout=180s
+k logs job/servicebus-order-producer -n orders
 
 echo "Sent 100 messages. Watching KEDA scale..."
 
@@ -1294,7 +1390,7 @@ k get deployment order-processor -n orders -w
 # Check the HPA that KEDA created
 k describe hpa -n orders
 
-# Check queue depth decreasing (in a real app, consumers would drain the queue)
+# Check queue depth. In this lab it remains high until Task 7 clears the queue.
 az servicebus queue show \
   --resource-group rg-aks-prod \
   --namespace-name "$SB_NAMESPACE" \
@@ -1362,11 +1458,25 @@ Drain the queue and confirm KEDA scales the deployment back to zero. This final 
 <summary>Solution</summary>
 
 ```bash
-# In a real scenario, consumers process messages. For the lab, purge the queue:
-az servicebus queue message purge \
+# In a real scenario, consumers process messages.
+# For this lab, delete and recreate the queue to clear active messages with supported Azure CLI commands.
+az servicebus queue delete \
   --resource-group rg-aks-prod \
   --namespace-name "$SB_NAMESPACE" \
-  --queue-name incoming-orders
+  --name incoming-orders
+
+az servicebus queue create \
+  --resource-group rg-aks-prod \
+  --namespace-name "$SB_NAMESPACE" \
+  --name incoming-orders \
+  --max-size 1024 \
+  --default-message-time-to-live "PT1H"
+
+az servicebus queue show \
+  --resource-group rg-aks-prod \
+  --namespace-name "$SB_NAMESPACE" \
+  --name incoming-orders \
+  --query "countDetails.activeMessageCount" -o tsv
 
 # Watch the deployment scale down (takes cooldownPeriod seconds: 60s in our config)
 echo "Waiting for KEDA cooldown (60 seconds)..."
@@ -1396,10 +1506,10 @@ echo "az group delete --name rg-aks-prod --yes --no-wait"
 - [ ] Workload Identity configured for the consumer (managed identity + federated credential + service account)
 - [ ] Consumer deployment starts at 0 replicas
 - [ ] KEDA ScaledObject and TriggerAuthentication deployed
-- [ ] Sending 100 messages causes KEDA to scale to 20 replicas (100 messages / 5 per pod)
+- [ ] Producer Job sends 100 Service Bus messages with Workload Identity, causing KEDA to scale to 20 replicas (100 messages / 5 per pod)
 - [ ] HPA created by KEDA is visible with `kubectl get hpa`
 - [ ] Azure Monitor alert configured for queue depth > 200 (warning) and > 1000 (critical)
-- [ ] After queue is drained, deployment scales back to 0 replicas within the cooldown period
+- [ ] After the queue is cleared by delete/recreate, deployment scales back to 0 replicas within the cooldown period
 - [ ] No credentials stored in Kubernetes Secrets (Workload Identity used throughout)
 
 ---
@@ -1416,10 +1526,15 @@ For further learning, explore the [Platform Engineering Track](/platform/) to de
 - [Create a PV with Azure Disks on AKS](https://learn.microsoft.com/en-us/azure/aks/azure-disk-volume) — StorageClasses, `WaitForFirstConsumer`, and PVC patterns for block storage.
 - [Azure managed disk types](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types) — Premium SSD v1/v2, Ultra Disk IOPS/throughput limits and SKU behavior.
 - [Monitor Azure Kubernetes Service (AKS)](https://learn.microsoft.com/en-us/azure/aks/monitor-aks) — Observability stack split: platform metrics, Container insights, Managed Prometheus, Grafana.
+- [az monitor log-analytics workspace](https://learn.microsoft.com/en-us/cli/azure/monitor/log-analytics/workspace) — Log Analytics workspace creation flags, including `--retention-time` and `--quota`.
 - [Azure Monitor managed service for Prometheus overview](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/prometheus-metrics-overview) — Ingestion/query pricing model, eighteen-month retention, recording and alert rules.
 - [Collect Prometheus metrics from an AKS cluster](https://learn.microsoft.com/en-us/azure/azure-monitor/containers/prometheus-metrics-enable) — Enabling `--enable-azure-monitor-metrics` and Azure Monitor workspace linkage.
+- [Customize scraping of Prometheus metrics in Azure Monitor](https://learn.microsoft.com/en-us/azure/azure-monitor/containers/prometheus-metrics-scrape-configuration) — Pod annotation scraping with `podannotationnamespaceregex` in `ama-metrics-settings-configmap`.
+- [Microsoft.AlertsManagement/prometheusRuleGroups](https://learn.microsoft.com/en-us/azure/templates/microsoft.alertsmanagement/prometheusrulegroups) — ARM/Bicep resource schema for Managed Prometheus rule groups.
 - [Kubernetes Event-driven Autoscaling (KEDA) add-on](https://learn.microsoft.com/en-us/azure/aks/keda-about) — Architecture, workload identity auth, and HPA interaction constraints.
 - [Deploy and manage KEDA on AKS](https://learn.microsoft.com/en-us/azure/aks/keda-deploy) — Enable add-on via Azure CLI and operational guidance.
+- [ScaledObject specification](https://keda.sh/docs/latest/reference/scaledobject-spec/) — KEDA `scalingModifiers.formula`, `target`, `activationTarget`, and trigger naming requirements.
+- [Use the Vertical Pod Autoscaler in AKS](https://learn.microsoft.com/en-us/azure/aks/use-vertical-pod-autoscaler) — Managed AKS VPA add-on and `az aks update --enable-vpa`.
 - [AKS cost analysis](https://learn.microsoft.com/en-us/azure/aks/cost-analysis) — OpenCost-based add-on, namespace showback, and `--enable-cost-analysis`.
 - [Understand AKS usage and costs](https://learn.microsoft.com/en-us/azure/aks/understand-aks-costs) — Idle/system/unallocated charge definitions and Cost Management integration.
 - [Use spot VMs on AKS](https://learn.microsoft.com/en-us/azure/aks/spot-node-pool) — Spot node pools, eviction policy, taints, and workload suitability.
