@@ -4,7 +4,7 @@ slug: cloud/eks-deep-dive/module-5.3-eks-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [QUICK] | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane). After completing this module, you will be able to:
+**Complexity**: [MEDIUM] | **Time to Complete**: 1.5h | **Prerequisites**: Module 5.1 (EKS Architecture & Control Plane). After completing this module, you will be able to:
 
 ## What You'll Be Able to Do
 
@@ -23,7 +23,7 @@ Hypothetical scenario: a platform team runs a multi-tenant EKS cluster where eve
 
 This is the **node-level blast radius** problem. Without pod-level identity, every container scheduled on an EC2-backed node can potentially inherit whatever IAM permissions are attached to the underlying instance profile. A vulnerability in one pod does not stop at that pod’s business logic — it can become a lateral movement path into every AWS API the node role allows. The fix is **workload-scoped IAM**: map each Kubernetes ServiceAccount to a dedicated IAM role with least-privilege policies, and keep the node role stripped to cluster operations (image pull, CSI drivers, CNI, and similar node plumbing).
 
-EKS ships two first-class mechanisms for that mapping. **[IAM Roles for Service Accounts (IRSA)](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)** federates Kubernetes OIDC tokens into `sts:AssumeRoleWithWebIdentity`. **[EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)** uses a node agent plus EKS API associations and a stable `pods.eks.amazonaws.com` trust principal. If you completed [Module 1.1: IAM Identity & Access Management](../aws-essentials/module-1.1-iam/), you already saw the comparison at essentials depth; this module is the EKS deep dive — trust policies, credential paths, cross-account topologies, migration runbooks, and STS debugging.
+EKS ships two first-class mechanisms for that mapping. **[IAM Roles for Service Accounts (IRSA)](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)** federates Kubernetes OIDC tokens into `sts:AssumeRoleWithWebIdentity`. **[EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)** uses a node agent plus EKS API associations and a stable `pods.eks.amazonaws.com` trust principal. If you completed [Module 1.1: IAM Identity & Access Management](../../aws-essentials/module-1.1-iam/), you already saw the comparison at essentials depth; this module is the EKS deep dive — trust policies, credential paths, cross-account topologies, migration runbooks, and STS debugging.
 
 By the end, you will know how to choose IRSA versus Pod Identity for a given cluster, harden nodes against metadata credential theft, and migrate fleet-wide without taking outages.
 
@@ -258,11 +258,11 @@ flowchart TD
         direction TB
         Kubelet["kubelet"]
         Agent["Pod Identity Agent<br>(DaemonSet on node)"]
-        STS["AWS STS<br>(AssumeRoleForPodIdentity)"]
+        EKSAuth["EKS Auth API<br>(AssumeRoleForPodIdentity)"]
         
         Kubelet -->|"projected token"| Agent
-        Agent -->|"exchanges token<br>for credentials"| STS
-        STS -->|"credentials injected"| Kubelet
+        Agent -->|"exchanges token<br>for credentials"| EKSAuth
+        EKSAuth -->|"credentials injected"| Kubelet
     end
 ```
 
@@ -336,7 +336,7 @@ That is it. Any pod using this ServiceAccount in the `production` namespace will
 
 ### Pod Identity Agent mechanics and platform constraints
 
-The **[Amazon EKS Pod Identity Agent](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html)** runs as a DaemonSet on **Linux Amazon EC2 worker nodes**. It binds link-local addresses documented by AWS (`169.254.170.23` for IPv4) and serves credentials to the AWS SDK via `AWS_CONTAINER_CREDENTIALS_FULL_URI`. The agent exchanges the pod’s Kubernetes service account identity for STS credentials through **`AssumeRoleForPodIdentity`** (visible in CloudTrail), applying **session tags** that carry cluster, namespace, and service account metadata — which is why the role trust policy must allow **`sts:TagSession`** in addition to **`sts:AssumeRole`**.
+The **[Amazon EKS Pod Identity Agent](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html)** runs as a DaemonSet on **Linux Amazon EC2 worker nodes**. It binds link-local addresses documented by AWS (`169.254.170.23` for IPv4) and serves credentials to the AWS SDK via `AWS_CONTAINER_CREDENTIALS_FULL_URI`. The agent exchanges the pod’s Kubernetes service account identity for temporary credentials via the EKS Auth API **`AssumeRoleForPodIdentity`** (CloudTrail source `eks-auth.amazonaws.com`); EKS Auth then assumes the role via STS, applying **session tags** that carry cluster, namespace, and service account metadata — which is why the role trust policy must allow **`sts:TagSession`** in addition to **`sts:AssumeRole`**.
 
 Platform restrictions matter for architecture reviews:
 
@@ -406,7 +406,7 @@ Pod Identity is the recommended approach for new Linux EC2 node groups on suppor
 
 ### AWS SDK credential provider chain (both models)
 
-Modern AWS SDKs (Boto3 1.24+, AWS SDK for Go v2, Java v2, JavaScript v3) walk a **default credential chain** at runtime. For IRSA, the chain picks up `AWS_WEB_IDENTITY_TOKEN_FILE` + `AWS_ROLE_ARN` and calls STS. For Pod Identity, the chain prefers `AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN` injected by the EKS mutating webhook/agent path — the same class of mechanism used by App Runner and other container credential providers documented in [Grant Kubernetes workloads access to AWS](https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html).
+Modern AWS SDKs (Boto3 1.24+, AWS SDK for Go v2, Java v2, JavaScript v3) walk a **default credential chain** at runtime. For IRSA, the chain picks up `AWS_WEB_IDENTITY_TOKEN_FILE` + `AWS_ROLE_ARN` and calls STS — this provider runs **before** the container credential provider in the standardized chain. For Pod Identity, the chain uses `AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` (a path to the pod identity token file) injected by the EKS mutating webhook/agent path — the same class of mechanism used by App Runner and other container credential providers documented in [Grant Kubernetes workloads access to AWS](https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html).
 
 If you run **custom credential wrappers** or pin ancient SDKs, you may bypass both paths and fall back to environment keys — a recurring source of “works in dev, fails in prod.” Standardize SDK versions in base images the same way you standardize base OS patches. For local `kubectl exec` debugging, `aws sts get-caller-identity` inside the pod is the fastest proof of which role the chain resolved.
 
@@ -569,7 +569,7 @@ Identity issues on EKS produce some of the most confusing error messages in all 
 | 5 | `aws iam simulate-principal-policy` on role | CloudTrail `AssumeRoleForPodIdentity` events appear |
 | 6 | Resource policy / SCP not denying | Same — credentials may be valid but target denies |
 
-When both IRSA annotation and Pod Identity association coexist, **Pod Identity wins** in the SDK chain — if you are debugging IRSA while an association still exists, you may be inspecting tokens that are no longer used.
+When both IRSA annotation and Pod Identity association coexist, **IRSA sits earlier in the SDK chain and wins** — if you are debugging Pod Identity while the `eks.amazonaws.com/role-arn` annotation still exists, pods keep using IRSA credentials and you may be inspecting container-credential env vars that the chain never selects.
 
 ### Error: "An error occurred (AccessDenied) when calling the AssumeRoleWithWebIdentity"
 
@@ -607,7 +607,7 @@ kubectl exec -it order-service-pod -n production -- env | grep AWS
 
 # For Pod Identity, you should see:
 # AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/v1/credentials
-# AWS_CONTAINER_AUTHORIZATION_TOKEN=<token>
+# AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE=/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token
 ```
 
 ### Error: "ExpiredTokenException"
@@ -754,7 +754,7 @@ kubectl exec -it $(kubectl get pods -n production -l app=order-service -o name |
 # Should NOT show AWS_WEB_IDENTITY_TOKEN_FILE (IRSA)
 ```
 
-> **Important**: If both IRSA annotation and Pod Identity association exist for the same service account, Pod Identity takes precedence. This means you can create the association first, then remove the annotation, and pods will seamlessly switch on their next restart.
+> **Important**: If both IRSA annotation and Pod Identity association exist for the same service account, IRSA keeps winning in the SDK chain while the annotation remains. AWS's recommended migration is: create the association (no effect while IRSA is present) → remove the `eks.amazonaws.com/role-arn` annotation → rolling restart so the chain falls through to Pod Identity.
 
 ### Fleet migration playbook (platform team view)
 
@@ -859,9 +859,9 @@ Training application developers matters as much as configuring clusters. Develop
 
 1. IRSA uses the `sts:AssumeRoleWithWebIdentity` API call, which is subject to the same STS rate limits as all other AssumeRole calls. At large scale (thousands of pods restarting simultaneously during a deployment), IRSA can trigger STS throttling, causing pods to fail to obtain credentials. Pod Identity mitigates this with local credential caching on the agent, reducing STS API calls.
 
-2. The Pod Identity Agent runs as a DaemonSet that listens on `169.254.170.23:80` and `169.254.170.23:2703` on each node. When the AWS SDK inside a pod makes a credential request, it is intercepted and redirected to this local agent rather than hitting the EC2 metadata service. The agent then exchanges the pod's service account token for temporary IAM credentials.
+2. The Pod Identity Agent runs as a DaemonSet that listens on `169.254.170.23:80` and `169.254.170.23:2703` on each node. When the AWS SDK inside a pod makes a credential request, it is directed to this local agent endpoint via the injected env var instead of IMDS. The agent then exchanges the pod's service account token for temporary IAM credentials.
 
-3. Before IRSA existed (2017-2019), the community tools `kiam` and later `kube2iam` were the main options for pod-level IAM. They worked by intercepting metadata requests using iptables rules and a node-level daemon. These tools were notoriously fragile -- iptables race conditions could cause pods to receive the wrong role's credentials. IRSA eliminated this entire class of bugs by using projected service account tokens instead of metadata interception.
+3. Before IRSA existed (2019), the community tools `kube2iam` (2016) and later `kiam` (2017) were the main options for pod-level IAM. They worked by intercepting metadata requests using iptables rules and a node-level daemon. These tools were notoriously fragile -- iptables race conditions could cause pods to receive the wrong role's credentials. IRSA eliminated this entire class of bugs by using projected service account tokens instead of metadata interception.
 
 4. When you delete a Pod Identity association, existing pods keep their current credentials until those credentials expire (typically within an hour). New credential requests will usually fail shortly after the change propagates. This gives you a grace period during migrations, but it also means that removing an association does not instantly revoke access -- you must also restart the pods if immediate revocation is required.
 
@@ -869,7 +869,7 @@ Training application developers matters as much as configuring clusters. Develop
 
 ## Summary: Credential Paths at a Glance
 
-Before you leave this module, you should be able to narrate both credential paths without looking at notes. **IRSA** begins at the Kubernetes API server (projected SA token), flows through the pod’s filesystem and environment variables, hits **STS AssumeRoleWithWebIdentity** with JWT claim checks, and ends with IAM role session credentials used by the SDK. **Pod Identity** begins at the **EKS association API** (infrastructure intent), flows through the **node agent** (local credential server), hits **STS AssumeRoleForPodIdentity** with session tags, and ends with the same style of temporary keys — but with fewer per-pod STS calls and a trust policy that does not embed cluster OIDC IDs.
+Before you leave this module, you should be able to narrate both credential paths without looking at notes. **IRSA** begins at the Kubernetes API server (projected SA token), flows through the pod’s filesystem and environment variables, hits **STS AssumeRoleWithWebIdentity** with JWT claim checks, and ends with IAM role session credentials used by the SDK. **Pod Identity** begins at the **EKS association API** (infrastructure intent), flows through the **node agent** (local credential server), hits the **EKS Auth API AssumeRoleForPodIdentity** (which assumes the role via STS with session tags), and ends with the same style of temporary keys — but with fewer per-pod STS calls and a trust policy that does not embed cluster OIDC IDs.
 
 Neither path removes your obligation to **scope node IAM**, **patch SDKs**, and **write least-privilege policies**. They replace the anti-pattern of sharing the node instance profile across unrelated microservices. Choose Pod Identity for new Linux EC2 services when the agent is available; keep IRSA where AWS documents gaps; migrate deliberately with CloudTrail evidence; and treat cross-account access as IAM role design, not a kubectl annotation trick.
 
@@ -911,7 +911,7 @@ The blast radius includes full access to all S3 buckets and DynamoDB tables perm
 <details>
 <summary>Question 2: You are migrating a cluster from IRSA to EKS Pod Identity. Your IAM team is concerned because they noticed you are no longer provisioning an IAM OIDC provider for the new cluster. How do you explain to the IAM team the architectural difference that makes the OIDC provider unnecessary in the new model?</summary>
 
-IRSA relies on OpenID Connect (OIDC) federation to establish cryptographic trust between the Kubernetes API server (which issues tokens) and AWS STS, requiring an explicit OIDC provider configuration per cluster. EKS Pod Identity eliminates this requirement by introducing a trusted node-level component: the EKS Pod Identity Agent. This agent intercepts credential requests and directly calls `sts:AssumeRoleForPodIdentity`, relying on the built-in AWS service principal `pods.eks.amazonaws.com` rather than external OIDC federation. Because the trust is brokered by a managed AWS service rather than an external identity provider, the explicit OIDC setup is no longer necessary.
+IRSA relies on OpenID Connect (OIDC) federation to establish cryptographic trust between the Kubernetes API server (which issues tokens) and AWS STS, requiring an explicit OIDC provider configuration per cluster. EKS Pod Identity eliminates this requirement by introducing a trusted node-level component: the EKS Pod Identity Agent. This agent forwards credential requests to the EKS Auth API (`AssumeRoleForPodIdentity`), which then assumes the role via STS, relying on the built-in AWS service principal `pods.eks.amazonaws.com` rather than external OIDC federation. Because the trust is brokered by a managed AWS service rather than an external identity provider, the explicit OIDC setup is no longer necessary.
 </details>
 
 <details>
@@ -923,7 +923,7 @@ First, you must verify that the EKS Pod Identity Agent DaemonSet is actually run
 <details>
 <summary>Question 4: During a live migration of a high-traffic payment processing service, you configure a new EKS Pod Identity association for the service account. However, you forgot to remove the existing IRSA annotation (`eks.amazonaws.com/role-arn`) from that same service account. How will the AWS SDK inside the payment pods behave when requesting credentials, and will this cause an outage?</summary>
 
-The service will not experience an outage, and the AWS SDK will seamlessly prefer the Pod Identity credentials over the IRSA credentials. This happens because the EKS Pod Identity webhook injects the `AWS_CONTAINER_CREDENTIALS_FULL_URI` environment variable, which takes precedence in the standard AWS SDK credential provider chain over the `AWS_WEB_IDENTITY_TOKEN_FILE` variable used by IRSA. The pod will still have the IRSA token mounted in its filesystem, but it will be ignored by modern SDKs. This priority mechanism is intentionally designed to allow safe, zero-downtime migrations between the two identity systems.
+The service will not experience an outage, but pods will **keep using the IRSA role** while the `eks.amazonaws.com/role-arn` annotation remains. The standardized AWS SDK credential chain checks web identity (IRSA: `AWS_WEB_IDENTITY_TOKEN_FILE` + `AWS_ROLE_ARN`) **before** the container credential provider (Pod Identity: `AWS_CONTAINER_CREDENTIALS_FULL_URI`). Creating a Pod Identity association alone does not switch credential machinery — you must remove the IRSA annotation and restart pods so the chain falls through to Pod Identity. That sequence is AWS's recommended zero-downtime migration path.
 </details>
 
 <details>
@@ -1121,7 +1121,7 @@ kubectl exec -n demo order-reader -- \
 
 Switch from IRSA to Pod Identity without service disruption. You will update the role trust, create the association, remove annotation debt, and then verify that the same workload still performs reads using Pod Identity credentials.
 
-**Order matters:** create the association while the IRSA annotation still exists if you want a safety net — Pod Identity takes precedence, but IRSA remains a rollback lever. Update trust to include `pods.eks.amazonaws.com` **before** deleting OIDC statements if other workloads on the cluster still use IRSA. In shared lab clusters, coordinate with teammates so you do not remove an OIDC provider others rely on.
+**Order matters:** create the association while the IRSA annotation still exists if you want a safety net — IRSA keeps winning until you remove the annotation, so the old path remains a rollback lever. Update trust to include `pods.eks.amazonaws.com` **before** deleting OIDC statements if other workloads on the cluster still use IRSA. In shared lab clusters, coordinate with teammates so you do not remove an OIDC provider others rely on.
 
 After restart, compare CloudTrail: you should see `AssumeRoleForPodIdentity` replacing `AssumeRoleWithWebIdentity` for the same role name. If both events appear, you may have two pods on different revisions — check ReplicaSet ages.
 

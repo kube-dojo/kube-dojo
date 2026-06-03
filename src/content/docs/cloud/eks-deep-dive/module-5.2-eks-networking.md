@@ -45,7 +45,7 @@ The IP Address Management Daemon (`ipamd`, packaged in the `aws-node` DaemonSet)
 
 Understanding ipamd behavior is the fastest path to diagnosing `FailedCreatePodSandBox` and `InsufficientFreeAddresses` errors. Check the `aws-node` pod logs on the affected node first, then correlate with subnet IP utilization in the VPC console and ENI attachment state on the EC2 instance. [Amazon's VPC CNI best-practices guide](https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html) documents the environment variables that control warm pools, prefix targets, and custom networking. When logs mention `InsufficientCidrBlocks`, the problem is often subnet fragmentation rather than a missing feature flag—you need contiguous `/28` space for prefix delegation, not merely a high theoretical CIDR size.
 
-Nitro-based EC2 instances are required for prefix delegation and for security groups for pods; older Xen-based families lack the ENI prefix and branch-interface capabilities the modern CNI modes depend on. If your node group mixes instance types, remember that [EKS applies the lowest max-pods value in the group to every node](https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html), so one smaller instance type can silently cap density for the entire pool.
+Nitro-based EC2 instances are required for prefix delegation and for security groups for pods; older Xen-based families lack the ENI prefix and branch-interface capabilities the modern CNI modes depend on. Managed node groups and Karpenter [calculate max-pods per node from each instance type's ENI capacity](https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html). If you pin a uniform `--max-pods` for a mixed-type group, set it to the smallest instance type's value — otherwise a larger type can over-schedule and fail at sandbox creation.
 
 ---
 
@@ -98,7 +98,7 @@ In this formula, the `-1` accounts for the primary IP on each ENI, which is requ
 
 When pods stay Pending with sandbox errors, work top-down from the subnet to the node. At the VPC layer, confirm available addresses in the subnet the node uses (or the ENIConfig subnet if custom networking is on). At the node layer, describe the instance ENIs and count secondary IPs versus prefixes—secondary mode shows discrete `PrivateIpAddresses`, while prefix mode shows `Ipv4Prefixes` entries. At the CNI layer, inspect `aws-node` logs for `InsufficientFreeAddresses`, `InsufficientCidrBlocks`, or EC2 API throttling.
 
-The EC2 instance type matrix is the hard ceiling. An `m5.large` allows fewer ENIs and addresses per ENI than an `m5.4xlarge`; if Karpenter or the cluster autoscaler mixes types in one NodePool, the smallest type sets max pods for the whole group. Document expected pod capacity per instance in your internal standards so application teams do not request 110 pods on nodes that physically support fewer slots in secondary IP mode.
+The EC2 instance type matrix is the hard ceiling. An `m5.large` allows fewer ENIs and addresses per ENI than an `m5.4xlarge`; with per-node auto-calculation, each node gets its own max-pods ceiling. If you hardcode a single `--max-pods` across mixed types, use the smallest type's limit for the whole group. Document expected pod capacity per instance in your internal standards so application teams do not request 110 pods on nodes that physically support fewer slots in secondary IP mode.
 
 ```bash
 # Quick node-level IP capacity snapshot
@@ -683,9 +683,9 @@ The reduction is happening because Custom Networking reserves the node's primary
 </details>
 
 <details>
-<summary>Question 4: During a busy traffic spike, you have a Kubernetes Ingress with the annotation `target-type: instance` routing to pods spread across 10 nodes in 3 Availability Zones. One of the application pods suddenly crashes and begins failing its readiness probe, yet users are reporting intermittent HTTP 502 errors when accessing the service. Why is traffic still reaching the failed pod, and how do you resolve it?</summary>
+<summary>Question 4: During a busy traffic spike, you have a Kubernetes Ingress with the annotation `target-type: instance` routing to pods spread across 10 nodes in 3 Availability Zones. One of the application pods suddenly crashes and begins failing its readiness probe, yet users are reporting intermittent HTTP 502 errors when accessing the service. Why does instance mode struggle here, and how do you resolve it?</summary>
 
-With `target-type: instance`, the ALB targets the NodePort on each node, not individual pods. The ALB health checks the NodePort -- and if any pod behind that NodePort on a specific node fails, kube-proxy may still route traffic to the unhealthy pod because the ALB only sees the node as healthy or unhealthy. This means traffic can reach unhealthy pods until kube-proxy removes the endpoint. With `target-type: ip`, the ALB health-checks each pod directly and stops sending traffic to failed pods within seconds, regardless of the node. Changing the target type completely bypasses the unpredictable kube-proxy hop, providing immediate routing updates when a pod fails.
+With `target-type: instance`, the ALB targets each node's NodePort, not individual pods. Kubernetes removes a failing pod from Service endpoints once its readiness probe fails, but the ALB health check only validates the NodePort — it cannot tell whether one unhealthy pod among several healthy pods on the same node is causing 502s. During the endpoint-update window, traffic still flows ALB → NodePort → kube-proxy, so users can hit the bad pod until convergence completes. With `target-type: ip`, the ALB health-checks each pod IP directly and drains failed pods in seconds. Switch to IP mode for precise per-pod health and faster drain behavior.
 </details>
 
 <details>
@@ -709,7 +709,7 @@ You can consolidate all 45 microservices behind a single Application Load Balanc
 <details>
 <summary>Question 8: Your finance team asks whether to move internal microservices from three dedicated internal ALBs to one shared internal ALB with host-based rules. Traffic is moderate, but teams worry about blast radius. What cost and operational factors should guide the decision?</summary>
 
-Consolidation removes two hourly ALB fixed charges—at roughly $0.0225 per hour each in US East, that is on the order of $32 per month per load balancer before LCU usage, per [Elastic Load Balancing pricing](https://aws.amazon.com/elasticloadbalancing/pricing/). The trade is operational coupling: a bad listener rule or certificate annotation on one Ingress can affect every hostname on the shared ALB, and LCU rule-evaluation cost rises with listener complexity. A practical compromise is grouping related non-production services together while keeping revenue-critical or PCI-scoped domains on dedicated ALBs with tighter change control. Require code review on `group.name` membership the same way you review shared security groups, and export per-ALB CloudWatch metrics so incidents show which team owns the failing rule.
+Consolidation removes two hourly ALB fixed charges—at roughly $0.0225 per hour each in US East, that is ≈ $16/month per load balancer (≈ $32/month for the two you remove) before LCU usage, per [Elastic Load Balancing pricing](https://aws.amazon.com/elasticloadbalancing/pricing/). The trade is operational coupling: a bad listener rule or certificate annotation on one Ingress can affect every hostname on the shared ALB, and LCU rule-evaluation cost rises with listener complexity. A practical compromise is grouping related non-production services together while keeping revenue-critical or PCI-scoped domains on dedicated ALBs with tighter change control. Require code review on `group.name` membership the same way you review shared security groups, and export per-ALB CloudWatch metrics so incidents show which team owns the failing rule.
 </details>
 
 ---
@@ -758,7 +758,7 @@ kubectl rollout status daemonset aws-node -n kube-system --timeout=120s
 
 # Verify on a node (check that prefixes are assigned, not individual IPs)
 NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-kubectl get node $NODE_NAME -o json | jq '.status.allocatable["vpc.amazonaws.com/pod-ens"]'
+kubectl get node $NODE_NAME -o json | jq '.status.allocatable.pods'
 
 # Check ENI details via AWS CLI
 INSTANCE_ID=$(kubectl get node $NODE_NAME -o json | jq -r '.spec.providerID' | cut -d'/' -f5)
@@ -780,9 +780,11 @@ Update the physical nodes to inform the `kubelet` that it is now permitted to sc
 
 ```bash
 # Create a new launch template with updated max-pods
+# This /etc/eks/bootstrap.sh form is AL2-specific; AL2023 (current default EKS-optimized AMI) uses nodeadm/NodeConfig.
 cat > /tmp/eks-userdata.txt << 'USERDATA'
 #!/bin/bash
 /etc/eks/bootstrap.sh my-cluster \
+  --use-max-pods false \
   --kubelet-extra-args '--max-pods=110'
 USERDATA
 
@@ -833,6 +835,16 @@ curl -o /tmp/iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/a
 aws iam create-policy \
   --policy-name AWSLoadBalancerControllerIAMPolicy \
   --policy-document file:///tmp/iam_policy.json
+
+# Create the IAM service account and role (OIDC trust) — prerequisite for the Helm role-arn below
+eksctl create iamserviceaccount \
+  --cluster=my-cluster \
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --role-name AWSLoadBalancerControllerRole \
+  --attach-policy-arn=arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve \
+  --override-existing-serviceaccounts
 
 # Install the controller
 helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
@@ -975,9 +987,9 @@ spec:
           image: moul/grpcbin:latest
           ports:
             - containerPort: 9000
-              name: grpc
-            - containerPort: 9001
               name: grpc-insecure
+            - containerPort: 9001
+              name: grpc-tls
           resources:
             requests:
               cpu: 100m
