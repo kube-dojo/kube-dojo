@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Session 97 — Cloud: GKE Deep Dive complete (expand-to-floor + review)</title>
+<style>body{font:15px/1.55 system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+code{background:#f3f3f3;padding:.1em .3em;border-radius:3px;font-size:.9em}table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.92em;vertical-align:top}th{background:#f6f6f6}
+.tl{background:#eef6ff;border-left:4px solid #2b7;padding:.6rem .9rem;border-radius:4px}.warn{color:#a40}</style></head><body>
+<h1>Session 97 — Cloud track: GKE Deep Dive complete (expand-to-floor + cross-family review)</h1>
+<p class="tl"><strong>Date:</strong> 2026-06-03 · <strong>Branch:</strong> main (clean, pushed) · <strong>Orchestrator:</strong> Claude Opus 4.8 · No-codex roster · continues session 96 cloud workstream.<br>
+<strong>TL;DR.</strong> Review-axis <strong>504 → 509 done (+5)</strong>. <strong>GKE Deep Dive 6.1–6.5 (5/5) COMPLETE</strong> via two consolidated PRs (<strong>#1772</strong> wave 1 = 6.1/6.2/6.3, <strong>#1773</strong> wave 2 = 6.4/6.5). Each module was below the 5000-word prose floor; EXPANDED to floor → cross-family reviewed (opus 4.8 / deepseek) → orchestrator ground-checked &amp; web-verified every GCP/GKE fact → consolidated cursor fix → CI → rebase-merge → finalize. Same proven loop as session 96, applied to GCP/Kubernetes content.</p>
+
+<h2>What shipped</h2>
+<table><tr><th>Wave / PR</th><th>Modules</th><th>Author → Reviewer</th><th>Result</th></tr>
+<tr><td>1 · #1772</td><td>GKE 6.1 Architecture, 6.2 Networking, 6.3 Identity/Security (all expand)</td><td>cursor → opus (6.1/6.3) + deepseek (6.2)</td><td>done</td></tr>
+<tr><td>2 · #1773</td><td>GKE 6.4 Storage, 6.5 Observability &amp; Fleet (expand) — completes GKE Deep Dive</td><td>cursor (6.4) / deepseek (6.5) → opus</td><td>done</td></tr></table>
+<p>Starting state: all 5 GKE modules <code>shipped_unreviewed</code>/UNAUDITED and sub-floor (1170–1406 prose words vs 5000 floor). Each expanded to floor with genuine GKE depth + the two missing standard sections (Patterns &amp; Anti-Patterns; Decision Framework) and sources raised to ≥10 (6.3 was 5, 6.4 was 4, 6.5 was 3). Final body words: 6.1 5004 · 6.2 5012 · 6.3 5000 · 6.4 5031 · 6.5 5669. All T0, all density/structure gates green.</p>
+
+<h2>Notable correctness saves (verifier-blind; caught by cross-family review + web-verify)</h2>
+<ul>
+<li><strong>Two fabricated dated/$ openers</strong> (the recurring expand-to-floor failure mode, both lanes): 6.4 "In August 2023, a gaming company lost 6h of data for 180,000 users… $420,000… VP quote"; 6.5 "In November 2023, a ride-sharing company with 12 clusters… 11 days to remediate… CTO post-mortem" — both reframed to <code>Hypothetical scenario:</code> with the false precision stripped.</li>
+<li><strong>Fabricated statistic</strong> (6.3 DYK#1): "Google internal security audits in 2019 found that 34% of GKE clusters had SA keys as Secrets" — no such public figure; deleted, replaced with the qualitative key-in-etcd point.</li>
+<li><strong>Invented Monarch stats</strong> (6.5 DYK#1): "2 billion time series / 4 trillion points per day" don't match published figures — invented counts dropped, qualitative Monarch-backs-GMP point kept.</li>
+<li><strong>100×-wrong PD throughput table</strong> (6.4): per-GiB read throughput listed as 12/28/48 MB/s/GB — dropped decimal; web-verified correct values <strong>0.12/0.28/0.48 MB/s per GiB</strong> (the IOPS column 0.75/6/30 per GB was already right, and 48 MB/s/GB × 100 GiB = 4,800 MB/s exceeds the per-instance ceiling 4×).</li>
+<li><strong>Two non-existent gcloud commands</strong>: 6.3 <code>gcloud container security-posture findings list</code> (no such group → routed to <code>gcloud scc findings list</code> / Console); 6.4 <code>gcloud compute disks detach</code> (→ <code>gcloud compute instances detach-disk</code>).</li>
+<li><strong>MCS DNS model wrong</strong> (6.5): taught the headless "DNS returns weighted pod IPs" model, but the module's own <code>serviceimport</code> output shows <strong>ClusterSetIP</strong>; web-verified that <code>clusterset.local</code> resolves to the single virtual IP and the data plane (kube-proxy/Dataplane V2) distributes — corrected prose, DYK, table, and quiz.</li>
+<li><strong><code>internalTrafficPolicy: Local</code> "graceful fallback" wrong</strong> (6.5 Quiz 4 + DYK#3): <code>Local</code> routes node-local only and DROPS when no local endpoint exists — NO cross-zone fallback (web-verified vs kubernetes.io). Corrected to <strong>Topology Aware Routing</strong> for in-zone-with-failover; disentangled DYK#3's conflation of topologySpreadConstraints / internalTrafficPolicy / Topology Aware Routing.</li>
+<li><strong>Config Sync apply-spec schema wrong</strong> (6.5): used a <code>git:</code> wrapper with <code>repo/branch/dir/auth</code>; web-verified the real shape is FLAT under <code>spec.configSync</code> (<code>syncRepo/syncBranch/policyDir/secretType/sourceType/sourceFormat</code> — no <code>git:</code>, no <code>auth:</code>) — would have been rejected as written.</li>
+<li><strong>Non-metrics lab image</strong> (6.5 GMP lab): scraped <code>/metrics</code> on <code>hashicorp/http-echo</code>, which returns the same text on every path → scrape fails, <code>up=0</code>, the "GMP collecting metrics" success criterion can't be met → swapped to a real Prometheus example app.</li>
+<li><strong>Confidential GKE Nodes "N2D only" outdated</strong> (6.3): web-verified GA on <strong>N2D, C2D, and C3D</strong> (Autopilot still N2D-only) — widened, not deleted.</li>
+<li><strong>Leaked authoring meta-note</strong> (6.1 DYK#3, pre-existing back-catalog): "Avoid uncited deployment-volume rankings or causal claims about patch timing here." — deleted; replaced with a real per-second-billing fact.</li>
+</ul>
+
+<h2>Ground-check rejections / keeps (deepseek + opus claims verified before acting)</h2>
+<ul>
+<li><strong>REJECTED</strong> deepseek's 6.2 "P1 blocker" that <code>--default-max-pods-per-node</code> is a deprecated alias for <code>--max-pods-per-node</code> that "breaks creation" — web-verified they are <strong>distinct valid flags</strong> (cluster-wide default vs default-node-pool override); using both is correct. Left the command unchanged.</li>
+<li><strong>KEPT</strong> deepseek's flagged "260,000 endpoints" Dataplane V2 limit — web-verified <strong>correct</strong> (GKE DPv2 eBPF maps limited to 260,000 endpoints across all Services).</li>
+<li><strong>KEPT</strong> 6.1 pricing ($0.10/cluster/hour flat per-second; $74.40/mo free credit = one zonal-Standard-or-Autopilot cluster; regional Standard not covered by the credit) — web-verified current and confirmed by opus independently. Softened nothing.</li>
+<li>The 6.3 BinAuthz "War Story" and 6.4 binding-mode "War Story" are pre-existing + anonymized (no company/$); relabeled to <code>Hypothetical scenario:</code> for anti-fab consistency, content preserved.</li>
+</ul>
+
+<h2>Process notes (durable)</h2>
+<ul>
+<li><strong>opus read-only review stall + reroute worked</strong>: the 6.2 opus review produced zero model output while its peers (6.1/6.3/6.4, fired in the same window) all finished — the documented ~10–20min read-only stall. Killed it (<code>TaskStop</code>) at ~11min and re-routed 6.2's review to <strong>deepseek</strong> (cross-family vs the cursor author; cursor can't review its own family) in a throwaway worktree. Clean 3.8/5 review. Lesson: when the stalled review is of cursor-authored content, reroute to deepseek, not cursor.</li>
+<li><strong>deepseek authored 6.5 cleanly this time</strong> — no gutter corruption, no truncation (grew to 5,669w), no fused fences. Still produced the most verifier-blind technical errors of the five (MCS DNS, internalTrafficPolicy, Config Sync schema, lab image, Monarch stats) — confirms deepseek is usable as a 2nd author but its output needs the hardest ground-check + a strong (opus) cross-family reviewer.</li>
+<li><strong>finalize gotcha</strong>: <code>reset-stage</code> takes the DASHED key (<code>cloud-gke-deep-dive-module-6.1-gke-architecture</code>), NOT the slashed relpath — passing slashes creates a bogus nested <code>.pipeline/quality-pipeline/cloud/…</code> lock dir and errors. (The <code>.pipeline/reviews/&lt;key&gt;.md</code> audit file uses the <code>__</code>-joined key; the state key uses <code>-</code>.)</li>
+<li>cursor applied both consolidated fix waves cleanly (auto-committed in the integration worktree; verified). No fused fences introduced this session.</li>
+</ul>
+
+<h2>The proven loop (unchanged from session 96; artifacts now in session97/)</h2>
+<p>Per wave of ≤3 (curriculum order): expand thin→5000w (cursor primary, deepseek 2nd, ≤3 concurrent, own worktree) → <code>verify_module.py</code> + failure-mode scan (gutter / fused fences / add-iam-binding) → cross-family review (cursor-authored→opus; deepseek-authored→opus, hardest ground-check) → orchestrator web-verifies EVERY fact-changing finding before applying → consolidated cursor <code>edit</code> fix in an integration worktree (cherry-pick the expansions first) → verify all + <code>incident_dedup_gate.py --mode absolute --base origin/main</code> (fetch first, run from the worktree) → push + <code>gh pr create --body-file</code> (single-line verbatim Learner-check quote, no md-bold/pipes) → CI (watch via <code>gh pr checks --watch</code> in background) → <code>gh pr merge --rebase</code> → pull primary → finalize (<code>.pipeline/reviews/&lt;key__&gt;.md</code> last line <code>## ts — `REVIEW` — `APPROVE`</code> + <code>reset-stage &lt;dashed-key&gt; COMMITTED</code>; <code>git add -f</code> records + <code>docs(reviews)</code> commit + push) → cleanup worktrees. Artifacts: <code>logs/remediation/briefs/session97/</code> (review-template-gke.md, _shared-expand-rules.md, expand-6.*.md, fix-w1.md, fix-w2.md, VERIFY-NOTES.md).</p>
+
+<h2>NEXT (curriculum order)</h2>
+<ul>
+<li><strong>Azure Essentials 3.1–3.17</strong> (next sub-track, 17 modules) — then AKS Deep Dive 7.1–7.5 · Architecture Patterns 4.1–4.4 · Advanced Ops 8.1–8.10 · Managed Services 9.1–9.10 (the 3 cloud <code>needs_rewrite</code> are here) · Enterprise &amp; Hybrid 10.1–10.11. Cloud remaining after GKE: ~48 shipped_unreviewed + 3 needs_rewrite; <strong>cloud now 41/93 done.</strong> Then ai-ml-eng → on-prem → platform.</li>
+<li>Density-check each Azure module live first (<code>verify_module.py</code>); expect most sub-floor → expand. Reuse the session97 artifacts (the GCP-tailored shared rules generalize; swap cloud.google.com → learn.microsoft.com and gcloud → az in the per-module deepening briefs).</li>
+<li>Carryover leak-cleanup (still open, both later in curriculum order): <code>cloud/hyperscaler-rosetta-stone.md</code> (sub-floor, not a board module — expand opportunistically) + <code>platform/disciplines/data-ai/mlops/module-5.6-ml-pipelines.md</code>.</li>
+<li>4 needs_review stragglers (on-prem Private MLOps, on-prem Multi-Cluster, toolkits SST, toolkits Grafana — score 5.0, quick flips, later in curriculum order).</li>
+<li>Brief-writing reminder: bake the OPENER anti-fab rule + "ground-check deepseek numbers / web-verify recent features" into every Azure expansion brief (already in <code>session97/_shared-expand-rules.md</code>; retune the GCP-specific gcloud gotchas for <code>az</code>).</li>
+</ul>
+</body></html>
