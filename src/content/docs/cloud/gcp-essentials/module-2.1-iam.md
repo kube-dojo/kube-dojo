@@ -130,7 +130,7 @@ When Policy Troubleshooter or audit logs explain a decision, they walk the same 
 4. Default: DENY                    →  "No matching allow → reject."
 ```
 
-**Deny wins over allow.** A principal with `roles/owner` still cannot delete a project if an org-level deny policy blocks `cloudresourcemanager.googleapis.com/projects.delete` without an exception. **IAM Conditions** on allow bindings add a fourth dimension: the binding exists, but only when a CEL expression (time, resource name, tags) evaluates to true. Conditions do not replace deny policies; they narrow when an allow applies.
+**Deny wins over allow.** A principal with `roles/owner` still cannot delete a project if an org-level deny policy blocks `cloudresourcemanager.googleapis.com/projects.delete` without an exception. **IAM Conditions** on allow bindings add a fourth dimension: the binding exists, but only when a CEL expression (time, resource name, tags) evaluates to true. Conditions do not replace deny policies; they narrow when an allow applies. Review condition expressions in pull requests the same way you review role names.
 
 ```bash
 # Search IAM bindings for a user across the org (requires Cloud Asset Inventory API)
@@ -140,8 +140,8 @@ gcloud asset search-all-iam-policies \
 
 # Effective IAM policy for one resource (includes inherited allows)
 gcloud asset get-effective-iam-policy \
-  --project=PROJECT_ID \
-  //storage.googleapis.com/projects/PROJECT_ID/buckets/my-bucket
+  --scope=projects/PROJECT_ID \
+  --full-resource-name=//storage.googleapis.com/projects/_/buckets/my-bucket
 ```
 
 ### Organization Policies vs IAM Policies
@@ -161,15 +161,17 @@ New GCP practitioners often confuse **Organization Policies** with **IAM policie
 gcloud org-policies list --organization=ORGANIZATION_ID
 
 # Set a constraint to deny external IPs on all VMs in a folder
-gcloud org-policies set-policy policy.yaml --folder=FOLDER_ID
+gcloud org-policies set-policy policy.yaml
 ```
 
-To block external IPs on every VM under a folder, you attach an organization policy document such as the following `policy.yaml` (the constraint name is what the API enforces; the list policy denies all values):
+To block external IPs on every VM under a folder, you attach an organization policy document such as the following `policy.yaml` (v2 API shape—the folder is encoded in `name`, not a separate `--folder` flag):
 
 ```yaml
-constraint: constraints/compute.vmExternalIpAccess
-listPolicy:
-  allValues: DENY
+name: folders/FOLDER_ID/policies/compute.vmExternalIpAccess
+spec:
+  rules:
+  - enforce: true
+    denyAll: true
 ```
 
 ### Shared VPC and IAM (cross-project networking)
@@ -369,9 +371,7 @@ Conditions apply to **allow policies** (version 3 when any binding uses a condit
 gcloud projects add-iam-policy-binding my-project \
   --member="user:contractor@example.com" \
   --role="roles/compute.instanceAdmin.v1" \
-  --condition-title="contractor_expires" \
-  --condition-description="Access ends after engagement" \
-  --condition-expression='request.time < timestamp("2026-09-30T23:59:59Z")'
+  --condition='expression=request.time < timestamp("2026-09-30T23:59:59Z"),title=contractor_expires,description=Access ends after engagement'
 
 # Lint a condition expression before applying (alpha)
 gcloud alpha iam policies lint-condition \
@@ -409,7 +409,7 @@ gcloud iam service-accounts create gcs-reader \
   --project=my-project
 
 # Grant it only the permissions it needs
-gcloud projects add-iam-binding my-project \
+gcloud projects add-iam-policy-binding my-project \
   --member="serviceAccount:gcs-reader@my-project.iam.gserviceaccount.com" \
   --role="roles/storage.objectViewer"
 
@@ -524,12 +524,12 @@ gcloud iam service-accounts create github-deployer \
   --project=my-project
 
 # Step 4: Grant the service account permissions it needs
-gcloud projects add-iam-binding my-project \
+gcloud projects add-iam-policy-binding my-project \
   --member="serviceAccount:github-deployer@my-project.iam.gserviceaccount.com" \
   --role="roles/run.admin"
 
 # Step 5: Allow the GitHub repo to impersonate the service account
-gcloud iam service-accounts add-iam-binding \
+gcloud iam service-accounts add-iam-policy-binding \
   github-deployer@my-project.iam.gserviceaccount.com \
   --project="my-project" \
   --role="roles/iam.workloadIdentityUser" \
@@ -575,7 +575,7 @@ gcloud iam service-accounts create gke-app \
   --display-name="GKE app identity" \
   --project=my-project
 
-gcloud projects add-iam-binding my-project \
+gcloud projects add-iam-policy-binding my-project \
   --member="serviceAccount:gke-app@my-project.iam.gserviceaccount.com" \
   --role="roles/cloudsql.client"
 
@@ -637,14 +637,14 @@ Treat recommender output as a **prioritized backlog**, not auto-remediation. Per
 ```bash
 # Who can act as this service account? (impersonation graph)
 gcloud asset analyze-iam-policy \
-  --project=my-project \
+  --scope=projects/my-project \
   --identity="serviceAccount:data-pipeline@my-project.iam.gserviceaccount.com" \
   --permissions="iam.serviceAccounts.actAs" \
   --expand-groups
 
 # Which principals have a role on a specific bucket resource?
 gcloud asset analyze-iam-policy \
-  --project=my-project \
+  --scope=projects/my-project \
   --full-resource-name="//storage.googleapis.com/projects/my-project/buckets/sensitive-data" \
   --roles="roles/storage.objectAdmin"
 ```
@@ -1016,12 +1016,12 @@ gcloud iam service-accounts create data-pipeline \
 export DEV_SA="data-pipeline@${DEV_PROJECT}.iam.gserviceaccount.com"
 
 # Grant minimal permissions: read GCS objects
-gcloud projects add-iam-binding $DEV_PROJECT \
+gcloud projects add-iam-policy-binding $DEV_PROJECT \
   --member="serviceAccount:$DEV_SA" \
   --role="roles/storage.objectViewer"
 
 # Grant permission to write logs
-gcloud projects add-iam-binding $DEV_PROJECT \
+gcloud projects add-iam-policy-binding $DEV_PROJECT \
   --member="serviceAccount:$DEV_SA" \
   --role="roles/logging.logWriter"
 
@@ -1047,7 +1047,7 @@ gcloud iam service-accounts create artifact-reader \
 export PROD_SA="artifact-reader@${PROD_PROJECT}.iam.gserviceaccount.com"
 
 # Grant it read access to the DEV project's storage (cross-project)
-gcloud projects add-iam-binding $DEV_PROJECT \
+gcloud projects add-iam-policy-binding $DEV_PROJECT \
   --member="serviceAccount:$PROD_SA" \
   --role="roles/storage.objectViewer"
 
@@ -1090,7 +1090,7 @@ gcloud iam workload-identity-pools providers create-oidc "github-provider" \
 export PROJECT_NUM=$(gcloud projects describe $DEV_PROJECT --format="value(projectNumber)")
 export REPO_NAME="my-org/my-repo"
 
-gcloud iam service-accounts add-iam-binding $DEV_SA \
+gcloud iam service-accounts add-iam-policy-binding $DEV_SA \
   --project=$DEV_PROJECT \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUM}/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${REPO_NAME}"
@@ -1177,7 +1177,7 @@ gcloud iam roles create safeStorageReader \
 gcloud iam roles describe safeStorageReader --project=$PROD_PROJECT
 
 # Grant the custom role to the prod service account
-gcloud projects add-iam-binding $PROD_PROJECT \
+gcloud projects add-iam-policy-binding $PROD_PROJECT \
   --member="serviceAccount:$PROD_SA" \
   --role="projects/${PROD_PROJECT}/roles/safeStorageReader"
 ```

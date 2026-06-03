@@ -44,8 +44,8 @@ When you evaluate a family, collect three numbers from a representative week: p9
 ```mermaid
 flowchart TD
     subgraph "Machine Families"
-        A["<b>General Purpose</b><br/>E2, N2, N2D, T2D, N1<br/><i>Web servers, Dev/test, microservices</i>"]
-        B["<b>Compute Optimized</b><br/>C2, C2D, C3, H3<br/><i>HPC, gaming, batch jobs, scientific simulations</i>"]
+        A["<b>General Purpose</b><br/>E2, N2, N2D, T2D, C3, C3D, N1<br/><i>Web servers, Dev/test, microservices</i>"]
+        B["<b>Compute Optimized</b><br/>C2, C2D, H3<br/><i>HPC, gaming, batch jobs, scientific simulations</i>"]
         C["<b>Memory Optimized</b><br/>M2, M3<br/><i>SAP HANA, in-memory databases</i>"]
         D["<b>Accelerator Optimized</b><br/>A2, A3, G2<br/><i>ML training, inference, video transcoding</i>"]
     end
@@ -58,7 +58,7 @@ General-purpose series are where most teams should start and often stay. **E2** 
 | Series | CPU | vCPU:Memory Ratio | Best For | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **E2** | Intel/AMD (automatic) | 1:4 (0.25 to 32 vCPUs) | Cost-sensitive, dev/test | Cheapest, shared-core options (e2-micro: 0.25 vCPU) |
-| **N2** | Intel Cascade Lake/Ice Lake | 1:4 (2 to 128 vCPUs) | General production | Good balance, use CUDs for savings (no SUDs) |
+| **N2** | Intel Cascade Lake/Ice Lake | 1:4 (2 to 128 vCPUs) | General production | Good balance; SUD-eligible (~20%), layer CUD on stable baseline |
 | **N2D** | AMD EPYC | 1:4 (series-specific limits) | General production workloads | Compare current N2D and N2 pricing in your region |
 | **T2D** | AMD EPYC | 1:4 | Scale-out workloads | Evaluate against current workload benchmarks |
 | **N1** | Intel Skylake/older | 1:3.75 | Legacy (avoid for new) | Still supported but outdated |
@@ -124,18 +124,19 @@ For lightweight workloads that do not need a full vCPU, E2 offers shared-core op
 
 ### Compute-Optimized, Memory-Optimized, and Accelerator Families
 
-Beyond general-purpose shapes, production platforms routinely land on specialized families when a single dimension—CPU throughput, RAM, or accelerators—dominates the bottleneck. The compute-optimized **C2**, **C2D**, and newer **C3** / **C3D** series target HPC, gaming backends, and numeric batch jobs where you want high vCPU performance per dollar rather than the widest memory envelope. Memory-optimized **M1**, **M2**, and **M3** machines exist for in-memory databases and SAP-scale footprints; Google documents M3 configurations up to very large vCPU and memory counts for workloads that cannot shard cheaply. Accelerator-optimized **A2**, **A3**, and **G2** families attach NVIDIA GPUs for ML training and inference; Spot pricing extends to GPUs, but preemption and maintenance behavior differ from standard VMs, so treat GPU pools as interruption-aware capacity.
+Beyond general-purpose shapes, production platforms routinely land on specialized families when a single dimension—CPU throughput, RAM, or accelerators—dominates the bottleneck. The compute-optimized **C2**, **C2D**, and **H3** series target HPC, gaming backends, and numeric batch jobs where you want high vCPU performance per dollar rather than the widest memory envelope. **C3** and **C3D** are classified as general-purpose in Google Cloud documentation (the `gcloud` CLI may still label C3 "Compute-optimized"—a historical quirk); benchmark them against N2/N2D before assuming an HPC tier. Memory-optimized **M1**, **M2**, and **M3** machines exist for in-memory databases and SAP-scale footprints; Google documents M3 configurations up to very large vCPU and memory counts for workloads that cannot shard cheaply. Accelerator-optimized **A2**, **A3**, and **G2** families attach NVIDIA GPUs for ML training and inference; Spot pricing extends to GPUs, but preemption and maintenance behavior differ from standard VMs, so treat GPU pools as interruption-aware capacity.
 
 | Series | Processor / accelerator | Typical workload | Cost note |
 | :--- | :--- | :--- | :--- |
-| **C3 / C3D** | Intel / AMD latest gen | Latency-sensitive APIs, simulation | Compare against N2/N2D in-region; CUDs may apply where SUDs do not |
+| **C3 / C3D** | Intel / AMD latest gen | General-purpose latency-sensitive APIs, simulation | General-purpose family; compare against N2/N2D in-region; CUDs may apply where SUDs do not |
+| **C2 / C2D / H3** | Intel / AMD HPC-oriented | HPC, gaming, numeric batch | Compare against N2/N2D when CPU-bound; CUDs may apply where SUDs do not |
 | **M2 / M3** | High memory per vCPU | SAP HANA, large caches | Hourly rates are high—justify with residency needs, not default choice |
 | **A2 / A3 / G2** | NVIDIA GPUs | Training, inference, video | Spot can discount GPU hours; live migration not available on Spot |
 | **T2D / T2A** | AMD / Arm | Scale-out Linux fleets | Good when software stack is Arm-ready; benchmark before mass migration |
 
 ### Custom Machine Types and Sole-Tenant Nodes
 
-Custom machine types let you pick vCPU and memory independently within a series, which is how you stop paying for RAM you never touch or vCPUs that sit idle while memory is pegged. Extended-memory custom shapes cost more per GB above the standard ratio for that series, so the billing signal should push you back toward predefined types when you are only slightly off-size. **Sole-tenant nodes** dedicate physical hosts to your project—useful for license compliance, noisy-neighbor isolation, or colocation-style placement. You pay for the entire node capacity, so sole-tenant is a deliberate premium unless regulation or performance isolation demands it; it is not a default cost-optimization path.
+Custom machine types let you pick vCPU and memory independently within a series, which is how you stop paying for RAM you never touch or vCPUs that sit idle while memory is pegged. Extended-memory custom shapes cost more per GB above the standard ratio for that series, so the billing signal should push you back toward predefined types when you are only slightly off-size. **Sole-tenant nodes** dedicate physical hosts to your project—useful for license compliance, noisy-neighbor isolation, or colocation-style placement. You pay for the entire node capacity, so sole-tenant is a deliberate premium unless regulation or performance isolation demands it; it is not a default cost-optimization path. Node type names are region-specific—run `gcloud compute sole-tenancy node-types list --zone=ZONE` before creating a group.
 
 ```bash
 # List sole-tenant node types available in a zone
@@ -143,7 +144,7 @@ gcloud compute sole-tenancy node-types list --zone=us-central1-a
 
 # Create a node group (reserves physical capacity)
 gcloud compute sole-tenancy node-groups create analytics-hosts \
-  --node-type=n2-node-96-240 \
+  --node-type=n2-node-80-640 \
   --node-count=1 \
   --zone=us-central1-a
 
@@ -167,7 +168,7 @@ GCP offers three pricing tiers for the same hardware, and each tier optimizes a 
 | Tier | Discount vs On-Demand | Max Lifetime | Guarantee | Use Case |
 | :--- | :--- | :--- | :--- | :--- |
 | **On-Demand** | 0% (baseline) | Unlimited | Will not be preempted | Production, stateful workloads |
-| **Committed Use (CUD)** | 28-52% | 1 or 3 year term | Will not be preempted | Steady-state production |
+| **Committed Use (CUD)** | ~37% (1yr) / ~55% (3yr) for general-purpose | 1 or 3 year term | Will not be preempted | Steady-state production |
 | **Spot** | 60-91% | None (no 24h limit) | Can be preempted anytime | Batch, CI/CD, fault-tolerant |
 | **Preemptible (legacy)** | 60-91% | 24 hours max | Preempted at 24h, or earlier | Use Spot instead (superset) |
 
@@ -254,7 +255,7 @@ Sustained Use Discounts (SUDs) apply automatically to eligible machine families-
 
 ### GCP Compute Cost Model (and How It Differs from "Buy a Reservation First")
 
-Understanding GCP pricing starts with what happens **without** anyone filing a purchase order. For eligible N1/N2/N2D/C2/M-series vCPU and memory—and some sole-tenant premium components—[sustained-use discounts](https://cloud.google.com/compute/docs/sustained-use-discounts) accrue automatically once a resource runs more than 25% of a billing month. Discounts step at 25%, 50%, 75%, and 100% utilization thresholds, reaching up to **30% net discount** on many N-family shapes and up to **20%** on several C2 resources. SUDs do **not** apply to E2, nor to usage already covered by committed-use discounts, which is why FinOps reviews often show E2 for bursty tiers and N2/N2D for always-on cores.
+Understanding GCP pricing starts with what happens **without** anyone filing a purchase order. For eligible N1/N2/N2D/C2/M1/M2 vCPU and memory—and some sole-tenant premium components—[sustained-use discounts](https://cloud.google.com/compute/docs/sustained-use-discounts) accrue automatically once a resource runs more than 25% of a billing month. Discounts step at 25%, 50%, 75%, and 100% utilization thresholds, reaching up to **30%** for N1/M1/M2 and up to **20%** for N2/N2D/C2. SUDs do **not** apply to E2, nor to usage already covered by committed-use discounts, which is why FinOps reviews often show E2 for bursty tiers and N2/N2D for always-on cores.
 
 Committed-use discounts (CUDs) are the deliberate mirror image: you commit to vCPU, memory, or spend for one or three years and receive lower rates in exchange for forecast risk. Resource-based CUDs attach to machine families; spend-based CUDs attach to billing-account spend. A common mistake is buying a three-year CUD for a fleet you plan to migrate to a different series next quarter—commitment savings evaporate if the workload moves off eligible SKUs. Spot VMs sit at the opposite end of the flexibility spectrum: [up to 91% off on-demand](https://cloud.google.com/compute/docs/instances/spot) for many machine types, no minimum or maximum runtime (unlike legacy preemptible's 24-hour cap), but preemption can happen anytime with as little as a 30-second shutdown window by default.
 
@@ -459,7 +460,7 @@ gcloud compute instance-groups managed set-autoscaling web-mig \
   --target-cpu-utilization=0.6 \
   --cool-down-period=120
 
-# Scale based on HTTP load balancing utilization
+# Scale based on custom load-balancing request-count metric (Cloud Monitoring)
 gcloud compute instance-groups managed set-autoscaling web-mig \
   --region=us-central1 \
   --min-num-replicas=2 \
@@ -847,16 +848,16 @@ flowchart TD
 | Signal | Lean toward | Avoid |
 | :--- | :--- | :--- |
 | Cost-sensitive dev/test | E2 shared-core or `e2-small` | N1 legacy, oversized custom types |
-| General production API | N2, N2D, or C3 after benchmark | Defaulting to M-series "just in case" |
+| General production API | N2, N2D, or C3/C3D after benchmark | Defaulting to M-series "just in case" |
 | GPU ML training | A3 + Spot if fault-tolerant | Standard VM without GPU quota planning |
 | License isolation | Sole-tenant node group | Sole-tenant for every app (cost) |
 
 ### Spot vs CUD vs on-demand
 
-| Question | If mostly "yes" | Choose |
-| :--- | :--- | :--- |
+| Question | Choose |
+| :--- | :--- |
 | Can the job restart from checkpoint without SLA breach? | Spot (or Spot MIG) |
-| Will vCPU/memory run >25% of month on N2/N2D/C2/M? | On-demand + automatic SUD first |
+| Will vCPU/memory run >25% of month on N2/N2D/C2/M1/M2? | On-demand + automatic SUD first |
 | Is baseline core count stable 12+ months? | Add resource-based CUD on that baseline |
 | Does preemption break revenue path? | On-demand or CUD, not Spot |
 
@@ -890,7 +891,7 @@ This checklist is deliberately boring—boring platforms survive traffic spikes 
 
 3. **Live migration is a GCP superpower that most users never notice**. [When Google needs to perform host maintenance, your VMs are transparently migrated to another physical host with no reboot and typically less than a second of degraded performance.](https://cloud.google.com/compute/docs/instances/live-migration-process) [This is enabled by default on all standard VMs. Preemptible/Spot VMs do not support live migration---they are terminated instead.](https://cloud.google.com/compute/docs/instances/setting-vm-host-options)
 
-4. **You can create a VM with up to 416 vCPUs and 12 TB of memory** using the M3 machine family. These ultra-high-memory machines are designed for SAP HANA, large in-memory databases, and genomics workloads. These ultra-high-memory machines are expensive on an hourly basis, but they can still be attractive when you need short-term capacity without buying hardware.
+4. **You can create a VM with up to 416 vCPUs and 12 TB of memory** using the M2 machine family (`m2-ultramem-416`). These ultra-high-memory machines are designed for SAP HANA, large in-memory databases, and genomics workloads. M3 tops out at lower maximums (128 vCPUs / 4 TB)—check current machine-type limits before sizing.
 
 ---
 
@@ -914,7 +915,7 @@ This checklist is deliberately boring—boring platforms survive traffic spikes 
 <details>
 <summary>1. Your team is running a batch processing workload that takes 30 hours to complete. A junior engineer suggests using Preemptible VMs to save money. How would you explain to them why Spot VMs are a better choice for this specific scenario?</summary>
 
-Preemptible VMs have a hard limitation: GCP will always terminate them after exactly 24 hours of uptime, regardless of whether there is available capacity in the zone. Because your workload takes 30 hours to complete, it would never finish on a Preemptible VM without being interrupted. Spot VMs are the modern successor to Preemptible VMs and remove this 24-hour maximum lifetime restriction. While Spot VMs can still be preempted at any time if GCP needs the capacity, they are allowed to run indefinitely during periods of low demand, making them the only viable low-cost option for uninterrupted jobs longer than 24 hours.
+Preemptible VMs have a hard limitation: GCP will always terminate them after exactly 24 hours of uptime, regardless of whether there is available capacity in the zone. Spot VMs are the modern successor and remove the 24-hour cap, but **Spot does not guarantee uninterrupted runtime**—GCP can preempt them anytime with as little as a 30-second warning. For a 30-hour batch job that cannot restart from scratch, neither Preemptible nor Spot is appropriate unless the workload checkpoints progress; use on-demand or committed-use capacity instead. Spot suits long jobs **only when they tolerate interruption and resume from checkpoints**; the 24-hour Preemptible limit makes Spot strictly better than legacy Preemptible, not a guarantee of continuous execution.
 </details>
 
 <details>
@@ -1101,7 +1102,6 @@ gcloud compute instance-groups managed set-named-ports web-mig-eu \
 
 # Add autoscaling
 for MIG_REGION in $REGION_US $REGION_EU; do
-  MIG_NAME="web-mig-$(echo $MIG_REGION | cut -d- -f1)"
   [ "$MIG_REGION" = "$REGION_US" ] && MIG_NAME="web-mig-us"
   [ "$MIG_REGION" = "$REGION_EU" ] && MIG_NAME="web-mig-eu"
 
@@ -1179,7 +1179,7 @@ echo "Load balancer will be available at http://$WEB_IP in 3-5 minutes"
 echo "Waiting for backends to become healthy..."
 while true; do
   STATUS=$(gcloud compute backend-services get-health web-backend-svc --global 2>&1)
-  HEALTHY=$(echo "$STATUS" | grep -c "HEALTHY" || true)
+  HEALTHY=$(echo "$STATUS" | grep -c "healthState: HEALTHY" || true)
   echo "Healthy backends: $HEALTHY"
   if [ "$HEALTHY" -ge 4 ]; then
     echo "All backends healthy!"
