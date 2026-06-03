@@ -100,6 +100,23 @@ aws ecr-public create-repository \
   --region us-east-1
 ```
 
+
+### Encryption at Rest
+
+ECR encrypts every image layer automatically using AES-256 server-side encryption with an S3-managed key, which requires no action from you and satisfies the encryption-at-rest requirement that most compliance frameworks mandate. For organizations that need to control the encryption key lifecycle — rotating keys on a schedule, auditing key usage through CloudTrail, or revoking access to specific images — ECR also supports AWS KMS customer-managed keys (CMKs). When you specify a KMS key at repository creation, ECR wraps the S3 encryption key with your CMK, which means that even if an attacker gained access to the S3 bucket, they could not decrypt the layers without also having permission to use your KMS key.
+
+```bash
+# Create a repository with a customer-managed KMS key
+aws ecr create-repository \
+  --repository-name myapp/api \
+  --encryption-configuration encryptionType=KMS,kmsKey=arn:aws:kms:us-east-1:123456789012:key/abcd1234-... \
+  --region us-east-1
+```
+
+KMS encryption does introduce a cost and latency trade-off. Every call to `kms:Decrypt` when the Docker daemon fetches a layer counts against your KMS request quota and incurs a per-request charge. For repositories that serve thousands of pulls per hour, the KMS API costs can meaningfully exceed the ECR storage costs. Teams that need KMS for compliance but want to keep the cost predictable typically apply KMS encryption only to repositories holding production images and use AES-256 for development and CI repositories.
+
+A common misconception is that ECR Public (`public.ecr.aws`) supports KMS encryption or private VPC endpoints. ECR Public is a fundamentally different service: it stores images in a global CloudFront-backed distribution, does not support encryption configuration (AES-256 is applied automatically and transparently), and does not integrate with IAM for pull access because anonymous pulls are the defining feature. If your images contain proprietary code or configuration secrets, ECR Public is the wrong destination regardless of encryption — use private ECR with repository policies to share access with specific external accounts.
+
 ---
 
 ## Authentication and Pushing Images
@@ -193,6 +210,24 @@ docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp/api:v1.3.0
 # Error: tag invalid: The image tag 'v1.3.0' already exists
 ```
 
+### Digest Pinning and Supply-Chain Integrity
+
+Immutable tags address one part of the supply-chain integrity problem, but digest pinning closes the remaining gap. A tag is a human-readable alias that resolves to an image digest — the cryptographic SHA256 hash of the image manifest. When your Kubernetes Deployment or ECS task definition references `myapp/api:v1.3.0`, the container runtime resolves that tag to a digest at pull time. If tags are mutable and an attacker or a misconfigured CI job overwrites `v1.3.0` with a different image, the runtime pulls the replacement and deploys it without any warning. Immutable tags prevent tag overwrites at the registry level, which stops accidental or malicious CI-side injection. But tag resolution itself is still an indirection: the runtime trusts the registry to map the tag to the correct digest.
+
+Digest pinning removes that indirection entirely. When you reference an image by its SHA256 digest directly — `myapp/api@sha256:abc123...` — the container runtime fetches the exact content hash you specified, and ECR will never serve a different image for the same digest because digests are content-addressable and immutable by definition. A digest-pinned deployment is immune to tag manipulation of any kind. If a tag is accidentally deleted, moved, or (in a mutable repository) overwritten, the digest reference remains valid as long as the underlying image layers exist in the registry.
+
+```yaml
+# Kubernetes Deployment with digest pinning — immune to tag overwrites
+spec:
+  containers:
+  - name: api
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp/api@sha256:abc123def456789...
+```
+
+The two-layer defense — immutable tags in CI plus digest pinning in deployment manifests — creates a cryptographic chain of custody. In regulated environments where you must prove that the image running in production matches the image that passed your vulnerability scanner and change approval process, digest references serve as the verifiable link between the CI attestation and the runtime. An auditor can compare the digest logged by your CI system against the digest in your deployment spec and confirm they are identical without trusting the tag system at all.
+
+Digest pinning does add a workflow friction: you need a mechanism to update deployment manifests with the digest of each new build. Most CI systems handle this automatically: after `docker push`, capture the digest with `docker inspect --format='{{index .RepoDigests 0}}'` or read it from the push output, then update your Kubernetes manifest or ECS task definition before applying. The extra CI step is minor compared to the guarantee that your production deployment references an exact, verifiable artifact.
+
 With immutability enabled, you are guaranteed that `v1.3.0` always refers to the exact same image. This makes rollbacks reliable and audit trails meaningful.
 
 ### Tagging Strategy Comparison
@@ -277,6 +312,16 @@ aws ecr put-registry-scanning-configuration \
     }
   ]'
 ```
+
+#### Basic vs Enhanced: When the Difference Matters
+
+A concrete example makes the distinction clearer. Consider a Python application image built `FROM python:3.12-slim` with a `requirements.txt` that pins `flask==2.3.0` and `requests==2.31.0`. Basic scanning (Clair) inspects the Debian package database inside the `python:3.12-slim` base layer and reports CVEs against `libssl3`, `libc6`, and other system libraries. It might find three HIGH findings for outdated OpenSSL packages. Enhanced scanning (Amazon Inspector) inspects those same OS packages but also parses the `requirements.txt` embedded in the image layer, cross-references `flask` and `requests` against the Inspector vulnerability database, and reports application-level CVEs. If Flask 2.3.0 has a known cross-site scripting vulnerability and requests 2.31.0 has a certificate validation bypass, Enhanced scanning reports both while Basic scanning reports zero application findings.
+
+The operational consequence: teams that rely on Basic scanning alone ship images that look clean on the OS scan but carry known application vulnerabilities. This is not a theoretical edge case — it is the default state for any image that includes application dependencies, which is nearly every production image. Enhanced scanning is not free (Inspector charges per image scan), but the cost of deploying a vulnerable application almost always exceeds the scanning charges.
+
+Enhanced scanning in `CONTINUOUS_SCAN` mode provides an additional safeguard that `SCAN_ON_PUSH` cannot match. When a new CVE is published — for example, a critical vulnerability in the `requests` library disclosed six months after you built your image — CONTINUOUS_SCAN re-scans every affected image in your registry within 24 hours and surfaces the finding without any action on your part. With SCAN_ON_PUSH, images that passed their initial scan remain marked as clean indefinitely, creating a "drift window" where production images carry vulnerabilities that were unknown at build time but are now public and exploitable. For any repository that feeds a production deployment, CONTINUOUS_SCAN is the safer default.
+
+Findings from Enhanced scanning flow into Amazon Inspector's centralized dashboard and can be forwarded to AWS Security Hub, where they appear alongside findings from GuardDuty, Macie, and IAM Access Analyzer. This integration matters operationally because it lets you apply the same remediation workflows — Jira tickets, Slack notifications, escalation policies — to container CVEs that you already use for EC2 patching and S3 bucket exposure alerts.
 
 ### Interpreting Scan Results
 
@@ -597,6 +642,150 @@ aws ec2 create-vpc-endpoint \
 If you block public internet access in your private subnets and forget the S3 Gateway Endpoint, your ECS tasks will authenticate successfully but hang indefinitely in the "PENDING" state while trying to download the image layers.
 
 ---
+
+## Pull-Through Cache Repositories
+
+When your ECS tasks or EKS pods reference public container images — a base image from Docker Hub, a sidecar from Quay.io, or a Kubernetes component from `registry.k8s.io` — every `docker pull` crosses the public internet to the upstream registry. That external dependency introduces two operational risks: rate limits and availability. Docker Hub enforces pull rate limits based on the requesting IP address or authenticated user: 100 pulls per 6 hours for anonymous access and 200 pulls per 6 hours for authenticated free-tier accounts. When your cluster scales from 10 to 100 pods simultaneously during a traffic spike, every pod attempts to pull the same public image, Docker Hub throttles the excess requests, and the pods that hit the rate limit fail to start. The autoscaling event that was supposed to absorb the traffic spike instead creates a cascading failure because your infrastructure cannot retrieve the images it needs to run.
+
+ECR pull-through cache eliminates both problems by creating a caching proxy inside your private ECR registry. You define a pull-through cache rule that maps an upstream registry to a namespace prefix in your private registry. When your workloads pull an image through the cache URL, ECR checks its local store first. If the image exists and is fresh, ECR serves it directly with no external call. If the image is missing or stale, ECR fetches it from the upstream registry exactly once, caches it, and serves all subsequent requests from the cache. A 100-pod scale-out event generates one external pull to Docker Hub regardless of how many pods need the image.
+
+```bash
+# Create a pull-through cache rule for Docker Hub
+aws ecr create-pull-through-cache-rule \
+  --ecr-repository-prefix docker-hub \
+  --upstream-registry-url docker-hub \
+  --region us-east-1
+
+# Create a rule for the Kubernetes community registry
+aws ecr create-pull-through-cache-rule \
+  --ecr-repository-prefix k8s \
+  --upstream-registry-url registry-k8s-io \
+  --region us-east-1
+
+# Create a rule for GitHub Container Registry
+aws ecr create-pull-through-cache-rule \
+  --ecr-repository-prefix ghcr \
+  --upstream-registry-url github-container-registry \
+  --region us-east-1
+```
+
+The pull URL scheme follows a fixed pattern. An image you would normally pull with `docker pull nginx:1.25` (which implicitly resolves to `docker.io/library/nginx:1.25`) becomes `{registry}/docker-hub/library/nginx:1.25` through the cache. ECR creates the target repository automatically on the first pull — you do not need to pre-create repositories for cached images, and the repository inherits the registry-level scanning and encryption defaults you have configured.
+
+Supported upstream registries include Docker Hub, Quay.io, GitHub Container Registry (`ghcr.io`), `registry.k8s.io` (the Kubernetes community registry), and ECR Public (`public.ecr.aws`). Each upstream has its own `--upstream-registry-url` value that ECR recognizes. Check the current list in the ECR documentation because AWS adds upstream support periodically.
+
+ECR maintains a configurable cache time-to-live (TTL) for each pull-through cache rule, defaulting to 24 hours. When a cached image is younger than the TTL, ECR serves it directly from the local cache without contacting the upstream registry at all — even if a newer version of the same tag exists upstream. When the cached image exceeds the TTL, the next pull triggers a conditional request to the upstream registry (using HTTP `If-None-Match` headers with the cached manifest digest), and ECR updates the cache only if the upstream image has actually changed. This means you are not pulling the full image on every TTL expiry — only a lightweight manifest check — and you are protected from upstream changes during the TTL window, which prevents a compromised or broken upstream image from instantly propagating into your production clusters. If you need stricter freshness guarantees (for example, pulling a security-patched base image the moment it is published), configure a shorter TTL or use a `docker pull --no-cache` equivalent to force a refresh.
+
+A secondary benefit of pull-through cache is availability during upstream outages. When Docker Hub experienced an extended outage in November 2020, organizations that depended on direct Docker Hub pulls saw their CI pipelines and cluster scaling operations fail because the registry was unreachable. With pull-through cache, the cached images remain available inside your private ECR registry regardless of the upstream's status. Your clusters can continue scaling and deploying because the base images are already local to your AWS region. The cache does not guarantee zero-downtime for new images that have not been pulled before — the first pull still requires the upstream to be reachable — but it protects against the common case where the images your production workloads need have already been cached through normal operations.
+
+Cached images are subject to the same scanning policies as any other image in your private registry. If you have Enhanced scanning enabled, every cached image is scanned automatically when it enters the cache, which means public images you do not control get vulnerability visibility before they run in your environment. The scan results appear alongside your own application images in the ECR console and the Inspector dashboard.
+
+---
+
+## OCI Artifact Support
+
+ECR is a Docker container registry, but it is more precisely an OCI-compliant artifact store. The Open Container Initiative (OCI) defines specifications for container images and distribution, and the OCI Artifacts extension allows registries to store and distribute arbitrary content types alongside container images. ECR supports pushing and pulling OCI artifacts directly through standard OCI-compatible tools, which means you can store Helm charts, OPA (Open Policy Agent) policies, WebAssembly modules, Cosign signatures, and any other OCI-compatible artifact in the same registry that holds your container images.
+
+The practical benefit is consolidation. Instead of running a separate Helm chart repository (ChartMuseum, Harbor, or a self-hosted OCI registry), you push everything to ECR and use IAM to control access uniformly. Helm 3.8+ includes native OCI support, so `helm push` and `helm pull` work against ECR repositories using the same authentication flow you already have configured for container images. The command below demonstrates the workflow — note that it uses the same registry URI and the same `aws ecr get-login-password` token you would use for `docker push`:
+
+```bash
+# Package and push a Helm chart to ECR as an OCI artifact
+helm package ./my-chart/
+helm registry login ${REGISTRY} \
+  --username AWS \
+  --password $(aws ecr get-login-password --region us-east-1)
+helm push my-chart-0.1.0.tgz oci://${REGISTRY}/
+
+# Pull the chart from any environment with ECR access
+helm pull oci://${REGISTRY}/my-chart --version 0.1.0
+```
+
+The same lifecycle policies, tag immutability settings, cross-account sharing, and cross-region replication that protect your container images apply to OCI artifacts stored alongside them. A Helm chart version tagged `1.0.0` in an immutable repository cannot be overwritten, and a lifecycle policy that retains the last 10 tagged artifacts applies equally to container images and Helm charts. This uniformity eliminates the operational gap where container images have mature retention and access controls while the Helm charts that deploy them sit in an unmanaged S3 bucket with no versioning.
+
+---
+
+## Patterns and Anti-Patterns
+
+The patterns below represent configurations that mature ECR deployments converge on after operating at scale. Each one addresses a specific failure mode that the corresponding anti-pattern enables.
+
+### Proven Patterns
+
+**Pattern 1: Immutable tags combined with digest-pinned deployments.** Apply `IMMUTABLE` tag mutability on every production repository so that no CI pipeline can accidentally or maliciously overwrite a released version. In Kubernetes Deployments and ECS task definitions, reference images by SHA256 digest (`image@sha256:...`) rather than by tag. Tag overwrite attacks, whether from compromised CI credentials or a misconfigured pipeline branch, cannot affect running workloads when the deployment spec references a cryptographic digest. This pattern scales naturally: as you add more services, the guarantee that `v2.1.0` in January is identical to `v2.1.0` in July holds without per-service configuration.
+
+**Pattern 2: Lifecycle policy at repository creation time.** The moment a repository exists, apply a lifecycle policy that retains the last N tagged images (typically 20 to 30 for active services, 5 for internal tools) and removes untagged images after one to three days. Waiting until the storage bill arrives means you have already paid for months of accumulated CI build debris. At $0.10 per GB-month, a team pushing 15 builds per day at 200 MB per image accumulates 90 GB of storage in a single month ($9), and the untagged intermediates — the layers that existed between tags during multi-stage builds — can double that figure. A lifecycle policy applied on day one prevents this entirely. For services with compliance retention requirements, add a second rule with a higher age threshold (180 days) that matches your audit policy.
+
+**Pattern 3: Enhanced scanning as a CI gate.** Enable Enhanced scanning with `SCAN_ON_PUSH` or `CONTINUOUS_SCAN` at the registry level, and add a pipeline step after `docker push` that calls `describe-image-scan-findings`, checks the severity counts against your thresholds (zero CRITICAL, fewer than N HIGH), and blocks deployment promotion if the thresholds are exceeded. This turns scanning from a dashboard widget that nobody checks into an enforceable control that prevents known-vulnerable images from reaching staging, let alone production. The gate adds 30 to 90 seconds to your pipeline (the time for the scan to complete) but saves the hours of incident response and rollback that deploying a vulnerable image triggers.
+
+**Pattern 4: Pull-through cache for all public base images.** Audit your Dockerfiles and Kubernetes manifests for any `FROM` line or `image:` field that references a public registry (Docker Hub, Quay, `registry.k8s.io`, GitHub Container Registry). Replace each with the corresponding pull-through cache URL. This single change protects every service in your cluster from Docker Hub rate limits and upstream outages simultaneously. The cache does not require per-image configuration — once the cache rule exists, any image pulled through the `{prefix}/{upstream_path}` URL is cached automatically.
+
+**Pattern 5: Least-privilege repository policies with VPC endpoints.** Combine repository policies that grant only the minimum actions (`ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage`, `ecr:BatchCheckLayerAvailability`) to specific IAM principals with VPC endpoints (`com.amazonaws.region.ecr.api`, `com.amazonaws.region.ecr.dkr`, and the S3 gateway endpoint) so image pulls never traverse the public internet. For EKS workloads, pair this with IRSA (IAM Roles for Service Accounts) so individual pods authenticate with scoped roles rather than sharing the node's instance profile.
+
+### Anti-Patterns (and Their Remedies)
+
+| Anti-Pattern | Why Teams Fall Into It | What Goes Wrong | Better Approach |
+|---|---|---|---|
+| Mutable `latest` tag as the sole deployment reference | Docker defaults to `latest`, and it works during development | A rollback becomes impossible because the previous image no longer exists under any tag. The production incident lasts until a rebuild completes, not until a rollback command runs. | Tag every build with a version or Git SHA. Enable `IMMUTABLE` tag mutability. Reference images by digest in deployment manifests. |
+| No lifecycle policy on any repository | Teams do not think about storage costs during the prototype phase, and ECR never sends a warning | Three months later, 400 untagged images consume 180 GB of storage at $18/month per repository. Across 30 microservices, that is $540/month for images nobody will ever deploy. | Apply a lifecycle policy at repository creation. A default policy retaining 20 tagged images and removing untagged images after three days covers 90% of services. |
+| Ignoring vulnerability scan findings | The findings appear in the ECR console, which developers rarely open, and there is no enforcement in the pipeline | A critical CVE in a base image sits in production for months. When the vulnerability is eventually exploited, the incident response team discovers that the scan flagged it six weeks earlier but nobody reviewed the dashboard. | Add a scan-results gate to the CI pipeline. Forward findings to Security Hub. Set up Slack or PagerDuty notifications for new CRITICAL findings in production repositories. |
+| Long-lived static registry credentials stored in CI variables | `aws ecr get-login-password` feels like an extra step compared to generating a permanent token once | A CI provider breach or an accidental log output exposes the static token. Because the token never rotates, the attacker has indefinite pull access to every private image. | Use `get-login-password` at the start of every pipeline run. For EKS, use IRSA. For ECS, use task execution roles. Tokens expire after 12 hours, limiting the blast radius of any credential leak. |
+| Cross-region image pulls without replication | The ECS cluster is in `eu-west-1` but the ECR repository was created in `us-east-1` during the initial project setup | Container startup adds 200 to 500 ms per image layer for cross-region transfer, and AWS bills data transfer at standard inter-region rates. A 500 MB image pulled 1,000 times per day across regions generates meaningful latency and monthly charges. | Enable cross-region replication from the source region to every region where you run container workloads. Images land in the local registry before the first deployment, and pulls stay in-region. |
+| Repository names unrelated to service identity | Ad hoc naming during prototyping (`test-repo`, `my-container`, `app1`) without a naming convention | After six months, the team has 40 repositories and nobody can confidently map a repository name to a running service. Incident response stalls while engineers grep deployment manifests to find which repository feeds which ECS service. | Adopt a naming convention upfront: `{team}/{service}` or `{domain}/{component}`. Enforce it through CI linting or a Terraform module that rejects non-conforming names. |
+
+Hypothetical scenario: A platform team deploys their first EKS cluster and configures ECR with scan-on-push and lifecycle policies, but they leave tag mutability at the default (MUTABLE). Six months later, a developer troubleshooting a staging issue manually pushes a debug build tagged `v2.3.0` — the same version that has been running in production for three weeks. The manual push overwrites the production image digest. The next day, a routine ECS task restart in production pulls the debug image, which contains a hardcoded staging database connection string. Production services begin failing with database authentication errors against the staging database. The incident takes 45 minutes to diagnose because nobody suspected a tag overwrite. The fix is one command (`--image-tag-mutability IMMUTABLE`), but applying it after the incident means you have already absorbed the outage.
+
+---
+
+## Decision Framework
+
+The choices you make when configuring ECR — tag mutability, scanning level, cache strategy — are interconnected. Each decision affects cost, security, and operational complexity along different axes. The framework below lays out the trade-offs so you can map your organization's requirements to the right configuration without guessing.
+
+### Tag Mutability: Immutable vs Mutable
+
+| Criterion | Immutable (`IMMUTABLE`) | Mutable (`MUTABLE`) |
+|---|---|---|
+| Tag overwrite protection | Guaranteed — a tag, once pushed, is permanently bound to its digest | None — any push can replace any tag |
+| `latest` tag support | Not compatible — `latest` must move | Compatible |
+| Rollback reliability | Absolute — `v1.3.0` always resolves to the same image | Conditional — depends on CI discipline |
+| CI complexity | Requires CI to never reuse a version tag; `latest` must be omitted or directed to a separate mutable repository | No additional CI constraints |
+| Regulatory audit trail | Strong — tag-to-digest mapping is permanent | Weak — a tag can map to different digests over time |
+| **Recommendation** | Use for all production repositories. The `latest` constraint is a feature: it forces version discipline. | Acceptable for development repositories where convenience outweighs overwrite risk. If you use mutable in production, enforce digest pinning in deployment manifests to compensate. |
+
+### Vulnerability Scanning: Basic vs Enhanced
+
+| Criterion | Basic Scanning (Clair-based) | Enhanced Scanning (Amazon Inspector) |
+|---|---|---|
+| Scope | OS packages only (apt, yum, apk) | OS packages + application dependencies (npm, pip, Maven, NuGet, Go modules, RubyGems, Rust crates) |
+| Cost per image scan | Free | Charged per image scan (Inspector pricing) |
+| Re-scan on new CVE | Manual re-trigger required | Automatic with `CONTINUOUS_SCAN` |
+| Security Hub integration | No | Yes — findings appear alongside GuardDuty, Macie, IAM Access Analyzer |
+| Finding types missed | Application CVEs in `package.json`, `requirements.txt`, `pom.xml`, etc. | None — Inspector covers both OS and application layers |
+| **Recommendation** | Acceptable as a minimum baseline for internal tools and development images where application vulnerability risk is low. | Required for any image that reaches production, contains application dependencies, or must pass a security review. The per-scan cost is negligible compared to the cost of deploying a vulnerable image. |
+
+### Image Distribution: Pull-Through Cache vs Cross-Region Replication
+
+| Criterion | Pull-Through Cache | Cross-Region Replication |
+|---|---|---|
+| Primary use case | Caching public images from Docker Hub, Quay, `registry.k8s.io` to avoid rate limits and upstream outages | Distributing your own private images to multiple regions for low-latency local pulls |
+| Source of images | Upstream public registries | Your own ECR repositories |
+| Setup complexity | One cache rule per upstream registry | One replication configuration per destination region + destination registry policy |
+| Storage cost impact | Cached images consume storage in your private registry ($0.10/GB-month) | Replicated images consume storage in each destination region |
+| Data transfer cost | Inbound from upstream to ECR is free; outbound within region is free | Cross-region replication data transfer is free (AWS does not charge for ECR replication traffic) |
+| Availability during upstream outage | Cached images remain available; uncached images are unreachable | Replicated images are fully independent in each region |
+| **Recommendation** | Use pull-through cache for every public upstream registry your workloads reference. This is a one-time setup with ongoing availability and rate-limit benefits. | Use cross-region replication for every region where you run production container workloads. The replication traffic is free, and local pulls eliminate cross-region latency and data transfer charges on every deployment. |
+
+### Cost Lens
+
+ECR costs break down into three categories, and each configuration decision in this framework moves cost in a specific direction:
+
+| Cost category | Pricing structure | What drives cost up | How to control it |
+|---|---|---|---|
+| Storage | $0.10 per GB-month of stored image layers (verify current rates at aws.amazon.com/ecr/pricing/) | No lifecycle policy — untagged layers accumulate indefinitely. Large images (machine learning models, monorepos with many layers). | Lifecycle policies that expire old and untagged images. Layer deduplication across repositories (same base image stored once). |
+| Data transfer | Free inbound to ECR. Free in-region to ECS/EKS. Cross-region and internet egress billed at standard EC2 data transfer rates. | Cross-region image pulls without replication. Public internet pulls from on-premises or other cloud providers. Workloads in regions where you have not replicated images. | Enable cross-region replication to every region with production workloads. Use VPC endpoints to keep pulls on the AWS backbone. |
+| Enhanced scanning | Charged per image scan under the Amazon Inspector pricing model | Enabling CONTINUOUS_SCAN on every repository including development and CI throwaway images. Frequent rebuilds of images with large dependency trees. | Apply Enhanced scanning selectively to production repositories. Use repository filter rules in the registry scanning configuration to scope CONTINUOUS_SCAN to `prod-*` prefixed repositories while using SCAN_ON_PUSH for others. |
+| KMS encryption | Per-request charge for `kms:Decrypt` calls when the Docker daemon fetches layers | High-frequency pulls from KMS-encrypted repositories — every layer decryption counts as a KMS API call. A 10-layer image pulled 1,000 times per day generates 10,000 KMS requests. | Use AES-256 encryption for repositories with high pull volume. Reserve KMS encryption for repositories where key lifecycle control is a compliance requirement, and monitor KMS request metrics to catch unexpected cost growth. |
+
+The most common cost surprise is not the storage cost itself but the compound effect of neglecting lifecycle policies while also running workloads in multiple regions without replication. A team with 20 microservices, each generating 200 MB of images per day with no lifecycle policy and pulling cross-region from a single ECR region, can accumulate 3.6 TB of storage ($360/month) and significant cross-region data transfer charges before anyone notices because ECR does not send billing alerts for approaching thresholds. The fix — lifecycle policies plus replication — costs nothing to enable and eliminates the recurring waste.
+
+
 
 ## Did You Know?
 
@@ -958,5 +1147,15 @@ Next up: **[Module 1.7: Elastic Container Service (ECS) & Fargate](../module-1.7
 ## Sources
 
 - [Amazon ECR private registry](https://docs.aws.amazon.com/AmazonECR/latest/userguide/Registries.html) — Covers the core registry model, private registry URI format, and account-and-Region basics.
-- [Scan images for software vulnerabilities in Amazon ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning.html) — Explains the current Basic versus Enhanced scanning model and where Amazon Inspector fits.
-- [Amazon ECR interface VPC endpoints (AWS PrivateLink)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html) — Documents the endpoint combination needed to pull private images without internet egress.
+- [Image tag mutability](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-tag-mutability.html) — Documents the IMMUTABLE and MUTABLE tag settings, their behavior at push time, and compatibility with lifecycle policies.
+- [Scan images for software vulnerabilities in Amazon ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning.html) — Explains Basic (Clair-based) versus Enhanced (Amazon Inspector) scanning models, including scan-on-push and continuous scan frequencies.
+- [Amazon Inspector — Enhanced scanning for ECR](https://docs.aws.amazon.com/inspector/latest/user/scanning-ecr.html) — Details how Inspector Enhanced scanning analyzes both OS packages and programming-language dependencies across supported runtimes.
+- [Pull-through cache rules](https://docs.aws.amazon.com/AmazonECR/latest/userguide/pull-through-cache.html) — Configuration, supported upstream registries, pull URL patterns, and automatic repository creation for cached images.
+- [Lifecycle policies](https://docs.aws.amazon.com/AmazonECR/latest/userguide/LifecyclePolicies.html) — Lifecycle policy rule structure, evaluation order, preview behavior, and example policies for common retention patterns.
+- [Cross-region replication](https://docs.aws.amazon.com/AmazonECR/latest/userguide/replication.html) — Private registry replication configuration, cross-account replication setup, and required destination registry permissions.
+- [Repository policies](https://docs.aws.amazon.com/AmazonECR/latest/userguide/repository-policies.html) — IAM-based repository access policies for cross-account sharing, allowed actions, and principal configurations.
+- [Encryption at rest](https://docs.aws.amazon.com/AmazonECR/latest/userguide/encryption-at-rest.html) — AES-256 default encryption and KMS customer-managed key options for ECR repositories.
+- [Amazon ECR interface VPC endpoints (AWS PrivateLink)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html) — Documents the endpoint combination (ecr.api, ecr.dkr, and S3 gateway) needed to pull private images without internet egress.
+- [Pushing an OCI artifact to ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/push-oci-artifact.html) — OCI artifact support in ECR, including Helm chart push/pull workflows and supported artifact types.
+- [Amazon ECR Public](https://docs.aws.amazon.com/AmazonECR/latest/public/what-is-ecr-public.html) — ECR Public Gallery architecture, authentication model (anonymous pull, authenticated push), and differences from private ECR.
+
