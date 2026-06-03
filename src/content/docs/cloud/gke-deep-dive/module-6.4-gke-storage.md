@@ -19,7 +19,7 @@ When you finish this module, you will be able to design GKE storage that survive
 
 ## Why This Module Matters
 
-In August 2023, an online gaming company running on GKE lost 6 hours of player progress data for 180,000 active users. Their PostgreSQL database was running on a single-zone Persistent Disk attached to a StatefulSet pod. When `us-central1-a` experienced a partial zone outage, the node hosting the database went offline. Because the PD was zonal, it could not be attached to a node in another zone. The StatefulSet controller created a replacement pod in `us-central1-b`, but it could not mount the volume---zonal PDs are locked to their zone. The database was down for 6 hours until the zone recovered. The company's VP of Engineering later estimated the revenue loss at $420,000 and the player trust damage as "incalculable." The fix was straightforward: switch to a **Regional Persistent Disk**, which synchronously replicates data to two zones and can failover in under a minute. It cost 16 cents more per GB per month.
+**Hypothetical scenario:** Consider an online gaming company running PostgreSQL on GKE with a single-zone Persistent Disk attached to a StatefulSet pod. When the zone hosting the database node experiences a partial outage, the node goes offline. Because the PD is zonal, it cannot be attached to a node in another zone—the StatefulSet may schedule a replacement pod elsewhere, but it cannot mount the volume until the original zone returns; zonal PDs stay locked to their zone. A **Regional Persistent Disk** synchronously replicates data across two zones (RPO≈0) and can fail over in roughly a minute once the pod reschedules and the disk re-attaches. Regional PD costs roughly **2×** the zonal GB-month rate—for SSD that is about **+$0.17/GB-month** on top of zonal (~$0.17/GB-month), not a fixed “16 cents” delta for every disk type.
 
 Storage in Kubernetes is where the "cattle, not pets" philosophy meets reality. Stateless pods can be replaced instantly, but pods with Persistent Volumes carry data that must survive restarts, rescheduling, and zone failures. GKE offers multiple storage options---Persistent Disks (block storage), Filestore (managed NFS), Cloud Storage FUSE (object storage as a filesystem), and Backup for GKE (disaster recovery). Choosing the right storage backend and configuring it for resilience is often the difference between a minor disruption and a catastrophic data loss event.
 
@@ -37,9 +37,9 @@ The **Compute Engine Persistent Disk CSI driver** is the primary block storage d
 
 | Disk Type | Identifier | IOPS (Read) | Throughput (Read) | Use Case | Cost (us-central1) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Standard** | `pd-standard` | 0.75/GB | 12 MB/s/GB | Logs, cold data, backups | ~$0.040/GB/mo |
-| **Balanced** | `pd-balanced` | 6/GB | 28 MB/s/GB | General purpose (default) | ~$0.100/GB/mo |
-| **SSD** | `pd-ssd` | 30/GB | 48 MB/s/GB | Databases, latency-sensitive | ~$0.170/GB/mo |
+| **Standard** | `pd-standard` | 0.75/GB | 0.12 MB/s/GB | Logs, cold data, backups | ~$0.040/GB/mo |
+| **Balanced** | `pd-balanced` | 6/GB | 0.28 MB/s/GB | General purpose (default) | ~$0.100/GB/mo |
+| **SSD** | `pd-ssd` | 30/GB | 0.48 MB/s/GB | Databases, latency-sensitive | ~$0.170/GB/mo |
 | **Extreme** | `pd-extreme` | Configurable (up to 120K) | Configurable (up to 2.4 GB/s) | SAP HANA, Oracle, high-IOPS | ~$0.125/GB/mo + IOPS |
 | **Hyperdisk Balanced** | `hyperdisk-balanced` | Configurable | Configurable | Next-gen general purpose | Variable |
 | **Hyperdisk Balanced HA** | `hyperdisk-balanced-high-availability` | Provisioned IOPS/throughput | Provisioned IOPS/throughput | Regional HA on 3rd-gen+ machine series | Per provisioned IOPS + capacity |
@@ -105,7 +105,7 @@ Volume binding mode controls **when** the CSI driver creates the backing disk re
 
 > **Stop and think**: You just created a PVC using a StorageClass with `Immediate` binding in a regional cluster spanning three zones. The disk is provisioned right away in zone A. What happens if the Kubernetes scheduler later decides the only node with enough CPU for your pod is in zone B?
 
-**War Story**: A team used `Immediate` binding mode in a regional cluster. The PD was provisioned in `us-central1-a`, but the pod was scheduled to `us-central1-c`. The pod hung in `Pending` with the error "disk is in zone us-central1-a, which does not match the zone of node us-central1-c." In regional clusters, prefer `WaitForFirstConsumer` so the disk is created in the pod's zone.
+**Hypothetical scenario**: A team used `Immediate` binding mode in a regional cluster. The PD was provisioned in `us-central1-a`, but the pod was scheduled to `us-central1-c`. The pod hung in `Pending` with the error "disk is in zone us-central1-a, which does not match the zone of node us-central1-c." In regional clusters, prefer `WaitForFirstConsumer` so the disk is created in the pod's zone.
 
 ### Reclaim policies, expansion, and snapshots
 
@@ -217,9 +217,9 @@ Failover time includes node health detection (default node auto-repair timelines
 
 ```bash
 # Force-detach a stuck PD (emergency use only)
-gcloud compute disks detach my-disk \
-  --zone=us-central1-a \
-  --instance=failed-node
+gcloud compute instances detach-disk failed-node \
+  --disk=my-disk \
+  --zone=us-central1-a
 
 # Monitor PV/PVC status during failover
 kubectl get pv,pvc -o wide
@@ -526,7 +526,7 @@ Object storage billing is **per GB-month plus operation charges** (Class A/B req
 
 **File caching** stores hot object bytes on the node’s ephemeral disk (or configured cache volume), dramatically improving repeated reads of the same blobs—critical for ML epochs that re-read shards. Tuning knobs include sidecar resource limits and mount options documented in [Use the Cloud Storage FUSE CSI driver on GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/gcs-fuse-csi-driver). **Parallel download** options (where supported in your driver version) help large sequential reads; they do not fix random small-write latency. For write-heavy pipelines, write to GCS with the JSON API or batch uploads, then expose read-only FUSE mounts to consumers.
 
-Workload Identity is mandatory for secure bucket access: bind a Kubernetes service account to a Google service account with `roles/storage.objectViewer` (or tighter custom roles) via `gcloud iam service-accounts add-iam-policy-binding` and the cluster’s `--workload-pool=PROJECT.svc.id.goog`. Never mount production buckets with long-lived HMAC keys in Secrets unless you have no alternative.
+Workload Identity is mandatory for secure bucket access. The binding chain has two distinct steps: (a) **KSA→GSA** — grant `roles/iam.workloadIdentityUser` on the Google service account to member `serviceAccount:PROJECT.svc.id.goog[NAMESPACE/KSA]` via `gcloud iam service-accounts add-iam-policy-binding`; annotate the Kubernetes ServiceAccount with `iam.gke.io/gcp-service-account`. (b) **GSA→bucket** — grant `roles/storage.objectViewer` (or tighter custom roles) on the bucket to the GSA via `gcloud storage buckets add-iam-policy-binding` (or `gcloud projects add-iam-policy-binding` for project-wide scope). On newer clusters you can instead use **direct principal** IAM on the bucket for `principal://iam.googleapis.com/.../subject/ns/.../sa/...` without an intermediary GSA. Never mount production buckets with long-lived HMAC keys in Secrets unless you have no alternative.
 
 ```yaml
 # Enable file caching for better read performance
@@ -695,7 +695,7 @@ flowchart TD
 | :--- | :--- | :--- |
 | Need provisioned IOPS independent of GiB? | Yes—provision IOPS/throughput explicitly | No—scale GiB and vCPUs |
 | Machine series | 3rd gen+ for Hyperdisk Balanced HA | Broader (check regional PD limits) |
-| RWX block without NFS? | Hyperdisk HA supports RWX in block mode with care | Use Filestore or redesign |
+| RWX block without NFS? | Hyperdisk HA can expose RWX in raw block mode only (multi-writer, no shared POSIX filesystem)—use Filestore for shared RWX filesystems | Use Filestore or redesign |
 | Cost predictability | Pay for provisioned performance | Pay for allocated GiB |
 
 When the matrix shows Filestore and FUSE both viable (shared read-mostly data), default to **FUSE** if objects are large and immutable; default to **Filestore** if the app requires directory semantics, `chmod`, or mmap behavior FUSE cannot provide.
@@ -754,7 +754,7 @@ Hypothetical scenario: A 200 GiB production PostgreSQL PVC on **regional `pd-ssd
 
 ## Storage troubleshooting and observability
 
-Stateful incidents on GKE usually present as `Pending` pods, `FailedMount` events, or silent I/O latency—not as clear “disk down” pages. Train your on-call to read **events first**, then CSI driver logs, then Compute Engine disk attachment state. A pod stuck `Pending` with `volume node affinity conflict` almost always means the PVC’s topology does not match any schedulable node zone; fix binding mode or delete the PVC and reprovision with `WaitForFirstConsumer` after confirming data is disposable or restored from snapshot. `FailedAttachVolume` / `FailedMount` on a running cluster often indicates a zombie attachment from a crashed node—use `kubectl describe volumeattachment` and, only after confirming no writer pod exists, escalate to controlled detach procedures documented for your org (the module’s emergency `gcloud compute disks detach` snippet is a last resort, not a daily tool).
+Stateful incidents on GKE usually present as `Pending` pods, `FailedMount` events, or silent I/O latency—not as clear “disk down” pages. Train your on-call to read **events first**, then CSI driver logs, then Compute Engine disk attachment state. A pod stuck `Pending` with `volume node affinity conflict` almost always means the PVC’s topology does not match any schedulable node zone; fix binding mode or delete the PVC and reprovision with `WaitForFirstConsumer` after confirming data is disposable or restored from snapshot. `FailedAttachVolume` / `FailedMount` on a running cluster often indicates a zombie attachment from a crashed node—use `kubectl describe volumeattachment` and, only after confirming no writer pod exists, escalate to controlled detach procedures documented for your org (the module’s emergency `gcloud compute instances detach-disk` snippet is a last resort, not a daily tool).
 
 For performance complaints, split **Kubernetes wait time** from **backend I/O**. Kubernetes metrics show volume mount success; they do not show PD queue depth. On the node, correlate application latency with disk utilization in Cloud Monitoring (`compute.googleapis.com/guest/disk/...` metrics when Ops Agent is installed). If IOPS plateaus below expectations, verify machine type and combined GiB using Google’s tables before filing a support ticket—many “slow Postgres” cases are undersized nodes, not faulty CSI. For Filestore, watch NFS latency and used capacity against tier limits; for GCS FUSE, watch Class A/B operation rates and sidecar OOM kills from undersized fuse caches.
 
@@ -834,9 +834,9 @@ Keep a living diagram in your team wiki that maps each production namespace to i
 
 ## Did You Know?
 
-1. **Regional Persistent Disks perform synchronous replication across exactly two zones in the same region.** Every write to the primary copy must be acknowledged by the secondary copy before the write returns to the application. This adds approximately 1-2ms of write latency compared to a zonal PD, but guarantees zero data loss (RPO=0) during a zone failover. The two zones are chosen automatically by GKE based on the cluster's node topology and cannot be manually selected.
+1. **Regional Persistent Disks perform synchronous replication across exactly two zones in the same region.** Every write to the primary copy must be acknowledged by the secondary copy before the write returns to the application. This adds approximately 1-2ms of write latency compared to a zonal PD, but guarantees zero data loss (RPO=0) during a zone failover. The two zones are chosen automatically by GKE based on the scheduled pod's topology **unless you pin them with `allowedTopologies`** (required on zonal clusters; optional on regional).
 
-2. **Cloud Storage FUSE was originally developed inside Google for Borg workloads** that needed to read training data from Colossus (Google's internal distributed storage system). The open-source version was released in 2015 and the GKE CSI driver followed in 2023. Internally, Google ML training jobs read petabytes of data per day through FUSE-like interfaces. The GKE CSI driver injects a sidecar container that runs the gcsfuse process, which is why pods need the `gke-gcsfuse/volumes: "true"` annotation.
+2. **Google has long used FUSE-style interfaces internally** for large-scale data access. The open-source gcsfuse project was released in 2015 and the GKE CSI driver followed in 2023. Internally, Google ML training jobs read petabytes of data per day through FUSE-like interfaces. The GKE CSI driver injects a sidecar container that runs the gcsfuse process, which is why pods need the `gke-gcsfuse/volumes: "true"` annotation.
 
 3. **Backup for GKE does not just snapshot disks---it captures the full Kubernetes state.** A backup includes all Kubernetes resource configurations (Deployments, Services, ConfigMaps, Secrets, CRDs, custom resources), PersistentVolume data (via disk snapshots), and namespace metadata. This means you can restore an entire application stack---not just the data---to a different cluster in a different region. This is what distinguishes it from simply taking PD snapshots manually.
 
@@ -1190,7 +1190,7 @@ gcloud container clusters delete storage-demo \
 
 # Check for orphaned regional PDs (reclaim policy was Retain)
 gcloud compute disks list --filter="name~pvc" \
-  --format="table(name, zone, sizeGb, status)"
+  --format="table(name, region, sizeGb, status)"
 # Delete any orphaned disks manually if needed
 
 echo "Cleanup complete."
