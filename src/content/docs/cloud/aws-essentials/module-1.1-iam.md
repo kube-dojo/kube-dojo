@@ -352,6 +352,22 @@ When the requester and the resource are in *different* AWS accounts, the evaluat
 
 Think of it like visiting another country: [you need both an exit visa (your account's permission) and an entry visa (the resource owner's permission). If either side says no, access is denied.](https://docs.aws.amazon.com/IAM/latest/UserGuide/intro-structure.html) The most practical debugging tip is to trace identity and resource policies separately before changing anything else, because the failure often comes from the side you are not currently inspecting.
 
+#### Same-Account UNION vs Cross-Account INTERSECTION
+
+The contrast between same-account and cross-account evaluation is one of the most commonly misunderstood IAM mechanics. Getting it wrong leads to false confidence ("the role policy allows it, so it should work") or unnecessary policy sprawl ("we added a bucket policy but nothing changed"). [When an IAM entity in Account A requests access to a resource also in Account A, AWS evaluates identity-based policies and resource-based policies together. The resulting permissions are the **union** of both: if either policy type grants an explicit Allow and neither applies an explicit Deny, the action is permitted.](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html) You do not need a resource-based policy when the identity-based policy alone is sufficient. Quiz Question 1 reflects this: an S3 bucket policy is only required to *not* deny in the same-account case, not to affirmatively allow.
+
+Cross-account access inverts that mental model. [Both the identity-based policy in the requester's account and the resource-based policy on the target resource must grant permission. This is an intersection, not a union.](https://docs.aws.amazon.com/IAM/latest/UserGuide/intro-structure.html) Missing either side produces AccessDenied even when the other side looks perfectly configured. When debugging, ask two questions in parallel. First: does the caller's identity policy permit this action on this resource ARN? Second: does the resource owner's policy permit this principal? Only when both answers are yes---and no explicit Deny or SCP blocks the path---will the request succeed.
+
+This union/intersection split also explains why permission boundaries and SCPs behave differently from resource policies. [Boundaries intersect with identity-based policies. They cap what an identity can ever receive, regardless of how permissive the attached policies appear.](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html) SCPs similarly intersect at the organization level. Resource policies in the same account expand the permission surface through union. Keep four evaluation modes straight: union for same-account identity plus resource, intersection for cross-account, intersection for boundaries, and intersection for SCPs. That framework is the foundation of every access-debugging workflow you will run in production.
+
+#### The `NotAction`, `NotResource`, and `NotPrincipal` Foot-Guns
+
+Advanced policy elements that negate a list (`NotAction`, `NotResource`, `NotPrincipal`) can produce dramatically shorter JSON. They also invert the reader's intuition and are a leading cause of accidental over-provisioning. [`NotAction` with `"Effect": "Allow"` matches every action *except* those listed. All unlisted actions on applicable resources are allowed, which is often far broader than authors expect.](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notaction.html) A statement like `"Effect": "Allow", "NotAction": "iam:*", "Resource": "*"` grants access to every non-IAM action in every service across the entire account. It does not mean "everything except IAM admin."
+
+[`NotResource` with `"Effect": "Allow"` is equally dangerous when paired with broad actions. AWS explicitly warns never to combine `"Effect": "Allow"`, `"Action": "*"`, and `"NotResource"` pointing at a single bucket.](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notresource.html) That pattern allows all actions on all resources except the one bucket. It even permits IAM policy changes that could grant access to the excluded bucket anyway. The safer pattern for exclusion is `"Effect": "Deny"` with `NotResource`. That denies everything *except* the listed resources, but you still need separate Allow statements for what you actually want to permit.
+
+`NotPrincipal` appears primarily in resource-based policies and follows the same inversion logic: an Allow with `NotPrincipal` grants access to every principal *except* those named. Teams reach for these elements when policy JSON grows unwieldy, but the maintenance cost shifts from "add a new ARN to the Allow list" to "hope nobody creates a new resource type we forgot to exclude." For production guardrails, prefer explicit Allow lists with condition keys (`aws:PrincipalOrgID`, `aws:PrincipalTag`, `aws:SourceArn`) over Not-prefixed wildcards unless you have automated policy testing that simulates every new resource class before deployment.
+
 ```bash
 # Example: Bucket policy allowing cross-account access
 # (applied on the bucket in Account B)
@@ -411,6 +427,48 @@ As organizations scale, managing individual IAM users across dozens of AWS accou
 IAM Identity Center is the modern successor to standard IAM users. Instead of creating users directly in AWS, you connect AWS to an external Identity Provider (IdP) like Okta, Azure AD, or Google Workspace. Users log into a portal using their standard corporate credentials, then select AWS accounts and roles that map to their authorization. [The portal then presents them with the AWS accounts and roles they are authorized to access. When they click a role, the Identity Center uses SAML federation to seamlessly call `sts:AssumeRoleWithSAML`, dropping the user directly into the AWS console (or providing short-lived CLI credentials) without ever creating a permanent AWS IAM user.](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html) This pattern removes long-lived human credentials from the infrastructure surface area while still allowing fine-grained role-based assignments.
 
 Why this matters for Kubernetes engineers: if you are running EKS, Identity Center integrates with `aws eks get-token` to provide short-lived credentials for `kubectl` access. No more shared kubeconfigs with embedded long-term tokens, and no more manual key distribution during role transitions.
+
+### Kubernetes Workload Identity on EKS: IRSA vs EKS Pod Identity
+
+Cloud-native platforms run most application logic inside Pods, and those Pods need AWS API access without inheriting the entire EC2 node's IAM role. AWS offers two first-class mechanisms to map a Kubernetes ServiceAccount to an IAM role: **IAM Roles for Service Accounts (IRSA)**, built on OpenID Connect federation, and **EKS Pod Identity**, a newer agent-based association model. Both deliver temporary credentials through the AWS SDK default credential chain, but they differ in trust mechanics, operational ownership, and scaling characteristics---and choosing the wrong one creates either OIDC-provider sprawl or unnecessary migration churn.
+
+**IRSA (OIDC federation)** requires you to create an IAM OIDC identity provider for each EKS cluster, linking the cluster's OIDC issuer URL to IAM. The ServiceAccount receives a projected OIDC token (a `ProjectedServiceAccountToken`), and the AWS SDK calls `sts:AssumeRoleWithWebIdentity` to exchange that JWT for STS credentials. The role's trust policy must reference the OIDC provider ARN and constrain `sub`/`aud` claims so only the intended ServiceAccount can assume the role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Federated": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"},
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {
+        "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE:sub": "system:serviceaccount:payments:worker",
+        "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE:aud": "sts.amazonaws.com"
+      }
+    }
+  }]
+}
+```
+
+Each cluster gets its own OIDC provider principal, so a role reused across ten clusters needs ten trust-policy statements (or ten separate roles). IRSA has been the standard pattern since EKS added OIDC support and remains fully supported on all EKS versions that expose an OIDC issuer.
+
+**EKS Pod Identity** (available on supported EKS platform versions) replaces per-cluster OIDC federation with a single service principal. You create an **association** in the EKS API mapping `(cluster, namespace, serviceAccount) → IAM role`, install the **EKS Pod Identity Agent** as a DaemonSet on worker nodes, and configure the role trust policy once with `"Service": "pods.eks.amazonaws.com"`. The agent injects environment variables into Pods using the associated ServiceAccount, and the SDK retrieves credentials without each Pod calling STS directly---reducing STS API load from "once per Pod" to "once per node per credential refresh." [AWS documents that Pod Identity does not use OIDC identity providers, separates IAM configuration from cluster OIDC setup, and reuses a single IAM principal across clusters.](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
+
+| Dimension | IRSA | EKS Pod Identity |
+| :--- | :--- | :--- |
+| **Trust mechanism** | OIDC provider per cluster; `AssumeRoleWithWebIdentity` | `pods.eks.amazonaws.com` service principal; EKS-managed association |
+| **Setup owner** | Platform team creates OIDC provider + annotates ServiceAccount | Platform team creates EKS association + installs Pod Identity Agent |
+| **Multi-cluster reuse** | Separate OIDC principal per cluster in trust policy | Same role trust policy across clusters (associations per cluster) |
+| **Credential path** | Pod SDK → STS directly | Pod SDK → node-local agent → STS |
+| **Cross-account target role** | Native via trust policy | Same-account role only; cross-account via role chaining |
+| **Fargate / Windows pods** | Supported where IRSA is supported | Not supported (Linux EC2 nodes only) |
+
+When should you pick which? For **new clusters on supported EKS versions** with Linux EC2 nodes, Pod Identity reduces operational overhead. The win is largest in multi-cluster fleets where duplicating OIDC trust statements is painful. For **Fargate workloads, Windows nodes, existing IRSA investments, or cross-account roles accessed directly from Pods**, IRSA remains the correct or only choice. Migration from IRSA to Pod Identity is a deliberate project. You replace OIDC trust conditions with EKS associations, redeploy the agent, and validate credential propagation latency. Associations are eventually consistent, so allow time before cutting over production traffic.
+
+Hypothetical scenario: a platform team runs twelve EKS clusters. Each cluster's IRSA roles carry near-identical trust policies with different OIDC issuer ARNs. Consolidating to Pod Identity lets them attach one `pods.eks.amazonaws.com` trust and manage associations through the EKS API. They must confirm no Fargate services depend on the old IRSA annotation path before cutover.
+
+Restrict IMDS access on worker nodes regardless of which mechanism you choose. [Both IRSA and Pod Identity documentation warn that unrestricted EC2 Instance Metadata Service access lets containers reach the node's instance profile credentials.](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) That undermines credential isolation. Set `HttpPutResponseHopLimit: 1` on node instance metadata options. Use `hostNetwork: true` only when you understand the IMDS exposure implications.
 
 ```bash
 # Configure AWS CLI to use Identity Center (one-time setup)
@@ -476,6 +534,34 @@ aws iam get-role --role-name LambdaDataProcessorRole \
   --query 'Role.PermissionsBoundary'
 ```
 
+### Session Policies: Further-Restrict-Only at AssumeRole Time
+
+Session policies are a third layer of restriction applied at the moment a role session is created, not when the role is defined. When you call `AssumeRole`, `AssumeRoleWithSAML`, or `AssumeRoleWithWebIdentity`, you can pass an inline JSON policy via the `Policy` parameter or up to ten managed policy ARNs via `PolicyArns`. [The resulting session permissions are the **intersection** of the role's identity-based policies and the session policy---session policies can only **shrink** permissions, never expand them beyond what the role already grants.](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) If the role allows `s3:*` but your session policy allows only `s3:GetObject` on one prefix, the session can read that prefix and nothing else.
+
+This further-restrict-only property makes session policies ideal for delegation scenarios where you hand temporary credentials to another party but do not trust them with the role's full permission set. A CI pipeline might assume a deployment role with broad EC2 and S3 permissions, but the orchestrator passes a session policy limiting the run to `s3:PutObject` on a single artifact prefix. A security vendor integration might receive credentials scoped to read-only actions even though the underlying audit role could write findings. Session policies also appear in IAM Roles Anywhere profiles (covered below) and in `GetFederationToken` flows for custom identity brokers.
+
+Session policies sit in the evaluation chain alongside permission boundaries and SCPs, but at a different lifecycle point. Boundaries cap the role identity itself. SCPs cap the account. Session policies cap *this specific invocation*. [AWS evaluates session policies after identity-based allows are found, intersecting them with the role's effective permissions.](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_assumerole.html) An explicit Deny anywhere---including in a session policy---still wins. The plaintext for inline and managed session policies combined cannot exceed 2,048 characters. Complex scoping may require multiple managed session policy ARNs rather than one monolithic inline document. Teams often combine session policies with CloudTrail `roleSessionName` conventions so every delegated credential session is traceable to a human initiator or CI job ID in audit logs.
+
+```bash
+# Assume a role but restrict the session to read-only S3 on one prefix
+aws sts assume-role \
+  --role-arn arn:aws:iam::123456789012:role/DeployRole \
+  --role-session-name ci-pipeline-run-42 \
+  --policy '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::artifacts-bucket",
+        "arn:aws:s3:::artifacts-bucket/builds/42/*"
+      ]
+    }]
+  }'
+```
+
+Hypothetical scenario: an incident-response automation assumes a powerful `IR-SuperRole` but passes a session policy permitting only `ec2:StopInstances` and `ec2:DescribeInstances` on instances tagged `Incident: active`. Even if the role's identity policy grants `ec2:TerminateInstances` and `iam:*`, the session cannot escalate beyond the session policy ceiling---and CloudTrail records the session name for audit correlation.
+
 ### Service Control Policies (SCPs): Guardrails for Organizations
 
 If Permission Boundaries are the fences for individual identities, Service Control Policies (SCPs) are the walls around entire AWS accounts. SCPs are a feature of AWS Organizations and define the *maximum available permissions* for all principals in a member account. In other words, SCPs are not a replacement for identity design, they are the highest-level safety net that keeps all accounts inside a guardrail envelope, especially in multi-team or multi-business-unit environments.
@@ -514,6 +600,16 @@ aws organizations list-policies --filter SERVICE_CONTROL_POLICY
 # View an SCP's content
 aws organizations describe-policy --policy-id p-abc123def4
 ```
+
+### IAM Roles Anywhere: X.509 Certificates for Hybrid Workloads
+
+Not every workload that needs AWS API access runs inside AWS. On-premises servers, edge devices, and partner-hosted VMs traditionally forced teams toward long-lived IAM user access keys embedded in configuration files---precisely the anti-pattern this module argues against. **IAM Roles Anywhere** closes that gap by letting external workloads authenticate with **X.509 certificates** issued by a certificate authority you register as a **trust anchor**, then receive temporary STS credentials for an IAM role the same way EC2 instance profiles do.
+
+The workflow has three components. A **trust anchor** references either AWS Private CA or an external CA certificate, establishing PKI trust between your non-AWS infrastructure and IAM. A **profile** links one or more IAM roles to optional session policies that further restrict the credentials Roles Anywhere issues. The workload presents its certificate to the Roles Anywhere endpoint, which validates the chain, assumes the configured role, and returns temporary credentials scoped by the profile's session policy. [AWS documents that Roles Anywhere uses the same IAM roles and policies as in-account workloads, avoiding a parallel permission model for hybrid environments.](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html)
+
+Trust is scoped at the **account level**. Any certificate from any trust anchor in the account can assume any role trusting the Roles Anywhere service principal. The role trust policy can add conditions such as `aws:SourceArn` matching a specific trust anchor. For multi-account setups, delegate through standard cross-account role assumption. Do not expect organization-wide Roles Anywhere controls out of the box. Roles Anywhere resources are regional. They must reside in the same account and region as the roles they target. Plan certificate renewal and trust-anchor rotation in the same change window to avoid unexpected credential gaps.
+
+Hypothetical scenario: a manufacturing plant runs a telemetry collector on bare-metal servers that must push metrics to Amazon Managed Prometheus. Instead of embedding access keys in the collector's config, the platform team registers the plant's internal CA as a trust anchor, creates a profile with a session policy allowing only `aps:RemoteWrite` on one workspace, and rotates certificates through the existing PKI renewal process---no AWS-side key rotation tickets required.
 
 ---
 
@@ -580,6 +676,120 @@ Instead of creating a separate policy for each project, use tags to create dynam
 ```
 
 [This single policy works for every team. If Alice is tagged with `Project: payments` and Bob with `Project: search`, they can each only manage EC2 instances tagged with their respective project. No policy updates needed when a new project is created.](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_attribute-based-access-control.html)
+
+### Step 4: Continuous Access Review and Credential Hygiene
+
+Least privilege is not a milestone you reach once. It is a loop you run every sprint. New services launch new API actions. Engineers change teams. Vendors rotate. Emergency break-glass grants linger. Each of these events can widen effective permissions without anyone editing a policy document directly. A practical review cadence combines automated signals with human judgment so you tighten access based on evidence rather than calendar guilt.
+
+Start with the **credential report**. Run `aws iam generate-credential-report` monthly and inspect password age, access-key age, and last-used timestamps. Any human IAM user with active access keys should trigger a migration ticket to Identity Center. Any application key older than ninety days without a documented rotation owner is a finding, not an accepted risk. Pair the credential report with **Access Analyzer unused-access findings** in production accounts first. Unused permissions are cheaper to remove than to explain after an audit.
+
+For roles and policies, schedule **quarterly policy simulations** against your highest-risk principals: deployment roles, data-pipeline roles, and break-glass roles. Use `aws iam simulate-principal-policy` with the exact API actions your runbooks require. Remove Allow statements that simulate as unused for ninety days of CloudTrail history. When removing permissions breaks a workflow, fix the workflow---do not restore the broad Allow. Document the required action in the role's runbook so the next reviewer understands why it exists.
+
+Finally, treat **trust policy changes** with the same rigor as permission policy changes. A permissive trust policy on a tightly scoped role still lets the wrong principal assume that role and inherit whatever the role permits. Code-review trust policies in IaC pull requests. Require `sts:ExternalId` for every third-party assumption path. Alert on CloudTrail `AssumeRole` events for break-glass roles within minutes, not days. Hypothetical scenario: a quarterly review discovers a CI role unused for six months but still trusted by an old GitHub OIDC provider from a decommissioned repository. The role permissions are least-privilege; the trust policy is the actual vulnerability. Continuous review catches that mismatch before an attacker does.
+
+---
+
+## Patterns & Anti-Patterns
+
+Mature IAM design is less about memorizing JSON syntax and more about recognizing recurring shapes that scale safely versus shapes that create silent debt. The patterns below appear repeatedly in well-run AWS organizations; the anti-patterns are the failure modes incident reviewers see after credentials leak or auditors flag excessive access.
+
+### Proven Patterns
+
+| Pattern | When to Use | Why It Works | Scaling Note |
+| :--- | :--- | :--- | :--- |
+| **One role per workload** | Every Lambda, EC2 instance profile, EKS ServiceAccount, or ECS task gets its own IAM role scoped to that application's API surface | Blast radius stays bounded: compromising one workload's credentials does not grant access to unrelated services; CloudTrail session names map cleanly to owners | At hundreds of roles, automate creation via IaC and enforce naming conventions (`app-env-component-role`) |
+| **Permission boundaries for delegated role creation** | Developers or application teams may create their own IAM roles (Lambda, ECS) but must not self-grant admin | Boundaries intersect with identity policies, so attaching `AdministratorAccess` to a bounded role still yields only boundary-permitted actions | Publish a small library of approved boundary policies (`Boundary-DataPlane`, `Boundary-ReadOnly`) rather than ad-hoc boundaries per team |
+| **ABAC via principal/resource tags** | Many teams, dynamic project namespaces, shared accounts where RBAC policy count would explode | One policy template keyed on `${aws:PrincipalTag/Project}` scales to N projects without N policy documents | Requires tag governance: untagged resources become invisible or overly accessible depending on policy default |
+| **Centralized human identity via IAM Identity Center** | Any human accessing AWS console or CLI across multiple accounts | Eliminates long-lived IAM user keys; SAML/OIDC federation provides SSO and automatic credential rotation | Map IdP groups to permission sets once; avoid duplicating user records in each account |
+| **Break-glass role with heavy auditing** | Rare emergency operations (full admin) that cannot be pre-approved via normal RBAC | Role exists but trust policy restricts assumption to specific break-glass IdP group + MFA + `aws:SourceIp`; CloudTrail + alerting on every session | Session duration set to minimum (15-60 minutes); automatic ticket creation on assumption |
+
+### Anti-Patterns
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+| :--- | :--- | :--- | :--- |
+| **Long-lived access keys on IAM users** | Keys leak via git, logs, or SSRF to metadata endpoints; no automatic expiry | "It's just a quick script" or legacy CI that predates OIDC | Roles with temporary credentials; Identity Center for humans; OIDC federation for CI |
+| **`Resource: "*"` on production Allow statements** | Any resource of that type in the account becomes reachable, including data stores owned by other teams | Wildcards unblock development faster than ARN discovery | Scope to ARNs; use ABAC conditions; simulate before deploy |
+| **"Temporary" AdministratorAccess** | Admin permissions never get removed; drift becomes permanent | Deadline pressure during incidents or PoC phases | Time-bound permission sets in Identity Center; break-glass role with alerting |
+| **One shared role across many workloads** | Cannot attribute CloudTrail activity; one compromise affects every consumer | Copy-paste from a tutorial or fear of IAM quota limits | One role per workload; use IAM policy reuse via customer managed policies |
+| **`Principal: "*"` in trust policy without conditions** | Any AWS principal (or in some cases any caller) can attempt assumption | Vendor docs omit ExternalId; confusion between resource and trust policies | Always pair broad principals with `StringEquals` on `sts:ExternalId`, `aws:PrincipalOrgID`, or specific ARNs |
+| **Third-party cross-account trust without ExternalId** | Confused deputy: another customer of the same vendor could trigger assumption of your role | Vendor template uses bare account-root principal | Generate unique ExternalId per vendor; enforce in trust policy Condition block |
+
+---
+
+## Decision Framework
+
+Choosing among IAM primitives is a design decision, not a syntax exercise. The matrix and flowchart below summarize the tradeoffs this module covers; use them during architecture reviews when someone proposes "just create an IAM user" or "let's use AdministratorAccess for now."
+
+### Human Access: IAM User vs IAM Role vs Identity Center
+
+| Criterion | IAM User | IAM Role (direct) | IAM Identity Center |
+| :--- | :--- | :--- | :--- |
+| **Credential type** | Long-term password + access keys | Temporary STS (requires federation or assumption path) | Temporary STS via SSO portal |
+| **Multi-account** | Duplicate user per account | Role per account; manual federation setup | Native multi-account permission sets |
+| **Rotation** | Manual key/password rotation | Automatic via STS | Automatic via SSO session |
+| **AWS recommendation** | Discouraged for humans | For machines and federation targets | Recommended for all human access |
+| **Best fit** | Legacy break-glass only | Service-to-service, EC2/Lambda/EKS workloads | Engineers, operators, auditors |
+
+### ABAC vs RBAC
+
+| Criterion | RBAC (role/group policies) | ABAC (tag-driven conditions) |
+| :--- | :--- | :--- |
+| **Policy count** | Grows with teams × services | Stable template policies |
+| **Governance dependency** | Role catalog maintenance | Tag schema enforcement on principals and resources |
+| **Audit clarity** | "Alice has DeveloperRole" is human-readable | "Alice's Project tag matches resource tag" requires tag inspection |
+| **Best fit** | Small teams, fixed roles, strict separation of duties | Large orgs, many projects, shared accounts |
+
+### Permission Boundary vs SCP
+
+| Criterion | Permission Boundary | SCP |
+| :--- | :--- | :--- |
+| **Scope** | Single IAM user or role in one account | All principals in member accounts (org-wide) |
+| **Grants permissions?** | No---caps maximum | No---caps maximum |
+| **Bypassable by account admin?** | Admin can modify boundary if they have `iam:PutRolePermissionsBoundary` | Even root user in member account cannot override explicit SCP Deny |
+| **Best fit** | Delegated developer self-service within an account | Org-wide guardrails (region lock, deny root actions, protect security roles) |
+
+```mermaid
+flowchart TD
+    Start([Who or what needs AWS access?]) --> Human{Human operator?}
+
+    Human -- Yes --> SSO[IAM Identity Center<br/>+ permission sets]
+    Human -- No --> Compute{Runs on AWS compute?}
+
+    Compute -- Yes --> AWSService{Which platform?}
+    AWSService -- EC2/Lambda/ECS --> InstanceRole[Service-specific IAM role<br/>instance profile / execution role]
+    AWSService -- EKS Pod --> K8sChoice{Cluster supports<br/>Pod Identity?}
+    K8sChoice -- Yes, Linux EC2 --> PodId[EKS Pod Identity association]
+    K8sChoice -- No / Fargate / existing IRSA --> IRSA[IRSA with OIDC trust]
+    K8sChoice -- Cross-account from Pod --> IRSA
+
+    Compute -- No --> Hybrid{Has X.509 PKI?}
+    Hybrid -- Yes --> RA[IAM Roles Anywhere<br/>trust anchor + profile]
+    Hybrid -- No --> Fed[Federate via SAML/OIDC<br/>or re-architect onto AWS]
+
+    SSO --> Scope{Need org-wide max cap?}
+    InstanceRole --> Scope
+    PodId --> Scope
+    IRSA --> Scope
+    RA --> Scope
+
+    Scope -- Account-level delegation --> Boundary[Permission boundary<br/>on creatable roles]
+    Scope -- Org-wide guardrail --> SCP[Service Control Policy<br/>on OU/account]
+    Scope -- Single session delegation --> SessionPol[Session policy at AssumeRole]
+```
+
+---
+
+## Cost Lens: IAM Is Free, Visibility Is Not
+
+[IAM itself, IAM Identity Center, and AWS STS incur no additional charge---you pay only when those credentials invoke other AWS services.](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html) This makes IAM deceptively "free" in budget conversations while the observability and governance tooling around it carries real line-item cost at scale. Understanding where charges appear prevents surprise finance reviews after you enable organization-wide least-privilege automation.
+
+**CloudTrail** is the primary audit backbone for IAM activity. [Management events delivered via the 90-day Event history and the first copy of management events to S3 through a trail are available at no additional CloudTrail charge; however, CloudTrail Lake ingestion, advanced event selectors, and data events are billed separately.](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-aws-service-charges.html) Data events---which log object-level S3 operations and Lambda invocations---are priced per event and can spike unexpectedly if you enable them account-wide on high-traffic buckets. The cost knob is selective data-event logging: scope to sensitive buckets and keys rather than `ReadWriteType: All` on every S3 ARN in the organization.
+
+**IAM Access Analyzer** splits free and paid tiers sharply. [External access analysis (public and cross-account findings) is free; unused access analysis is billed per IAM role and user per month; internal access analysis is billed per monitored resource per Region per month; custom policy checks are billed per API call.](https://aws.amazon.com/iam/access-analyzer/pricing/) A single organization with hundreds of roles and dozens of S3 buckets monitored for unused and internal access can reach hundreds of dollars monthly---still cheaper than one incident, but not zero. Enable unused-access analyzers first in production accounts where stale permissions matter most, rather than blindly at org root on day one.
+
+**Identity Center** remains free; the cost surface is indirect. Engineers with broader permission sets can provision expensive resources. That is an IAM governance problem manifesting as EC2 or RDS bills rather than an IAM line item. Tag-based ABAC that prevents cross-project resource access often pays for itself by blocking accidental provisioning in wrong accounts. Finance teams sometimes miss this linkage until a quarterly review connects oversized permission sets to orphaned infrastructure spend.
+
+Hypothetical scenario: a security team enables CloudTrail data events on all S3 buckets in a data-lake account processing billions of GET requests monthly. The IAM policies are perfect, but the CloudTrail bill triggers a finance escalation---the fix is narrowing data events to buckets holding PII, not removing audit capability entirely.
 
 ---
 
@@ -992,3 +1202,12 @@ Ready to build the network foundation where your identities will operate? Head t
 - [aws.amazon.com: how to monitor and query iam resources at scale part 1](https://aws.amazon.com/blogs/security/how-to-monitor-and-query-iam-resources-at-scale-part-1/) — An AWS Security Blog post states that AWS Identity handles over half a billion API calls per second worldwide.
 - [docs.aws.amazon.com: reference policies condition keys.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html) — The global condition-keys reference explicitly describes `aws:PrincipalOrgID` as an alternative to listing all account IDs.
 - [docs.aws.amazon.com: confused deputy.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html) — AWS's confused-deputy guidance directly explains the role of `ExternalId` in third-party cross-account access.
+- [docs.aws.amazon.com: pod-identities.html](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) — EKS Pod Identity documentation covers the `pods.eks.amazonaws.com` trust principal, agent-based credential delivery, and comparison with IRSA.
+- [docs.aws.amazon.com: iam-roles-for-service-accounts.html](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — IRSA documentation describes OIDC federation, projected service account tokens, and IMDS isolation requirements.
+- [docs.aws.amazon.com: API AssumeRole.html](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) — The AssumeRole API reference documents session policy intersection semantics and the 2,048-character limit.
+- [docs.aws.amazon.com: id credentials temp control-access assumerole.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_assumerole.html) — AWS explains session policies as further-restrict-only filters at role assumption time.
+- [docs.aws.amazon.com: reference policies elements notaction.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notaction.html) — NotAction element reference warns that Allow + NotAction can over-provision unintentionally.
+- [docs.aws.amazon.com: reference policies elements notresource.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notresource.html) — NotResource element reference explicitly warns against Allow + Action * + NotResource combinations.
+- [docs.aws.amazon.com: rolesanywhere introduction.html](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html) — IAM Roles Anywhere guide covers trust anchors, profiles, X.509 authentication, and hybrid workload credentialing.
+- [docs.aws.amazon.com: cloudtrail-aws-service-charges.html](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-aws-service-charges.html) — CloudTrail pricing documentation distinguishes free management-event delivery from billed Lake and data events.
+- [aws.amazon.com: iam access-analyzer pricing](https://aws.amazon.com/iam/access-analyzer/pricing/) — IAM Access Analyzer pricing page separates free external access analysis from billed unused and internal access analyzers.
