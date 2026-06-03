@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Teams that rely on a shared public registry can discover at the worst possible time that pull limits or registry availability are constraining their CI/CD pipeline. Docker Hub had heavily rate-limited their pulls: the free tier allows only [100 pulls per 6 hours for anonymous users and 200 for authenticated users](https://www.docker.com/blog/revisiting-docker-hub-policies-prioritizing-developer-experience/). With 40 microservices, 3 environments, and frequent node scaling events, they were regularly blowing past the limit. 
+Hypothetical scenario: a platform team that relies on a shared public registry discovers at the worst possible time that pull limits or registry availability are constraining their CI/CD pipeline. Docker Hub had heavily rate-limited their pulls: the free tier allows only [100 pulls per 6 hours for anonymous users and 200 for authenticated users](https://www.docker.com/blog/revisiting-docker-hub-policies-prioritizing-developer-experience/). With 40 microservices, 3 environments, and frequent node scaling events, they were regularly blowing past the limit.
 
 Registry bottlenecks can delay fixes, slow engineering teams, and create real operational and business costs. They learned the hard way that infrastructure dependencies must be owned and controlled.
 
@@ -43,7 +43,7 @@ Azure Container Registry is designed to scale with your organization. To support
 | **Webhooks** | 2 | 10 | 500 |
 | **Geo-replication** | No | No | Yes |
 | **Private Link** | No | No | Yes |
-| **Content Trust** | No | No | Yes (image signing) |
+| **Image signing (Notary Project)** | No | No | Yes (OCI artifact signing) |
 | **Customer-managed keys** | No | No | Yes |
 | **Approximate cost** | Varies by region and agreement | Varies by region and agreement | Varies by region, agreement, and replica count |
 
@@ -51,7 +51,7 @@ The comparison table is a starting point, not a capacity plan. Validate against 
 
 When designing your architecture, you must balance cost against capability. The **Basic** tier is excellent for individual learning and sandboxed development environments, but its strict rate limits (1,000 ReadOps/min) can easily be overwhelmed by a moderately sized Kubernetes cluster pulling images during a scale-out event. 
 
-[For most production workloads, **Standard** is the recommended baseline. It provides ten times the storage and significantly higher throughput. However, if your security team mandates that all traffic must traverse private networks, or if your application is deployed across multiple global regions, you must adopt the **Premium** tier to unlock Private Link and Geo-replication.](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus?source=recommendations)
+[For most production workloads, **Standard** is the recommended baseline. It provides ten times the storage and significantly higher throughput. However, if your security team mandates that all traffic must traverse private networks, or if your application is deployed across multiple global regions, you must adopt the **Premium** tier to unlock Private Link and Geo-replication.](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus)
 
 Microsoft documents that you can change an ACR SKU without registry downtime, subject to the limits and feature constraints of the target tier.
 
@@ -81,11 +81,11 @@ Throughput is not a single headline number on the pricing page. Image pull and p
 
 **Geo-replication** is Premium-only. You add regional replicas with `az acr replication create`; pushes land on the home region and [replicate asynchronously to each replica](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-geo-replication). Clients are steered to a nearby replica for pulls, which is the single-registry-multi-region model: one logical registry name, many physical storage locations. Billing adds a per-replica daily charge on top of the Premium registry fee (see [Azure Container Registry pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/)).
 
-**Private Link** and **content trust** (Docker Content Trust image signing) are also Premium-only. [Private endpoints](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link) project the registry into your VNet so pulls never traverse the public internet. **Customer-managed keys** for encryption at rest and **retention policies** for untagged manifests are Premium capabilities as well.
+**Private Link** and **OCI image signing** via the [Notary Project](https://notaryproject.dev/) (`notation` CLI with Azure Key Vault keys) are Premium-aligned supply-chain controls. [Docker Content Trust (DCT) is deprecated](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-content-trust-deprecation)—new DCT enablement ended 2025-03-31 and DCT is fully removed 2028-03-31; use Notary Project signing instead. [Private endpoints](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link) project the registry into your VNet so pulls never traverse the public internet. **Customer-managed keys** for encryption at rest and **retention policies** for untagged manifests are Premium capabilities as well.
 
 [Zone redundancy](https://learn.microsoft.com/en-us/azure/container-registry/zone-redundancy) is enabled by default in supported regions for Basic, Standard, and Premium. That protects the registry control plane and storage substrate within a region. It does not replace geo-replication: zone redundancy is about surviving a zone failure inside one region; geo-replication is about placing blobs close to compute in multiple regions.
 
-Teams are effectively forced to Premium when any of these are non-negotiable: multi-region pull locality without operating separate registries per region, Private Link with public access disabled, signed images via content trust, CMK, connected registries at the edge, or the built-in untagged-manifest retention policy. Standard is the right default for single-region production that still needs anonymous pull or artifact cache rules but not geo-replication.
+Teams are effectively forced to Premium when any of these are non-negotiable: multi-region pull locality without operating separate registries per region, Private Link with public access disabled, signed images via Notary Project, CMK, connected registries at the edge, or the built-in untagged-manifest retention policy. Standard is the right default for single-region production that still needs anonymous pull or artifact cache rules but not geo-replication.
 
 ```bash
 # Check current usage against SKU limits (storage, webhooks, replicas, etc.)
@@ -185,7 +185,7 @@ Registry-wide **AcrPull**, **AcrPush**, and **AcrDelete** roles are correct for 
 
 A scope map groups actions such as `content/read`, `content/write`, `content/delete`, `metadata/read`, and `metadata/write` per repository. Wildcards like `samples/*` are supported when the pattern ends with `/*`. Tokens ship with generated passwords; Microsoft recommends expiration dates and treating passwords like any other secret rotation item. This model fits IoT devices, partner access to a single repo, and CI jobs that should not receive delete rights on production images.
 
-Microsoft Entra managed identities cannot receive repository-scoped ABAC today; use Entra RBAC at registry scope for kubelet and VM identities, and tokens for non-Entra consumers.
+Microsoft Entra managed identities **can** receive repository-scoped permissions via [Entra ABAC repository permissions](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-rbac-abac-repository-permissions) (GA November 2025). Set the registry role-assignment mode to **RBAC Registry + ABAC Repository Permissions**, then assign the ABAC built-in roles **Container Registry Repository Reader**, **Writer**, or **Contributor** with repository conditions to AKS kubelet/workload identities, Container Apps, ACI, and other Entra principals. On ABAC-enabled registries, broad Owner/Contributor/Reader roles grant control-plane access only—not data-plane pull/push. Use repository-scoped **tokens** and **scope maps** for non-Entra consumers (IoT devices, external partners).
 
 ```bash
 # Create a token limited to one repository (creates a matching scope map)
@@ -198,9 +198,11 @@ az acr scope-map create --name team-a-map --registry kubedojoacr \
 az acr token create --name team-a-token --registry kubedojoacr --scope-map team-a-map
 ```
 
-### Content trust, Defender scanning, and anonymous pull
+### Image signing, Defender scanning, and anonymous pull
 
-**Content trust** on Premium registries integrates [Docker Content Trust](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-content-trust) so signed tags can be enforced at push and pull time. This is separate from generic TLS: it cryptographically ties a tag to a publisher key, which helps when you need supply-chain guarantees beyond "someone with AcrPush uploaded this."
+**Docker Content Trust (DCT)** on ACR is [deprecated](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-content-trust-deprecation): Microsoft stopped new DCT enablement on 2025-03-31 and will fully remove DCT on 2028-03-31. For supply-chain signing on Premium registries, adopt the **[Notary Project](https://notaryproject.dev/)** with the `notation` CLI and keys stored in **Azure Key Vault**. Sign images at push time (`notation sign`) and verify at deploy time (`notation verify`); on AKS, pair verification with [Ratify](https://ratify.dev/) and enforce policy via Azure Policy so unsigned images cannot run.
+
+This is separate from generic TLS: signing cryptographically ties an artifact digest to a publisher key, which helps when you need guarantees beyond "someone with AcrPush uploaded this."
 
 **Microsoft Defender for Containers** can [scan images pushed to ACR](https://learn.microsoft.com/en-us/azure/container-registry/scan-images-defender) and surface CVE data in Defender views. Scanning is a control-plane integration; it does not replace patching your Dockerfiles. Pair Defender findings with ACR Tasks base-image triggers so vulnerable bases trigger rebuilds instead of lingering silently in `:latest`.
 
@@ -231,8 +233,8 @@ az acr repository list --name kubedojoacr -o table
 # List tags for a repository
 az acr repository show-tags --name kubedojoacr --repository myapp -o table
 
-# Show image manifest details
-az acr repository show-manifests --name kubedojoacr --repository myapp --detail -o table
+# Show image manifest details (tagged manifests only)
+az acr manifest list-metadata --registry kubedojoacr --name myapp --detail -o table
 ```
 
 ---
@@ -263,12 +265,11 @@ az acr build \
   --image myapp:v2.0.0 \
   https://github.com/myorg/myrepo.git#main
 
-# Build a multi-architecture image
-az acr build \
-  --registry kubedojoacr \
-  --image myapp:v1.0.0 \
+# Build a multi-architecture image (requires buildx; --platform on az acr build accepts one OS/arch)
+docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  .
+  --tag kubedojoacr.azurecr.io/myapp:v1.0.0 \
+  --push .
 ```
 
 ### Base Image Triggers and Automated Patching
@@ -394,9 +395,9 @@ Dedicated **data endpoints** (Premium) expose region-specific DNS names for high
 
 ## Network Security and Private Link
 
-By default, Azure Container Registry exposes a public endpoint. While authenticated via Azure Active Directory, the registry is technically reachable from anywhere on the internet. In highly regulated industries like healthcare or finance, data exfiltration policies mandate that Platform-as-a-Service (PaaS) resources must not possess public IP addresses.
+By default, Azure Container Registry exposes a public endpoint. While authenticated via Microsoft Entra ID, the registry is technically reachable from anywhere on the internet. In highly regulated industries like healthcare or finance, data exfiltration policies mandate that Platform-as-a-Service (PaaS) resources must not possess public IP addresses.
 
-[Azure Private Link allows you to project your ACR directly into your Virtual Network (VNet). The registry receives a private IP address (e.g., `10.0.5.10`), and all traffic between your virtual machines or Kubernetes nodes and the registry never leaves the Microsoft backbone network.](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link?view=azureml-api-2)
+[Azure Private Link allows you to project your ACR directly into your Virtual Network (VNet). The registry receives a private IP address (e.g., `10.0.5.10`), and all traffic between your virtual machines or Kubernetes nodes and the registry never leaves the Microsoft backbone network.](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link)
 
 > **Pause and predict**: If you enable Private Link for an ACR but forget to link the Private DNS Zone to your AKS Virtual Network, what error message will the kubelet throw when trying to pull an image?
 
@@ -469,7 +470,7 @@ OCI artifacts complicate tagging slightly. ACR stores [Helm charts and other OCI
 
 ### Manifest lists, digests, and supply-chain traceability
 
-Multi-architecture images ship as manifest lists. When you `docker pull` on Apple silicon and CI pulls on AMD64, you may get different digests under the same tag. For compliance, record the digest returned at deploy time (`kubectl get pod -o jsonpath='{.status.containerStatuses[0].imageID}'`) and compare against `az acr repository show-manifests`. Content trust on Premium adds cryptographic signing on top of digest discipline.
+Multi-architecture images ship as manifest lists. When you `docker pull` on Apple silicon and CI pulls on AMD64, you may get different digests under the same tag. For compliance, record the digest returned at deploy time (`kubectl get pod -o jsonpath='{.status.containerStatuses[0].imageID}'`) and compare against `az acr manifest list-metadata`. Notary Project signing on Premium adds cryptographic verification on top of digest discipline.
 
 Locking tags with `az acr repository update --write-enabled false` prevents accidental overwrites of golden releases. Pair locks with RBAC so only release managers hold **AcrDelete** or token `content/delete` on production repositories. Developers retain push to `myapp/dev-*` repos via scope maps without delete on `myapp/release-*` paths.
 
@@ -589,7 +590,7 @@ Hypothetical scenario: a team runs Premium in three regions for a single-region 
 | Anonymous pull for "internal" images | Unauthenticated download if endpoint reachable | Keep anonymous off; use AcrPull + network rules |
 | Ignoring untagged manifest growth | Storage bill climbs while tag count looks fine | Retention policy (Premium) or weekly purge |
 | Pulling prod images cross-region on Standard | Slow scale-out + egress charges | Upgrade to Premium replicas or move compute |
-| Signing disabled but claiming supply-chain security | Tampered tags look legitimate | Enable content trust on Premium for release repos |
+| Signing disabled but claiming supply-chain security | Tampered tags look legitimate | Sign release images with Notary Project (`notation` + AKV); verify on AKS with Ratify + Azure Policy |
 
 ---
 
@@ -603,7 +604,7 @@ Use this matrix when onboarding a new workload to ACR. It complements the authen
 | Single-region production, no Private Link | Tight limits | **Default** | Optional |
 | Anonymous public artifacts | No | **Yes** | **Yes** |
 | Geo-replication or Private Link | No | No | **Required** |
-| Content trust / CMK / retention policy | No | No | **Required** |
+| Image signing (Notary Project) / CMK / retention policy | No | No | **Required** |
 | >100 GiB included storage need | No | Maybe | **Likely** |
 
 ```mermaid
@@ -615,7 +616,7 @@ flowchart TD
     D -- No --> E{Production workload?}
     E -- No --> F[Basic or shared Standard dev registry]
     E -- Yes --> G[Standard unless Premium features needed]
-    G --> H{Content trust / CMK / retention policy?}
+    G --> H{Notary signing / CMK / retention policy?}
     H -- Yes --> C
     H -- No --> I[Standard + purge tasks + Defender scan]
     C --> J{Consumer is AKS in Azure?}
@@ -635,7 +636,7 @@ Imagine a B2B SaaS with one AKS cluster in East US 2, twelve services, and GitHu
 
 ### Worked example: regulated multi-region bank on Premium
 
-The same architectural diagram with Private Link, three geo-replicas, content trust on `banking/*` repos, and CMK keys in a dedicated Key Vault illustrates the Premium baseline. Builds still occur in a non-production registry; `az acr import` promotes signed release candidates into the production registry after change advisory approval. AKS clusters in each region attach-acr to the same logical registry name but pull from local replicas. Operations runbooks document replica lag checks after marketing pushes large ML model images. Finance sees predictable line items: Premium SKU, three replica days, Defender, and Task minutes for quarterly base-image rebuilds. Attempting to replicate this with Docker Hub plus pull secrets would violate network policy and rate limits simultaneously.
+The same architectural diagram with Private Link, three geo-replicas, Notary Project signing on `banking/*` repos, and CMK keys in a dedicated Key Vault illustrates the Premium baseline. Builds still occur in a non-production registry; `az acr import` promotes signed release candidates into the production registry after change advisory approval. AKS clusters in each region attach-acr to the same logical registry name but pull from local replicas. Operations runbooks document replica lag checks after marketing pushes large ML model images. Finance sees predictable line items: Premium SKU, three replica days, Defender, and Task minutes for quarterly base-image rebuilds. Attempting to replicate this with Docker Hub plus pull secrets would violate network policy and rate limits simultaneously.
 
 ---
 
@@ -655,7 +656,7 @@ The same architectural diagram with Private Link, three geo-replicas, content tr
 | Using the admin account for CI/CD pipelines | It is the first authentication method shown in quickstarts | Use service principals with AcrPush role for CI/CD, or OIDC federation for GitHub Actions. Run `az acr check-health` before blaming AKS for pull failures. |
 | Not cleaning up old images | [There is no built-in retention policy enabled by default](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-retention-policy) | Create an ACR Task with `acr purge` on a schedule. Delete untagged manifests weekly and old tagged images monthly. |
 | Using `:latest` tag in production deployments | It seems like "latest" means "newest and best" | `:latest` is mutable---it can point to different images at different times. Use immutable tags (semantic version or Git SHA) for production. |
-| Running Premium SKU for dev/test registries | Teams copy production configuration | Use Basic ($5/month) for dev/test. Premium ($50+/month) is only needed for geo-replication, Private Link, or content trust. |
+| Running Premium SKU for dev/test registries | Teams copy production configuration | Use Basic ($5/month) for dev/test. Premium ($50+/month) is only needed for geo-replication, Private Link, or Notary Project image signing. |
 | Pulling images from a different region than compute | The registry is in East US but compute is in West Europe | Use geo-replication (Premium) or create separate registries per region. Cross-region pull adds latency and egress costs. |
 | Not enabling vulnerability scanning | Teams assume images are secure because they built them | [Enable Microsoft Defender for Containers, which automatically scans images pushed to ACR and reports vulnerabilities.](https://learn.microsoft.com/en-us/azure/container-registry/scan-images-defender) |
 | Hardcoding registry URLs in Kubernetes manifests | It works today, so why abstract it? | Use a variable or Helm value for the registry URL. This lets you switch registries (e.g., from dev ACR to prod ACR) without modifying manifests. |
@@ -832,13 +833,13 @@ You should observe exactly four tags chronologically ordered: v1.0.0, v1.1.0, v1
 
 ### Task 4: Inspect Image Metadata
 
-Understanding how to query the underlying cryptographic signatures and storage metrics of your images is essential for compliance auditing. Manifest digests are the immutable identifiers auditors expect; tags are friendly aliases that can move during promotions.
+Understanding how to query the underlying cryptographic signatures and storage metrics of your images is essential for compliance auditing. Manifest digests are the immutable identifiers auditors expect; tags are friendly aliases that can move during promotions. `az acr manifest list-metadata` returns **tagged** manifests only, which is sufficient for this lab's tag inventory.
 
 ```bash
-# Show detailed manifest information
-az acr repository show-manifests \
-  --name "$ACR_NAME" \
-  --repository webapp \
+# Show detailed manifest information (tagged manifests only)
+az acr manifest list-metadata \
+  --registry "$ACR_NAME" \
+  --name webapp \
   --detail \
   --query '[].{Digest:digest, Tags:tags, Created:createdTime, Size:imageSize}' -o table
 

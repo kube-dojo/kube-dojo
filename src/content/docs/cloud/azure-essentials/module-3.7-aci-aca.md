@@ -255,7 +255,7 @@ Windows container groups remain viable when legacy .NET Framework or Windows-onl
 | **Pricing (per vCPU/sec)** | See current pricing page | See current pricing page |
 | **Pricing (per GB memory/sec)** | See current pricing page | See current pricing page |
 
-A continuously running ACI workload should be priced against the current Azure pricing page, because the effective hourly and monthly cost depends on the current rates, region, and OS. Worked estimate without pinning a currency to a stale rate: a Linux group at 2 vCPU and 4 GiB memory running continuously for thirty days is roughly 2.59 million vCPU-seconds and 10.4 million GB-seconds per month before rounding nuances. Multiply those seconds by your region's published per-second rates from the pricing page to compare against a B-series VM or against ACA with `min-replicas: 1`. You will often discover that ACI's simplicity does not beat a right-sized VM for flat always-on CPU, while ACI still wins for cumulative runtimes measured in minutes per day.
+A continuously running ACI workload should be priced against the current Azure pricing page, because the effective hourly and monthly cost depends on the current rates, region, and OS. Worked estimate without pinning a currency to a stale rate: a Linux group at 2 vCPU and 4 GiB memory running continuously for thirty days is roughly 5.18 million vCPU-seconds and 10.4 million GB-seconds per month before rounding nuances. Multiply those seconds by your region's published per-second rates from the pricing page to compare against a B-series VM or against ACA with `min-replicas: 1`. You will often discover that ACI's simplicity does not beat a right-sized VM for flat always-on CPU, while ACI still wins for cumulative runtimes measured in minutes per day.
 
 > **Pause and predict**: If you had a monolithic web application that receives consistent, heavy traffic 24/7, would ACI be a cost-effective hosting choice compared to a standard VM? Why or why not?
 
@@ -339,6 +339,7 @@ az containerapp create \
   --image mcr.microsoft.com/k8se/quickstart:latest \
   --target-port 80 \
   --ingress external \
+  --revision-suffix v1 \
   --min-replicas 1 \
   --max-replicas 10 \
   --cpu 0.5 \
@@ -447,7 +448,7 @@ When you combine multiple rules, remember that KEDA evaluates scalers against th
 
 Service invocation routes `http://localhost:3500/v1.0/invoke/<app-id>/method/<name>` through the sidecar, which resolves targets inside the environment rather than hard-coding cluster DNS names that change during revisions. Pub/sub decouples publishers from subscribers: an order service publishes `OrderCreated` without maintaining a subscriber list in code. State management abstracts key/value persistence to configured backends. Each capability trades operational simplicity for sidecar overhead; monitor CPU and memory after enabling Dapr on high-density environments.
 
-Component configuration belongs in Git-reviewed YAML checked into your platform repository, not in one-off CLI strings in runbooks. The `az containerapp env dapr-component set` example below illustrates the shape; production pipelines should parameterize secrets via Key Vault references or managed identity-backed components where supported.
+Component configuration belongs in Git-reviewed YAML checked into your platform repository, not in one-off CLI strings in runbooks. The example below shows a `pubsub.yaml` component file; apply it with `az containerapp env dapr-component set --yaml pubsub.yaml`. Production pipelines should parameterize secrets via Key Vault references or managed identity-backed components where supported.
 
 ```mermaid
 flowchart TB
@@ -473,6 +474,21 @@ flowchart TB
     end
 ```
 
+```yaml
+# pubsub.yaml — Dapr pub/sub component for Azure Service Bus
+componentType: pubsub.azure.servicebus.topics
+version: v1
+metadata:
+  - name: connectionString
+    secretRef: sb-connection
+secrets:
+  - name: sb-connection
+    value: "<connection-string>"
+scopes:
+  - order-service
+  - notification-service
+```
+
 ```bash
 # Enable Dapr on a Container App
 az containerapp create \
@@ -487,22 +503,12 @@ az containerapp create \
   --dapr-app-port 8080 \
   --dapr-app-protocol http
 
-# Configure a Dapr pub/sub component
+# Configure a Dapr pub/sub component from file
 az containerapp env dapr-component set \
   --resource-group myRG \
   --name kubedojo-env \
   --dapr-component-name pubsub \
-  --yaml '{
-    componentType: pubsub.azure.servicebus.topics,
-    version: v1,
-    metadata: [
-      {name: connectionString, secretRef: sb-connection},
-    ],
-    secrets: [
-      {name: sb-connection, value: "<connection-string>"}
-    ],
-    scopes: [order-service, notification-service]
-  }'
+  --yaml pubsub.yaml
 ```
 
 **Example pattern**: In a microservice architecture, direct service-to-service HTTP calls can amplify slowdowns and retries into cascading failures. Dapr on Container Apps can reduce custom plumbing by adding service invocation, mTLS, and optional resiliency features such as retries and circuit breakers.
@@ -660,7 +666,7 @@ Relying on CPU-based auto-scaling for queue processors is fundamentally flawed b
 <details>
 <summary>4. Scenario: You are performing a canary deployment for a critical payment gateway running on Container Apps. You currently have 80% of traffic routing to revision v1 and 20% to revision v2. When you observe no errors in v2, you update the ingress rules to route 100% of traffic to v2. What happens to the users currently in the middle of processing a payment on revision v1?</summary>
 
-Users currently processing payments on revision v1 will not experience drops or interruptions. When you shift the traffic weights to 100% for revision v2, the Envoy proxy within Azure Container Apps performs a graceful drain on the newly deactivated v1 revision. This means Envoy stops routing any new incoming requests to v1, but actively allows all existing, established connections to complete their processing naturally. Once those active connections are closed or timeout according to configuration, the replicas for revision v1 will eventually be scaled down, ensuring a safe, zero-downtime transition for your users.
+Users currently processing payments on revision v1 will not experience drops or interruptions. When you shift the traffic weights to 100% for revision v2, the Envoy proxy stops routing new incoming requests to v1 while allowing established connections on v1 to complete. In **multiple revision mode**, weighting v1 to 0 does not automatically deactivate it—v1 stops receiving new requests, but you should deactivate or scale it down once drained. In **single revision mode**, shifting all traffic to v2 deactivates the prior revision automatically.
 </details>
 
 <details>
@@ -672,7 +678,7 @@ Direct HTTP calls between services lack inherent resilience mechanisms; if a dow
 <details>
 <summary>6. Scenario: You deploy an ACA background worker configured to process video rendering jobs from a Service Bus queue, with a target of 1 replica per 5 messages, min-replicas set to 0, and max-replicas set to 50. During off-peak hours, a batch upload system suddenly pushes 1,000 video jobs into the queue. Detail the exact sequence of scaling events that Container Apps will execute in response.</summary>
 
-Initially, KEDA detects the sudden spike in queue depth and triggers a scale-out from zero replicas, with the first instance starting up after a brief 5-10 second cold start to pull the image and initialize the container. Next, KEDA evaluates your scaling rule (1 replica per 5 messages) against the backlog of 1,000 messages, calculating a desired state of 200 replicas, but strictly caps the deployment at your configured `max-replicas` limit of 50. The environment rapidly spins up to 50 concurrent replicas to chew through the queue backlog. Once the queue is entirely empty and the default cool-down period of 300 seconds passes without any new messages arriving, KEDA will gracefully scale the worker back down to zero replicas, ensuring you pay absolutely nothing for compute while the system is idle.
+Initially, KEDA detects the sudden spike in queue depth and triggers a scale-out from zero replicas, with the first instance starting up after a brief cold start (seconds, depending on image size) to pull the image and initialize the container. Next, KEDA evaluates your scaling rule (1 replica per 5 messages) against the backlog of 1,000 messages, calculating a desired state of 200 replicas, but strictly caps the deployment at your configured `max-replicas` limit of 50. The environment rapidly spins up to 50 concurrent replicas to chew through the queue backlog. Once the queue is entirely empty and the default cool-down period of 300 seconds passes without any new messages arriving, KEDA will gracefully scale the worker back down to zero replicas, ensuring you pay absolutely nothing for compute while the system is idle.
 </details>
 
 <details>
@@ -836,8 +842,8 @@ sleep 30
 # Check replica count (should have scaled up)
 echo "Current replicas: $(az containerapp replica list -g "$RG" -n queue-worker --query 'length(@)' -o tsv)"
 
-# Check the queue length
-az storage queue show \
+# Check the queue length (approximate count from queue metadata)
+az storage queue metadata show \
   --name "work-items" \
   --account-name "$STORAGE_NAME" \
   --connection-string "$STORAGE_CONN" \
