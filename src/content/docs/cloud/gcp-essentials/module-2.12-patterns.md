@@ -122,23 +122,20 @@ module "project" {
   budget_amount = var.budget_amount
 }
 
-# Delete the default VPC
-resource "google_compute_network" "delete_default" {
-  name    = "default"
-  project = module.project.project_id
+# Default VPC: the project-factory module suppresses auto-created default networks
+# (auto_create_network=false). Do not declare a google_compute_network named "default"
+# here—that would create/manage a network instead of deleting the platform default.
 
-  lifecycle {
-    prevent_destroy = false
-  }
-}
-
-# Configure log sinks
+# Configure log sinks (unique_writer_identity grants a dedicated writer SA per sink)
 resource "google_logging_project_sink" "audit_to_central" {
-  name        = "audit-to-central-logging"
-  project     = module.project.project_id
-  destination = "logging.googleapis.com/projects/${var.central_logging_project}/locations/global/buckets/audit-logs"
-  filter      = "logName:\"cloudaudit.googleapis.com\""
+  name                   = "audit-to-central-logging"
+  project                = module.project.project_id
+  destination            = "logging.googleapis.com/projects/${var.central_logging_project}/locations/global/buckets/audit-logs"
+  filter                 = "logName:\"cloudaudit.googleapis.com\""
+  unique_writer_identity = true
 }
+# Grant roles/logging.bucketWriter (or equivalent) on the destination bucket to the
+# sink's writer_identity output—same IAM step as the gcloud lab in Task 4.
 
 # IAM baseline
 resource "google_project_iam_binding" "team_editors" {
@@ -181,7 +178,7 @@ A landing zone is the foundational GCP environment your entire organization is b
 
 The hierarchy flows Organization → Folders → Projects → Resources. IAM bindings and organization policies inherit downward unless explicitly overridden. That inheritance is the governance superpower: set `constraints/iam.disableServiceAccountKeyCreation` at the organization root and every descendant project inherits it. Place production workloads under a `Production` folder with stricter region constraints than your `Sandbox` folder. Shared services—networking, logging, security tooling—live in dedicated projects under a `Shared Services` folder where platform engineers retain control.
 
-Folder design should mirror how your business thinks about risk, not how your org chart happens to look today. A common pattern separates `Shared Services`, `Production`, `Non-Production`, and `Sandbox`. Sandbox folders often carry auto-expiry policies or tighter service constraints so experiments cannot accidentally become production dependencies.
+Folder design should mirror how your business thinks about risk, not how your org chart happens to look today. A common pattern separates `Shared Services`, `Production`, `Non-Production`, and `Sandbox`. Sandbox folders often pair **automated cleanup via tooling** (scheduled project deletion, budget caps) with tighter organization-policy constraints so experiments cannot accidentally become production dependencies—GCP has no native folder or project auto-expiry.
 
 ### The Three-Layer Architecture
 
@@ -204,7 +201,7 @@ flowchart TD
     NP2["payments-stg"]
     NP3["orders-dev"]
     
-    FolderSandbox["Folder: Sandbox (Auto-deleted after 30d)"]
+    FolderSandbox["Folder: Sandbox (auto-cleanup via tooling)"]
     SB1["sandbox-alice"]
     SB2["sandbox-bob"]
 
@@ -236,55 +233,64 @@ Centralized logging deserves explicit mention because audit failures often start
 Organization Policies are absolute, programmatic guardrails that cannot be overridden by individual developers, regardless of their local IAM roles. They enforce your security baseline across the entire organization or at specific folder levels.
 
 ```bash
+# Organization policies use the v2 policy file schema (name + spec.rules) with set-policy
+
 # Restrict which regions can be used (data residency)
 cat > /tmp/region-policy.yaml << 'EOF'
-constraint: constraints/gcp.resourceLocations
-listPolicy:
-  allowedValues:
-    - in:us-locations
-    - in:eu-locations
-  deniedValues:
-    - in:asia-locations
+name: organizations/ORG_ID/policies/gcp.resourceLocations
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - in:us-locations
+      - in:eu-locations
+      deniedValues:
+      - in:asia-locations
 EOF
-gcloud org-policies set-policy /tmp/region-policy.yaml --organization=ORG_ID
+gcloud org-policies set-policy /tmp/region-policy.yaml
 
 # Disable service account key creation org-wide
 cat > /tmp/no-sa-keys.yaml << 'EOF'
-constraint: constraints/iam.disableServiceAccountKeyCreation
-booleanPolicy:
-  enforced: true
+name: organizations/ORG_ID/policies/iam.disableServiceAccountKeyCreation
+spec:
+  rules:
+  - enforce: true
 EOF
-gcloud org-policies set-policy /tmp/no-sa-keys.yaml --organization=ORG_ID
+gcloud org-policies set-policy /tmp/no-sa-keys.yaml
 
-# Restrict external IP addresses on VMs
+# Restrict external IP addresses on VMs (production folder)
 cat > /tmp/no-ext-ip.yaml << 'EOF'
-constraint: constraints/compute.vmExternalIpAccess
-listPolicy:
-  allValues: DENY
+name: folders/PROD_FOLDER_ID/policies/compute.vmExternalIpAccess
+spec:
+  rules:
+  - denyAll: true
 EOF
-gcloud org-policies set-policy /tmp/no-ext-ip.yaml --folder=PROD_FOLDER_ID
+gcloud org-policies set-policy /tmp/no-ext-ip.yaml
 
 # Enforce uniform bucket-level access
 cat > /tmp/uniform-access.yaml << 'EOF'
-constraint: constraints/storage.uniformBucketLevelAccess
-booleanPolicy:
-  enforced: true
+name: organizations/ORG_ID/policies/storage.uniformBucketLevelAccess
+spec:
+  rules:
+  - enforce: true
 EOF
-gcloud org-policies set-policy /tmp/uniform-access.yaml --organization=ORG_ID
+gcloud org-policies set-policy /tmp/uniform-access.yaml
 
-# Restrict which services can be used
+# Restrict which services can be used (sandbox folder)
 cat > /tmp/allowed-services.yaml << 'EOF'
-constraint: constraints/serviceuser.services
-listPolicy:
-  allowedValues:
-    - compute.googleapis.com
-    - container.googleapis.com
-    - run.googleapis.com
-    - storage.googleapis.com
-    - cloudbuild.googleapis.com
-    - secretmanager.googleapis.com
+name: folders/SANDBOX_FOLDER_ID/policies/serviceuser.services
+spec:
+  rules:
+  - values:
+      allowedValues:
+      - compute.googleapis.com
+      - container.googleapis.com
+      - run.googleapis.com
+      - storage.googleapis.com
+      - cloudbuild.googleapis.com
+      - secretmanager.googleapis.com
 EOF
-gcloud org-policies set-policy /tmp/allowed-services.yaml --folder=SANDBOX_FOLDER_ID
+gcloud org-policies set-policy /tmp/allowed-services.yaml
 ```
 
 Combine `constraints/storage.publicAccessPrevention` with uniform bucket-level access for defense in depth. Public bucket incidents are among the most common audit findings, and organization policies block them at the API layer regardless of developer intent.
@@ -678,7 +684,7 @@ Reserved capacity and committed use discounts reward predictable baselines but p
 
 Egress economics deserve explicit architecture review because they are silent budget killers. Serving user traffic from the same region as your object storage and compute avoids cross-region bandwidth charges. Calling Google APIs through Private Google Access avoids routing API traffic over the public internet and may reduce NAT processing. Publishing static assets through Cloud CDN collapses repeated downloads into cache hits at the edge instead of repeated origin fetches from Cloud Storage.
 
-Sandbox environments need cost guardrails too, not just production. Auto-delete projects in the sandbox folder after thirty days, cap machine types through organization policy, and alert when any sandbox project exceeds a small weekly spend threshold. Experiments that linger become shadow production systems with none of the controls you built into the landing zone.
+Sandbox environments need cost guardrails too, not just production. Use **tooling** (scheduled project deletion scripts, budget alerts, factory TTL labels) to retire sandbox projects—GCP does not auto-delete folders or projects after a fixed calendar period—cap machine types through organization policy, and alert when any sandbox project exceeds a small weekly spend threshold. Experiments that linger become shadow production systems with none of the controls you built into the landing zone.
 
 ---
 

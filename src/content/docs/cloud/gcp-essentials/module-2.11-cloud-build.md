@@ -182,7 +182,7 @@ The simplicity of the `cloudbuild.yaml` format conceals substantial orchestratio
 
 **Logging Modes**: The `options.logging` field controls where build output is stored. `CLOUD_LOGGING_ONLY` (the recommended default) streams live logs to Cloud Logging, making them searchable and available for alerting. `GCS_ONLY` writes logs to a Cloud Storage bucket, useful when you need long-term archival beyond Cloud Logging's retention period. The legacy `LEGACY` mode stores logs in Cloud Storage under a predefined bucket naming convention. Most teams standardize on `CLOUD_LOGGING_ONLY` and forward critical error patterns to monitoring dashboards.
 
-**Build Timeouts**: The default build timeout is 10 minutes (600 seconds). This is deliberately short to prevent runaway builds from consuming quota indefinitely. For larger projects, you can override this in the `timeout` field using Go duration syntax: `timeout: '1800s'` for 30 minutes, or up to the maximum of 24 hours (`'86400s'`). A timeout that is too generous masks real problems --- if your build suddenly jumps from 8 minutes to 45 minutes, a shorter timeout surfaces the regression faster by hard-failing the build rather than silently consuming budget.
+**Build Timeouts**: The default build timeout is **60 minutes (3600 seconds)**. For larger projects, you can override this in the `timeout` field using Go duration syntax: `timeout: '1800s'` for 30 minutes, or up to the maximum of **24 hours (`'86400s'`)**. Set the timeout to a comfortable multiple of your observed build duration—at least 2x, ideally 3x—so normal growth does not fail the build, while still catching genuinely hung steps (infinite loops, stuck network calls) before they burn a full day of quota.
 
 **Build Artifacts**: Beyond the `images` field for container images, Cloud Build can persist arbitrary build outputs to Cloud Storage using the `artifacts` field. This is essential when your pipeline produces binaries, test reports, or code coverage HTML that downstream systems need to consume. Artifacts are saved after all steps complete, and they support glob patterns to select files from the `/workspace` volume:
 
@@ -321,9 +321,9 @@ steps:
       - '--no-traffic'
       - '--tag=canary'
 
-  # Step 6: Run integration tests against staging
-  - name: 'curlimages/curl:latest'
-    entrypoint: 'sh'
+  # Step 6: Run integration tests against staging (cloud-sdk image includes gcloud)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
     args:
       - '-c'
       - |
@@ -446,11 +446,13 @@ In this setup, a Pull Request trigger runs a subset of tasks defined in a separa
 For organizations operating enterprise instances of GitLab, Cloud Build facilitates seamless integration through the concept of "Connections." Rather than relying on a simple webhook, Cloud Build creates an authenticated, regional connection leveraging a Personal Access Token securely stored within Google Secret Manager.
 
 ```bash
-# Create a GitLab connection first
+# Create a GitLab connection (2nd-gen; three Secret Manager versions required)
 gcloud builds connections create gitlab my-gitlab-conn \
   --region=us-central1 \
   --host-uri="https://gitlab.com" \
-  --api-access-token-secret-version="projects/my-project/secrets/gitlab-token/versions/latest"
+  --authorizer-token-secret-version="projects/my-project/secrets/gitlab-api-pat/versions/latest" \
+  --read-authorizer-token-secret-version="projects/my-project/secrets/gitlab-read-pat/versions/latest" \
+  --webhook-secret-secret-version="projects/my-project/secrets/gitlab-webhook-secret/versions/latest"
 
 # Link a repository
 gcloud builds repositories create my-gitlab-repo \
@@ -458,13 +460,13 @@ gcloud builds repositories create my-gitlab-repo \
   --region=us-central1 \
   --remote-uri="https://gitlab.com/my-org/my-repo.git"
 
-# Create a trigger
-gcloud builds triggers create gitlab-enterprise \
+# Create a trigger on the linked repository
+gcloud builds triggers create gitlab \
   --name="deploy-from-gitlab" \
+  --region=us-central1 \
   --repository="projects/my-project/locations/us-central1/connections/my-gitlab-conn/repositories/my-gitlab-repo" \
   --branch-pattern="^main$" \
-  --build-config="cloudbuild.yaml" \
-  --region=us-central1
+  --build-config="cloudbuild.yaml"
 ```
 
 This configuration strategy anchors the repository metadata strictly within a designated Google Cloud region, ensuring compliance with data sovereignty and location requirements.
@@ -477,9 +479,9 @@ While automated triggers drive the day-to-day continuous integration loop, manua
 # Submit a build manually (from local source)
 gcloud builds submit --config=cloudbuild.yaml .
 
-# Submit with substitutions
+# Submit with substitutions (use a custom _TAG; do not override built-in SHORT_SHA)
 gcloud builds submit --config=cloudbuild.yaml \
-  --substitutions=_ENV=staging,SHORT_SHA=local123 .
+  --substitutions=_ENV=staging,_TAG=local123 .
 
 # Submit from a GCS archive
 gcloud builds submit --config=cloudbuild.yaml \
@@ -533,11 +535,11 @@ gcloud builds triggers create pubsub \
   --build-config="cloudbuild-nightly-scan.yaml"
 ```
 
-The Pub/Sub message payload is accessible inside the build through the `$_PUBSUB_PAYLOAD` substitution variable, allowing the build steps to parse JSON event data and adapt their behavior dynamically. For example, a message containing `{"scan_type": "full", "target": "production"}` can route the pipeline into a comprehensive security audit path, while `{"scan_type": "quick"}` triggers a fast lint-only pass.
+Bind fields from the Pub/Sub message on the trigger using **JSONPath substitution bindings** (not a built-in `$_PUBSUB_PAYLOAD` variable). For example, map `body.message.data` or attributes to custom substitutions such as `_DATA=$(body.message.data)` and `_EVENT=$(body.message.attributes.eventType)`, then reference `_DATA` and `_EVENT` in `cloudbuild.yaml` steps to route a comprehensive security audit versus a fast lint-only pass.
 
 ### Webhook Triggers
 
-When neither the native GitHub/GitLab integrations nor Pub/Sub fit your workflow --- for example, when you use a self-hosted version control system, a custom internal tool, or a third-party service that fires generic HTTP callbacks --- Cloud Build provides webhook triggers. A webhook trigger exposes a unique HTTPS URL that accepts POST requests with an optional shared secret for HMAC-SHA256 signature verification:
+When neither the native GitHub/GitLab integrations nor Pub/Sub fit your workflow --- for example, when you use a self-hosted version control system, a custom internal tool, or a third-party service that fires generic HTTP callbacks --- Cloud Build provides webhook triggers. A webhook trigger exposes a unique HTTPS URL; the shared secret is passed as **query parameters** on that URL (`?key=API_KEY&secret=SECRET`, with the secret value stored in Secret Manager), not as an HMAC header:
 
 ```bash
 # Create a webhook trigger with secret verification
@@ -547,7 +549,7 @@ gcloud builds triggers create webhook \
   --build-config="cloudbuild.yaml"
 ```
 
-The trigger URL is returned on creation. Any external system can then POST JSON payloads to that URL, and Cloud Build validates the `X-CloudBuild-Signature` header against the shared secret before executing the pipeline. This is the escape hatch that connects Cloud Build to essentially any automation system in your ecosystem.
+The trigger URL is returned on creation (including the `key` and `secret` query parameters your caller must supply). External systems POST to that URL; Cloud Build validates the secret as a query parameter before executing the pipeline. This is the escape hatch that connects Cloud Build to essentially any automation system in your ecosystem.
 
 ### Second-Generation Repository Connections
 
@@ -581,15 +583,15 @@ The second-generation model is the recommended path for new projects as of 2024,
 
 A pipeline is fundamentally an automated process acting on behalf of your organization. When Cloud Build pushes an image to Artifact Registry or deploys a service to Cloud Run, it must authenticate and authorize those actions. It achieves this by assuming the identity of an IAM Service Account.
 
-By default, Cloud Build historically leveraged a single, powerful "legacy" service account (`[PROJECT_NUMBER]@cloudbuild.gserviceaccount.com`) which possessed sweeping administrative privileges across the entire project. Relying on this default account violates the core security tenet of least privilege. A compromised pipeline configuration could theoretically be used to alter routing configurations, delete databases, or modify core infrastructure far beyond the scope of a simple deployment.
+Since the 2024 default change, **new projects** run Cloud Build as the **Compute Engine default service account** (`[PROJECT_NUMBER]-compute@developer.gserviceaccount.com`) unless you opt in to the legacy Cloud Build service account (`[PROJECT_NUMBER]@cloudbuild.gserviceaccount.com`). Either default can be broader than a single pipeline needs. Relying on project-wide defaults without scoping violates least privilege—a compromised `cloudbuild.yaml` could reach resources far beyond one deployment.
 
 Best practices dictate creating dedicated, custom service accounts explicitly tailored to the precise requirements of individual pipelines.
 
 ```bash
-# View the default Cloud Build service account
+# View which service accounts Cloud Build-related triggers may use
 gcloud projects get-iam-policy $PROJECT_ID \
   --flatten="bindings[].members" \
-  --filter="bindings.members:cloudbuild.gserviceaccount.com" \
+  --filter="bindings.members:compute@developer.gserviceaccount.com OR bindings.members:cloudbuild.gserviceaccount.com" \
   --format="table(bindings.role)"
 
 # Use a custom service account (recommended for production)
@@ -597,11 +599,11 @@ gcloud iam service-accounts create cloud-build-sa \
   --display-name="Custom Cloud Build SA"
 
 # Grant specific permissions
-gcloud projects add-iam-binding $PROJECT_ID \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:cloud-build-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/run.admin"
 
-gcloud projects add-iam-binding $PROJECT_ID \
+gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:cloud-build-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/artifactregistry.writer"
 
@@ -852,11 +854,11 @@ A single `cloudbuild.yaml` that uses conditional logic (bash `if` statements che
 
 **Anti-Pattern 2: Ignoring Build Timeouts**
 
-Leaving the default 10-minute timeout in place indefinitely, even as the project grows.
+Setting `timeout` far below your real pipeline duration—or never revisiting timeout after the test suite grows—while assuming the platform default will always fit.
 
-*What goes wrong*: One day a new dependency or a larger test suite pushes the build to 11 minutes. The pipeline starts failing with timeout errors. The team's first reaction is usually to assume something is broken, triggering a fire drill that wastes an afternoon before someone checks the timeout setting.
+*What goes wrong*: The default is **60 minutes (3600s)**, but an explicit `timeout: '600s'` in `cloudbuild.yaml` overrides it. Teams that copy a short timeout from a tutorial may see failures when integration tests expand, or they may set `timeout: '86400s'` everywhere and mask hung builds that burn quota for hours.
 
-*Better approach*: Set the timeout to a comfortable multiple of your observed build duration --- at least 2x, ideally 3x --- and monitor build duration trends. If the 90th percentile build time consistently exceeds half the timeout, increase the timeout proactively. A build that is genuinely stuck (infinite loop, hung network call) will still hit the timeout and fail, but a build that is merely growing with the codebase will not be prematurely killed.
+*Better approach*: Set `timeout` to a comfortable multiple of your observed build duration (at least 2x, ideally 3x) and monitor duration trends. If the 90th percentile build time consistently exceeds half your configured timeout, increase it proactively. A genuinely stuck build (infinite loop, hung network call) should still fail before 24 hours—the platform maximum.
 
 **Anti-Pattern 3: Secrets in Substitutions**
 
@@ -884,7 +886,7 @@ The choices you face when adopting Cloud Build are not purely technical --- they
 |-----------|-------------|----------------|-----------|
 | **Infrastructure** | Fully managed, serverless (default pool) or VPC-native (private pool) | GitHub-hosted runners or self-hosted | GitLab-hosted runners or self-hosted |
 | **GCP integration** | Native IAM, Artifact Registry auth, Cloud Deploy hand-off, Cloud Logging | Requires Workload Identity Federation setup | Requires Workload Identity Federation setup |
-| **Free tier** | 120 build-minutes/day (default machine) | 2,000 minutes/month (private repos), unlimited for public | 400 minutes/month (all tiers) |
+| **Free tier** | 120 build-minutes/day (default machine) | 2,000 minutes/month (private repos), unlimited for public | 400 compute-minutes/month on **free tier** (paid tiers include substantially more) |
 | **Pricing model** | Per build-minute by machine type | Per minute by runner tier (Linux/Windows/macOS) | Per minute by compute tier |
 | **Configuration** | Single `cloudbuild.yaml`, build steps as containers | `.github/workflows/*.yml`, job matrix, reusable workflows | `.gitlab-ci.yml`, stages, includes |
 | **Ecosystem** | Deepest GCP service integration, no third-party action marketplace | Largest marketplace (12,000+ actions), broadest third-party integration | Built-in container registry, Kubernetes integration |
@@ -933,7 +935,7 @@ When you exceed the free tier or use larger machine types, pricing scales with v
 
 - **File filtering on triggers**: The fastest build minute is the one you never consume. Use `ignoredFiles` to skip builds for documentation-only commits. For monorepos, use `includedFiles` to trigger only the relevant sub-pipeline.
 - **Caching**: Use Kaniko with Artifact Registry layer caching for Docker builds. A cached build that skips 80% of its layers might complete in 90 seconds instead of 8 minutes.
-- **Timeout discipline**: A build that hangs for 10 minutes before the timeout kills it consumes 10 billable minutes of zero-value execution. Set timeouts that are generous enough for normal operation but tight enough to catch hangs quickly.
+- **Timeout discipline**: A build that hangs until timeout consumes billable minutes of zero-value execution. Set timeouts generous enough for normal operation but well below the 24-hour maximum so hung jobs fail in minutes, not hours.
 - **Right-size machine types**: Run your build on the default machine and measure the wall-clock time. If it is acceptable, stay on the default. If developers complain about CI latency, benchmark on `E2_HIGHCPU_8` and compare the cost-per-build against the developer-productivity gain.
 
 **What makes cost spike unexpectedly**:
@@ -959,7 +961,7 @@ When you exceed the free tier or use larger machine types, pricing scales with v
 | Using the default Cloud Build SA for everything | Convenience; it has broad permissions | Create a custom SA per pipeline with minimal permissions |
 | Not using parallel steps | Steps run sequentially by default | Use `waitFor: ['-']` to run independent steps concurrently |
 | Hardcoding project IDs in cloudbuild.yaml | Works during initial development | Use `$PROJECT_ID` substitution for portability |
-| Not setting build timeouts | Default 10-minute timeout is too short for large builds | Set `timeout: '1800s'` (30 minutes) for complex pipelines |
+| Not setting build timeouts | Relying on a copied short timeout while the pipeline outgrows it | Set `timeout` to 2–3× observed duration (default platform max is 3600s unless you raise it to 86400s) |
 | Skipping tests in the CI pipeline | "We test locally" | Always run tests in CI; the pipeline is the source of truth |
 | Not using `images:` field for Docker pushes | Pushing images manually in steps | Use the `images:` field for automatic pushing and provenance |
 | Building everything on every commit | Simplest configuration | Use path filters in triggers to build only what changed |
@@ -988,7 +990,7 @@ You would configure two separate Cloud Build triggers using different Git matchi
 <details>
 <summary>4. A junior developer creates a basic Cloud Build pipeline that just runs `npm test` on a React frontend and outputs the results. During a security audit, you notice this pipeline is using the default Cloud Build service account. You immediately recommend switching it to a custom service account. What is the security risk of leaving it as the default?</summary>
 
-The risk lies in the violation of the principle of least privilege due to the default service account's broad, overly permissive roles. By default, the Cloud Build service account (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`) is granted the `Cloud Build Service Account` role, which includes permissions to push to Artifact Registry, deploy to Cloud Run, modify GKE clusters, and more. If a malicious actor compromises the React repository and alters the `cloudbuild.yaml` or a test script, they could use that pipeline's default credentials to deploy rogue containers or delete production infrastructure. A custom service account should be created with absolutely no permissions, and only the specific IAM roles required for that exact pipeline (e.g., just logging) should be granted.
+The risk lies in violating least privilege when triggers use a project-wide default identity with more permissions than the pipeline needs. On **new projects**, Cloud Build typically runs as the **Compute Engine default service account**; older projects may still use the legacy `PROJECT_NUMBER@cloudbuild.gserviceaccount.com` builder account if opted in—both can hold broad roles. If a malicious actor compromises the React repository and alters `cloudbuild.yaml` or a test script, they could abuse those credentials to push images, deploy services, or modify clusters. Create a dedicated service account per pipeline (or per environment) and grant only the roles that pipeline requires—for a CI-only job, logging and artifact read may be enough; omit deploy roles entirely.
 </details>
 
 <details>
@@ -1125,7 +1127,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}'
       - '.'
 
   # Step 3: Push to Artifact Registry
@@ -1134,7 +1136,7 @@ steps:
     waitFor: ['build']
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}'
 
   # Step 4: Deploy to Cloud Run
   - id: 'deploy'
@@ -1145,18 +1147,19 @@ steps:
       - 'run'
       - 'deploy'
       - '${_SERVICE}'
-      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}'
       - '--region=${_REGION}'
       - '--allow-unauthenticated'
-      - '--set-env-vars=APP_VERSION=${SHORT_SHA}'
+      - '--set-env-vars=APP_VERSION=${_TAG}'
 
 substitutions:
   _REGION: 'us-central1'
   _REPO: 'cicd-lab'
   _SERVICE: 'cicd-lab-api'
+  _TAG: 'local'
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${_TAG}'
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -1180,7 +1183,7 @@ cd /tmp/cicd-lab
 # Submit the build
 gcloud builds submit \
   --config=cloudbuild.yaml \
-  --substitutions=SHORT_SHA=manual01 \
+  --substitutions=_TAG=manual01 \
   .
 
 # Check build status
@@ -1232,7 +1235,7 @@ PYEOF
 # Build and deploy v2
 gcloud builds submit \
   --config=cloudbuild.yaml \
-  --substitutions=SHORT_SHA=manual02 \
+  --substitutions=_TAG=manual02 \
   .
 
 # Verify the new version
@@ -1250,7 +1253,7 @@ Audit your pipeline execution metadata locally using command-line filters to vis
 ```bash
 # List recent builds
 gcloud builds list --limit=5 \
-  --format="table(id, status, createTime, substitutions.SHORT_SHA)"
+  --format="table(id, status, createTime, substitutions._TAG)"
 
 # Get the latest build ID
 BUILD_ID=$(gcloud builds list --limit=1 --format="value(id)")
