@@ -309,7 +309,7 @@ Enable flow logs at the scope that matches your investigation: **VPC-wide** for 
 ### Reading a Flow Log Entry
 
 ```text
-2 123456789012 eni-abc123 10.0.1.50 203.0.113.25 443 49152 6 25 5000 1620140761 1620140821 ACCEPT OK
+2 123456789012 eni-abc123 10.0.1.50 203.0.113.25 49152 443 6 25 5000 1620140761 1620140821 ACCEPT OK
 ```
 
 | Field | Value | Meaning |
@@ -319,8 +319,8 @@ Enable flow logs at the scope that matches your investigation: **VPC-wide** for 
 | ENI | `eni-abc123` | Network interface |
 | Source IP | `10.0.1.50` | Where the traffic came from |
 | Dest IP | `203.0.113.25` | Where it was going |
-| Dest Port | `443` | HTTPS |
 | Source Port | `49152` | Ephemeral port (client) |
+| Dest Port | `443` | HTTPS |
 | Protocol | `6` | TCP |
 | Packets | `25` | Number of packets |
 | Bytes | `5000` | Total bytes |
@@ -341,7 +341,7 @@ As organizations mature, a single VPC per environment stops scaling: security bo
 
 ### VPC Peering
 
-[VPC Peering](https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/vpc-peering.html) is a one-to-one private connection between two VPCs. Traffic stays on the AWS backbone—never hairpinning through the public internet—and peering works **cross-account** and **cross-region** when you accept the operational overhead of managing peering accepters and route propagation in both directions. Two constraints bite every design review: peering is **non-transitive** (if A is peered with B and B is peered with C, A still cannot reach C through B), and **overlapping CIDR blocks cannot peer**, which is why the non-overlapping plan you drafted in Module 1.2's CIDR section pays dividends years later.
+[VPC Peering](https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/vpc-peering.html) is a one-to-one private connection between two VPCs. Traffic stays on the AWS backbone—never hairpinning through the public internet—and peering works **cross-account** and **cross-region** when you accept the operational overhead of managing peering accepters and route propagation in both directions. Two constraints bite every design review: peering is **non-transitive** (if A is peered with B and B is peered with C, A still cannot reach C through B), and **overlapping CIDR blocks cannot peer**, which is why the non-overlapping plan you drafted earlier in this module's CIDR section pays dividends years later.
 
 > **Stop and think**: You have three VPCs: Dev, Test, and Prod. The Dev VPC is peered with the Test VPC, and the Test VPC is peered with the Prod VPC. An engineer tries to ping an EC2 instance in Prod directly from an EC2 instance in Dev. Does the ping succeed? Why or why not?
 >
@@ -755,7 +755,7 @@ Flow logs require a destination and an IAM trust relationship so the VPC Flow Lo
 aws logs create-log-group --log-group-name /vpc/dojo-prod-flow-logs
 
 # Enable VPC Flow Logs (requires an IAM role with permissions -- see note below)
-# In production, you would create an IAM role. For this exercise, we use S3 delivery:
+# This exercise delivers to CloudWatch Logs; see the note below for the role-free S3 alternative.
 FLOW_LOG_ID=$(aws ec2 create-flow-logs \
   --resource-type VPC \
   --resource-ids $VPC_ID \
@@ -785,7 +785,7 @@ aws logs delete-log-group --log-group-name /vpc/dojo-prod-flow-logs
 aws ec2 delete-nat-gateway --nat-gateway-id $NAT1_ID
 aws ec2 delete-nat-gateway --nat-gateway-id $NAT2_ID
 echo "Waiting for NAT Gateways to delete..."
-sleep 60
+aws ec2 wait nat-gateway-deleted --nat-gateway-ids $NAT1_ID $NAT2_ID
 
 # 3. Release Elastic IPs
 aws ec2 release-address --allocation-id $EIP1_ALLOC
@@ -796,19 +796,19 @@ aws ec2 delete-security-group --group-id $DB_SG_ID
 aws ec2 delete-security-group --group-id $APP_SG_ID
 aws ec2 delete-security-group --group-id $ALB_SG_ID
 
-# 5. Delete custom NACL (subnets revert to default NACL)
-aws ec2 delete-network-acl --network-acl-id $NACL_ID
-
-# 6. Delete routes from private route tables, then delete them
+# 5. Delete routes from private route tables, then delete them
 aws ec2 delete-route --route-table-id $PRIV_RT1_ID --destination-cidr-block 0.0.0.0/0
 aws ec2 delete-route --route-table-id $PRIV_RT2_ID --destination-cidr-block 0.0.0.0/0
 aws ec2 delete-route --route-table-id $PUB_RT_ID --destination-cidr-block 0.0.0.0/0
 
-# 7. Delete subnets (this automatically disassociates route tables)
+# 6. Delete subnets (this frees their custom-NACL association automatically)
 aws ec2 delete-subnet --subnet-id $PUB_SUB1_ID
 aws ec2 delete-subnet --subnet-id $PUB_SUB2_ID
 aws ec2 delete-subnet --subnet-id $PRIV_SUB1_ID
 aws ec2 delete-subnet --subnet-id $PRIV_SUB2_ID
+
+# 7. Delete custom NACL (now unassociated; a NACL still bound to a subnet cannot be deleted)
+aws ec2 delete-network-acl --network-acl-id $NACL_ID
 
 # 8. Delete route tables
 aws ec2 delete-route-table --route-table-id $PUB_RT_ID
@@ -853,14 +853,14 @@ With routing, NAT, layered firewalls, and observability in place, you have the s
 - [docs.aws.amazon.com: vpc nat gateway.html](https://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/vpc-nat-gateway.html) — AWS NAT gateway documentation directly describes public NAT gateway placement, EIP requirements, and connection behavior.
 - [docs.aws.amazon.com: nat gateway working with.html](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-working-with.html) — AWS NAT gateway lifecycle documentation explicitly describes blackhole status for leftover routes.
 - [docs.aws.amazon.com: gateway endpoints.html](https://docs.aws.amazon.com/vpc/latest/privatelink/gateway-endpoints.html) — AWS gateway-endpoint documentation directly states the supported services and pricing model.
-- [docs.aws.amazon.com: privatelink access aws services.html](https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: privatelink access aws services.html](https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html) — AWS PrivateLink documentation describes reaching AWS services privately through interface endpoints without an internet or NAT path.
 - [docs.aws.amazon.com: infrastructure security.html](https://docs.aws.amazon.com/vpc/latest/userguide/infrastructure-security.html) — AWS VPC infrastructure-security documentation includes this comparison explicitly.
 - [docs.aws.amazon.com: security group rules.html](https://docs.aws.amazon.com/vpc/latest/userguide/security-group-rules.html) — AWS security-group rules documentation explicitly covers security-group referencing.
 - [docs.aws.amazon.com: vpc service.html](https://docs.aws.amazon.com/general/latest/gr/vpc-service.html) — AWS quota references publish these default numeric limits.
 - [docs.aws.amazon.com: vpc peering.html](https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/vpc-peering.html) — The AWS VPC connectivity whitepaper covers these peering characteristics together.
 - [docs.aws.amazon.com: AmazonDNS concepts.html](https://docs.aws.amazon.com/vpc/latest/userguide/AmazonDNS-concepts.html) — AWS Amazon DNS documentation explicitly describes the base-plus-two address and the DNS attributes.
 - [docs.aws.amazon.com: resolver overview DSN queries to vpc.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-overview-DSN-queries-to-vpc.html) — Route 53 Resolver documentation directly defines inbound and outbound endpoint behavior for hybrid DNS.
-- [docs.aws.amazon.com: nat gateway pricing.html](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-pricing.html) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: nat gateway pricing.html](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-pricing.html) — AWS NAT gateway pricing documentation details the hourly charge plus the per-GB data-processing fee referenced in the cost discussion.
 - [docs.aws.amazon.com: vpc sharing.html](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-sharing.html) — AWS VPC sharing documentation explicitly describes subnet sharing within an Organization and its management benefits.
 - [VPC Basics](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-subnet-basics.html) — Good canonical reference for VPC, subnet, and built-in component behavior.
 - [Regional NAT Gateways for Automatic Multi-AZ Expansion](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateways-regional.html) — Covers the newer regional NAT option that changes the HA guidance in this module.
