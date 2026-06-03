@@ -1,15 +1,14 @@
 ---
-revision_pending: true
 title: "Module 2.8: GCP Cloud Functions & Event-Driven Architecture"
 slug: cloud/gcp-essentials/module-2.8-cloud-functions
 sidebar:
   order: 9
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 2.4 (GCS), Module 2.7 (Cloud Run)
+**Complexity**: [MEDIUM] | **Time to Complete**: 2h | **Prerequisites**: Module 2.4 (GCS), Module 2.7 (Cloud Run). This module assumes you can create buckets and deploy Cloud Run services from Module 2.7, because Cloud Run functions share that execution plane.
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+When you finish the readings and the lab, you will be able to:
 
 - **Deploy Cloud Functions (2nd gen) with event triggers from Pub/Sub, Cloud Storage, and Eventarc**
 - **Configure Cloud Functions with VPC connectors, environment variables, and Secret Manager integration**
@@ -20,17 +19,25 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A polling VM that checks Cloud Storage on a fixed interval can add delivery lag, waste idle compute, and struggle when a large backlog arrives at once.
+Hypothetical scenario: your data platform team ingests partner CSV files into a shared Cloud Storage bucket every night. A small Compute Engine VM polls the bucket every five minutes, lists new objects, and pushes rows into Pub/Sub. On quiet nights the VM still runs continuously, and on busy nights the same single process falls behind while storage notifications already know exactly when each file landed. The architecture works until volume grows, at which point lag, duplicated processing, and weekend pager load all increase together.
 
-Replacing a polling VM with an event-driven function can reduce idle cost and improve burst handling because compute runs only when uploads arrive and the platform can scale out automatically.
+Replacing that polling VM with an event-driven Cloud Run function (deployed through the Cloud Functions tooling most teams still call “2nd gen”) removes idle polling cost and lets the platform scale out automatically when uploads arrive in bursts. Compute runs only when something actually happens, which is the practical definition of event-driven design on GCP: **instead of constantly checking for work, you react to events as they occur**. Google now markets the latest generation as [Cloud Run functions](https://cloud.google.com/functions/docs/concepts/overview), because each function is a Cloud Run service built from your source; the `gcloud functions deploy --gen2` path remains the familiar on-ramp while the underlying resource model converges with Module 2.7.
 
-This is the essence of event-driven architecture: **instead of constantly checking for things to do, you react to events as they happen**. Cloud Functions is GCP's function-as-a-service offering that lets you write small, focused pieces of code that execute in response to events. In this module, you will learn the difference between Gen 1 and Gen 2 Cloud Functions, the various trigger mechanisms, how Eventarc enables event-driven workflows, and how to build a practical event pipeline from Cloud Storage to Pub/Sub.
+This module connects those product names to decisions you will make in production. You will compare Cloud Run functions (latest) with Cloud Run functions (1st gen), choose triggers across HTTP, Pub/Sub, Cloud Storage, Firestore, and Eventarc, understand CloudEvents as the wire format, tune concurrency and minimum instances against cold starts, wire least-privilege service accounts and Secret Manager, and assemble a GCS → function → Pub/Sub pipeline you can reason about in reviews and cost conversations.
+
+### Key Concepts You Will Reuse on the Job
+
+**Function-as-a-service** means you ship an entry point and let Google manage servers, patching, and horizontal scaling. You still own correctness, idempotency, backoff behavior, and data contracts. **Event-driven** means triggers carry payloads to your code instead of your code polling buckets or queues. **CloudEvents** standardize those payloads so the same handler signature works across services. **Eventarc** routes events from many GCP APIs through filters to Cloud Run targets. **Gen2 / Cloud Run functions** mean your function is a Cloud Run revision created from source by Cloud Build.
+
+When you interview architectures, ask four questions: What is the trigger? What is the delivery guarantee? What happens on duplicate delivery? What is the cold-start and cost profile under minimum traffic and peak traffic? If any answer is missing, the design is not production-ready regardless of how small the code looks.
+
+Finally, connect this module back to Module 2.7 mentally: a Cloud Run function is a specialized deploy path, not a different runtime planet. Teams that already operate Cloud Run services should feel at home reading function metrics, revision lists, and VPC settings. Teams that only know legacy gen1 functions should plan training on Eventarc filters and CloudEvents parsing, because those two skills matter more day to day than memorizing additional `gcloud` flags. Carry a personal checklist: trigger type written down, idempotency store named, DLQ subscription identified, and cost owner assigned before you merge infrastructure YAML.
 
 ---
 
 ## Gen 1 vs Gen 2: Which to Choose
 
-Cloud Functions has two generations, and understanding the differences is critical for choosing the right one.
+Google documents two generations of Cloud Run functions, and the differences below should drive every new deployment decision you make in a GCP project.
 
 | Feature | Gen 1 | Gen 2 |
 | :--- | :--- | :--- |
@@ -68,15 +75,75 @@ gcloud functions deploy my-function-v1 \
 
 **Why Gen 2 matters**: Because Gen 2 is built on Cloud Run, each function instance can handle multiple concurrent requests. A Gen 1 function processing 100 concurrent requests needs 100 instances. A Gen 2 function with concurrency set to 50 needs only 2 instances. This drastically reduces costs and cold starts.
 
+Google’s [comparison guide](https://cloud.google.com/run/docs/functions/comparison) is the authoritative map when you inherit a `cloudfunctions.net` URL or a Terraform resource still named `google_cloudfunctions2_function`. Cloud Run functions deploy into Artifact Registry, expose a primary `run.app` endpoint, and inherit Cloud Run features such as traffic splitting, Direct VPC egress, GPU options on the underlying service, and request timeouts up to 60 minutes for HTTP-triggered workloads. Cloud Run functions (1st gen) remain on the older internal sandbox, cap memory at 8 GiB with 2 vCPU, and force one concurrent request per instance, which is why bursty HTTP APIs on gen1 often look expensive in metrics even when average CPU is low.
+
+Naming convergence matters for cross-team communication. Console navigation may say **Cloud Run** while your runbooks still say **Cloud Functions (2nd gen)**; both refer to the same Cloud Run-backed functions when you pass `--gen2`. New work should default to Cloud Run functions unless you are patching a gen1-only trigger contract you cannot migrate yet. Gen1 still supports direct triggers from a smaller set of sources, while Cloud Run functions route most non-HTTP events through Eventarc, including audit-log-derived events from many GCP services. When you plan a migration, treat it as a Cloud Run service migration: revise IAM roles (`roles/run.sourceDeveloper` and related), retest idempotency, and revalidate latency because audit-log-based routes are not identical to direct storage notifications.
+
 > **Stop and think**: If Gen 2 instances can handle multiple requests concurrently, how does this affect the memory and CPU requirements of the instance itself compared to a Gen 1 instance handling a single request?
+
+---
+
+## Runtimes, Source Deploy, and Entry Points
+
+Cloud Run functions are **source-deployed**: you point `gcloud functions deploy` at a directory (or archive), Google Cloud Build produces a container using language buildpacks, and the resulting image runs as a Cloud Run service. You do not hand-craft a Dockerfile for the default path, though the output is still a container stored in Artifact Registry. That matters operationally because supply-chain controls (Binary Authorization, pinned base images) apply to the built artifact even when you never wrote a `Dockerfile` yourself.
+
+Supported runtimes span Node.js, Python, Go, Java, Ruby, PHP, and .NET with independent deprecation schedules documented on the [runtime support](https://cloud.google.com/functions/docs/runtime-support) page. Pick a runtime ID that matches your language version (`python312`, `nodejs22`, `go124`, etc.) and plan upgrades before decommission dates, because Google stops creating new deployments on retired runtimes even if existing instances still run for a window. The **entry point** is the symbol Cloud Functions invokes: for Python HTTP handlers it is the function name passed to `@functions_framework.http`; for CloudEvents handlers it is the name on `@functions_framework.cloud_event`. Node.js uses `functions.http('name', handler)` or background equivalents depending on generation and trigger type.
+
+The Functions Framework is the portable contract between your code and the platform. It normalizes HTTP requests into familiar web request objects and delivers event triggers as [CloudEvents](https://cloud.google.com/eventarc/docs/cloudevents), which means the same handler shape works across Pub/Sub, Cloud Storage, and Eventarc routes. Ruby, PHP, and .NET use CloudEvents for event-driven functions on Cloud Run functions, while older gen1 Node/Go/Python/Java background functions followed different signatures—another reason to standardize on gen2 for new event handlers.
+
+Local iteration uses the same framework: install `functions-framework` in your virtualenv, export `FUNCTION_TARGET=hello_http`, and run `functions-framework` to emulate HTTP triggers before spending build minutes in Cloud Build. Keep `requirements.txt`, `package.json`, or `go.mod` minimal because cold start time includes dependency import cost, not only platform boot.
+
+---
+
+## Scaling, Concurrency, Cold Starts, and Timeouts
+
+Autoscaling for Cloud Run functions is Cloud Run autoscaling: instances scale out when concurrent demand exceeds what existing instances can serve at your configured **maximum concurrency**, and scale toward zero when idle unless you set **minimum instances**. Concurrency defaults are not universal constants; I/O-bound HTTP handlers that mostly await downstream APIs can often run tens of concurrent requests per instance, while CPU-bound transcode or cryptography work should usually keep concurrency low so requests do not contend for the same vCPU time slice.
+
+Cold starts happen when the platform must start a new instance process, load your runtime, import dependencies, and pass health checks before accepting traffic. Mitigations are economic tradeoffs: **minimum instances** keep warm containers ready (you pay idle CPU and memory), **startup CPU boost** spends extra CPU briefly during boot, and smaller dependency trees reduce import latency. For event-driven bursts, also remember that Eventarc and Pub/Sub can deliver multiple events while instances are still warming, which increases retry traffic unless handlers are idempotent.
+
+Timeout configuration must respect trigger class. [Google’s comparison documentation](https://cloud.google.com/run/docs/functions/comparison) documents up to 60 minutes for HTTP-triggered Cloud Run functions and shorter ceilings for many event-driven paths depending on API and trigger wiring. Size timeouts from measured worst-case processing—including downstream HTTP calls and GCS downloads—not from happy-path lab tests. Memory and CPU are coupled on Cloud Run: raising memory often increases CPU share, which can speed CPU-bound handlers but raises per-second billing.
+
+```bash
+# Example: latency-sensitive HTTP function with warm pool and tuned concurrency
+gcloud functions deploy payment-webhook \
+  --gen2 \
+  --runtime=python312 \
+  --region=us-central1 \
+  --source=. \
+  --entry-point=handle_webhook \
+  --trigger-http \
+  --memory=512Mi \
+  --timeout=120 \
+  --concurrency=40 \
+  --min-instances=1 \
+  --max-instances=20
+```
+
+---
+
+## Security, Identity, Networking, and Secrets
+
+Every function runs as a **service account** identity. The default compute service account is convenient in tutorials but is broader than production should allow; create a per-function account with only the roles it needs (`roles/storage.objectViewer` on specific buckets, `roles/pubsub.publisher` on specific topics, `roles/secretmanager.secretAccessor` for named secrets). Callers of HTTP functions need **Cloud Run Invoker** (`roles/run.invoker`) unless you expose a public endpoint; event triggers instead rely on Eventarc and Pub/Sub IAM paths configured during deploy.
+
+Ingress settings on the underlying Cloud Run service control whether traffic must arrive through internal Google networks, VPC, or the public internet. **Direct VPC egress** and **VPC connectors** let functions reach private RFC1918 resources such as on-prem databases via hybrid connectivity; choose Direct VPC when you want the simpler modern path documented for Cloud Run, and retain connectors only when operational standards require the older connector model. Egress to the internet for third-party APIs remains default for many setups, which is why exfiltration reviews still matter even for “serverless” functions.
+
+Secrets belong in [Secret Manager](https://cloud.google.com/functions/docs/configuring/secrets), mounted as environment variables or volumes on the Cloud Run service backing your function. Avoid baking API keys into source tarballs uploaded to Cloud Build. Rotate secrets by versioning in Secret Manager and redeploying or updating the service binding so new revisions pick up `latest` or a pinned version intentionally. Environment variables remain appropriate for non-secret configuration such as topic names, feature flags, and project IDs discovered via `GOOGLE_CLOUD_PROJECT`.
+
+### Production Rollouts on the Cloud Run Service Behind Your Function
+
+Because gen2 functions are Cloud Run services, every deploy creates a **revision** with immutable settings. You can shift traffic gradually between revisions, tag a revision for internal QA, and roll back by restoring traffic to a known-good revision without rebuilding source. That workflow matters when a dependency upgrade passes unit tests but fails under real Pub/Sub volume. Practice the rollback command before you need it at 2 a.m.
+
+Billing mode is another production knob easy to miss. Cloud Run services can bill per request and only allocate CPU during request processing, or allocate CPU for the entire instance lifecycle. Event-driven functions that wait on external APIs may behave differently under each model. Read the service billing settings when cost reviews show unexpected GiB-seconds during idle-looking charts.
 
 ---
 
 ## HTTP Triggers: Request-Response Functions
 
-The simplest trigger type. Your function receives an HTTP request and returns a response.
+HTTP triggers are the simplest mental model because they mirror ordinary web services: a client calls your URL, the Functions Framework adapts the request, your code returns JSON or HTML, and the platform handles TLS termination and scaling. Behind the scenes the deployment is still a Cloud Run service, which is why authentication uses Cloud Run invoker permissions and why you can later graduate the same container to a full Cloud Run deploy if the function outgrows the functions packaging model. Treat HTTP functions like any public API: validate inputs, bound payload sizes, and return explicit status codes so gateways and callers can retry safely.
 
 ### Python Example
+
+Python is the reference runtime in many GCP samples because the `functions-framework` package integrates cleanly with Flask request objects for HTTP and dict-like CloudEvents for storage and Pub/Sub. Keep `requirements.txt` small: every import in cold paths shows up in startup traces. Use `python312` or newer supported runtimes per the support schedule, and pin major versions to avoid surprise buildpack upgrades during redeploys.
 
 ```python
 # main.py
@@ -126,7 +193,11 @@ FUNCTION_URL=$(gcloud functions describe hello-api \
 curl "$FUNCTION_URL?name=KubeDojo"
 ```
 
+For authenticated HTTP functions, remove `--allow-unauthenticated` and grant `roles/run.invoker` to callers such as Cloud Load Balancing service accounts, Apigee, or partner service accounts. Public internet exposure should be a conscious choice documented in threat models, not the default copied from tutorials.
+
 ### Node.js Example
+
+Node.js remains a common choice for JSON APIs and webhook adapters because the ecosystem ships small HTTP handlers quickly. The Functions Framework package exposes the same HTTP and CloudEvents entry points across generations; keep dependencies lean because `node_modules` size dominates cold starts more than Python wheels in many projects.
 
 ```javascript
 // index.js
@@ -153,7 +224,9 @@ functions.http('helloHttp', (req, res) => {
 
 ## Cloud Storage Triggers: Reacting to File Events
 
-Cloud Storage triggers fire when objects are created, deleted, archived, or have their metadata updated in a bucket.
+Cloud Storage triggers fire when objects are created, deleted, archived, or have their metadata updated in a bucket. On Cloud Run functions, those notifications are Eventarc events with types such as `google.cloud.storage.object.v1.finalized`, which is why gen2 deploy flags use `--trigger-event-filters` instead of the older `google.storage.object.finalize` strings you still see in gen1 examples. The payload arriving in your handler is a CloudEvent: resource-specific fields live under `cloud_event.data`, while correlation identifiers such as `id`, `source`, `type`, and `time` sit at the top level per the CloudEvents specification.
+
+Design bucket layout deliberately when functions write back to storage. A function that transforms uploads and writes results into the same bucket without prefix discipline can re-trigger itself indefinitely, which shows up as a sudden invocation spike rather than a logic error in logs. Prefer separate buckets for raw and curated data, or strict prefix filters where input lands under `incoming/` and outputs land under `processed/` that the trigger ignores.
 
 ### Event Types
 
@@ -245,7 +318,9 @@ gcloud functions logs read process-upload \
 
 ## Eventarc: The Event Router
 
-Eventarc is GCP's event routing layer. It connects sources such as Cloud Storage, Pub/Sub, and Cloud Audit Logs to targets such as Cloud Functions, Cloud Run, GKE, and Workflows.
+Eventarc is GCP's event routing layer. It connects sources such as Cloud Storage, Pub/Sub, and Cloud Audit Logs to targets such as Cloud Functions, Cloud Run, GKE, and Workflows. Think of it as a managed event bus with filtering: you declare which event types and attributes matter, and Eventarc delivers matching CloudEvents to the destination you choose. That indirection is what unlocks audit-log triggers—your function can react when an IAM policy changes or a Compute Engine instance is created even though there is no “IAM trigger” flag on `gcloud functions deploy` itself.
+
+Audit-log-sourced events are powerful but subtly different from direct resource events. They follow the path of Cloud Audit Logs being written, which can add latency compared to a direct finalize notification and may include events you did not anticipate if filters are too broad. Tighten filters on `serviceName`, `methodName`, and resource labels so your security automation does not fan out on unrelated admin activity. Eventarc also lets one trigger fan out to multiple targets in advanced architectures, though the common learning path keeps a single Cloud Run function per trigger for clarity.
 
 ```mermaid
 graph LR
@@ -307,6 +382,8 @@ gcloud eventarc triggers list --location=us-central1
 gcloud eventarc providers list --location=us-central1
 ```
 
+Exploring providers in your region is worthwhile during design spikes because available audit event types evolve as GCP services ship new APIs. Capture the exact `type=` strings in Terraform or YAML so changes are reviewed like application code, not hidden console clicks. When a provider is unavailable in a region, the fix is usually redeploying the function and trigger together—not patching code alone.
+
 ### Eventarc vs Direct Triggers
 
 | Approach | How It Works | When to Use |
@@ -314,11 +391,19 @@ gcloud eventarc providers list --location=us-central1
 | **Direct trigger** (Gen 1 style) | Function directly subscribes to event source | Simple setups, single trigger per function |
 | **Eventarc trigger** | Event routed through Eventarc's event bus | Complex routing, audit log events, multiple targets, filtering |
 
+Direct triggers feel simpler because the deploy command names the bucket or topic explicitly. Eventarc triggers add a routing layer that pays off when you need audit logs, multiple consumers, or attribute filters that would otherwise require custom plumbing. In migrations, compare end-to-end latency and log shape—not only line count in Terraform—because audit-log events include different metadata than storage finalize events.
+
+### Firestore and Database-Style Events
+
+Firestore document changes can invoke Cloud Run functions when you wire the appropriate Eventarc or legacy Firebase/Google Cloud event path for your project layout. Document-write triggers are attractive for low-volume state changes—feature flags, user preference rows, approval records—where standing up a VM poll loop would be absurd. The same idempotency rules apply: a retried write event must not double-charge or duplicate notifications. Keep handlers small and push heavy enrichment to Pub/Sub if fan-out grows, because database-triggered functions can become hot spots when many clients write concurrently.
+
 ---
 
 ## Pub/Sub Integration: Decoupled Processing
 
-Pub/Sub is the messaging backbone for event-driven architectures in GCP. [Cloud Functions can both consume and produce Pub/Sub messages.](https://cloud.google.com/functions/docs/tutorials/pubsub)
+Pub/Sub is the messaging backbone for event-driven architectures in GCP. [Cloud Functions can both consume and produce Pub/Sub messages.](https://cloud.google.com/functions/docs/tutorials/pubsub) Publishing decouples producers from consumers: your upload handler can finish after enqueueing work, and downstream teams can add subscriptions without redeploying the function. Subscriptions control delivery semantics—ack deadlines, message retention, ordering keys, and dead-letter policies—so functions should ack only after side effects are durable (database commit, idempotency record written, outbound object stored).
+
+When retries exhaust, messages belong in a **dead-letter topic** attached to the subscription rather than silently disappearing. Configure a DLQ subscription monitored by alerting, and keep DLQ handlers idempotent too because operators replay messages manually during incidents. For Cloud Run functions created with the Cloud Functions v2 API, retry behavior on event triggers is often toggled at deploy time (`--retry` / `--no-retry`), while longer-lived architectures managed purely through Eventarc may adjust retry policies on the trigger and Pub/Sub subscription together. Either way, at-least-once delivery is the default assumption—exactly-once processing is an application property you build with keys and stores, not a platform promise.
 
 ### Pub/Sub-Triggered Function
 
@@ -378,7 +463,7 @@ gcloud functions logs read process-message \
 
 ## Building an Event Pipeline: GCS to Function to Pub/Sub
 
-A common pattern: a file upload triggers a Cloud Function that processes the file and publishes results to Pub/Sub for downstream consumers.
+A common pattern: a file upload triggers a Cloud Function that processes the file and publishes results to Pub/Sub for downstream consumers. The pipeline below is deliberately small so you can see each hop: storage notification → single function → durable topic → multiple subscribers. In production you might split parse and publish stages into two functions so retries on publishing do not re-download multi-gigabyte objects, but the data flow remains the same. Pay attention to attribute keys on published messages (`source_file`, `event_id`) because they become filters for downstream monitoring and idempotency checks.
 
 ```mermaid
 graph TD
@@ -490,9 +575,23 @@ gcloud functions logs read parse-csv \
 gcloud pubsub subscriptions pull results-sub --limit=5 --auto-ack
 ```
 
+Operating this pipeline in production means setting `max-instances` caps so a poison file cannot spin thousands of concurrent parsers, and setting subscription ack deadlines longer than your worst-case row fan-out. If each CSV row becomes one Pub/Sub message, wide files multiply downstream cost—consider batching rows into chunked messages when subscribers only need file-level notifications. Align regions so the bucket, function, topic, and primary subscribers share a locale unless disaster recovery requirements dictate otherwise.
+
+---
+
+## Worked Examples: Tuning Memory, CPU, and Concurrency
+
+Imagine three workloads side by side. First, a Stripe-style webhook that validates a signature, writes one Firestore document, and returns 200 within 300 ms. It is I/O-bound with tiny CPU use, so 256 MiB memory and concurrency 50–80 on gen2 often minimize instance count without risking CPU starvation. Second, a PDF thumbnail generator that downloads a 20 MiB object and renders pages with native libraries. It is CPU-bound; keep concurrency at 1–2, raise memory to 2–4 GiB so CPU shares increase, and expect longer timeouts. Third, a nightly audit exporter that streams millions of log rows to BigQuery. It may exceed comfortable function duration even with 60-minute HTTP limits—graduate to Cloud Run jobs or Dataflow instead of forcing a function shape.
+
+These examples share a method: measure p95 duration and memory high-water mark under realistic inputs, then set `--memory`, `--cpu`, `--concurrency`, and `--max-instances` from data. The console’s Cloud Run revision metrics show billable time per request; use them after load tests, not before. When in doubt, load test Pub/Sub triggers with duplicated messages to observe retry amplification before declaring a configuration “cheap.”
+
+Event-driven functions also need **backpressure** thinking. If downstream BigQuery inserts cap at 500 rows per second, publishing 5,000 Pub/Sub messages per second from the function will create a growing backlog and retry storm. Throttle inside the function, batch publishes, or insert a streaming layer designed for throughput. Serverless scale-out is fast; your dependencies are often slower.
+
 ---
 
 ## Error Handling and Retries
+
+Event-driven systems fail in predictable ways: transient downstream outages, poison messages with bad schemas, permission regressions after IAM changes, and duplicate deliveries when a handler times out after doing partial work. Your operability story needs three layers: structured logging with event identifiers, metrics on retry counts and DLQ depth, and idempotent business logic that tolerates duplicates without corrupting state. HTTP triggers differ—they return status codes to callers who may retry—so document which errors are safe to retry (429/503 with backoff) versus which should surface immediately (400 validation failures).
 
 ### Retry Behavior
 
@@ -502,6 +601,8 @@ gcloud pubsub subscriptions pull results-sub --limit=5 --auto-ack
 | **Cloud Storage** | Retry behavior depends on how the trigger and function were created | Yes |
 | **Pub/Sub** | Redelivery behavior depends on the subscription and function retry settings | Yes |
 | **Eventarc** | Retries for 24 hours | Yes |
+
+Operational teams sometimes disable retries for poison-message scenarios where any repeat would harm customers, but that choice trades away automatic recovery from transient blips. Prefer DLQs plus alerting when possible so you retain retries for network glitches while isolating bad payloads. Document the retry policy in your runbook next to the idempotency strategy so on-call engineers know whether to replay from Pub/Sub or fix forward in the database.
 
 ```bash
 # Deploy with retries disabled (for functions that should not retry)
@@ -519,9 +620,11 @@ gcloud functions deploy my-function \
 
 ### Idempotency: The Golden Rule
 
-Event-driven functions **must be idempotent**---processing the same event twice should produce the same result. [Events can be delivered more than once.](https://cloud.google.com/run/docs/tips/function-retries)
+Event-driven functions **must be idempotent**---processing the same event twice should produce the same result. [Events can be delivered more than once.](https://cloud.google.com/run/docs/tips/function-retries) Idempotency is not a library feature you install once; it is a data model choice. Store processed event IDs in a table with a uniqueness constraint, or use natural keys such as `gs://bucket/object/generation` when the storage event exposes generation numbers. Retention should exceed the maximum retry window for your trigger plus any manual replay horizon your operations team uses.
 
-> **Stop and think**: If an event ID is the best way to deduplicate events, where should you store these processed IDs, and how long should you retain them?
+Side effects that cannot be rolled back—charging money, shipping physical goods, sending irreversible emails—need stronger guards than a log line. Use outbox patterns or idempotent API tokens supplied by downstream systems. HTTP webhooks should validate signatures before work begins so random retries cannot forge payloads.
+
+> **Stop and think**: If an event ID is the best way to deduplicate events, where should you store these processed IDs, and how long should you retain them? Consider cost of the store, query latency on the hot path, and whether replays after deploys should reuse the same table or a new namespace per function version.
 
 ```python
 # BAD: Not idempotent (counter increments on every retry)
@@ -544,6 +647,86 @@ def process_event(cloud_event):
 
 ---
 
+## Observability: Logs, Metrics, and Traces
+
+Cloud Run functions inherit Cloud Run observability: stdout/stderr streams go to Cloud Logging, request metrics appear under Cloud Run service charts, and distributed traces can propagate through HTTP handlers when you instrument OpenTelemetry in code. For event-driven handlers, log the CloudEvent `id`, `type`, and `source` on every invocation so you can correlate duplicates during retry investigations. Structured JSON logs parse better than printf lines when Pub/Sub delivers thousands of messages per minute.
+
+Useful metrics to watch include request count, request latency percentiles, billable instance time, instance count, and error ratio on the Cloud Run service backing your function. For Pub/Sub triggers, also monitor `num_undelivered_messages` and oldest unacked message age on the subscription. Eventarc triggers expose delivery health through Cloud Logging entries on the trigger resource; alert when error rates spike after IAM or VPC changes. Tracing is optional for small labs but becomes valuable when functions call other GCP APIs—each outbound client library span explains whether slowness is cold start, GCS download, or downstream SQL.
+
+Debugging deploy failures usually means reading Cloud Build logs first, then Cloud Run revision status. Common errors include missing APIs, wrong region on the trigger, service accounts without `roles/eventarc.eventReceiver`, or entry-point names that do not match your source symbol. Keep a “known good” minimal HTTP function in the repo to bisect whether failures are project policy or application code.
+
+Alerting should tie together signals: rising function error rate, growing Pub/Sub backlog, DLQ message count, and sudden jumps in billable instance time. A spike only in instance time might mean min-instances were raised; a spike only in backlog might mean downstream database throttling. Train on-call engineers to read CloudEvent IDs in logs so replays after deploys do not double-process unless the idempotency table cleared.
+
+---
+
+## Cost Lens: Invocations, Compute Seconds, and Idle Warmth
+
+Cloud Run functions bill through [Cloud Run pricing](https://cloud.google.com/run/pricing) for the latest generation, while Cloud Run functions (1st gen) retain the older [1st gen pricing page](https://cloud.google.com/functions/pricing-1stgen). In practice you pay for **requests**, **vCPU-seconds**, **GiB-seconds** of memory while instances are allocated, and **networking** egress when responses or outbound calls leave Google’s network. Event-driven architectures often look cheap in demos because invocations are sparse, but production bills climb when retries multiply work, handlers download large objects on every event, or concurrency is set so low that each message spins up its own instance.
+
+**Minimum instances** are the classic cost surprise: they eliminate many cold starts by keeping containers warm, yet you pay for that warmth during quiet periods. A function with `min-instances=3` at 512 MiB memory is buying three always-on containers even when Pub/Sub has nothing to deliver. Right-size memory because Cloud Run couples CPU to memory tiers; over-provisioning memory for a lightweight JSON transformer increases both CPU share and GiB-seconds without improving throughput. **Concurrency** is the main cost lever for I/O-bound HTTP APIs—higher concurrency reduces instance count for the same request rate—while CPU-bound work should not chase high concurrency because it lengthens tail latency and can trigger timeouts that cause more retries.
+
+Networking costs deserve explicit review. Functions that pull multi-gigabyte objects from Cloud Storage on every small notification pay egress and storage operation charges in addition to function compute. Cross-region triggers (bucket in `europe-west1`, function in `us-central1`) add latency and data transfer. Pub/Sub itself has separate message and egress pricing; fan-out pipelines that publish one message per CSV row can dwarf function CPU when files are wide. Use budgets and alerts on Cloud Run metrics (`billable_instance_time`, request counts) plus Pub/Sub backlog metrics so cost spikes show up before finance does.
+
+Free tier allowances exist for Cloud Run and related services, but production pipelines should be sized without assuming free coverage. Chargeback teams often allocate function cost to the product owner of the triggering bucket or topic so engineers see the price of per-row Pub/Sub fan-out. When cost dominates, batch objects in the function and publish one message per file, or move parsing to Dataflow for heavy transforms while keeping the function as a notifier only.
+
+---
+
+## Patterns and Anti-Patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **Thin trigger, fat async worker** | Spiky uploads or webhooks that must return quickly | HTTP or storage handler validates and enqueues to Pub/Sub; heavy work consumes at controlled concurrency elsewhere | Add subscriber autoscaling and DLQ monitoring as volume grows |
+| **Prefix-separated buckets** | Any function that writes derivatives back to storage | Prevents accidental self-trigger loops and clarifies IAM per prefix | Move to separate buckets per data classification at enterprise scale |
+| **Idempotency store keyed by event ID** | Pub/Sub, Eventarc, or storage triggers with side effects | Survives at-least-once delivery and retry storms without duplicate charges or rows | Back with Firestore/Spanner/SQL with TTL aligned to max retry window |
+| **Dedicated runtime service account** | All production functions | Least privilege limits blast radius when credentials leak via logs or dependency compromise | Automate IAM via Terraform per function family |
+| **Eventarc audit filters for governance** | Security automation reacting to admin APIs | Captures control-plane actions HTTP/GCS triggers cannot see | Start strict on `methodName`; broaden only with testing |
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Gen1 for new HTTP APIs** | One request per instance explodes instance count on bursts | Old tutorials and `cloudfunctions.net` examples | Deploy Cloud Run functions (`--gen2`) with tuned concurrency |
+| **Same-bucket read/write trigger** | Runaway invocations and billing shocks | Simplest path in demos | Separate buckets or non-overlapping prefixes |
+| **Unbounded synchronous fan-out** | Timeouts, duplicate publishes on retry | Easiest way to “notify everyone” inside one handler | Publish once to Pub/Sub; let subscribers scale independently |
+| **Default compute service account** | Over-broad access if function is compromised | Fastest lab deploy | Per-function SA with minimal roles |
+| **Ignoring DLQ backlog** | Silent data loss after retry exhaustion | DLQ setup feels optional | Alert on DLQ depth; runbook replays with idempotency |
+| **Max memory “just in case”** | Higher GiB-seconds without benefit | Copy-paste from other services | Profile memory; increase only with evidence |
+
+Patterns succeed when you pair them with explicit SLOs. A thin trigger pattern only helps if the enqueue step is faster than user-facing latency budgets. Idempotency stores only help if reviewers verify uniqueness constraints in schema migrations. Governance triggers via Eventarc only help if security operations owns the filter list and reviews it quarterly as APIs evolve.
+
+---
+
+## Decision Framework: Functions vs Cloud Run vs App Engine
+
+Use the flowchart when stakeholders ask “which serverless surface do we pick?” All three can run HTTP workloads, but operational contracts differ.
+
+```mermaid
+flowchart TD
+    Start([New workload on GCP]) --> Q1{Need full container<br/>control or sidecars?}
+    Q1 -->|Yes| CR[Cloud Run service<br/>bring your Dockerfile]
+    Q1 -->|No| Q2{Handler is small<br/>event or HTTP function?}
+    Q2 -->|Yes| Q3{Existing gen1<br/>constraint?}
+    Q3 -->|No| CRF[Cloud Run functions<br/>gcloud functions --gen2]
+    Q3 -->|Yes| G1[Cloud Run functions 1st gen<br/>migrate plan required]
+    Q2 -->|No| Q4{Long-lived App Engine<br/>standard features needed?}
+    Q4 -->|Yes| AE[App Engine standard<br/>legacy fit only]
+    Q4 -->|No| CR
+    CRF --> Q5{Trigger type?}
+    Q5 -->|HTTP / CloudEvents code| CRF
+    Q5 -->|Custom container ports<br/>GPU / mesh| CR
+```
+
+| Choice | Strengths | Tradeoffs | Typical fit |
+| :--- | :--- | :--- | :--- |
+| **Cloud Run functions (latest)** | Fastest path from source to HTTPS or CloudEvents; inherits Cloud Run scaling | Less control than custom containers; event sources often via Eventarc | Webhooks, ETL on GCS uploads, lightweight APIs |
+| **Cloud Run service** | Full container, sidecars, GPUs, service mesh integrations | You own Dockerfile/security patching cadence | Microservices, multi-process apps, bespoke runtimes |
+| **App Engine standard** | Mature PaaS for specific legacy apps | Narrower runtime story; not the default for new event systems | Existing App Engine estates, not greenfield functions |
+| **Cloud Run functions (1st gen)** | Familiar if frozen on gen1 triggers | No concurrency; smaller trigger surface | Maintenance only—plan upgrade |
+
+**Gen1 vs gen2 inside functions:** choose Cloud Run functions (latest) unless a compliance or Terraform constraint blocks migration this quarter. If you must stay on gen1 temporarily, isolate those functions behind an integration boundary and budget engineering time to retest Eventarc filters and IAM on gen2, because gen2 is not a flag-only change—it is a Cloud Run service with different metrics and roles.
+
+When stakeholders ask for App Engine instead, clarify whether they need standard environment conveniences or simply want “no servers.” Cloud Run functions usually satisfy the second desire with more transparent scaling and clearer IAM. When they need arbitrary processes in one address space, Cloud Run services remain the better container story. Document the decision in your architecture record so future teams do not relitigate the same comparison during every hack week.
+
+---
+
 ## Did You Know?
 
 1. **Cloud Functions Gen 2 is built entirely on Cloud Run**. When you deploy a Gen 2 function, [GCP creates a Cloud Run service behind the scenes.](https://cloud.google.com/functions/docs/deploy) You can actually see it in the Cloud Run console. This means Gen 2 functions inherit all Cloud Run features: traffic splitting, min instances, concurrency, and Direct VPC Egress.
@@ -554,9 +737,13 @@ def process_event(cloud_event):
 
 4. **Eventarc supports event filtering**. You can narrow which events reach a target so the function runs only for the resources and changes you care about.
 
+The four facts above share a theme: Cloud Run functions are Cloud Run services under the hood. That convergence is why skills from Module 2.7 transfer directly—traffic management, VPC egress, Secret Manager mounts, and Cloud Run metrics apply without a parallel learning track. The functions-specific surface area is triggers and the Functions Framework entry points, not the scaling engine itself.
+
 ---
 
 ## Common Mistakes
+
+The table below collects issues that survive code review because they only appear under retries, bursts, or billing review. Treat it as a pre-production checklist for any new function.
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
@@ -569,9 +756,13 @@ def process_event(cloud_event):
 | Hardcoding project ID in function code | Works in development | Use environment variables or the metadata server for project ID |
 | Not creating a dedicated service account | [Default SA has Editor role](https://cloud.google.com/functions/docs/concepts/iam) | Create a function-specific SA with minimal permissions |
 
+Review the table during design reviews, not after launch week. Many mistakes are policy and topology issues invisible in unit tests until retries and loops appear under real traffic. Region mismatches belong on the same checklist: when your bucket lives in `europe-west1` but the function defaults to `us-central1`, you pay latency and cross-region egress while debugging “slow uploads” that are actually physics and billing, not application logic. Treat that checklist like a pre-merge template for every new function PR so reviewers can reject incomplete operational stories before they reach production projects. The habit takes minutes per change and prevents the expensive rework cycles that begin when finance notices runaway invocations or compliance finds over-broad service accounts. That discipline is part of operating event-driven GCP platforms responsibly now at true production scale every week you ship changes to customers.
+
 ---
 
 ## Quiz
+
+These questions mix architecture judgment with handler mechanics you will use in reviews. Read each scenario carefully before opening the answer.
 
 <details>
 <summary>1. You are migrating a high-traffic image processing API to Cloud Functions. The API receives sporadic bursts of thousands of requests per second. Your team is debating whether to use Gen 1 or Gen 2 functions. Which generation should you choose and why is its underlying architecture better suited for this scenario?</summary>
@@ -615,7 +806,7 @@ The team member will find these values within the attributes of the `cloud_event
 
 ### Objective
 
-Build an event-driven pipeline: uploading a file to Cloud Storage triggers a Cloud Function that processes the file and publishes results to Pub/Sub.
+Build an event-driven pipeline: uploading a file to Cloud Storage triggers a Cloud Function that processes the file and publishes results to Pub/Sub. The lab mirrors the architecture diagram earlier in this module, but adds explicit IAM and cleanup steps so you can tear the environment down without leaving billed resources running overnight.
 
 ### Prerequisites
 
@@ -625,7 +816,7 @@ Build an event-driven pipeline: uploading a file to Cloud Storage triggers a Clo
 
 ### Tasks
 
-**Task 1: Create the Infrastructure**
+**Task 1: Create the infrastructure** — Enable the APIs, create the upload bucket and Pub/Sub topic, and provision a least-privilege service account with Eventarc receiver permissions. This foundation prevents mysterious deploy failures later when Eventarc cannot impersonate your runtime identity.
 
 <details>
 <summary>Solution</summary>
@@ -677,7 +868,7 @@ gcloud projects add-iam-binding $PROJECT_ID \
 ```
 </details>
 
-**Task 2: Write the Cloud Function**
+**Task 2: Write the Cloud Function** — Author a CloudEvents handler that filters file types, computes simple analytics, and publishes a JSON summary with the event identifier attached as a Pub/Sub attribute for downstream deduplication.
 
 <details>
 <summary>Solution</summary>
@@ -756,7 +947,7 @@ echo "Function source created."
 ```
 </details>
 
-**Task 3: Deploy the Cloud Function**
+**Task 3: Deploy the Cloud Function** — Deploy with gen2, explicit entry point, GCS finalize filters scoped to your lab bucket, and the dedicated service account from Task 1.
 
 <details>
 <summary>Solution</summary>
@@ -784,7 +975,7 @@ gcloud functions describe process-file \
 ```
 </details>
 
-**Task 4: Test the Pipeline**
+**Task 4: Test the pipeline** — Upload CSV and text objects, wait for asynchronous delivery, then read function logs and pull Pub/Sub messages to confirm summaries match expectations.
 
 <details>
 <summary>Solution</summary>
@@ -829,7 +1020,7 @@ gcloud pubsub subscriptions pull processed-files-sub \
 ```
 </details>
 
-**Task 5: Test Filtering (Non-Matching Files)**
+**Task 5: Test filtering for non-matching files** — Upload a JSON object to prove your handler short-circuits without publishing, which is how you avoid paying for Pub/Sub fan-out on unsupported MIME paths.
 
 <details>
 <summary>Solution</summary>
@@ -849,7 +1040,7 @@ gcloud pubsub subscriptions pull processed-files-sub --limit=5 --auto-ack
 ```
 </details>
 
-**Task 6: Clean Up**
+**Task 6: Clean up resources** — Delete the function, subscription, topic, bucket, and service account so the lab does not continue charging minimum-instance or storage fees after you finish.
 
 <details>
 <summary>Solution</summary>
@@ -879,6 +1070,8 @@ echo "Cleanup complete."
 
 ### Success Criteria
 
+Completing the lab means you observed end-to-end causality: storage event → log lines with event ID → Pub/Sub payload. Capture screenshots or log excerpts for your portfolio if you mentor others; the failure modes are more educational than the happy path.
+
 - [ ] GCS bucket, Pub/Sub topic, and service account created
 - [ ] Cloud Function deployed with GCS trigger
 - [ ] Uploading a CSV file triggers the function
@@ -890,15 +1083,22 @@ echo "Cleanup complete."
 
 ## Next Module
 
+You now have an event-driven spine connecting storage, compute, and messaging. The next module deepens the security layer those functions already touch lightly: Secret Manager for storing API keys and connection strings, versioning secrets, tightening IAM bindings, and mounting secrets into Cloud Run and Compute Engine without copying material into environment files in source control.
+
 Next up: **[Module 2.9: Secret Manager](../module-2.9-secret-manager/)** --- Learn how to securely store and manage secrets, control access with IAM, version and rotate secrets, and integrate them with Cloud Run and Compute Engine.
 
 ## Sources
 
-- [cloud.google.com: comparison](https://cloud.google.com/run/docs/functions/comparison) — The official comparison page directly covers the Cloud Run resource model, concurrency, and traffic-splitting differences.
-- [cloud.google.com: quotas](https://cloud.google.com/functions/quotas) — The Cloud Run functions quotas page lists 8 GiB for 1st gen and 32 GiB for 2nd gen.
-- [cloud.google.com: event types](https://cloud.google.com/eventarc/docs/event-types) — The Eventarc event types page explicitly lists these Cloud Storage event types.
-- [cloud.google.com: pubsub](https://cloud.google.com/functions/docs/tutorials/pubsub) — The official Pub/Sub trigger docs describe this exact trigger behavior.
-- [cloud.google.com: function retries](https://cloud.google.com/run/docs/tips/function-retries) — The retry documentation states this explicitly.
-- [cloud.google.com: deploy](https://cloud.google.com/functions/docs/deploy) — The deployment guide says the deployment creates the Cloud Run-managed artifact and the function appears on the Cloud Run overview page.
-- [cloud.google.com: iam](https://cloud.google.com/functions/docs/concepts/iam) — The Cloud Run functions IAM page documents the default runtime service account behavior and the Editor-role caveat.
-- [Trigger Functions from Cloud Storage Using Eventarc](https://cloud.google.com/run/docs/tutorials/trigger-functions-storage) — It shows the canonical Cloud Storage to Eventarc to function flow used throughout the module.
+- [Cloud Run functions overview](https://cloud.google.com/functions/docs/concepts/overview) — Product naming and pointers to Cloud Run-backed functions.
+- [Compare Cloud Run functions](https://cloud.google.com/run/docs/functions/comparison) — Gen1 vs latest differences for concurrency, timeouts, triggers, and APIs.
+- [Cloud Run functions quotas](https://cloud.google.com/functions/quotas) — Memory, CPU, and scaling limits per generation.
+- [Runtime support](https://cloud.google.com/functions/docs/runtime-support) — Supported language versions and deprecation schedules.
+- [Eventarc event types](https://cloud.google.com/eventarc/docs/event-types) — Cloud Storage and other filterable event type strings.
+- [CloudEvents in Eventarc](https://cloud.google.com/eventarc/docs/cloudevents) — Wire format fields used by CloudEvents handlers.
+- [Pub/Sub triggers tutorial](https://cloud.google.com/functions/docs/tutorials/pubsub) — Publishing and consuming messages from functions.
+- [Function retries](https://cloud.google.com/run/docs/tips/function-retries) — At-least-once delivery and retry guidance.
+- [Deploy Cloud Run functions](https://cloud.google.com/functions/docs/deploy) — Source deploy path and Cloud Run console visibility.
+- [Cloud Run functions IAM](https://cloud.google.com/functions/docs/concepts/iam) — Service accounts, invoker roles, and least privilege.
+- [Configure secrets](https://cloud.google.com/functions/docs/configuring/secrets) — Secret Manager integration on the underlying Cloud Run service.
+- [Cloud Run pricing](https://cloud.google.com/run/pricing) — vCPU, memory, requests, and networking cost model for latest functions.
+- [Trigger functions from Cloud Storage](https://cloud.google.com/run/docs/tutorials/trigger-functions-storage) — Eventarc + Cloud Storage finalize walkthrough.
