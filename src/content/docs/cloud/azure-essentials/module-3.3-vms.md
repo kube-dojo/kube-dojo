@@ -41,6 +41,39 @@ Azure offers many VM sizes, organized into families based on the workload type t
 | **GPU** | NC, ND, NV | GPU-accelerated workloads | ML training, rendering, video encoding |
 | **High Performance** | HB, HC, HX | Fastest CPUs, InfiniBand networking | Scientific simulation, financial modeling |
 
+### Deep Dive: VM Family Characteristics
+
+Selecting a VM size is about matching workload demands to the hardware profile each family provides. Every family tunes a different ratio of compute, memory, storage, and networking capacity. Picking the wrong family creates a VM bottlenecked in one dimension while wasting money in another. Understanding what each family optimizes is the first step toward right-sizing.
+
+**General Purpose (B-family, D-family)**: The B-series uses a CPU credit model that makes it effective for workloads with irregular traffic patterns where the VM spends most of its time well below the baseline and only occasionally spikes. The D-family (D, Ds, Dd, Das, Dps) balances CPU and memory for production web servers, small-to-medium databases, and line-of-business applications. The `s` variant adds premium storage support, making it the default choice for any workload that needs both balanced compute and fast managed disks. The `a` variant uses AMD EPYC processors, which often deliver similar performance at a lower per-hour cost than their Intel counterparts in the same D-family.
+
+**Compute Optimized (F-family)**: The F-series provides a higher CPU-to-memory ratio than D-series at a lower per-core cost because each vCPU maps to a full physical core rather than a hyper-thread. This makes F-series the natural fit for batch processing, computational workloads, gaming servers, and build agents where the workload is CPU-bound and memory demand is modest. Like D-series, the `s` variant enables premium storage. F-series VMs also offer higher network bandwidth per vCPU than D-series, which helps when processing requires fetching large datasets from remote storage.
+
+**Memory Optimized (E-family, M-family)**: The E-family delivers substantially more memory per vCPU than D-series, typically 8 GiB of RAM per vCPU compared to 4 GiB on D-series. This makes E-series suitable for relational databases with large buffer pools, in-memory caches like Redis or Memcached, and medium-sized SAP workloads. The M-family scales memory much further, supporting configurations with up to 12 TiB of RAM for the largest SAP HANA and SQL Server deployments. When a database workload slows down under concurrent query load, insufficient memory for caching is the most common cause, and moving from D-series to E-series often resolves the bottleneck without any application changes.
+
+**Storage Optimized (L-family)**: The L-series pairs high CPU counts with locally attached NVMe SSDs that deliver very high IOPS and throughput without incurring managed-disk charges. These local disks are ephemeral, so data does not survive a VM stop or deallocation. L-series is designed for workloads that either do their own replication, such as Cassandra, MongoDB, and Elasticsearch, or treat storage as disposable cache for temporary processing and data pipeline scratch space. The locally attached storage is not encrypted at rest by default; you must enable encryption explicitly if compliance requires it.
+
+**GPU-Accelerated (NC-family, ND-family, NV-family)**: The NC-series targets compute-intensive GPU workloads using NVIDIA Tesla GPUs for machine learning training and high-performance computing simulation. The ND-series adds high-bandwidth InfiniBand networking for tightly coupled multi-GPU distributed training jobs where inter-GPU communication is the scaling bottleneck. The NV-series provides visualization-grade GPUs designed for remote desktops, 3D rendering, and video transcoding. GPU instances are among the most expensive VM types, so verify that your workload genuinely benefits from GPU acceleration. Many inference workloads can run efficiently on CPU-only D-series VMs.
+
+**High-Performance Compute (HB-series, HC-series, HX-series)**: The HB-series uses AMD EPYC processors with 100 Gbps InfiniBand for MPI workloads where sub-microsecond inter-node latency matters, including weather modeling, computational fluid dynamics, and financial risk simulation. The HC-series targets dense compute with Intel Xeon processors, and the HX-series pushes to extreme scale for the largest simulation workloads. These families are infrequently used outside specialized scientific and engineering domains, but when you need them, the choice between HB and HC depends on whether your application is optimized for AMD or Intel instruction sets.
+
+### Right-Sizing Workflow
+
+Right-sizing is an iterative process, not a single decision made at deployment time.
+
+1. **Profile the workload**: Measure CPU utilization, memory consumption, disk IOPS and throughput, and network throughput under realistic, not synthetic, load. A VM that averages 15% CPU but spikes to 95% for two hours during nightly batch processing needs burst capacity, not a permanently larger, more expensive size.
+
+2. **Identify the primary bottleneck**: Determine which resource ceiling the workload hits first. If CPU is pinned at 100% but memory sits at 40%, a compute-optimized size (F-series) is the right direction. If disk queue length is consistently high while CPU is at 30%, the bottleneck is storage throughput, not compute, and a different disk tier or Premium SSD v2 is the fix.
+
+3. **Choose the matching family**: Map the bottleneck to a family: compute-bound workloads go to F-series, memory-bound to E-series, disk-bound to L-series or Premium SSD v2, and balanced workloads to D-series. Avoid the temptation to jump two tiers higher just in case because each tier step adds cost that compounds across a fleet of VMs.
+
+4. **Select the generation**: Newer generations, indicated by a higher `_v` number, typically offer better price-performance ratios and newer hardware features such as faster networking or support for larger local disks. A `Standard_D4s_v6` may offer 15 to 20 percent better performance per dollar than `Standard_D4s_v5` at a similar or identical per-hour price.
+
+5. **Monitor and iterate**: After resizing, continue monitoring because workloads change. A size that was well-matched six months ago may be oversized or undersized today. Azure Advisor provides automated right-sizing recommendations based on observed usage patterns over a rolling 14-day window.
+
+> **Stop and think**: Your team runs a web application on `Standard_D2s_v5` VMs. Metrics show 92% CPU utilization at peak but only 30% memory consumption. The application latency spikes during peak hours. Would you scale up to `Standard_D4s_v5` or scale out to more `Standard_D2s_v5` instances? What factors beyond raw CPU numbers would influence your choice?
+
+
 ### Understanding VM Size Naming
 
 Once you pick a family, the size name itself encodes tier, vCPU count, disk capabilities, and hardware generation—so Azure VM sizes follow a naming convention that tells you a lot if you know how to read it:
@@ -155,6 +188,37 @@ graph TD
 | **Cost** | No extra charge for the VM, but cross-zone data transfer costs | No extra charge |
 | **Recommendation** | Use whenever the region supports zones | Use only when zones are unavailable in a region for the desired VM size |
 
+
+### Zonal vs Zone-Redundant Architectures
+
+When you deploy across Availability Zones, you choose between two architectural patterns that determine how resilience trades off against complexity and operational control.
+
+**Zonal architecture** pins each VM to a specific, named zone using `--zone 1`, `--zone 2`, or `--zone 3`. You explicitly control which zone hosts each instance, which gives you precise failure-domain placement. A zonal deployment where all VMs land in zone 1 survives the loss of zones 2 and 3 but goes completely offline if zone 1 fails. Zonal placement makes sense when you need to co-locate compute with zonal storage, such as a managed disk pinned to a specific zone, or when running an active-passive cluster where the passive node must reside in a different zone from the active for true physical isolation.
+
+**Zone-redundant architecture** spreads instances across all available zones automatically. A VM Scale Set deployed with `--zones 1 2 3` distributes instances evenly, and the Standard Load Balancer distributes traffic across every healthy instance regardless of zone. If any single zone fails, the load balancer detects the unhealthy backends and routes traffic exclusively to the surviving zones while the scale set provisions replacement capacity. This is the recommended default for stateless web tiers, API gateways, and any workload where you want Azure to manage zone placement rather than controlling it yourself.
+
+### SLA Architecture: What You Are Actually Promised
+
+The SLA is a binding commitment with financial consequences. If Azure fails to meet it, you may be eligible for service credits. Understanding the SLA tiers helps you communicate risk to stakeholders and justify the cost of redundancy to budget owners:
+
+| Architecture | SLA | Protects Against |
+| :--- | :--- | :--- |
+| Single VM with Standard HDD/SSD | No compute SLA | Nothing, a host failure means VM downtime with no recourse |
+| Single VM with Premium SSD / Ultra Disk | 99.9% | Host-level failure with a faster disk recovery path |
+| 2+ VMs in an Availability Set | 99.95% | Rack failure and planned host maintenance |
+| 2+ VMs across 2+ Availability Zones | 99.99% | Data center-level failure: power, cooling, or network isolation event |
+
+The gap between no SLA and 99.9% is significant: a single Premium SSD is the minimum barrier to earn an SLA at all. The jump from 99.9% to 99.95% requires adding a second VM with an Availability Set, which protects against the host maintenance and rack-failure scenarios that a single VM cannot survive. The jump to 99.99% requires spanning zones, which isolates against entire data-center failures.
+
+> **Hypothetical scenario**: A team deploys a customer-facing payments API on a single `Standard_D2s_v5` VM with a Premium SSD OS disk. The workload processes transactions with an RTO of 5 minutes. At 3 AM on a Saturday, the underlying physical host experiences a hardware failure that Azure Live Migration cannot recover. Because there is no second VM and no availability construct, the API stays down for 45 minutes while an engineer is paged, wakes up, and manually reprovisions the VM from a backup. With an Availability Set and a pre-configured second VM, the failover would have been automatic and the API would have been back in under 2 minutes, well inside the RTO window.
+
+### Availability in VM Scale Sets
+
+VM Scale Sets offer a third path to high availability that layers auto-scaling on top of zone placement. In Flexible orchestration mode with `--zones 1 2 3`, Azure spreads instances across zones and maintains the target count within each zone. When zone 1 loses capacity, the scale set automatically provisions replacements in zones 2 and 3, and the load balancer shifts traffic accordingly. This combination of zone redundancy plus automated instance replacement provides the most resilient architecture for stateless workloads because it handles both individual VM failures and zone-level failures with the same mechanism.
+
+Uniform orchestration also supports high availability through fault-domain spreading within the selected zones, but it cannot absorb existing standalone VMs into the scale set, which limits migration paths. For greenfield deployments, Flexible mode is the recommended choice.
+
+
 ```bash
 # Create a VM in a specific Availability Zone
 az vm create \
@@ -248,6 +312,44 @@ az vm encryption enable \
 # Check encryption status
 az vm encryption show --resource-group myRG --name db-vm -o table
 ```
+
+### Understanding IOPS and Throughput
+
+IOPS and throughput are the two dimensions of disk performance, and understanding the relationship between them prevents misdiagnosing performance problems. IOPS measures how many individual read or write operations the disk can complete per second, while throughput measures the total data volume those operations transfer. A workload issuing many small, random reads, such as a database index scan, is IOPS-bound. A workload streaming large sequential files, such as log shipping or media transcoding, is throughput-bound. If you provision for IOPS when your bottleneck is throughput, or vice versa, you pay for performance you cannot use while the real constraint remains unsolved.
+
+With Premium SSDs, the IOPS and throughput are provisioned based on disk size. The relationship is deterministic: a larger disk automatically gets more IOPS and throughput. A 128 GiB Premium SSD (P10) provides 500 IOPS and 100 MB/s. A 512 GiB disk (P20) provides 2,300 IOPS and 150 MB/s. A 1 TiB disk (P30) provides 5,000 IOPS and 200 MB/s. To reach 5,000 IOPS on standard Premium SSD, you must provision at least 1 TiB of capacity even if your actual data occupies only 100 GiB. This forced coupling means that many teams over-provision capacity purely to reach a performance target, accepting the wasted storage cost as a necessary tradeoff.
+
+Premium SSD v2 and Ultra Disk break this coupling entirely. With Premium SSD v2, you pay separately for capacity, IOPS, and throughput, and you can adjust each dimension independently without detaching the disk or restarting the VM. A 32 GiB Premium SSD v2 can be configured for 5,000 IOPS if your workload is small but transaction-heavy. This configuration is impossible with standard Premium SSD, where 32 GiB provides only 120 IOPS. Ultra Disk pushes further, supporting up to 400,000 IOPS and 10,000 MB/s on a single disk for the most demanding enterprise workloads.
+
+### Baseline vs Burst Performance
+
+Standard SSDs and Premium SSDs support disk-level bursting, which allows a disk to exceed its provisioned baseline for short periods using accumulated credits. Credits build up when the disk operates below its baseline and are consumed during demand spikes, providing a buffer for predictable, short-duration traffic surges without forcing you to pay for a permanently larger disk.
+
+For example, a 512 GiB Premium SSD (P20) has a baseline of 2,300 IOPS and 150 MB/s but can burst up to 3,500 IOPS for a limited window determined by the credit balance. This burst capacity handles daily spikes like a morning report generation or an end-of-day batch reconcile without a permanent performance upgrade. However, sustained demand above baseline exhausts credits and throttles the disk back to its provisioned limits. If your workload consistently needs more than the baseline, you need Premium SSD v2 or Ultra Disk, or you need to use multiple Premium SSDs in a storage pool through OS-level striping to aggregate performance. Striping adds operational complexity because you must manage the pool yourself.
+
+### Disk Caching: The Free Performance Multiplier
+
+Azure provides host-level disk caching that can dramatically improve read and write performance at no additional cost, but only when you match the caching mode to the workload's access pattern. The cache sits between the VM and the storage fabric, using fast local SSD on the physical host to serve reads directly from cache rather than fetching from the storage backend every time.
+
+| Caching Mode | Behavior | Best For |
+| :--- | :--- | :--- |
+| **None** | All reads and writes bypass the cache entirely, going directly to persistent storage. This is the default for data disks. | Write-heavy workloads such as database transaction logs, append-only log files, and any workload where the storage engine manages its own cache, such as PostgreSQL `shared_buffers` or the SQL Server buffer pool. |
+| **ReadOnly** | Reads are served from the cache when the data is present, dramatically reducing read latency. Writes always go to persistent storage, so there is no data loss risk from cache volatility. | Read-heavy data disks: static content servers, reporting databases, data warehouse query volumes, and OLAP workloads where reads dominate writes by a large margin. |
+| **ReadWrite** | Both reads and writes are cached, but writes must be acknowledged and flushed to persistent storage. A host failure before a flush loses cached-but-unflushed writes. | OS disks, the default, and applications that explicitly handle write-caching semantics through write barriers or `fsync`. Not suitable for database data files unless the database is configured with synchronous commit and understands the caching layer. |
+
+Premium SSD v2 and Ultra Disk do not support host caching, but their inherently lower latency, often sub-millisecond, addresses many of the same performance concerns that host caching solves on Premium SSD. The tradeoff is that you cannot boost read performance through a free cache layer; you must provision the IOPS and throughput your workload needs directly.
+
+> **Pause and predict**: Your PostgreSQL database uses a data disk with a read-heavy workload at roughly 80 percent reads and 20 percent writes, and you have already tuned the `shared_buffers` parameter. Would you enable ReadOnly caching on the data disk, and what risk must you consider before doing so?
+
+### The VM IOPS Cap: When the Disk Outruns the VM
+
+A fast disk cannot deliver its full performance if the VM it is attached to cannot keep up. Every VM size has a maximum uncached and cached disk IOPS and throughput limit, documented in the VM size specifications. Attaching a disk capable of more IOPS than the VM can handle wastes money on unused disk performance while the VM itself becomes the bottleneck.
+
+For example, a `Standard_D2s_v5` VM has a maximum uncached disk throughput of roughly 85 MB/s and a maximum of approximately 3,750 IOPS. Attaching a Premium SSD P30 that can deliver 5,000 IOPS and 200 MB/s does not give you 5,000 IOPS because the VM caps any disk at its own lower limit. When you diagnose disk performance problems, measure both the disk metrics, to check if the disk is hitting its provisioned ceiling, and the VM metrics, to check if the VM is hitting its own IOPS or throughput cap. The bottleneck can sit on either side, and replacing the disk when the VM is the constraint wastes time and money.
+
+Use `az vm list-sizes --location <region>` and inspect the `maxDataDiskCount` and resource disk fields to compare against your provisioned disk performance. Right-sizing is a combined exercise: the VM and its disks form a single performance envelope, and you must size both together rather than independently.
+
+
 
 ---
 
@@ -558,6 +660,43 @@ az vm create \
 
 Reserved Instances reward **steady-state** production—databases, always-on web tiers, and other workloads with predictable 24/7 usage—and **long-running projects** where you already know you will need the same compute footprint for a year or more. Reservations include **instance size flexibility** within a family in many cases, but savings depend on **utilization**: unused reservation hours do not roll forward as free compute. You can pay **upfront or monthly** depending on how your finance team prefers to recognize spend. In practice, **Spot VMs** win for interruptible, cost-sensitive burst work, while **Reserved Instances** win when you need guaranteed capacity and a stable unit price for continuously running VMs.
 
+
+### Azure Savings Plans
+
+Azure Savings Plans offer a discount model that trades a slightly lower savings rate than Reserved Instances for substantially more flexibility. Instead of committing to a specific VM SKU and region, you commit to a fixed hourly spend amount, for example $10 per hour, for a one-year or three-year term. Azure automatically applies the savings plan discount to any eligible compute usage across VM families, regions, and even to some non-VM compute services such as App Service and Azure Functions Premium plans.
+
+Savings Plans typically provide discounts of up to 65 percent compared to pay-as-you-go rates, with the three-year plan yielding a deeper discount than the one-year plan because of the longer commitment. The key advantage over Reserved Instances is portability: if you migrate from D-series to E-series VMs or shift workloads from East US 2 to West US 3, the savings plan follows your compute spend without requiring you to exchange, cancel, or re-purchase a reservation. This makes Savings Plans the better match for environments where workload types, regions, or architectures change over time. Reserved Instances win when you know with certainty that a specific VM SKU will run continuously in a specific region for the full commitment term.
+
+### Stopped vs Stopped (Deallocated): The Billing Distinction
+
+The distinction between `Stopped` and `Stopped (Deallocated)` is one of the most common sources of unexpected Azure compute bills. When you stop a VM from inside the guest operating system, using `sudo shutdown now` or the Windows Start menu, the VM transitions to the `Stopped` state but remains allocated to the underlying physical host. Compute charges continue to accrue because the host's CPU and memory remain reserved for that VM. When you stop a VM through Azure's control plane, using `az vm deallocate`, the Azure portal's Stop button, or an automation runbook calling the deallocation API, the VM releases the physical host and enters the `Stopped (Deallocated)` state. Compute charges stop immediately, but you continue paying for the OS disk and any attached managed disks.
+
+A team with 50 deallocated VMs, each carrying a 128 GiB Premium SSD OS disk at approximately $19 per month, faces roughly $950 per month in disk charges even when zero VMs are running. To eliminate disk costs entirely, you must delete the disks and recreate the VMs from images or snapshots when needed. For truly temporary dev and test environments, consider deleting the entire resource group, including the VM, disks, NICs, and public IPs, at the end of each day rather than deallocating individually. An Azure Automation runbook or a simple Logic App with a schedule trigger can automate this so nobody has to remember.
+
+### What Drives Managed Disk Cost
+
+Managed disk cost breaks down into three components. First, the disk tier sets the base rate: Standard HDD costs approximately $0.05 per GiB per month, while Premium SSD costs approximately $0.15 per GiB per month and Ultra Disk costs around $0.33 per GiB per month for the storage capacity alone. Second, the provisioned capacity determines the monthly charge regardless of how much data you actually store. A 1 TiB disk costs the same whether it holds 100 GiB or 900 GiB of data. Third, for Premium SSD v2 and Ultra Disk, you pay separately for provisioned IOPS and throughput on top of the capacity charge. Ultra Disk charges roughly $0.06 per provisioned IOPS and $0.01 per MB/s of throughput per month, which means a disk configured for 10,000 IOPS and 500 MB/s adds approximately $600 per month in IOPS charges and $250 per month in throughput charges before the capacity cost.
+
+Transaction costs add another layer. Premium SSD and Standard SSD bill per I/O operation beyond a monthly free threshold, while Standard HDD bills approximately $0.0005 per 10,000 disk operations after the first 10 million free operations each month. For a VM that handles millions of small database queries per day, transaction charges can become the dominant cost component even if the disk capacity charge appears modest. Measure your workload's typical I/O profile before committing to a disk tier, because a workload with many small transactions may cost less on a higher-tier disk with fewer per-transaction charges than on a lower-tier disk that bills aggressively per operation.
+
+The cost scaling is not linear across disk tiers. A 512 GiB Premium SSD (P20) costs roughly five times as much per month as a 128 GiB Premium SSD (P10) for four times the capacity and roughly four times the baseline IOPS. When performance dictates the disk choice more than capacity, Premium SSD v2 often delivers better cost efficiency because you can provision exactly the IOPS and throughput you need on a smaller-capacity disk. Achieving 5,000 IOPS with standard Premium SSD requires a 1 TiB P30 disk at approximately $195 per month for capacity you may not need, while Premium SSD v2 can deliver the same 5,000 IOPS on a 32 GiB disk at a fraction of the capacity cost because you pay only for the provisioned IOPS you actually use.
+
+### Cost Strategy Comparison
+
+| Strategy | Discount | Commitment | Capacity Guarantee | Best For |
+| :--- | :--- | :--- | :--- | :--- |
+| Pay-as-You-Go | Baseline | None | Yes | Short-lived experiments, unpredictable spikes, usage under 8 hours per day |
+| Spot VMs | Up to 90% | None (eviction risk) | No (eviction with 30-second notice) | Batch processing, CI/CD runners, stateless dev/test, fault-tolerant stateless web |
+| Reserved Instances (1-year) | ~35 to 40% | Specific SKU + region | Yes | Databases, always-on web tiers, predictable 24/7 workloads |
+| Reserved Instances (3-year) | Up to 72% | Specific SKU + region | Yes | Multi-year ERP, core infrastructure, stable-architecture production |
+| Savings Plans (1-year) | ~30 to 35% | Hourly spend commitment | Yes | Multi-region deployments, evolving architectures, growing workloads |
+| Savings Plans (3-year) | Up to 65% | Hourly spend commitment | Yes | Large stable compute spend with changing SKU mix or regions |
+
+When a workload runs 24/7 and you know the SKU and region for at least a year, Reserved Instances provide the highest guaranteed discount with capacity assurance. When the SKU or region may change during a migration, a multi-region expansion, or a technology refresh, Savings Plans preserve the bulk of the discount while keeping your options open. Spot is never a replacement for guaranteed capacity but works as a cost layer on top: cover the baseline with a Reservation or Savings Plan and use Spot for burst capacity, accepting that burst instances may disappear when Azure needs the capacity back.
+
+The combination approach is common in mature cloud cost strategies: production database VMs on 3-year RIs, web-tier VMSS with a Savings Plan covering the minimum instance count, and Spot VMs handling autoscale overflow. No single model fits every workload. The skill is matching each component to the cost instrument that best aligns with its usage pattern, risk tolerance, and predictability.
+
+
 ---
 
 ## Did You Know?
@@ -586,6 +725,85 @@ Reserved Instances reward **steady-state** production—databases, always-on web
 | Not tagging VMs with cost allocation metadata | It seems like busywork during initial deployment | Without tags, you cannot attribute costs to teams or projects. Enforce tagging with Azure Policy. At minimum, tag with environment, team, and project. |
 
 ---
+
+
+## Patterns & Anti-Patterns
+
+### Proven Patterns
+
+**1. Scale out before scaling up.** Deploy several smaller VMs rather than a single large one, even at small scale. Horizontal scaling builds resilience into the architecture from day one: if one VM fails, traffic routes to the others without interruption. Autoscale reduces cost during off-peak hours by removing unneeded instances. Horizontal scale has no practical ceiling, you can add instances indefinitely, whereas a single VM eventually hits the largest size available in its family. The prerequisite is stateless application design: session state must live in an external cache or database, never in local VM memory or disk.
+
+**2. Build immutable images for repeatable deployments.** Bake application code, OS dependencies, and security baselines into a Shared Image Gallery image rather than configuring each VM individually at boot time. Every VM launched from the same image version is identical, eliminating configuration drift. Rolling back becomes a version change: point the scale set or deployment pipeline at the previous image version. Boot time shrinks because no package installation runs at first boot, which matters when autoscale must add instances quickly during a traffic spike. Azure Image Builder and Packer both integrate with CI/CD pipelines to produce images on every application release.
+
+**3. Use burstable VMs for spiky, low-average workloads.** Deploy B-series VMs for workloads that spend most of the day near idle and spike only occasionally, such as build agents, cron-driven batch processing, or internal dashboards that refresh hourly. The credit model lets you pay for baseline CPU while handling bursts transparently, provided the burst does not exhaust credits. Monitor CPU credit balance through Azure Metrics and set alerts when credit approaches zero. A VM that consistently exhausts credits belongs on a larger baseline or a fixed-performance family.
+
+**4. Define the availability construct before deploying the first VM.** Every production deployment should specify the failure-domain strategy, whether Availability Zones, Availability Set, or VMSS with zone placement, before a single `az vm create` runs. Retrofitting availability onto an existing deployment is difficult because moving a VM into an Availability Set or changing its zone assignment usually requires recreating the VM with new NICs, new disks, and a new IP configuration. Making availability the first decision rather than the last forces the team to design for resilience at architecture time.
+
+### Anti-Patterns
+
+| Anti-Pattern | Why Teams Fall Into It | What Goes Wrong | Better Approach |
+| :--- | :--- | :--- | :--- |
+| Deploying one large VM instead of several smaller ones | It seems simpler: one VM to manage, one IP address, no load balancer to configure. | A single point of failure takes the entire workload offline. You hit the VM family's maximum size with no path to further vertical scaling, and you cannot reduce cost during off-peak hours because there is nothing to scale in. | Start with at least two VMs in a VMSS or Availability Set. Even a minimal two-instance deployment behind a Standard Load Balancer eliminates the single point of failure and opens a path to horizontal scaling. |
+| Using the OS disk for application data | The OS disk is the easiest to attach because it comes with the VM and requires no extra `az vm disk attach` step. | OS disk resizing is constrained by the image. Snapshot and migration workflows are more complex, and performance tuning interferes with OS operations. A compromised application that fills the disk also fills the OS volume, which can prevent the VM from booting. | Keep the OS disk small, typically 64 to 128 GiB. Attach separate data disks for application data, database files, and logs, each independently provisioned for its IOPS and capacity requirements. |
+| TCP health probes that skip application-level checks | The default probe from `az vmss create` is TCP on the backend port, and it succeeds as long as the port is listening. This feels sufficient during initial setup. | A running web server like nginx, Apache, or IIS accepts TCP connections and returns successfully to the probe even when the application behind it has crashed, is returning HTTP 500 errors, or is stuck in a restart loop. The load balancer continues sending production traffic to a broken backend indefinitely. | Create an HTTP health endpoint at `/health` or `/healthz` that verifies the application's actual dependencies: database connectivity, cache availability, and disk space. Return HTTP 200 only when every dependency check passes. |
+| Running production databases on Spot VMs | A 90 percent discount is compelling, and weeks of stable operation build false confidence that eviction will not happen. | Spot VMs can be evicted with as little as 30 seconds of notice through the Scheduled Events API. A database cannot safely checkpoint, flush writes, and shut down in 30 seconds, and eviction during a write operation risks data corruption. | Use Spot only for stateless and fault-tolerant workloads: batch processing with checkpointing, CI/CD runners, and dev/test environments. Production databases belong on Reserved Instances or Savings Plans. |
+| Deploying resources without cost-allocation tags | Tags feel like optional metadata during the rush to deploy, and teams promise to add them later. | Without `environment`, `team`, `costCenter`, and `project` tags, you cannot attribute Azure charges to specific teams or projects. Waste goes undetected because nobody knows who owns the idle resources. | Enforce mandatory tags through Azure Policy at the subscription or management-group level. Configure the policy to deny VM and disk creation unless required tags are present. |
+| Choosing a disk tier by price alone | Standard HDD is the cheapest option per GiB, and during initial testing under light load, performance appears acceptable. | Under production concurrency, Standard HDD's 500 IOPS ceiling becomes the bottleneck for every workload sharing that disk. Latency spikes cascade through the application stack, and the team spends days debugging slow application code when the root cause is the disk. | Match the disk tier to the workload's IOPS and latency requirements from the start. Use Premium SSD as the production minimum and profile the workload under realistic concurrency before committing to a tier. |
+
+## Decision Framework
+
+### Compute + Availability Decision Matrix
+
+Use this matrix as a starting point for matching workload patterns to Azure compute and availability constructs. Every workload has unique constraints that may pull you toward a different choice, but this table captures the default mappings that apply to the most common scenarios.
+
+| Workload Pattern | Compute Choice | Availability Construct | Cost Strategy | Key Tradeoff |
+| :--- | :--- | :--- | :--- | :--- |
+| Stateless web tier, variable traffic | VMSS (Flexible, B or D-series) | Zones + Autoscale | Savings Plan (baseline) + Spot (burst) | Spot instances can be evicted, so use only for overflow capacity, not the minimum instance count |
+| Stateful database, steady 24/7 load | Standalone D or E-series VM | Availability Zones (2 VMs, active-passive or synchronous replica) | 3-year RI | Highest discount but SKU and region are locked; validate the commitment period against planned migrations |
+| Nightly batch processing, fault-tolerant | VMSS with Spot instances (F-series) | Zones (replace on eviction) | Spot (up to 90% off) | Jobs must checkpoint progress; eviction interrupts in-flight work and wastes compute time |
+| Dev/test, business hours only | Standalone B-series VMs | None (single VM, deallocate off-hours) | PAYG + scheduled deallocation | Deallocation stops compute charges but disks continue billing at approximately $15 to $20 per VM per month |
+| GPU training, multi-week job | Standalone NC or ND-series VM | None (checkpoint model, no HA) | Spot if available (GPU Spot availability is lower than general-purpose) | Spot eviction can waste days of training unless checkpointing is frequent and automated |
+| Always-on ERP, multi-year horizon | Standalone E or M-series VM | Availability Zones or Availability Set | 3-year RI (maximum discount) | Commit duration matches the business planning horizon; oversize slightly for growth within the term |
+| Multi-region global API | VMSS (Flexible) per region | Zones per region + cross-region Traffic Manager or Front Door | Savings Plan (follows spend across regions) | Multi-region VMSS coordination adds operational overhead; ensure deployment pipelines are consistent globally |
+| Virtual desktop infrastructure (VDI) | NV-series VMs + Azure Virtual Desktop | Availability Set for session hosts | 1-year RI (workforce size is predictable within a year) | GPU-enabled VDI is expensive; verify that user density per host justifies the NV-series premium |
+
+### Architectural Decision Flow
+
+Start at the top of this flowchart and follow the path that matches your workload characteristics. The flow guides the primary decision, but real workloads often combine multiple patterns. For example, a database tier might run on RIs while a web tier runs on VMSS with Savings Plans.
+
+```mermaid
+graph TD
+    START["Is the workload<br>stateful or stateless?"]
+
+    START -->|Stateless| SCALE["Does traffic vary<br>significantly over time?"]
+    START -->|Stateful| REPL["Is the state replicated<br>at the application layer<br>(DB replication, clustering)?"]
+
+    SCALE -->|Yes| VMSS_AUTO["VM Scale Set + Autoscale<br>Use Savings Plan for baseline<br>Spot for burst capacity"]
+    SCALE -->|No| VMSS_FIXED["VM Scale Set, fixed count<br>Across Availability Zones"]
+
+    REPL -->|Yes| ZONES["2+ VMs across<br>Availability Zones<br>SLA: 99.99%"]
+    REPL -->|No| AVSET["2+ VMs in<br>Availability Set<br>SLA: 99.95%"]
+
+    VMSS_AUTO --> DISK_Q["Sustained high IOPS<br>or throughput required?"]
+    VMSS_FIXED --> DISK_Q
+    ZONES --> DISK_Q
+    AVSET --> DISK_Q
+
+    DISK_Q -->|"Yes, sustained"| PV2["Premium SSD v2<br>or Ultra Disk<br>Pay per provisioned IOPS"]
+    DISK_Q -->|"Yes, bursty"| PREM["Premium SSD<br>with burst credits<br>Size for baseline"]
+    DISK_Q -->|No| STD["Standard SSD<br>Cost-effective baseline<br>for light workloads"]
+
+    PV2 --> COST["Final: Cost Strategy"]
+    PREM --> COST
+    STD --> COST
+
+    COST --> RI_Q["Predictable 24/7 usage<br>for 1+ years?"]
+    RI_Q -->|Yes| RI["Reserved Instance<br>or Savings Plan<br>Lock in discount"]
+    RI_Q -->|No| PAYG["Pay-as-You-Go<br>Deallocate when idle<br>Maximum flexibility"]
+```
+
+Working through this flow typically produces a mixed strategy: steady-state database VMs on 3-year Reserved Instances, a web tier on VMSS with a Savings Plan covering the minimum instance count and Spot handling scale-out, and dev/test environments on PAYG B-series deallocated overnight. The goal is not a single answer for everything but a deliberate match between each workload component and the cost and availability model that fits its actual usage pattern. When in doubt, start with PAYG for the first month of a new workload to establish a usage baseline, then graduate to a commitment-based model once you have real data rather than estimates.
+
 
 ## Quiz
 
@@ -880,3 +1098,7 @@ az group delete --name "$RG" --yes --no-wait
 - [learn.microsoft.com: states billing](https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing) — Microsoft's billing-state documentation explicitly says deallocated VMs stop compute billing while resources like disks continue to incur charges.
 - [Azure Managed Disk Types](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types) — Authoritative reference for current disk classes, performance envelopes, and workload-fit guidance.
 - [Azure Spot Virtual Machines](https://learn.microsoft.com/en-us/azure/virtual-machines/spot-vms) — Canonical product documentation for Spot VM eviction behavior, notice timing, and operational tradeoffs.
+- [VM sizes overview](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/overview) — Microsoft's VM size series taxonomy, naming conventions, and family descriptions used as the authoritative reference for VM family characteristics and right-sizing guidance.
+- [Premium Storage performance](https://learn.microsoft.com/en-us/azure/virtual-machines/premium-storage-performance) — Microsoft's guidance on disk caching modes (None, ReadOnly, ReadWrite), host-cache interaction, and VM-level IOPS and throughput limits.
+- [Azure Savings Plans](https://learn.microsoft.com/en-us/azure/cost-management-billing/savings-plan/) — Microsoft's Savings Plan documentation covering the hourly spend commitment model, discount rates, and eligible compute services.
+- [Disk bursting](https://learn.microsoft.com/en-us/azure/virtual-machines/disk-bursting) — Microsoft's documentation on disk-level bursting for Premium SSD and Standard SSD, including credit accumulation, burst duration, and throttling behavior.
