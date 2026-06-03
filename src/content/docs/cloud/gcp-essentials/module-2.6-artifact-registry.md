@@ -21,7 +21,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In November 2021, the `ua-parser-js` npm package---downloaded over 7 million times per week---was compromised. An attacker gained access to the maintainer's npm account and published three malicious versions that installed cryptocurrency miners on Linux and Windows systems, and also stole passwords from infected machines. Any CI/CD pipeline that ran `npm install` during the window when the malicious versions were available pulled compromised code directly into production builds. Companies that pulled packages directly from the public npm registry had no defense. Companies that used a private registry with upstream caching had a critical advantage: in many cases, the malicious versions were not cached because their pipelines pulled the cached (clean) versions already stored in the private registry.
+Hypothetical scenario: A widely used npm package in your dependency tree is compromised when an attacker publishes malicious versions to the public registry. Any CI/CD pipeline that runs `npm install` directly against the public npm registry during the exposure window can pull compromised code into production builds. Companies that pull packages directly from the public npm registry have no defense. Companies that use a private registry with upstream caching have a critical advantage: in many cases, the malicious versions are not cached because their pipelines pull the cached (clean) versions already stored in the private registry.
 
 This incident represents a growing threat: **supply chain attacks targeting public package registries**. Whether you are pulling container images from Docker Hub, npm packages from the npm registry, or Python packages from PyPI, you are trusting code written by strangers. Artifact Registry is GCP's managed solution for storing, managing, and securing software artifacts. It replaces the older Container Registry (GCR) and extends beyond Docker images to support npm, Maven, Python, Go, and OS packages.
 
@@ -299,15 +299,11 @@ Artifact Registry integrates with [Artifact Analysis](https://cloud.google.com/a
 ### Enabling and Configuring Scanning
 
 ```bash
-# Enable the Container Analysis API
-gcloud services enable containeranalysis.googleapis.com
+# Enable the Container Scanning API (required for on-push scan results)
+gcloud services enable containeranalysis.googleapis.com \
+  containerscanning.googleapis.com
 
-# Enable automatic scanning on a repository
-gcloud artifacts repositories update docker-repo \
-  --location=us-central1 \
-  --enable-vulnerability-scanning
-
-# Scanning happens automatically when you push an image.
+# Scanning happens automatically when you push an image after the API is enabled.
 # You can also trigger an on-demand scan:
 gcloud artifacts docker images scan \
   ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/my-api:v1.2.0 \
@@ -414,7 +410,7 @@ gcloud artifacts repositories get-iam-policy docker-repo \
 
 Cross-project access is a frequent source of ImagePullBackOff errors in GKE. When your cluster runs in project `app-prod` but images live in project `shared-artifacts`, you must grant `roles/artifactregistry.reader` on the repository in `shared-artifacts` to the node service account from `app-prod`. Project-level IAM bindings work but violate least privilege because they grant access to every repository in the project; repository-level bindings limit the blast radius if a node is compromised.
 
-Cloud Run and Cloud Functions pull images through the Cloud Run service agent (`PROJECT_NUMBER@serverless-robot-prod.iam.gserviceaccount.com`), which needs reader access on the repository hosting the container image specified in the service definition. App Engine flexible environment uses its own service account (`PROJECT_ID@appspot.gserviceaccount.com`). Each compute service has a documented service agent in the [access control guide](https://cloud.google.com/artifact-registry/docs/access-control), and granting the wrong agent is a common copy-paste mistake during initial setup.
+Cloud Run and Cloud Functions pull images through the Cloud Run service agent (`service-PROJECT_NUMBER@serverless-robot-prod.iam.gserviceaccount.com`), which needs reader access on the repository hosting the container image specified in the service definition. App Engine flexible environment uses its own service account (`PROJECT_ID@appspot.gserviceaccount.com`). Each compute service has a documented service agent in the [access control guide](https://cloud.google.com/artifact-registry/docs/access-control), and granting the wrong agent is a common copy-paste mistake during initial setup.
 
 For human developers who need local pull access, bind `roles/artifactregistry.reader` to a Google Group rather than individual users so onboarding and offboarding happen through group membership. Developers who also need push access for manual hotfix builds receive writer on staging repositories only; production repositories receive pushes exclusively from CI service accounts with Binary Authorization attestations downstream.
 
@@ -451,7 +447,7 @@ substitutions:
 
 Cloud Build's service account needs `roles/artifactregistry.writer` on the target repository. If builds pull base images through a remote Docker Hub cache, the build service account also needs reader access on the remote repository. Separating build-time permissions (writer on staging repo) from deploy-time permissions (reader on production repo, attestation signer) enforces the same promotion workflow that Binary Authorization expects downstream.
 
-When Cloud Build runs inside a private pool or VPC-SC perimeter, verify that Artifact Registry endpoints are allowed through your service perimeter. [VPC Service Controls](https://cloud.google.com/artifact-registry/docs/transition/prepare-gcr-shutdown) documentation covers `mirror.gcr.io` and Artifact Registry access from restricted networks, which matters for regulated industries that cannot reach Google APIs over the public internet without explicit perimeter configuration.
+When Cloud Build runs inside a private pool or VPC-SC perimeter, verify that Artifact Registry endpoints are allowed through your service perimeter. [VPC Service Controls documentation for Artifact Registry](https://cloud.google.com/artifact-registry/docs/securing-artifacts) covers restricted-network access from perimeters, which matters for regulated industries that cannot reach Google APIs over the public internet without explicit perimeter configuration.
 
 ---
 
@@ -514,13 +510,13 @@ docker pull us-central1-docker.pkg.dev/${PROJECT_ID}/dockerhub-cache/library/ngi
 
 Remote repositories do not prefetch the entire upstream registry—they cache artifacts on first pull, which means the initial CI run after creating a remote repo still hits the public registry and is subject to upstream rate limits until the cache warms. Docker Hub official images require the `library/` namespace prefix when pulling through Artifact Registry, as shown in the nginx example above, because Docker Hub namespaces official images under `library/` even when users omit it in direct Hub pulls.
 
-For npm, Maven, and Python remote repos, the upstream configuration uses enumerated constants like `NPMJS`, `MAVEN-CENTRAL`, and `PYPI` in the gcloud command. Authentication to private upstream registries is not supported on standard remote repositories; if you need to cache a private Docker Hub organization, you configure upstream credentials through the remote repository settings documented in the [remote repository guide](https://cloud.google.com/artifact-registry/docs/repositories/remote-overview).
+For npm, Maven, and Python remote repos, the upstream configuration uses enumerated constants like `NPMJS`, `MAVEN-CENTRAL`, and `PYPI` in the gcloud command. Remote repositories support authenticated upstream access for private Docker Hub organizations and other protected registries by storing credentials in a Secret Manager secret referenced in the remote repository configuration—see the [remote repository guide](https://cloud.google.com/artifact-registry/docs/repositories/remote-overview).
 
 Hypothetical scenario: Your CI pipeline builds 200 times per day and each build pulls `node:20-bookworm-slim` from Docker Hub. Without a remote cache, you hit Docker Hub rate limits within the first hour and builds fail unpredictably. After creating a remote repository and updating CI to pull through `us-central1-docker.pkg.dev/PROJECT/dockerhub-cache/library/node:20-bookworm-slim`, the first build populates the cache and the remaining 199 builds pull from Artifact Registry at in-region speeds with no upstream dependency.
 
 ### Virtual Repositories
 
-Virtual repositories provide a single endpoint that aggregates multiple upstream repositories (both standard and remote). [Priority values determine lookup order](https://cloud.google.com/artifact-registry/docs/repositories/virtual-overview): lower numbers are checked first, so your internal standard repository at priority 100 wins over the Docker Hub remote cache at priority 200 when both contain an artifact with the same name.
+Virtual repositories provide a single endpoint that aggregates multiple upstream repositories (both standard and remote). [Priority values determine lookup order](https://cloud.google.com/artifact-registry/docs/repositories/virtual-overview): **higher priority wins**—when multiple upstreams contain an artifact with the same name, the upstream with the highest priority value is served. To defend against dependency confusion, your internal standard repository must have a **higher** priority than the public remote cache so internal packages win over identically named public packages.
 
 ```bash
 # Create a virtual repository that combines your internal repo and Docker Hub cache
@@ -537,19 +533,19 @@ gcloud artifacts repositories create docker-virtual \
   {
     "id": "internal",
     "repository": "projects/my-project/locations/us-central1/repositories/docker-repo",
-    "priority": 100
+    "priority": 200
   },
   {
     "id": "dockerhub",
     "repository": "projects/my-project/locations/us-central1/repositories/dockerhub-cache",
-    "priority": 200
+    "priority": 100
   }
 ]
 ```
 
-With this configuration, pulls from the virtual repository first check your internal repo (priority 100, checked first), then fall back to the Docker Hub cache (priority 200). Developers configure a single registry URL in Docker, npm, or pip settings, which reduces misconfiguration and makes dependency-confusion defenses easier because internal package names resolve to internal artifacts before the public cache is consulted.
+With this configuration, pulls from the virtual repository check upstreams by priority (highest first). The internal standard repository at priority 200 wins when both it and the Docker Hub cache contain an artifact with the same name; the remote cache at priority 100 is consulted only when the internal repo has no match. Developers configure a single registry URL in Docker, npm, or pip settings, which reduces misconfiguration and makes dependency-confusion defenses easier because internal package names resolve to internal artifacts before the public cache is consulted.
 
-When designing upstream priority, remember that lower numbers win. A common mistake sets the remote cache at priority 50 and the internal repo at priority 100, which inverts the intended behavior and serves public packages even when an internal artifact exists. Document priority ordering in your platform runbook so teams configuring virtual repositories do not accidentally expose themselves to dependency confusion attacks through inverted or misunderstood priority values.
+When designing upstream priority, remember that **higher numbers win**. A common mistake sets the remote cache at priority 200 and the internal repo at priority 100, which inverts the intended behavior and serves public packages even when an internal artifact exists. Document priority ordering in your platform runbook so teams configuring virtual repositories do not accidentally expose themselves to dependency confusion attacks through inverted priority values.
 
 ---
 
@@ -657,7 +653,7 @@ Hypothetical scenario: A data platform team enables vulnerability scanning proje
 | Pattern | When to Use | Why It Works | Scaling Note |
 | :--- | :--- | :--- | :--- |
 | **Regional repo per environment** | Separate `prod`, `staging`, and `dev` Docker repos in the same region as GKE | IAM and cleanup policies differ per environment; in-region pulls avoid egress | Add repos per team only when IAM isolation requires it—repo sprawl complicates virtual upstream configs |
-| **Remote cache + virtual repo** | Teams consume both internal and public packages | Single endpoint for developers; internal names win via priority ordering | Monitor remote cache storage; high-cardinality public tag pulls fill cache quickly |
+| **Remote cache + virtual repo** | Teams consume both internal and public packages | Single endpoint for developers; internal repo at higher priority wins over public cache | Monitor remote cache storage; high-cardinality public tag pulls fill cache quickly |
 | **Immutable tags on production repos** | Any repo receiving release artifacts | Prevents tag mutation attacks and accidental overwrites | Pair with digest references in Kubernetes manifests for strongest guarantees |
 | **Repo-scoped CI service accounts** | Every pipeline that pushes images | Writer role on one repo cannot poison unrelated npm or staging repos | Create one SA per pipeline class, not one shared `ci@` with admin |
 | **Cleanup: delete untagged, keep N releases** | High-churn CI repos | Stops silent storage growth from floating branch tags | Test with `--dry-run`; policies take ~24h to apply |
@@ -733,7 +729,7 @@ Multi-team platforms often ask whether to share one Docker repository or isolate
 
 ## Did You Know?
 
-1. **Artifact Registry stores over 10 billion container images** across all GCP customers. It is the same infrastructure that Google uses internally to store the images for Google Cloud services like Cloud Run, GKE, and Cloud Functions.
+1. **Artifact Registry is the managed successor to Container Registry** and supports Docker/OCI images, language packages, and OS packages across regional repositories with per-repository IAM.
 
 2. **The `--immutable-tags` flag prevents tag mutation attacks**. Without it, someone with push access can overwrite `myapp:v1.0` with a completely different image. This is a real attack vector---an attacker who compromises a CI/CD pipeline can replace a known-good image tag with a malicious one. Immutable tags guarantee that `v1.0` always refers to the exact same image digest.
 
@@ -791,9 +787,9 @@ The first likely cause is that the developer has not configured Docker to authen
 </details>
 
 <details>
-<summary>6. Your company uses a virtual repository to consolidate access. It is configured with an internal standard repository at priority 100, and a remote repository caching Docker Hub at priority 200. A developer accidentally names their internal helper script `ubuntu` and publishes it as a container image to the internal repository. When a CI pipeline runs `docker pull <virtual-repo-url>/ubuntu:latest`, what exactly happens and what security benefit does this priority configuration provide?</summary>
+<summary>6. Your company uses a virtual repository to consolidate access. It is configured with an internal standard repository at priority 200, and a remote repository caching Docker Hub at priority 100. A developer accidentally names their internal helper script `ubuntu` and publishes it as a container image to the internal repository. When a CI pipeline runs `docker pull <virtual-repo-url>/ubuntu:latest`, what exactly happens and what security benefit does this priority configuration provide?</summary>
 
-When the `docker pull` command is executed, the virtual repository evaluates its upstreams in priority order, starting with the lowest number. It checks the internal standard repository (priority 100) first, finds the internally published `ubuntu:latest` image, and returns it immediately without ever querying the remote repository (priority 200). This priority configuration provides a critical security benefit by preventing dependency confusion attacks. If an attacker publishes a malicious package to a public registry with the exact same name as an internal package, the virtual repository will prioritize and serve the internal version first in the normal case, which helps mitigate this attack.
+When the `docker pull` command is executed, the virtual repository evaluates its upstreams by priority, with **higher values winning**. It checks the internal standard repository (priority 200) first among matching upstreams, finds the internally published `ubuntu:latest` image, and returns it without consulting the remote Docker Hub cache (priority 100). This priority configuration provides a critical security benefit by preventing dependency confusion attacks. If an attacker publishes a malicious package to a public registry with the exact same name as an internal package, the virtual repository serves the internal version because it carries the higher priority—not the public copy.
 </details>
 
 <details>
@@ -835,7 +831,8 @@ export REGION=us-central1
 
 # Enable APIs
 gcloud services enable artifactregistry.googleapis.com \
-  containeranalysis.googleapis.com
+  containeranalysis.googleapis.com \
+  containerscanning.googleapis.com
 
 # Create a standard Docker repository with immutable tags
 gcloud artifacts repositories create app-images \
