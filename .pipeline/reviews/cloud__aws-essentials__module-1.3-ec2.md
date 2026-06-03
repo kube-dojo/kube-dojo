@@ -1,0 +1,2 @@
+## 2026-06-03T07:49:26Z — `REVIEW` — `APPROVE`
+Cloud AWS Essentials wave 1 (session 96) cross-family review. Reviewer: composer-2.5. Expanded 2.25k->5.6k (Patterns/Decision/Cost/placement-groups/Nitro/Graviton/ASG-features); EIP IPv4 charge, gp3 80k/2k, Graviton 20%, SP min, ALB-healthcheck nuance, 52% scenario all corrected. All gates green; incident-dedup PASS; PR #1762 CI green; fixes self-verified by orchestrator (web-verified cloud facts).

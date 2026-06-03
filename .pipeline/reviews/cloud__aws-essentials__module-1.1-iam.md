@@ -23,3 +23,5 @@
 **New phase**: write
 **Cleared errors**:
 - Deterministic checks failed after review
+## 2026-06-03T07:49:26Z — `REVIEW` — `APPROVE`
+Cloud AWS Essentials wave 1 (session 96) cross-family review. Reviewer: opus-4.8. Expanded 2.4k->5.0k (Patterns/Decision/IRSA-vs-PodIdentity/cost lens); P1 cross-tab link depth fixed; Capital One opener reframed to labeled hypothetical (dedup). All gates green; incident-dedup PASS; PR #1762 CI green; fixes self-verified by orchestrator (web-verified cloud facts).
