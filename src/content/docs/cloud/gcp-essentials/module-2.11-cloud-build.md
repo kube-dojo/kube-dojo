@@ -172,6 +172,31 @@ gcloud builds submit --config=cloudbuild.yaml \
   --substitutions=_REGION=europe-west1,_SERVICE_NAME=my-api-eu
 ```
 
+### Step Orchestration & Build Options
+
+The simplicity of the `cloudbuild.yaml` format conceals substantial orchestration depth. Understanding the runtime knobs at your disposal transforms Cloud Build from a basic script runner into a high-performance build executor that can shrink pipeline durations from tens of minutes to single-digit minutes.
+
+**Parallelism via `waitFor`**: The `waitFor` field is not limited to the simple `['-']` (start immediately) pattern you have already seen. You can construct arbitrary directed acyclic graphs by referencing step `id` values. A step that specifies `waitFor: ['compile-go', 'compile-python']` will remain pending until both compilation steps complete successfully, enabling fan-in patterns where independent language builds converge before integration testing begins. Cloud Build enforces that no circular dependencies exist in your graph --- if you accidentally create a cycle (Step A waits for B, which waits for A), the build fails immediately at the scheduling stage rather than hanging indefinitely.
+
+**Machine Types**: The default `e2-medium` machine (2 vCPUs, 4 GB RAM) is appropriate for lightweight builds such as simple `npm install && npm test` pipelines. For compute-intensive workloads, you can request larger machine types through the `options.machineType` field. The `E2_HIGHCPU_8` type (8 vCPUs) is a common sweet spot for Docker image builds with many layers. For Go monorepo compilation, C++ builds, or large Java/Kotlin projects with Gradle, stepping up to `E2_HIGHCPU_32` (32 vCPUs) can cut compilation time by 60-80% compared to the default. The cost scales proportionally with vCPU count, and you are billed per build-second on the selected machine type. A machine that is twice as fast but costs twice as much per minute produces the same total cost while delivering faster feedback to developers --- an almost always worthwhile tradeoff.
+
+**Logging Modes**: The `options.logging` field controls where build output is stored. `CLOUD_LOGGING_ONLY` (the recommended default) streams live logs to Cloud Logging, making them searchable and available for alerting. `GCS_ONLY` writes logs to a Cloud Storage bucket, useful when you need long-term archival beyond Cloud Logging's retention period. The legacy `LEGACY` mode stores logs in Cloud Storage under a predefined bucket naming convention. Most teams standardize on `CLOUD_LOGGING_ONLY` and forward critical error patterns to monitoring dashboards.
+
+**Build Timeouts**: The default build timeout is 10 minutes (600 seconds). This is deliberately short to prevent runaway builds from consuming quota indefinitely. For larger projects, you can override this in the `timeout` field using Go duration syntax: `timeout: '1800s'` for 30 minutes, or up to the maximum of 24 hours (`'86400s'`). A timeout that is too generous masks real problems --- if your build suddenly jumps from 8 minutes to 45 minutes, a shorter timeout surfaces the regression faster by hard-failing the build rather than silently consuming budget.
+
+**Build Artifacts**: Beyond the `images` field for container images, Cloud Build can persist arbitrary build outputs to Cloud Storage using the `artifacts` field. This is essential when your pipeline produces binaries, test reports, or code coverage HTML that downstream systems need to consume. Artifacts are saved after all steps complete, and they support glob patterns to select files from the `/workspace` volume:
+
+```yaml
+artifacts:
+  objects:
+    location: 'gs://my-build-outputs/$BUILD_ID/'
+    paths:
+      - 'build/binaries/*'
+      - 'test-reports/coverage.html'
+```
+
+The `$BUILD_ID` substitution in the path ensures every build writes to a unique location, preventing collisions between concurrent pipeline executions. This pattern is widely used to publish test result summaries that CI dashboards can aggregate across builds.
+
 ## Builders: The Tools in Your Pipeline
 
 ### Google-Provided Builders
@@ -468,6 +493,90 @@ gcloud builds list --limit=10 \
 gcloud builds log BUILD_ID
 ```
 
+### Trigger File Filtering
+
+Not every source change warrants a full pipeline execution. A documentation update to `README.md` does not need to trigger a container build, and a change limited to the `frontend/` directory should not kick off the backend test suite. Cloud Build supports two complementary filtering directives on every trigger: `includedFiles` and `ignoredFiles`.
+
+When you specify `includedFiles`, the trigger fires only if at least one changed file matches one of the patterns. The `ignoredFiles` directive inverts the logic: the trigger fires unless every changed file matches an ignore pattern. These patterns accept glob syntax (`**` for recursive directory matching, `*` for single-level wildcards) and are evaluated against the list of files modified in the triggering commit. This distinction matters:
+
+```bash
+# Trigger only when frontend source files change
+gcloud builds triggers create github \
+  --name="frontend-ci" \
+  --repo-name="my-repo" \
+  --repo-owner="my-org" \
+  --branch-pattern="^main$" \
+  --build-config="cloudbuild-frontend.yaml" \
+  --included-files="frontend/**,package.json"
+
+# Trigger on everything EXCEPT documentation changes
+gcloud builds triggers create github \
+  --name="skip-docs" \
+  --repo-name="my-repo" \
+  --repo-owner="my-org" \
+  --branch-pattern="^main$" \
+  --build-config="cloudbuild.yaml" \
+  --ignored-files="docs/**,*.md,*.adoc"
+```
+
+The second example above is a common optimization in monorepos: it prevents the main pipeline from burning build minutes on pure documentation commits while still reacting to every source-code change. Teams that skip this optimization frequently discover, at the end of the month, that 30-40% of their build minutes went to verifying that README formatting is still correct.
+
+### Pub/Sub Triggers
+
+For event-driven workflows that extend beyond Git, Cloud Build can subscribe to Pub/Sub topics. A Pub/Sub trigger fires whenever a message is published to the specified topic, enabling pipelines that react to events such as: a new security vulnerability scan completing, a scheduled Cloud Scheduler job publishing a nightly-build message, or a BigQuery data pipeline signaling that fresh data is ready for model retraining.
+
+```bash
+# Create a Pub/Sub trigger
+gcloud builds triggers create pubsub \
+  --name="nightly-scan" \
+  --topic="projects/my-project/topics/nightly-scan-trigger" \
+  --build-config="cloudbuild-nightly-scan.yaml"
+```
+
+The Pub/Sub message payload is accessible inside the build through the `$_PUBSUB_PAYLOAD` substitution variable, allowing the build steps to parse JSON event data and adapt their behavior dynamically. For example, a message containing `{"scan_type": "full", "target": "production"}` can route the pipeline into a comprehensive security audit path, while `{"scan_type": "quick"}` triggers a fast lint-only pass.
+
+### Webhook Triggers
+
+When neither the native GitHub/GitLab integrations nor Pub/Sub fit your workflow --- for example, when you use a self-hosted version control system, a custom internal tool, or a third-party service that fires generic HTTP callbacks --- Cloud Build provides webhook triggers. A webhook trigger exposes a unique HTTPS URL that accepts POST requests with an optional shared secret for HMAC-SHA256 signature verification:
+
+```bash
+# Create a webhook trigger with secret verification
+gcloud builds triggers create webhook \
+  --name="custom-callback" \
+  --secret="projects/my-project/secrets/webhook-secret/versions/latest" \
+  --build-config="cloudbuild.yaml"
+```
+
+The trigger URL is returned on creation. Any external system can then POST JSON payloads to that URL, and Cloud Build validates the `X-CloudBuild-Signature` header against the shared secret before executing the pipeline. This is the escape hatch that connects Cloud Build to essentially any automation system in your ecosystem.
+
+### Second-Generation Repository Connections
+
+The GitHub and GitLab trigger patterns earlier in this section use what Google calls "first-generation" connections. In 2023, Google introduced a second-generation integration model built on **Developer Connect**, a new service that establishes deeper, bidirectional links between Cloud Build and external repositories.
+
+Second-generation connections offer several advantages over the first-generation approach: they support Bitbucket Cloud and Bitbucket Data Center in addition to GitHub and GitLab Enterprise, they use fine-grained access tokens instead of broad OAuth scopes, and they integrate with Cloud Build repositories --- a resource type that decouples the trigger configuration from the connection setup. With 2nd-gen, you first create a connection to your Git provider, then link individual repositories, and finally attach triggers to those repository resources:
+
+```bash
+# Create a 2nd-gen GitHub connection
+gcloud builds connections create github my-github-conn \
+  --region=us-central1
+
+# Link a repository through the connection
+gcloud builds repositories create my-repo \
+  --connection=my-github-conn \
+  --region=us-central1 \
+  --remote-uri="https://github.com/my-org/my-repo.git"
+
+# Create a trigger on the linked repository
+gcloud builds triggers create github \
+  --name="deploy-prod-2g" \
+  --repository="projects/my-project/locations/us-central1/connections/my-github-conn/repositories/my-repo" \
+  --branch-pattern="^main$" \
+  --build-config="cloudbuild.yaml" \
+  --region=us-central1
+```
+
+The second-generation model is the recommended path for new projects as of 2024, though first-generation triggers continue to function and are not deprecated. If your organization already has a working first-generation setup, migration to 2nd-gen offers incremental security improvements but is not an emergency --- prioritize the migration when you next restructure your trigger inventory.
+
 ## Cloud Build Service Account
 
 A pipeline is fundamentally an automated process acting on behalf of your organization. When Cloud Build pushes an image to Artifact Registry or deploys a service to Cloud Run, it must authenticate and authorize those actions. It achieves this by assuming the identity of an IAM Service Account.
@@ -651,6 +760,187 @@ availableSecrets:
 ```
 
 In this configuration, the `availableSecrets` block references the highly secure cryptographic payload stored within Secret Manager. During execution, the Cloud Build engine utilizes its service account identity to request the decrypted payload from the API. The secret is then injected dynamically into the runtime environment of the executing Docker container via the `secretEnv` array. Crucially, the double-dollar sign `$$NPM_TOKEN` escapes the variable, ensuring it evaluates directly as a shell parameter inside the container instead of attempting a premature Cloud Build substitution evaluation, completely obscuring the secret from the visible logs and build output.
+
+## Private Worker Pools
+
+The default Cloud Build worker pool runs on Google-managed infrastructure provisioned from a shared pool of virtual machines. This is the ideal configuration for most workloads: zero maintenance, automatic scaling, and builds that only communicate with public internet endpoints. However, when your pipeline must interact with resources inside a VPC --- a private Artifact Registry repository with no public ingress, an internal database that only accepts connections from RFC 1918 addresses, or a CI-driven integration test that validates a service behind an internal load balancer --- the default pool cannot reach those resources, because its workers live outside your VPC boundary.
+
+Private worker pools solve this by running build workers inside your own VPC network. You define a `WorkerPool` resource that specifies the VPC network, subnet, and the machine configuration for the workers:
+
+```bash
+# Create a private worker pool
+gcloud builds worker-pools create private-pool \
+  --region=us-central1 \
+  --peered-network=projects/my-project/global/networks/my-vpc \
+  --worker-machine-type=e2-medium \
+  --worker-disk-size=100
+```
+
+Once created, your `cloudbuild.yaml` references the private pool in the `options` block:
+
+```yaml
+options:
+  pool:
+    name: 'projects/my-project/locations/us-central1/workerPools/private-pool'
+```
+
+Private pool workers are dedicated to your project --- they are not shared with other GCP customers. This provides not only network isolation but also a hard guarantee that your builds run on infrastructure that has never executed another organization's code. The tradeoff is that you are responsible for the worker lifecycle: private pool workers that sit idle still consume capacity until they are scaled down or deleted, and you pay for the underlying Compute Engine resources. Private pools are the correct choice when network isolation or dedicated-tenancy requirements are non-negotiable, but they add operational surface area that the default pool eliminates entirely.
+
+## SLSA Build Provenance & Binary Authorization
+
+Software supply chain security has moved from an academic concern to a board-level priority. When your build pipeline produces a container image that eventually runs in production, how do you prove --- cryptographically --- that the image was built from a specific commit on a specific repository by a specific build service, and that no intermediate step could have tampered with the artifact?
+
+Cloud Build addresses this through **SLSA Level 3 build provenance** (Supply-chain Levels for Software Artifacts). Whenever you use the `images` field in your `cloudbuild.yaml` to declare the output container images, Cloud Build automatically generates a signed provenance attestation that records the complete build metadata: the source repository, the commit SHA, the builder images used, the build steps executed, the substitution variables (except those marked as secrets), and the digest of every output image. This attestation is stored in the Artifact Analysis service alongside your container image.
+
+The provenance is verifiable. A downstream system can cryptographically validate that the attestation was signed by Cloud Build's private key, establishing an auditable chain of custody from source commit to deployed artifact. This becomes operationally powerful when paired with **Binary Authorization**, a GCP service that enforces deploy-time policies. Binary Authorization can be configured to reject any container image that does not carry a valid Cloud Build provenance attestation, ensuring that only images built through your approved pipeline ever reach your GKE or Cloud Run production environment:
+
+```
+Source Repo → Cloud Build → Provenance Attestation → Binary Authorization Gate → GKE/Cloud Run
+```
+
+Setting up Binary Authorization requires configuring an attestor that validates Cloud Build provenance, and then enabling the Binary Authorization enforcement policy on your GKE cluster or Cloud Run service. The initial configuration involves several steps --- creating a KMS key for the attestor, configuring the Binary Authorization policy, and enabling the enforcement mode --- but once in place, it closes the gap between "we believe this image came from CI" and "we have cryptographic proof that this image came from CI."
+
+This is especially important in regulated industries where auditors require evidence that production deployments follow an approved change management process. Rather than producing manual screenshots of CI dashboards, you point the auditor to the provenance attestation chain.
+
+## Patterns & Anti-Patterns
+
+Cloud Build's flexibility is both its greatest strength and the source of its most common failures. The patterns below represent proven configurations that teams converge on after operating Cloud Build in production for months or years. The anti-patterns are the mistakes those teams made on the way.
+
+### Proven Patterns
+
+**Pattern 1: Separate CI and CD Configurations**
+
+Maintain distinct `cloudbuild-ci.yaml` (pull requests) and `cloudbuild-cd.yaml` (main branch / tags) files. The CI configuration runs tests, linting, and security scans but never deploys or pushes to production registries. The CD configuration assumes CI has already passed and focuses on building release artifacts and executing deployments. This separation prevents a misconfigured PR trigger from accidentally deploying to production, and it keeps each configuration file focused on a single responsibility.
+
+*When to use*: Any project with more than one developer. The separation cost is zero --- two YAML files instead of one --- and the blast-radius reduction is substantial.
+
+*Scaling note*: As your test suite grows, the CI configuration may become the bottleneck while the CD configuration remains fast. Monitoring CI and CD durations separately allows you to optimize each independently.
+
+**Pattern 2: Immutable Tags via Commit SHA**
+
+Always tag container images with the full or short commit SHA (`$COMMIT_SHA` or `$SHORT_SHA`) as the primary identifier. The `latest` tag is a convenience pointer for development environments only. In staging and production, every deployed image must be traceable to an exact commit. When a production incident requires a rollback, you are not guessing which version of the code was running --- you look at the running image tag, find the corresponding commit, and know exactly what changed.
+
+*When to use*: Always. This is the single highest-leverage tagging discipline you can adopt.
+
+*Scaling note*: Artifact Registry's garbage collection policies should exempt images tagged with commit SHAs that correspond to active deployments. Coordinate this with your release retention policy.
+
+**Pattern 3: Pre-Built Custom Builder Images**
+
+Instead of running `apt-get install` or `pip install` inside every build step --- which downloads packages from the internet on every pipeline execution --- pre-build custom builder images that contain your full toolchain and store them in Artifact Registry. A step that references `us-central1-docker.pkg.dev/my-project/builders/python-tools:latest` starts executing in seconds because all dependencies are already baked into the image. This pattern also eliminates the risk that a public package registry outage blocks your pipeline.
+
+*When to use*: When any build step spends more than 30 seconds installing tools that change rarely (weekly or less). The upfront cost of maintaining a builder image CI pipeline pays for itself within a week of reduced build times.
+
+*Scaling note*: Tag builder images with a version scheme (`python-tools:v2`, not `:latest`) and promote them through environments alongside your application images. An application pinned to builder image `v2` should not silently pick up `v3` which might have a breaking toolchain change.
+
+**Pattern 4: Fan-Out Test Matrix**
+
+For projects with multiple test suites that can run independently --- unit tests, integration tests, end-to-end tests, performance benchmarks --- use `waitFor: ['-']` to launch all test suites in parallel, with a final convergence step that aggregates results. This pattern reduces total CI time from the sum of all test durations to the duration of the longest individual suite.
+
+*When to use*: When total sequential test time exceeds 10 minutes and test suites are truly independent (no shared mutable state).
+
+*Scaling note*: The convergence step should fail the build if any parallel test suite failed. Use a shared artifact (a JSON status file written to `/workspace`) or rely on Cloud Build's native step dependency propagation.
+
+### Anti-Patterns
+
+**Anti-Pattern 1: The Monolithic cloudbuild.yaml**
+
+A single `cloudbuild.yaml` that uses conditional logic (bash `if` statements checking `$BRANCH_NAME`) to decide whether to run tests, build, or deploy. This anti-pattern emerges when teams start with a simple pipeline and gradually bolt on behavior for different branches.
+
+*What goes wrong*: The configuration becomes a tangle of imperative shell scripts masquerading as a declarative pipeline. Debugging a failed build requires mentally executing bash conditionals to determine which code path was taken. Worse, a logic error in a conditional can cause a pull request trigger to execute the production deployment path.
+
+*Better approach*: Use separate trigger-specific configuration files (`cloudbuild-ci.yaml`, `cloudbuild-cd.yaml`, `cloudbuild-release.yaml`) and configure each trigger to point to the correct file. The branching logic moves from inside the YAML to the trigger configuration, where it is visible, auditable, and less error-prone.
+
+**Anti-Pattern 2: Ignoring Build Timeouts**
+
+Leaving the default 10-minute timeout in place indefinitely, even as the project grows.
+
+*What goes wrong*: One day a new dependency or a larger test suite pushes the build to 11 minutes. The pipeline starts failing with timeout errors. The team's first reaction is usually to assume something is broken, triggering a fire drill that wastes an afternoon before someone checks the timeout setting.
+
+*Better approach*: Set the timeout to a comfortable multiple of your observed build duration --- at least 2x, ideally 3x --- and monitor build duration trends. If the 90th percentile build time consistently exceeds half the timeout, increase the timeout proactively. A build that is genuinely stuck (infinite loop, hung network call) will still hit the timeout and fail, but a build that is merely growing with the codebase will not be prematurely killed.
+
+**Anti-Pattern 3: Secrets in Substitutions**
+
+Passing API tokens, database passwords, or private keys through the `--substitutions` flag or `substitutions` YAML block.
+
+*What goes wrong*: Substitution values are stored in plaintext in the Cloud Build database. Any principal with `cloudbuild.builds.get` permission can view the full substitution payload for any build, including past builds. A developer who hardcodes a staging database password as a substitution variable has effectively published that password to everyone in the project who can view build history.
+
+*Better approach*: Store all sensitive values in Secret Manager and reference them through `availableSecrets` with `secretEnv`. This keeps the plaintext value out of the build record entirely. The Secret Manager access log provides an independent audit trail of which build service account accessed which secret and when.
+
+**Anti-Pattern 4: Default Service Account for Everything**
+
+Using the default Cloud Build service account across all pipelines and environments.
+
+*What goes wrong*: A junior developer's experimental pipeline, running on a feature branch with a hastily written `cloudbuild.yaml`, inherits the same IAM permissions as the production deployment pipeline. If that experimental build contains a misconfiguration --- or worse, if the feature branch is compromised --- the blast radius includes the ability to push images to production registries, modify GKE clusters, or delete Cloud Run services.
+
+*Better approach*: Create dedicated service accounts per pipeline or per environment, granting only the exact roles each pipeline needs. A CI-only trigger that runs tests gets `roles/logging.logWriter` and nothing else. A CD trigger that deploys to staging gets `roles/run.admin` scoped to the staging project. The production deployer gets its own service account that is never used by any other trigger.
+
+## Decision Framework
+
+The choices you face when adopting Cloud Build are not purely technical --- they involve tradeoffs between operational simplicity, cost, security posture, and ecosystem fit. The following decision matrix and flowchart help you navigate the most common decision points.
+
+### Cloud Build vs. GitHub Actions vs. GitLab CI
+
+| Dimension | Cloud Build | GitHub Actions | GitLab CI |
+|-----------|-------------|----------------|-----------|
+| **Infrastructure** | Fully managed, serverless (default pool) or VPC-native (private pool) | GitHub-hosted runners or self-hosted | GitLab-hosted runners or self-hosted |
+| **GCP integration** | Native IAM, Artifact Registry auth, Cloud Deploy hand-off, Cloud Logging | Requires Workload Identity Federation setup | Requires Workload Identity Federation setup |
+| **Free tier** | 120 build-minutes/day (default machine) | 2,000 minutes/month (private repos), unlimited for public | 400 minutes/month (all tiers) |
+| **Pricing model** | Per build-minute by machine type | Per minute by runner tier (Linux/Windows/macOS) | Per minute by compute tier |
+| **Configuration** | Single `cloudbuild.yaml`, build steps as containers | `.github/workflows/*.yml`, job matrix, reusable workflows | `.gitlab-ci.yml`, stages, includes |
+| **Ecosystem** | Deepest GCP service integration, no third-party action marketplace | Largest marketplace (12,000+ actions), broadest third-party integration | Built-in container registry, Kubernetes integration |
+| **Best for** | Organizations standardizing on GCP, regulated environments needing provenance + Binary Authorization | Mixed-cloud or SaaS-heavy stacks, open-source projects | Self-hosted GitLab organizations, integrated DevSecOps |
+
+**Decision heuristic**: If your applications already run on GCP and your team manages infrastructure through GCP IAM, Cloud Build eliminates the complexity of federating external CI systems into your GCP identity model. If your stack spans AWS, Azure, and GCP equally, GitHub Actions' provider-agnostic marketplace may justify the additional identity federation setup. If you are a GitLab shop, GitLab CI's tight repository integration reduces the number of systems your team needs to context-switch between, and Cloud Build can still serve as the GCP-native deployment execution engine invoked from a GitLab CI pipeline.
+
+### Default Worker Pool vs. Private Worker Pool
+
+```mermaid
+flowchart TD
+    Q1{Does your build need to access\\nprivate VPC resources?}
+    Q1 -- No --> Q2{Do you have regulatory\\ndedicated-tenancy requirement?}
+    Q1 -- Yes --> Private
+    Q2 -- No --> Q3{Is build duration predictability\\ncritical (no cold starts)?}
+    Q2 -- Yes --> Private
+    Q3 -- No --> Default
+    Q3 -- Yes --> Private
+
+    Default["Default Pool\n(Google-managed, shared infrastructure)\n- Zero maintenance\n- Automatic scaling\n- Lower cost\n- Public internet only"]
+    Private["Private Pool\n(VPC-native, dedicated workers)\n- VPC access to private resources\n- Dedicated tenancy\n- Predictable warm-start performance\n- Higher cost + operational overhead"]
+```
+
+Most teams should start with the default pool and only migrate to a private pool when a concrete requirement (VPC access, dedicated tenancy, or predictable warm-start latency) makes the default pool insufficient. Private pools add operational surface area --- worker lifecycle management, capacity planning, and per-worker Compute Engine billing --- that the default pool absorbs on your behalf.
+
+### When to Add Cloud Deploy
+
+Cloud Deploy is not a replacement for Cloud Build; it is the CD half of the CI/CD pairing. Use Cloud Build alone when you are deploying to a single environment (or when your "staging" and "production" environments are separate projects with separate Cloud Build triggers). Introduce Cloud Deploy when:
+
+- You need formal approval gates between environments (dev → staging → production with a human approval at the production boundary).
+- You want canary deployments with automatic traffic splitting and metric-based verification, rather than all-at-once deployments.
+- You need a single view of the rollout status across all environments, with the ability to promote or roll back releases from one control plane.
+- Compliance requires an immutable audit trail of which release was deployed to which environment and when, with cryptographic provenance linking each deployment back to a specific build.
+
+For a simple project deploying to a single Cloud Run service on push to `main`, Cloud Build alone is sufficient and Cloud Deploy adds complexity without proportionate benefit. As soon as you introduce a staging environment that must be validated before production, Cloud Deploy's value begins to materialize.
+
+## Cost Lens: Build-Minute Economics
+
+Cloud Build's pricing model is transparent: you pay for build minutes consumed, measured from the moment the build VM starts provisioning until it is torn down. The rate depends on the machine type you select.
+
+The **free tier** provides 120 build-minutes per day on the default machine type (`e2-medium`), calculated per billing account. For a small team running 15 builds per day averaging 5 minutes each, this covers the first 75 minutes, leaving 45 minutes of buffer before any charges accrue. Many small-to-medium teams operate entirely within the free tier without ever receiving a Cloud Build invoice.
+
+When you exceed the free tier or use larger machine types, pricing scales with vCPU count. The default `e2-medium` (2 vCPUs) is the cheapest option. Stepping up to `E2_HIGHCPU_8` (8 vCPUs, approximately 4x the per-minute rate) makes sense when the faster execution unblocks developers waiting for CI feedback. The economic calculation is not "how much does the build cost" but "how much does a developer waiting 15 minutes instead of 5 cost the organization." At typical engineering fully-loaded costs, the larger machine pays for itself if it saves even a few minutes per build across a team running dozens of builds daily.
+
+**Cost optimization levers**:
+
+- **File filtering on triggers**: The fastest build minute is the one you never consume. Use `ignoredFiles` to skip builds for documentation-only commits. For monorepos, use `includedFiles` to trigger only the relevant sub-pipeline.
+- **Caching**: Use Kaniko with Artifact Registry layer caching for Docker builds. A cached build that skips 80% of its layers might complete in 90 seconds instead of 8 minutes.
+- **Timeout discipline**: A build that hangs for 10 minutes before the timeout kills it consumes 10 billable minutes of zero-value execution. Set timeouts that are generous enough for normal operation but tight enough to catch hangs quickly.
+- **Right-size machine types**: Run your build on the default machine and measure the wall-clock time. If it is acceptable, stay on the default. If developers complain about CI latency, benchmark on `E2_HIGHCPU_8` and compare the cost-per-build against the developer-productivity gain.
+
+**What makes cost spike unexpectedly**:
+
+- **High-frequency trigger loops**: A trigger configured on `push` to a branch where an automated process also pushes commits (such as a version-bumping bot) can create infinite build loops. Each iteration consumes build minutes. Always pair automated commit bots with a commit author filter or a trigger condition that breaks the loop.
+- **Forked-repository abuse on public projects**: If you enable Cloud Build triggers for external contributors on a public repository, a malicious actor can submit pull requests that consume your build minutes by triggering builds in a loop. Mitigate this with `--comment-control=COMMENTS_ENABLED_FOR_EXTERNAL_CONTRIBUTORS_ONLY` or by requiring a maintainer to explicitly trigger CI on external PRs.
+- **Large private pool clusters left idle**: Private pool workers that are provisioned but not building still consume Compute Engine resources. If you create a private pool with a minimum of 5 workers and your team only runs builds during business hours, those workers sit idle for 16 hours a day at full Compute Engine pricing. Schedule private pool scale-down during off-hours or use a minimum worker count of zero with autoscaling.
 
 ## Did You Know?
 
@@ -1022,3 +1312,12 @@ Now that you have established a reliable and immutable pathway for releasing cod
 - [Cloud Build Overview](https://cloud.google.com/build/docs/overview) — Covers the core execution model, build steps, pools, and security concepts behind Cloud Build.
 - [Cloud Deploy Overview](https://cloud.google.com/deploy/docs/overview) — Explains delivery pipelines, targets, releases, promotions, approvals, and rollouts.
 - [Use Secrets from Secret Manager](https://cloud.google.com/build/docs/securing-builds/use-secrets) — Shows the supported pattern for handling build-time secrets safely in Cloud Build.
+- [Cloud Build Pricing](https://cloud.google.com/build/pricing) — Build-minute pricing by machine type, free tier details, and private pool cost model.
+- [Build Configuration Schema](https://cloud.google.com/build/docs/build-config-file-schema) — Complete reference for the `cloudbuild.yaml` schema including `options`, `artifacts`, `timeout`, and `machineType`.
+- [Configuring Build Triggers](https://cloud.google.com/build/docs/automating-builds/create-manage-triggers) — Trigger types, branch/tag patterns, file filtering, and comment control for external contributors.
+- [Private Worker Pool Overview](https://cloud.google.com/build/docs/private-pools/private-pools-overview) — VPC-native build execution, worker pool lifecycle, and private pool configuration.
+- [View Build Provenance](https://cloud.google.com/build/docs/securing-builds/view-build-provenance) — SLSA Level 3 build provenance generation, attestation verification, and supply chain integrity.
+- [Binary Authorization Overview](https://cloud.google.com/binary-authorization/docs/overview) — Deploy-time security enforcement, attestor configuration, and policy setup for GKE and Cloud Run.
+- [Cloud Build Service Account](https://cloud.google.com/build/docs/securing-builds/configure-build-sa) — Default and custom service account configuration, least-privilege patterns, and permission scoping.
+- [Connecting a Host via Developer Connect](https://cloud.google.com/build/docs/automating-builds/github/connect-repo-github) — Second-generation repository connections for GitHub, GitLab, and Bitbucket.
+- [Kaniko Cache in Cloud Build](https://cloud.google.com/build/docs/kaniko-cache) — Layer caching for Docker builds using Kaniko with Artifact Registry, reducing build times.
