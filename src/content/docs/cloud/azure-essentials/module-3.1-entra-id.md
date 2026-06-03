@@ -19,15 +19,23 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Misconfigured identity applications and forgotten credentials can expose large amounts of sensitive data for long periods if no one is inventorying app registrations, reviewing permissions, and rotating or eliminating secrets. In practice, risk tends to grow through small misses that are easy to ignore one day and expensive to unwind the next. This story illustrates a critical truth about Azure: **identity is not just security---it is the foundation of everything**. Every action in Azure, from creating a virtual machine to reading a blob in storage, flows through the identity layer. Unlike traditional on-premises environments where you might rely on network segmentation and firewall rules as your primary defense, Azure's control plane is entirely identity-driven, so if an attacker compromises a service principal with Contributor access to a subscription, no perimeter hardening alone can stop them from deleting databases.
+Hypothetical scenario: a platform team ships a new microservice with a client secret embedded in Helm values. Six months later, nobody remembers which pipeline created the app registration. The secret never rotated. An attacker with read access to the chart history now has Contributor on a production subscription. The breach is not a firewall failure. It is an identity lifecycle failure that compounded quietly.
 
-In this module, you will learn how Microsoft Entra ID (formerly Azure Active Directory) works as the identity backbone of Azure. You will understand the hierarchy of tenants, management groups, and subscriptions so you can reason clearly about where permission boundaries are enforced. You will learn the critical differences between Entra ID roles and Azure RBAC roles---a distinction that trips up even experienced engineers under pressure. By the end, you will be able to design an identity strategy that follows the principle of least privilege from the ground up and is easier to defend during security reviews.
+This pattern is common because Azure makes resource creation easy while identity cleanup stays manual. **Identity is not just security---it is the foundation of everything in Azure.** Every VM, storage account, and Kubernetes cluster call flows through Entra authentication and Azure RBAC authorization. Traditional on-premises defenses often lean on network segmentation first. Azure's control plane is identity-driven first. A compromised service principal with broad RBAC can delete data even when NSGs are perfect.
+
+In this module, you will learn how Microsoft Entra ID (formerly Azure Active Directory) works as the identity backbone of Azure. You will map tenants, management groups, and subscriptions to real permission boundaries. You will separate Entra directory roles from Azure resource roles---a distinction that still trips experienced engineers during incidents. You will also learn when managed identities beat secrets, and when workload identity federation beats both. By the end, you can design least-privilege access that survives audits and reduces licensing waste.
 
 ---
 
 ## Azure's Identity Backbone: Microsoft Entra ID
 
-Before you create a single resource in Azure, you need to understand the identity layer that governs everything. Microsoft Entra ID (still frequently called Azure AD in documentation, CLI tools, and everyday conversation) is a cloud-based identity and access management service. Think of it as the bouncer at every door in the Azure building. Every person, every application, every automated process must present credentials to Entra ID before Azure will do anything.
+Before you create a single resource in Azure, you need to understand the identity layer that governs everything. Microsoft Entra ID (still frequently called Azure AD in documentation, CLI tools, and everyday conversation) is a cloud-based identity and access management service. Think of it as the bouncer at every door in the Azure building. Every person, every application, and every automated process must present credentials to Entra ID before Azure will do anything.
+
+> **The Bouncer Analogy**
+>
+> A nightclub bouncer checks ID at the door—that is authentication. The wristband color determines which rooms you may enter—that is authorization. Entra ID issues wristbands (tokens). Azure RBAC decides which rooms (resources) each wristband may access. You need both checks; a forged ID at the door is useless if the wristband never gets issued, and a valid ID without the right wristband still cannot enter the VIP room.
+
+Cloud operators who internalize this analogy debug faster. Sign-in failures are bouncer problems (password, MFA, Conditional Access). Resource Manager `AuthorizationFailed` errors are wristband problems (missing RBAC, wrong scope, missing data-plane role, deny assignment). Mixing the two leads to futile password resets when the real issue is a missing `Storage Blob Data Contributor` assignment.
 
 ### What Entra ID Is (and What It Is Not)
 
@@ -94,6 +102,21 @@ flowchart TD
 
 A common mistake is treating subscriptions as purely a billing construct. They are also **security boundaries**, because a user with Owner on Subscription A has zero access to Subscription B by default, even if both subscriptions are in the same tenant. This is why large organizations use multiple subscriptions to isolate environments and teams: they want predictable blast-radius boundaries and cleaner privilege models before cost structures become a secondary consideration.
 
+### Enterprise Layout: Tenants, Management Groups, and Landing Zones
+
+Real enterprises rarely run "one subscription for everything." A common pattern is a **platform subscription** for shared services (logging, DNS hubs, identity automation) and **workload subscriptions** per product or environment (dev/test/prod). Management groups apply policies once—require tags, deny public IPs in production, inherit Azure Policy initiatives—while subscriptions keep billing and RBAC isolation crisp.
+
+| Pattern | Structure | Identity benefit |
+| :--- | :--- | :--- |
+| **Environment isolation** | MG `Production` / `NonProd` with separate subs | CA policies differ; prod Owners are fewer |
+| **Team isolation** | Subscription per product team | Blast radius contained to one sub |
+| **Platform hub** | Shared services sub with user-assigned MIs | Central MI for DNS/ACR/Key Vault access |
+| **Sandbox** | Low-privilege sub with Contributor for engineers | No standing Owner; PIM for exceptions |
+
+When designing landing zones, decide **where human access lives** (groups at MG or sub scope) versus **where workload identities live** (user-assigned MIs in the workload sub, federated CI/CD from GitHub). Hypothetical scenario: a company places all production apps in one subscription to "save money," then grants 40 engineers Contributor. Incident response becomes role-assignment archaeology. Splitting subscriptions costs little compared to one mistaken `az group delete`.
+
+Landing zone identity automation often uses infrastructure-as-code to create groups, assign RBAC, and register federated credentials. The operator still must understand scope strings. A role assignment scope of `/providers/Microsoft.Management/managementGroups/Production` affects every child subscription. A scope of `/subscriptions/{id}/resourceGroups/app-rg` affects only that group. Terraform `azurerm_role_assignment` and Bicep `Microsoft.Authorization/roleAssignments` must mirror the same paths you would type in `az role assignment create`.
+
 > **Pause and predict**: If you assign a user the 'Contributor' role at the Subscription level, but explicitly assign them the 'Reader' role at a specific Resource Group level within that subscription, what effective permissions do they have on the Resource Group?
 > *Answer: They have 'Contributor' access. Azure RBAC is an additive model. Permissions flow down the hierarchy, and a lower-level assignment cannot subtract or restrict permissions granted at a higher level (unless you use Azure Blueprints or explicit Deny Assignments, which are advanced and rare).*
 
@@ -147,6 +170,15 @@ Groups simplify access management. Instead of assigning roles to individual user
 
 Groups can have **assigned membership** (manually add/remove members) or **dynamic membership** (members are automatically added/removed based on user attributes like department or job title). [Dynamic groups require Entra ID P1 or P2 licensing.](https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership)
 
+**Guest users (B2B collaboration)** invite external identities into your tenant as `userType: Guest`. Guests authenticate with their home organization but appear in your directory for RBAC and app access. Treat guests like employees for access reviews—contractors often retain group memberships after projects end. Assign RBAC to groups that include guests only when necessary; prefer app-scoped access or entitlement management for vendor scenarios.
+
+| Group strategy | Best for | RBAC tip |
+| :--- | :--- | :--- |
+| **Security group (assigned)** | Stable teams with manual onboarding | `Platform-Ops` group gets Contributor on `rg-platform` |
+| **Security group (dynamic)** | Department-based access at scale | Rule `department -eq "Engineering"`; needs P1 |
+| **Role-assignable group** | Nesting Entra directory roles | Limited to ~500 role-assignable groups per tenant |
+| **Microsoft 365 group** | Collaboration + optional RBAC | Extra M365 licensing surface; use security groups for pure RBAC |
+
 ```bash
 # Create a security group
 az ad group create \
@@ -197,6 +229,20 @@ az ad app federated-credential create --id "$APP_ID" --parameters '{
 ```
 
 **War Story**: Exposed client secrets in public repositories can be discovered quickly, and a high-privilege service principal can be abused for costly or destructive activity. The safer pattern is to avoid long-lived secrets by using Managed Identities for Azure workloads and federated workload identity for CI/CD.
+
+### Application Permissions vs Delegated Permissions
+
+App registrations declare **API permissions** in two flavors. **Delegated permissions** apply when a signed-in user is present—the app acts on behalf of that user within the consent boundary. **Application permissions** apply when the app calls APIs with its own identity (daemon jobs, unattended sync)—these are powerful and often require admin consent. [Microsoft Graph and Azure Resource Manager permissions are separate from Azure RBAC](https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview): granting `Directory.Read.All` on Graph does not grant Reader on a subscription. Operators must track both planes during security reviews.
+
+A mature registration workflow documents: which secrets or federated credentials exist, which API permissions are granted, which enterprise application (service principal) holds Azure RBAC assignments, and who owns quarterly review. Hypothetical scenario: an inventory scanner holds Graph application permission and subscription Reader via RBAC. Removing Graph access does not remove storage enumeration if RBAC Reader remains—fix both or the scanner still exfiltrates metadata.
+
+```bash
+# List API permissions declared on an app registration
+az ad app show --id "$APP_ID" --query "requiredResourceAccess" -o json
+
+# Show service principal RBAC (Azure plane) vs Graph app roles (directory/API plane)
+az role assignment list --assignee "$SP_OBJECT_ID" --all -o table
+```
 
 ### Managed Identities: The Gold Standard
 
@@ -249,6 +295,48 @@ print(f"Secret value: {secret.value}")
 
 The `DefaultAzureCredential` class tries several credential types, and the exact chain depends on SDK version and configuration. In Azure, Managed Identity is one built-in option; on a developer machine, local credentials such as Azure CLI can be used instead.
 
+### How Managed Identities Obtain Tokens Without Secrets
+
+When code on an Azure resource calls the local **Instance Metadata Service (IMDS)** endpoint, Azure validates that the request originates from that resource and returns a Microsoft Entra access token for the managed identity's service principal. [No client secret or certificate is stored in your application configuration](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview); Azure rotates credentials on the platform side. This is why managed identities are the default recommendation for App Service, Azure Functions, VMs, and AKS pods that call Azure APIs: you grant RBAC on the identity's `principalId`, and the runtime handles token acquisition.
+
+The operator workflow is deliberately simple: create or enable the identity, assign roles at the narrowest scope, then let the SDK call `DefaultAzureCredential()` or `ManagedIdentityCredential()`. Propagation delays still apply after role assignment, so automated deployments should retry token acquisition for several minutes after `az role assignment create`.
+
+### Workload Identity Federation for AKS, GitHub Actions, and External Workloads
+
+Not every workload runs on Azure compute with IMDS available. CI/CD pipelines in GitHub Actions, pods on Amazon EKS or Google GKE, and legacy VMs outside Azure still need Entra tokens—but **client secrets expire, leak in logs, and resist rotation at scale**. [Workload identity federation lets a user-assigned managed identity or app registration trust tokens from an external identity provider (IdP)](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation) such as GitHub, Kubernetes OIDC issuers, or Google Cloud. You configure a **federated identity credential** with `issuer`, `subject`, and `audience` values that must case-sensitively match the external JWT; Microsoft identity platform validates the external token and issues an Entra access token with no long-lived secret.
+
+```mermaid
+sequenceDiagram
+    participant W as External workload
+    participant IdP as External IdP (GitHub/K8s)
+    participant Entra as Microsoft identity platform
+    participant Az as Azure resource API
+
+    W->>IdP: Request OIDC token
+    IdP->>W: JWT (subject matches federated credential)
+    W->>Entra: Exchange JWT for access token
+    Entra->>Entra: Validate trust on MI or app registration
+    Entra->>W: Entra access token
+    W->>Az: Call API with Bearer token
+```
+
+For **AKS**, the supported pattern is [Azure Workload Identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity/overview). Enable the OIDC issuer on the cluster first. Create a user-assigned managed identity in the node resource group or a dedicated identity RG. Add a federated credential whose `issuer` is the cluster OIDC URL and whose `subject` is the Kubernetes service account (`system:serviceaccount:<namespace>:<name>`). Annotate the pod service account with `azure.workload.identity/client-id`. The pod receives Entra tokens like a VM managed identity, without mounting secrets. This curriculum targets Kubernetes **1.35**; workload identity is the modern replacement for the deprecated aad-pod-identity addon pattern.
+
+For **GitHub Actions**, you create a federated credential on the app registration (as shown earlier with `az ad app federated-credential create`) and use the `azure/login` action with `client-id`, `tenant-id`, and `subscription-id`—no `AZURE_CLIENT_SECRET`. Hypothetical scenario: a platform team runs twenty repositories; rotating twenty secrets quarterly is error-prone, but one federated trust per repo branch pattern scales with policy-as-code reviews.
+
+**Important constraint**: [tokens issued by Microsoft Entra ID cannot be used as input to federated identity credential flows](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation)—the external IdP must be GitHub, your Kubernetes issuer, AWS Cognito, etc., not another Entra tenant token chained informally.
+
+```bash
+# Federated credential on a user-assigned managed identity (AKS-style issuer example)
+az identity federated-credential create \
+  --name "aks-federated-credential" \
+  --identity-name "app-identity" \
+  --resource-group myRG \
+  --issuer "https://oidc.prod.aks.azure.com/<tenant-id>/<cluster-id>/" \
+  --subject "system:serviceaccount:default:my-app-sa" \
+  --audience "api://AzureADTokenExchange"
+```
+
 ---
 
 ## Azure RBAC vs Entra ID Roles: The Great Confusion
@@ -257,13 +345,16 @@ This is the section that will save you hours of frustration. Azure has **two sep
 
 ### Entra ID Roles (Directory Roles)
 
-These roles control access to **Entra ID itself**---the directory. They govern who can create users, manage groups, register applications, configure Conditional Access policies, and perform other directory operations. In other words, Entra ID roles are about identity administration and tenant governance, not direct resource creation, deletion, or data plane operations.
+These roles control access to **Entra ID itself**---the directory. They govern who can create users, manage groups, register applications, configure Conditional Access policies, and perform other directory operations. In other words, Entra ID roles are about identity administration and tenant governance, not direct resource creation, deletion, or data plane operations. [Directory roles are assigned at tenant scope only](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/custom-overview); you cannot assign "User Administrator" on a single subscription because the directory is one flat namespace per tenant.
 
 Examples of core Entra ID directory roles are shown below:
 - **Global Administrator**: Full access to Entra ID and all Microsoft services (the "root" of your tenant)
 - **User Administrator**: Can create and manage users and groups
 - **Application Administrator**: Can manage app registrations and enterprise applications
 - **Security Reader**: Read-only access to security features
+- **Privileged Role Administrator**: Can manage role assignments for other Entra directory roles (high blast radius—often paired with PIM)
+
+When an engineer asks for "admin access," clarify **which plane** they need. Directory admins can reset passwords and create app registrations; they cannot deploy VMs until someone grants Azure RBAC. Resource owners can delete storage accounts but cannot invite guest users unless they also hold directory roles.
 
 ### Azure RBAC Roles (Resource Roles)
 
@@ -294,9 +385,27 @@ This is a critical detail: [a **Global Administrator** in Entra ID does **not** 
 > **Stop and think**: A new security engineer is granted the 'Global Administrator' role in Entra ID. When they log into the Azure portal, they cannot see any Virtual Machines or Storage Accounts. Why?
 > *Answer: Global Administrator is a directory role that grants control over Entra ID (users, groups, policies), not an Azure RBAC role. The engineer has no default access to Azure resources. They must explicitly elevate their access to gain the User Access Administrator role at the root scope before they can grant themselves permissions to view or manage Azure resources.*
 
+### Role Assignment Scope Hierarchy and `az role assignment create`
+
+Azure RBAC assignments attach a **role definition** to a **security principal** (user, group, service principal, or managed identity) at a **scope**. Scopes form a tree: management group → subscription → resource group → individual resource. [Permissions are additive as they inherit downward](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview); a Contributor at subscription scope can modify every resource group underneath unless a **deny assignment** blocks specific actions.
+
+The CLI shape you will use daily is:
+
+```bash
+az role assignment create \
+  --assignee "<object-id-or-upn>" \
+  --role "<RoleName>" \
+  --scope "/subscriptions/<sub-id>/resourceGroups/<rg-name>"
+```
+
+Use the principal's **object ID** for service principals and managed identities (`principalId` from `az identity show` or `az ad sp show`). For users, UPN often works, but object ID avoids ambiguity when guest accounts share display names. Scope should be as narrow as the task allows: prefer resource group over subscription, and resource over resource group when the workload is single-purpose.
+
 ```bash
 # List Azure RBAC role assignments at subscription scope
 az role assignment list --scope "/subscriptions/<sub-id>" -o table
+
+# List assignments for one principal across the tenant (diagnostics)
+az role assignment list --assignee "$PRINCIPAL_ID" --all -o table
 
 # List all built-in Azure RBAC roles
 az role definition list --query "[?roleType=='BuiltInRole'].{Name:roleName, Description:description}" -o table
@@ -304,6 +413,14 @@ az role definition list --query "[?roleType=='BuiltInRole'].{Name:roleName, Desc
 # Show what a specific role can do
 az role definition list --name "Contributor" --query '[0].{Actions:permissions[0].actions, NotActions:permissions[0].notActions}'
 ```
+
+### Deny Assignments and the Least-Privilege Model
+
+Least privilege on Azure means granting the **minimum RBAC and directory roles** required for a task, at the **narrowest scope**, for the **shortest duration** practical. Groups should hold roles; humans should be members of groups. Standing Global Administrator or subscription Owner assignments should be rare and visible in access reviews.
+
+**Deny assignments** are the exception mechanism: they block specified control-plane or data-plane actions even when a role assignment would allow them. [You cannot create arbitrary deny assignments yourself in most tenants](https://learn.microsoft.com/en-us/azure/role-based-access-control/deny-assignments)—Azure creates them to protect platform resources, and deployment stacks can create deny settings to prevent deletion of managed resources. Operators still need to recognize deny assignments when troubleshooting "I have Contributor but the API returns AuthorizationFailed." List them in the portal under Access control (IAM) → Deny assignments, or query with appropriate `Microsoft.Authorization/denyAssignments/read` permission.
+
+Deny does not replace good role design. If teams rely on deny to compensate for excessive Contributor grants, the permission model is already unhealthy. The sustainable pattern is: built-in or custom roles scoped tightly, PIM for elevation, Conditional Access for sign-in risk, and access reviews to remove stale assignments.
 
 ### Custom RBAC Roles
 
@@ -347,11 +464,49 @@ az role definition list --custom-role-only true -o table
 
 An important distinction: **Actions** vs **DataActions**. [Actions control *management plane* operations (creating, deleting, configuring resources). DataActions control *data plane* operations (reading blobs in storage, sending messages to a queue). The role `Storage Blob Data Reader` uses DataActions, not Actions](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions), because it grants access to the data inside storage, not to the storage account management operations.
 
+### Diagnosing "Access Denied" Across Entra ID and Azure RBAC
+
+When authentication succeeds but authorization fails, split the problem into **token issuance** (Entra sign-in, Conditional Access, app consent) versus **RBAC evaluation** (role assignments, scope, deny assignments, data-plane roles). The Azure portal's "Check access" blade on a resource is the fastest sanity check for RBAC. For directory tasks, verify Entra directory role assignments in Entra admin center roles and administrators.
+
+| Symptom | Likely plane | First checks |
+| :--- | :--- | :--- |
+| Cannot sign in to portal | Entra authentication / CA | Sign-in logs, CA report-only, MFA registration |
+| Sign-in works, cannot create RG | Azure RBAC | `az role assignment list --assignee`, scope too narrow |
+| Can create container, cannot upload blob | Data-plane RBAC | Missing `Storage Blob Data Contributor` or equivalent |
+| Global Admin cannot see VMs | Plane confusion | RBAC not granted; elevate access or assign Reader |
+| Contributor but delete blocked | Deny assignment / locks | Deny assignments tab, CanNotDelete lock on RG |
+| MI works locally, fails in Azure | Wrong credential chain | `DefaultAzureCredential` picking CLI instead of IMDS |
+
+Worked troubleshooting flow: confirm the principal's `objectId`, list all role assignments with `--all`, verify each assignment scope includes the target resource, confirm data-plane roles exist for storage/SQL/Key Vault data APIs, wait ten minutes for propagation, then inspect deny assignments. If the principal is a service principal, also verify API permissions and admin consent on the app registration—Graph consent gaps will not show up in `az role assignment list`.
+
+```bash
+# Effective permissions simulation (subscription scope example)
+az role assignment list --assignee "$PRINCIPAL_ID" --scope "/subscriptions/<sub-id>" -o table
+
+# Sign-in diagnostics for human users (requires appropriate Graph permissions)
+az rest --method GET \
+  --url "https://graph.microsoft.com/v1.0/auditLogs/signIns?\$top=5" \
+  --query "value[].{User:userPrincipalName, App:appDisplayName, Status:status.errorCode}" -o table
+```
+
 ---
 
 ## Conditional Access: Context-Aware Security
 
 Conditional Access policies are the enforcement engine of Entra ID. They evaluate conditions (who, where, what device, what app) and make access decisions (allow, block, require MFA). Think of them as programmable if/then rules for authentication that let you tighten control based on context instead of trying to secure every login with one static policy. In practice, this gives you better risk balance because you can keep the default experience lightweight while still protecting high-risk scenarios.
+
+### Policy Anatomy: Signals, Conditions, and Grant Controls
+
+Every Conditional Access policy is a pipeline. **Assignments** define who and what the policy applies to (users, groups, roles, cloud apps, or user actions such as registering security info). **Conditions** filter the sign-in context: client app type, device platform, location (IP ranges from **named locations**), sign-in risk level, or device compliance state. **Access controls** decide the outcome: block, grant with requirements (MFA, compliant device, approved app), or session controls (sign-in frequency, persistent browser session). [Policies evaluate in report-only mode first, then enforcement](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-conditional-access-policy-common)—a practical rollout pattern that avoids locking out administrators on day one.
+
+| Policy stage | What you configure | Operator intent |
+| :--- | :--- | :--- |
+| **Assignments (WHO/WHAT)** | Users, groups, roles, cloud apps, user actions | Limit blast radius—start with admins, then expand |
+| **Conditions (signals)** | Locations, device state, risk, client apps | Tie controls to real risk (unknown geography, legacy auth) |
+| **Grant controls** | Require MFA, require compliant device, block | Enforce step-up only when context warrants it |
+| **Session controls** | Sign-in frequency, app-enforced restrictions | Reduce token lifetime for sensitive portals |
+
+**Named locations** are CIDR ranges or countries you label as trusted corporate networks versus "anywhere else." Pairing "Require MFA except from trusted locations" with "Block legacy authentication" closes common password-spray paths without punishing employees on VPN. [Risk-based Conditional Access (sign-in risk, user risk) requires Microsoft Entra ID Protection, which needs P2 licensing](https://learn.microsoft.com/en-us/entra/fundamentals/licensing).
 
 | Assignments (WHO) | Conditions (WHERE/WHEN/HOW) | Controls (THEN WHAT) |
 | :--- | :--- | :--- |
@@ -377,15 +532,27 @@ az rest --method GET \
   --query "value[].{Name:displayName, State:state}"
 ```
 
+### MFA Methods and Authentication Strength
+
+Multi-factor authentication is not a single technology. Entra supports Authenticator push/OTP, FIDO2 security keys, certificate-based auth, and telephony (where licensed). [Security defaults favor Microsoft Authenticator for all users](https://learn.microsoft.com/en-us/entra/fundamentals/licensing), while P1/P2 tenants can tune allowed methods per Conditional Access policy. Phishing-resistant MFA (FIDO2, Windows Hello for Business, certificate-based) should be required for Global Administrators and for PIM activations.
+
+Operators should align MFA policy with helpdesk capacity. If every CA policy demands FIDO2 on day one, contractors without enrolled keys will open tickets. A staged rollout—Authenticator first, FIDO2 for privileged roles—is usually sustainable. Pair MFA requirements with **named locations** so corporate VPN users are not challenged on every API call, while unknown locations always step up.
+
+[Break-glass emergency access accounts](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/security-emergency-access) should be cloud-only, excluded from routine Conditional Access, and monitored with alerts. Skipping this step causes painful lockouts during MFA migrations when administrators cannot sign in to fix policies.
+
 ---
 
 ## Privileged Identity Management (PIM) & Access Reviews
 
 Even with least privilege and Conditional Access, standing access is a massive security risk. Standing access means a user can hold a highly privileged role like Owner or Global Administrator continuously, even when they are not actively performing privileged tasks. If their account is compromised, the attacker can immediately inherit that privilege. This is why modern governance patterns treat privileged assignments as exceptions, not defaults.
 
-Microsoft Entra Privileged Identity Management (PIM) solves this by providing **Just-In-Time (JIT) access** that limits privileged exposure to specific windows. With PIM, users are made *eligible* for a role rather than being permanently assigned to it. When they need to perform a privileged task, they must *activate* the role and satisfy the controls defined in the policy, which is usually a lower-risk posture than indefinite standing rights. 
+Microsoft Entra Privileged Identity Management (PIM) solves this by providing **Just-In-Time (JIT) access** that limits privileged exposure to specific windows. With PIM, users are made *eligible* for a role rather than being permanently assigned to it. When they need to perform a privileged task, they must *activate* the role and satisfy the controls defined in the policy, which is usually a lower-risk posture than indefinite standing rights.
 
-The [Microsoft Entra PIM model](https://learn.microsoft.com/en-us/azure/role-based-access-control/pim-integration) exists so you can require evidence before granting temporary privilege, and it makes the access decision explicit instead of implicit.
+### Eligible vs Active Assignments
+
+An **active** assignment behaves like a classic standing role: the principal has the privilege until someone removes it. An **eligible** assignment means the principal *may* request activation; until activation succeeds, the effective permissions are not granted. [PIM applies to both Entra directory roles and Azure resource roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/pim-integration) when licensed appropriately—Global Administrator eligible assignments are directory-scoped, while subscription Owner eligible assignments are Azure RBAC-scoped. Activation creates a time-bound active assignment; when the window expires, the extra assignment disappears without a manual cleanup ticket.
+
+The [Microsoft Entra PIM model](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure) exists so you can require evidence before granting temporary privilege, and it makes the access decision explicit instead of implicit.
 
 The activation process can require several controls before a role becomes active, and that sequence is where governance policies get enforced:
 - **Time-bounding**: The role automatically expires after a set period (e.g., 2 hours).
@@ -396,11 +563,108 @@ The activation process can require several controls before a role becomes active
 > **Stop and think**: An engineer is *eligible* for the Subscription Owner role via PIM. They activate the role, which requires approval. After approval, they try to delete a resource group but get an authorization error. 15 minutes later, the deletion succeeds. Why? 
 > *Answer: Azure RBAC role assignments can take up to 10 minutes to propagate across the globally distributed authorization system. PIM works by dynamically creating a temporary role assignment when activated, so the standard propagation delay applies. The user must simply wait a few minutes after activation for the permissions to take effect.*
 
-### Access Reviews
+### Access Reviews and Governance Cadence
 
-Over time, users accumulate permissions they no longer need—often from changing teams, temporary project assignments, or evolving org structures. **Access Reviews** automate cleanup by giving owners and reviewers a periodic checkpoint, which is far more reliable than relying on people to remember every stale permission. You can configure this process to ask users, managers, or resource owners on a cadence (for example, quarterly) whether specific access is still required. If the reviewer says "no" or fails to respond within the timeframe, Entra ID can automatically revoke access, which directly supports periodic governance evidence and least-privilege review processes. For this reason, Access Reviews are most effective when they are tied to clear ownership and realistic review cycles.
+Over time, users accumulate permissions they no longer need—often from changing teams, temporary project assignments, or evolving org structures. **Access Reviews** automate cleanup by giving owners and reviewers a periodic checkpoint, which is far more reliable than relying on people to remember every stale permission. You can configure this process to ask users, managers, or resource owners on a cadence (for example, quarterly) whether specific access is still required. If the reviewer says "no" or fails to respond within the timeframe, Entra ID can automatically revoke access, which directly supports periodic governance evidence and least-privilege review processes. [Deploy access reviews with explicit reviewers and auto-removal settings documented](https://learn.microsoft.com/en-us/entra/id-governance/deploy-access-reviews) so audit evidence is reproducible.
 
-*Note: PIM and Access Reviews are premium governance features, so check the current Microsoft Entra licensing requirements for your exact scenarios before rollout.*
+Access reviews complement PIM: PIM limits *how long* elevated access lasts during an incident window; access reviews prove *whether standing or eligible assignments should exist at all*. For this reason, Access Reviews are most effective when they are tied to clear ownership and realistic review cycles.
+
+### Entra ID Licensing: Free, P1, P2, and What Requires a Paid Seat
+
+[Microsoft Entra ID Free is included with Azure and Microsoft 365 subscriptions](https://learn.microsoft.com/en-us/entra/fundamentals/licensing) and covers basic directory features, security defaults with MFA for all users (with Authenticator as the primary method in defaults), and built-in Azure RBAC role usage. **Entra ID P1** adds Conditional Access, dynamic groups, self-service password reset with writeback, Entra Connect Health, and custom directory roles (each user with a custom role assignment needs P1). **Entra ID P2** adds Privileged Identity Management, Entra ID Protection (risk-based policies), and advanced access review capabilities bundled with governance scenarios.
+
+| Capability | Free | P1 | P2 |
+| :--- | :---: | :---: | :---: |
+| Security defaults / basic MFA | Yes | Yes | Yes |
+| Conditional Access policies | No | Yes | Yes |
+| Dynamic group membership | No | Yes | Yes |
+| Custom Entra directory roles | No | Yes (licensed assignees) | Yes |
+| Privileged Identity Management | No | No | Yes |
+| Risk-based Conditional Access | No | No | Yes (via ID Protection) |
+| Managed identities for Azure resources | Yes (no extra license) | Yes | Yes |
+
+Microsoft 365 E3 includes P1; Microsoft 365 E5 and EMS E5 include P2. Small-business **Microsoft 365 Business Premium** also bundles Conditional Access—check your exact SKU before buying standalone P1 seats.
+
+---
+
+## Patterns & Anti-Patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **Group-based RBAC** | Any team larger than a handful of engineers | Role assignments on groups survive org churn; audit shows group membership changes | Use dynamic groups for department-based access; avoid nested group explosions |
+| **User-assigned managed identity shared across services** | Multiple Azure resources need the same downstream permissions | One `principalId`, one set of Key Vault or SQL role assignments | Pre-create identity in Terraform/Bicep before attaching to App Service, Functions, ACI |
+| **Workload identity federation for CI/CD** | GitHub Actions, GitLab, or non-Azure Kubernetes calling Azure APIs | No rotating client secrets in pipeline variables | One federated credential per repo/environment subject; review `issuer`/`subject` in PRs |
+| **Conditional Access baseline + report-only** | New tenant hardening | MFA for admins and block legacy auth stop most commodity attacks | Expand policies gradually; exclude break-glass accounts explicitly |
+| **PIM eligible for Owner/Global Admin** | Production subscriptions and tenant administration | Standing privilege window shrinks to activation duration | License every eligible user, approver, and reviewer (P2 or Governance) |
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Subscription Owner for all engineers** | One compromised laptop deletes entire environments | Speed during early cloud adoption | Contributor or custom roles at RG scope; PIM Owner when needed |
+| **Client secret in pipeline variables** | Secret leaks via logs, forks, or retired maintainers | Tutorials default to `AZURE_CLIENT_SECRET` | Federated credential + OIDC login action |
+| **System-assigned MI per microservice when permissions are identical** | N identities, N role assignments, N audit trails | Each tutorial enables `[system]` locally | One user-assigned MI attached to all components |
+| **Global Admin for day-to-day Azure portal work** | Directory and resource planes blurred; over-broad access | Confusion between Entra roles and RBAC | RBAC Reader/Contributor at scoped resources; PIM for elevation |
+| **Conditional Access without break-glass plan** | Lockout during MFA or location misconfiguration | "Secure everything" rush | Two cloud-only emergency accounts, excluded from CA, monitored |
+| **Ignoring deny assignments during RCA** | "Contributor" still fails mysteriously | Deny is invisible in simple IAM screenshots | Check Deny assignments tab; review deployment stack deny settings |
+
+---
+
+## Decision Framework: Workload Identity Choice
+
+Use this matrix when onboarding a new workload that needs Entra-authenticated access to Azure APIs. The goal is **no long-lived secrets** and **narrow RBAC scope**.
+
+| Workload context | Recommended identity | Why | Avoid |
+| :--- | :--- | :--- | :--- |
+| Single Azure VM, App Service, or Function | System-assigned managed identity | Lifecycle tied to resource; zero secret management | User-assigned unless you will share permissions |
+| Multiple Azure resources, same permissions | User-assigned managed identity | One principal, many attachments | Duplicate system-assigned identities |
+| AKS pod accessing Azure APIs | User-assigned MI + workload identity federation | OIDC trust to Kubernetes service account | Mounting service principal secrets into cluster |
+| GitHub Actions deploying to Azure | App registration + federated credential (OIDC) | Branch/repo-scoped trust, no secret rotation | Client secret in GitHub Secrets |
+| Third-party SaaS outside Azure | App registration + certificate or federation if supported | Explicit consent and scoped API permissions | Contributor role on subscription for the vendor |
+| Legacy app that cannot use OIDC/MI | Service principal + short-lived certificate | Certificates rotatable via Key Vault | Multi-year client secrets in config files |
+
+```mermaid
+flowchart TD
+    A[Workload needs Azure API access] --> B{Runs on Azure with IMDS?}
+    B -->|Yes, single resource| C[System-assigned managed identity]
+    B -->|Yes, multiple resources same perms| D[User-assigned managed identity]
+    B -->|No| E{External OIDC issuer available?}
+    E -->|Yes: GitHub/K8s/GCP/AWS| F[Federated credential on MI or app registration]
+    E -->|No| G{Can use certificate auth?}
+    G -->|Yes| H[App registration + cert from Key Vault]
+    G -->|No| I[Service principal secret - last resort, short TTL]
+    C --> J[Assign RBAC at narrowest scope]
+    D --> J
+    F --> J
+    H --> J
+    I --> J
+```
+
+---
+
+## Cost Lens: Entra Licensing and Over-Provisioning
+
+Identity licensing is a **per-user monthly line item** that is easy to overspend because it is invisible next to VM and storage bills. [Managed identities for Azure resources incur no additional Entra license charge](https://learn.microsoft.com/en-us/entra/fundamentals/licensing)—you pay for the Azure resources themselves, not per identity. The cost driver is **human and governance seats**: Conditional Access, dynamic groups, PIM activations, and access reviews each map to P1, P2, or Entra ID Governance licensing rules.
+
+**Free tier** covers directory basics and security defaults. If you only need cloud-only users, standard groups, and built-in RBAC on subscriptions, you may never buy P1—until you need Conditional Access for compliance, at which point every user **in scope of those policies** needs P1 (or a bundle like Microsoft 365 E3 that includes P1).
+
+**P1** is the enterprise baseline for policy-driven sign-in. Budget P1 (or E3) for employees subject to Conditional Access and for administrators who use custom Entra directory roles. A common over-licensing mistake is assigning P1 to every contractor when only employees hitting CA policies need it—use separate guest policies or scoped assignments.
+
+**P2** is required for PIM eligible/active role workflows, risk-based Conditional Access, and Entra ID Protection reports. [Microsoft documents that every user who is eligible for PIM, can approve activations, or participates in access reviews needs a P2 or Entra ID Governance license](https://learn.microsoft.com/en-us/entra/fundamentals/licensing). A team of five eligible Owners plus three approvers plus quarterly reviewers can require **more licensed identities than expected** because approvers and reviewers count too.
+
+**Cost spikes to watch**:
+- Buying standalone P2 when Microsoft 365 E5 already includes it for the same users (duplicate spend).
+- Leaving PIM eligible assignments on vendors or contractors who no longer need them—licenses still attach to identities in review scope.
+- Enabling advanced access review features without Entra ID Governance planning—some scenarios bill per reviewer and per reviewed user.
+- Using service principals with secrets instead of federation—no license savings, but incident cost dominates when secrets leak.
+
+**Knobs that reduce cost without weakening security**: use group-based licensing in Microsoft 365 admin center; align CA policies to groups rather than "all users" when possible; prefer managed identities (no license) over human service accounts; use PIM time bounds so fewer people need standing Owner; right-size P2 to identities in governance workflows only.
+
+Hypothetical scenario: a 200-person company buys 200 P2 licenses "for security," but only 15 administrators use PIM and 30 employees are in Conditional Access scope. A disciplined model might be 30 P1-equivalent (E3) plus 20 P2 for admins and reviewers—saving substantial monthly cost while keeping controls on the identities that actually touch privileged paths.
+
+**Licensing hygiene checklist** (quarterly): reconcile Microsoft 365 admin center group-based licensing with Entra group membership; remove P2 from users without eligible PIM roles; confirm contractors are guests with scoped access reviews; verify GitHub federated credentials still match active repos; audit app registrations with secrets older than 90 days.
+
+### Security Defaults vs Conditional Access
+
+Tenants without P1 historically relied on **security defaults**—tenant-wide baseline requiring MFA for admins and users, and blocking legacy authentication. [Security defaults are mutually exclusive with Conditional Access in many tenants](https://learn.microsoft.com/en-us/entra/fundamentals/security-defaults)—you choose a baseline path. Moving to Conditional Access means buying P1 (or bundled E3/Business Premium) and migrating policies deliberately. Do not disable security defaults until equivalent CA policies exist, or you temporarily weaken sign-in protections.
 
 ---
 
@@ -469,13 +733,27 @@ Assigning roles directly to individual users does not scale and creates a nightm
 A System-Assigned Managed Identity is inextricably tied to the specific lifecycle of the Azure resource it was created on. When you deleted the original VM, its managed identity (and all associated role assignments) was permanently destroyed by Azure. When you restored the VM, Azure generated a brand new System-Assigned Managed Identity with a completely different Principal ID. You must recreate the RBAC role assignments on the Key Vault for this new identity before the application can authenticate.
 </details>
 
+<details>
+<summary>7. Your security team wants GitHub Actions in `repo:contoso/deploy:environment:production` to deploy to Azure without storing `AZURE_CLIENT_SECRET`. The app registration already exists. What Entra feature do you configure, and what three fields must match the token GitHub sends?</summary>
+
+Configure a **federated identity credential** on the app registration (or on a user-assigned managed identity if the pipeline assumes that identity). The credential's **issuer** must match GitHub's OIDC issuer (`https://token.actions.githubusercontent.com`), the **subject** must match the workflow claim (for example `repo:contoso/deploy:environment:production`), and the **audience** must match what the login action expects (commonly `api://AzureADTokenExchange`). Microsoft identity platform rejects the exchange if any value differs by even case from the external JWT. This is workload identity federation: external OIDC token in, Entra access token out, with no client secret in GitHub.
+</details>
+
+<details>
+<summary>8. A contractor still appears as *eligible* for User Administrator in PIM, but your organization let their Microsoft 365 license expire last month. They attempt to activate the role and the portal blocks them. Which licensing lesson applies, and what should operations do?</summary>
+
+PIM requires **Microsoft Entra ID P2 or Entra ID Governance** licenses for users with eligible assignments, approvers, and reviewers—not merely an Azure subscription. Expired or missing P2/Governance licensing disables activation even if the eligible assignment row still exists. Operations should remove stale eligible assignments during offboarding, reconcile licenses in the Microsoft 365 admin center, and run access reviews so contractors do not remain in privileged eligibility after employment ends. This is why identity governance is both a security process and a licensing compliance process.
+</details>
+
 ---
 
 ## Hands-On Exercise: Custom RBAC Role + Managed Identity on a VM
 
-In this exercise, you will create a custom RBAC role, set up a VM with a Managed Identity, and verify that the identity can only perform the actions allowed by the custom role.
+In this exercise, you will create a custom RBAC role, set up a VM with a Managed Identity, and verify that the identity can only perform the actions allowed by the custom role. The lab stitches together three ideas from this module: **custom roles** narrow management and data actions, **system-assigned managed identities** remove secrets from the VM, and **scope-limited assignments** show least privilege in practice. You will see propagation delay in Task 5—build the wait into your scripts in production.
 
-**Prerequisites**: Azure CLI installed and authenticated (`az login`), a resource group to work in, and SSH access to a temporary VM for identity verification.
+The exercise intentionally uses **DataActions** with **NotDataActions** so listing and reading blobs succeed while delete fails. That mirrors real application needs: telemetry agents that read inputs but must not wipe archives. If you only granted Contributor, the VM could delete containers even when blob delete should be forbidden—another reminder that management-plane roles do not imply data-plane rights.
+
+**Prerequisites**: Azure CLI installed and authenticated (`az login`), a resource group to work in, and SSH access to a temporary VM for identity verification. Use a sandbox subscription; the VM is a small `Standard_B1s` burstable size. Delete the resource group in Cleanup to avoid ongoing compute charges.
 
 ### Task 1: Create a Resource Group for the Exercise
 
@@ -693,6 +971,8 @@ az group delete --name "$RG_NAME" --yes --no-wait
 az role definition delete --name "Storage Blob Lister"
 ```
 
+After cleanup, confirm the custom role no longer appears in `az role definition list --custom-role-only true`. If the role definition delete fails because assignments still exist, remove assignments first with `az role assignment delete`. Labs that skip cleanup leave custom roles and storage accounts billing quietly in sandbox subscriptions. Document your principal IDs during the lab—they help when comparing audit logs and exported Azure RBAC role assignment lists later.
+
 ### Success Criteria
 
 - [ ] Custom RBAC role "Storage Blob Lister" created with specific actions and data actions
@@ -724,3 +1004,13 @@ az role definition delete --name "Storage Blob Lister"
 - [learn.microsoft.com: deploy access reviews](https://learn.microsoft.com/en-us/azure/active-directory/governance/deploy-access-reviews) — Microsoft's access reviews deployment guidance documents recurring reviews and auto-apply removal behavior.
 - [learn.microsoft.com: new name](https://learn.microsoft.com/en-us/entra/fundamentals/new-name) — The official rename guidance states the July 2023 announcement and that existing login URLs, APIs, and PowerShell cmdlets stayed the same.
 - [learn.microsoft.com: ad](https://learn.microsoft.com/en-us/cli/azure/ad?view=azure-cli-lts) — The Azure CLI reference page still documents the az ad command group for Microsoft Entra entities.
+- [learn.microsoft.com: licensing](https://learn.microsoft.com/en-us/entra/fundamentals/licensing) — Documents Free, P1, and P2 feature matrices, Conditional Access and PIM license requirements, and managed identity licensing (none).
+- [learn.microsoft.com: workload identity federation](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation) — Explains federated credentials, supported external IdPs, and the OIDC token exchange flow without secrets.
+- [learn.microsoft.com: deny assignments](https://learn.microsoft.com/en-us/azure/role-based-access-control/deny-assignments) — Describes how deny assignments block actions despite role grants and that operators cannot create arbitrary deny assignments.
+- [learn.microsoft.com: rbac overview](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview) — Scope hierarchy, inheritance, and role assignment fundamentals for management groups through resources.
+- [learn.microsoft.com: custom roles overview](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/custom-overview) — Entra directory roles versus Azure RBAC and tenant-scoped directory role assignments.
+- [learn.microsoft.com: workload identity overview](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) — AKS OIDC issuer and Kubernetes service account federation to user-assigned managed identities.
+- [learn.microsoft.com: conditional access common policies](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-conditional-access-policy-common) — Policy structure: assignments, conditions, grant controls, and report-only rollout.
+- [learn.microsoft.com: pim configure](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure) — Eligible versus active role assignments and activation settings for directory and Azure roles.
+- [learn.microsoft.com: permissions consent overview](https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview) — Delegated versus application API permissions and admin consent boundaries separate from Azure RBAC.
+- [learn.microsoft.com: security defaults](https://learn.microsoft.com/en-us/entra/fundamentals/security-defaults) — Baseline MFA and legacy auth blocks for tenants not yet on Conditional Access.
