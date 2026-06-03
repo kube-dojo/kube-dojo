@@ -113,7 +113,7 @@ aws ecr create-repository \
   --region us-east-1
 ```
 
-KMS encryption does introduce a cost and latency trade-off. Every call to `kms:Decrypt` when the Docker daemon fetches a layer counts against your KMS request quota and incurs a per-request charge. For repositories that serve thousands of pulls per hour, the KMS API costs can meaningfully exceed the ECR storage costs. Teams that need KMS for compliance but want to keep the cost predictable typically apply KMS encryption only to repositories holding production images and use AES-256 for development and CI repositories.
+KMS encryption does introduce a cost and latency trade-off. High pull rates against KMS-encrypted repositories can generate substantial KMS request volume (each layer fetch may invoke `kms:Decrypt`), which counts against your quota and incurs per-request charges. For repositories that serve thousands of pulls per hour, KMS API costs can meaningfully exceed the ECR storage costs. Teams that need KMS for compliance but want to keep the cost predictable typically apply KMS encryption only to repositories holding production images and use AES-256 for development and CI repositories.
 
 A common misconception is that ECR Public (`public.ecr.aws`) supports KMS encryption or private VPC endpoints. ECR Public is a fundamentally different service: it stores images in a global CloudFront-backed distribution, does not support encryption configuration (AES-256 is applied automatically and transparently), and does not integrate with IAM for pull access because anonymous pulls are the defining feature. If your images contain proprietary code or configuration secrets, ECR Public is the wrong destination regardless of encryption — use private ECR with repository policies to share access with specific external accounts.
 
@@ -650,34 +650,36 @@ When your ECS tasks or EKS pods reference public container images — a base ima
 ECR pull-through cache eliminates both problems by creating a caching proxy inside your private ECR registry. You define a pull-through cache rule that maps an upstream registry to a namespace prefix in your private registry. When your workloads pull an image through the cache URL, ECR checks its local store first. If the image exists and is fresh, ECR serves it directly with no external call. If the image is missing or stale, ECR fetches it from the upstream registry exactly once, caches it, and serves all subsequent requests from the cache. A 100-pod scale-out event generates one external pull to Docker Hub regardless of how many pods need the image.
 
 ```bash
-# Create a pull-through cache rule for Docker Hub
+# Create a pull-through cache rule for Docker Hub (requires upstream credentials)
 aws ecr create-pull-through-cache-rule \
   --ecr-repository-prefix docker-hub \
-  --upstream-registry-url docker-hub \
+  --upstream-registry-url registry-1.docker.io \
+  --credential-arn arn:aws:secretsmanager:us-east-1:123456789012:secret:ecr-pullthroughcache/dockerhub-AbCdEf \
   --region us-east-1
 
-# Create a rule for the Kubernetes community registry
+# Kubernetes community registry (anonymous — no credential-arn)
 aws ecr create-pull-through-cache-rule \
   --ecr-repository-prefix k8s \
-  --upstream-registry-url registry-k8s-io \
+  --upstream-registry-url registry.k8s.io \
   --region us-east-1
 
-# Create a rule for GitHub Container Registry
+# GitHub Container Registry (requires upstream credentials)
 aws ecr create-pull-through-cache-rule \
   --ecr-repository-prefix ghcr \
-  --upstream-registry-url github-container-registry \
+  --upstream-registry-url ghcr.io \
+  --credential-arn arn:aws:secretsmanager:us-east-1:123456789012:secret:ecr-pullthroughcache/ghcr-XyZ123 \
   --region us-east-1
 ```
 
 The pull URL scheme follows a fixed pattern. An image you would normally pull with `docker pull nginx:1.25` (which implicitly resolves to `docker.io/library/nginx:1.25`) becomes `{registry}/docker-hub/library/nginx:1.25` through the cache. ECR creates the target repository automatically on the first pull — you do not need to pre-create repositories for cached images, and the repository inherits the registry-level scanning and encryption defaults you have configured.
 
-Supported upstream registries include Docker Hub, Quay.io, GitHub Container Registry (`ghcr.io`), `registry.k8s.io` (the Kubernetes community registry), and ECR Public (`public.ecr.aws`). Each upstream has its own `--upstream-registry-url` value that ECR recognizes. Check the current list in the ECR documentation because AWS adds upstream support periodically.
+Supported upstream registries include Docker Hub (`registry-1.docker.io`), Quay (`quay.io`), GitHub Container Registry (`ghcr.io`), `registry.k8s.io`, and ECR Public (`public.ecr.aws`). Pass the **hostname** as `--upstream-registry-url`, not the console enum name. Only ECR Public, Quay, and `registry.k8s.io` allow anonymous pulls; Docker Hub, GHCR, GitLab, Azure Container Registry, and Chainguard require a Secrets Manager secret whose name **must** start with `ecr-pullthroughcache/`, referenced via `--credential-arn`. Store upstream registry credentials in that secret (username and password or token JSON) before creating the rule — otherwise the first pull fails with an authentication error even though the rule exists.
 
-ECR maintains a configurable cache time-to-live (TTL) for each pull-through cache rule, defaulting to 24 hours. When a cached image is younger than the TTL, ECR serves it directly from the local cache without contacting the upstream registry at all — even if a newer version of the same tag exists upstream. When the cached image exceeds the TTL, the next pull triggers a conditional request to the upstream registry (using HTTP `If-None-Match` headers with the cached manifest digest), and ECR updates the cache only if the upstream image has actually changed. This means you are not pulling the full image on every TTL expiry — only a lightweight manifest check — and you are protected from upstream changes during the TTL window, which prevents a compromised or broken upstream image from instantly propagating into your production clusters. If you need stricter freshness guarantees (for example, pulling a security-patched base image the moment it is published), configure a shorter TTL or use a `docker pull --no-cache` equivalent to force a refresh.
+ECR uses a fixed **24-hour** cache window for pull-through cache (not user-configurable). While an image is within that window, ECR serves it from the local cache without contacting upstream. After 24 hours, the next pull checks upstream for a newer version and updates the cache if one exists. You cannot shorten that window or force an immediate refresh through ECR settings — plan tag immutability and promotion pipelines accordingly when you need deterministic upstream freshness.
 
-A secondary benefit of pull-through cache is availability during upstream outages. When Docker Hub experienced an extended outage in November 2020, organizations that depended on direct Docker Hub pulls saw their CI pipelines and cluster scaling operations fail because the registry was unreachable. With pull-through cache, the cached images remain available inside your private ECR registry regardless of the upstream's status. Your clusters can continue scaling and deploying because the base images are already local to your AWS region. The cache does not guarantee zero-downtime for new images that have not been pulled before — the first pull still requires the upstream to be reachable — but it protects against the common case where the images your production workloads need have already been cached through normal operations.
+A secondary benefit of pull-through cache is resilience when upstream registries throttle or rate-limit pulls. In November 2020, Docker Hub's introduction of pull rate limits (100 pulls per 6 hours anonymous, 200 per 6 hours for authenticated free accounts) caused CI pipelines that pulled directly from Docker Hub to fail under burst load. With pull-through cache, images already cached in your private ECR registry remain available in-region regardless of upstream throttling. The cache does not help for brand-new images that have never been pulled — the first pull still needs a reachable upstream — but it protects the common case where production base images were cached during normal operations.
 
-Cached images are subject to the same scanning policies as any other image in your private registry. If you have Enhanced scanning enabled, every cached image is scanned automatically when it enters the cache, which means public images you do not control get vulnerability visibility before they run in your environment. The scan results appear alongside your own application images in the ECR console and the Inspector dashboard.
+Cached images are subject to the same scanning policies as any other image in your private registry, including Enhanced scanning when enabled at the registry level. Findings appear in the ECR console and Inspector dashboard like any pushed image. If you have Enhanced scanning enabled, every cached image is scanned automatically when it enters the cache, which means public images you do not control get vulnerability visibility before they run in your environment. The scan results appear alongside your own application images in the ECR console and the Inspector dashboard.
 
 ---
 
@@ -693,7 +695,9 @@ helm package ./my-chart/
 helm registry login ${REGISTRY} \
   --username AWS \
   --password $(aws ecr get-login-password --region us-east-1)
-helm push my-chart-0.1.0.tgz oci://${REGISTRY}/
+# Create the OCI repository first (unlike Docker Hub, ECR does not auto-create on helm push)
+aws ecr create-repository --repository-name my-chart --region us-east-1
+helm push my-chart-0.1.0.tgz oci://${REGISTRY}/my-chart
 
 # Pull the chart from any environment with ECR access
 helm pull oci://${REGISTRY}/my-chart --version 0.1.0
@@ -753,7 +757,7 @@ The choices you make when configuring ECR — tag mutability, scanning level, ca
 
 | Criterion | Basic Scanning (Clair-based) | Enhanced Scanning (Amazon Inspector) |
 |---|---|---|
-| Scope | OS packages only (apt, yum, apk) | OS packages + application dependencies (npm, pip, Maven, NuGet, Go modules, RubyGems, Rust crates) |
+| Scope | OS packages only (apt, yum, apk) | OS packages + application dependencies across 8 languages (Python, .NET/C#, PHP, JavaScript/Node.js, Java, Ruby, Rust, Go) and their ecosystems (npm, pip, Maven, NuGet, Go modules, RubyGems, Rust crates) |
 | Cost per image scan | Free | Charged per image scan (Inspector pricing) |
 | Re-scan on new CVE | Manual re-trigger required | Automatic with `CONTINUOUS_SCAN` |
 | Security Hub integration | No | Yes — findings appear alongside GuardDuty, Macie, IAM Access Analyzer |
@@ -768,9 +772,9 @@ The choices you make when configuring ECR — tag mutability, scanning level, ca
 | Source of images | Upstream public registries | Your own ECR repositories |
 | Setup complexity | One cache rule per upstream registry | One replication configuration per destination region + destination registry policy |
 | Storage cost impact | Cached images consume storage in your private registry ($0.10/GB-month) | Replicated images consume storage in each destination region |
-| Data transfer cost | Inbound from upstream to ECR is free; outbound within region is free | Cross-region replication data transfer is free (AWS does not charge for ECR replication traffic) |
+| Data transfer cost | Inbound from upstream to ECR is free; outbound within region is free | Cross-region replication incurs source-region data transfer out (~$0.09/GB tiered) plus storage in each destination; in-region pulls after replication are free |
 | Availability during upstream outage | Cached images remain available; uncached images are unreachable | Replicated images are fully independent in each region |
-| **Recommendation** | Use pull-through cache for every public upstream registry your workloads reference. This is a one-time setup with ongoing availability and rate-limit benefits. | Use cross-region replication for every region where you run production container workloads. The replication traffic is free, and local pulls eliminate cross-region latency and data transfer charges on every deployment. |
+| **Recommendation** | Use pull-through cache for every public upstream registry your workloads reference. This is a one-time setup with ongoing availability and rate-limit benefits. | Use cross-region replication for every region where you run production container workloads. Local pulls eliminate cross-region latency and per-pull data transfer charges on every deployment. |
 
 ### Cost Lens
 
@@ -781,7 +785,7 @@ ECR costs break down into three categories, and each configuration decision in t
 | Storage | $0.10 per GB-month of stored image layers (verify current rates at aws.amazon.com/ecr/pricing/) | No lifecycle policy — untagged layers accumulate indefinitely. Large images (machine learning models, monorepos with many layers). | Lifecycle policies that expire old and untagged images. Layer deduplication across repositories (same base image stored once). |
 | Data transfer | Free inbound to ECR. Free in-region to ECS/EKS. Cross-region and internet egress billed at standard EC2 data transfer rates. | Cross-region image pulls without replication. Public internet pulls from on-premises or other cloud providers. Workloads in regions where you have not replicated images. | Enable cross-region replication to every region with production workloads. Use VPC endpoints to keep pulls on the AWS backbone. |
 | Enhanced scanning | Charged per image scan under the Amazon Inspector pricing model | Enabling CONTINUOUS_SCAN on every repository including development and CI throwaway images. Frequent rebuilds of images with large dependency trees. | Apply Enhanced scanning selectively to production repositories. Use repository filter rules in the registry scanning configuration to scope CONTINUOUS_SCAN to `prod-*` prefixed repositories while using SCAN_ON_PUSH for others. |
-| KMS encryption | Per-request charge for `kms:Decrypt` calls when the Docker daemon fetches layers | High-frequency pulls from KMS-encrypted repositories — every layer decryption counts as a KMS API call. A 10-layer image pulled 1,000 times per day generates 10,000 KMS requests. | Use AES-256 encryption for repositories with high pull volume. Reserve KMS encryption for repositories where key lifecycle control is a compliance requirement, and monitor KMS request metrics to catch unexpected cost growth. |
+| KMS encryption | Per-request charge for `kms:Decrypt` calls when the Docker daemon fetches layers | High-frequency pulls from KMS-encrypted repositories can drive substantial KMS request volume at scale | Use AES-256 encryption for repositories with high pull volume. Reserve KMS encryption for repositories where key lifecycle control is a compliance requirement, and monitor KMS request metrics to catch unexpected cost growth. |
 
 The most common cost surprise is not the storage cost itself but the compound effect of neglecting lifecycle policies while also running workloads in multiple regions without replication. A team with 20 microservices, each generating 200 MB of images per day with no lifecycle policy and pulling cross-region from a single ECR region, can accumulate 3.6 TB of storage ($360/month) and significant cross-region data transfer charges before anyone notices because ECR does not send billing alerts for approaching thresholds. The fix — lifecycle policies plus replication — costs nothing to enable and eliminates the recurring waste.
 
@@ -789,13 +793,13 @@ The most common cost surprise is not the storage cost itself but the compound ef
 
 ## Did You Know?
 
-1. **ECR stores images in S3 under the hood**, but you cannot see or access the S3 buckets directly. Each image layer is stored as an individual S3 object, deduplicated across all repositories in the same account and region. If five of your repositories use the same base layer (like `ubuntu:22.04`), that layer is stored only once. This deduplication can reduce your storage costs by 40-60% for organizations with many similar images.
+1. **ECR stores images in S3 under the hood**, but you cannot see or access the S3 buckets directly. Each image layer is stored as an individual S3 object, deduplicated across all repositories in the same account and region. If five of your repositories use the same base layer (like `ubuntu:22.04`), that layer is stored only once. This deduplication can substantially reduce storage when images share base layers.
 
 2. **The ECR credential helper eliminates manual `docker login` calls.** Install `amazon-ecr-credential-helper` and configure Docker to use it, and every `docker pull` and `docker push` command against ECR automatically authenticates using your AWS credentials. GitHub Actions, GitLab CI, and Jenkins all have native ECR integration that uses this same mechanism under the hood.
 
 3. **ECR pull-through cache** lets your ECR registry act as a proxy for public registries like Docker Hub, Quay.io, and GitHub Container Registry. When your workloads pull `docker.io/library/nginx:1.25`, ECR intercepts the request, caches the image locally, and serves subsequent pulls from the cache. This protects you from Docker Hub rate limits (100 pulls per 6 hours for anonymous users) and reduces external network dependencies.
 
-4. **Amazon Inspector's enhanced scanning for ECR can detect vulnerabilities in 15+ programming languages**, not just OS packages. This includes npm, pip, Maven, NuGet, Go modules, Rust crates, and more. A single Node.js application image might have 3 OS-level vulnerabilities but 28 application-level ones. Basic scanning would only catch the 3.
+4. **Amazon Inspector's enhanced scanning for ECR can detect vulnerabilities in 8 programming languages (and their package ecosystems)** — Python, .NET/C#, PHP, JavaScript/Node.js, Java, Ruby, Rust, and Go — not just OS packages. This includes npm, pip, Maven, NuGet, Go modules, RubyGems, Rust crates, and more. A single Node.js application image might have 3 OS-level vulnerabilities but 28 application-level ones. Basic scanning would only catch the 3.
 
 ---
 
@@ -819,7 +823,7 @@ The most common cost surprise is not the storage cost itself but the compound ef
 <details>
 <summary>1. Your security team mandates that all application dependencies (like npm packages and Python wheels) must be scanned for vulnerabilities before deployment. You enable ECR Basic scanning, but the security team reports that it is missing known vulnerabilities in your Node.js application. Why is this happening, and what must you change?</summary>
 
-ECR Basic scanning uses the open-source Clair engine, which only checks for known CVEs in operating system packages (like those installed via apt or yum). It cannot look inside application-level dependency files like package.json or requirements.txt. To satisfy the security team's mandate, you must upgrade to Amazon Inspector Enhanced scanning. Enhanced scanning analyzes both OS packages and application dependencies across over 15 programming languages, catching vulnerabilities that Basic scanning completely ignores.
+ECR Basic scanning uses the open-source Clair engine, which only checks for known CVEs in operating system packages (like those installed via apt or yum). It cannot look inside application-level dependency files like package.json or requirements.txt. To satisfy the security team's mandate, you must upgrade to Amazon Inspector Enhanced scanning. Enhanced scanning analyzes both OS packages and application dependencies across 8 programming languages (and their package ecosystems), catching vulnerabilities that Basic scanning completely ignores.
 </details>
 
 <details>
@@ -1006,7 +1010,7 @@ aws ecr describe-image-scan-findings \
 <summary>Solution</summary>
 
 ```bash
-# First, preview what the policy would delete
+# Apply the retention policy (preview with start-lifecycle-policy-preview first)
 aws ecr put-lifecycle-policy \
   --repository-name ${REPO_NAME} \
   --lifecycle-policy-text '{

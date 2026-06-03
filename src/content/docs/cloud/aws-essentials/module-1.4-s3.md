@@ -10,7 +10,7 @@ sidebar:
 
 After completing this module, you will be able to configure secure access boundaries, automate lifecycle cost controls, and safely share objects using encryption-aware, time-bound mechanisms:
 
-- **Configure S3 bucket policies and access control lists to enforce least-privilege access on object storage**
+- **Configure S3 bucket policies, Block Public Access, and Object Ownership (ACLs disabled) to enforce least-privilege access on object storage**
 - **Implement lifecycle policies to automate data tiering across S3 storage classes and reduce storage costs**
 - **Deploy server-side encryption with KMS customer-managed keys and enforce encryption in transit**
 - **Design presigned URL strategies and cross-account access patterns for secure, time-limited object sharing**
@@ -52,7 +52,6 @@ S3 is **Object Storage**, and this is a bigger shift in how data is managed than
 Think of it this way: EBS is a hard drive bolted to one server, EFS is a network file share everyone mounts, and S3 is a massive warehouse where you hand parcels to a clerk and get a receipt (the key) to retrieve them later.
 
 ---
----
 
 ## Durability, Availability & Data Protection
 
@@ -70,11 +69,11 @@ Multipart upload also enables a workflow that single PUT cannot: you can begin u
 
 ### S3 Object Lock: Write Once, Read Many
 
-Some regulatory frameworks and security policies require genuinely immutable storage -- data that cannot be deleted or overwritten by anyone, including the root user of the AWS account, for a fixed period. S3 Object Lock provides this capability through two distinct modes that operate on individual object versions at the bucket level. Object Lock is only available on versioned buckets, so enabling versioning is a prerequisite.
+Some regulatory frameworks and security policies require genuinely immutable storage for a fixed period. S3 Object Lock provides this capability through two distinct modes that operate on individual object versions at the bucket level. Object Lock is only available on versioned buckets, so enabling versioning is a prerequisite. You can enable Object Lock at bucket creation or on an existing versioning-enabled bucket via the S3 API; objects already in the bucket are not retroactively locked — use S3 Batch Operations to apply retention to them.
 
-Governance mode prevents most users from overwriting or deleting a locked object version, but it includes an escape hatch: users with the `s3:BypassGovernanceRetention` permission can still delete the object. This makes governance mode suitable for internal audit trails, test data retention policies, and scenarios where an authorized administrator needs the ability to override the lock in an emergency. It provides protection against accidental or unauthorized deletion while preserving administrative control.
+Governance mode prevents most users from overwriting or deleting a locked object version, but it includes an escape hatch: users with the `s3:BypassGovernanceRetention` permission can delete the object when they also send the `x-amz-bypass-governance-retention: true` header. This makes governance mode suitable for internal audit trails, test data retention policies, and scenarios where an authorized administrator needs the ability to override the lock in an emergency. It provides protection against accidental or unauthorized deletion while preserving administrative control.
 
-Compliance mode is stricter. Once a retention period is set in compliance mode, no user -- including the root account holder and AWS support -- can delete or overwrite the object until the retention period expires. The retention period can be extended but never shortened, and the compliance mode itself cannot be removed from the object. This mode is designed for legal holds, regulatory archives, and scenarios governed by SEC Rule 17a-4 or similar financial services regulations that demand absolute immutability. Before enabling compliance mode on a bucket, you must carefully consider whether your organization can tolerate the inability to delete data even if a court order or policy change demands it, because the answer is a definitive no until the clock runs out.
+Compliance mode is stricter. Once a retention period is set in compliance mode, no user — including the root account holder and AWS support — can delete or overwrite the object until the retention period expires; that absolute immutability applies only in compliance mode, not governance mode. The retention period can be extended but never shortened, and the compliance mode itself cannot be removed from the object. This mode is designed for legal holds, regulatory archives, and scenarios governed by SEC Rule 17a-4 or similar financial services regulations that demand absolute immutability. Before enabling compliance mode on a bucket, you must carefully consider whether your organization can tolerate the inability to delete data even if a court order or policy change demands it, because the answer is a definitive no until the clock runs out.
 
 Object Lock also supports Legal Hold, which is an on-off flag independent of any retention period. Placing a legal hold on an object version prevents deletion regardless of retention settings, and the hold remains in effect until someone with the `s3:PutObjectLegalHold` permission explicitly removes it. Hypothetical scenario: a company facing litigation discovers that relevant documents stored in S3 have retention policies expiring in two weeks. They apply legal holds to all implicated object versions, ensuring those objects cannot be deleted even after the automated lifecycle expiration rules would normally purge them, and they remove the holds only after the legal matter concludes.
 
@@ -204,7 +203,6 @@ ACLs are a legacy access control mechanism from before IAM existed. They apply t
 **Rule of thumb**: Use IAM policies for same-account access control. Use bucket policies for cross-account access, IP restrictions, and encryption enforcement. Disable ACLs.
 
 ---
----
 
 ## S3 Access Points & VPC Endpoints
 
@@ -224,24 +222,34 @@ Your backend application (which has an IAM Role with access to S3) uses the AWS 
 ### Generating Pre-Signed URLs
 
 ```bash
-# Generate a pre-signed URL valid for 300 seconds (5 minutes)
+# Generate a pre-signed GET URL valid for 300 seconds (5 minutes)
+# aws s3 presign supports GET (download) URLs only — not PUT uploads
 aws s3 presign s3://my-bucket/private/report.pdf --expires-in 300
 
 # Output (example):
 # https://my-bucket.s3.amazonaws.com/private/report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Expires=300&X-Amz-Signature=abc123...
-
-# Generate a pre-signed URL for UPLOADING (PUT)
-aws s3 presign s3://my-bucket/uploads/user-photo.jpg \
-    --expires-in 3600
-
-# Anyone with this URL can upload a file to that exact key for 1 hour
 ```
 
-Important details to remember about pre-signed URLs are that they inherit the permissions of the IAM identity that generated them, they can be valid for up to 7 days when signed with IAM user credentials, and they support both GET (download) and PUT (upload) flows.
+For **upload** URLs, use the AWS SDK (the CLI `presign` command cannot sign PUT requests):
+
+```python
+# boto3: pre-signed PUT for a browser or mobile client upload
+import boto3
+s3 = boto3.client("s3")
+upload_url = s3.generate_presigned_url(
+    "put_object",
+    Params={"Bucket": "my-bucket", "Key": "uploads/user-photo.jpg"},
+    ExpiresIn=3600,
+)
+# Anyone with upload_url can PUT to that exact key for one hour
+# For HTML form uploads, use generate_presigned_post() instead
+```
+
+Important details to remember about pre-signed URLs are that they inherit the permissions of the IAM identity that generated them and they can be valid for up to 7 days when signed with IAM user credentials.
 
 - [The URL inherits the permissions of the IAM identity that generated it. If that identity loses access, existing pre-signed URLs typically stop working once that change takes effect.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)
 - Maximum expiration: up to 7 days when generated with the AWS CLI or SDKs using IAM user credentials; URLs signed with temporary credentials expire when those credentials expire.
-- Pre-signed URLs work for both GET (download) and PUT (upload) operations.
+- The AWS CLI `aws s3 presign` command generates GET URLs only; use the SDK (`generate_presigned_url` or `generate_presigned_post`) for PUT uploads.
 
 > **Stop and think**: You generate a pre-signed URL valid for 7 days using your IAM User credentials. Two days later, your IAM User is deleted by an administrator. What happens when someone tries to use the URL on day 3?
 
@@ -262,8 +270,8 @@ Why pay premium rates for data you rarely access? A hot tier for cold data usual
 | **S3 Standard-IA** | 99.9% | 30 days | 128 KB | Instant | ~$0.0125/GB/mo | $0.01/GB | Backups, DR copies |
 | **S3 One Zone-IA** | 99.5% | 30 days | 128 KB | Instant | ~$0.01/GB/mo | $0.01/GB | Reproducible infrequent data |
 | **S3 Glacier Instant** | 99.9% | 90 days | 128 KB | Instant | ~$0.004/GB/mo | $0.03/GB | Archive with instant access |
-| **S3 Glacier Flexible** | 99.99% | 90 days | None | 1-5 min to 12 hrs | ~$0.0036/GB/mo | $0.01-0.03/GB | Long-term archives |
-| **S3 Glacier Deep Archive** | 99.99% | 180 days | None | 12-48 hours | ~$0.00099/GB/mo | $0.02/GB | Compliance, 7-10yr retention |
+| **S3 Glacier Flexible** | 99.99% (after restore) | 90 days | None | 1-5 min to 12 hrs | ~$0.0036/GB/mo | $0.01-0.03/GB | Long-term archives |
+| **S3 Glacier Deep Archive** | 99.99% (after restore) | 180 days | None | 12-48 hours | ~$0.00099/GB/mo | $0.02/GB | Compliance, 7-10yr retention |
 
 The table above uses illustrative pricing values only; always check the [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/) because rates are region-specific and can move over time.
 
@@ -320,7 +328,6 @@ You cannot transition from Glacier back to Standard-IA via a lifecycle rule. To 
 
 > **Pause and predict**: Look at the minimum object size for S3 Standard-IA (128 KB). If you configure a lifecycle rule to transition a bucket containing 10 million tiny 5 KB log files from Standard to Standard-IA, what do you expect will happen to your monthly storage bill?
 
----
 ---
 
 ## S3 Replication: CRR and SRR
@@ -506,7 +513,6 @@ Important versioning behaviors to remember:
 > **Stop and think**: If you have a bucket with 1 million objects, and you enable versioning but never overwrite or delete any existing objects, what happens to your storage bill?
 
 ---
----
 
 ## Cost Lens: What Drives Your S3 Bill
 
@@ -534,11 +540,11 @@ The patterns below represent proven, repeatable designs that experienced S3 oper
 
 **Cross-Region Replication for disaster recovery.** When a regional outage would cause unacceptable business impact, configure CRR to maintain a read-only replica of critical data in a separate region. During normal operation, the replica sits idle and accumulates replication costs. During a regional outage, your failover procedure points your application at the replica bucket and resumes serving data. The scaling consideration is replication lag: S3 replication is asynchronous, so the replica may be several seconds to several minutes behind the source depending on object size and write rate. Your failover runbook must account for the possibility that the most recently written objects have not yet arrived at the destination, and your application should handle partial-data windows gracefully.
 
-**S3 Object Lock for compliance and ransomware protection.** When regulatory requirements demand immutable storage or when you need a defense against ransomware that attempts to encrypt or delete your data, enable Object Lock on a versioned bucket and apply retention periods in governance or compliance mode. The immutability guarantee is enforced at the S3 service level, so even if an attacker compromises the AWS credentials that normally manage the bucket, they cannot delete or overwrite locked object versions. The scaling consideration is storage cost: locked objects cannot be deleted until their retention period expires, so a bucket with Object Lock enabled will grow monotonically during the retention window. Before enabling Object Lock, model the monthly storage growth rate against the retention period to confirm the ongoing cost is sustainable.
+**S3 Object Lock for compliance and ransomware protection.** When regulatory requirements demand immutable storage or when you need a defense against ransomware that attempts to encrypt or delete your data, enable Object Lock on a versioned bucket (at creation or on an existing bucket via the API) and apply retention periods in governance or compliance mode. In **compliance** mode, locked versions cannot be deleted or overwritten even by the root user until retention expires; governance mode allows authorized bypass with `s3:BypassGovernanceRetention` and `x-amz-bypass-governance-retention: true`. The scaling consideration is storage cost: locked objects cannot be deleted until their retention period expires, so a bucket with Object Lock enabled will grow monotonically during the retention window. Before enabling Object Lock, model the monthly storage growth rate against the retention period to confirm the ongoing cost is sustainable.
 
 **Presigned URLs for time-limited object sharing.** When you need to grant temporary access to a specific object without changing bucket permissions, generate a presigned URL from a trusted backend service and hand it to the consumer. The consumer accesses the object directly from S3 without your backend acting as a proxy, and the URL expires automatically. This pattern is the secure alternative to making buckets public or routing all traffic through an application server. The scaling consideration is credential lifetime: presigned URLs created with temporary credentials from an IAM role expire when the underlying credentials expire, which may be shorter than the URL's own expiration parameter. For long-lived sharing periods, use IAM user credentials to generate the presigned URL or implement a refresh mechanism.
 
-**Static website hosting with CloudFront OAC.** When you need to serve a static website or single-page application, place the assets in S3, enable static website hosting on the bucket, and front it with CloudFront using Origin Access Control (OAC). OAC ensures that S3 only accepts requests that arrive through your CloudFront distribution, so you never need to make the bucket public. CloudFront provides edge caching, HTTPS termination, and custom domain support, all without provisioning any compute. The scaling consideration is cache invalidation: when you update assets in S3, CloudFront edge caches may continue serving stale content until the TTL expires or you issue an invalidation. For production deployments, use content-hashed filenames so each deploy naturally bypasses the cache without manual invalidation.
+**Static sites with CloudFront OAC.** When you need to serve a static website or single-page application, store assets in S3 with Block Public Access enabled, use the S3 REST endpoint (`bucket.s3.<region>.amazonaws.com`) as the CloudFront origin, and attach Origin Access Control (OAC) so only your distribution can read objects. Do not enable S3 static website hosting for this pattern — OAC is designed for the REST API endpoint, not the website endpoint. CloudFront provides edge caching, HTTPS termination, and custom domain support without provisioning compute. The scaling consideration is cache invalidation: when you update assets in S3, CloudFront edge caches may continue serving stale content until the TTL expires or you issue an invalidation. For production deployments, use content-hashed filenames so each deploy naturally bypasses the cache without manual invalidation.
 
 ### Anti-Patterns
 
@@ -601,7 +607,7 @@ The decision matrix below summarizes the tradeoffs across all storage classes as
 | **Access frequency** | Multiple times/day | Unpredictable | Once/month | Once/month | Once/quarter | Once/year | Almost never |
 | **Retrieval speed** | Milliseconds | Milliseconds | Milliseconds | Milliseconds | Milliseconds | 1 min – 12 hrs | 12 – 48 hrs |
 | **Durability** | 11 nines | 11 nines | 11 nines | 11 nines (single AZ) | 11 nines | 11 nines | 11 nines |
-| **Availability SLA** | 99.99% | 99.9% | 99.9% | 99.5% | 99.9% | 99.99% | 99.99% |
+| **Availability SLA** | 99.99% | 99.9% | 99.9% | 99.5% | 99.9% | 99.99% (after restore) | 99.99% (after restore) |
 | **Min storage duration** | None | None | 30 days | 30 days | 90 days | 90 days | 180 days |
 | **Min billable object size** | None | None | 128 KB | 128 KB | 128 KB | None | None |
 | **Retrieval fee** | None | None | Per GB | Per GB | Per GB | Per GB | Per GB |
@@ -615,7 +621,7 @@ When you find yourself debating between two adjacent storage classes, the tiebre
 
 1.  [S3 provides "read-after-write" consistency for all PUTs and DELETEs. If you write a new object and immediately attempt to read it, S3 will return the new data. (Prior to December 2020, S3 was only eventually consistent, meaning immediate reads might return a 404 or an older version).](https://aws.amazon.com/about-aws/whats-new/2020/12/amazon-s3-now-delivers-strong-read-after-write-consistency-automatically-for-all-applications/)
 
-2.  S3 supports static website hosting. By placing an `index.html` file in a bucket, turning off Block Public Access, and adding a public-read bucket policy, S3 acts as a globally distributed, highly available web server without provisioning any EC2 instances.
+2.  Historically (not recommended today), teams served static sites by placing an `index.html` in a bucket, turning off Block Public Access, and adding a public-read bucket policy so S3 acted as a simple web server. The current pattern is private buckets with Block Public Access on, CloudFront in front, and Origin Access Control (OAC) using the S3 REST endpoint.
 
 3.  S3 has offered ways to reduce data movement by filtering or transforming data closer to storage. For example, S3 Select can return only matching rows from supported object formats, but it is no longer available to new customers; check current AWS guidance before designing around older S3 query features.
 
@@ -878,7 +884,7 @@ cat << 'EOF' > lifecycle.json
             "Status": "Enabled",
             "Transitions": [
                 {
-                    "Days": 14,
+                    "Days": 31,
                     "StorageClass": "STANDARD_IA"
                 },
                 {
@@ -918,7 +924,7 @@ This rule set accomplishes three operational goals:
 | Rule | What It Does |
 | :--- | :--- |
 | **TransitionDailyBackups** | Current backups: Standard -> IA at 30 days -> Glacier at 90 days. Old versions: Glacier at 30 days, deleted at 365 days. |
-| **ExpireOldLogs** | Logs: Standard -> IA at 14 days -> Glacier at 60 days -> Deleted at 180 days. |
+| **ExpireOldLogs** | Logs: Standard -> IA at 31 days -> Glacier at 60 days -> Deleted at 180 days. |
 | **CleanupIncompleteUploads** | Aborts any multipart upload that has been in progress for more than 7 days (prevents hidden storage costs). |
 
 ### Task 6: Apply a Bucket Policy (Enforce Encryption)
