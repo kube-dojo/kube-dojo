@@ -12,7 +12,7 @@ sidebar:
 >
 > **Track**: Cloud Architecture Patterns
 
-## What You Will Be Able to Do
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
@@ -29,6 +29,8 @@ A team under delivery pressure might take the fast path: create an IAM user, sto
 If a static access key ends up in source control and carries broad permissions, it can expose far more cloud data than the workload actually needs, especially when the credential does not expire on its own. 
 
 Revoking an embedded access key can break dependent workloads, and a review often reveals that the same static-secret pattern has spread to many services. Cleanup then turns into a costly security and operations exercise.
+
+The hidden cost is not only the breach risk. Static-secret sprawl creates recurring toil: inventory jobs to find mounted credentials, emergency rotations when one application leaks a key, permission reviews that cannot prove which pod actually used the credential, and rollout coordination when hundreds of replicas cache the old value. A key can be cheap to create and expensive to retire, especially when the same credential appears in Helm values, external secret stores, CI variables, and application logs.
 
 This is the exact problem that cloud IAM integration solves. Instead of passing static secrets around -- creating them, storing them, rotating them, and praying nobody commits them to version control -- you pass identity. The pod mathematically proves "I am the payment processor" and the cloud provider verifies the claim, returning short-lived credentials good for the next fifteen minutes. No long-lived keys. No secrets to rotate. No credentials to leak. In this module, running on modern Kubernetes v1.35+, you will learn exactly how this works, from the OpenID Connect mechanics underneath to the practical implementation on each major cloud provider.
 
@@ -100,6 +102,8 @@ In the configuration above, the pod mounts the credentials directly into its env
 
 The industry shifted away from static credentials toward federated identity. Federated identity means the cloud provider trusts the Kubernetes cluster to authenticate its own workloads. The cluster issues a time-bound mathematical proof of identity, and the cloud provider exchanges that proof for temporary access tokens.
 
+That wording matters: the cloud provider is not trusting the pod because the pod says a convincing name. It is trusting a signed, audience-bound statement issued by a configured authority. Kubernetes owns the first half of the problem, which is proving that a running workload is bound to a particular ServiceAccount. AWS, Google Cloud, and Azure own the second half, which is deciding whether that Kubernetes identity may become a cloud identity for a narrow set of cloud APIs.
+
 ### The New Way: Federated Identity
 
 ```mermaid
@@ -152,9 +156,19 @@ curl -s https://oidc.eks.us-east-1.amazonaws.com/id/ABCDEF1234567890/keys | jq .
 
 When you examine the JWKS (JSON Web Key Set) endpoint, you will find the precise RSA parameters required to construct the public key. If the cluster rotates its signing keys, the JWKS document updates dynamically.
 
+OIDC discovery is the reason this design scales beyond one vendor. AWS IAM can fetch the EKS issuer keys from the cluster-specific discovery endpoint, Google Cloud can trust a workload identity pool/provider mapping for GKE or external Kubernetes, and Microsoft Entra can validate an AKS OIDC issuer when a federated credential names that issuer. The cloud side does not need Kubernetes admin credentials; it only needs the issuer URL, the public signing keys, and a policy that says which token claims are acceptable.
+
+This is also why public key reachability is an operational requirement, not just a setup detail. If a provider cannot reach the issuer metadata or the JWKS URI at validation time, it cannot safely distinguish a real projected token from a forged one. In private clusters, that often means platform teams must deliberately solve issuer discovery and DNS rather than assuming that every control-plane endpoint is reachable from every verifier.
+
 ### Step 2: Kubernetes Injects a Signed Token into the Pod
 
 When a pod is scheduled, the kubelet provisions its volume mounts. If the pod uses a ServiceAccount associated with a cloud identity, [Kubernetes projects a highly specific JSON Web Token (JWT) into the pod's filesystem](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/). This JWT is cryptographically signed by the cluster's private key.
+
+The projected token is created through Kubernetes, not pre-baked into a Secret. The kubelet asks the API server for a time-bound token using the [TokenRequest flow](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/), then writes that token into a projected volume for the pod. A projected `serviceAccountToken` volume has an `audience`, an `expirationSeconds`, and a `path`; Kubernetes documents the default token lifetime as one hour and the minimum requested lifetime as ten minutes for this projected-volume mechanism.
+
+The kubelet also refreshes the token before it expires, which is what makes this pattern operationally different from a static key rotation calendar. Your application or cloud SDK still has to tolerate credential refresh, but the identity proof itself is designed to rotate underneath the pod. If a token is copied out of the container, the attacker gets a short-lived artifact with a specific `iss`, `sub`, `aud`, and expiry, not a reusable cloud password that can live for years.
+
+Do not infer every provider's runtime behavior from one decoded token sample. Kubernetes supplies the common primitives, while the managed provider integration chooses the audience and exchange path it needs. AWS IRSA uses an audience of `sts.amazonaws.com`; EKS Pod Identity projects a token for `pods.eks.amazonaws.com`; Azure commonly uses `api://AzureADTokenExchange` in the federated credential; and GKE Workload Identity Federation maps Kubernetes identity into Google IAM principals through a Google-managed pool and provider.
 
 ```yaml
 # The ServiceAccount references an IAM role
@@ -219,6 +233,12 @@ sequenceDiagram
     Pod->>Pod: Use credentials for<br/>S3, DynamoDB, etc.
 ```
 
+AWS has two different EKS paths that produce similar runtime behavior but different control-plane mechanics. With IRSA, the AWS SDK reads `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE`, then calls STS `AssumeRoleWithWebIdentity` using the projected web identity token. With EKS Pod Identity, the SDK uses the container credentials provider, talks to the node-local Pod Identity Agent, and the agent calls the EKS Auth API action `AssumeRoleForPodIdentity` to retrieve temporary credentials.
+
+Google Cloud and Azure also split the same responsibility across their own identity systems. GKE Workload Identity Federation deploys the GKE metadata server on nodes and uses IAM policy to grant Kubernetes principals direct access or service-account impersonation. Microsoft Entra Workload ID uses a Kubernetes projected service account token plus a federated credential on an Entra application or user-assigned managed identity, then Azure Identity or MSAL libraries exchange that proof for a Microsoft Entra access token.
+
+The practical lesson is that "OIDC federation" is not one command you can memorize. It is a contract: the pod presents a signed assertion, the provider validates the issuer and public keys, and the provider applies claim-level policy before issuing temporary cloud credentials. Troubleshooting should follow that same contract order, because a missing annotation, wrong audience, unreachable issuer, or broad trust rule each fails at a different layer.
+
 ### Step 4: IAM Trust Policy Controls Which Pods Get Which Roles
 
 The final layer of security resides in the cloud provider's IAM trust policy. The cloud provider will not blindly issue credentials to any valid token; [the token's specific claims must match the conditions defined on the role](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html).
@@ -245,6 +265,12 @@ The final layer of security resides in the cloud provider's IAM trust policy. Th
 ```
 
 This trust policy forms an unbreakable access control boundary. It explicitly states: "Only the `data-processor` ServiceAccount residing in the `production` namespace of the cluster associated with this specific OIDC issuer is authorized to assume this role." No other pod, no other namespace, and no other cluster can satisfy these conditions.
+
+The important AWS fields are the issuer-prefixed `sub` and `aud` condition keys. The subject should normally be the exact Kubernetes ServiceAccount identity, such as `system:serviceaccount:production:data-processor`, and the audience for IRSA should be `sts.amazonaws.com`. Replacing `StringEquals` with a wildcard `StringLike` is sometimes documented for namespace-wide sharing, but it should be treated as a deliberate exception because it makes the trust policy authorize a class of workloads instead of one workload.
+
+GKE expresses the same boundary through Google IAM principals and, when service-account impersonation is used, an IAM binding that names the Kubernetes namespace and ServiceAccount, such as `serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]`. For direct Workload Identity Federation access, Google documents principal identifiers under the workload identity pool, including forms that select a ServiceAccount by UID or by namespace/name. For external federation, attribute mappings and attribute conditions let you reject credentials whose mapped subject, group, or custom attributes do not match the environment you intended to trust.
+
+Azure stores the equivalent boundary in the federated identity credential. The credential names the issuer, the subject, and the accepted audience, and the incoming Kubernetes token must match those values before Microsoft Entra issues an access token. The common AKS subject is still `system:serviceaccount:<namespace>:<serviceAccount>`, while the Kubernetes ServiceAccount carries the `azure.workload.identity/client-id` annotation that points the workload toward the intended Entra identity.
 
 ## The Confused Deputy Problem
 
@@ -285,9 +311,19 @@ sequenceDiagram
 
 The remediation is structural and straightforward: every discrete workload requires its own dedicated ServiceAccount, and each IAM role's trust policy must rigidly define which ServiceAccounts are permitted to assume it. A pod operating in the `staging` namespace will fundamentally fail to assume a role that demands the `production:data-processor` subject claim.
 
+Across providers, the confused-deputy defense is the same idea expressed with different knobs. AWS IRSA uses `StringEquals` conditions on the issuer-prefixed `:sub` and `:aud` claims, so a token for `system:serviceaccount:staging:debug-shell` cannot become the production role even if it is signed by the same cluster issuer. EKS Pod Identity moves the binding into an EKS association and a role trust that allows the `pods.eks.amazonaws.com` service principal, then adds session tags that can include cluster, namespace, and service-account context for policy decisions.
+
+Google Cloud's defense appears in both principal selection and conditions. If a role binding grants access to every identity in a workload identity pool, the pool itself becomes the deputy, and a workload from another cluster or namespace can gain surprising access when identity sameness is not considered. Narrow principal identifiers, service-account impersonation bindings for a single Kubernetes namespace/name, and conditional IAM expressions prevent a low-trust identity from borrowing permissions meant for a different workload.
+
+Azure's defense is strict federated-credential matching. A managed identity or app registration should have a federated credential whose issuer is the AKS issuer and whose subject is the exact ServiceAccount that needs access. If several namespaces share one managed identity, Azure RBAC sees one identity at the resource boundary; the blast radius then depends on every workload that can cause a token exchange for that identity, so the better default is one federated credential and role assignment per workload access boundary.
+
+Too-broad conditions are attractive because they reduce onboarding friction, but they convert a security rule into a naming convention. A wildcard AWS trust policy, a Google principalSet binding for an entire project pool, or a many-to-one Azure federated credential can all appear to "work" until a new team creates a ServiceAccount with a similar name or a staging cluster shares the same identity pool. The safer migration pattern is to start narrow, automate the narrow object creation, and only widen when you can prove that the wider set is an intentional security domain.
+
 ## Implementation: AWS (IRSA and Pod Identity)
 
 Amazon Web Services provides two primary mechanisms for integrating Kubernetes identity. IAM Roles for Service Accounts (IRSA) is the foundational, heavily established approach. EKS Pod Identity is the more modern, significantly streamlined alternative introduced to simplify large-scale cluster management.
+
+Choose IRSA when you need the explicit OIDC trust-policy model, compatibility with older automation, or a pattern that is already standardized across your Terraform and `eksctl` pipelines. Choose EKS Pod Identity when the main pain is operating many clusters and repeated OIDC trust statements; AWS documents that Pod Identity does not require a separate IAM OIDC provider per cluster and uses a reusable `pods.eks.amazonaws.com` trust principal instead. The security bar is still the same: the IAM permissions attached to the target role must be least privilege, and the namespace/ServiceAccount association must be treated as a production access-control object.
 
 ### IRSA Setup
 
@@ -382,6 +418,8 @@ spec:
 
 EKS Pod Identity simplifies the trust relationship profoundly. You no longer need to manage OIDC provider setup or complex trust policies per cluster. The association is handled directly by the EKS control plane API.
 
+The target IAM role still needs a trust policy that allows EKS Pod Identity to assume it. AWS documents the service principal as `pods.eks.amazonaws.com` and the actions as `sts:AssumeRole` and `sts:TagSession`, with the association carrying the cluster, namespace, ServiceAccount, and role mapping. That difference matters during reviews: an IRSA review inspects issuer-prefixed `sub` and `aud` conditions, while a Pod Identity review inspects the EKS association plus any tag-based restrictions on the role.
+
 ```bash
 # Pod Identity simplifies the trust relationship
 # No OIDC provider setup needed per cluster
@@ -399,9 +437,13 @@ aws eks create-pod-identity-association \
   --role-arn arn:aws:iam::123456789012:role/data-processor-role
 ```
 
+Because the Pod Identity Agent returns credentials through the container credentials provider, static credentials earlier in the AWS default provider chain can still win if you leave old environment variables mounted. That is useful for staged migration, but dangerous after cutover. A clean migration removes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and old projected Secret references after the workload has proven it can refresh Pod Identity credentials during a long-running test.
+
 ## Implementation: GCP (Workload Identity)
 
 Google Cloud Platform relies on Workload Identity, which maps Kubernetes ServiceAccounts directly to Google Cloud Service Accounts (GSA). The architecture [intercepts metadata server calls](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) to inject the correct identity tokens.
+
+GKE Workload Identity Federation has two common authorization styles. Direct access grants IAM roles to the Kubernetes workload principal itself, which keeps the Kubernetes identity visible at the IAM boundary. Service-account impersonation grants `roles/iam.workloadIdentityUser` on a Google service account to the Kubernetes ServiceAccount, which is useful when a Google API expects a service account identity or when your organization already centralizes permissions on service accounts.
 
 ```bash
 # Step 1: Enable Workload Identity on the cluster (if not already)
@@ -439,9 +481,11 @@ metadata:
     iam.gke.io/gcp-service-account: data-processor@my-project.iam.gserviceaccount.com
 ```
 
+The multi-cluster gotcha is identity sameness. GKE's workload identity pool is tied to the Google Cloud project, so two clusters in the same project can produce principals that look the same when namespace and ServiceAccount metadata match. If you need cluster-specific separation, design the IAM principal or condition strategy before you stamp out many clusters, rather than discovering later that `production/report-reader` in two clusters has become one authorization subject.
+
 ## Implementation: Azure (Workload Identity)
 
-Microsoft Azure utilizes Azure AD Workload Identity, integrating Kubernetes OIDC with Azure Active Directory federated credentials. This [replaces the deprecated AAD Pod Identity project](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity).
+Microsoft Azure utilizes Microsoft Entra Workload ID, integrating Kubernetes OIDC with Microsoft Entra federated credentials. Microsoft Entra Workload ID supersedes the deprecated [AAD Pod Identity project](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity).
 
 ```bash
 # Step 1: Enable Workload Identity on the cluster
@@ -483,7 +527,7 @@ az role assignment create \
   --scope "/subscriptions/.../resourceGroups/.../providers/Microsoft.Storage/storageAccounts/patientdata"
 ```
 
-In AKS, you apply the client ID directly to the ServiceAccount and label it appropriately so [the mutating admission webhook injects the necessary environment variables into the pod](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview).
+In AKS, you apply the client ID directly to the ServiceAccount and label the pod template so [the mutating admission webhook injects the necessary environment variables into the pod](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview). This distinction is easy to miss: the `azure.workload.identity/client-id` annotation belongs on the ServiceAccount, while `azure.workload.identity/use: "true"` is a pod label that moves workload identity into a fail-close path for participating pods.
 
 ```yaml
 apiVersion: v1
@@ -493,9 +537,27 @@ metadata:
   namespace: production
   annotations:
     azure.workload.identity/client-id: "12345678-abcd-efgh-ijkl-123456789012"
-  labels:
-    azure.workload.identity/use: "true"
 ```
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-processor
+  namespace: production
+spec:
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: data-processor
+      containers:
+        - name: processor
+          image: company/data-processor:v1.2
+```
+
+The Azure federated credential is a three-part trust rule: issuer, subject, and audience. The Azure CLI parameter is `--audiences`, and the configured audience must match the `aud` value in the incoming token. When a token exchange fails, check those three values first, then check Azure RBAC on the target resource; a correct token exchange only proves identity, while the role assignment decides authorization.
 
 ## The Cross-Cloud Rosetta: One Trust Chain, Three Clouds
 
@@ -513,11 +575,12 @@ In other words, each provider implements the same trust choreography but with di
 
 | Mechanism | AWS IRSA | AWS EKS Pod Identity | GCP Workload Identity | Azure Workload Identity |
 |---|---|---|---|---|
-| **Trust anchor** | Per-cluster OIDC provider object in AWS IAM | EKS control-plane trust via Pod Identity associations | GKE-managed identity pool issuer and provider binding to Google IAM | Azure AD token exchange trust with AKS OIDC issuer + Entra app identity |
+| **Trust anchor** | Per-cluster OIDC provider object in AWS IAM | EKS control-plane trust via Pod Identity associations | GKE-managed identity pool issuer and provider binding to Google IAM | Microsoft Entra token exchange trust with AKS OIDC issuer + Entra app identity |
 | **SA→identity binding declaration** | ServiceAccount annotation (`eks.amazonaws.com/role-arn`) + IAM trust policy on the role | API-managed association (`aws eks create-pod-identity-association`) linking namespace + ServiceAccount | ServiceAccount annotation (`iam.gke.io/gcp-service-account`) + IAM binding of `roles/iam.workloadIdentityUser` | ServiceAccount annotation (`azure.workload.identity/client-id`) + Entra `federatedIdentityCredential` for subject binding |
 | **Token audience** | `sts.amazonaws.com` (validated in IAM role trust policy) | `pods.eks.amazonaws.com` (projected SA token; **not** `sts.amazonaws.com`). Trust is enforced by EKS Pod Identity associations + IAM role trust to `pods.eks.amazonaws.com`, not per-cluster OIDC `aud` conditions | GKE cluster issuer audience for native WI; `sts.googleapis.com` / workload-identity-pool audience for external WIF | `api://AzureADTokenExchange` as commonly defined in federated credential |
 | **Where creds are exchanged** | AWS STS `AssumeRoleWithWebIdentity` | EKS Auth API `AssumeRoleForPodIdentity`, delivered by the node-local Pod Identity Agent — **not** STS `AssumeRoleWithWebIdentity` | Google Security Token Service and Workload Identity Federation with Google IAM credentials | Azure STS/OAuth token exchange to obtain Entra access token for the target scope |
 | **Credential lifetime & rotation** | Temporary AWS credentials (often minutes-to-hour, automatically rotated by workload refresh logic) | Same short-lived model with central EKS agent handling association and refresh patterns | Temporary Google access credentials/impersonation token with frequent refresh via token exchange | Short-lived Entra tokens, rotated through workload identity token exchange on demand |
+| **Audit signal** | CloudTrail shows assumed-role activity and STS web-identity exchange context | CloudTrail shows the assumed role and Pod Identity session tags when enabled | Cloud Audit Logs can show workload identity pool subjects and service-account impersonation events | Azure Monitor, Entra sign-in logs, and resource logs show managed identity and resource access context |
 | **Scale friction** | OIDC provider trust and trust-policy statements must scale per cluster/application shape | Better operational scaling due to API associations managed separately from role trust text | Requires mapping discipline between Kubernetes subjects and service accounts across projects/pools | Scales via workload identity settings and federated credentials, but object sprawl can grow across many teams/clusters |
 
 ### How to read the table under pressure
@@ -530,6 +593,10 @@ When onboarding a new environment, this table helps you compare three immediate 
 
 In other words, this is less about which vendor has the best feature and more about which operational system your team can run without identity debt in six months.
 
+The most useful comparison is where the reviewer can prove intent. In AWS IRSA, intent is visible in the role trust policy because `sub` and `aud` are right there. In EKS Pod Identity, intent is split between the target role trust and the Pod Identity association, so review automation must inspect EKS association state as well as IAM. In GKE, intent might live in a direct IAM principal binding or in a service-account impersonation binding. In Azure, intent lives in the federated credential and in Azure RBAC role assignments on the target resource.
+
+That split changes how you design platform workflows. If the Kubernetes team can edit ServiceAccounts but cannot edit cloud IAM, annotation-only workflows will stall or drift. If the IAM team can create roles but cannot see Kubernetes namespaces, broad wildcard trusts will appear as an onboarding shortcut. The platform pattern that holds up is a single request path that creates the Kubernetes ServiceAccount, cloud identity object, trust binding, permission policy, and audit label together.
+
 A practical way to consume this table is to ask three questions every time you add a new workload:
 
 1. **How will the identity-binding statement be added** (annotation, association, or external object)?
@@ -537,6 +604,8 @@ A practical way to consume this table is to ask three questions every time you a
 3. **What grows first**: role statements, service bindings, or federation objects?
 
 If the answer to the third question is "everything grows everywhere", you likely need a stronger ownership model before adding more workloads.
+
+For AWS-heavy platforms, this often means moving high-churn EKS fleets toward Pod Identity while keeping IRSA for workloads that need exact OIDC trust semantics or cross-account patterns that are already stable. For GCP-heavy platforms, it means deciding early whether Kubernetes principals get direct IAM roles or impersonate GSAs, because mixing both without naming rules makes audit trails harder to read. For Azure-heavy platforms, it means managing user-assigned managed identities and federated credentials as first-class objects, not as one-off commands pasted into deployment notes.
 
 Here is the same idea as a compact mapping:
 
@@ -555,7 +624,9 @@ Azure Workload ID   => ServiceAccount annotation + Entra federated credential ob
 
 Native workload identity is excellent inside a single cloud provider, but it usually ends at that cloud boundary. When workloads must act across AWS, GCP, Azure, and on-prem together, you often need a common identity abstraction.
 
-SPIFFE/SPIRE provides that abstraction:
+The key word is "must." SPIFFE/SPIRE is not a prize for being multi-cloud; it is a serious identity control plane that earns its keep only when native provider identity cannot express the security requirement cleanly. If a workload only needs S3 from EKS, Pub/Sub from GKE, or Key Vault from AKS, the native workload identity path is simpler, cheaper to operate, and easier for provider support teams to reason about. If the same workload must prove the same identity across cloud-to-cloud service calls, on-prem services, and service-mesh mTLS, then a portable identity layer starts to justify its operational weight.
+
+SPIFFE/SPIRE provides that abstraction through a vocabulary that separates workload names, identity documents, node trust, and federation boundaries:
 
 - **SPIFFE ID**: a stable workload identity URI, e.g. `spiffe://platform.example/ns/order-api/sa/api`.
 - **SVID**: a workload proof of identity, emitted as either:
@@ -582,12 +653,12 @@ sequenceDiagram
     Cloud-->>Pod: Issue cloud-scoped temporary credentials
 ```
 
-SPIRE becomes the bridge when cloud identity and workload identity must be one source of truth:
+SPIRE becomes the bridge when cloud identity and workload identity must be one source of truth across environments that do not share one managed Kubernetes provider:
 
 - Workload-to-workload traffic in a service mesh can use SPIFFE X.509-SVID-based mTLS.
 - Workload-to-cloud calls can exchange SPIFFE JWT-SVIDs into each cloud's OIDC trust path to assume native cloud roles.
 
-That gives you a useful split:
+That gives you a useful split between identity proof and cloud authorization, which keeps the portable identity layer from becoming an all-powerful permission engine:
 
 - **SPIFFE/SPIRE** defines **who** a workload is across any cluster.
 - **Cloud IAM** still decides **what** that workload is allowed to do.
@@ -596,6 +667,10 @@ This exchange is not automatic. SPIRE must run its **OIDC Discovery Provider** (
 
 This separation is subtle but powerful. If you force one layer to do both, you often leak assumptions between architecture layers.
 
+In practice, a SPIRE bridge should have a smaller blast radius than your cloud identities, not a larger one. A SPIFFE ID such as `spiffe://platform.example/ns/payments/sa/settlement-worker` can be mapped to one AWS role, one Google principal, and one Azure federated credential, but that mapping still needs least-privilege resource permissions in each provider. The bridge is successful when it reduces duplicated identity proof while leaving authorization decisions close to the resource owner.
+
+The over-engineering smell is different. If SPIRE is introduced before the team can rotate its trust root, monitor agent health, explain workload selectors, or document what happens when the OIDC Discovery Provider is unavailable, it becomes another critical dependency rather than a simplification. Native workload identity should remain the default until you can name the exact cross-environment identity problem SPIRE solves and the exact team that will operate the new trust domain.
+
 ### What SPIFFE/SPIRE does *not* solve by itself
 
 - **Downstream IAM policy quality**: SPIRE can only carry identity; it cannot prevent you from attaching overly broad cloud roles.
@@ -603,6 +678,8 @@ This separation is subtle but powerful. If you force one layer to do both, you o
 - **Operational burden elimination**: SPIRE creates its own trust root, upgrade lifecycle, and incident workflows.
 
 Many teams therefore start with a strict "single cluster trust boundary" proof and expand only when business need appears.
+
+Hypothetical scenario: a payments platform runs one settlement worker in EKS and a fraud-scoring service in GKE, and both must mutually authenticate during a regulated batch window while also accessing provider-native storage. Native workload identity can solve the storage calls, but it does not create one portable workload identity for service-to-service trust. SPIFFE/SPIRE becomes reasonable when that shared identity has to survive across providers, logs, and mTLS policy without inventing a custom token broker.
 
 ### Practical rollout pattern
 
@@ -655,6 +732,10 @@ aws cloudtrail lookup-events \
 
 Combining cloud audit logs with Kubernetes audit and event data can give you a detailed investigation trail from workload identity to cloud API activity. Compare this forensic depth to the archaic static key approach, where the audit log cryptically shows "IAM user data-processor-user" with zero context regarding which cluster, namespace, or pod actually initiated the request.
 
+Each provider exposes a different amount of correlation detail, so design your naming and labels before the first incident. AWS IRSA gives CloudTrail assumed-role events and the IAM role session context; EKS Pod Identity can add session tags such as cluster, namespace, and ServiceAccount context. Google Cloud audit logs for Workload Identity Federation can include the federated principal subject and mapped principal when audit logging is enabled for the relevant IAM and Security Token Service activity. Azure investigations often combine Entra sign-in data, managed identity or service principal identifiers, Azure Activity Logs for control-plane changes, and resource logs for data-plane access.
+
+Good auditability is not automatic. If twenty workloads impersonate the same Google service account, use the same Azure managed identity, or share one AWS role, the cloud log will faithfully show that shared identity and still leave you guessing which pod was responsible. The fix is boring and powerful: encode namespace, ServiceAccount, and application name into the cloud identity name, require one workload per access boundary, and keep Kubernetes deployment events long enough to correlate pod UID and rollout time with provider logs.
+
 ### Cross-Referencing with Kubernetes Audit Logs
 
 To build an end-to-end incident timeline, you can cross-reference the cloud provider logs with the Kubernetes cluster audit logs.
@@ -677,9 +758,13 @@ To build an end-to-end incident timeline, you can cross-reference the cloud prov
 
 The principle of least privilege mandates that each pod must possess only the permissions strictly necessary to execute its function, and absolutely nothing more. The following practices are non-negotiable for production environments.
 
+Least privilege should be expressed in two places at once. First, the trust side should answer "which Kubernetes identity may become this cloud identity?" Second, the permission side should answer "what can that cloud identity do after it is assumed?" A precise trust policy attached to a role with broad `AdministratorAccess` still fails the design, while a narrow permission policy attached to a role that any namespace can assume also fails the design.
+
 ### One ServiceAccount Per Workload
 
 Never share ServiceAccounts. Sharing identities defeats the purpose of granular access control and expands the blast radius of a breach. Additionally, always disable automatic token mounting on the default namespace account to prevent accidental token leakage to non-participating pods.
+
+The one-ServiceAccount-per-workload rule is also an audit rule. When `order-api`, `payment-processor`, and `analytics-pipeline` each use distinct Kubernetes and cloud identities, a cloud audit event can be mapped back to a narrow deployment owner. When they share the namespace's default ServiceAccount, incident response has to reconstruct intent from pod schedules, logs, and luck.
 
 ```yaml
 # BAD: Shared ServiceAccount with broad permissions
@@ -718,7 +803,7 @@ metadata:
 
 ### Preventing ServiceAccount Token Theft
 
-Even with ephemeral, short-lived tokens, an attacker compromising a pod could potentially extract the token and attempt to assume the IAM role remotely. To fortify your perimeter, append stringent network condition keys to the IAM trust policy.
+Even with ephemeral, short-lived tokens, an attacker compromising a pod could potentially extract the token and attempt to assume the IAM role remotely before it expires. Network conditions can reduce that risk, but only when the request context actually includes the condition keys you plan to enforce. For AWS, `aws:SourceVpc` is useful when STS calls are routed through an AWS path that supplies that context, such as a VPC endpoint; otherwise, a condition that depends on a missing key can deny legitimate traffic or give a false sense of protection.
 
 ```json
 {
@@ -733,9 +818,7 @@ Even with ephemeral, short-lived tokens, an attacker compromising a pod could po
       "Condition": {
         "StringEquals": {
           "oidc.eks.us-east-1.amazonaws.com/id/ABCDEF1234567890:sub": "system:serviceaccount:production:data-processor",
-          "oidc.eks.us-east-1.amazonaws.com/id/ABCDEF1234567890:aud": "sts.amazonaws.com"
-        },
-        "StringEquals": {
+          "oidc.eks.us-east-1.amazonaws.com/id/ABCDEF1234567890:aud": "sts.amazonaws.com",
           "aws:SourceVpc": "vpc-0abc123def456"
         }
       }
@@ -744,7 +827,74 @@ Even with ephemeral, short-lived tokens, an attacker compromising a pod could po
 }
 ```
 
-Additional network-based conditions can narrow where temporary credentials are usable, but you need to validate the exact AWS condition keys and request paths that apply in your environment.
+Additional network-based conditions can narrow where temporary credentials are usable, but you need to validate the exact AWS condition keys and request paths that apply in your environment. For GCP and Azure, the equivalent control is usually less about a trust-policy network key and more about private egress paths, conditional IAM where supported, workload-level network policy, and alerting on token exchanges from unexpected locations.
+
+## Cost and Operations Lens
+
+Static secrets look cheap because the first key is free to create. The cost appears later in rotation labor, emergency revocation, leaked-key investigation, duplicated secret stores, and audit gaps. At moderate scale, the expensive part is not one pod reading one cloud API; it is hundreds of workloads sharing unclear credentials, many teams needing exceptions, and security reviewers being unable to prove which workload touched which resource.
+
+Federated identity shifts that cost into platform automation and observability. You must provision identities, bind trust rules, keep SDKs current enough to refresh temporary credentials, and retain logs that let incident responders correlate cloud API calls with Kubernetes deployments. That is usually a better cost shape because it turns emergency manual rotation into repeatable identity lifecycle management, but it is still a cost shape that needs owners, runbooks, and tests.
+
+Provider pricing also changes the operations calculation. AWS EKS charges a per-cluster management fee, with the public EKS pricing page listing standard Kubernetes version support at [$0.10 per cluster-hour and extended support at $0.60 per cluster-hour](https://aws.amazon.com/eks/pricing/). Google Kubernetes Engine lists a flat [$0.10 per cluster-hour management fee](https://cloud.google.com/kubernetes-engine/pricing?hl=en), with a monthly free-tier credit that can offset one Autopilot or zonal Standard cluster. Azure's [AKS pricing-tier documentation](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) describes Free, Standard, and Premium cluster-management tiers, and the official [Azure Retail Prices API](https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&currencyCode=USD&%24filter=serviceName%20eq%20%27Azure%20Kubernetes%20Service%27%20and%20meterName%20eq%20%27Standard%20Uptime%20SLA%27) lists AKS Standard Uptime SLA meters at $0.10 per hour in the retail USD catalog, while [Standard Long Term Support meter entries](https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&currencyCode=USD&%24filter=serviceName%20eq%20%27Azure%20Kubernetes%20Service%27%20and%20meterName%20eq%20%27Standard%20Long%20Term%20Support%27) appear at $0.60 per hour.
+
+Those management fees are not caused by pod identity, but identity architecture influences how many clusters, private endpoints, log pipelines, and support tiers you need. A team that creates a new cluster for every application might pay more in cluster management and logging than a team that creates separate identities inside a shared platform cluster. A team that sends every token exchange and every storage read into high-retention logging also needs to budget for ingestion and retention, because auditability is only useful when the logs survive long enough to support an investigation.
+
+Cost spikes usually come from indirect knobs. AWS can surprise teams when IRSA trust policies are copied across many clusters and the fleet drifts into extended support. GKE can surprise teams when identity sameness pushes them to split projects or clusters for separation they did not design early. AKS can surprise teams when production clusters move from Free to Standard or Premium management tiers for SLA or LTS requirements. Across all three providers, NAT, private endpoints, service-mesh sidecars, and verbose audit retention can become larger recurring costs than the identity binding itself.
+
+The cost-control answer is not "use fewer identities." Fewer identities usually means larger blast radius and weaker audit evidence. The better answer is to automate narrow identities, keep cluster count intentional, choose support tiers deliberately, expire or archive high-volume logs by risk, and review unused cloud identities the same way you review unused Kubernetes ServiceAccounts.
+
+## Patterns & Anti-Patterns
+
+Good workload identity architectures are repetitive by design. The goal is not to invent a new trust pattern for every service; the goal is to make the secure path easy enough that teams stop asking for static keys. The following patterns are proven because they reduce blast radius, make audit trails readable, and scale through automation rather than through human memory.
+
+| Pattern | When to Use | Why It Works | Scaling Note |
+|---------|-------------|--------------|--------------|
+| One ServiceAccount per workload | Any workload with distinct cloud permissions | The Kubernetes `sub` claim becomes a precise workload boundary instead of a namespace-level guess | Generate ServiceAccount, cloud role, trust binding, and audit label together from one platform request |
+| Exact trust conditions | Any federated identity binding | Exact `sub`, issuer, and audience checks prevent a valid token for one workload from being replayed as another workload | Prefer exact match by default; require security review for wildcard or namespace-wide bindings |
+| Disable default token automount | Namespaces with mixed workload types | Pods that do not need Kubernetes or cloud identity should not receive an unnecessary token file | Set `automountServiceAccountToken: false` on the default ServiceAccount and override only where required |
+| Native workload identity first | Single-cloud cloud API access | AWS, GCP, and Azure support provider-native flows that integrate with their SDKs and audit systems | Add SPIFFE/SPIRE only when cross-environment workload identity or mTLS semantics demand it |
+
+The one-ServiceAccount pattern sounds tedious until you compare it with post-incident reconstruction. If one shared ServiceAccount accesses ten buckets, the incident team has to infer intent from timing and application logs. If each workload has its own ServiceAccount and cloud identity, the cloud log itself narrows the investigation before anyone opens a pod log.
+
+Exact trust conditions also make platform automation safer. A template that emits `system:serviceaccount:${namespace}:${serviceAccount}` for AWS, the corresponding GKE principal or impersonation member, and the Azure federated credential subject can be reviewed mechanically. A template that emits `system:serviceaccount:${namespace}:*` cannot be reviewed the same way because future workloads inherit today's trust decision.
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+|--------------|-----------------|------------------------|--------------------|
+| Shared broad-permission ServiceAccounts | One compromised pod can use permissions intended for unrelated services | It reduces early IAM requests and hides ownership decisions | Create one ServiceAccount and cloud role per workload access boundary |
+| Wildcard trust policies | A new or renamed ServiceAccount can unexpectedly assume a powerful role | Wildcards seem convenient when many services onboard at once | Automate exact bindings and create explicit group-level roles only for true shared platforms |
+| Long-lived static keys in Secrets | Stolen credentials remain usable until manual revocation and often work outside the cluster | Static keys are familiar and work before federation plumbing exists | Migrate through parallel auth, then remove key env vars and delete legacy Secrets |
+| Many workloads impersonating one cloud identity | Audit logs show the shared identity but not the original pod with enough confidence | Teams centralize permissions on one GSA, IAM role, or managed identity | Preserve workload identity in names, bindings, and logs; use shared identities only for shared platform components |
+
+The anti-patterns have a common theme: they optimize for the first deployment instead of the hundredth deployment. A wildcard or shared identity removes one ticket today and creates uncertainty for every future audit. Treat identity objects as production interfaces, version them, review them, and remove them when the workload is retired.
+
+## Decision Framework
+
+Use this flow when choosing between provider-native identity and a portable identity layer. The first decision is the cloud boundary, not the tool. If the workload only calls APIs in the same provider where it runs, start with the provider-native mechanism. If the workload identity must be portable across providers or drive workload-to-workload mTLS, then evaluate SPIFFE/SPIRE as an additional control plane rather than as a replacement for cloud IAM.
+
+```mermaid
+flowchart TD
+    A[Workload needs cloud API access] --> B{Same provider as cluster?}
+    B -- Yes, EKS --> C{Many EKS clusters or trust-policy sprawl?}
+    C -- No --> D[Use IRSA with exact sub and aud conditions]
+    C -- Yes --> E[Use EKS Pod Identity with association governance]
+    B -- Yes, GKE --> F{Need direct principal or GSA impersonation?}
+    F -- Direct principal works --> G[Use GKE Workload Identity Federation direct IAM bindings]
+    F -- API or policy expects GSA --> H[Use GKE Workload Identity Federation with service-account impersonation]
+    B -- Yes, AKS --> I[Use Microsoft Entra Workload ID with exact federated credential]
+    B -- No or hybrid --> J{Need one portable workload identity or universal mTLS?}
+    J -- No --> K[Use each provider-native WI path and normalize naming/audit]
+    J -- Yes --> L[Add SPIFFE/SPIRE, then map SVIDs to narrow cloud roles]
+```
+
+| Choice | Prefer It When | Tradeoff |
+|--------|----------------|----------|
+| AWS IRSA | You need explicit OIDC trust policies, mature Terraform patterns, or cross-account role assumptions already designed around web identity | Trust policies grow with cluster count, and each cluster needs IAM OIDC provider handling |
+| EKS Pod Identity | You operate many EKS clusters and want associations managed through the EKS API instead of per-cluster OIDC provider statements | Reviewers must inspect associations and role trust, not just ServiceAccount annotations |
+| GKE Workload Identity Federation | You want Google IAM to authorize Kubernetes principals directly or through GSA impersonation without service account keys | Project-level identity sameness requires careful namespace, cluster, and condition design |
+| Microsoft Entra Workload ID | AKS workloads need Azure resources through managed identities or app registrations without secrets | Federated credentials and Azure RBAC assignments can sprawl unless ownership is automated |
+| SPIFFE/SPIRE bridge | You need consistent workload identity across clouds, on-prem, and service-to-service mTLS | You operate another critical trust root, agent fleet, discovery endpoint, and policy lifecycle |
+
+The decision matrix should not be used once and forgotten. Revisit it when the platform crosses new thresholds: more clusters, more regulated workloads, more providers, or more incident-response requirements. Identity designs that were excellent for three services in one cluster can become fragile when a central platform team onboards fifty teams across three providers.
 
 ## Did You Know?
 
@@ -1170,9 +1320,26 @@ Using the rosetta table above, trace one workload through AWS IRSA, GCP Workload
 - [SPIFFE keyless OIDC federation (AWS)](https://spiffe.io/docs/latest/keyless/oidc-federation-aws/) — Documents OIDC token flow patterns for workload identity federation.
 - [docs.aws.amazon.com: iam roles for service accounts.html](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — The EKS IRSA documentation states that each cluster has a public OIDC discovery endpoint with signing keys for projected service account tokens.
 - [kubernetes.io: service accounts admin](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/) — The Kubernetes service account administration docs describe bound projected tokens, TokenRequest, default lifetimes, and pod-scoped claims.
+- [kubernetes.io: projected volumes](https://kubernetes.io/docs/concepts/storage/projected-volumes/) — Documents `serviceAccountToken` projected volume fields including `audience`, `expirationSeconds`, `path`, and token validity behavior.
+- [kubernetes.io: configure service accounts for pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) — Shows how to disable ServiceAccount token automounting at the ServiceAccount or Pod level.
+- [docs.aws.amazon.com: service accounts](https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html) — Compares IRSA and EKS Pod Identity and documents Pod Identity scaling and session-tag characteristics.
+- [docs.aws.amazon.com: pod identity how it works](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-how-it-works.html) — Explains the EKS Pod Identity Agent, container credential provider, `pods.eks.amazonaws.com` audience, and `AssumeRoleForPodIdentity` flow.
+- [docs.aws.amazon.com: pod identity association](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-association.html) — Documents the `pods.eks.amazonaws.com` role trust principal, `sts:AssumeRole`/`sts:TagSession`, and `create-pod-identity-association` command.
+- [docs.aws.amazon.com: pod identity agent setup](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html) — Documents installation and node prerequisites for the EKS Pod Identity Agent add-on.
+- [docs.aws.amazon.com: IAM condition context keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html) — Defines AWS global condition keys used for network-scoped policy design.
 - [docs.aws.amazon.com: iamserviceaccounts.html](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html) — The eksctl IRSA guide documents injection of `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` and notes that recent SDKs use them.
 - [docs.aws.amazon.com: associate service account role.html](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html) — The EKS IRSA documentation shows trust policy examples with `sub` and `aud` conditions and explains their least-privilege role.
+- [docs.aws.amazon.com: CloudTrail userIdentity](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-user-identity.html) — Documents how assumed-role and web-identity sessions appear in CloudTrail `userIdentity` fields.
+- [Amazon EKS pricing](https://aws.amazon.com/eks/pricing/) — Lists EKS standard and extended Kubernetes version support cluster management pricing.
 - [cloud.google.com: workload identity](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Google's GKE Workload Identity documentation describes the GKE metadata server and its interception of metadata requests.
 - [cloud.google.com: workload identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity?hl=en) — The GKE how-to guide documents both the `roles/iam.workloadIdentityUser` binding and the `iam.gke.io/gcp-service-account` annotation.
+- [cloud.google.com: Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation?hl=en) — Describes Google Security Token Service exchange, attribute mappings, attribute conditions, and principal identifiers for workload identity pools.
+- [cloud.google.com: Workload Identity Federation audit log examples](https://docs.cloud.google.com/iam/docs/audit-logging/examples-workload-identity) — Shows audit log fields for token exchange and short-lived service account credential creation.
+- [Google Kubernetes Engine pricing](https://cloud.google.com/kubernetes-engine/pricing?hl=en) — Lists the GKE cluster management fee and free-tier credit behavior.
 - [learn.microsoft.com: use azure ad pod identity](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity) — The AKS pod-managed identity documentation recommends Microsoft Entra Workload ID and states the older model was deprecated.
 - [learn.microsoft.com: workload identity overview](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) — The AKS workload identity overview documents the `azure.workload.identity/client-id` annotation, required `use: true` label, and webhook mutation behavior.
+- [learn.microsoft.com: AKS workload identity deploy cluster](https://learn.microsoft.com/en-us/azure/aks/workload-identity-deploy-cluster) — Documents `--enable-oidc-issuer`, `--enable-workload-identity`, federated credential creation, and `api://AzureADTokenExchange`.
+- [learn.microsoft.com: az identity federated-credential](https://learn.microsoft.com/en-us/cli/azure/identity/federated-credential?view=azure-cli-lts) — Documents the `az identity federated-credential create` command and `--audiences` parameter behavior.
+- [learn.microsoft.com: AKS pricing tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) — Describes AKS Free, Standard, and Premium cluster-management tiers, including SLA and LTS positioning.
+- [Azure Retail Prices API: AKS Standard Uptime SLA](https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&currencyCode=USD&%24filter=serviceName%20eq%20%27Azure%20Kubernetes%20Service%27%20and%20meterName%20eq%20%27Standard%20Uptime%20SLA%27) — Official retail price API result for AKS Standard Uptime SLA hourly meters.
+- [Azure Retail Prices API: AKS Standard Long Term Support](https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&currencyCode=USD&%24filter=serviceName%20eq%20%27Azure%20Kubernetes%20Service%27%20and%20meterName%20eq%20%27Standard%20Long%20Term%20Support%27) — Official retail price API result for AKS long-term support hourly meters.
