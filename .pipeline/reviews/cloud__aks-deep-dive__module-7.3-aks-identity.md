@@ -1,0 +1,2 @@
+## 2026-06-03T21:11:36Z — `REVIEW` — `APPROVE`
+AKS Deep Dive expand-to-floor wave (session 99). Reviewer: claude-opus-4.8 (cross-family). NEEDS_CHANGES 3.5/5 -> ~4.5; P1 'azure.workload.identity/use' label moved SA->pod template (lab/Deployment auth); AADSTS70021 (was 7000216); invented '--service-account-token-lifetime' removed; KV determinism; k-alias. Verifier T0/PASS; orchestrator web-verified key facts vs learn.microsoft.com + ground-checked fix; PR #1779.

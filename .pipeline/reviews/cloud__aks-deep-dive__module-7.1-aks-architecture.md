@@ -1,0 +1,2 @@
+## 2026-06-03T21:11:36Z — `REVIEW` — `APPROVE`
+AKS Deep Dive expand-to-floor wave (session 99). Reviewer: claude-opus-4.8 (cross-family). NEEDS_CHANGES 3.5/5 -> ~4.5; P1 ephemeral OS on Dsv5 (no temp disk) -> Ddsv5; invalid 'az aks create --mode System' removed; Cilium-without-overlay simplified (defer to 7.2); max-pods citation repointed. Verifier T0/PASS; orchestrator web-verified key facts vs learn.microsoft.com + ground-checked fix; PR #1779.

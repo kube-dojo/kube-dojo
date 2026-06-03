@@ -1,0 +1,2 @@
+## 2026-06-03T21:11:36Z — `REVIEW` — `APPROVE`
+AKS Deep Dive expand-to-floor wave (session 99). Reviewer: claude-opus-4.8 (cross-family). NEEDS_CHANGES 4.5/5 -> ~5.0 (full template rebuild); P1 'az fleet updatestrategy --stages' inline JSON -> file path; lab teardown added; Free-tier (<=1000 nodes) vs Standard (<=5000); selectionScope generalized. Verifier T0/PASS; orchestrator web-verified key facts vs learn.microsoft.com + ground-checked fix; PR #1779.
