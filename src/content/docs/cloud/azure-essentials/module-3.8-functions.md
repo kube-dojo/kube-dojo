@@ -32,10 +32,10 @@ The hosting plan determines the scaling behavior, available resources, and prici
 
 | Feature | Consumption | Flex Consumption | Premium (EP) | Dedicated (ASP) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Scaling** | 0 to 200 instances | 0 to 1000 instances | 1 to 100 instances | Manual or autoscale |
-| **Scale to zero** | Yes | Yes | Optional (min 1) | No |
+| **Scaling** | 0 to 100 instances (Linux; Windows 200) | 0 to 1000 instances | 1 to 100 instances | Manual or autoscale |
+| **Scale to zero** | Yes | Yes | No (always ≥1 warm instance) | No |
 | **Cold start** | Yes (1-10 seconds) | Reduced (pre-warmed) | No (always warm) | No (always running) |
-| **Max execution** | 5 min (default, 10 max) | 30 min | Unlimited | Unlimited |
+| **Max execution** | 5 min (default, 10 max) | Default 30 min / max unbounded | Unlimited | Unlimited |
 | **Memory** | 1.5 GB | Up to 4 GB | 3.5-14 GB | Plan-dependent |
 | **VNet integration** | No | Yes | Yes | Yes |
 | **Cost model** | Per execution + GB-s | Per execution + GB-s | Per instance hour | Per App Service Plan |
@@ -46,7 +46,7 @@ Microsoft now recommends **Flex Consumption** for new serverless function apps. 
 
 ### The Scale Controller and Instance Limits
 
-Behind every dynamically scaled plan sits the **Functions scale controller**, a component that watches trigger metrics—queue depth, Event Hub lag, HTTP request rate, timer schedules—and adds or removes worker instances to match load. On the legacy Consumption plan, scale-out is capped at **200 instances** per function app. Flex Consumption raises that ceiling to **1,000 instances** and scales faster because it keys off per-instance concurrency settings rather than treating every invocation as a potential new worker. Premium plans scale between your configured minimum and maximum burst count on pre-provisioned Elastic Premium SKUs (EP1, EP2, EP3), while Dedicated plans inherit App Service Plan autoscale rules you define yourself.
+Behind every dynamically scaled plan sits the **Functions scale controller**, a component that watches trigger metrics—queue depth, Event Hub lag, HTTP request rate, timer schedules—and adds or removes worker instances to match load. On the legacy Consumption plan, scale-out is capped at **100 instances per function app on Linux** (the runtime Python and Node use; Windows Consumption allows up to **200**). Flex Consumption raises that ceiling to **1,000 instances** and scales faster because it keys off per-instance concurrency settings rather than treating every invocation as a potential new worker. Premium plans scale between your configured minimum and maximum burst count on pre-provisioned Elastic Premium SKUs (EP1, EP2, EP3), while Dedicated plans inherit App Service Plan autoscale rules you define yourself.
 
 Understanding these limits prevents architectural surprises during load tests. A fan-out workflow that launches ten thousand parallel activity functions still executes on a bounded worker pool; the orchestrator queues work, but downstream services must tolerate the throughput your instance cap allows. If you need guaranteed headroom for a product launch, Premium **always-ready** instances or Flex **always-ready** baselines buy responsiveness upfront instead of waiting for the scale controller to react.
 
@@ -97,6 +97,7 @@ az functionapp plan create \
   --name kubedojo-premium-plan \
   --location eastus2 \
   --sku EP1 \
+  --is-linux true \
   --min-instances 1 \
   --max-burst 20
 
@@ -156,7 +157,7 @@ In many environments, total startup time is often around **3-8 seconds**, which 
 
 Cold starts stack several phases: the platform must **allocate a worker**, the **Functions host runtime** must start, your **language worker** (Python, Node, .NET isolated process) must boot, and any **module imports or dependency injection** in your startup path run before the trigger handler executes. Large container images, heavyweight ML libraries, or synchronous network calls during import multiply the delay. Premium and Flex always-ready instances keep a baseline warm so the first customer request skips most of that path, which is why payment and authentication webhooks often justify the fixed hourly component even when average traffic is low.
 
-**War Story**: A payment processing company chose the Consumption plan for their webhook handler. Most requests completed in 200ms. But once every 15-20 minutes, the function would cold start, adding 6 seconds of latency. Their payment provider interpreted these 6-second responses as timeouts and marked them as failed, triggering retry logic that created duplicate transactions. Switching to Premium plan with 1 minimum instance eliminated cold starts entirely, and the duplicate transaction problem vanished overnight.
+**Hypothetical scenario (War Story)**: A payment processing company chose the Consumption plan for their webhook handler. Most requests completed in 200ms. But once every 15-20 minutes, the function would cold start, adding 6 seconds of latency. Their payment provider interpreted these 6-second responses as timeouts and marked them as failed, triggering retry logic that created duplicate transactions. Switching to Premium plan with 1 minimum instance eliminated cold starts entirely, and the duplicate transaction problem vanished overnight.
 
 ---
 
@@ -592,7 +593,7 @@ You can optimize performance and control scaling behavior by configuring `host.j
 }
 ```
 
-**Dynamic concurrency** (when enabled) lets the runtime learn optimal per-trigger concurrency and persist snapshots between scale events, which helps queue-heavy workloads without manual tuning. Pair **`functionAppScaleLimit`** consciously: setting it too low protects downstream systems but creates artificial backlog during legitimate spikes; leaving it unlimited on Consumption without testing can hit the 200-instance ceiling and still saturate a fragile database. For Python CPU-bound handlers, **`FUNCTIONS_WORKER_PROCESS_COUNT`** launches multiple worker processes to sidestep GIL contention—each process consumes memory, so GB-second costs rise with process count even if executions stay flat.
+**Dynamic concurrency** (when enabled) lets the runtime learn optimal per-trigger concurrency and persist snapshots between scale events, which helps queue-heavy workloads without manual tuning. Pair **`functionAppScaleLimit`** consciously: setting it too low protects downstream systems but creates artificial backlog during legitimate spikes; leaving it unlimited on Linux Consumption without testing can hit the 100-instance ceiling and still saturate a fragile database. For Python CPU-bound handlers, **`FUNCTIONS_WORKER_PROCESS_COUNT`** launches multiple worker processes to sidestep GIL contention—each process consumes memory, so GB-second costs rise with process count even if executions stay flat.
 
 ### Authentication and Authorization
 
@@ -671,9 +672,9 @@ Need event-driven code with bindings and Durable Functions?
 | :--- | :--- | :--- | :--- | :--- |
 | Cold-start tolerance | Low–medium | Medium–high (with always-ready) | High | High |
 | VNet required | No | Yes | Yes | Yes |
-| Max scale-out | 200 | 1,000 | Configurable burst | Plan limit |
-| Scale to zero | Yes | Yes | Optional | No |
-| Max single execution | 5 min default (10 max) | 30 min | Unlimited | Unlimited |
+| Max scale-out | 100 (Linux; Windows 200) | 1,000 | Configurable burst | Plan limit |
+| Scale to zero | Yes | Yes | No (always ≥1 warm) | No |
+| Max single execution | 5 min default (10 max) | Default 30 min / max unbounded | Unlimited | Unlimited |
 | Best cost when | Legacy Windows sporadic jobs | New serverless apps | Steady low-latency APIs | Shared ASP already paid |
 
 When latency-sensitive HTTP meets private networking, **Flex with targeted always-ready instances** often beats **Premium with large minimum instances** because you pay baseline warmth only on entry functions while background queue processors stay on-demand. When executions routinely exceed Flex timeout limits or require more than 4 GB memory per instance, move activities to Premium or Container Apps rather than forcing monolithic functions.
@@ -712,7 +713,7 @@ Patterns capture what experienced teams repeat on purpose; anti-patterns capture
 
 1. **Azure Functions Consumption plan has processed trillions of executions** since its launch. The free grant of 1 million executions and 400,000 GB-seconds per month means that many small-to-medium applications run entirely for free. A function that executes 100,000 times per month at 128 MB memory and 200ms average duration uses only 2,560 GB-seconds---well within the free tier. Flex Consumption adds selectable instance memory (512 MB, 2,048 MB, or 4,096 MB); higher tiers increase GB-second totals but prevent timeouts for memory-heavy Python workloads.
 
-2. **Durable Functions can run for up to 7 days on the Consumption plan** (the orchestrator itself; individual activity functions still have the 5-10 minute limit). On Premium and Dedicated plans, they can run indefinitely. One retail company uses a Durable Function orchestration that runs for 30 days, managing a month-long A/B test lifecycle with periodic check-ins and automatic completion.
+2. **Durable Functions orchestrations can run for days, weeks, or months on any hosting plan** because the runtime checkpoints orchestrator state to storage and replays on wake—there is no separate 7-day orchestration cap on Consumption, Flex, Premium, or Dedicated. What *is* bounded is each **activity function execution**: on Consumption that is 5 minutes by default (10 minutes maximum); on Flex the default is 30 minutes with no enforced maximum execution timeout (the 230-second ceiling applies only to HTTP-trigger responses). Durable timers for Python, JavaScript, and PowerShell can schedule up to 6 days per timer, chainable for longer waits. **Hypothetical scenario:** a month-long A/B test orchestration might use periodic timer check-ins and automatic completion without holding a worker busy between intervals.
 
 3. **Blob triggers use a polling mechanism, not events.** When you use a Blob trigger, Azure Functions scans the blob container for changes every few seconds. This means there can be a delay of up to 60 seconds between a blob being uploaded and the function executing. For real-time processing, use an Event Grid trigger (which is event-driven and near-instant) that subscribes to the blob storage account's BlobCreated events.
 
@@ -1045,21 +1046,19 @@ az functionapp log tail -g "$RG" -n "$FUNC_NAME" --timeout 10 2>/dev/null || \
 <summary>Verify Task 5</summary>
 
 ```bash
-# Query Cosmos DB for the processed results
-az cosmosdb sql query \
-  --account-name "$COSMOS_NAME" \
-  --resource-group "$RG" \
-  --database-name "ProcessingDB" \
-  --container-name "results" \
-  --query-text "SELECT c.blobName, c.sizeBytes, c.extension, c.status, c.processedAt FROM c" \
-  -o table 2>/dev/null || \
+# Cosmos DB document reads are data-plane operations — az cosmosdb has no sql query subcommand.
+# Confirm the results container exists (control plane):
 az cosmosdb sql container show \
   --account-name "$COSMOS_NAME" -g "$RG" \
   --database-name "ProcessingDB" --name "results" \
-  --query resource.id -o tsv
+  --query '{Name:name, PartitionKey:resource.partitionKey.paths[0]}' -o table
+
+# Open Azure portal → Cosmos DB account → Data Explorer → ProcessingDB → results
+# Run: SELECT c.blobName, c.sizeBytes, c.extension, c.status, c.processedAt FROM c
+# Expect two documents after both uploads process.
 ```
 
-You should see two documents in Cosmos DB: one for test-data.json (with recordCount=2 and status=processed_with_analysis) and one for readme.txt (with status=processed).
+You should see two documents in the portal Data Explorer: one for `test-data.json` (with `recordCount=2` and `status=processed_with_analysis`) and one for `readme.txt` (with `status=processed`). The CLI commands above prove the container exists; document content verification requires the portal or the Cosmos DB REST/SDK data plane.
 </details>
 
 ### Cleanup
@@ -1074,8 +1073,8 @@ rm -rf /tmp/functions-lab /tmp/test-data.json /tmp/readme.txt
 - [ ] Storage account with uploads container created
 - [ ] Cosmos DB account with ProcessingDB database and results container created
 - [ ] Function App deployed with blob trigger and Cosmos DB output binding
-- [ ] JSON file uploaded and processed (metadata stored in Cosmos DB with record count)
-- [ ] Text file uploaded and processed (metadata stored in Cosmos DB)
+- [ ] JSON file uploaded; function logs show processing; `results` container exists in Cosmos DB
+- [ ] Text file uploaded; portal Data Explorer shows two result documents with expected `blobName` and `status` values
 - [ ] Function execution visible in logs or monitor
 
 After cleanup, capture one lesson in your runbook: which trigger type you used, how long polling delayed processing, and which hosting plan you would choose for a production deployment with VNet and latency requirements.
