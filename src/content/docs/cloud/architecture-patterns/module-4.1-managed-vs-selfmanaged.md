@@ -25,13 +25,11 @@ sidebar:
 
 ## Why This Module Matters
 
-March 2022. A mid-sized fintech startup in Berlin named ValuKredit was expanding rapidly. The platform team had been running self-managed Kubernetes on bare-metal servers in a colocation facility for three years. They were exceptionally proud of their architecture. They boasted custom-tuned etcd clusters, hand-rolled automated certificate rotation, and bespoke multi-dimensional monitoring. The tight-knit team of six engineers knew nearly every corner and quirk of their intricate infrastructure.
+**Hypothetical scenario:** A mid-sized fintech platform team runs self-managed Kubernetes on colocation hardware. They built custom etcd tuning, certificate rotation, and monitoring over three years. When two senior engineers leave within a month, nobody on the remaining team can execute a minor control-plane upgrade without the departed experts. A critical kube-apiserver CVE is public, but the team delays patching for days because a failed upgrade could freeze scheduling and block all deployments. Compliance and security stakeholders escalate while product releases stall. Six months later the organization migrates to a managed hyperscaler control plane so engineers return to application work instead of quorum math.
 
-Then, their lead infrastructure engineer resigned abruptly. Two weeks later, a second senior engineer departed for a major technology firm. The remaining four engineers had never performed a Kubernetes version upgrade without those two individuals directing the operation. When a critical CVE hit the kube-apiserver in April, the depleted team simply froze. They lacked the operational confidence to patch the control plane safely. For eleven agonizing days, their production cluster ran a publicly disclosed, highly weaponized vulnerability because nobody understood the upgrade procedure well enough to execute it without risking a total outage. The subsequent postmortem estimated their risk exposure at three point four million dollars in potential breach liability. Six months later, they abandoned their custom setup and migrated entirely to GKE. Their remaining engineers finally returned to shipping product features instead of babysitting etcd databases.
+The mirror case is equally common. **Hypothetical scenario:** A logistics company on managed EKS needs custom scheduler plugins, aggressive API-server failover targets, and admission hooks that conflict with provider-managed add-on lifecycles. They move control plane components onto self-managed EC2, right-size etcd and API servers for their latency profile, and accept the operational tax because the business value of those controls exceeds the predictable per-cluster management fee.
 
-This narrative plays out in reverse, too. A global logistics company running exclusively on EKS discovered that their managed control plane's fifteen-minute SLA for API server availability was woefully insufficient for their real-time, automated container orchestration workloads. They required sub-second failover and custom admission webhooks that inherently conflicted with EKS's strict managed add-on lifecycle policies. Ultimately, they moved to self-managed Kubernetes on raw EC2 instances. Consequently, their infrastructure costs dropped by a massive margin because they could meticulously right-size their control plane nodes instead of paying flat per-cluster fees, and they regained absolute authority over their scheduler. 
-
-Neither organization made a fundamentally wrong decision. Both choices were exactly right for their specific operational contexts. The truly difficult part of cloud architecture is knowing precisely which context you are currently operating in. In this module, you will learn to make that critical decision with absolute confidence. You will understand what "managed" actually entails, how to calculate the unforgiving true cost of self-management, and when you must utilize the escape hatches to run your own control plane.
+Neither path is universally correct. Managed versus self-managed is a portfolio decision shaped by team depth, compliance boundaries, workload latency, and how many clusters you operate. In this module you will learn what "managed" actually patches, how EKS, GKE, and AKS differ on SLA and pricing tiers, how to model TCO including labor and outage risk, and when escape hatches to self-managed or edge distributions are justified.
 
 ---
 
@@ -42,6 +40,8 @@ The most pervasive and dangerous assumption in cloud native engineering is that 
 Think of infrastructure like housing. Running self-managed Kubernetes on bare metal is like building and maintaining your own house from the foundation up. You pour the concrete, fix the plumbing, repair the roof, and furnish the interior. If the pipes burst, you are the one holding the wrench at midnight. 
 
 Managed Kubernetes is like renting a high-end apartment. The landlord (the cloud provider) is responsible for the building's structural integrity, the main water lines, and the central heating system. However, you are still entirely responsible for your own furniture, securing your front door, and ensuring you do not start a fire in the kitchen. The provider maintains the control plane (the plumbing), but you still own and must secure your workloads (the furniture).
+
+The analogy breaks if you treat "managed" as "no nodes to think about." Unless you adopt a **nodeless** mode (EKS Fargate profiles, GKE Autopilot, AKS [virtual nodes with Azure Container Instances](https://learn.microsoft.com/en-us/azure/aks/virtual-nodes)), you still choose instance types, disk types, autoscaling bounds, and maintenance windows. Managed control plane ≠ managed application reliability: you still design PodDisruptionBudgets, probes, and graceful shutdown. Cross-cloud architects document these boundaries in onboarding decks so application teams do not assume the provider will restart their stateful Pods safely during node drains.
 
 ### Shared Responsibility: Who Owns What?
 
@@ -79,6 +79,31 @@ The Kubernetes control plane is the brain of your cluster. When you opt for a ma
 | cloud-controller-manager | Integrates with cloud APIs | Must build/maintain if not on a major cloud |
 
 When you use EKS, GKE, or AKS, the provider runs these complex, stateful components for you. But the exact definition of "runs" means very different things depending on which hyperscaler you choose.
+
+### Patching, CVE response, and node OS ownership
+
+The control-plane boundary is only half the story. Production risk usually concentrates on **nodes and workloads**: kernel CVEs, container runtime updates, kubelet skew, and image supply chain. Each hyperscaler patches the Kubernetes control plane (API server, scheduler, controller-manager, etcd) on its own cadence, but **you** still own when worker nodes reboot and whether workloads tolerate disruption.
+
+**Amazon EKS** patches the managed control plane without customer SSH access. For workers, [EKS managed node groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) can automate AMI releases, while [Bottlerocket](https://docs.aws.amazon.com/eks/latest/userguide/bottlerocket.html) narrows the node attack surface with an immutable OS designed for containers. Many teams keep `updateConfig` conservative so security patches do not drain production during business hours—you initiate or schedule node cycles. CVE triage is shared: AWS publishes control-plane fixes; you validate application compatibility and roll nodes.
+
+**Google GKE** offers [node auto-upgrade](https://cloud.google.com/kubernetes-engine/docs/how-to/node-auto-upgrades) and [auto-repair](https://cloud.google.com/kubernetes-engine/docs/how-to/node-auto-repair) on Standard node pools, often on [Container-Optimized OS](https://cloud.google.com/container-optimized-os/docs) images. Release channels (Rapid, Regular, Stable, Extended) govern how aggressively the **control plane** moves forward; node upgrades can track or lag depending on maintenance windows. Autopilot shifts more node lifecycle work to Google, but privileged DaemonSets and host-level agents remain a design tension you must validate up front.
+
+**Azure AKS** documents [node image upgrades](https://learn.microsoft.com/en-us/azure/aks/node-image-upgrade) and cluster [auto-upgrade channels](https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-cluster) for Kubernetes minor versions. Node OS and kubelet updates still land in your change window for stateful systems. The Free tier does not buy you an API-server SLA—production patching discipline should assume Standard or Premium when uptime commitments exist.
+
+| Layer | EKS | GKE | AKS | Self-managed |
+|-------|-----|-----|-----|--------------|
+| Control-plane CVEs | AWS patches; you schedule upgrades | Google patches; channels + maintenance windows | Microsoft patches; tier defines SLA | You patch API/etcd/scheduler |
+| Node OS / kubelet | Managed node groups / Bottlerocket; you trigger cycles | Auto-upgrade/repair optional | Node image upgrade + surge settings | You own images and rollouts |
+| Workload & image CVEs | You (scanning, admission, rollouts) | You | You | You |
+| etcd backups | Provider-managed; no direct etcd access | Provider-managed; no direct etcd access | Provider-managed; no direct etcd access | You design snapshots & restore drills |
+
+### etcd backups and the access boundary
+
+On all three managed offerings, **you cannot open an etcd shell** or take ad hoc `etcdctl` snapshots of the provider's datastore. Backup, encryption at rest, compaction, and quorum are provider responsibilities—that is a major reason managed TCO drops for small teams. Your obligation shifts to **application-level recovery**: Velero for Kubernetes objects, external databases for state, and runbooks that do not assume you can "restore etcd from last night" the way a kubeadm operator might.
+
+Self-managed operators must implement snapshot schedules, test restores quarterly, and document who may run `etcdctl` during incidents. A failed restore drill is more expensive than a year of EKS cluster fees at moderate scale because it can mean rebuilding every Deployment, Secret, and CustomResource from Git—a multi-week program if backups were never validated.
+
+> **Stop and think**: Your security team asks for quarterly etcd restore tests. On EKS, GKE, and AKS, what evidence can you provide instead of a snapshot file, and why does that evidence still satisfy auditors who care about RPO/RTO?
 
 ---
 
@@ -156,9 +181,27 @@ flowchart TD
     Azure -. " " .-> RG
 ```
 
-AKS Free tier carries no control-plane SLA and suits development only. Standard tier adds a flat fee and a financially backed 99.95% SLA. Expect load balancers and network security groups in an auto-generated managed resource group (typically prefixed with `MC_`) inside your subscription even though the control plane itself stays provider-operated.
+AKS Free tier carries no control-plane SLA and suits development only. Standard tier adds cluster management pricing documented on Azure's pricing pages plus a financially backed uptime SLA when enabled. Expect load balancers and network security groups in an auto-generated managed resource group (typically prefixed with `MC_`) inside your subscription even though the control plane itself stays provider-operated.
+
+### Comparing control-plane isolation models
+
+Understanding **where** the API server runs explains latency, compliance narratives, and debugging limits:
+
+**EKS** keeps the plane in an AWS-owned account and bridges into your VPC with ENIs. You troubleshoot via CloudTrail, EKS audit logs, and AWS Support—not SSH to `kube-apiserver`. Custom admission webhooks and API aggregation layers still run as workloads **you** deploy; AWS does not inject your OPA or Kyverno policies into their plane.
+
+**GKE** regional clusters replicate control-plane components across zones; Autopilot further separates node provisioning from your node-pool YAML. Google's automation can feel opaque when something fails during maintenance windows—your response is GCP support and cluster events, not shell access to etcd members.
+
+**AKS** surfaces more adjacent resources in your subscription (VMSS, NSG, load balancers in the `MC_` group), which helps Azure-native operators reason about blast radius but blurs "what is control plane" versus "what is node" in cost allocation dashboards.
+
+None of the three grants etcd membership for customers; disaster recovery exercises must validate application backups and Git-declared state, not provider etcd snapshots you cannot download.
 
 > **Pause and predict**: GKE Autopilot completely abstracts away worker nodes, billing you only for requested pod resources. If your security team mandates a third-party intrusion detection agent that runs as a highly privileged DaemonSet to inspect host-level syscalls, how will Autopilot's architecture conflict with this requirement?
+
+### Monitoring and support: what "managed" includes
+
+Managed control planes ship baseline control-plane monitoring, but **your** SLOs still depend on kubelet/node metrics, ingress health, and application traces. EKS integrates with CloudWatch; GKE with Google Cloud Monitoring; AKS with Azure Monitor—each bills separately from the cluster management fee. Self-managed teams must additionally alert on etcd fsync latency, apiserver `429` rates, and certificate expiry—signals hyperscaler SREs watch internally while you sleep.
+
+Support tickets differ by cloud: providers remediate **their** plane outages documented in SLAs; they will not fix your Helm chart after you upgrade into a removed API. Game days should assume SLA covers Kubernetes API availability while **you** own recovery from bad rollouts—Pod restart storms after node drains remain customer runbooks on every provider.
 
 ### The Critical Differences
 
@@ -169,8 +212,43 @@ AKS Free tier carries no control-plane SLA and suits development only. Standard 
 | Max Pods per Node | 110 (default ENI limits) | 110 (default), 256 (GKE) | 250 |
 | K8s Version Lag | ~2-3 months behind upstream | ~1-2 months behind upstream | ~2-3 months behind upstream |
 | etcd Access | None | None | None |
-| Autopilot Mode | Fargate (serverless pods) | GKE Autopilot (full cluster) | None (virtual nodes via ACI) |
+| Autopilot Mode | Fargate (serverless pods) | GKE Autopilot (full cluster) | Virtual nodes via ACI |
 | Private Cluster | Yes (API endpoint in VPC) | Yes (Private cluster) | Yes (Private AKS) |
+| Workload → cloud IAM | IRSA / EKS Pod Identity | Workload Identity Federation | Entra Workload ID |
+
+When comparing max Pods per node, remember ENI/IP limits on AWS VPC CNI, GKE alias ranges, and Azure networking choices can all force smaller practical limits than the table maximum—subnet design is a managed-cluster skill, not only a self-managed concern.
+
+### Control plane SLA, pricing tiers, and what you are buying
+
+Managed Kubernetes is not one SKU—it is a **tier ladder** plus worker spend. Compare tiers before you compare instance types.
+
+**EKS** charges **$0.10 per cluster per hour** for Kubernetes versions in [standard support](https://aws.amazon.com/eks/pricing/) (roughly $73/month per cluster). After standard support ends, [extended support](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html) raises the control-plane rate to **$0.60 per cluster per hour** until you upgrade—an easy budget spike when many clusters linger on old minors. [EKS Provisioned Control Plane](https://aws.amazon.com/eks/pricing/) adds XL–8XL tiers ($1.65–$13.90/hr and above) when API-server throughput or large-scale etcd performance needs predictable headroom beyond the default plane.
+
+**GKE** applies a **$0.10 per cluster per hour** [cluster management fee](https://cloud.google.com/kubernetes-engine/pricing) to every cluster mode (zonal, regional, Autopilot). The [free tier](https://cloud.google.com/kubernetes-engine/pricing) credits **$74.40 per billing account per month**, equivalent to one zonal Standard or Autopilot cluster hour-bank—regional clusters still pay the full management fee. Extended channel clusters past standard support pay an additional **$0.50/hr** management surcharge (total **$0.60/hr**) until upgraded. SLAs: **99.95%** regional Standard/Autopilot control planes, **99.5%** zonal Standard control planes per the same pricing page.
+
+**AKS** splits [Free, Standard, and Premium tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers). **Free** has no financially backed API-server SLA—fine for labs, hazardous for revenue workloads. **Standard** enables the [uptime SLA](https://learn.microsoft.com/en-us/azure/aks/uptime-sla) (**99.95%** with availability zones, **99.9%** without). **Premium** pairs with Long-Term Support (`AKSLongTermSupport`) for regulated fleets that must stay on a minor longer than community support. Cluster management fees for Standard/Premium are documented on Azure's AKS pricing pages; worker VMs, load balancers, and egress remain pay-as-you-go.
+
+| Provider | Production-oriented control plane | SLA (API server) | Cost spike triggers |
+|----------|-----------------------------------|------------------|---------------------|
+| EKS | Standard + optional Provisioned CP | 99.95% (documented SLA) | Extended support $0.60/hr; many clusters × $0.10/hr; cross-AZ ENI traffic |
+| GKE | Regional Standard or Autopilot | 99.95% regional / 99.5% zonal | Extended channel surcharge; exceeding free-tier credit; Autopilot pod requests vs actual need |
+| AKS | Standard or Premium (LTS) | 99.9–99.95% by AZ layout | Running Free in prod; Premium + LTS; outbound data from Azure Load Balancer |
+
+### Private API endpoints and control-plane networking
+
+Exposing the Kubernetes API to `0.0.0.0/0` is the default on many clusters; tightening endpoint access is a cross-cloud pattern with different knobs.
+
+**EKS** lets you disable public [cluster endpoint](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html) access so the API server is reachable only inside the VPC (private hosted zone managed by AWS). Operators reach it via bastion, VPN, Transit Gateway, or [EKS access entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html) combined with IAM and RBAC. Private-only endpoints do not remove ENI consumption in your subnets—they change **who can route to the API**, not pod IP planning.
+
+**GKE** [private clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/private-cluster-concept) restrict control-plane endpoints using private RFC1918 addresses and authorized networks or Cloud VPN/Interconnect. [Private Service Connect](https://cloud.google.com/vpc/docs/private-service-connect) variants appear in enterprise designs that need controlled egress to Google APIs. Autopilot still honors private endpoint constraints but may limit host-level agents.
+
+**AKS** supports [private clusters](https://learn.microsoft.com/en-us/azure/aks/private-clusters) where the API server has a private IP in your VNet; access requires jump hosts or Azure Private Link patterns. API server VNet integration (where available in your region) further aligns DNS and routing with corporate network policy.
+
+Across clouds, private API access adds **engineering time** (CI runners inside the VPC, VPN maintenance) but reduces credential theft blast radius—a trade enterprises accept when compliance mandates no public Kubernetes API.
+
+### Control-plane scale and components recap
+
+Regardless of vendor, the managed plane runs **kube-apiserver**, **etcd**, **kube-scheduler**, and **kube-controller-manager** (plus cloud-controller-manager integrations). You do not resize etcd on EKS; on self-managed you might run five dedicated SSD nodes. Managed planes autoscale internally within provider limits; Provisioned Control Plane on EKS is the explicit knob when default throughput saturates during admission storms or massive `LIST` operations from controllers.
 
 ---
 
@@ -249,6 +327,19 @@ Managed total for this profile: **$30,276/yr** (service $12,276 + labor $13,000 
 
 The managed option is roughly sixty percent cheaper when you accurately account for labor and enterprise risk. That advantage shrinks at fleet scale: organizations running dozens or hundreds of clusters sometimes fund a dedicated platform team and Cluster API automation so per-cluster control-plane fees stop dominating the budget.
 
+### Building your own TCO worksheet (multi-cloud)
+
+Use the same spreadsheet schema for EKS, GKE, and AKS proposals so finance compares fairly:
+
+1. **Control plane**: clusters × hourly tier × 730; add extended-support rows if you lag minors.
+2. **Workers**: instance hours × price sheet; separate GPU, spot, and on-demand tabs.
+3. **Network**: NAT gateway hours + processed GB; inter-AZ GB; load balancer fixed + LCU charges (Azure) or NLB/LCU (AWS/GCP equivalents).
+4. **Observability**: log ingest GB, metric cardinality charges, APM per host.
+5. **Labor**: FTE fraction × loaded salary for upgrades, incidents, and migration.
+6. **Risk reserve**: annualized outage $ (revenue/hour × expected hours) for self-managed etcd scenarios.
+
+Hyperscaler calculators ([AWS Pricing Calculator](https://calculator.aws/), Google Cloud Pricing Calculator, Azure pricing tools) help with infrastructure rows; you must still type labor and risk manually or the business case will lie by omission. When leadership asks "why not self-managed if EC2 is cheap," show row 5 and 6 side by side for each cloud—identical logic, different NAT and management-fee cells.
+
 > **Stop and think**: The TCO models assume a static baseline of infrastructure. If your workloads are highly bursty and you run across three Availability Zones to ensure high availability, how does the managed control plane architecture of EKS invisibly multiply your cross-AZ data transfer costs compared to a self-managed cluster?
 
 ### The Costs People Forget
@@ -265,6 +356,33 @@ Budget conversations often stop at control-plane line items, yet the rows below 
 | Kubernetes CVE patching | You triage + patch | Provider patches, you schedule |
 | On-call rotation (control plane) | You staff 24/7 | Provider staffs |
 | Compliance auditing | You document | Shared (SOC2, HIPAA certs available) |
+
+### Engineer-hours, botched upgrades, and control-plane HA you build yourself
+
+Labor is the line item spreadsheets hide. A conservative model for self-managed production assumes **two senior engineers** spending partial quarters on: reading [Kubernetes release notes](https://kubernetes.io/releases/), running deprecated API discovery, etcd backup/restore drills, certificate rotation, and post-upgrade soak tests. At fully loaded $150–$200/hr, four upgrade cycles plus CVE firefighting easily exceed **$40k/year** before anyone touches application features—matching the labor subtotal in the tables above.
+
+A **botched minor upgrade** costs more than the successful upgrade would have saved. Symptoms include: etcd quorum loss (cluster read-only), API server version skew blocking kubelets after node reboot, or admission webhooks rejecting workloads on new defaults. Recovery often means emergency consultants, weekend war rooms, and revenue loss while Deployments cannot roll forward. Managed providers absorb etcd and API-server choreography, but **you still pay** if worker groups lag and pods crash on deprecated APIs—managed is not immunity, it is narrower blast radius.
+
+Self-managed **control-plane HA** means three (or five) API servers, etcd on low-latency SSD, load balancers, and monitoring—roughly the **$10k+/year infrastructure** slice in the self-managed table. Managed bundles that HA into the per-cluster fee. At **ten clusters**, EKS control-plane fees alone are ~$8,760/year at standard pricing—still often cheaper than one engineer-week per cluster per upgrade.
+
+### Node pool levers: spot, sizing, and autoscaler bounds
+
+Worker spend dominates most bills. Cross-cloud levers:
+
+- **Spot / preemptible / Azure Spot** node pools cut compute 60–90% for fault-tolerant batch and stateless tiers; keep on-demand baselines for latency-sensitive services.
+- **Right-sized machine types**: GKE Autopilot bills on [pod resource requests](https://cloud.google.com/kubernetes-engine/pricing); over-requesting CPU/memory inflates Autopilot cost. EKS and AKS on EC2/VMSS reward rightsizing instance families (ARM Graviton, Azure Ddsv5) when workloads fit.
+- **Cluster autoscaler min/max**: A max set to "headroom for Black Friday" becomes **always-on** cost; min too low causes cold-start latency. Tune per pool—GPU pools need different bounds than web frontends.
+- **NAT and egress**: EKS and AKS in private subnets often need NAT gateways or managed egress appliances; GKE may use Cloud NAT. Cross-AZ traffic between nodes and multi-AZ control planes shows up as "**mystery**" data transfer—model it explicitly in TCO workshops.
+
+### When the managed bill spikes unexpectedly
+
+| Spike driver | EKS | GKE | AKS |
+|--------------|-----|-----|-----|
+| Control-plane tier | Extended support $0.60/hr; Provisioned CP XL+ | Extended channel +$0.50/hr; many regional clusters bypass free tier | Premium + LTS; Standard fee on large fleets |
+| Networking | NAT + cross-AZ ENI traffic to managed plane | Cloud NAT + multi-cluster egress | Azure LB outbound rules + inter-region replication |
+| Operations | Forgotten node groups on old AMIs during forced CP upgrade | Autopilot over-provisioned requests | Free tier in production until incident forces Standard |
+
+> **Stop and think**: Finance approves "move to managed to save money." Six months later spend rises 20%. Which three line items from the tables above would you audit first, and which provider-specific fee is the most likely surprise?
 
 ---
 
@@ -287,6 +405,20 @@ gantt
 ```
 
 Provider policies differ in how aggressively they pull you forward. **EKS** adds versions two to three months after upstream, warns before forced upgrades, and sells extended support for another twelve months at a premium. **GKE** ships versions quickly and auto-upgrades according to your release channel (Rapid, Regular, or Stable). **AKS** supports an N-2 window—the latest minor plus the two previous—and exposes preview builds earlier for testing.
+
+### Multi-cloud upgrade ownership (who clicks, who tests)
+
+The upgrade **mechanism** is easy on managed clusters; the **risk** is identical across clouds because application manifests break on deprecated APIs regardless of who patches etcd.
+
+| Phase | Self-managed | EKS | GKE | AKS |
+|-------|--------------|-----|-----|-----|
+| Pre-flight API audit | You run conformance/deprecated API checks | You (same kubectl checks) | You + channel preview clusters | You + AKS preview version |
+| Control plane bump | You orchestrate kubeadm/etcd | `aws eks update-cluster-version` | `gcloud container clusters upgrade --master` | `az aks upgrade` |
+| Worker bump | Drain/uncordon each node | Managed node group version API | Node pool upgrade or auto-upgrade window | Node image upgrade / surge |
+| Rollback story | etcd restore / backup | Cannot downgrade CP—plan forward | Forward-only on CP—test in staging | Forward-only—maintain parallel cluster |
+| Cost of delay | CVE exposure + compliance findings | Extended support surcharge accrues | Extended channel surcharge | Unsupported minor blocks support tickets |
+
+Platform teams should maintain a **single internal runbook** with provider-specific CLI appendices so engineers do not confuse "GKE did the control plane" with "our Helm charts are compatible." Budget one full sprint per year per production cluster family for integration testing—even when CLIs look trivial.
 
 ### Self-Managed Upgrade Reality
 
@@ -364,6 +496,18 @@ az aks upgrade \
 
 Simple CLIs do not imply safe upgrades. Managed control-plane bumps still break workloads that depend on removed APIs, beta features, or version-skewed kubelets, so you need the same integration testing discipline as self-managed—only the etcd and API-server choreography is outsourced.
 
+### Serverless Kubernetes modes: less node toil, new constraints
+
+Teams chasing "fully managed" often jump to **nodeless** execution models. Compare them before assuming they replace Standard clusters:
+
+| Mode | Provider | What disappears | What remains your problem | Cost shape |
+|------|----------|-----------------|---------------------------|------------|
+| **Fargate profiles** | EKS | EC2 node pools for matched namespaces | VPC CNI planning, Fargate surcharges, sidecar/hostPort limits | Per-vCPU/memory pod-second + cluster $0.10/hr |
+| **GKE Autopilot** | GCP | Node pool YAML for many workloads | Pod requests/limits accuracy, DaemonSet restrictions | Per-pod vCPU/GiB/ephemeral + $0.10/hr management |
+| **Virtual nodes (ACI)** | AKS | VMSS for burst capacity | ACI subnet integration, scale latency | ACI consumption + cluster management tier |
+
+Autopilot and Fargate excel when workloads are stateless, bursty, and free of host-level security agents. They frustrate teams that need GPU bare-metal tuning, custom kernel modules, or forensic DaemonSets—exactly the escape-hatch scenarios in Section 5. Many enterprises run **Standard clusters with managed node pools** for the majority estate and isolate Autopilot/Fargate to greenfield microservices after a checklist review.
+
 > **Pause and predict**: Your EKS control plane is automatically upgraded by AWS because the old version reached its end of support. However, you forgot to upgrade your worker node groups, leaving the kubelets three minor versions behind the new control plane. Based on Kubernetes version skew policies, what is the immediate impact on your currently running workloads, and what hidden danger lurks when a node eventually reboots?
 
 ---
@@ -386,9 +530,21 @@ Managed Kubernetes fits most enterprise footprints, yet legitimate technical req
 
 ### When to Stay Managed
 
-Before you exit managed services, pressure-test the rationale. **"It will be cheaper"** rarely survives the TCO tables above once labor and risk are included. **"We want more control"** needs a concrete control-plane requirement—managed node groups plus admission webhooks satisfy most requests. **"We do not trust the cloud provider"** does not shrink your blast radius when compute, storage, and networking already live on their platform. **"Our team wants to learn Kubernetes deeply"** belongs in lab clusters, not production customer paths.
+Before you exit managed services, pressure-test the rationale. **"It will be cheaper"** rarely survives the TCO tables above once labor and risk are included.
+
+Document the escape hatch in an architecture decision record with: measurable latency targets, compliance clause citations, and a headcount plan for etcd/API on-call. Without those three, "self-managed for control" usually means "self-managed because the decision meeting ended early." Hybrid fleets should tag each cluster with `management-model: managed|self` and `reason-code` in GitOps labels so cost allocation and upgrade policies do not drift silently over two years. **"We want more control"** needs a concrete control-plane requirement—managed node groups plus admission webhooks satisfy most requests. **"We do not trust the cloud provider"** does not shrink your blast radius when compute, storage, and networking already live on their platform. **"Our team wants to learn Kubernetes deeply"** belongs in lab clusters, not production customer paths.
 
 > **Stop and think**: A maritime logistics company wants to run Kubernetes on cargo ships to process telemetry data locally. The ships have intermittent, high-latency satellite internet. If they attempt to use EKS or GKE for these onboard clusters by connecting back to a cloud region, what fundamental distributed systems failure will occur every time a ship loses its satellite link?
+
+### Workload identity: the managed-cluster contract you still must design
+
+Even when the control plane is fully managed, **cloud IAM binding** is yours to get right. Long-lived cloud credentials inside Secrets are an anti-pattern on every hyperscaler; each cloud pushes federated identity:
+
+- **AWS**: [IAM Roles for Service Accounts (IRSA)](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) via OIDC, plus [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) for simpler application of roles at scale.
+- **GCP**: [Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) maps Kubernetes service accounts to Google service accounts.
+- **Azure**: [Microsoft Entra Workload ID](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) with federated credentials; legacy AAD Pod Identity is retired—migrate during any AKS modernization.
+
+These features do not reduce Kubernetes operational work—they reduce **credential rotation** incidents. Architecture reviews should treat identity wiring as part of the managed-vs-self-managed decision because self-managed clusters on the same clouds need the same patterns.
 
 ### The Hybrid Approach
 
@@ -415,6 +571,37 @@ flowchart TD
     Fleet --> Self
 ```
 
+### Compliance and audit framing (managed vs self-managed)
+
+Auditors ask who patches what and who can access cluster state. Managed offerings let you cite provider SOC/ISO reports for **control-plane physical and hypervisor controls**, while you still attest to RBAC, Namespaces, NetworkPolicies, and Secrets encryption at the application layer. Self-managed shifts more controls to your evidence packet: etcd encryption configuration, backup restore tests, and API server audit log retention.
+
+Multi-cloud programs should harmonize evidence: same OPA/Gatekeeper policy bundles on EKS, GKE, and AKS where possible; same admission standards for privileged Pods; same requirement that production clusters never use AKS Free tier or EKS extended-support versions without CFO approval. Harmonization reduces audit cost even when management models differ (managed hub cluster plus self-managed edge).
+
+---
+
+## Patterns & Anti-Patterns
+
+### Proven patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+|---------|-------------|--------------|--------------|
+| **Managed control plane + managed node pools** | Default production on EKS/GKE/AKS | Provider owns etcd/API HA; you automate node AMI/image cycles | Replicate per environment; use IaC (Terraform/OpenTofu) to avoid drift |
+| **Regional HA + private API** | Regulated or internet-facing prod | 99.9–99.95% API SLAs with reduced credential exposure | Add CI runners/VPN early—private APIs do not simplify CI by themselves |
+| **Release channels / planned upgrades** | GKE Stable, EKS version policy, AKS auto-upgrade channels | Battle-tested versions before they hit your fleet | Document exceptions for CRDs/webhooks before auto-upgrade windows |
+| **Fleet GitOps over homogeneous kubeadm** | 20+ clusters | One promotion pipeline; managed clusters reduce per-site etcd heroes | Cluster API or fleet tools still help for edge/self-managed islands |
+| **Workload identity instead of long-lived keys** | Any cloud-managed cluster | [EKS Pod Identity / IRSA](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html), [GKE Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity), [AKS workload identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) shrink secret sprawl | Standardize identity contracts even when clusters span clouds |
+
+### Anti-patterns
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+|--------------|-----------------|------------------------|-------------------|
+| **Sticker-price TCO** | "EKS is $73/mo" ignores NAT, labor, extended support | Finance asks for infra-only numbers | Model labor + risk + egress; revisit quarterly |
+| **Free-tier AKS in production** | No API SLA; best-effort repairs | Cost cap during POC becomes prod | Standard tier minimum; Premium when LTS required |
+| **Skipping node upgrades after CP upgrade** | Kubelet skew blocks scheduling on reboot | CP upgrade feels "done" at the API | Upgrade node pools in same change; follow [version skew policy](https://kubernetes.io/releases/version-skew-policy) |
+| **Autopilot + mandatory host agents** | DaemonSets denied or ineffective | Security mandates unreviewed against Autopilot constraints | GKE Standard with hardened node images, or refactor agents to sidecars |
+| **Self-managed "to learn" on customer paths** | CVE debt and key-person risk | Engineers want deep skills | Lab clusters on kind/k3s; production stays managed |
+| **150 clusters all on managed without automation** | Control-plane fees + toil per cluster | Fear of etcd | Dedicated platform team + Cluster API; managed only where SLA fits |
+
 ---
 
 ## Section 6: Decision Framework: Making the Right Choice
@@ -440,13 +627,46 @@ Assign each row a weight from one to five based on how critical that factor is t
 
 Sum the weighted columns; the higher total is your default architectural path until a hard requirement in the escape-hatch table overrides it.
 
-### Step 2: The Three Questions
+### Step 2: Decision matrix by workload and team profile
+
+Use this matrix after scoring when stakeholders argue from anecdotes instead of constraints:
+
+| Profile | Team size / K8s depth | Compliance | Workload shape | Recommended default | Control needs |
+|---------|----------------------|------------|----------------|-------------------|---------------|
+| **Startup shipping MVP** | <10 engineers, shallow K8s | SOC2 in progress | Stateless web + workers | GKE Autopilot or EKS + Fargate/ managed nodes | IRSA/WI for cloud APIs; no custom scheduler |
+| **Enterprise multi-region** | Platform team 5+, some K8s experts | HIPAA/PCI, private API | Mixed stateless + managed data stores | Regional GKE/EKS/AKS Standard, private endpoints | Standard tier AKS; avoid Free tier |
+| **Regulated long-lived versions** | SRE + change advisory board | LTS mandates | Batch + APIs on stable minors | AKS Premium + LTS or GKE Extended channel with budget | Document extended-support surcharges |
+| **Edge / factory / vessel** | Small ops, intermittent network | Data residency | Telemetry at edge | k3s/k0s self-managed or [EKS Hybrid Nodes](https://aws.amazon.com/eks/pricing/) | Managed cloud hub + offline workers |
+| **High-frequency trading / custom scheduler** | Deep K8s + performance SRE | Strict latency | Custom schedulers, sub-second failover | Self-managed or EKS Provisioned CP + tuned node pools | Only if escape-hatch table row is filled with evidence |
+
+```mermaid
+flowchart TD
+    A[Need Kubernetes for production?] --> B{Air-gapped or no hyperscaler?}
+    B -->|Yes| S[Self-managed / k3s / sovereign cloud]
+    B -->|No| C{Two engineers who can upgrade CP alone?}
+    C -->|No| M[Managed EKS/GKE/AKS Standard+]
+    C -->|Yes| D{Custom scheduler / etcd tuning / edge offline?}
+    D -->|Yes| S
+    D -->|No| E{More than 50 clusters?}
+    E -->|Yes| F[Fleet automation + mixed managed/self]
+    E -->|No| M
+```
+
+### Step 3: The Three Questions
 
 If the spreadsheet feels ambiguous, answer three staffing and requirements questions before you sign contracts or provision infrastructure:
 
 1. **"Can we reliably staff a true 24/7 on-call rotation exclusively for the control plane?"** If the answer is no, go managed. An etcd quorum loss does not care that it is a national holiday.
 2. **"Do we currently have at least two engineers who can perform a Kubernetes minor version upgrade completely unsupervised?"** If the answer is no, go managed. Key person dependency on core infrastructure is a catastrophic company-level risk.
 3. **"Is there a concrete, highly specific technical requirement that the managed platform cannot fulfill?"** If you cannot articulate it in one sentence, go managed. Vague desires for architectural purity do not justify grueling operational overhead.
+
+### Step 4: Provider selection when managed wins
+
+If managed is the answer but the cloud is not locked yet, bias as follows: choose **GKE** when you want the fastest release-channel ergonomics and Autopilot for request-based billing; choose **EKS** when the organization is AWS-native (IAM, VPC, Outposts) and needs Provisioned Control Plane headroom; choose **AKS** when Microsoft Entra, Azure Policy, and Windows node pools dominate the estate. All three run **Kubernetes 1.35** in current curriculum targets—validate SKU availability in your region before promising dates to application teams.
+
+### Procurement and architecture review checklist
+
+Before finalizing managed vs self-managed in a formal ADR, walk this checklist with security, finance, and platform leads: confirm private API exposure and CI/VPN paths; verify workload federation (IRSA/Pod Identity, GKE Workload Identity, Entra Workload ID) with no long-lived cloud keys in Secrets; document version policy and extended-support budget caps; choose node strategy (managed node groups, Autopilot, Fargate, ACI virtual nodes) against host-access requirements; prove Velero plus external database RPO/RTO without customer etcd snapshots; populate TCO labor and risk rows; and if self-managed wins, record the single technical escape-hatch requirement plus on-call roster in the ADR.
 
 ---
 
@@ -460,6 +680,10 @@ If the spreadsheet feels ambiguous, answer three staffing and requirements quest
 ---
 
 ## Common Mistakes
+
+Managed-vs-self-managed decisions fail in predictable ways because stakeholders optimize for the metric they can see (monthly cloud bill) instead of the metrics they fear (weekend outages, audit findings, engineer attrition). The table below captures cross-cloud mistakes seen on EKS, GKE, and AKS estates; use it as a review checklist before board presentations or architecture decision records.
+
+When you facilitate the review, ask teams to cite **provider documentation** for any numeric claim—extended-support surcharges, free-tier credits, and SLA percentages change; spreadsheets from last year may be wrong. Also verify that "we are managed" statements include node upgrade ownership: a cluster with a current API server and three-minor-behind kubelets is still carrying skew risk per the Kubernetes version skew policy.
 
 | Mistake | Why It Happens | How to Fix It |
 |---------|---------------|---------------|
@@ -475,6 +699,8 @@ If the spreadsheet feels ambiguous, answer three staffing and requirements quest
 ---
 
 ## Quiz
+
+The questions below mix scenario judgment with multi-cloud mechanics. Answers should reference **why** a provider behavior exists (SLA tiers, ENI injection, release channels), not just name a brand.
 
 <details>
 <summary>1. A startup has 3 engineers, no Kubernetes experience, and needs to ship a product in 6 weeks. Should they use managed or self-managed Kubernetes? Why?</summary>
@@ -527,6 +753,10 @@ You are the lead platform engineer at a company running legacy self-managed Kube
 ### Setup
 
 This exercise is analytical: you will read YAML, estimate costs, and draft migration steps from realistic configuration and financial assumptions rather than applying changes to a running control plane.
+
+Before touching numbers, write one paragraph comparing **EKS vs GKE vs AKS** for this fictional company assuming they are already AWS-heavy (RDS, IAM Identity Center) but open to multi-cloud. Note which managed offering minimizes migration friction (IAM, VPC peering patterns, existing Terraform modules) and which hidden costs (NAT, extended support, AKS tier) you would flag in a steering committee. That narrative becomes the "cloud choice" appendix in your executive summary even when the math points to EKS.
+
+When estimating TCO, separate **one-time migration** from **steady-state operations**. One-time costs include: parallel cluster stand-up, CI/CD kubeconfig changes, Velero installs, security re-certification, and training for engineers who only knew kubeadm. Steady-state costs include: per-cluster management fees, node pools, observability ingest, and on-call rotations (even managed clusters need platform on-call for nodes and workloads). A common executive mistake is approving migration budget but not increasing platform headcount—model 0.25–0.5 FTE platform engineer per 3–5 managed production clusters until automation matures.
 
 ### Task 1: Analyze the Current Cluster Manifest
 
@@ -632,6 +862,8 @@ Recommendation: Migrate to EKS. The one-time migration cost is recovered within 
 
 Draft a six-week migration timeline that provisions EKS in parallel, shifts stateless workloads first, treats databases as external managed services or Velero-restored volumes, and keeps the legacy cluster available for rollback until decommission. The template below is a starting point—extend it with CI/CD auth changes and explicit rollback triggers.
 
+Document provider-agnostic migration guardrails even if you choose EKS in Task 2: **never** lift-and-shift etcd into a managed cluster; **always** externalize databases to RDS/Cloud SQL/Azure Database or equivalent; **always** rehearse DNS/traffic rollback. If you sketch a GKE or AKS path instead, swap CLI names but keep the parallel-cluster pattern—managed migrations fail when teams big-bang cut DNS without a week of error-budget burn on the new plane. List which cloud-specific items change (IRSA vs Workload Identity vs Entra federated credentials, AWS Load Balancer Controller vs GKE Ingress vs AGIC) so security reviewers see identity and ingress rebuilt deliberately, not copied from kubeadm-era Secrets.
+
 ```
 MIGRATION TIMELINE (6 weeks)
 ═══════════════════════════════════════════════════════════════
@@ -726,6 +958,10 @@ Week 6: Decommission
 
 Condense Tasks 1–3 into a one-page brief for the CTO: current risk posture, Year 1 and steady-state cost comparison, recommended managed path, and a six-week timeline with explicit rollback language.
 
+The summary should explicitly state which **shared responsibility** items move to the provider (control plane, etcd backups) and which remain internal (node upgrades, workload CVEs, ingress, identity). Executives often believe "managed" eliminates infrastructure headcount entirely—clarify that you still need platform engineers, just fewer etcd experts. Include one sentence per hyperscaler alternative (GKE, AKS) explaining why the primary recommendation won (existing AWS spend, IAM maturity, or regional service availability) so the document reads as architecture, not vendor cheerleading.
+
+Add a **risk thermometer** (Low/Medium/High) for: version debt, OS EOL, etcd backup maturity, and staffing. Tie each High rating to a managed-service control that mitigates it (provider-patched API server, managed node AMIs, SLA-backed API). Close with approval gates: security sign-off on private API + workload identity design, finance sign-off on Year-2 steady state, and operations sign-off on rollback DNS steps.
+
 <details>
 <summary>Solution: Executive Summary</summary>
 
@@ -759,14 +995,20 @@ Migrate to Amazon EKS over a 6-week period using parallel clusters with gradual 
 
 ### Success Criteria
 
-- [x] Identified at least 5 catastrophic operational risks in the provided cluster manifest.
-- [x] Calculated realistic TCO for both options, proving managed is highly cost-effective here.
-- [x] Designed a migration timeline and defended the parallel cluster approach.
-- [x] Addressed the extreme danger of stateful workload migration properly.
-- [x] Secured a highly resilient rollback plan ensuring immediate failback capability.
-- [x] Drafted a decisive, numbers-driven executive summary optimized for leadership review.
+- [ ] Identified at least 5 catastrophic operational risks in the provided cluster manifest.
+- [ ] Calculated realistic TCO for both options, proving managed is highly cost-effective here.
+- [ ] Designed a migration timeline and defended the parallel cluster approach.
+- [ ] Addressed the extreme danger of stateful workload migration properly.
+- [ ] Secured a highly resilient rollback plan ensuring immediate failback capability.
+- [ ] Drafted a decisive, numbers-driven executive summary optimized for leadership review.
 
 ---
+
+## Key Takeaways
+
+Managed Kubernetes from EKS, GKE, or AKS trades control-plane toil for ongoing node, network, and workload responsibility—you still patch nodes, design ingress, and test upgrades. Self-managed clusters only win when escape-hatch requirements are documented and staffed, not when control-plane fees look expensive in isolation. Model TCO with labor, extended-support surcharges, NAT/egress, and outage risk; compare clouds with the same spreadsheet rows. Use private API endpoints and workload identity on every production tier that offers SLA-backed management (AKS Standard+, EKS/GKE regional). Tag clusters with their management model in GitOps so hybrid fleets do not drift.
+
+When you present recommendations to leadership, lead with **risk reduction** (CVE exposure, etcd quorum, staffing) and support the narrative with TCO—not the reverse. A CFO hears dollars; a CISO hears audit evidence; platform engineers hear on-call load. The same architecture decision should speak to all three with provider-specific footnotes instead of a single generic "go managed" slide.
 
 ## Next Module
 
@@ -774,7 +1016,15 @@ Migrate to Amazon EKS over a 6-week period using parallel clusters with gradual 
 
 ## Sources
 
-- [Kubernetes Version Skew Policy](https://kubernetes.io/releases/version-skew-policy) — Explains the supported version window and the control-plane-to-kubelet compatibility rules that drive upgrade planning.
-- [Amazon EKS VPC and Subnet Considerations](https://docs.aws.amazon.com/eks/latest/best-practices/subnets.html) — Shows how EKS control-plane networking works and why ENIs and VPC-native pod IPs matter for subnet design.
-- [GKE Release Channels](https://cloud.google.com/kubernetes-engine/docs/concepts/release-channels) — Clarifies how Rapid, Regular, Stable, and auto-upgrade behavior affect managed-cluster version lifecycle decisions.
-- [AKS Free, Standard, and Premium Pricing Tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) — Defines what Azure actually manages in each AKS tier and where SLA-backed production guidance begins.
+- [Kubernetes Version Skew Policy](https://kubernetes.io/releases/version-skew-policy) — Supported version window and kubelet/control-plane compatibility that drives upgrade sequencing.
+- [Kubernetes Patch Releases](https://kubernetes.io/releases/patch-releases/) — CVE and patch cadence context for planning node and control-plane upgrades.
+- [Amazon EKS Pricing](https://aws.amazon.com/eks/pricing/) — Standard ($0.10/hr) and extended ($0.60/hr) cluster fees, Provisioned Control Plane tiers, Hybrid Nodes.
+- [Amazon EKS Cluster Endpoint Access](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html) — Public vs private API server endpoints and VPC DNS requirements.
+- [Amazon EKS Managed Node Groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) — Node AMI lifecycle and update configuration for worker patching.
+- [Amazon EKS VPC and Subnet Considerations](https://docs.aws.amazon.com/eks/latest/best-practices/subnets.html) — ENI injection and subnet IP planning for EKS clusters.
+- [GKE Pricing and Free Tier](https://cloud.google.com/kubernetes-engine/pricing) — $0.10/hr management fee, $74.40 monthly credit, Autopilot billing, SLA percentages.
+- [GKE Release Channels](https://cloud.google.com/kubernetes-engine/docs/concepts/release-channels) — Rapid, Regular, Stable, Extended channel behavior for version lifecycle.
+- [GKE Private Clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/private-cluster-concept) — Private control-plane endpoints and connectivity patterns.
+- [AKS Free, Standard, and Premium Pricing Tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) — Tier capabilities, LTS on Premium, and when Free is inappropriate for production.
+- [AKS Uptime SLA](https://learn.microsoft.com/en-us/azure/aks/uptime-sla) — 99.9% vs 99.95% API availability commitments by availability-zone layout.
+- [AKS Private Clusters](https://learn.microsoft.com/en-us/azure/aks/private-clusters) — Private API server IP and VNet integration considerations.
