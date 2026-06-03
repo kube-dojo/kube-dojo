@@ -17,7 +17,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In August of 2019, a massive data breach hit a major financial institution, exposing the personal information of over 100 million customers. The root cause was not a sophisticated zero-day exploit or a nation-state hacking group. It was a misconfigured web application firewall that allowed a server-side request forgery (SSRF) attack. The SSRF allowed the attacker to query the AWS EC2 instance metadata service, retrieving the credentials of the IAM role attached to the instance. Because that IAM role was overly permissive and had read access to dozens of sensitive S3 buckets containing customer data, the attacker simply synced the buckets to their own environment. The financial impact exceeded hundreds of millions of dollars in fines, settlements, and reputational damage.
+**Hypothetical scenario:** A misconfigured web application firewall allows a server-side request forgery (SSRF) attack. The SSRF lets an attacker query the AWS EC2 instance metadata service and retrieve the credentials of an over-permissive IAM role attached to the instance. Because that role grants broad S3 read access, the attacker exfiltrates customer data from multiple sensitive buckets. The breach illustrates how identity misconfiguration—not exotic malware—can turn a single application flaw into large-scale data loss.
 
 This incident underscores a fundamental truth about cloud security: **identity is the new perimeter**. In a traditional on-premises data center, security often meant building a strong network perimeter with firewalls and intrusion detection systems. Once inside the network, lateral movement was relatively easy. In AWS, the network perimeter still matters, but it is secondary to the identity perimeter. In AWS, most authenticated control-plane requests and many service-to-service actions are evaluated through IAM policies and related authorization mechanisms.
 
@@ -213,9 +213,7 @@ ARNs (Amazon Resource Names) are how AWS uniquely identifies every resource. Und
 arn:partition:service:region:account-id:resource-type/resource-id
 ```
 
-For an analysis of how identity failures cascade in distributed systems, see [Failure Modes and Effects](../../platform/foundations/reliability-engineering/module-2.2-failure-modes-and-effects/).
-<!-- incident-xref: aws-s3-2017-us-east-1 -->
-<!-- incident-xref: aws-s3-useast1-2017 -->
+For an analysis of how identity failures cascade in distributed systems, see [Failure Modes and Effects](../../../platform/foundations/reliability-engineering/module-2.2-failure-modes-and-effects/).
 
 ```text
 Examples:
@@ -424,7 +422,7 @@ As organizations scale, managing individual IAM users across dozens of AWS accou
 
 ### AWS IAM Identity Center (Formerly AWS SSO)
 
-IAM Identity Center is the modern successor to standard IAM users. Instead of creating users directly in AWS, you connect AWS to an external Identity Provider (IdP) like Okta, Azure AD, or Google Workspace. Users log into a portal using their standard corporate credentials, then select AWS accounts and roles that map to their authorization. [The portal then presents them with the AWS accounts and roles they are authorized to access. When they click a role, the Identity Center uses SAML federation to seamlessly call `sts:AssumeRoleWithSAML`, dropping the user directly into the AWS console (or providing short-lived CLI credentials) without ever creating a permanent AWS IAM user.](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html) This pattern removes long-lived human credentials from the infrastructure surface area while still allowing fine-grained role-based assignments.
+IAM Identity Center is the modern successor to standard IAM users. Instead of creating users directly in AWS, you connect AWS to an external Identity Provider (IdP) like Okta, Azure AD, or Google Workspace. Users log into a portal using their standard corporate credentials, then select AWS accounts and roles that map to their authorization. [The portal presents the AWS accounts and roles they are authorized to access. Console sign-in uses SAML federation (`sts:AssumeRoleWithSAML`) to drop the user into the AWS Management Console without creating a permanent IAM user.](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html) For the AWS CLI, credentials come through the IAM Identity Center SSO-OIDC flow (`aws sso login` → `GetRoleCredentials`), not `AssumeRoleWithSAML`. This pattern removes long-lived human credentials from the infrastructure surface area while still allowing fine-grained role-based assignments.
 
 Why this matters for Kubernetes engineers: if you are running EKS, Identity Center integrates with `aws eks get-token` to provide short-lived credentials for `kubectl` access. No more shared kubeconfigs with embedded long-term tokens, and no more manual key distribution during role transitions.
 
@@ -461,8 +459,10 @@ Each cluster gets its own OIDC provider principal, so a role reused across ten c
 | **Setup owner** | Platform team creates OIDC provider + annotates ServiceAccount | Platform team creates EKS association + installs Pod Identity Agent |
 | **Multi-cluster reuse** | Separate OIDC principal per cluster in trust policy | Same role trust policy across clusters (associations per cluster) |
 | **Credential path** | Pod SDK → STS directly | Pod SDK → node-local agent → STS |
-| **Cross-account target role** | Native via trust policy | Same-account role only; cross-account via role chaining |
+| **Cross-account target role** | Native via trust policy | Target role ARN in the association (same or cross-account) |
 | **Fargate / Windows pods** | Supported where IRSA is supported | Not supported (Linux EC2 nodes only) |
+
+Since June 2025, cross-account access is configurable directly in the EKS Pod Identity association by specifying a target role ARN—you no longer need role chaining as the only path for cross-account Pod credentials.
 
 When should you pick which? For **new clusters on supported EKS versions** with Linux EC2 nodes, Pod Identity reduces operational overhead. The win is largest in multi-cluster fleets where duplicating OIDC trust statements is painful. For **Fargate workloads, Windows nodes, existing IRSA investments, or cross-account roles accessed directly from Pods**, IRSA remains the correct or only choice. Migration from IRSA to Pod Identity is a deliberate project. You replace OIDC trust conditions with EKS associations, redeploy the agent, and validate credential propagation latency. Associations are eventually consistent, so allow time before cutting over production traffic.
 
@@ -1188,7 +1188,7 @@ Ready to build the network foundation where your identities will operate? Head t
 - [docs.aws.amazon.com: id roles.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) — The IAM roles guide directly states that roles lack long-term credentials and issue temporary credentials when assumed.
 - [docs.aws.amazon.com: elb service linked roles.html](https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/elb-service-linked-roles.html) — The ELB service-linked-role guide covers the exact role name, automatic creation behavior, and IAM editing limits.
 - [docs.aws.amazon.com: id roles update role trust policy.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_update-role-trust-policy.html) — AWS's trust-policy documentation directly defines trust policy as the mechanism that controls who can assume a role.
-- [docs.aws.amazon.com: API AssumeRole.html](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) — The `AssumeRole` API reference documents the returned temporary credentials and the 1-12 hour maximum session-duration setting.
+- [docs.aws.amazon.com: API AssumeRole.html](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) — The `AssumeRole` API reference documents temporary credentials, the 1–12 hour session-duration limit, session-policy intersection semantics, and the 2,048-character session-policy limit.
 - [docs.aws.amazon.com: access policies managed versioning.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-versioning.html) — AWS's managed-policy versioning documentation explicitly states the five-version limit and rollback behavior.
 - [docs.aws.amazon.com: reference policies elements version.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_version.html) — The IAM `Version` element reference directly compares `2012-10-17` and `2008-10-17` and notes policy-variable support.
 - [docs.aws.amazon.com: reference policies examples s3 rw bucket.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html) — The S3 IAM policy example shows `s3:ListBucket` on the bucket ARN and object actions on the `bucket/*` ARN.
@@ -1204,7 +1204,6 @@ Ready to build the network foundation where your identities will operate? Head t
 - [docs.aws.amazon.com: confused deputy.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html) — AWS's confused-deputy guidance directly explains the role of `ExternalId` in third-party cross-account access.
 - [docs.aws.amazon.com: pod-identities.html](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) — EKS Pod Identity documentation covers the `pods.eks.amazonaws.com` trust principal, agent-based credential delivery, and comparison with IRSA.
 - [docs.aws.amazon.com: iam-roles-for-service-accounts.html](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — IRSA documentation describes OIDC federation, projected service account tokens, and IMDS isolation requirements.
-- [docs.aws.amazon.com: API AssumeRole.html](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) — The AssumeRole API reference documents session policy intersection semantics and the 2,048-character limit.
 - [docs.aws.amazon.com: id credentials temp control-access assumerole.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_assumerole.html) — AWS explains session policies as further-restrict-only filters at role assumption time.
 - [docs.aws.amazon.com: reference policies elements notaction.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notaction.html) — NotAction element reference warns that Allow + NotAction can over-provision unintentionally.
 - [docs.aws.amazon.com: reference policies elements notresource.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notresource.html) — NotResource element reference explicitly warns against Allow + Action * + NotResource combinations.
