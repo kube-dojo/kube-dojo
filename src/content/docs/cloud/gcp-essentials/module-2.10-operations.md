@@ -27,6 +27,23 @@ In this module, you will learn how Cloud Logging's architecture works (the log r
 
 ---
 
+## The Cloud Operations Suite at a Glance
+
+Google Cloud Observability bundles the services you use to answer three questions in production: **Is the system healthy?** **Why did it fail?** **Where is time being spent?** The suite is not a monolith you install once—it is a set of managed APIs and consoles that managed GCP services feed automatically, while Compute Engine and custom workloads connect through the [Ops Agent](https://cloud.google.com/monitoring/agent/ops-agent) or OpenTelemetry exporters.
+
+| Service | Primary question | Typical data source |
+| :--- | :--- | :--- |
+| **Cloud Monitoring** | Are metrics within SLO? | Platform metrics, custom metrics, log-based metrics, uptime checks |
+| **Cloud Logging** | What happened, in detail? | Platform logs, stdout/stderr, audit logs, Ops Agent file logs |
+| **Cloud Trace** | Which hop added latency? | HTTP spans from managed runtimes, OpenTelemetry instrumentation |
+| **Cloud Profiler** | Which function consumed CPU/heap? | Continuous sampling in Go, Java, Node.js, Python |
+| **Error Reporting** | What new exceptions appeared? | Stack traces in logs or the Error Reporting API |
+| **Managed Service for Prometheus (GMP)** | Can we keep PromQL and lose the Prometheus server? | Prometheus exporters, GKE managed collection, OTLP |
+
+Managed services such as Cloud Run, GKE, Cloud Functions, and Cloud SQL emit platform logs and metrics without extra agents. That integration is why teams often discover observability gaps only after they deploy custom code on Compute Engine: without the Ops Agent or equivalent instrumentation, you get infrastructure metrics but miss application logs, Prometheus scrapes, and trace context propagation. The sections below walk through each layer with enough depth to design a production observability stack—not merely enable default dashboards.
+
+---
+
 ## Cloud Logging Architecture
 
 ### The Log Router
@@ -82,6 +99,30 @@ flowchart LR
 | **System Event** | Yes (always on) | Free | 400 days | Live migration, auto-scaling |
 | **Platform Logs** | Yes | Paid | 30 days (default) | Cloud Run requests, GKE events |
 | **Application Logs** | Yes (stdout/stderr) | Paid | 30 days (default) | Your application output |
+
+### Log Buckets, Views, and Log Analytics
+
+Ingestion charges apply when log entries are **stored in a log bucket**, not when they merely pass through the Log Router. The `_Default` bucket in each project receives most platform and application logs; the `_Required` bucket stores Admin Activity and System Event logs that Google manages with fixed retention and **no storage charge** for the bucket itself. You can create **user-defined log buckets** with custom retention (for example 90 days for security review) and **log views** that restrict which entries analysts in a given role may read—useful when a central security team owns long-retention buckets but application teams need read-only access to their service logs.
+
+[Log Analytics](https://cloud.google.com/logging/docs/analyze/query-link) lets you run SQL against linked log buckets through BigQuery's engine without exporting every line to a dataset first. That matters for ad hoc investigations ("show me distinct `error_type` values last Tuesday") where Log Explorer's line-by-line UI becomes tedious. Queries issued through Log Explorer and Log Analytics are not separately billed by Cloud Logging; you pay for the underlying log storage that makes the data available. When compliance requires multi-year retention, the usual pattern is a **sink to Cloud Storage** or BigQuery with lifecycle rules, not an infinitely growing `_Default` bucket—object storage and BigQuery long-term tiers are typically cheaper than retaining high-volume DEBUG traffic in Logging past 30 days.
+
+```bash
+# Create a user-defined log bucket with 90-day retention
+gcloud logging buckets create security-audit \
+  --location=global \
+  --retention-days=90 \
+  --description="Extended retention for security review"
+
+# List buckets and their retention
+gcloud logging buckets list --location=global \
+  --format="table(name, retentionDays, lifecycleState)"
+
+# Link a bucket to Log Analytics (enables SQL queries in console)
+gcloud logging links create security-analytics-link \
+  --location=global \
+  --bucket=security-audit \
+  --description="Analytics link for security bucket"
+```
 
 ### Querying Logs
 
@@ -144,6 +185,10 @@ labels."compute.googleapis.com/resource_name"="my-vm"
 
 Sinks route copies of log entries to destinations outside the default Cloud Logging storage, which is essential for long-term retention, security analytics, and compliance archives that outlive the default 30-day platform retention. Each sink has its own filter and a **writer identity** service account that must be granted permission on the destination bucket, dataset, or topic—creating the sink is only half the job. Sinks operate independently of exclusions: a log can be excluded from expensive default ingestion while still being copied to BigQuery or Cloud Storage for audit teams.
 
+Think of sinks as **parallel export pipes** evaluated by the Log Router for every matching entry. A common enterprise pattern uses three sinks: (1) all Admin Activity and Data Access audit logs to a BigQuery dataset for SIEM queries; (2) `severity>=ERROR` platform logs to a Cloud Storage archive bucket with 7-year lifecycle; (3) a Pub/Sub topic streaming critical security events to a real-time processor. Each sink filter should be as narrow as compliance allows—exporting `severity>=INFO` from a busy GKE cluster to BigQuery can dwarf the cost of the cluster itself because BigQuery storage and analysis charges apply downstream.
+
+When granting the sink writer identity, use least privilege: `roles/storage.objectCreator` on a prefix, `roles/bigquery.dataEditor` on a dataset, or `roles/pubsub.publisher` on a topic. Terraform and Deployment Manager templates should output the writer email (`serviceAccount:...`) so security teams can audit bindings. If logs stop appearing at the destination, the first check is almost always IAM on the destination—not the sink filter—because the router silently drops failed writes after retries.
+
 ```bash
 # Create a sink to Cloud Storage (long-term archival)
 gcloud logging sinks create archive-all-logs \
@@ -205,6 +250,26 @@ gcloud logging exclusions list
 
 Writing structured (JSON) logs instead of plain text enables powerful querying and log-based metrics because Cloud Logging maps well-formed JSON objects into `jsonPayload` fields you can filter with the same precision as built-in `httpRequest` attributes. When you emit `latency_ms`, `user_id`, or `error_type` as top-level JSON keys, you can build distribution metrics and dashboards without fragile regex on `textPayload`, and you can alert on thresholds that reflect application semantics rather than substring matches. Plain `print()` output still lands in logs, but it forfeits that structured field model—so production services on Cloud Run should treat JSON logging as the default, not an optimization.
 
+Cloud Logging recognizes several **severity** conventions automatically. For JSON logs, include a `severity` field with values such as `INFO`, `WARNING`, `ERROR`, and `CRITICAL` so Log Explorer color-codes entries and severity filters behave predictably. The special field `message` (or `msg`) populates the summary line in the console. For HTTP services behind Cloud Run or load balancers, Cloud Logging also captures **`httpRequest`** metadata—method, URL, status, latency—when the platform generates request logs; your application JSON should complement, not duplicate, those fields unless you need business context the platform cannot infer.
+
+Design a **stable schema** per service: document required keys in your team's runbook (`service`, `trace_id`, `latency_ms`, `status_code`, `error_type`) and avoid renaming fields between releases without updating log-based metrics. Breaking renames silently starve dashboards because filters stop matching overnight. For correlation with Trace, log the trace ID from the incoming `X-Cloud-Trace-Context` header so Log Explorer queries can jump to the waterfall view for the same request.
+
+```text
+# Recommended jsonPayload shape for API services
+{
+  "severity": "ERROR",
+  "message": "Payment authorization failed",
+  "service": "checkout-api",
+  "trace_id": "projects/my-proj/traces/abc123",
+  "latency_ms": 842,
+  "status_code": 502,
+  "error_type": "GatewayTimeout",
+  "order_id": "ord-9981"
+}
+```
+
+When logs must never contain secrets, enforce redaction in the formatter—mask PAN fragments, tokens, and password fields before serialization. Structured logging makes redaction easier because you target known keys instead of regex over free-form strings.
+
 ### Python Structured Logging for Cloud Run
 
 ```python
@@ -262,6 +327,12 @@ Use these filters in Log Explorer during incidents, then promote the same expres
 
 Log-based metrics are the bridge between logging and monitoring: they evaluate filters as entries flow through the log router and expose matching traffic as Cloud Monitoring time series you can chart, combine with infrastructure metrics, and attach to alerting policies. **Counter** metrics increment when a filter matches (ideal for error counts and auth failures), while **distribution** metrics sample numeric fields such as latency so you can compute percentiles instead of only knowing that "something slow happened." The commands in the next two subsections show both patterns for Cloud Run workloads.
 
+Because evaluation happens **at ingestion time**, log-based metrics are not retroactive: creating a metric today does not backfill yesterday's errors. Plan metrics before launch for SLO-critical signals (5xx counts, payment failures, auth denials). Each log-based metric becomes a **chargeable custom metric** in Cloud Monitoring—budget for cardinality. User-defined log-based metrics share the custom-metric byte allotment (150 MiB free per billing account per month on the standard pricing page); high-volume broad filters can consume that allotment quickly.
+
+Label extractors add dimensions—for example grouping error counts by `resource.labels.service_name` or a `jsonPayload.error_type` field—so one metric serves many services on a dashboard. Too many unique label combinations, however, explode time-series cardinality and cost the same way high-cardinality Prometheus labels do. Prefer a small set of business-meaningful labels (`error_type`, `region`) over per-user dimensions unless you truly page on individual users.
+
+When a platform metric already exists (`run.googleapis.com/request_count` with `response_code_class`), use it instead of duplicating a log-based counter—the platform metric is non-chargeable and maintained by Google. Reach for log-based metrics when the signal lives only in application JSON (`jsonPayload.event="inventory_shortfall"`) or when you need a distribution from a field Cloud Run does not expose as a native histogram.
+
 ### Counter Metrics
 
 ```bash
@@ -300,6 +371,8 @@ gcloud logging metrics create api_latency \
 ---
 
 ## Cloud Monitoring: Dashboards and Metrics
+
+Cloud Monitoring is the time-series layer where platform metrics, custom metrics, log-based metrics, uptime check results, and SLO burn rates converge. Dashboards are your incident "single pane"—but only if they chart **symptoms** (request latency percentiles, error rates, saturation) alongside **causes** you investigate after paging (CPU, memory, instance count). A dashboard that shows only infrastructure graphs reproduces the November 2022 blind spot from the opener: healthy CPU while customers fail checkout.
 
 ### Built-in Metrics
 
@@ -396,6 +469,25 @@ gcloud monitoring dashboards create --config-from-file=/tmp/dashboard.json
 gcloud monitoring dashboards list --format="table(displayName, name)"
 ```
 
+Treat dashboard JSON as infrastructure: store definitions in Git, review changes in PRs, and name dashboards after services or user journeys (`checkout-api prod`, `data pipeline batch`) rather than engineer names. During incidents, pin the top three charts—request rate by response class, p99 latency, and your primary log-based error metric—so new responders do not hunt for widgets.
+
+### Notification Channels and On-Call Routing
+
+Before alert policies fire into the void, wire **notification channels**—email, Slack, PagerDuty, SMS, webhooks—to the teams that can act. Channels are reusable objects; policies reference them by ID. Separate **page-worthy** channels from **informational** ones so backup-job CPU warnings land in Slack while SLO burn-rate violations wake an on-call rotation. Include runbook URLs in policy documentation fields; Cloud Monitoring surfaces that text in notifications and reduces mean time to remediate when the recipient is not the engineer who authored the alert six months ago.
+
+```bash
+# Create a PagerDuty channel (token stored as channel label — use Secret Manager in prod pipelines)
+gcloud monitoring channels create \
+  --display-name="Checkout On-Call PagerDuty" \
+  --type=pagerduty \
+  --channel-labels="service_key=YOUR_INTEGRATION_KEY"
+
+# Verify channel before attaching to critical policies
+gcloud monitoring channels describe CHANNEL_ID --format=json
+```
+
+Review channels when on-call rotations change—stale Slack webhooks are a common reason "the alert definitely fired but nobody saw it" during postmortems.
+
 ### PromQL in Cloud Monitoring
 
 Cloud Monitoring natively supports PromQL for teams that already think in Prometheus rate/histogram queries, which lowers migration friction when you adopt GCP but keep Grafana-style mental models. Metric names are translated to the `*_googleapis_com:*` form, and you can express error rates as ratios of labeled request counters or pull latency quantiles from histogram buckets. PromQL is optional—MQL and console builders work too—but it is valuable when your runbooks already reference PromQL snippets from open-source stacks.
@@ -420,6 +512,18 @@ compute_googleapis_com:instance_cpu_utilization{instance_name=~"web-.*"} > 0.8
 ---
 
 ## Alerting Policies
+
+Alerting policies in Cloud Monitoring evaluate conditions on a schedule and open incidents when thresholds breach for a configured duration. Understanding **condition types** prevents mismatched alerts: a metric threshold on `run.googleapis.com/request_count` with `response_code_class="5xx"` measures error volume, while a PromQL ratio divides 5xx rate by total rate for a true error **percentage**. **SLO burn-rate conditions** (covered earlier) use `select_slo_burn_rate` and tie pages to error budgets. **Uptime check conditions** consume the `monitoring.googleapis.com/uptime_check/check_passed` metric. **Log-based metric conditions** behave like any custom metric once the log-based metric exists.
+
+| Condition style | Best for | Caution |
+| :--- | :--- | :--- |
+| **Metric threshold** | Single metric vs static threshold (CPU, queue depth) | Noisy if metric is a cause not a symptom |
+| **Metric absent** | Expected heartbeat metrics that stop arriving | False positives during deploys unless suppressed |
+| **PromQL / MQL ratio** | Error rate %, saturation ratios | Query cost counts toward alerting policy billing |
+| **SLO burn rate** | Customer-facing reliability | Requires upfront SLO definition |
+| **Uptime check failure** | External availability | Regional flaps—require multi-region failure |
+
+Policies also incur ongoing cost when they reference chargeable metrics: Google bills for **metric references active** in alerting policies and for **points returned** when conditions evaluate complex queries—another reason to delete orphaned policies during quarterly hygiene reviews.
 
 ### Creating Alert Policies
 
@@ -509,6 +613,10 @@ gcloud monitoring policies update POLICY_ID \
 
 Uptime checks monitor the availability of your public endpoints from Google's global probe network, which catches failures that internal metrics miss—expired TLS certificates, DNS misconfigurations, VPC egress rules blocking external clients, or regional routing issues that still leave instances "healthy" behind a load balancer. Probes run HTTP/HTTPS (or TCP) checks on a schedule you define, record per-region pass/fail time series, and integrate with alerting policies so pages fire when multiple regions agree a user-visible path is down.
 
+Google operates checkers in multiple geographic regions; configuring alerts to require failures from **two or more regions** reduces false positives when a single probe path has transient packet loss. Uptime checks bill per execution according to the [Observability pricing page](https://cloud.google.com/products/observability/pricing)—consolidate checks on user-journey URLs (`/health` on the public API gateway) rather than creating one check per internal microservice that customers never call directly. For private services, uptime checks cannot reach RFC 1918 addresses; use **private synthetic monitoring** patterns (Cloud Run job with VPC egress, or third-party probes inside your network) instead of expecting public checkers to hit internal load balancers.
+
+Authenticated endpoints require custom headers or OAuth tokens in advanced configurations; keep health endpoints unauthenticated but non-sensitive so probes stay simple. Pair uptime alerts with log-based error metrics: external "down" with flat error logs often implicates DNS or TLS, while uptime failure plus rising 5xx logs implicates application regression.
+
 ```bash
 # Create an HTTP uptime check
 gcloud monitoring uptime create my-api-uptime \
@@ -566,11 +674,28 @@ While logs and metrics tell you *that* a service is slow or experiencing high lo
 
 ### Cloud Trace
 
-Cloud Trace is a distributed tracing system that collects latency data from your applications and displays it in the GCP Console. When a request enters your system, Trace assigns it a unique trace ID; as the request crosses a load balancer, Cloud Run revision, Cloud SQL query, and external HTTP dependency, each hop emits a **span** with start time, duration, and parent/child relationships. That waterfall view answers *where* wall-clock time went, which is invaluable when p99 latency spikes but CPU stays flat because the service is waiting on I/O. Managed runtimes often capture baseline HTTP spans automatically, and you add OpenTelemetry instrumentation when you need custom spans around business logic or database calls.
+[Cloud Trace](https://cloud.google.com/trace/docs) is a distributed tracing system that collects latency data from your applications and displays it in the GCP Console. When a request enters your system, Trace assigns it a unique trace ID; as the request crosses a load balancer, Cloud Run revision, Cloud SQL query, and external HTTP dependency, each hop emits a **span** with start time, duration, and parent/child relationships. That waterfall view answers *where* wall-clock time went, which is invaluable when p99 latency spikes but CPU stays flat because the service is waiting on I/O. Managed runtimes often capture baseline HTTP spans automatically, and you add OpenTelemetry instrumentation when you need custom spans around business logic or database calls.
+
+Trace sampling is worth configuring deliberately: at very high QPS, storing every span can become expensive and noisy, while sampling too aggressively hides rare tail-latency paths. Cloud Run and GKE can propagate the `X-Cloud-Trace-Context` header so downstream services join the same trace without custom glue code. When you instrument manually, ensure outbound HTTP clients forward that header (or W3C `traceparent`) so a slow payment gateway appears as a child span instead of an unexplained gap.
+
+```bash
+# List recent traces for a Cloud Run service (REST via gcloud)
+gcloud trace list-traces \
+  --filter='rootSpanName:"GET /checkout"' \
+  --limit=5 \
+  --format="table(traceId, startTime, latency)"
+
+# In application code (Python + OpenTelemetry), a custom span around DB work:
+#   with tracer.start_as_current_span("fetch_inventory"):
+#       rows = db.execute("SELECT ...")
+# Cloud Trace picks up OTLP exports when the Ops Agent or collector is configured.
+```
 
 ### Cloud Profiler
 
-Cloud Profiler provides continuous CPU and heap profiling for applications running on GCP with statistical sampling overhead typically under 1%, producing flame graphs that highlight hot functions rather than single slow requests. Reach for Profiler when you have evidence of high CPU or memory churn in a specific binary and need to know which methods dominate—after Trace has already ruled out external waits. Agents exist for Go, Java, Node.js, and Python; you import the library and start the profiler at process boot so production profiles accumulate without manual capture sessions.
+[Cloud Profiler](https://cloud.google.com/profiler/docs) provides continuous CPU and heap profiling for applications running on GCP with statistical sampling overhead typically under 1%, producing flame graphs that highlight hot functions rather than single slow requests. Reach for Profiler when you have evidence of high CPU or memory churn in a specific binary and need to know which methods dominate—after Trace has already ruled out external waits. Agents exist for Go, Java, Node.js, and Python; you import the library and start the profiler at process boot so production profiles accumulate without manual capture sessions.
+
+Profiler complements Trace rather than replacing it: Trace shows that 8 seconds elapsed between "authorize payment" and "commit order," while Profiler shows that 70% of CPU time inside the payment service is spent in JSON serialization after you ruled out network waits. For Cloud Run, enable Profiler in the container image and ensure the service account has `roles/cloudprofiler.agent` (or the broader Monitoring agent role bundles that include it). Profiles appear in the console within minutes of traffic; compare profiles before and after a deploy to spot regressions in hot paths.
 
 > **Stop and think**: If users report that clicking "Checkout" takes 10 seconds, but your system CPU utilization is hovering at a very healthy 20%, which tool should you reach for first to diagnose the issue: Cloud Trace or Cloud Profiler? Why?
 
@@ -585,6 +710,219 @@ In a real-world GCP organization, resources are rarely confined to a single proj
 A **Metrics Scope** allows you to view and manage monitoring data from multiple GCP projects through a single pane of glass. You designate one **scoping project**—often a shared observability or platform project—and attach **monitored projects** whose metrics become visible in that scope. Dashboards in the scoping project can chart resources from any attached project side by side, which is how platform teams compare error rates across microservices without console project hopping. Alert policies defined in the scoping project can evaluate conditions globally (for example, any Cloud SQL instance above a CPU threshold), and IAM on the scoping project alone can grant SREs read access to organizational health without handing them Owner on every application project.
 
 > **Pause and predict**: If you have 10 separate production microservice projects, should you manage alert policies in each project separately, or centrally within a single metrics scoping project?
+
+---
+
+## Ops Agent: Unified Collection on Compute Engine
+
+Cloud Run and GKE collect stdout and platform metrics automatically, but **Compute Engine VMs** need an agent unless your application pushes telemetry directly to Cloud Logging and Cloud Monitoring APIs. The [Ops Agent](https://cloud.google.com/monitoring/agent/ops-agent) is the preferred replacement for the legacy separate Logging and Monitoring agents: one package, one YAML configuration file, Fluent Bit for high-throughput logs, and the OpenTelemetry Collector for metrics and traces.
+
+By default the Ops Agent collects `/var/log/syslog` (or `/var/log/messages`) and host metrics such as CPU, memory, and disk without custom configuration. Production setups extend receivers to scrape **Prometheus endpoints** on localhost, tail application log files under `/var/log/myapp/`, and accept **OTLP** metrics and traces from in-process OpenTelemetry SDKs. Configuration merges user overrides from `/etc/google-cloud-ops-agent/config.yaml` with a built-in baseline at agent restart— you never edit the built-in file directly.
+
+```bash
+# Install Ops Agent on a Debian/Ubuntu VM (run on the instance)
+curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+sudo bash add-google-cloud-ops-agent-repo.sh --also-install
+
+# Verify agent status
+sudo systemctl status google-cloud-ops-agent
+
+# Example override: scrape a local Prometheus metrics endpoint
+sudo tee /etc/google-cloud-ops-agent/config.yaml << 'EOF'
+metrics:
+  receivers:
+    prometheus:
+      type: prometheus
+      config:
+        scrape_configs:
+          - job_name: 'my-app'
+            scrape_interval: 60s
+            static_configs:
+              - targets: ['localhost:9090']
+  service:
+    pipelines:
+      prometheus_pipeline:
+        receivers: [prometheus]
+EOF
+
+sudo systemctl restart google-cloud-ops-agent
+```
+
+Grant the VM's service account `roles/logging.logWriter` and `roles/monitoring.metricWriter` (or a custom role bundle your platform team publishes). Without those bindings, the agent buffers locally and you lose data silently during incidents—the classic "we thought logs were flowing" failure mode. For Windows VMs, paths and service names differ, but the receivers/processors/pipelines model is the same.
+
+---
+
+## Managed Service for Prometheus (GMP)
+
+Teams running Kubernetes often standardize on **Prometheus** for application metrics—histograms, RED metrics, custom business counters—but operating Prometheus at scale (retention, HA, remote write, cardinality explosions) consumes platform engineering time. [Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/managed-prometheus) is a fully managed, Prometheus-compatible backend built on the same Monarch datastore as Cloud Monitoring. You keep PromQL dashboards and alert rules; Google operates ingestion, retention (up to 24 months for Prometheus metrics), and global query fan-out.
+
+GMP supports **managed collection** on GKE (horizontal pod autoscaling collectors), self-deployed collectors, and OpenTelemetry pipelines on Cloud Run. Because GMP and native Cloud Monitoring metrics share a backend, you can chart `run.googleapis.com/request_count` beside `prometheus.googleapis.com/.../http_requests_total` in one dashboard and query both with PromQL in the console or Grafana. **Metering differs**: most Cloud Monitoring custom metrics bill by **bytes ingested** (scalar points count as 8 bytes each), while GMP bills by **samples ingested**—aligning with upstream Prometheus cost models and making high-cardinality label sets easier to attribute per namespace.
+
+```bash
+# Enable GMP API (if not already enabled with Monitoring)
+gcloud services enable monitoring.googleapis.com
+
+# List Prometheus targets in a GKE cluster with managed collection (console is often easier)
+# Metrics appear under prometheus.googleapis.com/* metric types in Metrics Explorer
+
+# Example PromQL mixing GMP and Cloud Run platform metrics:
+#   rate(run_googleapis_com:request_count{service_name="checkout"}[5m])
+#     /
+#   rate(prometheus.googleapis.com/.../http_requests_total{job="checkout"}[5m])
+```
+
+Use GMP when your organization already invested in Prometheus exporters and PromQL runbooks. Stay on native Cloud Monitoring custom metrics when you publish low-cardinality gauges from batch jobs via the Monitoring API and do not need PromQL portability. Many enterprises run both: platform metrics from GCP services, application RED metrics through GMP.
+
+---
+
+## Error Reporting
+
+[Error Reporting](https://cloud.google.com/error-reporting/docs) aggregates exceptions so responders see **grouped error events** instead of scrolling duplicate stack traces in Log Explorer. It is automatically enabled for supported runtimes: uncaught exceptions written to `stderr` on Cloud Run, Cloud Functions, GKE, and App Engine are parsed when log entries contain recognizable stack traces or formatted `ReportedErrorEvent` payloads. The Error Groups page highlights new and frequent failures; you can wire notification channels when a fresh group appears.
+
+Error Reporting itself has no separate per-event charge, but log entries that carry stack traces still incur **Cloud Logging ingestion** if they land in a chargeable bucket. The service samples up to 1,000 errors per hour for display; beyond that, counts are estimated so the UI remains responsive during storms. For explicit reporting from code, use language client libraries or the `events:report` REST method—those paths also generate structured log entries under `projects/PROJECT_ID/logs/clouderrorreporting.googleapis.com%2Freported_errors`.
+
+```python
+# Python: client library reports an handled exception with context
+from google.cloud import error_reporting
+
+client = error_reporting.Client()
+try:
+    process_payment(order_id)
+except PaymentError as exc:
+    client.report_exception(user=user_id, http_context={"url": "/checkout"})
+    raise
+```
+
+Pair Error Reporting with log-based metrics on `severity>=ERROR` for paging, and with Trace for the request that triggered the exception. Error Reporting answers "what new bugs shipped?"; log-based metrics answer "how fast is the error rate rising?"
+
+---
+
+## SLO Monitoring and Burn-Rate Alerts
+
+Infrastructure metrics and log counts are necessary but not sufficient for user-facing reliability. **Service-level objectives (SLOs)** translate "good enough" into measurable targets—99.9% of checkout requests succeed within 500 ms over a 30-day window, for example. Cloud Monitoring's [SLO monitoring](https://cloud.google.com/stackdriver/docs/solutions/slo-monitoring) lets you define a **service**, choose a **service-level indicator (SLI)** from platform metrics (Cloud Run request latency, load balancer availability, custom metrics), set a **performance goal**, and track **error budget** consumption over a compliance period.
+
+An **error budget** is the allowed unreliability before you violate the SLO. If the objective is 99.9% availability in 30 days, the budget is roughly 43 minutes of bad events. **Burn rate** measures how fast you consume that budget relative to sustainable pace; a burn rate of 10 means you will exhaust the month's budget in three days if nothing changes. Google recommends **two alerting policies per critical SLO**: a **fast-burn** policy with a short lookback for sudden spikes, and a **slow-burn** policy with a longer lookback for gradual degradation—the same pattern described in the Google SRE Workbook.
+
+Console-created SLO alerts use the `select_slo_burn_rate(SLO_NAME, LOOKBACK_PERIOD)` time-series selector. You set a burn-rate threshold and lookback duration; when consumption exceeds the threshold long enough, the policy fires. This is strictly more actionable than alerting on raw CPU because it ties pages to customer impact and pre-agreed budgets.
+
+```bash
+# SLOs are commonly created in console or Terraform; API sketch for burn-rate alert condition:
+# filter: select_slo_burn_rate("projects/PROJECT_ID/services/SERVICE_ID/serviceLevelObjectives/SLO_ID", "3600s")
+# comparison: COMPARISON_GT
+# thresholdValue: 14.4   # example fast-burn multiplier — tune per SLO policy
+
+# List services with SLOs in a project (Monitoring API)
+gcloud monitoring services list --format="table(displayName, name)"
+```
+
+When error budget is nearly exhausted, the disciplined response is to freeze risky releases and focus on reliability work—not to raise the SLO target quietly. Dashboards in the microservice SLO view show remaining budget percentage, SLI current value, and firing alert ratio per service.
+
+---
+
+## Cost Lens: Observability Spend at Moderate Scale
+
+Observability bills surprise teams when volume scales faster than attention. At moderate scale—a few Cloud Run services, a GKE cluster, several Compute Engine VMs, and audit logging enabled on sensitive buckets—the dominant costs are usually **log ingestion**, **custom metric cardinality**, and **retention**, not the console UI itself.
+
+| Cost driver | What spikes spend | Knobs that reduce spend |
+| :--- | :--- | :--- |
+| **Log ingestion** | DEBUG in staging copied to prod projects, Data Access audit logs on hot buckets, VPC Flow Logs at full sampling | Exclusion filters on `_Default`; scope audit configs; sample flow logs; structured INFO default |
+| **Log retention** | Keeping everything 90+ days in Logging buckets | Sink to Cloud Storage/BigQuery with lifecycle; shorten bucket retention for non-audit logs |
+| **Log-based metrics** | Broad filters matching millions of entries | Tight filters; prefer platform metrics when available—they are non-chargeable |
+| **Custom metrics (bytes)** | High-cardinality labels (`user_id`, `request_id`) on Monitoring API writes | Aggregate dimensions; use distributions sparingly |
+| **GMP samples** | Unbounded label cardinality from auto-instrumentation | Drop labels in relabel configs; use managed collectors' defaults on GKE |
+| **Uptime checks / alerting** | One check per microservice × many regions; alert conditions evaluating huge metric sets | Consolidate checks on user-facing URLs; delete orphaned policies |
+
+Per [Google Cloud Observability pricing](https://cloud.google.com/products/observability/pricing) (verify current rates in your billing console before budgeting):
+
+- **Logging storage** in `_Default` and user-defined buckets: **$0.50/GiB** ingested after the first **50 GiB free per project per month** (includes 30 days storage in the bucket).
+- **Vended network logs** (VPC Flow, firewall, NAT): **$0.25/GiB** with **no** free tier—enabling flow logs on every subnet is a common bill shock.
+- **Retention beyond 30 days** in log buckets: **$0.01/GiB/month** for stored volume.
+- **Chargeable custom metrics** (including log-based metrics): billed by bytes after **150 MiB free per billing account per month**; distribution points cost more than scalars.
+- **GMP**: billed by **samples ingested** (Prometheus-style metering), not the same byte model as generic custom metrics.
+
+Hypothetical scenario: A platform team enables Data Access audit logs project-wide and turns on VPC Flow Logs for "visibility." Ingestion jumps from 60 GiB/month to 800 GiB/month. At roughly $0.50/GiB on application logs and $0.25/GiB on vended logs, monthly Logging spend moves from single digits to hundreds of dollars before any application growth. The fix is scoped audit policies, flow-log sampling, and exclusion filters—not disabling observability entirely.
+
+Cloud Logging does **not** charge for routing copies via sinks to Pub/Sub, Cloud Storage, or BigQuery; downstream services bill separately. That makes **sink + exclude** patterns cost-effective: drop noise from `_Default` ingestion while archiving compliance streams cheaply in object storage.
+
+---
+
+## Patterns & Anti-Patterns
+
+Production observability on GCP succeeds when teams treat logs, metrics, and traces as **product infrastructure** with owners, budgets, and review cadences—not as default toggles left on after a tutorial.
+
+| Pattern | When to use it | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **Structured JSON logging from day one** | Any Cloud Run, GKE, or Functions service | Enables field filters, distribution metrics, and Log Analytics without regex fragility | Standardize field names (`severity`, `trace_id`, `latency_ms`) across services |
+| **Symptom-based alerting (SLO + log-based error rates)** | User-facing APIs and batch SLAs | Pages correlate with customer pain and error budgets | Pair fast- and slow-burn SLO policies per critical path |
+| **Log router exclusions + selective sinks** | High-volume staging or health-check noise | Cuts `_Default` ingestion while compliance logs still reach BigQuery/Storage | Review exclusions quarterly—services change |
+| **Metrics scope hub project** | 5+ production projects | Central dashboards and IAM for SRE without Owner on every app project | Hub project becomes critical—back Terraform state and access reviews |
+| **Ops Agent Prometheus receiver on VMs** | Legacy apps exposing `/metrics` | One agent for logs + scraped metrics; feeds GMP or Monitoring | Cap scrape frequency and label cardinality |
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Alert on CPU alone** | Pages during backups; misses I/O latency | CPU graphs are easy in console | Alert on latency, error rate, SLO burn, or log-based 5xx counters |
+| **Plain `print()` logging in production** | Cannot build precise metrics or Log Analytics SQL | Fastest local debug habit | JSON to stdout with stable field names |
+| **Project-wide Data Access audit logs** | Massive ingestion on busy Storage buckets | Compliance checkbox without scoping | Audit specific resources; sink to cheap long-term storage |
+| **Log-based metric with overly broad filter** | Expensive metric + alert noise | "Match anything with 'error' in text" | Narrow filters on `jsonPayload` fields and `severity` |
+| **Self-hosted Prometheus on GKE without capacity planning** | Cardinality explosions, missed SLAs on the monitoring stack | Fear of managed pricing | GMP with managed collectors; keep runbooks in PromQL |
+| **No uptime checks on public URLs** | Internal metrics green while users cannot connect | Assume load balancer health equals app health | HTTP checks on `/health` from multiple regions |
+| **Ignoring trace context propagation** | Disjoint spans; mystery gaps in Trace | New service added without header forwarding | Propagate `X-Cloud-Trace-Context` or W3C traceparent |
+| **Retention in `_Default` for years** | Retention surcharges and query slowdown | Simplest button in console | Sink to Storage; keep `_Default` at 30 days |
+
+---
+
+## Decision Framework
+
+Use this framework when choosing among log-based metrics, Monitoring API custom metrics, alerting condition types, and GMP versus native Monitoring ingestion.
+
+```mermaid
+flowchart TD
+    Start[Need a new observability signal] --> Source{Where does the data live?}
+    Source -->|Already in logs| LogMetric{Need percentiles or just counts?}
+    LogMetric -->|Counts / rates| LBC[Log-based counter metric]
+    LogMetric -->|Percentiles / histogram| LBD[Log-based distribution metric]
+    Source -->|Not in logs yet| Push{Prometheus / OTLP already?}
+    Push -->|Yes, PromQL runbooks| GMP[Managed Service for Prometheus]
+    Push -->|No, simple gauge from app| CM[Cloud Monitoring custom metric API]
+    LBC --> Alert{Page humans?}
+    LBD --> Alert
+    CM --> Alert
+    GMP --> Alert
+    Alert -->|User impact / SLO| SLO[SLO burn-rate alert]
+    Alert -->|Threshold on metric| Cond{Condition type?}
+    Cond -->|Single metric threshold| TH[Metric threshold condition]
+    Cond -->|Ratio e.g. 5xx rate| MQL[PromQL or MQL ratio]
+    Cond -->|External reachability| UP[Uptime check + alert]
+    SLO --> Notify[Notification channel + runbook link]
+    TH --> Notify
+    MQL --> Notify
+    UP --> Notify
+```
+
+| Decision | Prefer | Tradeoff |
+| :--- | :--- | :--- |
+| **Log-based counter vs distribution** | Counter for "how many errors"; distribution when magnitude matters (latency ms) | Distributions cost more as chargeable custom metrics; require numeric fields in structured logs |
+| **Log-based vs Monitoring API custom metric** | Log-based when event already logged; API when emitting real-time gauge without log line | Log-based metrics are not retroactive; API metrics need client library or agent |
+| **GMP vs native custom metrics** | GMP for K8s/Prometheus ecosystems; native API for low-cardinality app gauges | Different metering (samples vs bytes); PromQL parity has minor differences from upstream |
+| **Metric threshold vs SLO burn alert** | SLO for customer-facing reliability targets; raw threshold for capacity signals | SLO setup requires service definition and SLI choice upfront |
+| **Uptime check vs internal health metric** | Uptime for user-visible URL; internal metric for dependency depth | Uptime checks bill per execution; catch DNS/TLS issues external probes see |
+| **Exclude vs sink-only routing** | Exclude to drop `_Default` cost; sink when destination must retain copy | Exclusions do not block sinks—design both intentionally |
+
+Revisit decisions after the first month of production traffic: log volume dashboards in the Logs Storage page, GMP ingestion by namespace (if enabled), and alert policy incident counts reveal whether your filters are too loose or too tight.
+
+---
+
+## Building an Observability Baseline for a New Service
+
+When a team launches a new Cloud Run service or GKE deployment, observability should ship in the same PR as the Dockerfile—not as a follow-up ticket. A practical **baseline checklist** covers emission, aggregation, external proof, and cost guardrails without boiling the ocean on day one.
+
+First, **emit structured logs** to stdout with severity, request identifiers, and latency fields your log-based metrics will need later. Second, confirm **platform metrics** appear in Metrics Explorer (`run.googleapis.com/request_count`, `request_latencies`) before writing custom instrumentation—many alerts need only platform data. Third, create at least one **log-based counter** for application-specific failures your platform metrics cannot see (for example `jsonPayload.error_type="RateLimitExceeded"`). Fourth, add an **uptime check** on the public health URL if the service has external consumers. Fifth, define an **SLO** if the service is on the critical path— even a simple availability SLI on HTTP 5xx rate beats debating whether 3% errors is "bad enough" during an outage.
+
+For Compute Engine workloads, install the **Ops Agent** in the golden image, verify IAM roles on the VM service account, and test that logs appear in Log Explorer before autoscaling the fleet. For Kubernetes, decide early whether application metrics flow through **GMP managed collection** or a self-managed Prometheus sidecar; switching later is doable but rewrites dashboards and alert rules.
+
+Hypothetical scenario: A team ships a new internal admin API with DEBUG logging enabled "temporarily" and no exclusion filter. Staging and production share a project; ingestion adds 200 GiB/month at $0.50/GiB after the free tier—roughly $75/month in logging alone for a low-traffic admin tool. The baseline fix is INFO default, DEBUG only via feature flag in non-prod, and an exclusion for known-noisy health probes—not removing logging entirely.
+
+Document the baseline in the service README: dashboard link, primary alert policy names, SLO target, and which log fields are stable contracts for downstream metrics. The next engineer onboarding during a 2 AM incident will thank you.
 
 ---
 
@@ -945,5 +1283,15 @@ Next up: **[Module 2.11: Cloud Build & CI/CD](../module-2.11-cloud-build/)** ---
 
 - [Route Log Entries](https://cloud.google.com/logging/docs/routing/overview) — Best primary reference for the Log Router, sinks, exclusions, and routing behavior.
 - [Log-Based Metrics Overview](https://cloud.google.com/logging/docs/logs-based-metrics) — Explains counter and distribution metrics, alerting integration, and non-retroactive behavior.
+- [Log Analytics](https://cloud.google.com/logging/docs/analyze/query-link) — SQL analysis over linked log buckets without full BigQuery export.
+- [Google Cloud Observability Pricing](https://cloud.google.com/products/observability/pricing) — Logging ingestion ($/GiB), retention, custom metrics, GMP samples, uptime checks.
+- [Ops Agent Overview](https://cloud.google.com/monitoring/agent/ops-agent) — Unified logging, metrics, Prometheus scrape, and OTLP on Compute Engine.
+- [Managed Service for Prometheus](https://cloud.google.com/managed-prometheus) — PromQL-compatible managed backend, GKE collection, sample-based metering.
+- [PromQL for Cloud Monitoring](https://cloud.google.com/stackdriver/docs/managed-prometheus/promql) — Querying platform, custom, and GMP metrics with PromQL.
+- [Error Reporting Overview](https://cloud.google.com/error-reporting/docs/grouping-errors) — Error grouping, sampling limits, and log-based detection.
+- [SLO Monitoring](https://cloud.google.com/stackdriver/docs/solutions/slo-monitoring) — Services, SLIs, error budgets, and microservice dashboards.
+- [Alerting on Burn Rate](https://cloud.google.com/stackdriver/docs/solutions/slo-monitoring/alerting-on-budget-burn-rate) — Fast-burn and slow-burn SLO alert patterns.
+- [Cloud Trace Documentation](https://cloud.google.com/trace/docs) — Distributed tracing, span model, and instrumentation.
+- [Cloud Profiler Documentation](https://cloud.google.com/profiler/docs) — Continuous CPU and heap profiling.
 - [Metrics Scopes Overview](https://cloud.google.com/monitoring/settings) — Covers scoping projects, multi-project monitoring, and centralized dashboards and alerts.
 - [Create Public Uptime Checks](https://cloud.google.com/monitoring/uptime-checks) — Authoritative guide for checker locations, regional behavior, and uptime-check configuration.
