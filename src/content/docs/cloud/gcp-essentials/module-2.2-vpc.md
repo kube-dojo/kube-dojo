@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In March 2021, a logistics company running on GCP experienced a cascading outage that took down their entire order-tracking system for 14 hours. The root cause was a firewall rule misconfiguration during a routine deployment. An engineer had added a new firewall rule using network tags to allow traffic from their monitoring system to a set of backend VMs. The tag name had a typo---`monitoring-target` instead of `monitor-target`---and because GCP firewall rules are deny-by-default, the monitoring traffic was silently dropped. No alerts fired because the monitoring system itself was what stopped working. Meanwhile, a second engineer had created an overly broad "debug" firewall rule allowing all ingress from `0.0.0.0/0` on port 8080 to any VM with the tag `debug`, not realizing that 34 production VMs still carried that tag from a previous troubleshooting session. Within hours, automated scanners found the exposed endpoints and began probing for vulnerabilities. The incident cost the company over $800,000 in lost revenue and required a full security audit.
+**Hypothetical scenario:** During a routine deployment, an engineer adds a firewall rule using network tags to allow traffic from a monitoring system to backend VMs. The tag name has a typo, and because GCP firewall rules are deny-by-default, monitoring traffic is silently dropped. No alerts fire because the monitoring system itself is what stopped working. Meanwhile, a lingering broad "debug" firewall rule allows all ingress from `0.0.0.0/0` on port 8080 to any VM still carrying a stale `debug` tag from an earlier troubleshooting session—exposing endpoints that production traffic was never meant to reach.
 
 This story illustrates two truths about GCP networking. First, **GCP's VPC model is global by default**, which is both its greatest strength and its most dangerous trap. A single misconfigured firewall rule can affect VMs across every region. Second, **network tags are fragile**---they are arbitrary strings with no validation, and a typo creates a silent failure. Understanding VPC architecture, firewall rule design, and the difference between tag-based and service-account-based firewalling is not optional knowledge---it is the foundation that every other GCP service builds on.
 
@@ -89,7 +89,7 @@ gcloud compute networks subnets create prod-us-central1 \
   --network=prod-vpc \
   --region=us-central1 \
   --range=10.10.0.0/20 \
-  --secondary-ranges=pods=10.20.0.0/16,services=10.30.0.0/20 \
+  --secondary-range=pods=10.20.0.0/16,services=10.30.0.0/20 \
   --enable-private-ip-google-access
 
 gcloud compute networks subnets create prod-europe-west1 \
@@ -107,7 +107,7 @@ gcloud compute networks subnets create prod-europe-west1 \
 | **Production use** | Not recommended | Always use this |
 | **Default VPC** | Auto mode (created automatically) | Must be explicitly created |
 
-**War Story**: The auto-mode VPC creates a subnet with a `/20` range in every GCP region (currently over 40 regions). That consumes a massive amount of IP space from the `10.128.0.0/9` range, and these subnets often conflict with on-premises networks. Every GCP Well-Architected Review starts with "delete the default VPC and create a custom one."
+**War Story**: The auto-mode VPC creates a subnet with a `/20` range in every GCP region (currently over 40 regions). That consumes a massive amount of IP space from the `10.128.0.0/9` range, and these subnets often conflict with on-premises networks. Many Well-Architected reviews recommend replacing the default auto-mode VPC with a custom one when you outgrow tutorials.
 
 ```bash
 # Delete the default auto-mode VPC (do this in every new project)
@@ -130,7 +130,11 @@ gcloud compute networks subnets describe prod-us-central1 \
   --format="get(privateIpGoogleAccess)"
 ```
 
-Private Google Access works by installing a special route that directs traffic destined for Google API IP ranges (`199.36.153.4/30` and `199.36.153.8/30`, known as the `private.googleapis.com` and `restricted.googleapis.com` VIP ranges) to remain on Google's internal network rather than following the default internet route. When enabled on a subnet, any VM in that subnet that sends a packet to a Google API domain (like `storage.googleapis.com`) will have that traffic routed through the internal backbone, bypassing the public internet entirely. This is important to understand because Private Google Access does not require Cloud NAT, does not consume NAT gateway capacity, and does not generate internet egress charges for API traffic. However, it only works for Google APIs and services — it does not provide general internet access for package repositories, third-party APIs, or any non-Google endpoint. For those, you still need Cloud NAT. The two features complement each other: enable Private Google Access for Google services, and layer Cloud NAT on top for everything else.
+Basic **Private Google Access** (`--enable-private-ip-google-access`) lets VMs without external IPs reach default `*.googleapis.com` endpoints over Google's internal backbone—it does not require Cloud NAT and does not bill general internet egress for that API traffic. It does **not** automatically install a route to the restricted-access VIP ranges below; those require explicit DNS configuration (for example Private DNS zones pointing at `private.googleapis.com` or `restricted.googleapis.com`).
+
+The **`private.googleapis.com`** VIP range is `199.36.153.8/30` (broader Google API access over private paths). The **`restricted.googleapis.com`** VIP range is `199.36.153.4/30` (VPC Service Controls–compatible restricted endpoints). Use restricted VIPs when your organization enforces VPC-SC perimeters; use private VIPs when you need broader API coverage without traversing the public internet.
+
+When enabled on a subnet, a VM resolving `storage.googleapis.com` (or another supported API hostname) sends traffic through the internal backbone rather than the default internet route. Private Google Access only covers Google APIs and services—it does not provide general internet access for package repositories, third-party APIs, or any non-Google endpoint. For those, you still need Cloud NAT. The two features complement each other: enable Private Google Access for Google services, and layer Cloud NAT on top for everything else.
 
 ---
 
@@ -140,16 +144,16 @@ Every GCP VPC has a route table that determines how packets flow between subnets
 
 ### Route Types and Priority
 
-GCP routes have a strict priority ordering that you must internalize because it directly affects troubleshooting. When a VM sends a packet, the virtual network interface evaluates all applicable routes and selects the one with the lowest priority value (where lower numbers win). The route categories, from highest to lowest priority, are:
+GCP evaluates routes in two steps: **longest-prefix match** (most-specific destination CIDR wins), then **priority value** (lower numbers win when multiple routes match the same prefix). Subnet routes for a subnet's own CIDR cannot be overridden by a custom static route—you cannot blackhole traffic to your own address space. When destination and priority tie, **static routes beat dynamic (BGP) routes**; otherwise the lower priority number wins regardless of route type.
 
-| Priority Range | Route Type | Who Creates It | Example |
+| Route Type | Who Creates It | Typical Priority | Example |
 | :--- | :--- | :--- | :--- |
-| **Always wins** | Subnet routes | GCP (automatic) | Route to every subnet CIDR in the VPC |
-| **Custom static** | User-defined static routes | You | Route `10.200.0.0/16` to a VPN tunnel |
-| **Dynamic (BGP)** | Cloud Router-learned routes | Cloud Router | Routes from on-premises via BGP |
-| **System-generated** | Default internet route, Private Google Access | GCP (automatic) | `0.0.0.0/0` → default internet gateway |
+| **Subnet routes** | GCP (automatic) | 0 (implicit) | Route to every subnet CIDR in the VPC |
+| **Custom static routes** | You | 1–65535 (you choose) | Route `10.200.0.0/16` to a VPN tunnel at priority 500 |
+| **Dynamic (BGP) routes** | Cloud Router | From BGP (often 100+) | Routes from on-premises via BGP |
+| **System-generated default** | GCP (automatic) | 1000 | `0.0.0.0/0` → default internet gateway |
 
-Subnet routes are immutable and always take precedence because they represent the VPC's own address space. You cannot override a subnet route with a custom static route — if you try to create a static route to `10.10.0.0/20` when that CIDR is already assigned to an existing subnet, GCP rejects it. This is a safety mechanism that prevents you from accidentally blackholing traffic to your own subnets. Custom static routes come next and are useful for directing specific CIDR blocks to VPN tunnels, interconnect attachments, or third-party virtual appliances. Dynamic routes learned via BGP from Cloud Router come after static routes, giving you the ability to override BGP-advertised routes with manually defined ones. Finally, the system-generated default route (`0.0.0.0/0` with next-hop `default-internet-gateway`) handles all traffic that does not match any more specific route.
+Subnet routes appear in `gcloud compute routes list` with `nextHopNetwork` set to the VPC—they are not hidden from the CLI. Custom static routes let you direct specific CIDR blocks to VPN tunnels, interconnect attachments, or third-party virtual appliances. Dynamic routes learned via BGP integrate with Cloud Router; override them with static routes only when you need a deliberate, equal-or-better match. The system default internet route uses destination `0.0.0.0/0` at **priority 1000**—a normal numeric value, not "lowest priority" in the sense of losing to every custom route.
 
 ```bash
 # View all routes in a VPC (system, custom, and dynamic)
@@ -175,7 +179,7 @@ gcloud compute routes create route-via-nva \
   --tags=via-firewall
 ```
 
-> **Did You Know?** Subnet routes have an effective priority of 0 — but you never see priority 0 in `gcloud compute routes list`. The subnet routes are managed internally by the VPC control plane and are not user-visible as discrete route entries. They are, however, always evaluated first.
+> **Did You Know?** Subnet routes use implicit priority 0 for their own CIDRs. You **do** see them in `gcloud compute routes list` with `nextHopNetwork` pointing at the VPC network—they are managed by the control plane but are visible for troubleshooting.
 
 ### Tags and Route Applicability
 
@@ -650,12 +654,13 @@ gcloud compute networks subnets update prod-us-central1 \
   --region=us-central1 \
   --enable-flow-logs
 
-# Enable with custom aggregation and sampling
+# Enable with custom sampling, aggregation interval, and metadata
 gcloud compute networks subnets update prod-us-central1 \
   --region=us-central1 \
   --enable-flow-logs \
-  --flow-sampling=0.5 \
-  --flow-aggregation=SRC_DEST_PORT_PROTO
+  --logging-flow-sampling=0.5 \
+  --logging-aggregation-interval=INTERVAL_5_SEC \
+  --logging-metadata=include-all
 
 # Query flow logs to find top talkers by bytes
 gcloud logging read \
@@ -665,16 +670,17 @@ gcloud logging read \
   --freshness=1h
 ```
 
-### Flow Log Aggregation Options
+### Flow Log Tuning Options
 
-| Aggregation Level | What's Grouped | When to Use |
+GCP flow logs always record the full 5-tuple (source/destination IP and port, protocol). The platform aggregates packets from the same connection over a **time interval**—you do not choose alternate 5-tuple aggregation modes. Tune cost versus freshness with sampling and interval instead.
+
+| Setting | Values | Tradeoff |
 | :--- | :--- | :--- |
-| `SRC_DEST_PORT_PROTO` | All 5-tuple fields | Detailed debugging, security forensics |
-| `SRC_DEST` | Source + destination IP only | Bandwidth analysis, inter-service traffic mapping |
-| `DEST_PORT_PROTO` | Destination port + protocol | Identifying which services receive the most traffic |
-| `SRC_DEST_VM` | Source + destination VM | Per-VM traffic baselines, anomaly detection |
+| **`--logging-aggregation-interval`** | `INTERVAL_5_SEC`, `INTERVAL_30_SEC`, `INTERVAL_1_MIN`, `INTERVAL_5_MIN`, `INTERVAL_10_MIN`, `INTERVAL_15_MIN` | Shorter intervals produce more log entries and fresher visibility; longer intervals reduce volume |
+| **`--logging-flow-sampling`** | `0.0`–`1.0` (for example `0.5` = 50%) | Lower sampling cuts cost but may miss short-lived flows |
+| **`--logging-metadata`** | `include-all`, `exclude-all`, `custom` | Controls whether VM names, geo, and other metadata fields are exported |
 
-The aggregation level is a cost-versus-granularity tradeoff. `SRC_DEST_PORT_PROTO` generates the most log entries because every unique flow creates a separate record — useful for pinpointing which specific connection caused a problem, but expensive in log volume at scale. `SRC_DEST` aggregates all ports between two IPs into a single record, which is sufficient for understanding bandwidth patterns between services without the per-port noise. For most operational monitoring use cases, `SRC_DEST` at a 50% sampling rate provides enough fidelity to detect anomalies without overwhelming your logging budget.
+For operational monitoring, `INTERVAL_5_MIN` or `INTERVAL_1_MIN` at 50% sampling often balances anomaly detection with logging budget. Use `INTERVAL_5_SEC` only when debugging a live incident where per-connection timing matters.
 
 ---
 
@@ -683,6 +689,8 @@ The aggregation level is a cost-versus-granularity tradeoff. `SRC_DEST_PORT_PROT
 GCP's load balancing family is unique among cloud providers because it spans both Layer 4 and Layer 7 and is natively global. Unlike AWS, where an Application Load Balancer is regional and requires Route 53 or Global Accelerator for cross-region failover, GCP's external HTTP(S) load balancer is global by default — a single anycast IP address receives traffic at the nearest Google edge point-of-presence and routes it to the closest healthy backend region.
 
 ### Load Balancer Family Overview
+
+> **Naming note:** Google Cloud documentation now groups products as **Application Load Balancer** (HTTP/HTTPS), **Network Load Balancer** (TCP/UDP), **Proxy Network Load Balancer**, and **Classic** variants. The table below uses the long-standing CLI resource names you will still see in `gcloud` commands.
 
 | Load Balancer | Layer | Scope | Use Case |
 | :--- | :--- | :--- | :--- |
@@ -1221,11 +1229,10 @@ Next up: **[Module 2.3: Compute Engine](../module-2.3-compute/)** --- Learn mach
 
 ## Sources
 
-- [VPC networks](https://docs.cloud.google.com/vpc/docs/vpc) — Primary reference for global VPC behavior, subnet scope, and auto versus custom mode.
+- [VPC networks](https://docs.cloud.google.com/vpc/docs/vpc) — Primary reference for global VPC behavior, subnet scope, secondary ranges, and auto versus custom mode.
 - [VPC firewall rules](https://docs.cloud.google.com/firewall/docs/firewalls) — Covers firewall rule scope, implied rules, priorities, tags, and service-account filtering.
 - [Cloud NAT overview](https://docs.cloud.google.com/nat/docs/overview) — Explains Cloud NAT architecture, outbound-only behavior, availability model, and scaling properties.
 - [Shared VPC](https://docs.cloud.google.com/vpc/docs/shared-vpc) — Best primary doc for host-project and service-project roles, subnet delegation, and centralized networking.
-- [VPC network overview](https://cloud.google.com/vpc/docs/vpc) — Canonical VPC overview including subnet creation, secondary ranges, and VPC network maximums.
 - [VPC routes](https://cloud.google.com/vpc/docs/routes) — System-generated, custom static, and dynamic routes, route priority ordering, and next-hop configuration.
 - [Private Service Connect](https://cloud.google.com/vpc/docs/private-service-connect) — PSC architecture, service attachments, endpoint configuration, and producer-consumer model.
 - [VPC Flow Logs](https://cloud.google.com/vpc/docs/flow-logs) — Flow log record format, sampling, aggregation intervals, and log query examples.
