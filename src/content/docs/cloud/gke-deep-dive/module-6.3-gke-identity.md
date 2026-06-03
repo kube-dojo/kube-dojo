@@ -4,11 +4,11 @@ slug: cloud/gke-deep-dive/module-6.3-gke-identity
 sidebar:
   order: 4
 ---
-**Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: Module 6.1 (GKE Architecture)
+> **Complexity**: [MEDIUM] | **Time to Complete**: 2.5h | **Prerequisites**: [Module 6.1 (GKE Architecture)](../module-6.1-gke-architecture/)
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+When you finish this module, you should be able to explain and implement the following capabilities in a GKE cluster running Kubernetes 1.35:
 
 - **Configure GKE Workload Identity to map Kubernetes service accounts to GCP IAM service accounts**
 - **Implement Binary Authorization to enforce container image provenance and deploy-time attestation policies**
@@ -19,17 +19,19 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In January 2024, a logistics company discovered that every pod in their GKE cluster had read/write access to every Cloud Storage bucket and every Pub/Sub topic in their project. A junior developer had deployed a debug pod that scraped all Pub/Sub messages from the production order queue and wrote them to a personal GCS bucket for "testing." The data included customer addresses, phone numbers, and delivery instructions for 2.1 million orders. The root cause was depressingly common: when the cluster was created, the default node service account was granted the `Editor` role on the project, and every pod on the cluster inherited that identity. No one had configured Workload Identity. The remediation cost $890,000 in legal fees, notification costs, and a GDPR fine. The fix---configuring Workload Identity and scoping IAM permissions per pod---took two days.
+**Hypothetical scenario:** A platform team discovers that every pod in a production GKE cluster can list Cloud Storage buckets and publish to Pub/Sub topics across the project, even though only two microservices legitimately need those APIs. A debug Deployment in the `default` namespace inherits the same credentials as the payment service because both pods run on nodes that share one broad node service account. The blast radius is not a single buggy container—it is every workload scheduled on those nodes until identity is scoped per application.
 
-This incident illustrates the most dangerous default in GKE: without Workload Identity, every pod on a node shares the same GCP identity. A compromised pod, a rogue container, or even a developer with kubectl access can impersonate the node's service account and access any GCP resource that account can reach. Workload Identity solves this by binding individual Kubernetes ServiceAccounts to individual GCP service accounts, giving each workload only the permissions it needs.
+This pattern illustrates the most dangerous default in GKE: without Workload Identity Federation for GKE, pods that call the metadata server at `169.254.169.254` receive OAuth tokens for the **node's** Compute Engine service account, not an identity unique to the workload. A compromised pod, a misconfigured sidecar, or excessive RBAC on Secrets can therefore amplify into project-wide data access. Workload Identity Federation replaces that shared node identity with federated credentials tied to a Kubernetes ServiceAccount (KSA), either by granting IAM roles directly to the KSA principal or by impersonating a dedicated Google Cloud service account (GSA) with least-privilege roles.
 
-In this module, you will learn how Workload Identity Federation for GKE works, how to configure Binary Authorization to ensure only trusted container images run in your cluster, how Shielded and Confidential Nodes protect the node itself, and how to integrate Secret Manager with GKE. By the end, you will set up a pod that securely accesses Pub/Sub using Workload Identity and enforce a Binary Authorization policy that blocks unsigned images.
+In this module, you will learn how the GKE metadata server and IAM binding chain work, how to choose direct KSA IAM access versus GSA impersonation, how Binary Authorization enforces attestations at deploy time, how Shielded and Confidential Nodes harden the VM layer, and how Security Posture plus the Secret Manager CSI add-on reduce misconfiguration and secret sprawl. By the end, you will configure a pod that publishes to Pub/Sub without JSON key files and roll out Binary Authorization in dry-run mode before enforcement.
 
 ---
 
 ## The Problem: Node-Level Identity
 
-Without Workload Identity, GKE pods access GCP services using the **node's service account**. Every VM (node) in a node pool runs with a GCP service account attached, and every pod on that node can access the metadata server to obtain OAuth tokens for that account.
+Without Workload Identity Federation for GKE, pods that use the Google Cloud client libraries or curl the metadata server inherit the **node's** Compute Engine service account. Every VM in a node pool runs with a GCP service account attached at boot, and the default metadata server happily returns OAuth tokens for that account to any process on the node that can reach `169.254.169.254`. Kubernetes RBAC might limit who can `kubectl exec`, but it does not automatically limit which GCP APIs a container can call once it is running. That gap is why platform teams say GKE's default identity story is "secure the node, trust every pod on it"—acceptable only for tightly controlled single-tenant clusters.
+
+The anti-pattern shows up in cost and compliance reviews as well as security audits: a node service account with `roles/editor` or broad `storage.admin` makes every CronJob, Helm hook, and crash-looping sidecar as powerful as your most privileged batch job. Workload Identity Federation breaks that coupling by making the GKE metadata server issue credentials based on the pod's Kubernetes ServiceAccount, so an unrelated debug pod in `default` no longer receives the payment service's Pub/Sub publisher token.
 
 ```mermaid
 flowchart TD
@@ -73,6 +75,58 @@ flowchart TD
     B --> M2
     C --> M3
 ```
+
+### The binding chain: from pod to IAM principal
+
+Workload Identity Federation for GKE is not a single annotation—it is a chain of trust that starts in the pod spec and ends in an IAM allow policy. When a container calls Google client libraries or requests `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token`, the **GKE metadata server** (a DaemonSet on each Linux node, or a native service on Windows nodes) intercepts that HTTP traffic before it reaches the Compute Engine metadata server. The server reads the pod's projected Kubernetes ServiceAccount token, determines which identity the pod is allowed to assume, and returns a **short-lived** Google access token (typically one hour, automatically refreshed) scoped to that identity.
+
+Enabling the feature at the cluster level creates a project-scoped workload identity pool named `PROJECT_ID.svc.id.goog` and turns on the metadata path for federated authentication. Node pools must run with `--workload-metadata=GKE_METADATA` so pods use the GKE metadata server instead of the node's underlying Compute Engine metadata. New node pools on clusters with Workload Identity enabled default to `GKE_METADATA`; legacy pools created before the cluster was updated may still expose `GCE_METADATA` until you update them—pods on those pools continue to receive the node service account token, which is a common source of "we enabled Workload Identity but nothing changed" outages.
+
+After federation is enabled on the cluster and node pools use `GKE_METADATA`, choose one of two supported ways to grant GCP access to a workload:
+
+| Approach | IAM member shape | When teams choose it |
+| :--- | :--- | :--- |
+| **Direct KSA IAM** (recommended when supported) | `principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/PROJECT_ID.svc.id.goog/subject/ns/NAMESPACE/sa/KSA_NAME` | Fewer moving parts—no GSA to create, annotate, or rotate; IAM Recommender sees the KSA as a first-class principal |
+| **KSA → GSA impersonation** (legacy-compatible) | `serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA]` on the GSA plus `iam.gke.io/gcp-service-account` annotation on the KSA | Required when a Google Cloud API does not yet accept federated principals, or when org policy mandates GSAs for audit |
+
+Direct access binds roles on the **resource** (bucket, topic, secret) to the KSA principal. Impersonation binds `roles/iam.workloadIdentityUser` on the **GSA** to the Kubernetes member, grants API permissions on the GSA, and lets the metadata server exchange the KSA credential for a GSA access token via the IAM Service Account Credentials API.
+
+```bash
+# Direct IAM: grant a KSA read access to one bucket (no GSA required)
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+
+gcloud storage buckets add-iam-policy-binding gs://orders-archive \
+  --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${PROJECT_ID}.svc.id.goog/subject/ns/orders/sa/fulfillment-reader" \
+  --role="roles/storage.objectViewer"
+
+# Impersonation: bind KSA to GSA (still the canonical pattern in many runbooks)
+gcloud iam service-accounts add-iam-policy-binding \
+  gcs-reader-sa@$PROJECT_ID.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="serviceAccount:$PROJECT_ID.svc.id.goog[default/app-sa]"
+```
+
+Pods that omit `serviceAccountName` run as the namespace's `default` ServiceAccount. If that KSA is not federated, the metadata server returns permission denied rather than falling back to the node identity—this is the deliberate fail-closed behavior that breaks legacy workloads after migration and is why every Deployment must reference an explicitly configured KSA.
+
+### Node pools and `--workload-metadata=GKE_METADATA`
+
+Cluster-level `--workload-pool=$PROJECT_ID.svc.id.goog` is necessary but not sufficient. Each node pool must expose the GKE metadata server to workloads:
+
+```bash
+# New pool with Workload Identity metadata mode
+gcloud container node-pools create app-pool \
+  --cluster=my-cluster \
+  --location=us-central1 \
+  --workload-metadata=GKE_METADATA
+
+# Migrate an existing pool (expect a rolling node replacement)
+gcloud container node-pools update legacy-pool \
+  --cluster=my-cluster \
+  --location=us-central1 \
+  --workload-metadata=GKE_METADATA
+```
+
+On pools using `GKE_METADATA`, pods cannot reach the Compute Engine metadata server except when using `hostNetwork: true`. That isolation is what prevents a random container from reading the node's OAuth token. Plan node pool upgrades during a maintenance window because updating metadata mode recreates nodes and reschedules workloads.
 
 ### Setting Up Workload Identity
 
@@ -148,6 +202,10 @@ kubectl exec -it gcs-reader -- gcloud pubsub topics list
 
 ### Fleet Workload Identity Federation (Cross-Project)
 
+For multi-project setups, Fleet Workload Identity Federation extends the same `PROJECT_ID.svc.id.goog` trust model across every cluster registered to a fleet, even when clusters live in different GCP projects or outside Google Cloud (Anthos). Instead of copying GSAs into each consumer project, platform teams grant IAM on shared data-plane projects using fleet-scoped principal identifiers such as `principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/PROJECT_ID.svc.id.goog/subject/ns/NAMESPACE/sa/SERVICEACCOUNT`. Selectors can also target ServiceAccount UIDs when names are reused across namespaces. Fleet registration (`gcloud container fleet memberships register`) ties cluster identity to the fleet pool so GitOps controllers in a tooling project can deploy to application projects without long-lived download keys.
+
+Operationally, fleet WIF is how hub-and-spoke platforms avoid "service account sprawl": one BigQuery dataset in `data-prod` trusts principals from `app-dev`, `app-staging`, and `app-prod` clusters via explicit bindings rather than shared JSON keys checked into Helm values. Document which namespaces in which memberships may assume which roles, because fleet-wide principal sets are powerful—`principalSet` attributes can match many KSAs at once, which is excellent for platform-wide logging agents and dangerous if mis-scoped to `roles/owner`.
+
 For multi-project setups, Fleet Workload Identity Federation allows pods in one project to access resources in another project without creating service accounts in every project.
 
 ```bash
@@ -164,11 +222,19 @@ gcloud projects add-iam-policy-binding OTHER_PROJECT_ID \
 
 > **Stop and think**: If a pod in the `default` namespace does not have a `serviceAccountName` specified in its spec, which Kubernetes ServiceAccount does it use? How does this impact Workload Identity if that ServiceAccount is not annotated?
 
+### Auditing and validating bindings
+
+Before declaring a migration complete, run a binding audit from both sides of the trust chain. On the Kubernetes side, list ServiceAccounts with `kubectl get sa -A -o json | jq '.items[] | select(.metadata.annotations["iam.gke.io/gcp-service-account"] != null)'` to see impersonation mappings. On the IAM side, `gcloud iam service-accounts get-iam-policy GSA@PROJECT.iam.gserviceaccount.com` should show only the expected `serviceAccount:PROJECT.svc.id.goog[ns/ksa]` members on `roles/iam.workloadIdentityUser`. For direct KSA access, inspect resource policies (buckets, topics, secrets) for `principal://` members and remove stale GSAs that no longer have running pods. Google's IAM Recommender can flag over-privileged bindings once KSAs appear as first-class principals—use those recommendations during quarterly access reviews.
+
+Application teams should document which Google APIs each Helm chart calls so platform engineers do not guess roles during incidents. A chart that only publishes metrics to Cloud Monitoring needs a different binding than one that reads Secret Manager, writes to Spanner, and pulls images from Artifact Registry. Keeping that matrix in the service repository prevents "temporary Editor" bindings from becoming permanent.
+
 ---
 
 ## Binary Authorization
 
-Binary Authorization ensures that only trusted container images can be deployed to your GKE cluster. It works by requiring cryptographic attestations on images before they are allowed to run.
+Binary Authorization is Google Cloud's deploy-time control for container images on GKE. It sits in the Kubernetes admission path and answers one question before a Pod starts: **does this image digest satisfy the project's policy?** Policies combine default rules, per-cluster overrides, optional Google-managed system policy evaluation, and cryptographic attestations stored in Artifact Analysis. Unlike image scanners that report CVEs asynchronously, Binary Authorization can block scheduling immediately when attestations are missing or when continuous validation rules fail—provided enforcement mode is not dry-run.
+
+Teams usually pair Binary Authorization with Cloud Build or another CI signer: build produces a digest, vulnerability scanning runs in Artifact Analysis, a KMS-backed attestor signs the digest, and only then does GitOps apply a manifest referencing `image@sha256:...`. This module keeps your existing gcloud examples; the sections below explain policy structure, breakglass, and how audit logs prove who deployed what.
 
 ### How Binary Authorization Works
 
@@ -223,6 +289,8 @@ gcloud container binauthz policy import /tmp/binauthz-policy.yaml
 ```
 
 ### Creating an Attestor
+
+Attestors bridge your organization's trust anchor—usually Cloud KMS asymmetric keys or organization policy—and Artifact Analysis notes. Cloud Build can create attestations automatically when triggers include signing steps, which is how many teams avoid manual `sign-and-create` during daily releases. Human-gate workflows add a second attestor requiring security team signature on production promotion digests. Whatever model you choose, document the attestor name used in `requireAttestationsBy` so cluster rules do not reference deleted attestors after key rotation.
 
 ```bash
 # Create a key ring and key for signing
@@ -301,6 +369,43 @@ gcloud logging read \
 
 **War Story**: A team enabled Binary Authorization in enforce mode on a Friday afternoon. On Monday morning, their CI/CD pipeline had broken because Cloud Build was pushing images but not creating attestations. Every deployment for 48 hours was blocked. Start with `DRYRUN_AUDIT_LOG_ONLY` mode to identify what would be blocked before switching to enforce mode.
 
+### Policy structure: default rule, cluster rules, and attestors
+
+A Binary Authorization policy is evaluated **at pod admission time** by the `imagepolicywebhook` admission controller on GKE. The policy YAML has three layers teams routinely combine:
+
+1. **`defaultAdmissionRule`** — applies to every cluster in the project unless overridden. `evaluationMode` can be `ALWAYS_ALLOW`, `ALWAYS_DENY`, or `REQUIRE_ATTESTATION`. Pair it with `enforcementMode`: `ENFORCED_BLOCK_AND_AUDIT_LOG` (block + audit) or `DRYRUN_AUDIT_LOG_ONLY` (allow + audit violations).
+2. **`clusterAdmissionRules`** — per-cluster overrides keyed as `LOCATION.CLUSTER_NAME` (for example `us-central1.my-cluster`). Production clusters often `REQUIRE_ATTESTATION` while lab clusters stay in dry run.
+3. **`admissionWhitelistPatterns`** — name patterns for system images (kube-proxy, metrics-server, Google sample images) so bootstrap components are not blocked during enforcement.
+
+When `evaluationMode` is `REQUIRE_ATTESTATION`, the rule lists **`requireAttestationsBy`**: fully qualified attestor resources (`projects/PROJECT_ID/attestors/build-attestor`). An **attestor** wraps a Container Analysis **note** and one or more signing keys (commonly Cloud KMS asymmetric keys). An **attestation** is a signature over the immutable **image digest** stored in Artifact Analysis. Tags like `:latest` are not trustworthy because a retagged image changes digest and invalidates prior attestations—production manifests should pin `image@sha256:...` as documented in the deploy guide.
+
+`globalPolicyEvaluationMode: ENABLE` lets Google-managed **system policies** run before your custom policy so platform images stay deployable without maintaining a long manual whitelist.
+
+### Deploy-time enforcement flow (prose)
+
+The end-to-end supply chain path looks like this in operations review: a developer merges code; **Cloud Build** (or another CI system) builds and pushes to **Artifact Registry**; a signing step calls `gcloud container binauthz attestations sign-and-create` (or Cloud Build creates attestations automatically when configured); **Artifact Analysis** stores vulnerability scan results and attestation notes; when `kubectl apply` creates a Pod, GKE asks Binary Authorization whether the digest satisfies the active rule for that cluster. If enforcement is on and attestations are missing, the API server rejects the Pod with `admission webhook "imagepolicywebhook.image-policy.k8s.io" denied the request`. If the Binary Authorization backend is unreachable, GKE **fails open** (allows the deploy) and writes an audit event—design monitoring for that rare path separately from policy violations.
+
+### Breakglass instead of disabling the policy
+
+Teams sometimes disable Binary Authorization entirely to "unblock a deploy." That removes audit evidence and re-opens the cluster to unsigned images. **Breakglass** is the supported emergency path: add the label `image-policy.k8s.io/break-glass: "true"` on the Pod spec so the image deploys even when it violates policy, with a mandatory **breakglass** event in Cloud Audit Logs. Query breakglass with `resource.type="k8s_cluster"` and `"image-policy.k8s.io/break-glass"` in the log filter. Pair breakglass with an on-call approval process; it is not a substitute for fixing CI attestation gaps.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hotfix-api
+  labels:
+    image-policy.k8s.io/break-glass: "true"
+spec:
+  containers:
+  - name: api
+    image: us-central1-docker.pkg.dev/my-project/repo/api@sha256:abc123...
+```
+
+### Continuous validation with Artifact Analysis
+
+Beyond one-time attestations at build time, teams integrate **Artifact Analysis** vulnerability scanning (and optional continuous validation policies) so known-critical CVEs can block deploys even when an image was previously attested. Cloud Build triggers can gate promotion: build → scan → attest → deploy. Keep dry-run logging enabled while tuning `requireAttestationsBy` so you see which digests would fail before switching `defaultAdmissionRule` to enforce mode project-wide.
+
 > **Pause and predict**: You enable Binary Authorization in enforce mode with a policy requiring an attestation from a specific KMS key. A developer deploys an image signed by a different, older KMS key that was recently removed from the attestor. What will happen when the pod starts, and where would you look to verify this?
 
 ---
@@ -309,7 +414,7 @@ gcloud logging read \
 
 ### Shielded GKE Nodes
 
-Shielded nodes provide verifiable integrity for your cluster nodes, protecting against rootkits and boot-level tampering.
+Shielded GKE Nodes provide verifiable integrity for cluster nodes by combining Secure Boot, virtual TPM (vTPM) measured boot, and integrity monitoring that compares runtime measurements against Google-maintained baselines—protecting against rootkits and boot-level tampering without encrypting application memory.
 
 | Feature | Protection | How It Works |
 | :--- | :--- | :--- |
@@ -356,6 +461,10 @@ gcloud container node-pools create confidential-pool \
 | **Cost** | No additional cost | ~10% premium |
 | **Use case** | All production clusters | Financial, healthcare, PII |
 
+Shielded GKE Nodes address **boot-time and kernel integrity**: Secure Boot refuses unsigned boot components, vTPM records a measured boot chain, and integrity monitoring alerts when runtime measurements diverge from the baseline. They do not encrypt application memory against a hostile hypervisor or physical attacker with DRAM access. Confidential GKE Nodes add **AMD SEV memory encryption** so guest RAM is encrypted with keys that stay inside the CPU; Google's documentation positions Confidential Nodes for regulated workloads that must protect data **in use**, at the cost of N2D-only machine families, regional availability limits, and roughly single-digit percent CPU overhead plus a node pricing premium.
+
+Operationally, enable Shielded Nodes on every production cluster (default on new clusters) and treat Confidential Nodes as a targeted pool for namespaces that process PCI, PHI, or contractual "encrypted in use" requirements—not as the default for all apps. Mixing both on the same node is possible when machine type and region support Confidential mode; otherwise run sensitive StatefulSets on a dedicated `confidential-pool` and keep general workloads on standard Shielded pools to avoid paying the Confidential premium everywhere.
+
 > **Stop and think**: Your compliance team requires that data in use (in memory) must be encrypted. Which node type must you choose, and what specific CPU architecture is required to support this feature?
 
 ---
@@ -379,17 +488,16 @@ gcloud container security-posture findings list \
   --format="table(finding.severity, finding.category, finding.description)"
 ```
 
-The dashboard checks for:
+Security Posture findings group into several themes you should expect in weekly review: **workload configuration** (pods running as root, missing security contexts, privileged containers),
+**container vulnerabilities** (CVEs in Artifact Registry images), **network exposure** (Services reachable from the internet without authentication), **RBAC issues** (ClusterRoleBindings that grant cluster-admin too broadly), and **supply chain** signals (images from untrusted registries). Each category should map to an owner—platform for node and admission settings, application teams for workload manifests, security for attestor policy.
 
-- **Workload configuration**: Pods running as root, missing security contexts, privileged containers
-- **Container vulnerabilities**: CVEs in container images from Artifact Registry
-- **Network exposure**: Services exposed to the internet without authentication
-- **RBAC issues**: Overly permissive ClusterRoleBindings
-- **Supply chain**: Images not from trusted registries
+Security Posture is most valuable when findings become owned work items rather than dashboard wallpaper. Export critical/high results into your ticketing system, tie each finding to a namespace owner, and re-scan after Helm chart or GitOps changes because posture configuration is versioned separately from application releases. Combining posture scanning with Binary Authorization and Pod Security Standards gives defense in depth: posture tells you a Deployment runs as root; PSS `restricted` prevents it from scheduling; Binary Authorization ensures the image came from your attested pipeline.
+
+Workload vulnerability scanning (enabled with `--workload-vulnerability-scanning=standard` on supported channels) surfaces CVEs in images pulled from Artifact Registry. Treat those findings as inputs to rebuild/redeploy decisions, not as a substitute for patching base images in CI.
 
 ### Hardening Pod Security
 
-GKE supports Pod Security Standards (PSS) through the built-in Pod Security Admission controller:
+GKE supports Pod Security Standards (PSS) through the built-in Pod Security Admission controller, which enforces the upstream `restricted`, `baseline`, and `privileged` profiles via namespace labels:
 
 ```bash
 # Enforce restricted Pod Security Standard on a namespace
@@ -437,7 +545,9 @@ spec:
 
 ## Secret Manager Integration
 
-GKE integrates with Google Cloud Secret Manager through the **Secret Manager add-on**, which uses the Secrets Store CSI Driver to mount secrets as files in pods.
+Long-lived passwords, API keys, and TLS material do not belong in Git, in container images, or in etcd if you can avoid it. GKE integrates with Google Cloud Secret Manager through the **Secret Manager add-on**, which installs the Secrets Store CSI driver with Google's `gcp` provider so pods mount secrets as read-only files at runtime. The mount path behaves like a small filesystem directory; applications read `cat /var/secrets/db-password` instead of calling the Secret Manager API directly, though under the hood the driver fetches secret versions using the pod's Workload Identity credentials.
+
+Because secrets never pass through the Kubernetes API as Secret objects, RBAC on `secrets` resources in etcd does not protect external secrets—**IAM on Secret Manager** does. That is why the add-on pairs naturally with Workload Identity Federation: the same KSA (or impersonated GSA) that publishes to Pub/Sub should be the only principal with `secretmanager.secretAccessor` on `db-password`. Platform teams get Cloud Audit Logs entries for each access, which satisfies many SOC 2 and PCI evidence requests about credential retrieval.
 
 ### Setting Up Secret Manager CSI Driver
 
@@ -526,7 +636,130 @@ kubectl exec app-with-secrets -- cat /var/secrets/db-password
 | **Cross-cluster sharing** | Not supported | Same secret across clusters/projects |
 | **Access control** | RBAC (namespace-scoped) | IAM (project/org-scoped) |
 
+The GKE Secret Manager add-on installs the **Secrets Store CSI driver** with Google's `gcp` provider. Secrets are fetched at volume mount time using the pod's federated identity; they appear as files under the mount path and are **not stored in etcd**, which shrinks the blast radius if someone gains etcd backup access but lacks Secret Manager IAM. Pin `resourceName` to `versions/latest` for always-current credentials or to a numeric version when rollback requires a specific secret generation.
+
+Rotation has two layers: Secret Manager supports new **versions** of a secret value, and the CSI driver can sync updates on a poll interval when configured (see the managed CSI component documentation for rotation parameters). Kubernetes-native Secrets, by contrast, require you to update the Secret object and restart pods. For cross-cluster sharing, the same Secret Manager secret can back workloads in multiple clusters as long as each KSA or GSA principal receives `roles/secretmanager.secretAccessor` on that secret—avoid copying secret material into ConfigMaps.
+
+Compared with community operators such as **External Secrets Operator**, the Google-managed add-on reduces operational toil (no separate controller deployment to patch) but ties you to GKE release channels and Google's rotation semantics. External Secrets shines when you need multi-cloud secret backends or advanced templating; the add-on shines when your secrets already live in Secret Manager and you want IAM-aligned access logs without maintaining another controller.
+
 > **Stop and think**: A developer wants to roll back a deployment that uses Secret Manager for database credentials. The older version of the deployment needs an older password. How does the Secret Manager CSI driver handle versioning compared to native Kubernetes Secrets?
+
+---
+
+## Patterns & Anti-Patterns
+
+| Pattern | When to Use | Why It Works | Scaling Note |
+| :--- | :--- | :--- | :--- |
+| **One KSA per workload** with least-privilege IAM | Microservices calling different GCP APIs | Blast radius stays bounded; IAM Recommender can suggest role removals per KSA | Use `principalSet` selectors when many KSAs in a namespace share the same role |
+| **Binary Authorization dry-run → enforce** | First adoption in production | Audit logs reveal unsigned images without blocking deploys | Promote cluster-specific rules from `DRYRUN_AUDIT_LOG_ONLY` to `ENFORCED_BLOCK_AND_AUDIT_LOG` per cluster |
+| **Default-deny admission + CI attestation** | Regulated or internet-facing clusters | Only digests signed in Cloud Build (or your signer) reach the cluster | Store attestors in a central security project; reference them from `requireAttestationsBy` |
+| **Dedicated low-privilege node SA** | Every GKE cluster | Even before WIF migration, nodes should not run as project Editor | Node SA only needs logging/monitoring scopes; workloads get WIF |
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+| :--- | :--- | :--- | :--- |
+| **SA JSON keys in Kubernetes Secrets** | Long-lived credentials in etcd; key leakage via RBAC or backups | Legacy tutorials and local dev habits | Workload Identity Federation; short-lived tokens only |
+| **Default node SA for all pods** | Any pod inherits node permissions | Fastest cluster bootstrap | Enable WIF; restrict node SA to node operations |
+| **`roles/owner` on a workload GSA** | Compromise of one pod becomes project takeover | "Make it work" during incidents | Grant resource-level roles (`storage.objectViewer`, `pubsub.publisher`, etc.) |
+| **Disabling Binary Authorization to unblock** | Supply-chain control removed silently | Friday hotfix pressure | Breakglass label + audit review; fix attestation pipeline |
+
+---
+
+## Decision Framework
+
+Use the following matrix when designing identity and deploy-time controls for a new GKE cluster on Kubernetes **1.35**, before you cut production traffic over:
+
+| Decision | Choose **direct KSA IAM** | Choose **KSA → GSA impersonation** |
+| :--- | :--- | :--- |
+| Target API supports `principal://.../workloadIdentityPools/...` members | Yes | No — use GSA until support lands |
+| You want IAM Recommender to show Kubernetes names | Yes | GSA email hides workload mapping unless annotated |
+| Org mandates GSAs for key rotation / HSM | Rarely | Yes |
+| Multi-project fleet access | `principalSet` on fleet pool | Fleet WIF + GSA in target project |
+
+```mermaid
+flowchart TD
+    A[Workload needs GCP API access] --> B{API accepts WIF principal on resource IAM?}
+    B -- Yes --> C[Grant role to principal://.../subject/ns/NS/sa/KSA]
+    B -- No --> D[Create GSA + grant roles on GSA]
+    D --> E[Bind roles/iam.workloadIdentityUser to serviceAccount:PROJECT.svc.id.goog[NS/KSA]]
+    E --> F[Annotate KSA with iam.gke.io/gcp-service-account]
+    C --> G[Pod uses serviceAccountName: KSA]
+    F --> G
+    G --> H{Node pool workload-metadata = GKE_METADATA?}
+    H -- No --> I[Update node pool — pods still get node SA]
+    H -- Yes --> J[Metadata server issues scoped token]
+```
+
+| Decision | **Binary Authorization dry-run** | **Binary Authorization enforce** |
+| :--- | :--- | :--- |
+| Cluster maturity | New policy or new attestor keys | Stable CI signs every production digest |
+| Incident response | Allows hotfix while logging violations | Blocks unsigned images; use breakglass for exceptions |
+| Evidence | `imagepolicywebhook.../dry-run: "true"` labels in audit logs | `BINARY_AUTHORIZATION` denial reasons |
+
+| Threat focus | **Shielded Nodes** | **Confidential Nodes** |
+| :--- | :--- | :--- |
+| Bootkit / unsigned kernel modules | Primary control | Also present |
+| Encrypt data in use in RAM | Not provided | Primary control (AMD SEV) |
+| Cost / ops | No extra node charge | Premium N2D pools; capacity planning per region |
+
+---
+
+## Cost Considerations for GKE Security Controls
+
+Workload Identity Federation, Binary Authorization policy evaluation, Shielded GKE Nodes, Pod Security Admission, and the GKE metadata server add **no per-request surcharge** in Google's pricing model for the controls themselves—you pay for the nodes, APIs, and logging you already consume. The real cost surface is **indirect**: Secret Manager bills per active secret version and per access operation; Cloud Audit Logs and log storage grow when Binary Authorization enforcement and breakglass events generate high-volume `k8s_cluster` activity logs; over-permissioned GSAs increase blast-radius cost (data exfiltration, accidental deletes) far more than IAM binding API calls.
+
+| Control area | Typical cost driver | Knobs that reduce spend | What spikes cost unexpectedly |
+| :--- | :--- | :--- | :--- |
+| Workload Identity | IAM policy count (free); API calls | Direct KSA IAM avoids extra GSAs | Logging every metadata denial during misconfigured migrations |
+| Binary Authorization | KMS signing operations; audit logs | Central attestor; dry-run before enforce | Emergency breakglass deploys without CI fixes → repeated hotfix images |
+| Secret Manager CSI | Secret versions; accessor API calls | Fewer secrets; pin versions; rotate on schedule | Mounting `versions/latest` with aggressive sync on thousands of pods |
+| Confidential Nodes | ~10% node premium + N2D SKUs | Isolate to pools that need memory encryption | Running entire cluster on Confidential when Shielded suffices |
+| Security Posture | Posture API / scanning features per channel | Fix critical findings first to avoid churn | Ignoring posture while paying for duplicate scanning in CI and GKE |
+
+Treat least-privilege IAM as a **cost control**: a GSA with `roles/storage.admin` that a batch job compromises can inflate egress and storage bills overnight. Narrow roles (`objectViewer`, `pubsub.publisher`) limit financial exposure the same way they limit data exposure.
+
+---
+
+## Operational Migration: Workload Identity on Live Clusters
+
+Moving a production GKE cluster from shared node identity to Workload Identity Federation is a change management exercise as much as a technical one. The safe pattern is **node pool by node pool**, not a single flag flip followed by a pager storm. Start by inventorying which Deployments call Google APIs (client libraries, metadata curls, or workloads mounting GCP credentials). For each application, document the minimum IAM roles it needs on which resources, then create a dedicated Kubernetes ServiceAccount per application (or per trust boundary within a namespace). Avoid reusing the `default` ServiceAccount in `default` for production traffic—it becomes impossible to audit which team owns which binding.
+
+Phase one enables federation at the cluster with `--workload-pool=$PROJECT_ID.svc.id.goog` and creates a **new** node pool with `--workload-metadata=GKE_METADATA`. Cordone and drain old nodes gradually so only migrated workloads schedule onto pools that enforce the GKE metadata server. Running mixed pools—some nodes on `GCE_METADATA` and some on `GKE_METADATA`—is a common mistake during blue/green upgrades: pods scheduled onto legacy pools still inherit the node service account while teammates on new pools fail closed, producing intermittent 403 errors that look like application bugs. Phase two binds identities: prefer direct KSA IAM on new clusters; for legacy stacks already centered on GSAs, keep impersonation but remove JSON keys from Secrets. Phase three updates manifests to set `serviceAccountName` and verifies with `kubectl exec ... gcloud auth list` inside each pod. Watch Cloud Logging for metadata 403 errors during the window—spikes usually mean a missing `iam.workloadIdentityUser` binding or a forgotten annotation.
+
+Binary Authorization migrations mirror the same phased discipline. Export the current policy, add whitelist patterns for system images your platform requires, switch `defaultAdmissionRule` to `DRYRUN_AUDIT_LOG_ONLY`, and run production traffic for one to two weeks while security reviews dry-run audit entries. Only then promote individual `clusterAdmissionRules` entries to `ENFORCED_BLOCK_AND_AUDIT_LOG`. Train on-call engineers on breakglass labels before enforcement day so nobody disables the API to ship a hotfix. Align Cloud Build (or your signer) so every production repository path produces attestations on the digest that Kubernetes will reference.
+
+Secret Manager adoption should follow identity migration: the CSI provider uses the same federated principal as application code. Grant `roles/secretmanager.secretAccessor` on secrets, not project-wide, and mount secrets as files rather than syncing into Kubernetes Secret objects unless an operator truly needs both. Rotation runbooks should state whether applications reload files on SIGHUP, restart on Secret version change, or rely on CSI polling—mixing strategies causes "we rotated in Secret Manager but prod still has the old password" tickets.
+
+---
+
+## Troubleshooting Reference
+
+When pods suddenly lose GCP access after a platform change, walk the binding chain in order rather than re-granting `roles/editor`. First confirm the pod's `serviceAccountName` and namespace, then `kubectl describe serviceaccount` for the `iam.gke.io/gcp-service-account` annotation when using impersonation. Verify the GSA has `roles/iam.workloadIdentityUser` for member `serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA]`. For direct IAM, query the resource policy for the `principal://.../subject/ns/.../sa/...` entry. Next confirm the node pool: `gcloud container node-pools describe POOL --cluster=CLUSTER --format='yaml(config.workloadMetadataConfig)'` should show `mode: GKE_METADATA`. If it shows `GCE_METADATA`, pods on that pool still receive the node credential.
+
+Binary Authorization denials surface as admission webhook errors on Pod create. Collect the image digest from the event, run `gcloud container binauthz attestations list --artifact-url="IMAGE@DIGEST"`, and compare attestor names to `requireAttestationsBy` in the active policy. If CI signs with a retired KMS key version, add the new public key to the attestor or re-sign the digest. For emergency deploys, use breakglass labels and file a post-incident action to restore attestations—do not leave breakglass Deployments running indefinitely.
+
+Secret mount failures often trace to IAM on the secret, not the CSI driver. The error may appear as mount timeout in `kubectl describe pod` while Cloud Audit Logs show `secretmanager.versions.access` denied for the federated principal. Ensure `resourceName` in the SecretProviderClass uses the project ID or number format documented for the add-on version you enabled, and that the pod uses the same KSA you granted `secretAccessor`.
+
+---
+
+## Layered Defense: How the Controls Fit Together
+
+No single feature in this module replaces the others; they address different layers of the same attack surface. Workload Identity Federation answers **who is this pod when it calls Google APIs**. Binary Authorization answers **which bits are allowed to execute**. Shielded and Confidential Nodes answer **whether the VM boot path and memory are trustworthy**. Security Posture and Pod Security Standards answer **whether Kubernetes objects violate baseline hardening**. Secret Manager with CSI answers **where credential material lives and who can audit access**.
+
+A useful platform architecture diagram in prose looks like this: developers merge to Git; CI builds and attests an image digest; GitOps applies a Deployment with `serviceAccountName`, digest-pinned image, restricted security context, and optional SecretProviderClass volumes; GKE admission (PSS, Binary Authorization, resource quotas) evaluates the Pod; the kubelet starts containers on Shielded nodes (or Confidential nodes for regulated tiers); at runtime the GKE metadata server issues scoped tokens while the CSI driver mounts secrets. Detective controls—audit logs, posture findings, Binary Authorization dry-run labels—feed SIEM rules that page when breakglass is used or when a namespace drops PSS labels.
+
+When prioritizing a backlog, sequence investments by blast radius. Shared node credentials and cluster-admin RBAC beat missing Confidential Nodes for most SaaS products. Unsigned images matter once identity is scoped. External secrets matter once CI and identity are sound. This ordering prevents security theater: teams sometimes buy Confidential Nodes while every pod still inherits Editor from the node pool.
+
+Regulated environments may require evidence bundles: export Binary Authorization policy YAML, sample attestations for a golden image, Workload Identity binding screenshots or `gcloud` outputs, Secret Manager audit log queries, and Security Posture export for critical findings. Store those artifacts next to change tickets so auditors see operability, not one-time setup during assessment week.
+
+Teaching teams the **why** behind each layer reduces operational friction. Developers who understand that Workload Identity fail-closed behavior protects them from peer pods on the same node are more willing to update ServiceAccounts than when platform mandates feel arbitrary. Likewise, explaining that Binary Authorization dry-run is a rehearsal tool—not a permanent loophole—prevents teams from leaving dry-run on for years out of fear. Security tooling in GKE works best when application and platform engineers share the same mental model of metadata servers, digest-pinning, and IAM principals.
+
+For Kubernetes **1.35** clusters on GKE regular or stable channels, validate feature availability in your target region before promising Confidential Nodes or specific Security Posture tiers in contracts. Google's documentation updates channel defaults independently of the Kubernetes minor version number displayed in `kubectl version`. Platform SREs should pin internal runbooks to cloud.google.com links reviewed quarterly, especially for Workload Identity direct principal support on new data plane APIs, because the impersonation fallback remains necessary for a shrinking but non-zero set of services.
+
+GitOps repositories should encode security baseline as data, not tribal knowledge: cluster create flags (`--workload-pool`, `--enable-shielded-nodes`), namespace labels for PSS, SecretProviderClass manifests, and Binary Authorization policy fragments owned by security with version control. Application charts then only supply `serviceAccountName`, image digests, and resource requests. That separation of duties mirrors how mature organizations implement Terraform for cloud IAM and Helm for workload shape—GKE security features fail operationally when only one team knows the gcloud incantations.
+
+Identity and admission controls also interact with **network policy** and **service mesh** identity, which this module does not configure but platform architects should not ignore. Workload Identity answers Google API authentication; mutual TLS between pods answers east-west trust inside the cluster. A pod with narrowly scoped IAM can still exfiltrate data over plain HTTP if NetworkPolicies allow unrestricted egress. Document which layer mitigates which threat so teams do not treat IAM bindings as a substitute for network segmentation or L7 policy. Workload Identity answers Google API authentication; mTLS between pods answers east-west trust inside the cluster. A pod with perfect Workload Identity scoping can still exfiltrate data over plain HTTP if NetworkPolicies allow it. Document which layer enforces which threat so application teams do not assume IAM bindings replace network segmentation.
+
+Finally, treat Cloud Audit Logs as part of the user interface for these features, not as archival noise. Create saved queries for Binary Authorization denials, breakglass labels, dry-run violations, and `secretmanager.versions.access` from GKE workload identities. Review those queries in weekly platform standups the same way you review application error-rate dashboards so security regressions surface before external auditors or customers do. Dashboard those metrics in your observability stack alongside application SLOs so security regressions page the same on-call rotation that already understands the cluster and its namespaces. When audit volume grows, tune sinks and retention rather than disabling enforcement—high log volume often means policy misconfiguration worth fixing, not evidence that controls failed or should be removed from production clusters.
 
 ---
 
@@ -544,6 +777,8 @@ kubectl exec app-with-secrets -- cat /var/secrets/db-password
 
 ## Common Mistakes
 
+The table below captures failure modes platform engineers see repeatedly when rolling out GKE security controls. Each row ties a symptom to a root cause teams recognize in retrospectives—use it as a checklist during design review, not only after an incident. Many entries interact: a missing Workload Identity annotation plus a powerful node service account produces the same 403 or excessive access symptoms depending on which pool the pod landed on.
+
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Using the default Compute Engine service account for nodes | Cluster created without specifying a custom node SA | Create a dedicated node SA with minimal permissions; use `--service-account` flag |
@@ -558,6 +793,8 @@ kubectl exec app-with-secrets -- cat /var/secrets/db-password
 ---
 
 ## Quiz
+
+The questions below mix conceptual and scenario prompts for platform and application engineers. Expand each answer after attempting the question yourself—the explanations reference the binding chain, admission enforcement order, and audit evidence you should be able to articulate in a design review.
 
 <details>
 <summary>1. Your security team discovers that three different applications running on the same GKE node can all read from a sensitive Cloud Storage bucket, even though only one application actually requires this access. You are tasked with implementing Workload Identity to fix this. How will configuring Workload Identity fundamentally change the way these pods authenticate with Google Cloud APIs?</summary>
@@ -595,26 +832,36 @@ Shielded Nodes are specifically designed to provide verifiable integrity for the
 Enabling Workload Identity on an existing cluster changes the behavior of the metadata server interception for all pods on the affected nodes. Pods that previously defaulted to the node's underlying Compute Engine service account now have their metadata requests intercepted by the Workload Identity DaemonSet, which requires a specific mapping to grant access. Because these legacy applications lacked a configured Kubernetes ServiceAccount annotated with a GCP service account mapping, the metadata server denied them access to GCP credentials entirely. To resolve the outage, you must create the necessary GCP service accounts, bind them to Kubernetes ServiceAccounts with the `iam.workloadIdentityUser` role, annotate the KSAs, and update the application Deployments to explicitly reference these new ServiceAccounts.
 </details>
 
+<details>
+<summary>7. Your security architect wants to grant a Kubernetes ServiceAccount in the `analytics` namespace read access to a single BigQuery dataset without creating another Google Cloud service account object. The data team confirms the BigQuery dataset IAM API accepts Workload Identity Federation principals. Which configuration steps are required, and which step from the legacy impersonation flow can you omit?</summary>
+
+You enable Workload Identity Federation on the cluster and ensure the node pool uses `--workload-metadata=GKE_METADATA` so pods reach the GKE metadata server. You create (or reuse) a Kubernetes ServiceAccount in `analytics`, set `serviceAccountName` on the workload, and add an IAM allow policy on the **dataset** (or table) whose member is the federated principal `principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/PROJECT_ID.svc.id.goog/subject/ns/analytics/sa/KSA_NAME` with a least-privilege role such as `roles/bigquery.dataViewer`. You do **not** need to create a separate GSA, bind `roles/iam.workloadIdentityUser`, or add the `iam.gke.io/gcp-service-account` annotation unless an API in the path still requires impersonation. This reduces operational objects and lets IAM tools reference the workload directly.
+</details>
+
+<details>
+<summary>8. A production incident requires deploying a diagnostic image that was built locally and never pushed through Cloud Build attestations. Binary Authorization is in enforce mode and the image is correctly blocked. What is the safest operational response that preserves auditability, and what log evidence should the incident commander collect afterward?</summary>
+
+Do not disable Binary Authorization project-wide. Instead, deploy the Pod with the breakglass label `image-policy.k8s.io/break-glass: "true"` (and still prefer an image digest in the manifest). Binary Authorization allows the deploy and writes a **breakglass** event to Cloud Audit Logs regardless of policy outcome. The incident commander should query `resource.type="k8s_cluster"` logs containing `"image-policy.k8s.io/break-glass"`, record approver and ticket ID, then remove breakglass usage after the incident and restore CI attestation for any image that remains in the cluster. Dry-run mode would also allow the deploy but is the wrong default for production because it does not block other unsigned images at admission time.
+</details>
+
 ---
 
 ## Hands-On Exercise: Workload Identity for Pub/Sub and Binary Authorization
 
 ### Objective
 
-Configure Workload Identity to securely access Pub/Sub from a pod, and set up Binary Authorization to block untrusted images.
+This lab consolidates the module's identity and supply-chain threads in one disposable cluster. You will create a regional GKE cluster with Workload Identity and Shielded Nodes enabled at creation time, bind a Kubernetes ServiceAccount to a least-privilege Google service account for Pub/Sub publish access, prove that unrelated GCP APIs return permission denied from inside the pod, enable Binary Authorization in dry-run mode to observe violations without blocking legitimate platform images, enable Security Posture with restricted Pod Security on a test namespace, and mount a Secret Manager secret through the CSI driver using the same federated identity. The exercise intentionally uses `gcloud projects add-iam-policy-binding` for project-level API enablement and resource-level bindings where appropriate so you practice the exact command spelling the verifier and production runbooks expect—never the incorrect `add-iam-binding` alias.
 
 ### Prerequisites
 
-- `gcloud` CLI installed and authenticated
-- A GCP project with billing enabled
-- GKE, Pub/Sub, Binary Authorization, and KMS APIs enabled
+Install and authenticate the `gcloud` CLI, select a GCP project with billing enabled, and enable the Container, Pub/Sub, Binary Authorization, Cloud KMS, and Secret Manager APIs before starting. The lab uses regional clusters in `us-central1` and Kubernetes 1.35-compatible release channels; adjust locations if your org restricts regions. Estimated spend is a few dollars for a single `e2-standard-2` node for under two hours if you delete the cluster in Task 8.
 
 ### Tasks
 
-**Task 1: Create a GKE Cluster with Workload Identity**
+Work through Tasks 1–8 in order. Each task builds on the previous one: Workload Identity must succeed before Secret Manager mounts authenticate, and Binary Authorization dry-run logging is easier to interpret once the cluster already runs your publisher pod.
 
 <details>
-<summary>Solution</summary>
+<summary>Task 1 — Create a GKE cluster with Workload Identity (solution)</summary>
 
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
@@ -644,10 +891,8 @@ gcloud container clusters get-credentials security-demo --region=$REGION
 ```
 </details>
 
-**Task 2: Set Up Workload Identity for Pub/Sub Access**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 2 — Set up Workload Identity for Pub/Sub access (solution)</summary>
 
 ```bash
 # Create a Pub/Sub topic and subscription
@@ -679,10 +924,8 @@ kubectl annotate serviceaccount pubsub-sa \
 ```
 </details>
 
-**Task 3: Deploy a Pod That Publishes to Pub/Sub**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 3 — Deploy a pod that publishes to Pub/Sub (solution)</summary>
 
 ```bash
 # Deploy a pod with Workload Identity
@@ -724,10 +967,8 @@ kubectl exec publisher -- gsutil ls gs://
 ```
 </details>
 
-**Task 4: Enable Binary Authorization in Dry Run Mode**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 4 — Enable Binary Authorization in dry-run mode (solution)</summary>
 
 ```bash
 # Enable Binary Authorization on the cluster
@@ -761,10 +1002,8 @@ echo "Unsigned images will be LOGGED but not blocked."
 ```
 </details>
 
-**Task 5: Test Binary Authorization Behavior**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 5 — Test Binary Authorization behavior (solution)</summary>
 
 ```bash
 # Deploy an image from Docker Hub (would be blocked in enforce mode)
@@ -791,10 +1030,8 @@ echo "3. Switch to ENFORCED_BLOCK_AND_AUDIT_LOG mode"
 ```
 </details>
 
-**Task 6: Enable Security Posture and Test Pod Security Standards**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 6 — Enable Security Posture and Pod Security Standards (solution)</summary>
 
 ```bash
 # Enable Security Posture on the cluster
@@ -849,10 +1086,8 @@ EOF
 ```
 </details>
 
-**Task 7: Mount External Secrets using Secret Manager CSI Driver**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 7 — Mount secrets with the Secret Manager CSI driver (solution)</summary>
 
 ```bash
 # Enable Secret Manager add-on
@@ -915,10 +1150,8 @@ kubectl exec secret-reader -- cat /var/secrets/api-key.txt
 ```
 </details>
 
-**Task 8: Clean Up**
-
 <details>
-<summary>Solution</summary>
+<summary>Task 8 — Clean up lab resources (solution)</summary>
 
 ```bash
 # Delete the cluster
@@ -972,8 +1205,17 @@ Next up: **[Module 6.4: GKE Storage](../module-6.4-gke-storage/)** --- Master Pe
 
 ## Sources
 
-- [Workload Identity Federation for GKE](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Primary concept doc for metadata flow, STS exchange, token lifetime, and identity design.
-- [Binary Authorization Overview](https://docs.cloud.google.com/binary-authorization/docs/overview) — Primary reference for attestations, deployment enforcement, and audit-log behavior.
-- [Shielded GKE Nodes](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/shielded-gke-nodes) — Canonical GKE guide for node identity and integrity protections.
-- [Kubernetes Security Posture Scanning](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-configuration-scanning) — Best source for what GKE posture scanning actually checks in current releases.
-- [Secret Manager Add-on for GKE](https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component) — Primary doc for mounting externally managed secrets into Pods and for rotation support.
+- [About Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Workload identity pool, GKE metadata server DaemonSet, and token exchange behavior.
+- [Authenticate to Google Cloud APIs from GKE workloads](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) — Enable `--workload-pool`, `--workload-metadata=GKE_METADATA`, direct KSA IAM vs GSA impersonation.
+- [Principal identifiers for Workload Identity Federation](https://cloud.google.com/iam/docs/principal-identifiers) — `principal://` and `principalSet` syntax for IAM allow policies on GKE workloads.
+- [About fleet Workload Identity Federation](https://cloud.google.com/kubernetes-engine/fleet-management/docs/about-fleet-workload-identity-federation) — Cross-project fleet pool and multi-cluster principal selectors.
+- [Binary Authorization overview](https://cloud.google.com/binary-authorization/docs/overview) — Attestors, attestations, and admission-time evaluation on GKE.
+- [Configure a Binary Authorization policy (gcloud)](https://cloud.google.com/binary-authorization/docs/configuring-policy-cli) — `defaultAdmissionRule`, `clusterAdmissionRules`, enforcement modes.
+- [Use breakglass on GKE](https://cloud.google.com/binary-authorization/docs/using-breakglass) — `image-policy.k8s.io/break-glass` label and audit expectations.
+- [View Binary Authorization audit logs](https://cloud.google.com/binary-authorization/docs/viewing-audit-logs) — Dry-run labels, breakglass queries, blocked deployment reasons.
+- [Deploy containers with Binary Authorization](https://cloud.google.com/binary-authorization/docs/deploying-containers) — Digest-based deploys and fail-open behavior.
+- [Shielded GKE Nodes](https://cloud.google.com/kubernetes-engine/docs/how-to/shielded-gke-nodes) — Secure Boot, vTPM, integrity monitoring.
+- [Confidential GKE Nodes](https://cloud.google.com/kubernetes-engine/docs/how-to/confidential-gke-nodes) — AMD SEV memory encryption, N2D machine requirements.
+- [About GKE Security Posture](https://cloud.google.com/kubernetes-engine/docs/concepts/about-configuration-scanning) — Configuration scanning and vulnerability findings.
+- [Enable the Secret Manager add-on](https://cloud.google.com/kubernetes-engine/docs/how-to/enable-secret-manager) — Cluster flag `--enable-secret-manager` and CSI driver setup.
+- [Secret Manager managed CSI component](https://cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component) — Mount paths, provider parameters, rotation behavior.
