@@ -15,19 +15,25 @@ After completing this module, you will be able to:
 - **Deploy Key Vault integration patterns for App Service, Azure Functions, AKS, and VM workloads**
 - **Design multi-region Key Vault architectures with soft delete, purge protection, and HSM-backed keys**
 
+These outcomes chain together in real designs: you cannot integrate AKS or Container Apps safely without RBAC and managed identity; you cannot claim disaster recovery without understanding soft delete versus regional vault pairs; you cannot control spend without transaction and HSM-key meters. The hands-on lab intentionally uses RBAC, user-assigned identity, and soft-delete recovery—the same primitives production templates encode in Bicep or Terraform modules.
+
 ---
 
 ## Why This Module Matters
 
-In December 2022, a widely-used password management company disclosed a major breach. Attackers had stolen encrypted vault data and the encryption keys needed to decrypt it. The root cause was traced back to a developer's home computer that had an old, vulnerable version of a media player installed. The attacker exploited the vulnerability, captured the developer's master credentials, and used them to access the company's cloud storage containing encrypted customer data. The breach affected millions of users and led to substantial legal, remediation, and reputational costs.
+**Hypothetical scenario:** A platform team ships a hotfix that embeds a production database connection string in a Git commit. A contractor’s laptop is compromised the next week. The attacker clones the repository, extracts the string, and pivots into customer data before anyone rotates credentials. Incident response spends days untangling which services still read the old password from config maps, environment variables, and stale deployment artifacts.
 
-This incident drives home a fundamental point: **secrets management is not optional, and it is not a problem you solve with environment variables.** Every application has secrets---database passwords, API keys, encryption keys, TLS certificates. How you store and access these secrets determines whether a single compromised developer laptop leads to a minor inconvenience or a company-ending breach.
+That pattern is common because **secrets management is not optional, and it is not a problem you solve with environment variables alone.** Every application has secrets—database passwords, API keys, encryption keys, TLS certificates. How you store, scope, rotate, and audit access to those objects determines whether one leaked credential becomes a contained rotation event or a prolonged breach.
 
-Azure Key Vault is a cloud service for [securely storing and managing secrets, encryption keys, and certificates](https://learn.microsoft.com/en-us/azure/key-vault/general/developers-guide). It supports HSM-protected keys and integrates with many Azure services, but the exact hardware validation level depends on the SKU and HSM platform. In this module, you will learn the three object types Key Vault manages, the two access control models (Access Policies vs RBAC), how soft delete and purge protection safeguard against accidental deletion, and how to integrate Key Vault with your applications using Managed Identities. By the end, you will store a database connection string in Key Vault and retrieve it from a Container App without any credentials in your code.
+Azure Key Vault is a cloud service for [securely storing and managing secrets, encryption keys, and certificates](https://learn.microsoft.com/en-us/azure/key-vault/general/developers-guide). It supports HSM-protected keys and integrates with many Azure services, but the exact hardware validation level depends on the SKU and HSM platform. In this module, you will learn the three object types Key Vault manages, the two access control models (Access Policies vs RBAC), how soft delete and purge protection safeguard against accidental deletion, and how to integrate Key Vault with your applications using Managed Identities. You will also compare Standard, Premium, and Managed HSM costs, and choose among SDK, platform reference, and CSI integration paths. By the end, you will store a database connection string in Key Vault and retrieve it from a Container App without any credentials in your code.
 
 ---
 
 ## Key Vault Fundamentals
+
+Azure Key Vault is the default **control plane for secrets, keys, and certificates** in Azure-native architectures. Other services (Managed HSM, dedicated HSM appliances) exist for specialized key-only regimes, but vaults remain the integration point for App Service, SQL, AKS CSI, Disk Encryption, and hundreds of resource providers that expect a `vault.azure.net` URI. Thinking in object types—not “a password store”—helps you pick the right API, RBAC role, and pricing meter for each credential.
+
+Every REST call to `https://<vault-name>.vault.azure.net` is authenticated with a bearer token from Microsoft Entra ID whose audience is `https://vault.azure.net`. The token carries the caller’s identity; authorization is evaluated separately via RBAC or access policies. That split is why you can grant a managed identity read access without sharing passwords, and why compromised tokens are revocable by disabling the identity or removing role assignments—there is no long-lived shared vault password to rotate globally.
 
 ### The Three Object Types
 
@@ -38,6 +44,16 @@ Key Vault manages three distinct categories of cryptographic and sensitive mater
 | **Secrets** | [Any string up to 25 KB](https://learn.microsoft.com/en-us/azure/key-vault/secrets/about-secrets) | DB passwords, API keys, connection strings, config values | [`https://myvault.vault.azure.net/secrets/`](https://learn.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates) |
 | **Keys** | [RSA or EC cryptographic keys](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) | Data encryption, signing, wrapping other keys | `https://myvault.vault.azure.net/keys/` |
 | **Certificates** | [X.509 certificates + private keys](https://learn.microsoft.com/en-us/azure/key-vault/certificates/about-certificates) | TLS/SSL for web apps, code signing, mTLS | `https://myvault.vault.azure.net/certificates/` |
+
+Each object type has its own lifecycle semantics on the data plane. **Secrets** are opaque strings (up to 25 KB) with optional `nbf` (not-before), `exp` (expiry), and `enabled` attributes. Disabling a secret blocks new reads without deleting history—useful during incident response when you need to stop traffic immediately but preserve versions for forensics. **Keys** are JSON Web Key (JWK) objects; software-protected keys run in FIPS-validated software modules, while HSM-protected keys (`RSA-HSM`, `EC-HSM`) keep private material inside the HSM boundary for Premium vaults. **Certificates** bundle the public certificate, policy (issuer, subject, SANs, validity), and private key; Key Vault can [integrate with public CAs](https://learn.microsoft.com/en-us/azure/key-vault/certificates/about-certificates) (DigiCert, GlobalSign) for enrollment and renewal, or you can import PFX files you already own.
+
+Versioning applies uniformly: every `set` on a secret, `create`/`rotate` on a key, or certificate renewal produces a new version ID. Applications should pin to a version only when they must reproduce a specific ciphertext; otherwise they read the **current** version and tolerate rotation by refreshing on a schedule or on failure. Backup operations are special—Microsoft documents a [500-version cap per object for backup](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits); vaults with hundreds of versions per secret slow backup and can block restore planning.
+
+### Key Vault vaults vs Azure Managed HSM
+
+Most teams start with a **Key Vault vault** (`*.vault.azure.net`). [Standard tier](https://learn.microsoft.com/en-us/azure/key-vault/general/overview) encrypts data at rest with FIPS 140 Level 1 software modules and supports software-protected RSA/EC keys. **Premium tier** adds HSM-protected keys (FIPS 140-3 Level 3 on newer HSM platform keys per Microsoft’s [about keys](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) documentation) and is the right default when regulations or customer contracts require keys that never leave the HSM for wrap/unwrap operations.
+
+**Azure Managed HSM** (`*.managedhsm.azure.net`) is a separate resource type: single-tenant pools for **HSM-protected keys only**—no secrets or certificates in the same resource. Microsoft positions it for high-value keys and strict compliance ([Managed HSM overview](https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/overview)). You pay an hourly pool fee (pricing page lists Standard B1 pools) rather than per-transaction secret pricing. Choose Managed HSM when you need dedicated tenancy, higher key counts per pool, or symmetric `oct-HSM` keys; stay on a Premium vault when you want one control plane for secrets, certs, and HSM keys together.
 
 ```mermaid
 graph TD
@@ -110,9 +126,31 @@ az keyvault secret show \
   --version "abc123def456..."
 ```
 
+For rotation-friendly secrets, set `exp` when you create or update so Key Vault can emit [SecretNearExpiry events](https://learn.microsoft.com/en-us/azure/event-grid/event-schema-key-vault) to Event Grid. Operations teams often pair expiry metadata with an Azure Function that writes the next version after the downstream system (SQL login, API vendor key) has been updated—Key Vault stores the truth, but it does not change external systems by itself.
+
+```bash
+# Create a secret with activation and expiry (ISO 8601 duration/date)
+az keyvault secret set \
+  --vault-name kubedojo-vault \
+  --name "api-key-vendor" \
+  --value "vendor-key-v1" \
+  --expires "2026-12-31T23:59:59Z" \
+  --not-before "2026-06-01T00:00:00Z"
+
+# Disable without deleting (blocks new reads of current version)
+az keyvault secret set-attributes \
+  --vault-name kubedojo-vault \
+  --name "api-key-vendor" \
+  --enabled false
+```
+
 ### Keys: Encryption Without Exposing Key Material
 
 Key Vault keys are special: [for HSM-protected keys, the private key material stays inside the HSM](https://learn.microsoft.com/en-us/azure/key-vault/general/developers-guide). When you need to encrypt data, you send the data to Key Vault, and it returns the ciphertext. You never see the raw key.
+
+Software keys (`RSA`, `EC`) are cheaper per operation and sufficient for dev/test or low-risk signing. HSM keys (`RSA-HSM`, `EC-HSM`) require **Premium** SKU and bill a monthly **per active key version** charge when used in the prior 30 days, plus per-operation fees ([Azure Key Vault pricing](https://azure.microsoft.com/en-us/pricing/details/key-vault/)). Advanced sizes (3072/4096-bit RSA, non-2048 curves) use a higher operations meter ($0.15 per 10,000 transactions vs $0.03 for 2048-bit software keys on the public pricing page). Throttling also differs: [service limits](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) allow fewer GETs per 10 seconds for larger HSM keys because limits are weighted—4096-bit HSM GETs consume the budget eight times faster than 2048-bit HSM GETs.
+
+For bulk data, applications use **envelope encryption**: generate a random AES data key locally, encrypt the payload with AES, then wrap the data key with Key Vault’s RSA-OAEP or AES-KW. Only the small wrapped key transits the network to Key Vault. Azure Disk Encryption, SQL TDE with customer-managed keys, and many PaaS integrations follow this pattern so multi-gigabyte objects never traverse the vault API.
 
 > **Stop and think**: If the raw key material for a Key Vault key never leaves the HSM, how does an application encrypt a 50 GB video file? Sending a 50 GB payload over the network to Key Vault for encryption would be incredibly slow and inefficient. What pattern might be used instead?
 
@@ -166,14 +204,16 @@ az keyvault certificate download \
   --encoding PEM
 ```
 
+Certificate **policies** define issuer (self-signed vs CA partner), key type, exportability, and lifetime actions. Auto-renewal triggers before expiry; each renewal is a billable **certificate renewal** operation on the pricing page (distinct from ordinary certificate API calls). Imported certificates skip CA integration but still benefit from centralized private-key storage and access logging. When App Service or Application Gateway consumes certs, they typically pull the current version via reference URI—rotation in Key Vault propagates only after the consuming service refreshes its binding.
+
 ---
 
 ## Automated Secret Rotation
 
-Storing secrets securely is only half the battle; secrets must be rotated regularly to limit the impact of a potential compromise. Azure Key Vault provides native rotation policies for Keys, and integrates with Event Grid to orchestrate rotation for Secrets.
+Storing secrets securely is only half the battle; secrets must be rotated regularly to limit the impact of a potential compromise. Rotation has three moving parts: **generate new material**, **update dependents** (databases, partners, apps), and **retire old versions** without breaking decrypt of historical data. Azure Key Vault owns the first and third for keys; secrets usually need your automation for the second.
 
 ### Key Vault Rotation Policies (Keys)
-For cryptographic keys, you can [define an automated rotation policy directly within Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/keys/how-to-configure-key-rotation). This instructs the HSM to generate new key material at a scheduled interval.
+For cryptographic keys, you can [define an automated rotation policy directly within Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/keys/how-to-configure-key-rotation). This instructs the HSM to generate new key material at a scheduled interval. The policy JSON combines `lifetimeActions` (when to rotate) with `attributes.expiryTime` on the key. After rotation, old versions remain addressable by version ID—encrypted blobs, disks, or database columns written with the prior key still decrypt. Your application or service (SQL TDE, Storage CMK) must be configured to prefer the latest version for new encryption while retaining access to older versions until data is re-encrypted or no longer needed.
 
 ```bash
 # Create a rotation policy for a key (rotate 30 days before expiry)
@@ -206,6 +246,8 @@ az keyvault key rotation-policy update \
 ### Secret Rotation via Event Grid
 For secrets (like database passwords), Key Vault cannot magically change the password in the target system (e.g., Azure SQL). Instead, Key Vault [emits an Event Grid event 30 days before a secret expires](https://learn.microsoft.com/en-us/azure/event-grid/event-schema-key-vault). This event triggers an Azure Function, which connects to the database, generates a new password, updates the database user, and saves the new version to Key Vault.
 
+Event types you should wire in automation include **SecretNearExpiry**, **SecretExpired**, **KeyNearExpiry**, and certificate analogues—each maps to a schema version documented on the Event Grid page. Subscriptions can fan out to Functions, Logic Apps, or Service Bus so rotation does not run inline with user traffic. Idempotency matters: NearExpiry may fire more than once if clocks or retries overlap; your function should check the current secret version before writing.
+
 ```bash
 # Example flow for Secret Rotation:
 # 1. Secret approaches 'Expiration Date'
@@ -213,7 +255,14 @@ For secrets (like database passwords), Key Vault cannot magically change the pas
 # 3. Event Grid triggers an Azure Function
 # 4. Function connects to Azure SQL and changes the password
 # 5. Function writes the new password to Key Vault as a new version
+# 6. Function notifies app owners OR relies on app cache TTL to pick up new version
 ```
+
+**Human runbooks vs automation:** low-frequency secrets (annual vendor API keys) may stay manual with calendar reminders; high-frequency database credentials should be fully automated. In all cases, test rollback: keep the previous secret version enabled until all consumers confirm the new password, then disable the old version to prevent silent fallback.
+
+### Monitoring who touched secrets
+
+Key Vault integrates with Azure Monitor for auditability. Enable diagnostic settings to stream **AuditEvent** logs to Log Analytics or a storage account ([overview](https://learn.microsoft.com/en-us/azure/key-vault/general/overview) describes monitoring options). Security teams hunt for unusual `SecretGet` volumes, `Delete` after hours, or `Purge` attempts. Correlate vault logs with Entra ID sign-in logs for human operators; managed identities show as service principals with predictable application IDs. Alerts on 429 rates often precede credential stuffing or misconfigured loops more than external attackers.
 
 ---
 
@@ -223,7 +272,9 @@ Key Vault supports two access control models. You must choose one at creation ti
 
 ### Access Policies (Legacy)
 
-Access Policies are vault-level permissions granted to specific identities. Each policy specifies what operations (get, set, delete, list, etc.) an identity can perform on secrets, keys, and certificates.
+Access Policies are vault-level permissions granted to specific identities. Each policy specifies what operations (get, set, delete, list, etc.) an identity can perform on secrets, keys, and certificates. Permissions are not Azure RBAC roles—they are Key Vault-specific strings like `get`, `list`, `set`, `delete`, `recover`, `backup`, `restore`, `encrypt`, `decrypt`, `wrapKey`, `unwrapKey`, `sign`, and `verify` combined per object type. A single principal might have `secret-permissions get list` and `key-permissions get wrapKey unwrapKey` on the same vault, which still grants visibility to **every** secret name in that vault when `list` is allowed.
+
+Microsoft’s migration guidance maps common combinations to built-in RBAC roles, but automated scanners should flag any vault with `enableRbacAuthorization: false` for remediation. Access policies also do not participate in Entra Conditional Access or PIM—only RBAC assignments do—so human access via policies bypasses modern Zero Trust controls described in the [Key Vault overview](https://learn.microsoft.com/en-us/azure/key-vault/general/overview).
 
 ```bash
 # Create a vault with access policies (not recommended for new vaults)
@@ -309,15 +360,29 @@ graph TD
 
 **War Story**: With Access Policies, permissions are granted at vault scope, so a broad set of identities can end up with access to more secrets than they actually need. They could not scope Access Policies to individual secrets. After migrating to RBAC, they granted `Key Vault Secrets User` at the individual secret scope, reducing the blast radius of each identity to only the secrets it needed.
 
+### Why mixing access policies and RBAC fails
+
+A vault is created in **either** RBAC mode or access-policy mode (`enableRbacAuthorization`). Microsoft’s [RBAC vs access policy guide](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-access-policy) recommends RBAC for new vaults because it aligns with Entra ID Conditional Access, Privileged Identity Management, and subscription-wide access reviews. **Do not grant vault access policies on an RBAC-enabled vault** “just to make it work”—that bypasses the governance model and creates dual paths auditors cannot reason about. Migration is a one-time switch: export policies, map to built-in roles (`Key Vault Secrets User`, `Key Vault Crypto User`, etc.), validate with a staging vault, then cut over.
+
+Data-plane roles are intentionally narrow. `Key Vault Secrets User` can read secret **values**; `Key Vault Reader` sees vault metadata only. Human break-glass should use PIM-eligible `Key Vault Secrets Officer` at the narrowest scope (single secret URI), not standing `Key Vault Administrator` on the subscription. Managed identities for workloads almost always need **Secrets User** or **Crypto User**—not Officer—because rotation and import remain pipeline responsibilities.
+
+Network controls stack on top of RBAC: `default-action Deny` on the vault firewall, subnet rules, optional [private endpoints](https://learn.microsoft.com/en-us/azure/key-vault/general/how-to-azure-key-vault-network-security), and “Allow trusted Microsoft services” when a PaaS resource must reach the vault without public IPs. RBAC alone does not stop a caller on an allowed network path; conversely, a perfect firewall does not help if the identity holds `Key Vault Administrator`. Design both layers.
+
+### Transaction throttling on the data plane
+
+Even authorized callers hit [service limits](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits). Secret GET operations share a **4,000 transactions per 10 seconds per vault per region** bucket (with a subscription-wide multiplier). Create/import bursts for secrets, certificates, and keys share a **300 per 10 seconds** collective cap. Exceeding limits returns HTTP **429**; clients must backoff and retry. Hot paths that call `get_secret` on every HTTP request will throttle during scale-out long before RBAC denies them—cache in memory and refresh on interval or after rotation events.
+
 ---
 
 ## Soft Delete and Purge Protection
 
-Key Vault has two safety nets against accidental or malicious deletion:
+Key Vault has two safety nets against accidental or malicious deletion. Together they implement a **recoverable delete** model that is very different from simply removing a row in a configuration database.
 
-**Soft Delete**: When you delete a secret, key, or certificate, it is not immediately destroyed. Instead, it enters a "soft-deleted" state and can be recovered during the [retention period (7-90 days)](https://learn.microsoft.com/en-us/azure/key-vault/general/soft-delete-overview). Soft delete is on by default for newly created key vaults.
+**Soft Delete**: When you delete a secret, key, or certificate, it is not immediately destroyed. Instead, it enters a "soft-deleted" state and can be recovered during the [retention period (7-90 days)](https://learn.microsoft.com/en-us/azure/key-vault/general/soft-delete-overview). Soft delete is on by default for newly created key vaults. During the retention window the name remains reserved—you cannot create a new secret with the same name until the old object is recovered or purged. Applications that read the live name will fail after delete, which is why operations runbooks should document recover steps alongside monitoring alerts on secret GET failures.
 
-**Purge Protection**: When enabled, even a soft-deleted object cannot be permanently destroyed (purged) until the retention period expires. When purge protection is enabled, a soft-deleted object cannot be purged until the retention period expires. This protects against a compromised admin account deliberately destroying secrets.
+**Purge Protection**: When enabled, even a soft-deleted object cannot be permanently destroyed (purged) until the retention period expires. This protects against a compromised admin account deliberately destroying secrets. Microsoft documents that **purge protection cannot be disabled** once enabled; plan retention length per environment (seven days for labs, longer for production) because every delete becomes a waiting game until scheduled purge date. Vault-level purge protection also prevents purging the entire vault until retention elapses—pair with break-glass procedures stored outside the vault.
+
+**Operational implications:** soft delete protects against oops moments; purge protection protects against malicious purge. Neither replaces backup: [backup/restore](https://learn.microsoft.com/en-us/azure/key-vault/general/backup) downloads encrypted blobs that only restore into the same subscription and geography. For regional disasters, rely on paired-region replication behavior plus your active-active vault pattern, not backup alone.
 
 ```bash
 # Delete a secret (soft delete)
@@ -352,13 +417,17 @@ stateDiagram-v2
 
 ## Multi-Region Architectures and Disaster Recovery
 
-For mission-critical applications deployed across multiple Azure regions (e.g., East US and West Europe), depending on a single Key Vault creates a single point of failure and introduces cross-region latency.
+For mission-critical applications deployed across multiple Azure regions (e.g., East US and West Europe), depending on a single Key Vault creates a single point of failure and introduces cross-region latency. Calls from West Europe to an East US vault add round-trip time on every cold start that touches Key Vault; at scale you will feel it in pod startup and autoscaling curves even when throttling is not triggered.
 
 ### High Availability within a Region
-Behind the scenes, Azure Key Vault automatically replicates its contents within the region and to a paired region (e.g., East US to West US). If a single node fails, traffic is transparently routed to a healthy node.
+Behind the scenes, Azure Key Vault automatically replicates its contents within the region and to a paired region (e.g., East US to West US). If a single node fails, traffic is transparently routed to a healthy node. You do not configure this replication—it is part of the managed service SLA story. Your responsibility is to place the vault in the same sovereignty boundary as the primary workload and to grant identities access via RBAC before failover events, because Entra ID tokens and DNS for `*.vault.azure.net` must still resolve during stress.
 
 ### The Active-Active Vault Pattern
-However, if an entire region goes down, the vault in the [paired region enters read-only mode](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault). For active-active applications that need to *write* secrets or manage keys during a regional outage, you [must deploy independent Key Vaults in each region](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault).
+However, if an entire region goes down, the vault in the [paired region enters read-only mode](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault). For active-active applications that need to *write* secrets or manage keys during a regional outage, you [must deploy independent Key Vaults in each region](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault). Reads may continue from the surviving regional endpoint for many scenarios, but secret rotation, new certificate issuance, or emergency key creation requires a writable vault in the active region.
+
+**Sync discipline:** treat regional vaults like regional databases. Global secrets (Stripe API key, shared HMAC) need identical values in both vaults via CI/CD or an approved sync function with idempotent writes and alerting on drift. Regional secrets (SQL login for `db-east` vs `db-west`) should exist only in the local vault to avoid wrong-region connections. Document which category each secret belongs to in your secret catalog; auditors will ask.
+
+**Failover testing:** quarterly exercises should include revoking a secret version, recovering via soft delete, and failing over application reads to the secondary regional vault URI. Teams that only test compute failover without Key Vault writes discover read-only mode when they attempt to rotate during an incident.
 
 ```mermaid
 graph TD
@@ -377,13 +446,25 @@ graph TD
 
 When using multiple vaults, your CI/CD pipeline or a dedicated synchronization function must ensure that identical secrets (like a third-party API key) are pushed to both vaults. For regional resources (like a region-specific database password), the local vault stores the local credential.
 
+**Latency budgeting:** cross-region secret reads add tens of milliseconds per call. If each pod startup performs five serial GETs across the continent, startup SLOs suffer before throttling appears. Co-locate vault and compute in the same region whenever possible; use regional vault pairs only for disaster tolerance, not for routine traffic.
+
+**Compliance copies:** some regimes require customer-managed keys in specific geographies. Document vault region, backup geography, and Entra tenant residency together—Key Vault does not override data residency choices made at subscription creation time.
+
 > **Stop and think**: If you use an Active-Active Vault pattern and rely on a CI/CD pipeline to push the same Stripe API key to `KV-East` and `KV-West`, what happens to your application if the pipeline partially fails, updating `KV-East` but failing to update `KV-West`?
 
 ---
 
 ## Integrating Key Vault with Applications
 
+Applications should treat Key Vault as an **upstream dependency** with latency, quotas, and availability characteristics—not as a local file. Plan retries, circuit breaking, and health checks that distinguish “vault unreachable” from “identity misconfigured.” For VMs without managed identity legacy paths, install the [Azure Instance Metadata Service identity endpoint](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview-for-developers) via VM extensions; ARM templates and `az vm identity assign` attach the same principals Container Apps use.
+
+**AKS workload identity (modern):** replaces pod identity with federated credentials to Entra ID; the CSI provider documentation aligns with managed identity client IDs. Whichever identity model you choose, the vault firewall must see the caller’s egress path and RBAC must reference the same principal ID you pass to `az role assignment create`.
+
 ### Pattern 1: Direct SDK Access (Application Code)
+
+Direct SDK access is the most portable pattern: it works on AKS, Container Apps, VMs, and developer laptops with the same code path. Authentication flows through [DefaultAzureCredential](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview-for-developers), which tries environment variables, managed identity endpoint, and Azure CLI login in order. Authorization is pure RBAC on the vault data plane—no magic strings in app settings beyond the vault URL.
+
+**Design checklist for SDK consumers:** (1) grant only `Key Vault Secrets User` (or Crypto User) to the workload identity; (2) use versionless secret names in production so operators can rotate without redeploying when the app reloads secrets; (3) implement exponential backoff on 429 responses per [throttling guidance](https://learn.microsoft.com/en-us/azure/key-vault/general/overview-throttling); (4) emit structured logs when secret refresh fails but do not log secret values; (5) separate read credentials from rotation credentials—rotation functions need Officer, apps need User.
 
 ```python
 from azure.identity import DefaultAzureCredential
@@ -407,6 +488,10 @@ for secret in client.list_properties_of_secrets():
 
 ### Pattern 2: Key Vault References in App Configuration
 
+Platform references trade flexibility for simplicity. Azure resolves the secret at runtime and injects it like a normal app setting, which means your code never imports the Key Vault SDK—great for legacy apps, but rotation requires the platform to refresh the binding and you lose fine-grained per-request audit in application logs (vault diagnostics still record access). References must use a fully qualified secret URI including version if you pin; versionless URIs track **current** automatically per [App Service Key Vault references](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references).
+
+The identity performing resolution needs `get` on secrets—typically the App Service system-assigned identity with **Secrets User** on the vault. Misconfiguration shows up as startup errors referencing `@Microsoft.KeyVault(...)` syntax literally in environment dumps; never log resolved values.
+
 Azure App Service and Functions can use Key Vault references in app settings, and Container Apps can consume Key Vault-backed secrets without SDK code:
 
 ```bash
@@ -424,6 +509,10 @@ az functionapp config appsettings set \
 
 ### Pattern 3: Container Apps with Key Vault
 
+Container Apps treat Key Vault as a **secret provider** referenced at deploy time. The `keyvaultref:` and `identityref:` pair binds a secret name to a vault URI and the managed identity that authenticates. Environment variables then use `secretref:` indirection so the image stays free of vault URLs. Rotation requires revising the Container App secret definition or using an external pipeline to update revisions—there is no in-container SDK call unless you add one.
+
+Operational tip: user-assigned identities are clearer in multi-tenant platforms than system-assigned when several apps share automation templates. Grant **Secrets User** on the vault scope, not Contributor on the resource group, to avoid accidental resource deletion rights.
+
 ```bash
 # Create a Container App that reads secrets from Key Vault via Managed Identity
 az containerapp create \
@@ -437,7 +526,11 @@ az containerapp create \
 
 ### Pattern 4: Kubernetes Integration (CSI Driver)
 
-For AKS, the Azure Key Vault Provider for Secrets Store CSI Driver [mounts secrets as files in the pod](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver):
+For AKS, the Azure Key Vault Provider for Secrets Store CSI Driver [mounts secrets as files in the pod](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver). Pods see secrets as read-only files under `/mnt/secrets-store` (path depends on your `volumeMount`). Linux containers can `source` or read files directly; .NET and Java apps often map paths via configuration. Because the driver calls Key Vault on mount and on rotation intervals, cluster autoscaling that churns pods during traffic spikes can amplify transaction counts—pre-warm secrets in images only when they are non-sensitive config; never bake real secrets into layers.
+
+**Rotation and reload:** enabling rotation on the `SecretProviderClass` lets the driver pick up new versions without redeploying the entire Deployment, but application code may still cache old values until it re-reads files or receives SIGHUP. Document whether your framework watches the mount directory. When `secretObjects` sync to Kubernetes Secrets for env vars, rotation updates the mount first; synced Secrets may lag unless you enable auto-reload annotations supported in your cluster version.
+
+**Identity wiring:** `useVMManagedIdentity: "true"` uses the kubelet identity on the node pool unless you specify `userAssignedIdentityID` for a dedicated identity per workload class—prefer user-assigned identities per team so compromise of one pool does not unlock every vault in the subscription.
 
 ```yaml
 # SecretProviderClass for AKS
@@ -471,11 +564,32 @@ spec:
           key: STRIPE_KEY
 ```
 
+Mount the volume in the pod spec (`volumeMounts` + `volumes` referencing the `SecretProviderClass`). With `secretObjects`, the driver can [sync into a native Kubernetes Secret](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver) for env-var injection—understand that copying to a K8s Secret widens the blast radius to anyone with `get secrets` in the namespace. Prefer file mounts for sensitive material when your runtime supports reading paths.
+
+**Rotation on AKS:** enable rotation/reload on the `SecretProviderClass` so the driver polls Key Vault and remounts files; pair with workload restarts or sidecars that signal the app when files change. Managed identity (system- or user-assigned) replaces deprecated pod identity; set `useVMManagedIdentity: "true"` and pass the identity’s client ID as in the manifest above.
+
+### Contrast: hardcoded connection strings
+
+| Approach | Credential in Git? | Audit trail | Rotation | Scale-out risk |
+| :--- | :--- | :--- | :--- | :--- |
+| Env var / `appsettings.json` | Often yes | None on read | Redeploy required | N/A |
+| SDK + Managed Identity | No | Key Vault diagnostic logs | Update secret version; app refresh | Throttling if uncached |
+| App Service / Container Apps Key Vault reference | No | Platform + vault logs | Update vault; platform resolves | Platform caches reference |
+| CSI file mount | No | Vault logs + K8s audit | Driver rotation + pod reload | Low if mount-on-start only |
+
+The anti-pattern this module prevents is treating Key Vault as a remote `.env` file fetched per request. Fetch at process start (or on rotation webhook), hold in protected memory, and respect 429 backoff.
+
 ---
 
 ## Key Vault Networking: Private and Secure
 
-By default, Key Vault is [accessible from the public internet (with authentication required)](https://learn.microsoft.com/fi-fi/azure/key-vault/general/how-to-azure-key-vault-network-security?tabs=azure-cli). For production, restrict network access:
+By default, Key Vault is [accessible from the public internet (with authentication required)](https://learn.microsoft.com/fi-fi/azure/key-vault/general/how-to-azure-key-vault-network-security?tabs=azure-cli). Authentication and authorization still apply on public endpoints—network openness is not the same as anonymous access—but production baselines should assume attackers probe `*.vault.azure.net` from anywhere.
+
+**Defense in depth layers:** (1) private endpoint on a dedicated subnet with DNS integration to the vault’s private link FQDN; (2) firewall `default-action Deny` with explicit VNet service endpoints or private endpoint subnets; (3) optional IP rules for break-glass operators; (4) `Allow trusted Microsoft services` when Azure Backup, App Service, or other Microsoft services must reach the vault without routing through your VNet. Each layer reduces exposure; combine with RBAC least privilege because an insider on an allowed subnet can still exfiltrate secrets if they hold **Secrets User**.
+
+**AKS note:** when the CSI driver or workload identity calls Key Vault, traffic egresses from the node pool or overlay network—ensure NSGs and firewall rules include those subnets, not only developer office IPs. Private Link without updating DNS in the cluster causes opaque TLS failures that look like “Key Vault is down.”
+
+For production, restrict network access:
 
 ```bash
 # Restrict to specific VNets and IPs
@@ -508,15 +622,97 @@ az network private-endpoint create \
 
 ---
 
+## Cost Lens: Transactions, Keys, Certificates, and Managed HSM
+
+Key Vault billing is **operation-centric** for vaults, not capacity-based. Microsoft’s [pricing page](https://azure.microsoft.com/en-us/pricing/details/key-vault/) charges **$0.03 per 10,000 transactions** for most secret, software key, and certificate API calls in both Standard and Premium. That sounds negligible until you multiply by microservice instance count and request rate.
+
+**Secrets hot path:** An API tier with 200 pods, each handling 50 requests/second, that calls `get_secret` once per request generates 100,000 secret GETs per second—orders of magnitude above the [4,000 GETs per 10 seconds](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) limit. You pay twice: throttling outages plus billable operations if you somehow stayed under the cap. **Knobs that reduce cost:** in-memory cache with TTL (5–15 minutes is common), startup-only fetch, batching configuration reads, and fewer secrets per vault (reuse references, not duplicate copies).
+
+**Premium HSM keys:** Each active HSM key version can incur **$1/month (2048-bit RSA)** plus operations, with higher monthly charges for advanced key sizes on the pricing table. Idle versions you never use may avoid the monthly HSM key fee, but **each version counts separately** if it was used in the last 30 days—rotation without retiring old versions increases steady cost.
+
+**Certificates:** Ordinary certificate API operations bill like secrets; **renewal requests** bill **$3 per renewal** (not the $0.03/10k bucket). Automated TLS with frequent renewals across dozens of hostnames adds up—consolidate SAN certs where policy allows.
+
+**Automated key rotation policy:** Scheduled rotations on vault keys are **$1 per scheduled rotation** per the pricing page—cheaper than manual runbooks only if rotation frequency is sane.
+
+**Managed HSM pools:** Billed per **hour per HSM pool** (e.g., Standard B1 at $3.20/hour on the US pricing page at time of writing—verify region/currency in the calculator). Economical when you need many HSM operations on dedicated hardware; expensive for a handful of secrets—use a Premium **vault** instead.
+
+**Cost spike surprises:** Black Friday scale-out without cache; certificate auto-renewal storms; integration tests hitting production vaults; and backup jobs over objects with 500+ versions (slow, operation-heavy). Tag vaults by environment and alert on Key Vault metrics for **ServiceApiHit** throttling and transaction volume.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Proven patterns
+
+| Pattern | When to use | Why it works | Scaling note |
+| :--- | :--- | :--- | :--- |
+| **One vault per app per environment** | Prod vs dev isolation | Blast radius and RBAC scope stay bounded; aligns with [Microsoft app guidance](https://learn.microsoft.com/en-us/azure/key-vault/general/apps-api-keys-secrets) | More vaults mean more RBAC assignments—automate with IaC |
+| **RBAC + least-privilege data-plane roles** | All new vaults | Entra ID governance, secret-level scope, PIM for humans | Use `Key Vault Secrets User` at `/secrets/<name>` URI |
+| **Startup cache + periodic refresh** | High QPS services | Avoids 429 throttling and cuts $0.03/10k charges | Refresh on rotation Event Grid events, not every HTTP call |
+| **CSI file mount for AKS** | Twelve-factor apps that read files | No secret in image; identity-based access | Enable rotation; limit K8s Secret sync |
+| **Envelope encryption for bulk data** | Large blobs, disks, SQL CMK | Key Vault wraps DEK only; data stays in service | Use HSM keys when policy requires |
+
+### Anti-patterns
+
+| Anti-pattern | What goes wrong | Why teams fall into it | Better alternative |
+| :--- | :--- | :--- | :--- |
+| **Per-request `get_secret`** | 429 throttling + high ops bill | “Always fresh” security myth | Cache + rotation hooks |
+| **Subscription-wide `Key Vault Administrator`** | Over-privileged humans/scripts | Easiest role to “make it work” | Scoped Officer/User + PIM |
+| **Mixing access policies on RBAC vaults** | Audit gaps, dual control paths | Legacy scripts during migration | Complete RBAC migration |
+| **Premium vault for secrets-only workloads** | Paying HSM key fees unnecessarily | One-size-fits-all platform standard | Standard vault for secrets; Premium only when using HSM keys |
+| **CSI sync to K8s Secret for everything** | Secret duplicated in etcd | Env vars need Secret objects | Mount files; sync only when required |
+| **No purge protection in production** | Attacker purges after delete | Faster “cleanup” in tests | Enable purge protection; shorter retention in dev |
+
+---
+
+## Decision Framework
+
+Use this matrix when choosing control plane, SKU, and integration path. Prices and limits change—confirm in [pricing](https://azure.microsoft.com/en-us/pricing/details/key-vault/) and [service limits](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) before production sign-off.
+
+| Decision | Choose A | Choose B | Choose C |
+| :--- | :--- | :--- | :--- |
+| **Authorization** | **Azure RBAC** (new vaults) | Access policies (legacy only) | — |
+| **Vault SKU** | **Standard** — secrets + software keys | **Premium** — HSM keys + secrets/certs in one vault | **Managed HSM** — dedicated HSM keys only, highest isolation |
+| **App integration** | **SDK + Managed Identity** (full control, any host) | **Key Vault reference** (App Service/Functions/Container Apps) | **Secrets Store CSI** (AKS file mounts + optional K8s Secret sync) |
+
+```mermaid
+flowchart TD
+    Start([Need to store credentials or keys?]) --> Q1{Kubernetes workload?}
+    Q1 -->|Yes| Q2{Prefer files vs env vars?}
+    Q2 -->|Files / rotation| CSI[Secrets Store CSI + Azure provider]
+    Q2 -->|Env vars only| CSI2[CSI with secretObjects sync OR SDK]
+    Q1 -->|No| Q3{Azure PaaS with native reference?}
+    Q3 -->|Yes| Ref[Platform Key Vault reference]
+    Q3 -->|No| SDK[SDK + DefaultAzureCredential]
+    Start --> Q4{Only HSM keys, no secrets?}
+    Q4 -->|Yes| MHSM[Managed HSM pool]
+    Q4 -->|No| Q5{Need RSA-HSM / EC-HSM in vault?}
+    Q5 -->|Yes| Prem[Premium vault]
+    Q5 -->|No| Std[Standard vault]
+    Start --> Q6{Greenfield vault?}
+    Q6 -->|Yes| RBAC[enable-rbac-authorization true]
+    Q6 -->|Legacy| AP[Plan migration to RBAC]
+```
+
+**Tradeoffs in one glance:** RBAC wins governance; access policies only remain for untouchable legacy. Standard is cheapest for secrets-heavy platforms. Premium adds HSM key monthly + ops cost but keeps certs and secrets together. Managed HSM is hourly pool pricing—justify with compliance, not convenience. SDK offers maximum portability; references minimize code but hide rotation semantics; CSI is best for AKS-native secret delivery with file-based interfaces.
+
+### When Standard beats Premium (and when it does not)
+
+Choose **Standard** when the workload stores application secrets and software-protected RSA/EC keys only, and compliance does not mandate HSM-wrapped keys. Many microservice estates never call `wrapKey` on an HSM key—paying Premium’s per-key monthly fees would fund unused capability. Choose **Premium** when you require `RSA-HSM`/`EC-HSM` keys that stay inside validated HSM boundaries, or when auditors explicitly map controls to FIPS 140-3 Level 3 material described in Microsoft’s tier comparison. Choose **Managed HSM** when symmetric `oct-HSM` keys, dedicated tenancy, or pool-level scaling guidance from [Managed HSM scaling](https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/scaling-guidance) dominates the architecture—accept that secrets and certificates will still live in a separate vault.
+
+Certificate-heavy platforms should model **renewal dollars** separately from API operation dollars: a fleet of fifty certs renewing monthly triggers fifty $3 renewal lines on the public pricing page even if API traffic stays low. Secrets-heavy platforms should model **GET volume** against the 4,000/10s limit before the first invoice arrives. FinOps dashboards that only track vault count miss the dominant cost driver—transactions and renewals scale with application behavior, not resource inventory. Tag each vault with `cost-center` and `environment` application tags for chargeback reports. Review monthly Cost Management filters grouped by Key Vault resource ID.
+
+---
+
 ## Did You Know?
 
-1. **Azure Key Vault handles a very large volume of requests** across Azure customers. It is one of the most heavily used services in Azure because virtually every Azure service that needs secrets, keys, or certificates uses Key Vault under the hood. Azure Disk Encryption, App Service certificates, SQL Transparent Data Encryption---they all store their keys in Key Vault.
+1. **Azure Key Vault handles a very large volume of requests** across Azure customers. It is one of the most heavily used services in Azure because virtually every Azure service that needs secrets, keys, or certificates uses Key Vault under the hood. Azure Disk Encryption, App Service certificates, SQL Transparent Data Encryption—they all store their keys in Key Vault. That ubiquity means Microsoft invests heavily in throttling fairness and regional replication; your misconfigured loop affects shared capacity, which is why 429 responses should trigger client backoff instead of tight retry storms.
 
-2. **Key Vault tiers differ in protection model and pricing**. Check the current Microsoft documentation and pricing page before making compliance or cost claims about a specific SKU.
+2. **Key Vault tiers differ in protection model and pricing**. Standard uses software-protected keys with FIPS 140 Level 1 modules; Premium adds HSM-protected keys with stronger validations on current HSM platforms. Managed HSM pools bill hourly and target key-only estates. Always reconcile architectural slides with the current [overview](https://learn.microsoft.com/en-us/azure/key-vault/general/overview) and [pricing](https://azure.microsoft.com/en-us/pricing/details/key-vault/) pages before contractual commitments.
 
-3. **Key Vault has a throttling limit of [4,000 transactions per vault per 10 seconds](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits)** for secret read operations. Large microservice rollouts can hit Key Vault throttling if every instance fetches multiple secrets at once. Cache secrets locally, refresh them on a sensible interval, and stagger large deployments.
+3. **Key Vault has a throttling limit of [4,000 transactions per vault per 10 seconds](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits)** for secret read operations. Large microservice rollouts can hit Key Vault throttling if every instance fetches multiple secrets at once. Cache secrets locally, refresh them on a sensible interval, and stagger large deployments. The same page documents weighted limits for large RSA HSM keys—capacity planning is not only about secrets.
 
-4. **Once purge protection is enabled on a vault, it cannot be disabled.** This is by design---it prevents an attacker who gains admin access from disabling the protection and then purging secrets. If you enable purge protection on a test vault with a long retention period, deleted objects can't be permanently purged until that retention window expires. Use a shorter retention period (such as 7 days) for most non-production vaults.
+4. **Once purge protection is enabled on a vault, it cannot be disabled.** This is by design—it prevents an attacker who gains admin access from disabling the protection and then purging secrets. If you enable purge protection on a test vault with a long retention period, deleted objects cannot be permanently purged until that retention window expires. Use a shorter retention period (such as 7 days) for most non-production vaults, and document scheduled purge dates in change tickets so operators know when names become reusable.
 
 ---
 
@@ -526,12 +722,14 @@ az network private-endpoint create \
 | :--- | :--- | :--- |
 | Storing secrets in environment variables, config files, or code | It is "faster" during development | Use Key Vault from day one. Local dev uses `DefaultAzureCredential` which falls back to Azure CLI login---no secret management needed locally. |
 | Creating one vault per secret | Misunderstanding of vault purpose | A vault is a logical grouping of related secrets. [Use one vault per application/environment](https://learn.microsoft.com/en-us/azure/key-vault/general/apps-api-keys-secrets) (e.g., `app-prod-vault`, `app-dev-vault`). |
-For new vaults, create them with `--enable-rbac-authorization true` unless you have a specific reason to use Access Policies. RBAC provides per-secret scoping and uses standard Azure role-assignment and privileged-access workflows. |
+| Using Access Policies on new vaults | Copying old tutorials | For new vaults, create them with `--enable-rbac-authorization true` unless you have a specific legacy reason. RBAC provides per-secret scoping and uses standard Azure role-assignment and privileged-access workflows. |
 | Not enabling purge protection on production vaults | It seems overly cautious | A compromised admin could delete and purge all secrets. Purge protection ensures deleted secrets can be recovered. Enable it on all production vaults. |
 | Reading secrets from Key Vault on every request | It seems like the "most secure" approach | Cache secrets in memory and refresh periodically (every 5-15 minutes). Key Vault has throttling limits, and each call adds network latency. |
 | Granting Key Vault Administrator when Key Vault Secrets User is sufficient | "Administrator" sounds like the right role for an admin | [Key Vault Administrator can create, delete, and manage ALL objects. Most applications only need Key Vault Secrets User (read secrets).](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) |
 | Not rotating secrets | The initial secret "works fine" | Implement secret rotation. Use Key Vault rotation policies for keys, or Event Grid notifications to trigger custom secret-rotation logic. |
 | Forgetting to configure firewall rules on production vaults | The vault works from everywhere by default | Set `--default-action Deny` and add only the necessary VNet subnets and IPs. Use Private Endpoint for the strongest isolation. |
+
+**Governance habits that stick:** maintain a secret catalog (name, owner, rotation cadence, regional copy, RBAC assignees). Review **Key Vault Administrator** assignments quarterly. Export diagnostic logs to a workspace with retention matching your compliance regime, and alert when `SecretGet` anomalies exceed baselines. Treat emergency secret disable (`enabled: false`) as a break-glass action with ticket linkage, not as everyday rotation.
 
 ---
 
@@ -573,13 +771,27 @@ The outage occurred because Key Vault is designed as a secure storage repository
 Storing a password directly in an environment variable leaves the plaintext credential exposed in memory dumps, process listings, debugging logs, and the Azure Portal interface for anyone with read access to the App Service. It also provides no audit trail of who viewed the password, and requires a full application restart to rotate the credential. By moving the password to Azure Key Vault and using a Managed Identity, the credential is encrypted at rest in a hardware security module (HSM) and the application's identity is authenticated via Entra ID. This approach provides fine-grained RBAC scoping, generates an immutable audit log of every access attempt, and allows the secret to be rotated independently of the application deployment lifecycle.
 </details>
 
+<details>
+<summary>7. Your security architect must choose between a Premium Key Vault in East US and a Managed HSM pool for storing a single RSA-2048 key used by SQL transparent data encryption with customer-managed keys. The workload also needs fifty application secrets in the same project. Which resource type do you recommend and why?</summary>
+
+Use a **Premium Key Vault** for this combined workload. Managed HSM pools host **HSM-protected keys only** and do not store the application secrets SQL and microservices need in the same resource ([about keys](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) contrasts vaults vs Managed HSM). Premium vaults provide HSM-backed `RSA-HSM` keys for TDE while still centralizing secrets and certificates under one RBAC and networking model. Managed HSM is justified when keys are the sole high-value assets, tenancy isolation is mandatory, or symmetric `oct-HSM` keys are required—not when dozens of secrets share the operational plane with one CMK.
+</details>
+
+<details>
+<summary>8. Scenario: ACI tasks fetch three secrets from Key Vault on every container start, but your SRE sees rising monthly Key Vault charges after autoscaling to 500 tasks/day that each restart twice. The app is correct functionally. What change preserves security while addressing cost?</summary>
+
+Fetching on **every start** is appropriate; fetching on **every task iteration or health probe** is not. Ensure secrets load once per process lifetime into memory, not per job step. If restarts are excessive, fix orchestrator restart policy. For 500×2 starts/day, operations stay modest; charges spike when loops call Key Vault repeatedly. Add caching inside the container process, reuse the same vault URI with versionless GET for current secret, and verify diagnostic logs so only startup paths call `get_secret`. That preserves managed identity authentication while aligning with Microsoft’s throttling guidance for high-volume GETs.
+</details>
+
 ---
 
 ## Hands-On Exercise: DB Connection String in Key Vault, Retrieved by Container App via Managed Identity
 
-In this exercise, you will store a secret in Key Vault, create a Container App with a Managed Identity, grant the identity access to read the secret, and verify the integration.
+In this exercise, you will store a secret in Key Vault, create a Container App with a Managed Identity, grant the identity access to read the secret, and verify the integration. The flow mirrors production: **no secret in the container image**, Entra ID authenticates the identity, RBAC authorizes only `get`/`list` on secrets, and soft delete demonstrates recoverability. You use a disposable resource group so purge protection stays off for easy cleanup—do not copy that setting to production vaults.
 
-**Prerequisites**: Azure CLI installed and authenticated.
+**What you are proving:** (1) RBAC mode vaults reject anonymous access; (2) role assignments use `az role assignment create --assignee <principal> --role "Key Vault Secrets User" --scope <vault-id>` syntax; (3) user-assigned managed identity requires `AZURE_CLIENT_ID` when multiple identities exist on the same resource; (4) secret lifecycle commands (`set`, `delete`, `list-deleted`, `recover`) behave as documented in soft-delete overview.
+
+**Prerequisites**: Azure CLI installed and authenticated (`az login`). Sufficient subscription permissions to create resource groups, Key Vaults, managed identities, and Container Apps in `eastus2` (or change `LOCATION` consistently).
 
 ### Task 1: Create Key Vault with RBAC Authorization
 
@@ -831,3 +1043,9 @@ az group delete --name "$RG" --yes --no-wait
 - [learn.microsoft.com: how to azure key vault network security](https://learn.microsoft.com/fi-fi/azure/key-vault/general/how-to-azure-key-vault-network-security?tabs=azure-cli) — Microsoft's Key Vault networking documentation explicitly states that the firewall is disabled by default and clarifies that authentication and permissions still apply.
 - [learn.microsoft.com: service limits](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) — Microsoft's service-limits page explicitly documents the 4,000 transactions per 10 seconds threshold.
 - [learn.microsoft.com: apps api keys secrets](https://learn.microsoft.com/en-us/azure/key-vault/general/apps-api-keys-secrets) — Microsoft's current application guidance explicitly recommends separate key vaults for different applications and environments.
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/azure/key-vault/general/overview) — Documents Standard vs Premium tiers, FIPS levels, and centralized secrets management rationale.
+- [learn.microsoft.com: managed hsm overview](https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/overview) — Explains single-tenant Managed HSM pools vs multi-tenant vaults.
+- [learn.microsoft.com: key vault throttling guidance](https://learn.microsoft.com/en-us/azure/key-vault/general/overview-throttling) — Official backoff guidance when HTTP 429 occurs.
+- [azure.microsoft.com: key vault pricing](https://azure.microsoft.com/en-us/pricing/details/key-vault/) — Transaction, HSM key monthly, certificate renewal, rotation, and Managed HSM hourly rates.
+- [learn.microsoft.com: backup](https://learn.microsoft.com/en-us/azure/key-vault/general/backup) — Backup limits and restore geography constraints.
+- [learn.microsoft.com: managed hsm scaling guidance](https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/scaling-guidance) — Capacity planning for dedicated HSM pools.
