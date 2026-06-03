@@ -1,0 +1,2 @@
+## 2026-06-03T08:14:48Z — `REVIEW` — `APPROVE`
+Cloud AWS Essentials wave 2 (session 96) cross-family review. Reviewer: opus-4.8. Expanded 2.6k->5.0k (+sources to clear floor); pull-through URLs+credential-arn, replication billed not free, Inspector 8 langs, Docker Hub Nov-2020 rate-limit, TTL fixed-not-configurable. All gates green; dedup PASS; PR #1763 CI green; orchestrator web-verified cloud facts.
