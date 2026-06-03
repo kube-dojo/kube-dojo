@@ -17,6 +17,8 @@ After completing this module, you will be able to reason through the full reques
 - **Debug** Application Gateway failures by following a request through listener, WAF policy, routing rule, backend HTTP settings, probe, and backend pool.
 - **Design** a regional ingress pattern that uses the right boundary: Application Gateway, Front Door, AGIC, Application Gateway for Containers, or an in-cluster ingress controller.
 - **Evaluate** WAF, TLS, autoscaling, cost, logging, and migration choices before they become production incidents.
+- **Configure** WAF policies with managed and custom rules, narrow exclusions after log review, and a deliberate Detection-to-Prevention workflow.
+- **Implement** TLS termination with Key Vault-backed listener certificates and backend HTTP settings that stay aligned with health probe contracts.
 
 The emphasis is operational. You are not only learning which Azure resource to create; you are learning how to keep the resource understandable when many teams depend on it.
 
@@ -958,6 +960,54 @@ D. WAF CRS version
 <summary>Answer</summary>
 
 **Correct: B.** Certificate sync depends on secret access and the referenced secret ID. Backend replicas, MX records, and WAF rules do not explain the listener certificate.
+
+</details>
+
+### Question 5
+
+An architecture review must **design** a **regional** **ingress** pattern with an explicit traffic **boundary**. A global retail brand needs multi-region failover at the edge, WAF on private regional APIs inside hub-spoke VNets, and no managed Azure Layer-7 hop for an internal-only batch job in a single AKS cluster. Which pairing best matches those boundaries?
+
+A. Azure Front Door at the global edge, Application Gateway per region for private APIs, and in-cluster ingress only for the internal batch job
+B. Application Gateway only for global users and every backend, including the internal batch job
+C. Azure Load Balancer Standard as the sole public HTTPS entry with hostname-based routing to all workloads
+D. Azure API Management as the only edge for browser traffic, regional APIs, and Kubernetes workloads
+
+<details>
+<summary>Answer</summary>
+
+**Correct: A.** [Azure Front Door](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-overview) fits the global edge and failover boundary; [Application Gateway](https://learn.microsoft.com/en-us/azure/application-gateway/overview) fits regional VNet-integrated WAF and private backends. An internal-only cluster service does not need a regional managed gateway when cluster ingress is enough. Load Balancer operates at Layer 4 and does not provide Application Gateway-style HTTP host routing. API Management is an API lifecycle and policy plane, not a substitute for a global CDN-style web edge plus regional private ingress.
+
+</details>
+
+### Question 6
+
+During application onboarding, `/checkout` POST bodies trip OWASP rule `942430` after the team moves a WAF policy to Prevention. Security asks you to **configure** the **WAF** **policy** with the narrowest defensible change. Firewall logs show one `RequestHeaderValues` selector on a legacy header. What should you do first?
+
+A. Disable the entire SQL injection managed rule group for all listeners
+B. Add a per-rule exclusion for rule `942430` scoped to that header selector after confirming the log evidence, then keep other SQLi rules active
+C. Detach the WAF policy from the Application Gateway
+D. Leave Prevention mode but stop collecting WAF logs to reduce noise
+
+<details>
+<summary>Answer</summary>
+
+**Correct: B.** The [WAF customization guidance](https://learn.microsoft.com/en-us/azure/web-application-firewall/ag/application-gateway-customize-waf-rules-portal) expects operators to tune with evidence: identify rule ID, match variable, and selector, then apply the smallest exclusion. Disabling a whole rule group weakens unrelated traffic. Removing WAF or ignoring logs removes the feedback loop you need before returning to a bounded Prevention posture.
+
+</details>
+
+### Question 7
+
+Pods show Ready in Kubernetes, but Application Gateway reports unhealthy backends. The application now exposes `/healthz`, while the gateway probe still calls `/ready` with a host header that does not match backend HTTP settings. As the operator responsible for how you **implement** **TLS** and probe contracts, what is the best next step?
+
+A. Increase autoscale `max_capacity` without touching probes or backend settings
+B. Update the probe path and host-header behavior to match the readiness contract, then revalidate listener TLS and backend HTTPS settings on the same route
+C. Disable health probes so traffic flows while the app team investigates
+D. Switch backends to HTTP-only on port 80 without updating documentation or certificates
+
+<details>
+<summary>Answer</summary>
+
+**Correct: B.** Probe contract drift is a common cause of false unhealthy backends when applications change readiness paths or host expectations. [Backend HTTP settings](https://learn.microsoft.com/en-us/azure/application-gateway/configuration-http-settings) and [TLS overview](https://learn.microsoft.com/en-us/azure/application-gateway/ssl-overview) should be validated together because hostname, SNI, protocol, and certificate behavior cross both hops. Scaling or disabling probes masks the mismatch and can send traffic to backends that the gateway correctly refuses.
 
 </details>
 
