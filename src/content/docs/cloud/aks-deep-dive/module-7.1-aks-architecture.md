@@ -104,9 +104,8 @@ az aks create \
   --name aks-prod-westeurope \
   --nodepool-name system \
   --node-count 3 \
-  --node-vm-size Standard_D2s_v5 \
+  --node-vm-size Standard_D2ds_v5 \
   --zones 1 2 3 \
-  --mode System \
   --max-pods 30 \
   --generate-ssh-keys
 
@@ -116,7 +115,7 @@ az aks nodepool add \
   --cluster-name aks-prod-westeurope \
   --name apps \
   --node-count 3 \
-  --node-vm-size Standard_D4s_v5 \
+  --node-vm-size Standard_D4ds_v5 \
   --zones 1 2 3 \
   --mode User \
   --max-pods 110 \
@@ -163,6 +162,8 @@ az aks nodepool add \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 ```
 
+AKS auto-applies the `kubernetes.azure.com/scalesetpriority=spot:NoSchedule` taint when you create a pool with `--priority Spot`; the explicit `--node-taints` above is shown for clarity, not because it is required.
+
 | Pool Type | Purpose | Min Nodes | Taint Applied | When to Scale |
 | :--- | :--- | :--- | :--- | :--- |
 | **System** | CoreDNS, konnectivity, metrics-server | 3 (for HA across AZs) | `CriticalAddonsOnly` (auto) | Rarely---keep stable |
@@ -174,7 +175,7 @@ az aks nodepool add \
 
 [System node pools host CoreDNS, metrics-server, konnectivity-agent, and other critical add-ons](https://learn.microsoft.com/en-us/azure/aks/use-system-pools). AKS applies the `CriticalAddonsOnly=true:NoSchedule` taint on dedicated system pools so arbitrary application pods cannot land there unless they declare a matching toleration—which you should reserve for platform components, not product microservices. Microsoft recommends at least three system nodes when you span availability zones so a single zone loss still leaves quorum for DNS and control-plane tunnel traffic. Undersizing system pools (for example three `Standard_B2s` nodes running a full monitoring stack) is a common source of control-plane-adjacent failures that look like application bugs.
 
-Minimum practical sizing is workload-dependent, but a useful production starting point is three `Standard_D2s_v5` (or equivalent) system nodes with `max-pods` around 30, separate from bursty application pools. Keep system pool autoscaling off unless Microsoft guidance for your add-on set explicitly recommends otherwise; stability beats elasticity for the engine room.
+Minimum practical sizing is workload-dependent, but a useful production starting point is three `Standard_D2ds_v5` (or equivalent) system nodes with `max-pods` around 30, separate from bursty application pools. Keep system pool autoscaling off unless Microsoft guidance for your add-on set explicitly recommends otherwise; stability beats elasticity for the engine room.
 
 ### Manual scaling, Cluster Autoscaler, and node autoprovisioning (NAP)
 
@@ -184,7 +185,7 @@ Use Cluster Autoscaler when you already think in fixed pool SKUs (GPU pool, spot
 
 ### VMSS orchestration, max pods, and spot vs on-demand pools
 
-Most AKS node pools are Virtual Machine Scale Sets under the hood: scale-up adds instances, scale-down removes them, and zone placement is expressed in the scale set model. [Max pods per node is capped by your CNI choice and subnet IP inventory](https://learn.microsoft.com/en-us/azure/aks/concepts-storage)—Azure CNI assigns per-pod IPs from the subnet, so a `/24` subnet cannot magically host 110 pods per node across dozens of nodes without planning. Kubenet and overlay modes change the math; copying `max-pods 30` from a system pool into a user pool is a frequent mistake that throttles density.
+Most AKS node pools are Virtual Machine Scale Sets under the hood: scale-up adds instances, scale-down removes them, and zone placement is expressed in the scale set model. [Max pods per node is capped by your CNI choice and subnet IP inventory](https://learn.microsoft.com/en-us/azure/aks/concepts-network)—Azure CNI assigns per-pod IPs from the subnet, so a `/24` subnet cannot magically host 110 pods per node across dozens of nodes without planning. Kubenet and overlay modes change the math; copying `max-pods 30` from a system pool into a user pool is a frequent mistake that throttles density.
 
 At the pool level, **spot** nodes (`--priority Spot`) trade eviction risk for steep discounts on the VM line item; pair them with the Kubernetes spot taint and tolerations on fault-tolerant jobs. **On-demand** pools carry the SLA expectation for stateless APIs and system components. Mixing spot into the system pool is unsupported in practice because evictions would take down CoreDNS. Keep spot in dedicated user pools with `min-count 0` so idle batch capacity does not burn budget overnight.
 
@@ -214,7 +215,7 @@ az vmss list-instances --resource-group $INFRA_RG \
 
 When AKS creates your cluster, it also creates a second resource group with the naming convention `MC_{resource-group}_{cluster-name}_{region}`. This resource group contains all the infrastructure AKS manages on your behalf: the VMSS instances, load balancers, public IPs, managed disks, and virtual network interfaces.
 
-A critical rule: **do not manually modify resources in the MC_ resource group unless AKS explicitly supports it**. AKS reconciles this resource group continuously. If you manually delete a load balancer rule or resize a VMSS, [AKS may revert your change on the next reconciliation cycle](https://learn.microsoft.com/en-us/Azure/aks/resize-node-pool?tabs=azure-cli), creating confusing and hard-to-debug behavior. If you need to customize infrastructure, use the AKS API or supported extensions.
+A critical rule: **do not manually modify resources in the MC_ resource group unless AKS explicitly supports it**. AKS reconciles this resource group continuously. If you manually delete a load balancer rule or resize a VMSS, [AKS may revert your change on the next reconciliation cycle](https://learn.microsoft.com/en-us/azure/aks/resize-node-pool?tabs=azure-cli), creating confusing and hard-to-debug behavior. If you need to customize infrastructure, use the AKS API or supported extensions.
 
 ```bash
 # View what AKS has created in the infrastructure resource group
@@ -259,7 +260,7 @@ Another critical detail for stateful services: **persistent volumes backed by zo
 
 > **Pause and predict**: Imagine you have a stateful application pod running in Zone 1, connected to an Azure Disk PersistentVolume. The physical host running this node experiences a hardware failure, and the node goes offline. The cluster autoscaler spins up a replacement node in Zone 2, and the Kubernetes scheduler attempts to move your pod there. What will happen to your application?
 
-[An Azure Disk created in Zone 1 cannot be attached to a node in Zone 2. If a pod with a PVC backed by an Azure Disk gets rescheduled to a different zone, it will be stuck in `Pending` forever.](https://learn.microsoft.com/en-in/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume) You must use topology-aware scheduling or switch to Azure Files (which are zone-redundant) for workloads that need cross-zone mobility.
+[An Azure Disk created in Zone 1 cannot be attached to a node in Zone 2. If a pod with a PVC backed by an Azure Disk gets rescheduled to a different zone, it will be stuck in `Pending` forever.](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume) You must use topology-aware scheduling or switch to Azure Files (which are zone-redundant) for workloads that need cross-zone mobility.
 
 ```yaml
 # Pod topology spread constraint to enforce even zone distribution
@@ -325,18 +326,7 @@ az aks update \
   --name aks-prod-westeurope \
   --auto-upgrade-channel stable
 
-# Configure a maintenance window for control-plane weekly releases (optional)
-az aks maintenanceconfiguration add \
-  --resource-group rg-aks-prod \
-  --cluster-name aks-prod-westeurope \
-  --name default \
-  --schedule-type Weekly \
-  --day-of-week Saturday \
-  --start-time 02:00 \
-  --duration 4 \
-  --utc-offset "+01:00"
-
-# Prefer aksManagedAutoUpgradeSchedule for Kubernetes version auto-upgrade channels
+# Configure aksManagedAutoUpgradeSchedule for Kubernetes version auto-upgrade channels
 az aks maintenanceconfiguration add \
   --resource-group rg-aks-prod \
   --cluster-name aks-prod-westeurope \
@@ -415,7 +405,7 @@ Tradeoffs are explicit: ephemeral nodes are **stateless at the OS layer**. Deall
 
 ### Placement, sizing, and when managed disks remain required
 
-Sizing is the guardrail. [If you request a 100 GiB ephemeral OS on a SKU whose temp disk is only 75 GiB, validation fails; smaller images within the temp budget succeed](https://learn.microsoft.com/en-us/azure/aks/concepts-storage). Newer generations without separate cache disks evaluate temp space only; older generations may use cache for placement. Use `az vm list-skus` / VM size docs to confirm `EphemeralOSDiskSupported` before standardizing a pool SKU in Bicep.
+Sizing is the guardrail. [If you request a 100 GiB ephemeral OS on a SKU whose temp disk is only 75 GiB, validation fails; smaller images within the temp budget succeed](https://learn.microsoft.com/en-us/azure/aks/concepts-storage). Ephemeral OS requires a SKU whose cache **or** temp disk is large enough for the OS image—general-purpose `Dsv5` SKUs without a resource disk often cannot satisfy a 64–100 GiB request, which is why this lab uses temp-disk `Ddsv5` variants for the system and apps pools. Newer generations without separate cache disks evaluate temp space only; older generations may use cache for placement. Use `az vm list-skus` / VM size docs to confirm `EphemeralOSDiskSupported` before standardizing a pool SKU in Bicep.
 
 Managed OS disks remain the right choice when regulatory policy mandates disk encryption models tied to managed disks, when OS persistence across deallocation is required (rare for Kubernetes workers), or when your chosen SKU cannot fit the container-optimized OS image locally. For typical stateless worker pools, ephemeral OS disks reduce cost and upgrade time; pair them with `--os-disk-size-gb` only as large as the image plus headroom requires, because oversized ephemeral requests can disqualify otherwise valid SKUs.
 
@@ -426,7 +416,7 @@ az aks nodepool add \
   --cluster-name aks-prod-westeurope \
   --name fastapps \
   --node-count 3 \
-  --node-vm-size Standard_D4s_v5 \
+  --node-vm-size Standard_D4ds_v5 \
   --os-disk-type Ephemeral \
   --zones 1 2 3 \
   --mode User
@@ -773,10 +763,10 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
       nodeOSUpgradeChannel: 'NodeImage'
     }
 
+    // CNI model selection (Azure CNI Overlay, Cilium data plane) is covered in Module 7.2.
     networkProfile: {
       networkPlugin: 'azure'
-      networkPolicy: 'cilium'
-      networkDataplane: 'cilium'
+      networkPolicy: 'azure'
       loadBalancerSku: 'standard'
       serviceCidr: '10.0.0.0/16'
       dnsServiceIP: '10.0.0.10'
@@ -787,7 +777,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
         name: systemPoolName
         mode: 'System'
         count: 3
-        vmSize: 'Standard_D2s_v5'
+        vmSize: 'Standard_D2ds_v5'
         availabilityZones: [ '1', '2', '3' ]
         osDiskType: 'Ephemeral'
         osDiskSizeGB: 64
@@ -803,7 +793,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
         name: appsPoolName
         mode: 'User'
         count: 3
-        vmSize: 'Standard_D4s_v5'
+        vmSize: 'Standard_D4ds_v5'
         availabilityZones: [ '1', '2', '3' ]
         osDiskType: 'Ephemeral'
         osDiskSizeGB: 100
@@ -939,8 +929,8 @@ az aks show -g rg-aks-prod -n aks-prod-westeurope \
 
 - [ ] Entra ID groups created for admin and developer roles
 - [ ] AKS cluster deployed via Bicep with Standard tier
-- [ ] System pool: 3 nodes, Standard_D2s_v5, across 3 availability zones, ephemeral OS disks
-- [ ] Apps pool: 3-12 nodes (autoscaler enabled), Standard_D4s_v5, across 3 AZs, ephemeral OS disks
+- [ ] System pool: 3 nodes, Standard_D2ds_v5, across 3 availability zones, ephemeral OS disks
+- [ ] Apps pool: 3-12 nodes (autoscaler enabled), Standard_D4ds_v5, across 3 AZs, ephemeral OS disks
 - [ ] Entra ID integration enabled with Azure RBAC
 - [ ] Developer group has scoped write access to the payments namespace only
 - [ ] Maintenance windows configured for Saturday and Sunday off-peak hours
@@ -957,8 +947,8 @@ az aks show -g rg-aks-prod -n aks-prod-westeurope \
 - [learn.microsoft.com: core aks concepts](https://learn.microsoft.com/en-us/azure/aks/core-aks-concepts) — Microsoft's AKS core concepts documentation explicitly describes the managed control-plane components.
 - [learn.microsoft.com: free standard pricing tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) — The AKS pricing-tier documentation gives these SLA conditions directly.
 - [learn.microsoft.com: use system pools](https://learn.microsoft.com/en-us/azure/aks/use-system-pools) — The AKS system node pool guidance documents the required system-pool presence and the intended split between system and user pools.
-- [learn.microsoft.com: resize node pool](https://learn.microsoft.com/en-us/Azure/aks/resize-node-pool?tabs=azure-cli) — Microsoft's AKS guidance says agent nodes live in a custom MC_* resource group and direct IaaS customizations there do not persist.
-- [learn.microsoft.com: fail to mount azure disk volume](https://learn.microsoft.com/en-in/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume) — Microsoft's AKS troubleshooting guidance explicitly documents disk/node zone mismatch as a cause of Pending or mount failures and recommends zone-aware placement.
+- [learn.microsoft.com: resize node pool](https://learn.microsoft.com/en-us/azure/aks/resize-node-pool?tabs=azure-cli) — Microsoft's AKS guidance says agent nodes live in a custom MC_* resource group and direct IaaS customizations there do not persist.
+- [learn.microsoft.com: fail to mount azure disk volume](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume) — Microsoft's AKS troubleshooting guidance explicitly documents disk/node zone mismatch as a cause of Pending or mount failures and recommends zone-aware placement.
 - [learn.microsoft.com: supported kubernetes versions](https://learn.microsoft.com/en-us/azure/aks/supported-kubernetes-versions) — The AKS supported-versions page states both the upstream release cadence and AKS's three-GA-minor support window.
 - [learn.microsoft.com: auto upgrade cluster](https://learn.microsoft.com/en-us/azure/aks/auto-upgrade-cluster) — AKS's automatic-upgrade documentation defines these channels and their version-selection behavior.
 - [learn.microsoft.com: upgrade aks node pools rolling](https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-node-pools-rolling) — The AKS rolling-upgrade documentation describes this flow and explicitly recommends 33% max surge for production pools.
