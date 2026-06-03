@@ -20,14 +20,17 @@ flag requirements in the codebase:
 
 Key differences from CodexAdapter:
 - Output to stdout (no ``-o <file>``); ``output_file`` stays None.
-- No sandbox flags. Gemini CLI uses ``--approval-mode=yolo`` for
-  writable mode; read-only is the default. There is no ``danger`` mode
-  distinct from ``workspace-write``.
+- No sandbox flags. We always pass an explicit non-interactive approval
+  mode: ``--approval-mode=yolo`` for write modes, ``--approval-mode=plan``
+  (read-only) for review/read-only — the latter lets the 3.x models call
+  read tools headless without being able to write. There is no ``danger``
+  mode distinct from ``workspace-write``.
 - Liveness paths = () — stdout streaming is the only signal we need,
   and it's sufficient because Gemini CLI always writes to stdout.
 
 Issue: #1184
 """
+
 from __future__ import annotations
 
 import os
@@ -38,7 +41,9 @@ from pathlib import Path
 try:
     from dispatch import GEMINI_WRITER_MODEL
 except ImportError:  # pragma: no cover - package import path variant
-    GEMINI_WRITER_MODEL = os.environ.get("KUBEDOJO_WRITER_MODEL", "gemini-3.1-pro-preview")
+    GEMINI_WRITER_MODEL = os.environ.get(
+        "KUBEDOJO_WRITER_MODEL", "gemini-3.1-pro-preview"
+    )
 
 from ..result import ParseResult
 from .base import InvocationPlan
@@ -80,7 +85,9 @@ class GeminiAdapter:
     # Gemini has no sandbox distinction between workspace-write and danger —
     # we accept both names but treat them identically (both mean "CLI may
     # write files in cwd via --approval-mode=yolo").
-    supported_modes: frozenset[str] = frozenset({"read-only", "workspace-write", "danger"})
+    supported_modes: frozenset[str] = frozenset(
+        {"read-only", "workspace-write", "danger"}
+    )
 
     def build_invocation(
         self,
@@ -117,11 +124,22 @@ class GeminiAdapter:
                 cmd.extend(["--resume", session_id])
         cmd.extend(["-m", model or self.default_model])
 
-        # Approval mode: read-only is the default; yolo for write modes.
-        # "danger" is treated identically to "workspace-write" because
-        # Gemini CLI has no stricter-than-yolo bypass.
+        # Approval mode. The 3.x preview models proactively call tools
+        # (e.g. run_shell_command to read files) even for a pure review, and
+        # in the DEFAULT approval mode that tool call has no human to approve
+        # it headless → the CLI aborts with an empty "Invalid stream:
+        # malformed tool call" (issue: gemini-cli headless reviews returned 0
+        # bytes). So we ALWAYS pass an explicit non-interactive approval mode:
+        #   - write modes (workspace-write / danger) → yolo (auto-approve all,
+        #     including edits). "danger" == "workspace-write" (no stricter bypass).
+        #   - read-only → plan ("read-only mode": auto-approves tool calls so
+        #     the model can read files, but BLOCKS writes — so a review can
+        #     never accidentally edit a module the way yolo did). Verified
+        #     against gemini-cli 0.45.0 (gemini-3.1-pro-preview, headless).
         if mode in ("workspace-write", "danger"):
             cmd.append("--approval-mode=yolo")
+        else:
+            cmd.append("--approval-mode=plan")
 
         # MCP tool restriction via tool_config.
         env_overrides: dict[str, str | None] = {}
@@ -219,11 +237,7 @@ class GeminiAdapter:
         # got past the quota error), so we end in the hard-failure branch
         # and rate_limited is correctly set.
 
-        fast_path_ok = (
-            returncode == 0
-            and bool(stdout_response)
-            and not hard_limit_hit
-        )
+        fast_path_ok = returncode == 0 and bool(stdout_response) and not hard_limit_hit
 
         final_response = ""
         source_note: str | None = None
@@ -236,15 +250,15 @@ class GeminiAdapter:
             # recovery logic — leave the file_response empty.
             file_response = ""
             if plan is not None:
-                file_response, file_session_id = self._read_latest_session_response_with_session_id(
-                    plan, call_start_time=call_start_time,
+                file_response, file_session_id = (
+                    self._read_latest_session_response_with_session_id(
+                        plan,
+                        call_start_time=call_start_time,
+                    )
                 )
             if file_response:
                 final_response = file_response
-                reason = (
-                    "stdout empty" if not stdout_response
-                    else f"rc={returncode}"
-                )
+                reason = "stdout empty" if not stdout_response else f"rc={returncode}"
                 source_note = (
                     f"recovered {len(file_response)} chars from "
                     f"~/.gemini/tmp/.../chats (reason: {reason})"
@@ -279,7 +293,7 @@ class GeminiAdapter:
             stderr_excerpt=stderr_excerpt,
             rate_limited=rate_limited,
             session_id=file_session_id,
-            tokens=None,      # Nor tokens.
+            tokens=None,  # Nor tokens.
         )
 
     # ---------------------------------------------------------------------
