@@ -92,6 +92,8 @@ Conclusion:
 
 Prefix delegation changes the arithmetic by assigning address prefixes to nodes rather than only individual secondary addresses. That can improve pod density and reduce the per-node address management bottleneck, but it does not remove the need for subnet planning. Prefixes still come from somewhere. If the subnet is small, prefix allocation can still fail. The practical lesson is to size subnets for the maximum cluster shape, not the first week's node count.
 
+IP exhaustion is the number-one silent cluster-growth wall because it fails late and looks like a scheduling or application bug until someone reads CNI events. On AWS, prefix delegation assigns `/28` IPv4 prefixes to ENI slots on Nitro instances, which dramatically increases pod density per node, but every prefix still draws from the same subnet and managed node groups still cap `maxPods` at 110 or 250 depending on vCPU count per AWS documentation. On GKE, VPC-native alias IP ranges carve a per-node block from the pod secondary range — by default a `/24` per node even when max pods is 110 — so the subnet mask on that secondary range, not node count alone, limits how many nodes the cluster can grow. On Azure, Azure CNI Pod Subnet assigns VNet IPs directly to pods and can exhaust a delegated pod subnet quickly, while Azure CNI Overlay keeps pods on a private overlay CIDR and preserves VNet space at the cost of direct external pod reachability. The unified design lesson is to model warm IP targets, per-node blocks, and secondary CIDR growth paths together before the first production scale event, because adding nodes after exhaustion often accelerates the failure rather than relieving it.
+
 GKE and AKS use different implementation details, but the same design discipline applies. GKE VPC-native clusters use alias IP ranges for Pods and Services. Azure CNI options can assign VNet IPs to Pods or use overlay behavior depending on mode. The names differ, yet the review question is stable: where do Pod addresses come from, how many are available, how fast are they consumed, and can the architecture grow without renumbering?
 
 ## 3. Choose Underlay or Overlay Networking
@@ -117,6 +119,8 @@ flowchart LR
 ```
 
 Neither model is universally superior. Underlay favors cloud integration and performance transparency. Overlay favors portability and address conservation. Some CNIs offer hybrid options, eBPF datapaths, native routing modes, or cloud-specific integrations that blur the line. The important architectural habit is to make the tradeoff explicit. If a team chooses overlay because private address space is constrained, it should also decide how it will observe pod-level traffic, enforce policy, and expose services. If a team chooses underlay, it should show the subnet math.
+
+When a platform chooses underlay networking, packets stay closer to native cloud routing: GKE pod IPs are routable alias IPs in the VPC, AWS VPC CNI assigns routable secondary addresses or prefixes from the subnet, and Azure CNI Pod Subnet puts pod IPs in VNet space for direct reachability from peered networks or private endpoints. Overlay defaults invert that tradeoff: Azure CNI Overlay keeps pod traffic on an internal CIDR with SNAT at the node, and many portable CNIs encapsulate node-to-node traffic so VPC flow logs see node IPs rather than individual pod conversations. MTU is the hidden coupling between these models because encapsulation, VPN paths, and service-mesh sidecars shrink effective payload size; underlay designs that assume jumbo frames inside the VPC can silently fail when overlay tunnels or hybrid links sit downstream. Teams should document which model they chose, which provider default they inherited, and how they will observe pod-level traffic when the cloud fabric cannot see it directly.
 
 | Factor | Underlay / VPC-native | Overlay / encapsulated |
 |---|---|---|
@@ -189,6 +193,8 @@ flowchart LR
 ```
 
 Compliance-driven egress designs often add an explicit proxy or inspection layer. In that design, workloads may be denied general internet access and allowed to call only approved destinations through a proxy. NetworkPolicy can restrict Pods to the proxy, while cloud security groups and route tables restrict subnet-level paths. This is more complex than default NAT, but it gives security teams a place to log, filter, and review outbound traffic. The platform team should document exception processes because developers will eventually need new destinations.
+
+NAT gateways are easy to deploy and expensive to leave unmanaged because billing combines hourly availability with per-gigabyte processing that applies even when the destination is another cloud service you could have reached privately. AWS NAT Gateway charges an hourly rate plus data processing per gigabyte, and traffic routed to a NAT in another availability zone adds cross-AZ transfer in both directions on top of NAT processing before internet egress rates apply. Google Cloud Cloud NAT uses a similar processing charge model with gateway hourly cost that scales with the number of instances using it. Azure NAT Gateway likewise bills hourly plus per-gigabyte processed data, and bandwidth out of Azure data centers is charged separately from NAT processing. Cross-region hub routing, registry mirror misses, verbose telemetry, and chatty health checks can spike bills because each gigabyte may pass through NAT processing plus regional or internet egress tiers. Endpoint-first designs for object storage, container registry, logging, and identity APIs usually reduce NAT volume more reliably than resizing NAT gateways after finance notices the line item.
 
 ## 7. Connect Multiple VPCs and Environments
 
@@ -443,8 +449,13 @@ k logs -n kube-system -l k8s-app=aws-node --tail=100
 
 - [Amazon EKS: Amazon VPC CNI plugin](https://docs.aws.amazon.com/eks/latest/userguide/pod-networking.html) — Explains VPC-native Pod networking behavior and Amazon VPC CNI concepts.
 - [Amazon EKS: Increase available IP addresses for Pods](https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html) — Documents prefix delegation and approaches for increasing Pod IP capacity.
+- [Amazon EKS: Prefix mode for Linux](https://docs.aws.amazon.com/eks/latest/best-practices/prefix-mode-linux.html) — Explains `/28` prefix delegation behavior and ENI slot limits on Nitro instances.
 - [Google Kubernetes Engine: VPC-native clusters](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips) — Describes alias IP ranges for GKE Pods and Services.
+- [Google Kubernetes Engine: Configure maximum Pods per node](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr) — Documents per-node pod CIDR sizing and secondary range planning.
 - [Azure Kubernetes Service: Azure CNI networking](https://learn.microsoft.com/en-us/azure/aks/concepts-network-azure-cni-pod-subnet) — Covers Azure CNI behavior and Pod subnet planning.
+- [Azure Kubernetes Service: Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/concepts-network-azure-cni-overlay) — Compares overlay pod CIDR allocation with flat VNet pod addressing.
+- [Google Cloud: Cloud NAT overview](https://cloud.google.com/nat/docs/overview) — Describes Cloud NAT gateway billing components and outbound SNAT behavior.
+- [Azure NAT Gateway overview](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview) — Documents Azure NAT Gateway outbound connectivity and data-processing charges.
 - [Kubernetes: Services](https://kubernetes.io/docs/concepts/services-networking/service/) — Defines Service routing, selectors, and stable networking for Pods.
 - [Kubernetes: Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Explains Kubernetes-native traffic policy controls.
 - [Gateway API documentation](https://gateway-api.sigs.k8s.io/) — Provides the upstream Gateway API model for role-oriented ingress and routing.
