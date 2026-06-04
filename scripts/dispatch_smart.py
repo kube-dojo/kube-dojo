@@ -68,6 +68,7 @@ body even if the live stream was truncated. The JSONL row's
 
 Reuse with --dry-run to print the chosen plan without firing.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -131,18 +132,16 @@ class TaskClassConfig:
     codex_search: bool = False  # opt-in per class
 
 
-# Note on the "agy" model entries below: Antigravity CLI's model is selected
-# interactively in its TUI panel and cannot be overridden per-invocation
-# (no -m / --model flag as of agy 1.0.0). The string `tui-controlled`
-# is an informational placeholder — the actual model in flight is whatever
-# the operator last picked in `agy`'s panel and is reported in the model
-# self-identify probe (`agy -p 'what model are you?'`). The per-class
-# distinction is therefore meaningless for agy until Google adds a model
-# flag or config-file path.
+# Note on the "agy" model entries below: Antigravity 1.x added a per-session
+# `--model` flag (`agy models` lists the choices), so per-class selection now
+# works. The slugs below normalize to agy's display strings in AgyAdapter
+# (`gemini-3.1-pro-high` -> "Gemini 3.1 Pro (High)"). Cheap scans use Flash;
+# the writer/judgment classes use Gemini 3.1 Pro (High). Override per call with
+# `--model`. An unrecognized slug falls back to the adapter default.
 TASK_CLASSES: dict[str, TaskClassConfig] = {
     "search": TaskClassConfig(
         models={
-            "agy": "tui-controlled",
+            "agy": "gemini-3.5-flash-high",
             "claude": "claude-haiku-4-5-20251001",
             "codex": "gpt-5.4-mini",
             "deepseek": "deepseek-v4-flash",
@@ -159,7 +158,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
     ),
     "edit": TaskClassConfig(
         models={
-            "agy": "tui-controlled",
+            "agy": "gemini-3.1-pro-high",
             "claude": "claude-sonnet-4-6",
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
@@ -176,7 +175,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
     ),
     "draft": TaskClassConfig(
         models={
-            "agy": "tui-controlled",
+            "agy": "gemini-3.1-pro-high",
             "claude": "claude-sonnet-4-6",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
@@ -193,7 +192,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
     ),
     "review": TaskClassConfig(
         models={
-            "agy": "tui-controlled",
+            "agy": "gemini-3.1-pro-high",
             "claude": "claude-sonnet-4-6",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
@@ -210,7 +209,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
     ),
     "architect": TaskClassConfig(
         models={
-            "agy": "tui-controlled",
+            "agy": "gemini-3.1-pro-high",
             "claude": "claude-opus-4-8",
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
@@ -254,7 +253,7 @@ def _load_skill_body(skill_name: str) -> tuple[str, Path] | None:
 def _wrap_prompt_with_skill(prompt: str, skill_body: str, skill_name: str) -> str:
     """Prepend the skill body to the prompt with a clear marker."""
     return (
-        f"<auto-loaded-skill name=\"{skill_name}\">\n"
+        f'<auto-loaded-skill name="{skill_name}">\n'
         f"{skill_body.rstrip()}\n"
         f"</auto-loaded-skill>\n\n"
         f"{prompt}"
@@ -287,8 +286,7 @@ def make_task_id(task_class: str, agent: str) -> str:
     return f"smart-{agent}-{task_class}-{int(time.time())}"
 
 
-def ensure_worktree(worktree: Path, new_branch: str | None,
-                    base: str = "main") -> None:
+def ensure_worktree(worktree: Path, new_branch: str | None, base: str = "main") -> None:
     """Create a worktree if it doesn't exist; reuse if it does.
 
     Caller is responsible for picking a sensible path under .worktrees/.
@@ -305,13 +303,13 @@ def ensure_worktree(worktree: Path, new_branch: str | None,
     primary_venv = PRIMARY_REPO / ".venv"
     worktree_venv = worktree / ".venv"
     if primary_venv.exists() and not (
-            worktree_venv.exists() or worktree_venv.is_symlink()
+        worktree_venv.exists() or worktree_venv.is_symlink()
     ):
         worktree_venv.symlink_to(primary_venv)
     primary_node_modules = PRIMARY_REPO / "node_modules"
     worktree_node_modules = worktree / "node_modules"
     if primary_node_modules.exists() and not (
-            worktree_node_modules.exists() or worktree_node_modules.is_symlink()
+        worktree_node_modules.exists() or worktree_node_modules.is_symlink()
     ):
         worktree_node_modules.symlink_to(primary_node_modules)
 
@@ -458,10 +456,21 @@ def _run_router_agent(
     return ok, response.strip(), stderr.strip()
 
 
-def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
-         worktree: Path | None, task_id: str, timeout_s: int) -> int:
-    print(f"[smart] agent={agent} task_class={task_class} model={model} "
-          f"mode={mode} timeout={timeout_s}s")
+def fire(
+    *,
+    agent: str,
+    task_class: str,
+    prompt: str,
+    mode: str,
+    model: str,
+    worktree: Path | None,
+    task_id: str,
+    timeout_s: int,
+) -> int:
+    print(
+        f"[smart] agent={agent} task_class={task_class} model={model} "
+        f"mode={mode} timeout={timeout_s}s"
+    )
     if worktree:
         print(f"[smart] cwd={worktree}")
     print(f"[smart] task_id={task_id}")
@@ -526,27 +535,28 @@ def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
     elapsed = time.time() - started
     response_path = persist_response(task_id, response, stderr_excerpt)
     rel_response_path = str(response_path.relative_to(PRIMARY_REPO))
-    append_log({
-        "ts": int(started),
-        "elapsed_s": round(elapsed, 1),
-        "task_id": task_id,
-        "agent": agent,
-        "task_class": task_class,
-        "model": model,
-        "mode": mode,
-        "cwd": str(worktree) if worktree else None,
-        "ok": ok,
-        "session_id": session_id,
-        "response_chars": len(response),
-        "response_path": rel_response_path,
-        "stderr_excerpt": stderr_excerpt[:400] if stderr_excerpt else None,
-    })
+    append_log(
+        {
+            "ts": int(started),
+            "elapsed_s": round(elapsed, 1),
+            "task_id": task_id,
+            "agent": agent,
+            "task_class": task_class,
+            "model": model,
+            "mode": mode,
+            "cwd": str(worktree) if worktree else None,
+            "ok": ok,
+            "session_id": session_id,
+            "response_chars": len(response),
+            "response_path": rel_response_path,
+            "stderr_excerpt": stderr_excerpt[:400] if stderr_excerpt else None,
+        }
+    )
 
     # Print response_path BEFORE the body so callers that truncate stdout
     # (tail -N, head -N) still see the path and can `cat` the full file.
     print("=" * 70)
-    print(f"OK: {ok}  |  elapsed: {elapsed:.0f}s  |  "
-          f"resp_chars: {len(response)}")
+    print(f"OK: {ok}  |  elapsed: {elapsed:.0f}s  |  resp_chars: {len(response)}")
     print(f"response_path: {rel_response_path}")
     print("=" * 70)
     if response:
@@ -560,35 +570,55 @@ def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
 def main() -> int:
     p = argparse.ArgumentParser(
         description="Dispatch a headless agent with a "
-                    "task-class-based model choice. Mirrors the AGENTS.md "
-                    "economical multi-agent policy across agents.",
+        "task-class-based model choice. Mirrors the AGENTS.md "
+        "economical multi-agent policy across agents.",
     )
-    p.add_argument("task_class", choices=sorted(TASK_CLASSES),
-                   help="Picks the model + default mode.")
-    p.add_argument("prompt", nargs="?", default=None,
-                   help="Prompt text. Pass `-` to read from stdin.")
-    p.add_argument("--agent", choices=SUPPORTED_AGENTS, default="claude",
-                   help="Which agent to dispatch (default: claude).")
-    p.add_argument("--worktree",
-                   help="Path to a git worktree under .worktrees/. "
-                        "Required for write modes.")
-    p.add_argument("--new-branch",
-                   help="If --worktree doesn't exist, create it on this "
-                        "branch off main.")
-    p.add_argument("--mode",
-                   choices=["read-only", "workspace-write", "danger"],
-                   help="Override task-class default mode. For opencode, "
-                        "hermes, and cursor this is advisory; their CLIs "
-                        "enforce their own sandbox behavior.")
-    p.add_argument("--model",
-                   help="Override task-class default model "
-                        "(rarely needed — let the class+agent pick).")
-    p.add_argument("--timeout", type=int,
-                   help="Override task-class default hard timeout (s).")
-    p.add_argument("--task-id",
-                   help="Override auto-generated task_id.")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print the resolved plan and exit without firing.")
+    p.add_argument(
+        "task_class",
+        choices=sorted(TASK_CLASSES),
+        help="Picks the model + default mode.",
+    )
+    p.add_argument(
+        "prompt",
+        nargs="?",
+        default=None,
+        help="Prompt text. Pass `-` to read from stdin.",
+    )
+    p.add_argument(
+        "--agent",
+        choices=SUPPORTED_AGENTS,
+        default="claude",
+        help="Which agent to dispatch (default: claude).",
+    )
+    p.add_argument(
+        "--worktree",
+        help="Path to a git worktree under .worktrees/. Required for write modes.",
+    )
+    p.add_argument(
+        "--new-branch",
+        help="If --worktree doesn't exist, create it on this branch off main.",
+    )
+    p.add_argument(
+        "--mode",
+        choices=["read-only", "workspace-write", "danger"],
+        help="Override task-class default mode. For opencode, "
+        "hermes, and cursor this is advisory; their CLIs "
+        "enforce their own sandbox behavior.",
+    )
+    p.add_argument(
+        "--model",
+        help="Override task-class default model "
+        "(rarely needed — let the class+agent pick).",
+    )
+    p.add_argument(
+        "--timeout", type=int, help="Override task-class default hard timeout (s)."
+    )
+    p.add_argument("--task-id", help="Override auto-generated task_id.")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved plan and exit without firing.",
+    )
     p.add_argument(
         "--skill",
         default=None,
@@ -644,10 +674,10 @@ def main() -> int:
 
     # Read-only task classes for codex run in danger mode, but they do not
     # require a worktree.
-    codex_readonly_class = (
-        args.agent == "codex"
-        and args.task_class in {"review", "search"}
-    )
+    codex_readonly_class = args.agent == "codex" and args.task_class in {
+        "review",
+        "search",
+    }
 
     if args.prompt is None:
         sys.stderr.write("[smart] no prompt — pass as arg or `-` for stdin\n")
@@ -683,8 +713,7 @@ def main() -> int:
             prompt = _wrap_prompt_with_skill(prompt, skill_body, skill_to_load)
             rel = _display_path(source_path)
             print(
-                f"[dispatch_smart] auto-loaded skill: {skill_to_load} "
-                f"(from {rel})",
+                f"[dispatch_smart] auto-loaded skill: {skill_to_load} (from {rel})",
                 file=sys.stderr,
             )
 
@@ -714,8 +743,10 @@ def main() -> int:
         return 2
 
     if args.dry_run:
-        print(f"[dry-run] agent={args.agent} task_class={args.task_class} "
-              f"model={model} mode={mode} timeout={timeout_s}s")
+        print(
+            f"[dry-run] agent={args.agent} task_class={args.task_class} "
+            f"model={model} mode={mode} timeout={timeout_s}s"
+        )
         _wt_label = worktree or f"(none — {mode})"
         print(f"[dry-run] worktree={_wt_label}")
         print(f"[dry-run] task_id={task_id}")

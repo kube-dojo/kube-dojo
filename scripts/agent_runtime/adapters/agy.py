@@ -1,13 +1,19 @@
 """AgyAdapter - wraps Antigravity CLI (``agy``) for the agent runtime.
 
 Phase 1 of the Antigravity migration keeps this adapter alongside the
-existing Gemini CLI adapter. ``agy`` model selection is controlled by the
-interactive TUI and persists across ``agy -p`` invocations; there is no CLI
-model flag today, so the runtime's model value is audit-only.
+existing Gemini CLI adapter. Antigravity 1.x added a per-session ``--model``
+flag (``agy models`` lists the choices), so the runtime's model value is now
+mapped to the matching CLI display string and passed through — it is no
+longer audit-only.
 
 Known behavioral facts as of issue #1350:
 
 - Headless prompt mode is ``agy -p "<prompt>"``. Stdin prompts are ignored.
+- Per-invocation model is ``--model "<Display Name>"`` where the display name
+  is one of the strings printed by ``agy models`` (e.g. ``Gemini 3.1 Pro
+  (High)``). The runtime model slug (``gemini-3.1-pro-high``) and the display
+  string normalize to the same key, so callers may pass either form; an
+  unrecognized or empty value falls back to ``default_model``.
 - Resume/new conversation is ``--conversation=<uuid>``.
 - Write-capable modes use ``--dangerously-skip-permissions``. In addition,
   ``dispatch_smart.py`` forces ``mode="danger"`` for ``--agent agy``
@@ -24,6 +30,7 @@ accepts ``tool_config["mcp_server_names"]`` for API parity with
 ``GeminiAdapter`` but does not act on it today — wire ``agy plugin
 enable <name>`` here once we have concrete MCP servers to consume.
 """
+
 from __future__ import annotations
 
 import os
@@ -46,12 +53,43 @@ _RATE_LIMIT_PATTERNS = (
 _RATE_LIMIT_RE = re.compile("|".join(_RATE_LIMIT_PATTERNS), re.IGNORECASE)
 
 
+# Canonical model display strings accepted by ``agy --model`` (verbatim from
+# ``agy models``). The runtime passes a slug like ``gemini-3.1-pro-high``;
+# ``_normalize_model`` collapses both that slug and the display string to the
+# same key so either form maps here.
+_AGY_MODEL_NAMES: tuple[str, ...] = (
+    "Gemini 3.5 Flash (Medium)",
+    "Gemini 3.5 Flash (High)",
+    "Gemini 3.5 Flash (Low)",
+    "Gemini 3.1 Pro (Low)",
+    "Gemini 3.1 Pro (High)",
+    "Claude Sonnet 4.6 (Thinking)",
+    "Claude Opus 4.6 (Thinking)",
+    "GPT-OSS 120B (Medium)",
+)
+
+
+def _normalize_model(value: str) -> str:
+    """Collapse a model identifier to its alphanumeric-lowercase form so that a
+    slug (``gemini-3.1-pro-high``) and the CLI display string
+    (``Gemini 3.1 Pro (High)``) map to the same key."""
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+# normalized identifier -> canonical ``agy --model`` display string
+_AGY_MODEL_BY_NORMALIZED: dict[str, str] = {
+    _normalize_model(name): name for name in _AGY_MODEL_NAMES
+}
+
+
 class AgyAdapter:
     """Adapter for the ``agy`` Antigravity CLI."""
 
     name: str = "agy"
     default_model: str = os.environ.get("KUBEDOJO_AGY_MODEL", "gemini-3.5-flash-high")
-    supported_modes: frozenset[str] = frozenset({"read-only", "workspace-write", "danger"})
+    supported_modes: frozenset[str] = frozenset(
+        {"read-only", "workspace-write", "danger"}
+    )
 
     def build_invocation(
         self,
@@ -66,8 +104,10 @@ class AgyAdapter:
     ) -> InvocationPlan:
         """Build the ``agy`` print-mode invocation.
 
-        ``model`` is intentionally not mapped to a CLI flag. The active model
-        is whichever model the operator selected in the ``agy`` TUI panel.
+        ``model`` is mapped to the matching ``agy --model "<Display Name>"``
+        flag (see :func:`_normalize_model`). An unrecognized or empty value
+        falls back to ``default_model``; if even that is unmappable the flag
+        is omitted and agy uses its TUI-selected model.
         """
         if mode not in self.supported_modes:
             raise ValueError(f"AgyAdapter: unsupported mode {mode!r}")
@@ -82,18 +122,18 @@ class AgyAdapter:
         # --agent agy so callers can't accidentally route around this.
         cmd: list[str] = [agy_bin, "-p", prompt, "--dangerously-skip-permissions"]
 
+        resolved_model = self._resolve_model_flag(model)
+        if resolved_model:
+            cmd += ["--model", resolved_model]
+
         if session_id:
             cmd.append(f"--conversation={session_id}")
 
         # Phase 2 follow-up: agy uses `agy plugin` for MCP configuration,
-        # not a per-invocation CLI flag like gemini-cli.
-        # `model` is intentionally unused — agy's model is TUI-selected and
-        # cannot be overridden per-invocation. The runtime records the
-        # caller-passed model in the JSONL audit row for informational
-        # provenance only.
+        # not a per-invocation CLI flag like gemini-cli. The adapter accepts
+        # tool_config for GeminiAdapter API parity but does not act on it yet.
         _ = tool_config
         _ = task_id
-        _ = model
 
         return InvocationPlan(
             cmd=cmd,
@@ -103,6 +143,23 @@ class AgyAdapter:
             env_overrides={},
             liveness_paths=(),
         )
+
+    def _resolve_model_flag(self, model: str | None) -> str | None:
+        """Map a runtime model slug (or display string) to the canonical
+        ``agy --model`` value.
+
+        Tries the caller's ``model`` first, then ``default_model``, so a stale
+        placeholder (e.g. the legacy ``"tui-controlled"``) or an empty value
+        degrades to the adapter default rather than passing an invalid flag.
+        Returns ``None`` only when neither maps, leaving the model unset so
+        agy uses its TUI-selected one.
+        """
+        for candidate in (model, self.default_model):
+            if candidate:
+                resolved = _AGY_MODEL_BY_NORMALIZED.get(_normalize_model(candidate))
+                if resolved:
+                    return resolved
+        return None
 
     def parse_response(
         self,
