@@ -10,22 +10,45 @@ sidebar:
 
 After completing this module, you will be able to:
 
-- **Deploy managed OpenSearch/Elasticsearch (Amazon OpenSearch, Elastic Cloud, Azure Cognitive Search) with Kubernetes ingestion pipelines**
-- **Configure Fluentd or Vector to ship Kubernetes logs to managed search clusters with index lifecycle management**
+- **Deploy managed search services (Amazon OpenSearch, Azure AI Search, Elastic Cloud) and self-hosted clusters (ECK operator) integrated with Kubernetes workloads**
+- **Configure Fluent Bit or Vector to ship Kubernetes logs to managed search clusters with index lifecycle management**
 - **Implement search-as-a-service patterns where Kubernetes applications query managed search indices via private endpoints**
-- **Optimize search cluster sizing, shard strategies, and index templates for Kubernetes log and application data volumes**
+- **Design index templates, shard strategies, and refresh policies for optimal query performance and cluster stability**
+- **Evaluate managed vs self-hosted search tradeoffs using cost, operational burden, and feature requirements**
 
 ---
 
 ## Why This Module Matters
 
-In August 2023, a SaaS company running 200 microservices on EKS generated 12 TB of logs per day. They ran a self-managed Elasticsearch cluster on Kubernetes -- 9 data nodes, 3 master nodes, each on i3.2xlarge instances with local NVMe storage. Total monthly cost: $22,000 for compute alone. The cluster required a dedicated engineer spending roughly 30% of their time on shard rebalancing, index lifecycle management, JVM tuning, and version upgrades. When they attempted an upgrade from Elasticsearch 7.x to 8.x, a mapping incompatibility brought down the cluster for 4 hours. During those 4 hours, the security team could not search logs to investigate an active incident.
+Hypothetical scenario: A platform team runs a self-managed Elasticsearch cluster on Kubernetes to serve two use cases — centralized logging for 200 microservices and a customer-facing product search feature. The cluster has 9 data nodes on i3.2xlarge instances with local NVMe storage. Total monthly compute cost runs around $22,000. A dedicated engineer spends roughly 30% of their time on shard rebalancing, index lifecycle management, JVM tuning, and version upgrades. When the team attempts an upgrade from Elasticsearch 7.x to 8.x, a mapping incompatibility brings down the entire cluster for 4 hours. During those 4 hours, the security team cannot search logs to investigate an active incident, and customers see 500 errors on product search.
 
-They migrated to Amazon OpenSearch Service (managed). The migration took three weeks. The managed service handles node replacement, automated snapshots, encryption, and version upgrades. The same engineer now spends 5% of their time on search operations. More importantly, the cluster has not had a single unplanned outage in 14 months. The lesson: running a distributed search cluster on Kubernetes is technically possible, but the operational overhead is enormous. Managed search services let you focus on what matters -- getting insights from your data.
+The team migrates to a managed service. The migration takes three weeks. The managed service handles node replacement, automated snapshots, encryption, and version upgrades. The same engineer now spends about 5% of their time on search operations. The cluster has not had a single unplanned outage in 14 months.
+
+The lesson is not that self-hosted search is wrong — it is that running a distributed search cluster demands deep operational knowledge. Managed search services absorb that operational burden so your team can focus on what matters: extracting insights from your data and building search experiences for your users. This module gives you the mental models to choose the right approach for your context and the hands-on skills to integrate search engines with Kubernetes in production.
+
+---
+
+## How Search Engines Work
+
+Before you deploy a search cluster, you need to understand what happens when you submit a query. The fundamental insight that separates a search engine from a database `LIKE '%keyword%'` scan is the inverted index — a data structure that maps every term to the list of documents containing it. This is why search engines answer queries in milliseconds against terabytes of data while a relational database scans rows linearly.
+
+### The Inverted Index
+
+Imagine a book index at the back of a textbook: instead of scanning every page to find "Kubernetes," you flip to the index, see that the term appears on pages 14, 87, and 203, and go directly to those pages. An inverted index works the same way. During indexing, the engine tokenizes each document into individual terms, normalizes them (lowercasing, removing punctuation), applies language-specific analyzers (stemming "running" to "run," removing stop words like "the" and "is"), and builds a sorted dictionary where each term points to a postings list — the documents and positions where the term appears. When you query for `level:error`, the engine does not scan documents. It looks up "error" in the dictionary, retrieves the postings list, and returns matching documents directly.
+
+### Relevance Scoring with BM25
+
+Not all matches are equally good. A search for "Kubernetes pod crash" returns documents where these words appear, but which document is most relevant? Modern search engines use BM25 (Best Match 25), an evolution of TF-IDF, to compute relevance scores. BM25 considers term frequency (how often a term appears in a document — but with diminishing returns, so a document repeating "error" 50 times does not completely dominate one mentioning it 5 times), inverse document frequency (rare terms like "OOMKilled" carry more signal than common terms like "container"), and field length normalization (a match in a short log line is more precise than a match buried in a 10 KB stack trace). The engine scores every matching document and returns them in relevance order, not insertion order. This ranking is what turns a grep into a search engine.
+
+### Facets, Aggregations, and Typo Tolerance
+
+Search engines do more than find documents. Aggregations compute real-time statistics over matching results — count errors per namespace, chart response times over the last hour, identify the top 10 slowest pods. These aggregations run against the inverted index structures and complete in milliseconds, even across billions of log lines. Typo tolerance uses fuzzy matching (Levenshtein distance) to catch misspellings — searching for "paymnts" still finds the "payments" namespace. Faceted search lets users drill down by applying filters interactively: show me errors, in the payments namespace, from the last 15 minutes, grouped by pod name. Every one of these capabilities is built on top of the inverted index, and understanding this foundation helps you reason about why certain queries are fast, certain mappings matter, and certain cluster configuration choices impact performance.
 
 ---
 
 ## Log Ingestion Architecture
+
+Getting Kubernetes logs into a search engine requires understanding the path each log line takes from a container's stdout to a queryable document. The architecture has four stages: collection (reading log files from node filesystems), enrichment (adding Kubernetes metadata like pod name, namespace, and labels), buffering (absorbing ingestion spikes), and indexing (writing to the search cluster). Each stage involves design decisions that affect reliability, cost, and queryability.
 
 ### The Kubernetes Logging Pipeline
 
@@ -40,9 +63,9 @@ flowchart TD
     B --> FS
     C --> FS
     FS["Node Filesystem: /var/log/containers/"] --> FB
-    FB["DaemonSet: Fluent Bit\n(one per node)"] --> BT
-    BT["Buffer/Transform\n(optional: Kafka, Kinesis)"] --> OS
-    OS["OpenSearch /\nElasticsearch"]
+    FB["DaemonSet: Fluent Bit<br/>(one per node)"] --> BT
+    BT["Buffer/Transform<br/>(optional: Kafka, Kinesis)"] --> OS
+    OS["OpenSearch /<br/>Elasticsearch"]
 ```
 
 ### Fluent Bit DaemonSet for Log Collection
@@ -161,7 +184,7 @@ data:
 
 ### Buffering with Kafka for Resilience
 
-For high-volume clusters, buffer logs through Kafka to prevent data loss when OpenSearch is slow or unavailable:
+For high-volume clusters, buffer logs through Kafka to prevent data loss when OpenSearch is slow or unavailable. The buffer acts as a shock absorber: Fluent Bit writes to Kafka at whatever rate the pods produce logs, and a separate Logstash or Vector consumer reads from Kafka into OpenSearch at whatever rate OpenSearch can handle. This decoupling is essential because OpenSearch ingestion throughput is not constant — it dips during heavy query loads, JVM garbage collection pauses, shard rebalancing, and snapshot operations. Without a buffer, those dips cause backpressure that propagates all the way to Fluent Bit's in-memory buffers on each node, which overflow and drop logs silently. Kafka's durability guarantees (configurable replication factor and minimum in-sync replicas) mean logs are safe on disk until OpenSearch recovers, and you can replay the topic if you ever need to re-index data with updated mappings.
 
 ```mermaid
 flowchart LR
@@ -189,13 +212,17 @@ flowchart LR
 
 ## Setting Up Managed Search
 
+Each major cloud provider offers a managed search service. They share the same architectural DNA — a distributed indexing and search engine — but differ in APIs, pricing models, and Kubernetes integration patterns.
+
 ### Amazon OpenSearch Service
+
+Amazon OpenSearch Service is the managed successor to Amazon Elasticsearch Service, running the open-source OpenSearch engine (forked from Elasticsearch 7.10.2). It supports two deployment modes: provisioned domains (you choose instance types and counts) and OpenSearch Serverless (capacity automatically scales, billed in OCUs — OpenSearch Compute Units). Provisioned domains give you direct control over instance family, EBS volume configuration, dedicated master nodes, and VPC placement. Serverless removes capacity planning entirely and charges separately for indexing and search workloads, which maps well to spiky log ingestion patterns where indexing bursts during deployments but querying is steady throughout the day.
 
 ```bash
 # Create an OpenSearch domain
 aws opensearch create-domain \
   --domain-name k8s-logs \
-  --engine-version OpenSearch_2.13 \
+  --engine-version OpenSearch_2.13 \  # pinned example; verify current supported versions via the AWS console/CLI
   --cluster-config '{
     "InstanceType": "r6g.large.search",
     "InstanceCount": 3,
@@ -228,7 +255,11 @@ aws opensearch create-domain \
   }'
 ```
 
-### GCP: Elastic Cloud on Google Cloud
+For Kubernetes integration, the External Secrets Operator can sync OpenSearch credentials into your cluster from AWS Secrets Manager, and IAM Roles for Service Accounts (IRSA) lets Fluent Bit pods assume an IAM role for keyless authentication to the OpenSearch domain. The endpoint is a private VPC endpoint when the domain is VPC-bound, meaning only workloads within the VPC — including your EKS nodes — can reach it.
+
+### GCP: Elastic Cloud and Vertex AI Search
+
+Google Cloud offers two paths for managed search. The first is Elastic Cloud, Elastic's own managed service available through the GCP Marketplace. You deploy Elasticsearch clusters via the Elastic Cloud console or API, and you get full Elastic Stack features — Kibana, machine learning jobs, alerting, and the Elastic Common Schema. The Elastic Cloud deployment runs in your GCP project's VPC through Private Service Connect, and billing flows through your GCP account. Fluent Bit connects using Elasticsearch's REST API over TLS with basic authentication or API keys.
 
 ```bash
 # Using Elastic Cloud (managed Elasticsearch) with GKE
@@ -236,6 +267,7 @@ aws opensearch create-domain \
 # Then configure Fluent Bit to point to the Elastic Cloud endpoint
 
 # Fluent Bit output for Elastic Cloud
+# Replace Host with your actual endpoint from the Elastic Cloud deployment dashboard.
 # [OUTPUT]
 #     Name  es
 #     Match kube.*
@@ -247,11 +279,67 @@ aws opensearch create-domain \
 #     Logstash_Format On
 ```
 
+The second path is Vertex AI Search (formerly Discovery AI / Enterprise Search), Google's fully-managed AI-powered search platform. Unlike Elastic Cloud, which is a general-purpose search engine you configure yourself, Vertex AI Search is an opinionated service designed for website search, document search, and retrieval-augmented generation (RAG). It handles ingestion pipelines, embedding generation for vector search, and relevance tuning automatically. For Kubernetes workloads, the primary integration pattern is through a REST API — your application sends search queries to Vertex AI Search and receives ranked results, bypassing the operational concerns of managing indices and clusters. It is ideal for product search and knowledge-base retrieval but is not a drop-in replacement for log analytics, which is better served by Elastic Cloud or self-hosted OpenSearch.
+
+### Azure AI Search
+
+Azure AI Search (formerly Azure Cognitive Search) is Microsoft's managed search platform. Unlike the OpenSearch/Elasticsearch ecosystem, Azure AI Search uses a different architecture: you define indexes with explicit field schemas, data sources (Azure Blob Storage, Cosmos DB, Azure SQL), and indexers that extract, transform, and load data on a schedule or via push APIs. The service supports full-text search with Lucene analyzers, vector search using Azure OpenAI embeddings or custom models, and hybrid search that combines BM25 lexical scoring with vector similarity using Reciprocal Rank Fusion. For Kubernetes integration, applications running on AKS query the service through its REST API (replace any lab placeholder with your actual endpoint from the Azure portal service dashboard), authenticating via Entra Workload ID (the Azure equivalent of IRSA) to avoid storing API keys in pods. The Azure portal provides a search explorer for ad-hoc queries. For operational Kubernetes logging, Azure's primary path is Azure Monitor + Log Analytics (with optional export to AI Search via diagnostic settings / Event Hubs for search-layer use cases); AI Search shines for application search, document/RAG, and hybrid retrieval rather than as a drop-in high-volume log-analytics store.
+
+---
+
+## ECK Operator — Self-Hosted on Kubernetes
+
+When a managed service does not fit — due to data residency requirements, cost at extreme scale, or the need for plugin customization — the Elastic Cloud on Kubernetes (ECK) operator provides a first-class Kubernetes-native deployment path. ECK is Elastic's official operator that manages the full lifecycle of Elasticsearch, Kibana, APM Server, and Beats on Kubernetes. It handles rolling upgrades, persistent volume provisioning, pod disruption budgets, and secure TLS between nodes — the same operational concerns you would otherwise script yourself with StatefulSets and init containers.
+
+The operator runs as a deployment in your cluster and watches custom resources. Deploying a production-grade Elasticsearch cluster becomes a matter of defining an Elasticsearch resource with node sets, version, and storage configuration. ECK creates the StatefulSets, provisions PersistentVolumeClaims per node, generates and rotates TLS certificates, and performs rolling upgrades when you change the version field. You can define multiple node sets with different roles: a set of master-eligible nodes with smaller instances for cluster coordination, a set of data nodes with fast local SSDs for indexing and search, and optionally coordinating-only nodes for query fan-out. The operator enforces anti-affinity by default, spreading nodes across Kubernetes zones for high availability.
+
+The tradeoff is that you regain operational control — and operational responsibility. You must monitor JVM heap pressure, manage snapshot repositories (S3, GCS, Azure Blob), tune the JVM heap size (no more than 50% of available memory, never above 30.5 GB due to compressed OOPs), and plan for version upgrades. For many teams, the ECK operator represents the sweet spot between the flexibility of self-hosted and the automation of managed: the operator handles the Kubernetes-native concerns (scheduling, storage, networking, certificates), but you still own the Elasticsearch-level concerns (index management, shard strategy, query performance).
+
+---
+
+## Vector and Semantic Search
+
+The most significant evolution in search engines over the past three years has been the addition of vector search — the ability to find documents by semantic meaning rather than exact keyword matches. Where a traditional lexical search for "application running out of memory" returns documents containing those exact words, a vector search understands that "OOMKilled container" and "heap exhaustion in the JVM" describe the same underlying problem, even though they share no keywords.
+
+Vector search works by converting text into dense numerical representations called embeddings. An embedding model (such as a sentence transformer or OpenAI's text-embedding models) maps each chunk of text to a vector — typically 384 to 1,536 floating-point numbers — in a high-dimensional space where semantically similar texts cluster together. At search time, the query is also converted to a vector, and the engine finds the nearest neighbors using approximate nearest neighbor (ANN) algorithms like HNSW (Hierarchical Navigable Small World graphs). Unlike exact kNN which compares the query vector against every document vector (O(n) complexity), ANN uses graph-based navigation to find close matches in logarithmic time, making vector search practical at scale.
+
+### Hybrid Search: The Best of Both Worlds
+
+Neither lexical nor vector search is universally better. Lexical search (BM25) excels at exact matches — finding a specific error code, a pod name, or a trace ID. Vector search excels at conceptual matches — finding "authentication failures" even when the logs say "401 Unauthorized" or "token expired." Hybrid search combines both: it runs a BM25 query and a vector ANN query in parallel, then merges the results using Reciprocal Rank Fusion (RRF), a formula that blends the ranked lists without requiring normalized scores. The practical result is a search experience that handles exact lookups and fuzzy semantic exploration in a single query.
+
+### Managed Vector Search Offerings
+
+All three major cloud search platforms now support vector search. Amazon OpenSearch Service added k-NN support starting with version 1.0 and has since added neural search plugins that handle embedding generation and ANN search natively — you define an ingest pipeline that calls an embedding model (Amazon Bedrock, SageMaker, or a custom model) to generate vectors for incoming documents, and searches automatically include vector similarity. Azure AI Search supports vector fields natively in index definitions, integrates with Azure OpenAI for embedding generation, and offers hybrid search with configurable RRF parameters through its REST API. Vertex AI Search on GCP abstracts vectors entirely — you upload documents and the service handles chunking, embedding, and hybrid retrieval automatically, though this comes with less control over the retrieval pipeline. For self-hosted deployments, Elasticsearch 8.x and OpenSearch 2.x both include k-NN plugins, and you can pair ECK-managed clusters with self-hosted embedding models from Hugging Face running as sidecar containers or separate inference services on Kubernetes.
+
+---
+
+## Indexing Pipeline Deep Dive
+
+Understanding what happens between a Fluent Bit `[OUTPUT]` directive and a queryable document helps you diagnose slow ingestion, high CPU, and stale search results. The indexing pipeline has four stages.
+
+### Ingest
+
+Raw documents arrive at the cluster's HTTP API as JSON payloads — a single document via the index API, or batches via the bulk API (which is far more efficient, amortizing network round-trips and index operations). The coordinating node routes each document to the appropriate primary shard based on a routing formula: `shard = hash(_routing) % number_of_primary_shards`. If no explicit routing key is provided, the document ID is used, meaning documents distribute evenly across shards by default. If you specify a routing key (for example, a tenant ID), all documents for that tenant land on the same shard, which can be useful for colocation but dangerous if it creates hot shards.
+
+### Analyze
+
+Before a document is written to the inverted index, its text fields pass through an analyzer pipeline. The analyzer performs character filtering (stripping HTML tags, normalizing Unicode), tokenization (splitting text into individual terms on whitespace and punctuation), and token filtering (lowercasing, removing stop words, applying stemming). For example, the sentence "Kubernetes pods are crashing" passes through the standard analyzer and becomes the tokens `[kubernetes, pod, crash]` — "are" is a stop word and removed, "pods" is stemmed to "pod," and "crashing" is stemmed to "crash." These tokens are what end up in the inverted index, which is why the same analyzer must be applied at query time to match the indexed terms. Mismatched analyzers are a common source of "my data is indexed but my queries return nothing" bugs.
+
+### Index
+
+After analysis, the engine writes the document to the transaction log (translog) for durability, then to an in-memory buffer. When the buffer fills or the refresh interval elapses (default: 1 second), the in-memory buffer is flushed to a new Lucene segment on disk, and the document becomes searchable. This is why OpenSearch and Elasticsearch are called near-real-time: there is up to a 1-second lag between indexing and searchability. The refresh interval is a critical tuning knob — set it to 30 seconds during bulk indexing to reduce segment creation overhead, then restore it to the default for normal query workloads. Each refresh creates a new Lucene segment, and having too many small segments degrades query performance; the engine periodically merges segments in the background to keep their count manageable.
+
+The index mapping defines the schema: which fields are `keyword` (exact match, aggregatable), which are `text` (full-text search, analyzed), which are `date`, `long`, or `geo_point`. Mappings constrain what queries are possible — you cannot run aggregations on a `text` field, and you cannot run full-text queries on a `keyword` field without a multi-field mapping. Defining explicit mappings before any data enters the index is a best practice because dynamic mapping, while convenient, often guesses wrong (mapping an ID field as `text` instead of `keyword`, for example) and the mapping cannot be changed for existing fields without reindexing.
+
+### Bulk Indexing
+
+For log ingestion, the bulk API is the only practical approach. Instead of sending one document per HTTP request, you batch documents into newline-delimited JSON (NDJSON) payloads and send them in a single POST. A well-tuned bulk pipeline uses batches of 500-2,000 documents or 5-15 MB per batch, whichever comes first — smaller batches waste network round-trips, larger batches risk timeouts and memory pressure on the coordinating node. The bulk response reports per-document success or failure, allowing the ingestion pipeline to retry individual failures without re-sending the entire batch.
+
 ---
 
 ## Index Lifecycle Management (ILM/ISM)
 
-Without lifecycle management, indices grow forever. A single day of logs for a 200-pod cluster can be 50 GB. After a month, you have 1.5 TB of indices, most of which nobody searches.
+Without lifecycle management, indices grow forever. A single day of logs for a 200-pod cluster can be 50 GB. After a month, you have 1.5 TB of indices, most of which nobody searches. Even worse, the cluster must maintain all those shards in memory, the coordinating node scans every index matching your wildcard patterns, and disk usage grows linearly until you hit a quota and ingestion stops. Index Lifecycle Management (ILM in Elasticsearch) or Index State Management (ISM in OpenSearch) solves this by defining automated policies that transition indices through phases — hot, warm, cold, and delete — based on age or size. Each phase trades query performance for storage cost, matching the resources consumed by an index to its actual access patterns over time.
 
 ### Lifecycle Phases
 
@@ -380,7 +468,7 @@ curl -XPUT "https://search-logs.us-east-1.es.amazonaws.com/_index_template/k8s-l
 
 ## Sharding and Replication Strategy
 
-Sharding determines how data is distributed across nodes. Getting it wrong causes hot spots, uneven disk usage, and query performance problems.
+Sharding determines how data is distributed across nodes, and getting it wrong causes hot spots, uneven disk usage, and query performance problems that are difficult to fix after the fact. A shard is OpenSearch's unit of parallelism — each shard is an independent Lucene index that can be placed on any data node, and a search query fans out to all shards in the target indices. The number of primary shards is set at index creation and cannot be changed without reindexing (you can split shards in newer versions, but this is a manual operation with downtime implications). This immutability makes the initial shard count one of the most consequential decisions in your search architecture.
 
 ### Shard Sizing Rules
 
@@ -430,7 +518,7 @@ Use a single index with a `namespace` field for filtering. Only create separate 
 
 ## Fine-Grained Access Control
 
-In a multi-team environment, different teams should only see logs from their own namespaces.
+In a multi-team environment, different teams should only see logs from their own namespaces — the frontend team has no business searching the payments namespace's error logs, and the platform SREs need full access across all namespaces. OpenSearch's security plugin provides role-based access control with two powerful dimensions: Document Level Security (DLS) filters which documents a role can see, and Field Level Security (FLS) which fields within those documents are visible. Combined with OIDC integration through your cloud provider's identity system (AWS IAM, GCP IAM, or Entra ID), you can map Kubernetes RBAC roles to OpenSearch roles, ensuring that a developer's access in kubectl matches their access in OpenSearch Dashboards.
 
 ### OpenSearch Security: Role-Based Access
 
@@ -481,7 +569,7 @@ curl -XPUT "https://search-logs.us-east-1.es.amazonaws.com/_plugins/_security/ap
 
 ## Query Optimization
 
-Search queries against log indices can be slow if not designed well. Here are patterns for efficient operational queries.
+Search queries against log indices can be slow if not designed well. The difference between a query that completes in 50 milliseconds and one that takes 15 seconds often comes down to three factors: whether the query uses filter context (cached, no scoring) versus query context (uncached, with scoring), whether the time range is narrow enough for OpenSearch to skip non-matching indices, and whether the field types in the query match the field types in the mapping. Below are patterns for efficient operational queries, organized around these principles. Each example targets a real operational workflow — finding recent errors, aggregating error distribution by workload, and returning lean results for dashboard consumption.
 
 ### Common Query Patterns
 
@@ -562,7 +650,7 @@ curl -XPOST "https://search-logs.us-east-1.es.amazonaws.com/k8s-logs-*/_search" 
 
 ## OpenSearch Dashboards from Kubernetes
 
-Deploy OpenSearch Dashboards (or Kibana) inside your cluster for log visualization.
+Deploy OpenSearch Dashboards (or Kibana) inside your Kubernetes cluster for log visualization and ad-hoc exploration. While managed search services provide the backend, your teams still need a UI to craft queries, build dashboards, and explore log patterns interactively. OpenSearch Dashboards is the visualization layer that connects to the managed domain — it runs as a stateless deployment in your cluster, and all data remains in the managed service. This architecture keeps the visualization close to your developers while the search engine benefits from managed operations. The deployment below configures two replicas for high availability and connects to the managed OpenSearch domain via the `OPENSEARCH_HOSTS` environment variable, using IAM-based authentication through IRSA when running on EKS.
 
 ```yaml
 apiVersion: apps/v1
@@ -609,6 +697,87 @@ spec:
     - port: 5601
       targetPort: 5601
 ```
+
+---
+
+## Cost Lens
+
+Managed search services charge along several dimensions, and understanding the cost levers helps you avoid bill shock while keeping search performance acceptable. The biggest cost drivers are instance-hours, storage volume, and data transfer.
+
+### Compute Costs
+
+Provisioned managed clusters (Amazon OpenSearch provisioned domains, Elastic Cloud) charge per instance-hour for each node. An `r6g.large.search` instance in us-east-1 costs roughly $0.17 per hour, so a 3-node data tier plus 3 dedicated master nodes runs approximately $750 per month for compute alone. Larger instance families, Graviton-based ARM instances (r6g, m6g), and reserved instances (1-year or 3-year commitments) can reduce the per-hour rate by 30-50%. OpenSearch Serverless uses OCUs (OpenSearch Compute Units), billed separately for indexing and search workloads; indexing OCUs scale with ingestion throughput, and search OCUs scale with query concurrency and data scanned. At moderate scale (100 GB/day ingestion, ~50 queries per minute), Serverless can be cheaper than provisioned instances, but at high query volumes the OCU cost can exceed provisioned pricing because you pay for every query.
+
+### Storage Costs
+
+EBS volumes in AWS OpenSearch are charged per GB-month. gp3 volumes cost ~$0.08 per GB-month, so 500 GB of storage adds $40 per month, but this grows linearly with retention. The ILM policy becomes your primary storage cost control: moving indices from hot (gp3 on the data nodes) to warm (gp3 with force-merge reducing size by 40-60%) to cold (ultrawarm or searchable snapshots, ~$0.024/GB-month) can reduce storage cost by 70% for older data. In OpenSearch Serverless, storage is included in the OCU rate, but you still pay for every GB-month regardless of access frequency, making ILM even more important for cost control.
+
+### What Makes Cost Spike
+
+Over-sharding is the most common hidden cost driver: every shard consumes JVM heap, and when heap pressure exceeds 75% the JVM enters aggressive garbage collection, slowing queries and ingestion. Teams respond by adding more nodes, which increases the monthly bill, when the root cause is simply too many shards. Cross-AZ data transfer for replication between availability zones is another silent cost — a 3-AZ deployment with 1 replica effectively triples the inter-AZ traffic for every indexed document, and while AWS does not charge for OpenSearch node-to-node traffic within a region, self-hosted clusters on EC2 do pay standard inter-AZ data transfer rates ($0.01/GB). In Azure, AI Search charges per search unit (a combined compute + storage measure), and you scale by adding replicas (for query throughput) or partitions (for index size). Elastic Cloud on GCP bills through the GCP Marketplace with instance-based pricing similar to AWS, and cross-zone traffic within a region is not charged.
+
+### Reducing Cost Without Sacrificing Searchability
+
+Set the refresh interval to 30 seconds or higher during bulk indexing to reduce segment merges and I/O. Use index rollover based on shard size (30 GB) rather than time (1 day) so that low-volume days do not create unnecessarily small shards. Force-merge warm indices to single segments, which reduces storage by up to 60% and accelerates queries since fewer segments need to be opened per search. For cold storage, use searchable snapshots — indices are stored in cheap object storage (S3, GCS, Azure Blob) and only the portions needed for queries are fetched into local cache, bringing storage costs down to ~$0.024/GB-month while retaining the ability to search.
+
+---
+
+## Patterns and Anti-Patterns
+
+### Proven Patterns
+
+**Pattern 1: Buffer Everything.** Always place a message queue (Kafka, Kinesis, Event Hubs) between log producers and the search cluster. This decouples ingestion spikes from OpenSearch's ability to index, prevents log loss during cluster maintenance or JVM pauses, and enables replay if you need to re-index data with updated mappings. The buffer also lets you perform streaming transformations — parsing unstructured logs, enriching with Kubernetes metadata, dropping sensitive fields — before they reach the search index, reducing the indexing load and improving data quality.
+
+**Pattern 2: Time-Based Index Rollover with ILM.** Design your index strategy around daily (or size-based) rollover with automated lifecycle management from day one. New indices are created by the rollover action, old indices transition through hot, warm, and cold phases on a schedule, and indices past retention are deleted automatically. Without this, you either accumulate unbounded storage costs or face a painful manual reindexing operation when you eventually need to clean up. The daily rollover also bounds shard count: you can predict exactly how many shards the cluster will hold at steady state and size nodes accordingly.
+
+**Pattern 3: Explicit Mappings Before Data.** Define index templates with explicit field types before any data flows into the cluster. Dynamic mapping guesses wrong often enough to cause real problems: an `order_id` field gets mapped as `text` (full-text search) when you need `keyword` (exact match and aggregatable), and changing the mapping for existing data requires a full reindex. Explicit mappings also let you disable indexing on fields you will never search (large log payloads, binary blobs) using `"index": false`, saving disk and memory.
+
+**Pattern 4: Separate Clusters by Workload Profile.** Logging workloads and application search workloads have fundamentally different access patterns. Logging is write-heavy, append-only, with most queries scanning recent time ranges. Application search is read-heavy with diverse query patterns and latency-sensitive users. Running both on the same cluster causes index contention, cache eviction, and unpredictable query latency. Operate two separate clusters (or two separate managed domains), sized independently for each workload profile.
+
+### Anti-Patterns
+
+| Anti-Pattern | Why Teams Fall Into It | Better Alternative |
+|---|---|---|
+| Using OpenSearch as a primary database | "We already have OpenSearch, why add PostgreSQL?" — OpenSearch is not ACID, does not support joins, and is not designed for transactional writes | Use a proper database for transactional data; push only searchable projections to OpenSearch via a CDC pipeline |
+| One index per namespace per day | Seems like good organizational hygiene — but 50 namespaces × 3 shards × 2 replicas × 90 days = 27,000 shards, which overwhelms cluster state | Use a single daily index with `namespace` as a keyword field and Document Level Security for access control |
+| No ILM policy before production | "We'll configure retention later" — after 6 months of unmanaged index growth, retroactively applying ILM requires reindexing terabytes | Define ISM/ILM policies and index templates before any data enters the cluster; validate them in staging |
+| Over-sharding for "future growth" | Fear of hitting a shard size ceiling leads teams to create 10-20 primary shards for a 30 GB/day index — each shard ends up at 2-3 GB, well below the 10 GB minimum | Target 30 GB per shard; the daily rollover is your natural point to increase shard count when volume actually grows |
+| Direct ingestion without Kafka | Simplicity bias — Fluent Bit → OpenSearch has fewer moving parts, until OpenSearch slows down and Fluent Bit's in-memory buffer overflows, dropping logs | Always buffer through Kafka or Kinesis; the buffer is your insurance policy against cluster unavailability |
+| Running force_merge on hot indices | "Let's optimize everything" — force_merge on an actively-written index creates new segments immediately after every merge, wasting CPU and I/O | Only force_merge on read-only warm/cold indices as part of ILM transitions |
+| Ignoring JVM heap pressure | "It's managed, so I don't need to worry" — managed services handle node replacement but do not tune your index strategy; over-sharding still causes heap pressure and GC pauses | Monitor JVMMemoryPressure (alert above 80%), count shards, and follow shard sizing guidelines regardless of deployment model |
+| No snapshot strategy | Relying on replicas as the only data redundancy — replicas protect against node failure but not against accidental index deletion, data corruption, or cluster-wide misconfiguration | Configure automated snapshots to S3/GCS/Azure Blob with retention matching your recovery point objective; test restore quarterly |
+
+---
+
+## Decision Framework
+
+Choosing how and where to run your search infrastructure depends on four factors: operational maturity, cost sensitivity, feature requirements, and data gravity. The flowchart below captures the primary decision path, but the tradeoffs deserve deeper discussion.
+
+```mermaid
+flowchart TD
+    START["Need search for Kubernetes workloads?"] --> Q1{"Primary use case?"}
+    Q1 -->|"Log analytics and observability"| Q2{"Team size and ops capacity?"}
+    Q1 -->|"Application search (product, docs, RAG)"| Q3{"Vector/semantic search needed?"}
+
+    Q2 -->|"Small team, low ops bandwidth"| MANAGED_LOG["Managed OpenSearch / Elastic Cloud\n- AWS OpenSearch\n- Elastic Cloud on GCP\n- Azure Monitor + Log Analytics (optional AI Search export for search-layer use)"]
+    Q2 -->|"Large team, dedicated SRE support"| Q4{"Data residency or extreme scale (>100TB)?"}
+    Q4 -->|"Yes"| ECK["ECK Operator on Kubernetes\n- Full control over config and plugins\n- Reuse existing K8s infra\n- Own the operational burden"]
+    Q4 -->|"No"| MANAGED_LOG
+
+    Q3 -->|"Yes"| Q5{"Prefer fully-managed AI pipeline?"}
+    Q5 -->|"Yes"| VERTEX["Vertex AI Search (GCP)\n- Automatic embedding and chunking\n- Minimal configuration\n- Higher per-query cost"]
+    Q5 -->|"No, want control"| Q6{"Cloud preference?"}
+    Q6 -->|"AWS"| AWS_VECTOR["Amazon OpenSearch Service\nwith neural search plugin\n+ Bedrock or SageMaker embeddings"]
+    Q6 -->|"Azure"| AZURE_VECTOR["Azure AI Search\n+ Azure OpenAI embeddings\n+ Hybrid search with RRF"]
+    Q6 -->|"Multi-cloud / self-hosted"| ECK_VECTOR["ECK Operator + OpenSearch 2.x\n+ self-hosted embedding model\n(Hugging Face, sentence-transformers)"]
+    Q3 -->|"No, lexical only"| Q7{"Compliance restricts managed services?"}
+    Q7 -->|"Yes"| ECK
+    Q7 -->|"No"| MANAGED_APP["Managed Elasticsearch / OpenSearch\n- Elastic Cloud\n- Amazon OpenSearch\n- Azure AI Search (lexical)"]
+```
+
+The core tension is between operational burden and control. Managed services absorb node management, patching, snapshot automation, and version upgrades — tasks that consume meaningful engineering time on self-hosted clusters. But managed services also impose limits: Amazon OpenSearch restricts certain APIs (no direct `_cluster/settings` modifications), Azure AI Search uses a different indexer model that does not support all Elasticsearch query DSL features, and Vertex AI Search abstracts the retrieval pipeline entirely. When your use case fits within the managed service's feature set, the operational savings typically outweigh the loss of control. When it does not — custom plugins, specific JVM tunings, niche hardware requirements — ECK on Kubernetes provides a production-grade self-hosted path without reinventing the StatefulSet and PVC management wheel.
+
+For teams straddling both worlds, a common strategy is to use a managed service for the logging cluster (where feature requirements are modest — search, aggregate, visualize — and data volume is high) and self-hosted ECK for the application search cluster (where custom relevance tuning, plugin integrations, and latency SLAs demand full control). This split lets you match the operational investment to the business criticality of each workload.
 
 ---
 
@@ -660,7 +829,7 @@ With 50 namespaces and 3 primary shards per index (plus 1 replica), a single day
 </details>
 
 <details>
-<summary>4. You have consolidated all logs into a single daily index to prevent shard explosion, but your security compliance team dictates that the frontend team must never be able to query logs from the payments namespace. How can Document Level Security (DLS) solve this requirement, and what performance trade-off it introduce?</summary>
+<summary>4. You have consolidated all logs into a single daily index to prevent shard explosion, but your security compliance team dictates that the frontend team must never be able to query logs from the payments namespace. How can Document Level Security (DLS) solve this requirement, and what performance trade-off does it introduce?</summary>
 
 DLS is an OpenSearch security feature that dynamically appends a filter query to every search request made by a specific user role. For example, assigning the frontend team a role with a DLS filter `{"match": {"kubernetes.namespace_name": "frontend"}}` ensures they only ever see their own documents, regardless of their actual search query. This satisfies the compliance requirement by providing multi-tenant security within a shared index without the overhead of maintaining separate physical indices. However, DLS adds a 5-15% performance overhead per query because the filter is evaluated on every single search request.
 </details>
@@ -677,15 +846,29 @@ In OpenSearch `bool` queries, `must` clauses calculate relevance scores for each
 Setting the primary shard count to 10 for 100 GB of data would result in shards of only 10 GB each, leading to over-sharding and unnecessary cluster state overhead. You should calculate shards based on a target size of 10-50 GB per shard. For 100 GB of daily logs, dividing by a conservative 30 GB target yields about 3 or 4 primary shards (e.g., ceil(100/30) = 4). You should not over-shard for hypothetical future growth because the daily rollover action in ISM/ILM creates a new index every day, giving you a natural point to seamlessly increase the shard count when your actual daily volume consistently exceeds the target shard size.
 </details>
 
+<details>
+<summary>7. You are evaluating whether to use Amazon OpenSearch Service (managed) versus running the ECK operator on EKS for a new Kubernetes logging pipeline. Your team has two SREs, and the cluster will ingest ~200 GB of logs per day with 30-day retention. Which approach would you recommend and what are the primary tradeoffs?</summary>
+
+For a team with only two SREs and a moderate ingestion volume, managed OpenSearch Service is the stronger choice. A 200 GB/day workload with 30-day retention means ~6 TB of total storage running on perhaps 6-9 data nodes — this is well within the operational envelope of a managed service. The two SREs would spend their time on JVM tuning, shard rebalancing, version upgrades, and snapshot management if self-hosted — time better spent on higher-leverage platform work. Managed OpenSearch handles node replacement, automated snapshots, encryption, and version upgrades. The tradeoff is cost: managed services charge a premium over raw EC2 instances, and you give up direct control over cluster settings and plugin installation. If the team grows to 5+ SREs and data volume exceeds 500 TB, the cost equation may tilt toward ECK plus reserved instances.
+</details>
+
+<details>
+<summary>8. Your application search feature uses BM25 lexical scoring, but users complain that searching for "login issues" does not return documents about "authentication failures" or "password reset errors." How would adding vector search to your cluster address this, and what changes would you need to make to your indexing pipeline?</summary>
+
+BM25 matches keywords exactly, so "login issues" only retrieves documents containing those words. Vector search converts queries and documents into dense embeddings in a high-dimensional space where semantically similar concepts cluster together. Adding vector search requires three changes to the indexing pipeline: first, deploy an embedding model (such as a sentence transformer running as a Kubernetes deployment) that generates a vector for each document at ingest time; second, add a `knn_vector` field to your index mapping with the embedding dimension and similarity metric (cosine or dot product); third, update the ingest pipeline to call the embedding service and populate the vector field. At query time, you run a hybrid search that executes both a BM25 query and a kNN vector query in parallel, then merges the ranked results using Reciprocal Rank Fusion so that documents matching conceptually or lexically both appear in the results.
+</details>
+
 ---
 
 ## Hands-On Exercise: Log Pipeline with OpenSearch
 
-This exercise uses OpenSearch running in kind to build a complete log ingestion and search pipeline.
+This exercise uses OpenSearch running in kind to build a complete log ingestion and search pipeline from scratch. You will deploy a single-node OpenSearch cluster, define an index template with explicit field mappings, ingest 500 simulated Kubernetes log entries using the bulk API, run aggregation queries to explore the data, and inspect cluster health metrics. Each task builds on the previous one, and the entire lab runs locally in a kind cluster that you tear down at the end. The concepts you practice here — explicit mappings, bulk ingestion, filter-based queries, and shard inspection — are the same ones you will use when operating production clusters at scale.
 
 ### Setup
 
 ```bash
+alias k=kubectl
+
 # Create kind cluster
 kind create cluster --name search-lab
 
@@ -698,6 +881,7 @@ helm install opensearch opensearch/opensearch \
   --set persistence.enabled=false \
   --set resources.requests.memory=1Gi \
   --set resources.limits.memory=1.5Gi \
+  # Backslash escapes a literal dot in the Helm values key segment (opensearch.yml).
   --set config.opensearch\\.yml."plugins.security.disabled"=true
 
 k wait --for=condition=ready pod -l app.kubernetes.io/name=opensearch \
@@ -712,7 +896,7 @@ helm install dashboards opensearch/opensearch-dashboards \
 
 ### Task 1: Create an Index Template
 
-Create an index template for Kubernetes logs with proper field mappings.
+Define an index template that will be applied to every new index matching the `k8s-logs-*` pattern. Your template must include explicit field mappings — `keyword` types for namespace, pod, container, and node fields (enabling exact-match queries and aggregations), `date` type for the timestamp (enabling range queries), and `text` type for the log message (enabling full-text search). The template should also configure index settings including the number of shards and the refresh interval.
 
 <details>
 <summary>Solution</summary>
@@ -751,7 +935,7 @@ k run opensearch-setup --rm -it --image=curlimages/curl -n search --restart=Neve
 
 ### Task 2: Ingest Sample Log Data
 
-Push simulated Kubernetes log entries into the index.
+Use a Python script running inside the kind cluster to push 500 simulated Kubernetes log entries into OpenSearch via the bulk API. The script should generate documents with varied `namespace` values (payments, frontend, api-gateway, checkout, analytics) and `level` values (info, warn, error) to create a realistic distribution. The bulk API batches all 500 documents into a single HTTP request using newline-delimited JSON (NDJSON) format — observe the response to confirm all documents were indexed successfully and verify the document count.
 
 <details>
 <summary>Solution</summary>
@@ -793,7 +977,7 @@ print(f\\\"Total documents: {count.get(\\\"count\\\", 0)}\\\")
 
 ### Task 3: Query for Errors by Namespace
 
-Search for error-level logs and aggregate by namespace.
+Craft an OpenSearch query that finds all error-level log entries across all indices and aggregates them by namespace. Use a `bool` query with a `filter` context for the level term (avoiding unnecessary relevance scoring) and a `terms` aggregation on the `kubernetes.namespace` field. Set `size` to 0 to suppress individual document hits and return only the aggregation results. Compare the error distribution across namespaces — does any single namespace dominate the error count?
 
 <details>
 <summary>Solution</summary>
@@ -822,13 +1006,12 @@ k run search-errors --rm -it --image=curlimages/curl -n search --restart=Never -
 
 ### Task 4: Check Index Health and Stats
 
-Query the cluster for index statistics and health.
+Inspect the cluster's operational state by querying three critical endpoints: the cluster health API (which reports status, node count, and shard allocation), the index stats API (which shows document count and storage size per index), and the cat shards API (which lists every shard with its current node assignment and size). Understanding how to read these endpoints is essential for troubleshooting in production — the cluster health status tells you whether all shards are allocated, the index stats confirm your data volume matches expectations, and the shard list reveals whether any shards are undersized or stuck in an unexpected state.
 
 <details>
 <summary>Solution</summary>
 
 ```bash
-# Index stats
 k run check-stats --rm -it --image=curlimages/curl -n search --restart=Never -- \
   sh -c '
   echo "=== Cluster Health ==="
@@ -860,10 +1043,21 @@ kind delete cluster --name search-lab
 
 ---
 
-**Next Module**: [Module 9.7: Streaming Data Pipelines (MSK / Confluent / Dataflow)](../module-9.7-streaming/) -- Learn how to build streaming data pipelines with managed Kafka, compare managed vs in-cluster Strimzi, and process real-time events from Kubernetes workloads.
-
 ## Sources
 
 - [Index State Management in Amazon OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ism.html) — Primary AWS guide for lifecycle policies, rollover, and automated retention.
 - [Fine-grained access control in Amazon OpenSearch Service](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/fgac.html) — Covers document-level security, field-level security, roles, and mappings for shared clusters.
 - [Choosing the number of shards](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/bp-sharding.html) — Provides AWS shard-sizing guidance and sizing tradeoffs directly relevant to logging workloads.
+- [Amazon OpenSearch Service pricing](https://aws.amazon.com/opensearch-service/pricing/) — Instance-hour, storage, and data transfer pricing for provisioned domains and Serverless OCU billing.
+- [Index templates in OpenSearch](https://opensearch.org/docs/latest/im-plugin/index-templates/) — Upstream OpenSearch documentation for composable index templates, component templates, and priority resolution.
+- [Elastic Cloud on Kubernetes (ECK) documentation](https://www.elastic.co/docs/deploy-manage/deploy/cloud-on-k8s) — Official Elastic operator documentation covering deployment, upgrades, node sets, and volume management.
+- [Azure AI Search documentation](https://learn.microsoft.com/en-us/azure/search/) — Overview of Azure's managed search service including indexers, vector search, hybrid retrieval, and AI enrichment pipelines.
+- [Vertex AI Search overview](https://cloud.google.com/vertex-ai-search/docs/overview) — GCP's fully-managed AI search platform covering website search, document search, and RAG retrieval capabilities.
+- [OpenSearch k-NN plugin](https://opensearch.org/docs/latest/search-plugins/knn/index/) — Documentation for approximate nearest neighbor search, including HNSW graphs, IVF, and Lucene-based ANN.
+- [External Secrets Operator](https://external-secrets.io/latest/) — Kubernetes operator for syncing secrets from AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault into Kubernetes secrets.
+- [Fluent Bit Kubernetes filter](https://docs.fluentbit.io/manual/pipeline/filters/kubernetes) — Official documentation for the Kubernetes metadata enrichment filter used in the DaemonSet configuration.
+- [BM25 relevance scoring in Elasticsearch](https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables) — Elastic's technical deep-dive on the BM25 algorithm, its parameters (k1, b), and how they relate to term frequency saturation and field length normalization.
+
+## Next Module
+
+[Module 9.7: Streaming Data Pipelines (MSK / Confluent / Dataflow)](../module-9.7-streaming/) — Learn how to build streaming data pipelines with managed Kafka, compare managed vs in-cluster Strimzi, and process real-time events from Kubernetes workloads.
