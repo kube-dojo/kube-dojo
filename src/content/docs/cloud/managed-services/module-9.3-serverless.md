@@ -27,6 +27,40 @@ This module teaches you how to think about the serverless-Kubernetes boundary. Y
 
 ---
 
+## The Serverless Landscape: Two Flavors of Compute
+
+Before you can decide where to place a workload, you need to understand what "serverless" actually means across the three major clouds. The term has fractured into two distinct execution models, and confusing them leads to bad architecture decisions.
+
+### Function-as-a-Service (FaaS)
+
+FaaS is the original serverless model: you write a single function, upload the code, and the cloud runs it on demand. The function is the unit of deployment, not the container image or the pod. AWS Lambda pioneered this model in 2014, and it remains the most mature FaaS platform. Google Cloud Functions (2nd gen, built on Cloud Run infrastructure) and Azure Functions provide equivalent capabilities.
+
+With FaaS, the cloud provider manages every layer below your code: the OS, the runtime, the scaling, and the provisioning of compute capacity. You configure memory (and, indirectly, CPU — Lambda allocates CPU proportionally to memory), set a timeout, and decide how many concurrent instances you want running at most. You never see the VM, the container host, or the scheduler.
+
+FaaS functions have hard constraints. AWS Lambda caps execution at 15 minutes. Cloud Functions 2nd gen shares the same 60-minute ceiling as Cloud Run (since it runs on Cloud Run infrastructure). Azure Functions caps at 10 minutes on the Consumption plan, though Premium and Dedicated plans remove this limit. These constraints are not accidents — they enforce the stateless, short-lived execution model that makes FaaS scalable. If your function needs 20 minutes to complete, FaaS is the wrong tool regardless of what the timeout slider says on the premium tier.
+
+FaaS also imposes limits on deployment package size. Lambda allows 50 MB zipped, 250 MB unzipped (with container image support up to 10 GB for container-packaged functions). Azure Functions Consumption plan limits you to ~500 MB of temporary local storage (memory is capped separately, ~1.5 GB per instance). These numbers exist because the platform must be able to spin up a new instance of your function in a cold-start scenario — the larger the package, the longer the initialization.
+
+### Container-Serverless
+
+Container-serverless is the newer model. Instead of uploading code, you provide a container image. The cloud runs that container on demand, scaling it (potentially to zero) based on incoming requests. AWS App Runner and Fargate, Google Cloud Run, and Azure Container Apps are the flagship container-serverless offerings.
+
+The key difference from FaaS is control and generality. A container-serverless service can run any HTTP server, any language (even one with no official cloud runtime), and any framework — Flask, Express, Spring Boot, or a custom binary listening on a port. You are not limited to the provider's blessed runtimes or the event-source handshake protocols that FaaS requires. If your application is already packaged as a container, moving it to container-serverless requires no code changes beyond ensuring it listens on the `$PORT` environment variable and starts quickly.
+
+Cloud Run is particularly notable because it is built on Knative, the same open-source serverless layer you can deploy on any Kubernetes cluster. This means a Cloud Run service and a Knative Service on your GKE cluster use the same scaling model, the same revision management, and nearly the same YAML configuration. The portability argument is real: you can develop on Cloud Run and later move the workload to your own Knative installation without rewriting the application.
+
+The tradeoff is cold-start latency. Container-serverless cold starts are typically slower than FaaS cold starts because the platform must pull a container image (which may be hundreds of megabytes) and start a full user-space process rather than injecting your code into a pre-warmed runtime. AWS Fargate cold starts can take 30-60 seconds for a new pod, while Lambda cold starts are usually in the hundreds of milliseconds. Google Cloud Run mitigates this with aggressive image caching and a lightweight container runtime, starting many services in under 2 seconds cold, but large images or frameworks with heavy initialization (Spring Boot, Django with many middleware) will push this higher.
+
+### The Blurring Line
+
+The distinction between FaaS and container-serverless is eroding. AWS Lambda supports container images as a packaging format — you can build a container image and deploy it to Lambda, using the Lambda Runtime API to handle events. But this is still FaaS: Lambda manages the lifecycle, injects events through its Runtime API, and enforces the 15-minute timeout. The container is a packaging convenience, not a different execution model.
+
+Conversely, Google Cloud Functions 2nd gen runs on Cloud Run infrastructure. A Cloud Function (2nd gen) is effectively a Cloud Run service with a pre-configured buildpack that wraps your function code in a lightweight HTTP server. The underlying execution model is container-serverless, even though the developer experience is FaaS.
+
+What should you take from this? When evaluating where to place a workload, ask two questions: *Does this workload fit within a FaaS timeout and packaging constraint?* and *Does my team want to manage containers, or do we want the cloud to handle the runtime?* If the answer to the first question is yes and the second is "manage it for us," FaaS is the default. If either answer is no, container-serverless (or Kubernetes) is the better choice.
+
+---
+
 ## When Serverless vs When Kubernetes
 
 This is not a religious debate. It is a cost and operational decision matrix.
@@ -64,11 +98,34 @@ The exact crossover depends on execution time, memory, and provider pricing. But
 
 > **Stop and think**: If a service handles 5 million requests per month but each request takes 10 milliseconds and requires very little memory, would it still strictly follow the "Kubernetes wins above 2M requests" rule? Why might serverless still be cheaper here?
 
+### Decision Flowchart
+
+When you are staring at a new workload and need to decide where it runs, use the following flowchart. It captures the tradeoffs from the decision matrix in a sequence of elimination questions rather than a parallel comparison. Each "no" moves you closer to the right runtime; each "yes" narrows your options.
+
+```mermaid
+graph TD
+    Start["New workload"] --> Q1{"Runs continuously<br/>(24/7, steady traffic)?"}
+    Q1 -->|Yes| K8s["Kubernetes Deployment"]
+    Q1 -->|No| Q2{"Needs >15 min<br/>execution time?"}
+    Q2 -->|Yes| K8s
+    Q2 -->|No| Q3{"Requires GPU,<br/>large disk, or<br/>persistent conn?"}
+    Q3 -->|Yes| K8s
+    Q3 -->|No| Q4{"Already packaged as<br/>a container image?"}
+    Q4 -->|Yes| ContainerSL["Container-Serverless<br/>(Cloud Run / Fargate)"]
+    Q4 -->|No| Q5{"Language supported<br/>by FaaS runtime?"}
+    Q5 -->|Yes| FaaS["FaaS<br/>(Lambda / Cloud Functions)"]
+    Q5 -->|No| ContainerSL
+```
+
+This flowchart is a starting point, not a final answer. A workload might tick every container-serverless box and still be a better fit for Kubernetes if your team already operates a mature cluster, or if the workload shares a database with services that run on Kubernetes and you want to minimize cross-network latency. The flowchart eliminates obviously wrong choices; the remaining options should be weighed against team expertise, existing infrastructure, and cost.
+
 ---
 
 ## Triggering Cloud Functions from Kubernetes
 
-The most common pattern is using Kubernetes workloads as producers and cloud functions as async processors.
+The most common pattern is using Kubernetes workloads as producers and cloud functions as async processors. The Kubernetes pod runs as part of a Deployment or StatefulSet, handling the steady-state business logic, while the cloud function handles spiky, event-driven, or infrequent workloads that do not justify a permanently running container. The integration point between these two worlds is almost always a message broker (SQS, Pub/Sub, Event Hubs) or an event bus (EventBridge, Eventarc, Event Grid). Understanding why the message broker is the right integration point — rather than direct HTTP calls from pod to function — is essential for building reliable hybrid architectures.
+
+When a Kubernetes pod calls a Lambda function directly via HTTP, three things can go wrong: the function may be scaled to zero and start cold, introducing latency into the pod's request path; the function may be throttled (Lambda has account-level concurrent execution limits), causing the pod's request to fail; and if the pod itself crashes or restarts mid-call, there is no record of whether the function was invoked. A message broker solves all three: the pod writes a message and moves on, the broker buffers messages through traffic spikes, and the message persists until the function acknowledges successful processing. This decoupling is the foundation of every production-grade Kubernetes-to-serverless integration.
 
 ### Pattern 1: Queue-Triggered Functions
 
@@ -118,6 +175,8 @@ def request_report(user_id, report_type):
     )
 ```
 
+This queue-based pattern is the most robust integration between Kubernetes and serverless because it decouples the producer and consumer in both time and scale. The Kubernetes pod publishes a message and forgets about it, regardless of whether the serverless function is scaled to zero, throttled, or experiencing errors. If the function fails, the message remains in the queue (or moves to a dead-letter queue if you configure one). If traffic spikes 100x, the queue buffers the backlog while the serverless platform scales out. This is the architecture you want for any workload where delivery guarantees matter more than sub-second latency.
+
 ### Pattern 2: HTTP-Triggered Functions via API Gateway
 
 ```mermaid
@@ -133,12 +192,14 @@ aws apigatewayv2 create-api \
   --name hybrid-api \
   --protocol-type HTTP
 
-# Route /api/* to K8s ALB
+# Route /api/* to K8s ALB (private ALB requires a VPC link created first)
 aws apigatewayv2 create-integration \
   --api-id $API_ID \
   --integration-type HTTP_PROXY \
   --integration-uri arn:aws:elasticloadbalancing:us-east-1:123456789:listener/app/k8s-alb/abc123 \
-  --integration-method ANY
+  --integration-method ANY \
+  --connection-type VPC_LINK \
+  --connection-id $VPC_LINK_ID
 
 # Route /reports/* to Lambda
 aws apigatewayv2 create-integration \
@@ -197,7 +258,9 @@ spec:
 
 ## API Gateways: Bridging Both Worlds
 
-Cloud API Gateways sit in front of both Kubernetes services and serverless functions, providing a unified entry point.
+Cloud API Gateways sit in front of both Kubernetes services and serverless functions, providing a unified entry point. This is the architectural pattern that makes hybrid Kubernetes-serverless systems feel like a single application to external consumers. The API Gateway handles authentication, rate limiting, request validation, and response transformation at the edge — before any request reaches either a Kubernetes pod or a serverless function. This means your backend services, regardless of where they run, do not need to implement these cross-cutting concerns themselves.
+
+The routing logic at the API Gateway is what connects the two worlds. Typically, you define path-based routes: `/api/v1/orders` goes to the Kubernetes-hosted order service (steady traffic, database connections, complex business logic), while `/webhooks/stripe` goes to a Lambda function (spiky, stateless, third-party callback processing). Modern API Gateways support multiple integration types — HTTP proxy to any reachable endpoint, AWS Lambda proxy for direct function invocation without an intermediate HTTP layer, and mock integrations for testing. The key design decision is which routes belong on which backend, and that decision should flow from the traffic and cost analysis covered earlier in this module. A route that receives 10 requests per day does not need a permanently running Kubernetes pod; a route that receives 10,000 requests per minute should not pay per-invocation serverless pricing.
 
 ### Multi-Backend Architecture
 
@@ -268,6 +331,8 @@ graph TD
 ### Installing Knative
 
 ```bash
+alias k=kubectl
+
 # Install Knative Serving
 k apply -f https://github.com/knative/serving/releases/download/knative-v1.16.0/serving-crds.yaml
 k apply -f https://github.com/knative/serving/releases/download/knative-v1.16.0/serving-core.yaml
@@ -401,7 +466,11 @@ spec:
 
 ## Fargate vs Autopilot: Serverless Containers
 
-Fargate (AWS) and Autopilot (GCP) remove node management entirely. You define pods, and the cloud runs them without you provisioning or managing nodes.
+Fargate (AWS) and Autopilot (GCP) remove node management entirely. You define pods, and the cloud runs them without you provisioning or managing nodes. This is the container-serverless model applied to Kubernetes: you write standard Kubernetes manifests, but the control plane schedules your pods onto cloud-managed compute capacity rather than onto nodes you provisioned. You never SSH into a node, never patch a kernel, and never wonder whether your node group has enough capacity for the next deployment. The cloud handles all of that.
+
+This abstraction comes with a significant operational shift. On a standard Kubernetes cluster, you think in terms of nodes — how many you need, what instance types, whether to use spot or reserved. On Fargate or Autopilot, you think in terms of pods — how much CPU and memory each pod requests, and how many pods can run concurrently. The pod becomes the billing unit rather than the node. This changes how you reason about cost: instead of paying for a pool of compute that sits partially idle, you pay for exactly the resources each pod consumes, per second.
+
+The tradeoff is control. Fargate does not support privileged containers, host networking, or DaemonSets because those abstractions require node-level access, and Fargate provides no node to access. If your workload needs to mount a hostPath volume, run a log collection DaemonSet, or use a GPU with custom driver configuration, Fargate is not the right choice. Autopilot is more permissive — it supports DaemonSets and GPU workloads — but it still abstracts away the node, meaning you cannot SSH in to debug a kernel panic or inspect a container runtime issue. For teams that have invested in node-level observability and debugging workflows, this loss of visibility is a genuine operational cost that must be weighed against the reduction in node management toil.
 
 > **Pause and predict**: If you deploy a DaemonSet to a cluster using EKS Fargate for all its compute capacity, how many pods will the DaemonSet create? How does the Fargate architecture dictate this outcome?
 
@@ -412,7 +481,7 @@ Fargate (AWS) and Autopilot (GCP) remove node management entirely. You define po
 | Billing unit | Per pod (vCPU + memory per second) | Per pod (vCPU + memory per second) | Per container group (ACI pricing) |
 | DaemonSets | Not supported | Supported (since 2024) | Not supported |
 | GPUs | Supported (limited) | Supported | Not supported |
-| Persistent storage | EBS CSI (since 2024) | GCE PD | Azure Files |
+| Persistent storage | EFS CSI (static provisioning; EBS not supported on Fargate) | GCE PD | Azure Files |
 | Max pods per node | 1 pod = 1 "node" | Managed by GKE | Burstable |
 | Startup time | 30-60 seconds | Transparent | 15-30 seconds |
 | Best for | Batch, low-traffic services | Entire cluster, hands-off | Burst capacity |
@@ -467,7 +536,7 @@ Cold starts are the primary drawback of serverless. Here are practical mitigatio
 | **min-scale: 1** (Knative) | Keep one pod running | First request is usually warm |
 | **Warm-up endpoints** | Health check that loads dependencies | Reduces initialization overhead |
 | **Smaller images** | Alpine/distroless base images | Faster pull and startup |
-| **SnapStart** (Lambda Java) | Snapshot after init, restore on invocation | 90% reduction for JVM cold starts |
+| **SnapStart** (Lambda: Java, Python, .NET) | Snapshot after init, restore on invocation | 90% reduction for JVM cold starts |
 | **GraalVM native images** | Ahead-of-time compilation | 10-50ms startup for Java |
 
 ```bash
@@ -477,6 +546,20 @@ aws lambda put-provisioned-concurrency-config \
   --qualifier prod \
   --provisioned-concurrent-executions 5
 ```
+
+The cold-start problem deserves deeper treatment because it is the single most common reason teams reject serverless after an initial trial. Understanding *why* cold starts happen and *which* strategies apply to which runtimes is essential for making serverless work in production.
+
+**What causes a cold start?** When a serverless platform receives a request and no warm instance is available, it must create a new execution environment from scratch. For AWS Lambda, this means Firecracker — a purpose-built microVM — is provisioned, the runtime (Node.js, Python, Java, etc.) is loaded into the microVM, your code package is downloaded and extracted, and your initialization code (the code outside your handler function) runs. Only then can the platform invoke your handler with the incoming event. This entire chain — provisioning, runtime bootstrap, package load, init — is the cold start.
+
+The dominant cost in a cold start varies by runtime. For interpreted languages like Python and Node.js, the runtime bootstrap is fast (typically under 50 ms) and the dominant cost is initialization code — database connection pools, SDK client instantiation, framework setup. For JVM languages like Java and Kotlin, the JVM startup itself adds hundreds of milliseconds to seconds, which is why SnapStart and GraalVM native images are particularly valuable for the Java ecosystem. For Go, the compiled binary starts nearly instantly, so initialization code is again the dominant factor.
+
+**Provisioned concurrency** (Lambda) and **min instances** (Cloud Run) work by pre-allocating execution environments that sit idle, waiting for requests. These warm instances handle the first N concurrent requests without any cold start. The tradeoff is cost: you pay for the idle compute even when no requests arrive. For a latency-sensitive API with predictable baseline traffic, provisioning 2-3 warm instances may cost an extra $20-50 per month and eliminate the P99 latency spike that cold starts cause. For an unpredictable workload with zero traffic most of the time, provisioned concurrency wastes money.
+
+**SnapStart** (Lambda, for Java 11/17/21, plus Python and .NET) takes a different approach. Instead of keeping instances warm, Lambda snapshots the memory state of your function after initialization completes and persists that snapshot. When a cold start occurs, Lambda restores the snapshot instead of re-running initialization. The restore is fast (typically under 200 ms for JVM functions) because it is essentially a memory copy rather than a full JVM bootstrap and class-loading cycle. SnapStart does not eliminate cold starts entirely — it eliminates the initialization portion, leaving only the microVM provisioning and snapshot restore. It also introduces a constraint: any code that relies on uniqueness (random seeds, GUIDs generated during init, cached network connections) must be re-executed after restore, because the snapshot captures a frozen moment in time.
+
+**The container-serverless cold-start penalty.** Cloud Run and Fargate cold starts are typically longer than Lambda cold starts because the platform must pull a container image from a registry before starting it. Google mitigates this with aggressive caching of frequently used images and layers. AWS Fargate does not cache images across Fargate tasks — every new task pulls the image fresh, which is why Fargate cold starts are 30-60 seconds for typical images. If your container-serverless workload cannot tolerate this latency, you must either keep a minimum instance warm (Cloud Run `min-instances`) or use Kubernetes with pre-scaled pods instead.
+
+**KEDA and scale-to-zero on Kubernetes.** The Kubernetes ecosystem has its own answer to scale-to-zero: KEDA (Kubernetes Event-Driven Autoscaling). Unlike Knative, which is request-driven, KEDA scales based on event sources — queue depth, Kafka consumer lag, database query results, cron schedules. A KEDA-scaled deployment can scale to zero replicas when the event source is idle, and KEDA will scale it back up when events arrive. The cold-start latency on Kubernetes scale-to-zero is typically higher than on a managed FaaS platform because a Kubernetes pod must be scheduled onto a node, pull its image, and start — a process that can take 5-30 seconds depending on image size and cluster capacity. KEDA is the right choice when you need serverless-style scaling but cannot use a managed FaaS (compliance reasons, existing Kubernetes investment, or workload characteristics that exceed FaaS limits).
 
 ---
 
@@ -505,6 +588,82 @@ graph TD
 - **API pods on EKS**: Steady traffic, complex logic, persistent DB connections
 - **Webhook Lambda**: Spiky, unpredictable, stateless
 - **Report Lambda**: Infrequent, CPU-intensive for short bursts, output to S3
+
+---
+
+## Cost Lens: Serverless Economics
+
+Serverless pricing is seductive at low volume, but it can become punishing at scale if you do not understand the cost drivers. This section explains the mechanics, the traps, and the strategies for keeping serverless costs predictable.
+
+### How You Pay
+
+Every serverless compute platform bills on two dimensions: **invocations** (the number of times your function or service is called) and **duration** (how long each invocation runs, measured in GB-seconds or vCPU-seconds). AWS Lambda charges $0.20 per million requests plus $0.0000166667 per GB-second of execution time. Google Cloud Run charges per request ($0.40 per million) plus per vCPU-second and per GB-second of memory. Azure Functions Consumption plan charges $0.20 per million executions plus $0.000016 per GB-second.
+
+A lightweight function that runs for 100 ms with 256 MB of memory costs roughly $0.0000003 per invocation in compute — negligible at any reasonable scale. The invocation cost ($0.0000002 per call for Lambda) dominates for very short functions. But add memory and duration, and the GB-second charges grow linearly.
+
+At moderate scale — say, 10 million invocations per month, each running 500 ms with 1 GB of memory — Lambda costs roughly: 10M × $0.0000002 (invocation) = $2.00, plus 10M × 0.5 sec × 1 GB × $0.0000166667/GB-sec = $83.33. Total: ~$85/month. Compare this with the smallest always-on EKS node (a single t3.medium at ~$30/month reserved, plus control plane costs), and you can see why serverless wins at low-to-moderate volume.
+
+### The Cost Spike Scenarios
+
+Serverless costs spike in three predictable scenarios, and each has a mitigation.
+
+**Scenario 1: High sustained traffic.** At 100 million invocations per month with the same 500 ms / 1 GB profile, Lambda costs ~$853/month. Three always-on t3.medium nodes with reserved pricing cost ~$90/month and can handle significantly more throughput than a single Lambda instance. Above roughly 20-30 million invocations per month, Kubernetes becomes cheaper for any workload with steady traffic, because you pay for capacity rather than per-invocation. The mitigation is straightforward: identify the crossover point for your workload and move steady-state services to Kubernetes.
+
+**Scenario 2: Provisioned concurrency left on.** Provisioned concurrency eliminates cold starts by keeping instances warm, but you pay for those instances whether they handle requests or not. Five provisioned concurrent instances of a 1 GB Lambda function cost roughly $130/month in idle compute — more than the invocation and duration costs for many workloads. Teams often enable provisioned concurrency during launch, see improved latency, and forget to right-size it. A month later, the serverless bill is 3x the expected amount. The mitigation: use provisioned concurrency only for latency-sensitive paths, monitor the actual concurrent request count, and scale provisioned concurrency up and down with a schedule if traffic is predictable (lower it at night).
+
+**Scenario 3: Function-to-function chaining.** If a Lambda function calls another Lambda function synchronously and waits for the response, you pay for both functions' duration during the wait. A chain of three synchronous Lambda calls, each waiting 2 seconds for the next, bills for 6 seconds of compute per end-to-end request, even though the actual CPU work is minimal. This is the "chatty serverless" anti-pattern. The mitigation: use asynchronous patterns (SQS, EventBridge, Step Functions) for multi-step workflows. Step Functions let you orchestrate Lambda calls without paying for wait time — you pay per state transition (about $0.000025 per step) rather than per waiting second.
+
+### Free Tiers and Their Limits
+
+All three clouds offer generous free tiers that make experimentation essentially free, but each tier has hard limits that can catch teams off guard. AWS Lambda's free tier provides 1 million requests and 400,000 GB-seconds per month — enough to run a moderate production workload for free if your functions are short and lightweight. Cloud Run's free tier provides 2 million requests and 360,000 vCPU-seconds per month. Azure Functions offers 1 million executions and 400,000 GB-seconds. These tiers apply every month, not just during a trial period.
+
+The trap is that once you exceed the free tier, you pay for *all* usage, not just the excess. A service that runs at 1.1 million Lambda invocations per month pays for 1.1 million, not 100,000. Teams that grow gradually from the free tier into paid usage often miss this detail and are surprised by the first bill.
+
+---
+
+## Patterns & Anti-Patterns
+
+Serverless architecture has accumulated a body of proven patterns and well-known failure modes. The patterns below represent what works at scale across hundreds of production deployments. The anti-patterns are mistakes that teams make repeatedly, regardless of cloud provider or runtime.
+
+### Patterns
+
+**1. Async Queue Decoupling.** Place a message queue between your request producer and your serverless consumer. The producer (typically a Kubernetes pod or an API endpoint) writes a message to SQS, Pub/Sub, or Azure Service Bus and immediately returns a success response. The serverless function consumes from the queue, processes the message, and writes the result. This pattern absorbs traffic spikes, provides retry semantics (the message stays in the queue if processing fails), and allows the function to scale independently of the producer. It is the default integration pattern for any Kubernetes-to-serverless handoff.
+
+When to use it: whenever the caller does not need a synchronous response, or when the processing time is too variable to expose as an HTTP endpoint. Batch jobs, report generation, image processing, and email delivery are canonical use cases.
+
+**2. API Gateway Routing with Lambda Function URLs.** Instead of routing all traffic through a single Kubernetes ingress, split routes at the API Gateway layer: steady-state CRUD endpoints go to your Kubernetes services, while spiky or infrequent endpoints (webhooks, file upload processing, notification delivery) go directly to Lambda Function URLs or Cloud Run services. This reduces load on your Kubernetes cluster, eliminates the need to scale pods for low-traffic endpoints, and provides a unified authentication and rate-limiting layer at the API Gateway.
+
+When to use it: when migrating from a monolith to a hybrid architecture, or when adding new microservices that have dramatically different traffic patterns from the existing Kubernetes-hosted services.
+
+**3. Container-Serverless for Brownfield Migration.** When you have an existing containerized service that you want to run serverlessly without rewriting it, container-serverless (Cloud Run, Fargate, Azure Container Apps) is the path of least resistance. The service already listens on a port, already has health checks, and already packages as a container. Deploying it to Cloud Run requires no code changes — you push the image to Artifact Registry, create a Cloud Run service pointing at that image, and configure `min-instances` if you need warm starts. The migration from Kubernetes Deployment to Cloud Run service can take less than an hour for a simple HTTP service.
+
+When to use it: when you have containerized services with spiky or low-volume traffic, and your team lacks the bandwidth to refactor them into FaaS functions. Also the right choice when the service uses a language or framework not supported by FaaS runtimes.
+
+**4. Step Functions for Multi-Step Workflows.** Serverless functions should do one thing and do it quickly. Complex business logic that spans multiple steps — payment processing, order fulfillment, data pipeline orchestration — should be modeled as a state machine using AWS Step Functions, Google Cloud Workflows, or Azure Durable Functions. Each step is a separate function invocation, and the workflow engine handles retries, error routing, and parallelism. This keeps individual functions small and testable, avoids the function-to-function chaining anti-pattern, and provides visibility into workflow execution (each step is logged and traceable).
+
+When to use it: any workflow with more than two sequential steps that must complete in a specific order, or any workflow where failure in one step requires compensating actions in earlier steps.
+
+### Anti-Patterns
+
+**1. Serverless for Long-Running or Stateful Workloads.** Deploying a workload that runs for more than the FaaS timeout (15 minutes for Lambda, 60 for Cloud Run) to a serverless platform is a guaranteed failure. The platform terminates the execution, and any in-memory state is lost. Teams fall into this anti-pattern when they treat serverless as "cheap compute" without understanding the timeout constraints. A video transcoding pipeline that takes 45 minutes per file will never work on Lambda regardless of how much memory you allocate.
+
+Better approach: for long-running workloads, use Kubernetes Jobs or a container-serverless platform with a higher timeout (Cloud Run supports up to 60 minutes). For stateful workloads that need persistent connections (WebSocket servers, database connection pools that span requests), use Kubernetes Deployments with persistent pod identity.
+
+**2. Chatty Function-to-Function Synchronous Calls.** When a Lambda function calls another Lambda function via `Invoke` with `InvocationType: 'RequestResponse'` and waits, you pay for both functions' execution time simultaneously. A chain of five synchronous calls, each running 1 second, costs 5 seconds of billed duration per end-to-end request, even though the actual CPU time might total 500 ms. This pattern also introduces cascading latency: if the third function in the chain experiences a cold start, every upstream caller waits.
+
+Better approach: use an orchestrator service (Step Functions, Cloud Workflows) that invokes each function and waits at the orchestrator level, where you pay per state transition rather than per waiting second. Or restructure the workflow as an event-driven pipeline: each function publishes an event when it completes, and the next function subscribes to that event.
+
+**3. Cold Start on the User-Facing Path.** The first request a user makes should never pay a cold-start penalty. If your login endpoint or your product search endpoint is a Lambda function that scales to zero between uses, every user who visits after a quiet period experiences a multi-second delay. This is the fastest way to make users hate your serverless architecture, and it is completely avoidable.
+
+Better approach: identify every function that serves a synchronous user request (HTTP endpoints behind API Gateway, gRPC services) and either configure provisioned concurrency / min-instances for them, or move them to Kubernetes where pods stay warm. Reserve scale-to-zero for async, background, and batch workloads where latency is not user-visible.
+
+**4. Ignoring Execution Environment Reuse.** Serverless platforms reuse execution environments across invocations. If your function writes temporary files to `/tmp`, opens database connections during initialization, or caches data in global variables, those artifacts persist across invocations within the same warm instance — but they are NOT shared across instances and they disappear when the instance is recycled. Teams that rely on `/tmp` state between invocations (e.g., writing a file in invocation 1 and reading it in invocation 2) eventually hit an error when the second invocation lands on a different instance.
+
+Better approach: treat every invocation as if it runs in a fresh environment. Use external storage (S3, GCS, Blob) for any state that must survive beyond a single invocation. Use the execution context for performance optimization only (cached SDK clients, pre-loaded configuration), never for correctness.
+
+**5. Over-Provisioning Memory Without Understanding CPU Coupling.** AWS Lambda allocates CPU proportionally to memory: a 256 MB function gets roughly 0.16 vCPU, while a 1,792 MB function gets 1 full vCPU. Teams that set memory to 256 MB because "it's just a small function" and then wonder why it runs slowly are experiencing CPU throttling, not a platform defect. This also works in reverse: setting memory to 10 GB to get more CPU, even though the function only uses 200 MB of RAM, wastes money on unneeded memory allocation.
+
+Better approach: benchmark your function at different memory levels and find the sweet spot where execution time stops improving significantly. For CPU-bound functions, this is typically 1,792 MB (the point where a full vCPU is allocated). Above that, you get more vCPUs but pay proportionally for the memory.
 
 ---
 
@@ -573,6 +732,18 @@ With GKE Autopilot, the entire cluster is managed as a serverless container plat
 Knative solves this by handling traffic splitting at the networking and request routing layer, rather than relying on the ratio of running pod replicas. You simply update the Knative Service definition with a `traffic` block, explicitly mapping 95% to the v1 revision name and 5% to the v2 revision name. Knative configures the underlying ingress gateway (like Kourier or Istio) to route exactly 5% of incoming HTTP requests to the v2 pods, regardless of how many pods are currently running. This allows for precise, percentage-based canary rollouts even for services with very low request volumes or minimal replica counts.
 </details>
 
+<details>
+<summary>7. You notice your monthly Lambda bill jumped from $50 to $380 after enabling provisioned concurrency for a production API. The function runs with 1 GB of memory and you configured 10 provisioned concurrent instances. The function receives about 2 million invocations per month, each averaging 200 ms. Calculate the approximate monthly cost of the provisioned concurrency portion alone, and explain whether 10 instances is appropriate for this workload.</summary>
+
+Ten provisioned concurrent instances of a 1 GB Lambda function cost roughly: 10 instances × 1 GB × 730 hours/month × $0.0000041667 per GB-second (the provisioned concurrency rate, which is roughly 25% of the standard compute rate for the "always-on" portion) × 3,600 seconds/hour ≈ $109 per month in provisioned concurrency compute. Adding the invocation costs, the total bill increase to $380 suggests the provisioned concurrency is the dominant cost driver. For 2 million invocations per month at 200 ms each, the peak concurrency is likely well under 5 — meaning 10 provisioned instances are excessive. Reducing to 3 provisioned instances would still handle the steady-state traffic without cold starts while cutting the provisioned concurrency cost by ~70%.
+</details>
+
+<details>
+<summary>8. A platform team is comparing Cloud Run and Knative on GKE for a new service. The service is an HTTP API written in Go, packaged as a 12 MB distroless container, that needs to handle occasional traffic spikes but otherwise sits idle. The team already operates a GKE cluster. What are the decision factors between deploying to Cloud Run (managed) versus Knative on their existing GKE cluster?</summary>
+
+The decision hinges on three factors. First, operational overhead: Cloud Run eliminates the need to maintain the Knative installation, the Kourier/Istio networking layer, and the monitoring stack — Google manages all of it. On GKE, the team must install, upgrade, and troubleshoot Knative themselves, which adds ongoing maintenance cost. Second, cold-start latency: Cloud Run's managed infrastructure caches images aggressively and optimizes container startup, typically providing faster cold starts than a self-managed Knative installation where image pulls depend on cluster node disk and network conditions. Third, integration: if the service must communicate with other services on the same GKE cluster with very low latency, Knative on GKE keeps the traffic inside the cluster network; Cloud Run adds cross-network latency (typically low for same-region traffic, but non-zero). For a spiky, low-maintenance service, Cloud Run is usually the lower-total-cost option, but if the team values control over the serving layer and wants cluster-local networking, Knative on GKE is the right choice.
+</details>
+
 ---
 
 ## Hands-On Exercise: Knative Service with Scale-to-Zero
@@ -580,6 +751,8 @@ Knative solves this by handling traffic splitting at the networking and request 
 ### Setup
 
 ```bash
+alias k=kubectl
+
 # Create kind cluster with extra ports for Knative and explicitly target v1.35
 cat > /tmp/kind-knative.yaml << 'EOF'
 kind: Cluster
@@ -622,7 +795,7 @@ k patch configmap/config-domain \
 
 ### Task 1: Deploy a Knative Service
 
-Create a Knative Service that returns "Hello from Knative" and scales to zero.
+Deploy a Knative Service that responds to HTTP requests with a greeting message and is configured to scale down to zero replicas when idle, then verify it is ready to receive traffic.
 
 <details>
 <summary>Solution</summary>
@@ -664,7 +837,7 @@ k wait ksvc hello --for=condition=Ready --timeout=60s
 
 ### Task 2: Test Scale-to-Zero Behavior
 
-Verify the service scales to zero and then scales back up on request.
+Observe the Knative Service scaling down to zero replicas after an idle period, then trigger a request and confirm that the Activator component buffers the request and brings a new pod online to handle it.
 
 <details>
 <summary>Solution</summary>
@@ -695,7 +868,7 @@ k get pods -l serving.knative.dev/service=hello
 
 ### Task 3: Deploy a Second Revision and Split Traffic
 
-Update the service with a new environment variable and split traffic 80/20.
+Create a new revision of the Knative Service with an updated environment variable, then configure a traffic split that routes 80% of requests to the original revision and 20% to the new revision for canary testing.
 
 <details>
 <summary>Solution</summary>
@@ -750,7 +923,7 @@ done
 
 ### Task 4: Configure Knative Eventing with a PingSource
 
-Set up a cron-based event source that triggers the Knative service every minute.
+Install Knative Eventing components on the cluster, then create a PingSource that fires a CloudEvent on a cron schedule every minute and sends it to the Knative Service as a trigger target.
 
 <details>
 <summary>Solution</summary>
@@ -804,10 +977,21 @@ kind delete cluster --name knative-lab
 
 ---
 
-**Next Module**: [Module 9.4: Object Storage Patterns (S3 / GCS / Blob)](../module-9.4-object-storage/) -- Learn how to access cloud object storage from Kubernetes pods using CSI drivers, pre-signed URLs, and cross-region replication patterns.
+## Next Module
+
+[Module 9.4: Object Storage Patterns (S3 / GCS / Blob)](../module-9.4-object-storage/) — Learn how to access cloud object storage from Kubernetes pods using CSI drivers, pre-signed URLs, and cross-region replication patterns.
 
 ## Sources
 
 - [AWS Lambda asynchronous invocation](https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html) — Covers queueing behavior, async invocation semantics, and error-handling context for Kubernetes-to-Lambda handoff patterns.
 - [Knative Serving repository](https://github.com/knative/serving) — Good upstream entry point for Knative Serving concepts such as scale-to-zero, revisions, and request-driven compute.
 - [Google Kubernetes Engine pricing](https://cloud.google.com/kubernetes-engine/pricing) — Useful for understanding where Autopilot pricing follows Pod requests and where hardware-specific cases use different billing.
+- [AWS Lambda runtimes](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) — Supported runtimes, runtime deprecation policy, and custom runtime configuration for Lambda.
+- [AWS Lambda SnapStart](https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html) — SnapStart behavior, supported runtimes (Java 11/17/21, plus Python and .NET), runtime hooks, and pricing implications for JVM cold-start reduction.
+- [Google Cloud Run min instances](https://cloud.google.com/run/docs/configuring/min-instances) — Configuring minimum instances to eliminate cold starts on Cloud Run, including cost implications.
+- [AWS Fargate platform versions](https://docs.aws.amazon.com/eks/latest/userguide/fargate.html) — EKS Fargate capabilities, limitations (DaemonSets, privileged containers), and pod configuration.
+- [Azure Functions scale and hosting plans](https://learn.microsoft.com/en-us/azure/azure-functions/functions-scale) — Consumption, Premium, and Dedicated plan limits, cold-start behavior, and scaling decisions.
+- [KEDA documentation](https://keda.sh/docs/) — Event-driven autoscaling for Kubernetes, including scalers for cloud queue services (AWS SQS, GCP Pub/Sub, Azure Service Bus).
+- [AWS Step Functions pricing](https://aws.amazon.com/step-functions/pricing/) — Per-state-transition pricing model as an alternative to synchronous Lambda chaining.
+- [AWS Lambda provisioned concurrency](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html) — Reserved vs provisioned concurrency, pricing, and configuration for latency-sensitive workloads.
+- [CloudEvents specification](https://cloudevents.io/) — CNCF standard event format used by Knative Eventing for interoperable event routing.
