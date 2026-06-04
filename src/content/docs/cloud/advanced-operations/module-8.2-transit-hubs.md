@@ -19,8 +19,7 @@ After completing this module, you will be able to:
 - **Configure AWS Transit Gateway, GCP Cloud Interconnect, and Azure Virtual WAN for centralized network routing**
 - **Design hub-spoke network topologies that support transitive routing, traffic inspection, and cross-region connectivity**
 - **Implement network segmentation using route tables, firewall appliances, and centralized egress inspection points**
-- **Diagnose cross-region and cross-account routing failures in transit hub architectures using flow logs and route analysis**
-- **Evaluate cross-AZ and cross-region network topologies to mitigate hidden data transfer costs in high-throughput environments**
+- **Diagnose and optimize cross-AZ and cross-region transit topologies** — troubleshoot routing failures with flow logs and route analysis, and mitigate hidden data-transfer costs in high-throughput environments
 - **Debug overlapping CIDR conflicts and implement centralized IP Address Management (IPAM) strategies**
 
 ---
@@ -58,7 +57,7 @@ graph TD
 - 25 VPCs = 300 connections
 - 50 VPCs = 1,225 connections
 
-**Pros**: This pattern offers the lowest possible latency because traffic takes a direct path without intermediate hops. There is no central router to become a single point of failure, no bandwidth bottleneck, and crucially, no per-gigabyte data processing charges for the transit hop itself (in AWS, intra-region VPC peering is free for the connection). In tiny environments, these advantages can simplify troubleshooting because you can map traffic paths by manually tracing peering edges.
+**Pros**: This pattern offers the lowest possible latency because traffic takes a direct path without intermediate hops. There is no central router to become a single point of failure, no bandwidth bottleneck, and crucially, no per-gigabyte data processing charges for the transit hop itself (in AWS, intra-region VPC peering is free for the connection, though cross-AZ peering traffic still incurs roughly $0.01/GB each way). In tiny environments, these advantages can simplify troubleshooting because you can map traffic paths by manually tracing peering edges.
 
 **Cons**: The architecture scales quadratically. Route tables grow linearly per VPC, creating immense administrative burden. [VPC Peering explicitly denies transitive routing](https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/vpc-peering.html) (if VPC A peers with B, and B peers with C, VPC A cannot reach C through B). Furthermore, there is no centralized inspection point to enforce universal firewall policies.
 
@@ -120,7 +119,7 @@ graph TD
 >
 > <details>
 > <summary>Answer</summary>
-> Full mesh VPC Peering for 30 VPCs requires N*(N-1)/2 = 435 peering connections. Each peering connection requires route table entries in both VPCs. The route table limit is 200 entries per route table (can be raised to 1,000, but at a performance cost). Beyond the route table pressure, managing 435 connections is operationally complex: adding VPC #31 requires 30 new peering connections and 60 new route table entries. Transit Gateway reduces this to N connections (one per VPC) with centralized routing.
+> Full mesh VPC Peering for 30 VPCs requires N*(N-1)/2 = 435 peering connections. Each peering connection requires route table entries in both VPCs. The route table limit is 50 entries per route table (the default; adjustable to 1,000, with a performance caveat). Beyond the route table pressure, managing 435 connections is operationally complex: adding VPC #31 requires 30 new peering connections and 60 new route table entries. Transit Gateway reduces this to N connections (one per VPC) with centralized routing.
 > </details>
 
 ---
@@ -256,12 +255,25 @@ The traffic flow executes in a precise sequence:
 4. If allowed, the packet leaves the Firewall VPC and re-enters the TGW, but this time it is evaluated against the "Inspect" Route Table.
 5. The Inspect RT contains the specific route for VPC-B, delivering the packet successfully.
 
+Enable **appliance mode** on the inspection-VPC TGW attachment: without `appliance_mode_support = "enable"`, Transit Gateway hashes flows per-AZ and return traffic can land on a different AZ's firewall endpoint, breaking stateful inspection.
+
 This architecture introduces additional hop and inspection latency but provides major security benefits:
 - Centralized Intrusion Detection/Prevention (IDS/IPS) for internal traffic.
 - Consolidated logging of all inter-VPC flows in a single pane of glass.
 - Critical capability to block lateral movement by ransomware or compromised Kubernetes pods.
 
 ```hcl
+# Inspection-VPC attachment: appliance mode keeps ingress/return on the same AZ ENI
+resource "aws_ec2_transit_gateway_vpc_attachment" "firewall" {
+  subnet_ids                                      = [aws_subnet.firewall_a.id, aws_subnet.firewall_b.id]
+  transit_gateway_id                              = aws_ec2_transit_gateway.main.id
+  vpc_id                                          = aws_vpc.firewall.id
+  appliance_mode_support                          = "enable"
+  transit_gateway_default_route_table_association = false
+  transit_gateway_default_route_table_propagation = false
+  tags = { Name = "firewall-vpc-attachment" }
+}
+
 # Route all traffic from production to the firewall
 resource "aws_ec2_transit_gateway_route" "prod_default" {
   destination_cidr_block         = "0.0.0.0/0"
@@ -337,7 +349,8 @@ gcloud compute networks subnets create prod-subnet \
   --network=org-network \
   --region=us-central1 \
   --range=10.0.0.0/20 \
-  --secondary-range=pods=10.10.0.0/16,services=10.20.0.0/20
+  --secondary-range=pods=10.10.0.0/16,services=10.20.0.0/20 \
+  --secondary-range=pods-b=10.11.0.0/16
 
 # Grant GKE service account access to the shared subnet
 PROJECT_NUM=$(gcloud projects describe team-a-prod --format="value(projectNumber)")
@@ -356,6 +369,17 @@ gcloud container clusters create team-a-prod \
   --services-secondary-range-name=services \
   --enable-private-nodes \
   --master-ipv4-cidr=172.16.0.0/28
+
+# Second cluster in team-b-prod uses the pods-b secondary range (see diagram)
+gcloud container clusters create team-b-prod \
+  --project=team-b-prod \
+  --region=us-central1 \
+  --network=projects/network-hub-project/global/networks/org-network \
+  --subnetwork=projects/network-hub-project/regions/us-central1/subnetworks/prod-subnet \
+  --cluster-secondary-range-name=pods-b \
+  --services-secondary-range-name=services \
+  --enable-private-nodes \
+  --master-ipv4-cidr=172.16.0.16/28
 ```
 
 > **Stop and think**: In AWS, network segmentation is achieved by isolating workloads into separate VPCs and connecting them via a Transit Gateway with distinct route tables. In GCP's Shared VPC model, multiple environments might share the same VPC. How do you prevent workloads in a staging subnet from communicating with workloads in a production subnet?
@@ -714,7 +738,7 @@ Automated analysis does not remove human reasoning; it shortens the distance bet
 
 ## Did You Know?
 
-1. [**AWS Transit Gateway processes over 100 Gbps per attachment** and supports up to 5,000 attachments per gateway](https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-quotas.html). Its release gave AWS customers a managed alternative to self-built transit VPC patterns.
+1. [**AWS Transit Gateway processes up to 100 Gbps per VPC attachment** and supports up to 5,000 attachments per gateway](https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-quotas.html). Its release gave AWS customers a managed alternative to self-built transit VPC patterns.
 2. **GCP's Shared VPC is built for large multi-project environments.** Use host projects and shared subnets when multiple teams need centralized network control with delegated project ownership.
 3. **Azure Virtual WAN Standard automatically meshes hubs** within the same Virtual WAN, reducing manual inter-hub routing work over Microsoft's backbone.
 4. **Cross-AZ data transfer in AWS can become a major bill driver at scale.** Track it explicitly instead of assuming it is negligible.
@@ -747,7 +771,7 @@ In AWS, Transit Gateway connects separate VPCs (each with its own CIDR, route ta
 <details>
 <summary>2. Your EKS cluster spans 3 AZs and generates 50TB of cross-AZ traffic monthly. What are two strategies to reduce this cost?</summary>
 
-Strategy 1: Enable topology-aware routing in Kubernetes. Configure Services with `internalTrafficPolicy: Local` where possible, and use the `trafficDistribution: PreferClose` field in your Service spec so kube-proxy prefers endpoints in the same AZ. Strategy 2: Use pod topology spread constraints combined with service affinity to co-locate communicating services in the same AZ. For example, place the API server and its database cache in the same AZ. This requires understanding your service call graph. Together, these can reduce cross-AZ traffic by 40-70%, saving $500-$700/month on a 50TB workload.
+Strategy 1: Enable topology-aware routing in Kubernetes. Configure Services with `internalTrafficPolicy: Local` where possible — that setting is node-local and blackholes traffic if no endpoint exists on the same node, which is distinct from zone-aware `trafficDistribution`. Use `trafficDistribution: PreferSameZone` in your Service spec so kube-proxy prefers endpoints in the same AZ (`PreferClose` remains a deprecated alias as of Kubernetes 1.34). Strategy 2: Use pod topology spread constraints combined with service affinity to co-locate communicating services in the same AZ. For example, place the API server and its database cache in the same AZ. This requires understanding your service call graph. Together, these can reduce cross-AZ traffic by 40-70%, saving $500-$700/month on a 50TB workload.
 </details>
 
 <details>
@@ -771,14 +795,14 @@ Traffic from the 'web' VPC must hit a TGW attachment associated with a 'web' rou
 <details>
 <summary>6. A platform team deployed a multi-region Kubernetes v1.35 architecture. The application operates smoothly, but the monthly cloud bill displays exorbitant data transfer spikes. Upon investigation, they discover that front-end pods in `us-east-1a` are communicating with backend pods in `us-east-1b` and `us-east-1c` equally. How can this architecture be optimized to diminish these costs without sacrificing availability?</summary>
 
-The exorbitant costs stem directly from cross-AZ data transfer, which incurs financial penalties in both directions. The architecture can be deeply optimized by enabling topology-aware routing. By configuring Services with `trafficDistribution: PreferClose` (a feature introduced in Kubernetes 1.30 and fully stable in v1.35), `kube-proxy` actively prioritizes routing network traffic to application endpoints residing strictly within the same Availability Zone. This minimizes wasteful cross-AZ hops and vastly reduces the associated data transfer fees.
+The exorbitant costs stem directly from cross-AZ data transfer, which incurs financial penalties in both directions. The architecture can be deeply optimized by enabling topology-aware routing. By configuring Services with `trafficDistribution: PreferSameZone` (introduced as alpha in 1.30; the value is now `PreferSameZone` with `PreferClose` kept as a deprecated alias, beta and on by default as of 1.34), `kube-proxy` actively prioritizes routing network traffic to application endpoints residing strictly within the same Availability Zone. This minimizes wasteful cross-AZ hops and vastly reduces the associated data transfer fees.
 </details>
 
 ---
 
 ## Hands-On Exercise: Deploy an End-to-End Hub-and-Spoke Network
 
-In this exercise, you will deploy a fully executable hub-and-spoke network topology. You will provision the foundational infrastructure, architect the routing logic, apply the configuration via Terraform, and finalize the setup by deploying a stateful egress firewall. Each step builds toward a reproducible blueprint: first create stable primitives, then enforce segmentation, then validate behavior, then add defensive controls.
+In this exercise, you will deploy a guided hub-and-spoke network topology you can extend to complete end-to-end. You will provision the foundational infrastructure, architect the routing logic, apply the configuration via Terraform, and finalize the setup by deploying a stateful egress firewall. Each step builds toward a reproducible blueprint: first create stable primitives, then enforce segmentation, then validate behavior, then add defensive controls. Task 3 deliberately leaves TGW VPC attachment resources for you to add before apply.
 The exercise intentionally blends architecture, implementation, and validation so the same pattern can be reused in real teams. You are not only building a diagram that works once; you are building a repeatable sequence your team can standardize on. If this feels long in the first pass, it is by design: production-grade network work rewards patience and predictability over speed.
 
 ### Scenario
@@ -1019,7 +1043,7 @@ export LIVE_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 export LIVE_VPC=$(terraform output -raw egress_vpc_id)
 export LIVE_SUBNET=$(terraform output -raw egress_subnet_id)
 ```
-Replace `ACCOUNT` with `$LIVE_ACCOUNT`, `vpc-egress123` with `$LIVE_VPC`, and `subnet-fw-az1` with `$LIVE_SUBNET` within the bash snippet below prior to running it.
+Replace `ACCOUNT` with `$LIVE_ACCOUNT`, `vpc-egress123` with `$LIVE_VPC`, and `subnet-fw-az1` with `$LIVE_SUBNET` within the bash snippet below prior to running it. The scaffold provisions one subnet per VPC (single-AZ lab); use only that mapping.
 
 <details>
 <summary>Solution</summary>
@@ -1072,7 +1096,7 @@ aws network-firewall create-firewall \
   --firewall-name "datastream-egress-fw" \
   --firewall-policy-arn "arn:aws:network-firewall:us-east-1:ACCOUNT:firewall-policy/datastream-egress-policy" \
   --vpc-id vpc-egress123 \
-  --subnet-mappings SubnetId=subnet-fw-az1 SubnetId=subnet-fw-az2
+  --subnet-mappings SubnetId=subnet-fw-az1
 ```
 </details>
 
