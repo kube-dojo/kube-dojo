@@ -1,0 +1,2 @@
+## 2026-06-04T14:57:35Z — `REVIEW` — `APPROVE`
+Cloud / Enterprise & Hybrid expand-to-floor wave (session 103). Reviewer: claude-opus-4.8 (cross-family). APPROVE 4.5/5. P2 ESO external-secrets.io/v1beta1 -> v1 x2 (repo-standard, CKS-4.3 documents the 0.10 migration); nits canary manual-approval at 30% not 10%, SSA rationale, stable doc URLs. (At-floor module, review-only.) Verifier T0/PASS; orchestrator web-verified key facts + ground-checked all fixes; PR #1788.

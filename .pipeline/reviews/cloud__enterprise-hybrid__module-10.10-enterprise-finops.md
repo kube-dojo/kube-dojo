@@ -1,0 +1,2 @@
+## 2026-06-04T14:57:35Z — `REVIEW` — `APPROVE`
+Cloud / Enterprise & Hybrid expand-to-floor wave (session 103). Reviewer: claude-opus-4.8 (cross-family). P1 false AWS S3 cross-AZ data-transfer charge (S3 is regional; same-region EC2<->S3 is free) -> reframed to NAT-gateway path; P2 uncited '23 dimensions' softened, EDP discount-stacking hedge + NDA caveat, topologySpreadConstraints (scheduling) vs Topology Aware Routing (traffic) clarified. PRESERVED: OpenCost Incubating Oct-2024. Verifier T0/PASS; orchestrator web-verified key facts + ground-checked all fixes; PR #1788.

@@ -1,0 +1,2 @@
+## 2026-06-04T14:57:35Z — `REVIEW` — `APPROVE`
+Cloud / Enterprise & Hybrid expand-to-floor wave (session 103). Reviewer: gemini-3.1-pro (cross-family). P1 fabricated Control Tower 'management fee' removed (CT is no-charge), invalid kubectl '!=null' selector, fabricated constraints/container.restrictPublicCluster -> custom org-policy constraint; P2 Azure AD->Entra ID, vWAN hub vs VPN-gateway throughput. Backstage Incubating preserved. Verifier T0/PASS; orchestrator web-verified key facts + ground-checked all fixes; PR #1788.
