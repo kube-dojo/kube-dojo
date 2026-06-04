@@ -1992,12 +1992,14 @@ def test_module_state_flags_missing_lab_and_ledger(tmp_path: Path) -> None:
     repo = tmp_path
     _init_repo(repo)
     _write(
-        repo / "src/content/docs/k8s/cka/module-X-stub.md",
+        repo / "src/content/docs/k8s/cka/module-x-stub.md",
         "---\ntitle: stub\n---\nbody\n",
     )
     _git(repo, "add", ".")
     _git(repo, "commit", "-m", "init")
-    state = local_api.build_module_state(repo, "k8s/cka/module-X-stub")
+    # Lowercase key: build_module_state now re-validates via _validate_module_key
+    # (lowercase-only slugs), matching the real curriculum (all 1504 keys lowercase).
+    state = local_api.build_module_state(repo, "k8s/cka/module-x-stub")
     codes = _diag_codes(state["diagnostics"])
     assert "no_lab" in codes
     assert "no_fact_ledger" in codes
