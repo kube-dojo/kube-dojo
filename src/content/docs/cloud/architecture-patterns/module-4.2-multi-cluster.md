@@ -26,7 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-The Facebook 2021 backbone-routing outage (see *Route 53*) <!-- incident-xref: facebook-2021-bgp --> demonstrates how a single routing-control plane mistake can erase connectivity at scale when failure domains are not separated.
+Hypothetical scenario: a platform team pushes a bad routing-control change that removes reachability for every region at once because the fleet shares one global network dependency. The teaching point is simple: a multi-region design should contain that mistake to one region or cell, not let it erase connectivity everywhere.
 
 This module teaches you how to design architectures where that can't happen. You'll learn to think in failure domains, route traffic across regions, manage state across distance, and build systems where the worst-case scenario is a regional degradation -- not a global outage.
 
@@ -74,7 +74,7 @@ The failure-domain hierarchy takes different shapes on each major cloud provider
 
 **AWS** structures its infrastructure into Regions (geographically isolated areas, e.g., `us-east-1`) and Availability Zones (distinct data centers within a region, e.g., `us-east-1a` through `us-east-1f`). An EKS control plane runs across multiple AZs within a single region, providing built-in control-plane redundancy at the regional level. AWS also offers Local Zones -- extensions of a region that place compute closer to end-users in metropolitan areas -- and these can run worker nodes for ultra-low-latency workloads, but their failure-domain relationship to the parent region is tighter than a full AZ. An EKS control plane always lives within the region proper; it cannot be stretched across regions.
 
-**GCP** organizes around Regions and Zones with a crucial architectural choice: zonal versus regional GKE control planes. A *zonal* control plane runs in a single zone; if that zone fails, the control plane is unavailable until GCP recovers it. A *regional* control plane replicates the API server and etcd across three zones within a region, so a single-zone failure leaves the control plane fully operational. GKE Autopilot clusters are always regional. The distinction matters because a zonal control plane incurs no management fee (one free per billing account), while regional clusters carry a flat $0.10/hour charge. The blast radius of a zonal control plane is the zone; for a regional control plane, the blast radius shrinks to zero for single-zone failures but remains the region for catastrophic multi-zone events.
+**GCP** organizes around Regions and Zones with a crucial architectural choice: zonal versus regional GKE control planes. A *zonal* control plane runs in a single zone; if that zone fails, the control plane is unavailable until GCP recovers it. A *regional* control plane replicates the API server and etcd across three zones within a region, so a single-zone failure leaves the control plane fully operational. GKE Autopilot clusters are always regional. The distinction matters for availability and free-tier eligibility, not because zonal clusters are inherently fee-free: every GKE cluster accrues the flat $0.10/hour management fee, while the monthly free-tier credit can offset one zonal Standard or Autopilot cluster per billing account and does not apply to regional clusters. The blast radius of a zonal control plane is the zone; for a regional control plane, the blast radius shrinks to zero for single-zone failures but remains the region for catastrophic multi-zone events.
 
 **Azure** operates with Regions and Availability Zones, with an important nuance: not all regions have Availability Zones. Some Azure regions are designated as "region pairs" -- two regions within the same geography that serve as each other's disaster-recovery target, with Microsoft prioritizing recovery of one region in a pair during large-scale outages. An AKS control plane in a zone-enabled region can be spread across multiple zones, but the default deployment without explicit zone configuration places the control plane in a single zone, making it vulnerable to zonal failures. The Standard tier (which carries a financially backed 99.95% uptime SLA) provides a highly available control plane with automatic replication; the Free tier runs a limited control plane without SLA and with a recommended maximum of 10 nodes -- suitable only for experimentation.
 
@@ -125,13 +125,13 @@ flowchart LR
     end
 ```
 
-#### War Story: The Stretching of Cluster 9
+#### Hypothetical scenario: A stretched control plane over a WAN
 
-Some teams are tempted to stretch a single Kubernetes control plane across regions to chase global high availability, but that approach misunderstands how tightly the control plane depends on low-latency coordination.
+A platform team is tempted to stretch a single Kubernetes control plane across regions to chase global high availability, but that approach misunderstands how tightly the control plane depends on low-latency coordination.
 
 A stretched control plane may appear to start correctly and then fail under real workload once etcd and the API server must coordinate across high-latency links.
 
-etcd relies on the Raft consensus algorithm, requiring a strict quorum for every write operation. Raft requires extremely low-latency network connections (typically under 10 milliseconds) to maintain heartbeats and elect leaders. The latency between us-east-1 and eu-central-1 was over 90 milliseconds. The etcd nodes constantly missed heartbeats, assumed the leader was dead, and initiated endless leader elections. The cluster spent nearly all of its time trying to elect a leader and almost none of its time serving API requests. 
+etcd relies on the Raft consensus algorithm, requiring a strict quorum for every write operation. Raft requires extremely low-latency network connections (typically under 10 milliseconds) to maintain heartbeats and elect leaders. A transatlantic path between regions such as us-east-1 and eu-central-1 can exceed 90 milliseconds of round-trip latency. The etcd nodes miss heartbeats, assume the leader is dead, and initiate repeated leader elections. The cluster spends nearly all of its time trying to elect a leader and almost none of its time serving API requests.
 
 **The Lesson:** In practice, you should not stretch a single Kubernetes control plane across a high-latency Wide Area Network (WAN). Multi-region deployments require multi-cluster architectures.
 
@@ -141,7 +141,7 @@ While Kubernetes upstream tests to 5,000 nodes and 150,000 pods, each managed pr
 
 **EKS** does not publish a hard per-cluster node limit that differs from upstream Kubernetes, but practical ceilings emerge from the AWS VPC CNI architecture. Each pod receives a native VPC IP address, and each EC2 instance type has a fixed limit on Elastic Network Interfaces (ENIs) and IP addresses per ENI. For example, an `m5.large` supports 3 ENIs with 10 IPs each, capping the node at 29 pods (subtracting one for the ENI itself). Larger instances like `m5.16xlarge` support up to 737 pods. At cluster scale, you also face VPC CIDR exhaustion: a `/16` VPC provides 65,536 IP addresses, and with thousands of pods each consuming one, you can exhaust the entire subnet. EKS supports IPv6 and prefix delegation modes to mitigate this, but teams approaching 1,000+ nodes typically split into multiple clusters for operational manageability well before hitting the hard ceiling.
 
-**GKE** sets a default node quota of 5,000 nodes per cluster, with GKE Dataplane V2 and Private Service Connect on regional clusters automatically supporting that scale. GKE can support up to 65,000 nodes with a quota increase through Google Cloud Support, but several constraints tighten the practical limit: the GKE API server has a default 3,000 requests-per-second limit, etcd storage grows with every object, and the kube-scheduler must evaluate every pod against every node. GKE Autopilot clusters abstract node management entirely and scale pods directly, but the control plane's API throughput ceiling still applies. Google's own guidance: if you plan to run more than 2,000 nodes, use a regional cluster.
+**GKE** sets a default node quota of 5,000 nodes per cluster, with GKE Dataplane V2 and Private Service Connect on regional clusters automatically supporting that scale. GKE can support up to 65,000 nodes with a quota increase through Google Cloud Support, but several constraints tighten the practical limit: the GKE API server has a finite API-server throughput ceiling, etcd storage grows with every object, and the kube-scheduler must evaluate every pod against every node. GKE Autopilot clusters abstract node management entirely and scale pods directly, but the control plane's API throughput ceiling still applies. Google's own guidance: if you plan to run more than 2,000 nodes, use a regional cluster.
 
 **AKS** caps clusters at 5,000 nodes across all node pools, with a maximum of 1,000 nodes per individual node pool and up to 100 node pools per cluster. The Free tier is explicitly limited: a recommended maximum of 10 nodes, no SLA, and restricted API server inflight requests, making it categorically unsuitable for production. The Standard tier lifts these limits and provides the 99.95% SLA. Teams approaching the 5,000-node ceiling often face Azure API throttling and VM quota constraints across a subscription, which can be raised through support requests but require regional capacity planning. Notably, AKS supports both Kubenet and Azure CNI networking, with Azure CNI assigning VNet IP addresses directly to pods; running thousands of pods can exhaust VNet address space faster than anticipated, driving teams toward the fleet model for IP management alone.
 
@@ -240,7 +240,7 @@ This latency penalty is why most organizations start with an active-passive arch
 
 ### Active-Active vs Active-Passive Architectures
 
-1. **Active-Active (Synchronous)**: Writes can occur in any region and are immediately synchronized globally. This requires specialized, distributed SQL databases like Google Cloud Spanner or CockroachDB. These systems use advanced atomic clocks and complex consensus algorithms to manage global state. They are highly resilient but suffer from write latency penalties.
+1. **Active-Active (Synchronous)**: Writes can occur in any region and are immediately synchronized globally. This requires specialized, distributed SQL databases such as Google Cloud Spanner or CockroachDB, but they achieve coordination differently. Spanner uses TrueTime with atomic and GPS clocks to provide externally consistent global transactions, while CockroachDB uses Raft plus hybrid logical clocks (HLC) with ordinary clock synchronization rather than specialized hardware clocks. Both designs are highly resilient, but they still pay write-latency penalties when consensus spans distant regions.
 2. **Active-Passive (Asynchronous)**: All writes are directed to a primary cluster (e.g., us-east). Data is asynchronously replicated to a standby cluster (e.g., eu-west). If the primary fails, the standby is promoted. This is vastly simpler to implement but introduces data loss risk (Recovery Point Objective > 0) during a hard failover.
 
 ### Cross-Cloud Replication: How Each Provider Handles State Durability
@@ -249,7 +249,7 @@ The specific mechanics of cross-region state replication differ substantially ac
 
 **AWS** provides several building blocks for state durability across regions. Amazon RDS supports cross-region read replicas with asynchronous replication; you can promote a read replica to a standalone primary during a failover, accepting the replication lag as data loss. Amazon Aurora Global Database extends this with dedicated storage-layer replication that typically achieves under one second of lag and allows a cross-region failover in under one minute. For S3, Cross-Region Replication (CRR) asynchronously copies objects to a destination bucket in a different region, providing object-level durability. DynamoDB Global Tables offer active-active key-value storage with last-writer-wins conflict resolution across any number of regions, ideal for session stores and configuration data where eventual consistency is acceptable.
 
-**GCP** leans on its global network backbone and Spanner for multi-region state. Cloud Spanner is a globally distributed, strongly consistent relational database that combines synchronous replication across regions with external-consistency guarantees using TrueTime atomic clocks. It is the only managed relational database that can provide active-active writes across continents without sacrificing consistency, but the per-node pricing reflects that capability. Cloud SQL supports cross-region read replicas with asynchronous replication, similar to RDS. For object storage, Cloud Storage offers dual-region and multi-region bucket locations that automatically replicate data across geographically dispersed data centers, providing 99.95% to 99.99% availability SLAs without requiring the user to configure replication policies.
+**GCP** leans on its global network backbone and Spanner for multi-region state. Cloud Spanner is a globally distributed, strongly consistent relational database that combines synchronous replication across regions with external-consistency guarantees using TrueTime atomic clocks. It is the only managed relational database that can provide active-active writes across continents without sacrificing consistency, but the per-node pricing reflects that capability. Cloud SQL supports cross-region read replicas with asynchronous replication, similar to RDS. For object storage, Cloud Storage offers dual-region and multi-region bucket locations that automatically replicate data across geographically dispersed data centers, providing a 99.95% availability SLA for Standard storage in those locations without requiring the user to configure replication policies.
 
 **Azure** provides geo-redundant storage and database replication through several services. Azure SQL Database supports active geo-replication, which creates readable secondary databases in any Azure region with asynchronous replication. You can configure up to four secondaries and initiate a planned or unplanned failover. Cosmos DB, Azure's globally distributed multi-model database, can be configured for multi-region writes with configurable consistency levels ranging from strong to eventual -- a rare capability that lets you tune the CAP tradeoff per workload. Azure Storage offers geo-redundant storage (GRS) and read-access geo-redundant storage (RA-GRS) that asynchronously replicate data to a paired region hundreds of miles away, with Microsoft managing the failover process.
 
@@ -347,11 +347,11 @@ Cilium Cluster Mesh securely connects multiple Kubernetes clusters into a single
 
 ```mermaid
 graph TD
-    subgraph Cluster A (us-east)
+    subgraph clusterA["Cluster A (us-east)"]
         PodA[Frontend Pod] --> CiliumA[Cilium eBPF Datapath]
     end
     
-    subgraph Cluster B (us-west)
+    subgraph clusterB["Cluster B (us-west)"]
         CiliumB[Cilium eBPF Datapath] --> PodB[Backend Pod]
     end
     
@@ -374,14 +374,14 @@ The most visible cost is the per-cluster control plane fee, which varies by prov
 | Provider | Tier | Cost per Hour | Approximate Annual (per cluster) |
 | :--- | :--- | :--- | :--- |
 | EKS | Standard | $0.10 | $876 |
-| GKE | Zonal Standard | $0.00 (one free per billing account) | $0 |
+| GKE | Zonal Standard | $0.10 (one free-tier credit can offset one zonal or Autopilot cluster per billing account) | $876 before credit |
 | GKE | Regional Standard | $0.10 | $876 |
-| GKE | Autopilot | $0.00 (management fee waived) | $0 |
+| GKE | Autopilot | $0.10 (one free-tier credit can offset one zonal or Autopilot cluster per billing account) | $876 before credit |
 | AKS | Free tier | $0.00 | $0 |
 | AKS | Standard tier | $0.10 | $876 |
-| AKS | Premium (LTS) | $0.20 | $1,752 |
+| AKS | Premium (LTS) | $0.60 | $5,256 |
 
-At 10 clusters, these fees alone range from $0 to $8,760 per year depending on provider and tier choices. At 50 clusters -- not unusual for a large enterprise with per-region, per-environment, and per-tenant clusters -- the range extends from $0 (GKE zonal or AKS Free, though Free tier is unsuitable for production) to $43,800 annually. These numbers make the management-plane efficiency argument for GKE Autopilot and zonal Standard clusters compelling at scale, but they also highlight why many large organizations invest in Cluster API to self-manage control planes when fleet size makes managed fees the dominant budget line.
+At 10 clusters, these fees alone range from $0 for AKS Free development clusters to $52,560 for AKS Premium LTS, with GKE/EKS/AKS Standard fleets landing around $7,884 to $8,760 after any single GKE free-tier credit is applied. At 50 clusters -- not unusual for a large enterprise with per-region, per-environment, and per-tenant clusters -- there is no $0 GKE fleet option: GKE, EKS, and AKS Standard are roughly $43,800 annually before credits, while one GKE credit reduces only one zonal or Autopilot cluster's monthly management fee. These numbers highlight why many large organizations invest in Cluster API to self-manage control planes when fleet size makes managed fees the dominant budget line.
 
 ### Cross-Region Data Transfer (Egress)
 
@@ -469,17 +469,17 @@ A practical rule of thumb: start with one production cluster per region and one 
 | Factor | Regional Control Plane (GKE, EKS, AKS Standard) | Zonal Control Plane (GKE) |
 | :--- | :--- | :--- |
 | **Single-zone failure tolerance** | Full -- control plane survives zone loss | None -- control plane unavailable until zone recovers |
-| **Cost** | $0.10/hr (GKE Regional, EKS, AKS Standard) | $0.00/hr (GKE zonal, first per billing account) |
+| **Cost** | $0.10/hr (GKE Regional, EKS, AKS Standard) | $0.10/hr, with one GKE free-tier credit that can offset one zonal or Autopilot cluster per billing account |
 | **API server latency** | Slightly higher (cross-zone coordination) | Lower (single-zone) |
 | **Recommended for** | Production workloads, any SLA-backed service | Development, staging, batch processing, CI/CD |
 
-If the workload requires an uptime SLA, use a regional control plane. If the workload is stateless, restartable, and tolerant of control-plane downtime (e.g., a CI/CD runner fleet, a batch processing cluster, a development sandbox), a zonal control plane is a legitimate cost-saving measure on GKE. On EKS and AKS Standard tier, the control plane is always regional and priced accordingly.
+If the workload requires an uptime SLA, use a regional control plane. If the workload is stateless, restartable, and tolerant of control-plane downtime (e.g., a CI/CD runner fleet, a batch processing cluster, a development sandbox), a zonal control plane can be a legitimate availability tradeoff, and the GKE free-tier credit may offset one such cluster's management fee per billing account. On EKS and AKS Standard tier, the control plane is always regional and priced accordingly.
 
 ---
 
 ## Did You Know?
 
-- On June 8, 2021, Fastly experienced a global outage affecting 85% of its network due to a single configuration change pushed globally, underscoring the extreme danger of global, single-plane-of-control architectures without blast radius isolation.
+- A single global edge configuration push can remove a large share of serving capacity when every point of presence accepts the same bad state at once, underscoring why mature edge and multi-cluster platforms stage rollouts by cell or region.
 - The Multi-Cluster Services (MCS) API defines `ServiceExport`, `ServiceImport`, and the `clusterset.local` DNS model for cross-cluster service discovery.
 - Operating a multi-cluster fleet increases baseline infrastructure costs significantly; managing redundant control planes on cloud providers like EKS or GKE can add [approximately $850 per cluster annually in baseline fees alone](https://cloud.google.com/kubernetes-engine/pricing), before computing resources are consumed.
 - Kubernetes scalability limits officially test up to 5,000 nodes and 150,000 pods per cluster. However, organizations with massive scale adopt multi-cluster architectures long before hitting physical compute limits to mitigate configuration sprawl and strict network policy constraints.
@@ -649,7 +649,7 @@ Data residency and sovereignty regulations override purely technical replication
 <summary><strong>Question 8: Zonal vs Regional Control Plane</strong></summary>
 
 **Scenario:**
-You run a GKE Autopilot cluster for a production customer-facing application with a strict 99.95% uptime SLA. Your cost optimization team suggests switching from Autopilot (regional control plane) to a zonal GKE Standard cluster to eliminate the management fee. You push back.
+You run a GKE Autopilot cluster for a production customer-facing application with a strict 99.95% uptime SLA. Your cost optimization team suggests switching from Autopilot (regional control plane) to a zonal GKE Standard cluster to chase a lower-cost control-plane posture. You push back.
 
 **What is the strongest architectural argument against using a zonal control plane for this workload?**
 
@@ -662,7 +662,7 @@ D. Zonal clusters do not support GKE Dataplane V2.
 B. A zonal GKE control plane runs the API server and etcd within a single zone. If that zone fails, the control plane becomes unavailable, and while existing workloads may continue running, no new scheduling, scaling, or API operations can occur until the zone recovers -- which may take hours.
 
 **Explanation:**
-The fundamental architectural difference between zonal and regional GKE clusters is the control plane's failure domain. A zonal control plane lives in one zone and is vulnerable to that zone's failure. In a zone outage, the cluster continues running existing workloads because kubelets operate independently, but all control-plane operations -- deploying new pods, scaling, updating configurations, initiating rollbacks -- are blocked. A regional control plane replicates the API server and etcd across three zones, making it resilient to any single-zone failure. For any production workload with an uptime SLA, this resilience justifies the management fee.
+The fundamental architectural difference between zonal and regional GKE clusters is the control plane's failure domain. A zonal control plane lives in one zone and is vulnerable to that zone's failure. In a zone outage, the cluster continues running existing workloads because kubelets operate independently, but all control-plane operations -- deploying new pods, scaling, updating configurations, initiating rollbacks -- are blocked. A regional control plane replicates the API server and etcd across three zones, making it resilient to any single-zone failure. For any production workload with an uptime SLA, this resilience justifies paying for the regional control-plane posture instead of relying on zonal free-tier eligibility.
 </details>
 
 ---
@@ -760,9 +760,9 @@ Login using the ArgoCD CLI (assuming it is installed locally):
 ```bash
 argocd login localhost:8080 --username admin --insecure
 ```
-Add the `us-west` cluster context to ArgoCD:
+Add the `us-west` cluster context to ArgoCD. For kind, make sure both clusters share a Docker network and do not register the default host-only `https://127.0.0.1:<port>` endpoint from your local kubeconfig; the ArgoCD controller runs inside `us-east`, where that loopback address points back to itself. Register `us-west` with an address reachable from inside the management cluster, such as the west control-plane container IP or `host.docker.internal`:
 ```bash
-argocd cluster add kind-us-west-cluster --yes
+argocd cluster add kind-us-west-cluster --server https://<west-control-plane-container-ip>:6443 --yes
 ```
 </details>
 
@@ -856,7 +856,7 @@ You have successfully demonstrated blast radius isolation. The failure domain wa
 
 Now that you understand how to design and distribute workloads across multiple failure domains safely, it is time to explore how we secure the perimeters of those domains. In the next module, you will learn how to implement zero-trust architectures, enforce stringent network policies, and protect your clusters from lateral movement.
 
-**Continue to [Module 4.3: Cloud IAM](./module-4.3-cloud-iam/)**
+**Continue to [Module 4.3: Cloud IAM](../module-4.3-cloud-iam/)**
 
 ## Sources
 
@@ -865,9 +865,12 @@ Now that you understand how to design and distribute workloads across multiple f
 - [istio.io: multi primary](https://istio.io/latest/docs/setup/install/multicluster/multi-primary/) — Istio's multi-primary documentation directly states that each cluster is primary and that workloads communicate pod-to-pod across clusters.
 - [argo-cd.readthedocs.io: Generators Cluster](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Cluster/) — The Argo CD cluster generator docs directly describe label selectors and templated app generation per matching cluster.
 - [cloud.google.com: pricing](https://cloud.google.com/kubernetes-engine/pricing) — GKE's official pricing page directly lists a flat $0.10 per cluster-hour management fee, which annualizes to approximately the stated yearly baseline.
+- [cloud.google.com: Cloud Storage classes](https://cloud.google.com/storage/docs/storage-classes) — Cloud Storage availability documentation lists a 99.95% SLA for Standard storage in multi-region and dual-region locations.
 - [aws.amazon.com: overview of data transfer costs for common architectures](https://aws.amazon.com/blogs/architecture/overview-of-data-transfer-costs-for-common-architectures/) — AWS's architecture guidance explicitly warns that data-transfer charges are easy to overlook and should influence architecture decisions.
 - [docs.aws.amazon.com: EKS service quotas](https://docs.aws.amazon.com/eks/latest/userguide/service-quotas.html) — Official EKS service quotas, including the VPC CNI pod-per-node limits driven by ENI and IP allocation per instance type.
 - [cloud.google.com: GKE quotas](https://cloud.google.com/kubernetes-engine/quotas) — GKE quota documentation, including per-cluster node limits and the conditions under which clusters scale to 5,000 and beyond.
+- [learn.microsoft.com: AKS pricing tiers](https://learn.microsoft.com/en-us/azure/aks/free-standard-pricing-tiers) — Microsoft Learn describes the AKS Free, Standard, and Premium tiers and the LTS requirement for Premium.
+- [azure.microsoft.com: AKS pricing](https://azure.microsoft.com/en-us/pricing/details/kubernetes-service/) — Azure's AKS pricing page is the product pricing reference for the Free, Standard, and Premium cluster-management tiers.
 - [learn.microsoft.com: AKS quotas, SKUs, and regions](https://learn.microsoft.com/en-us/azure/aks/quotas-skus-regions) — AKS resource limits, including maximum nodes per cluster, per node pool, and Free-tier constraints.
 - [docs.cilium.io: Cluster Mesh](https://docs.cilium.io/en/stable/network/clustermesh/clustermesh/) — Cilium Cluster Mesh documentation describing cross-cluster pod connectivity, identity synchronization, and network policy enforcement.
 - [cloud.google.com: VPC network pricing](https://cloud.google.com/vpc/network-pricing) — GCP inter-region and internet egress pricing, critical for modeling cross-region data transfer costs.
