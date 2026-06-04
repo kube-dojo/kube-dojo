@@ -6,7 +6,7 @@ sidebar:
 ---
 This module is rated **[COMPLEX]** and typically takes about three hours to complete. You should already be comfortable with Cloud Essentials across AWS, Azure, and GCP, Kubernetes basics, and cloud architecture patterns before you begin.
 
-## What You'll Be Able To Do
+## What You'll Be Able to Do
 
 - **Design enterprise landing zones using AWS Control Tower, Azure Landing Zones, and GCP Organization Hierarchy**
 - **Implement automated account vending machines that provision cloud accounts and Kubernetes platforms quickly through automation**
@@ -22,6 +22,8 @@ A common failure mode in large enterprises is that environment provisioning stay
 When production environment delivery is slow, launch schedules slip and the business impact can be substantial. The problem is usually manual provisioning and inconsistent handoffs, not a lack of cloud features.
 
 Enterprise Landing Zones solve this exact problem. They are the foundational architecture that defines how an organization uses cloud at scale -- the account structure, the networking topology, the security guardrails, the identity model, and the automation that provisions all of it in minutes instead of weeks. When Kubernetes enters the picture, Landing Zones become even more critical: every cluster needs networking, identity, logging, and policy from day zero. In this module, you will learn how AWS Control Tower, Azure Landing Zones, and GCP Organization Hierarchy work, how to automate account vending with Kubernetes bootstrap included, and how to wire it all together so a team can go from "I need a cluster" to "I have a production-ready cluster" through a fast, automated provisioning flow.
+
+The cost argument for Landing Zones is equally compelling, though often overlooked during the initial build phase. A single manually-provisioned production account with misconfigured guardrails might cost $5,000-$15,000 per month in cloud spend alone, not counting the engineering time lost to troubleshooting drift. Multiply that by 50 accounts and you are looking at a recurring operational drain measured in engineer-months. Landing Zones with automated vending convert that variable, error-prone spend into a predictable baseline where every account starts with the same cost-optimized defaults: right-sized logging retention, centralized egress through a shared inspection VPC rather than per-account NAT Gateways, and guardrails that prevent the accidental deployment of expensive instance types in development environments. The governance angle is equally critical. Every hour a compliance audit takes to collect evidence across inconsistently configured accounts is an hour not spent on product work. Landing Zones with automated guardrail enforcement -- preventive controls that block violations before they happen and detective controls that surface drift immediately -- transform a reactive, audit-driven compliance posture into a continuously enforced one. For organizations operating in regulated industries, the difference between a Landing Zone designed for compliance from day zero and one retrofitted after an audit finding can mean the difference between launching a product on schedule and delaying it by a quarter.
 
 ---
 
@@ -58,6 +60,8 @@ flowchart TD
 **Security and Compliance**: The guardrails that prevent teams from doing dangerous things (like opening port 22 to the internet) while enabling them to move fast on everything else. These guardrails must cover both cloud resources and Kubernetes configurations.
 
 **Account Vending**: The automation that provisions new accounts (or subscriptions, or projects) with all three pillars pre-configured. This is the factory line that eliminates the fourteen-week wait.
+
+These four pillars are not independent. A network topology without adequate identity integration creates orphaned subnets that nobody can access securely. Security guardrails without automated vending means every new account inherits the guardrail policy inconsistently, creating exactly the drift the Landing Zone was meant to prevent. The pillars must be designed together, implemented together, and tested together -- which is why Landing Zone implementations are always opinionated frameworks rather than pick-and-choose toolkits.
 
 ---
 
@@ -111,6 +115,16 @@ aws controltower list-enabled-controls \
   --query 'enabledControls[*].{Control:controlIdentifier, Status:statusSummary.status}'
 ```
 
+### The Three Guardrail Types
+
+Control Tower organizes guardrails into three categories that work at different stages of the resource lifecycle. Understanding the distinction is critical because each type solves a different governance problem, and relying on only one -- typically preventive SCPs -- leaves dangerous gaps.
+
+**Preventive guardrails** block non-compliant actions before they execute. They are implemented as Service Control Policies (SCPs) attached to Organizational Units, and they operate at the AWS API authorization layer. When a principal attempts an API call, AWS evaluates the SCPs on the caller's account path and denies the call if any SCP forbids it. Preventive guardrails are the strongest form of governance because they make violations impossible, but they have a critical limitation: SCPs can only constrain actions that have corresponding IAM permissions. They cannot enforce configuration details like "every S3 bucket must have versioning enabled" because versioning is a resource property, not an IAM action. The SCP shown later in this module -- denying public EKS endpoints -- is a textbook preventive guardrail because `eks:endpointPublicAccess` is a condition key on the `eks:CreateCluster` API call itself.
+
+**Detective guardrails** identify non-compliance after resources exist. They are implemented as AWS Config rules that evaluate resource configurations against desired states and flag violations. For example, a Config rule can detect an S3 bucket with public read access and surface it in the Control Tower dashboard even though no preventive SCP blocked it. Detective guardrails do not stop violations from happening -- they ensure you find out about them quickly. Organizations that deploy only preventive guardrails often discover months later that dozens of development accounts have drifted because Config rules were never enabled. Detective guardrails are also essential for compliance audits because they produce the evidence trail auditors need.
+
+**Proactive guardrails** validate configurations before resource creation, but unlike preventive SCPs, they operate at the Infrastructure-as-Code level rather than the IAM layer. They are implemented as CloudFormation Hooks that run during stack operations and can reject a template that would create a non-compliant resource. Proactive guardrails are particularly powerful for Kubernetes-centric organizations because you can hook into the Terraform or CloudFormation pipeline that provisions EKS clusters and reject a configuration that, for example, specifies an unsupported Kubernetes version or a public endpoint before the API call ever reaches AWS. The limitation is that proactive guardrails only work for resources deployed through CloudFormation -- resources created through the Console or CLI bypass them entirely, which is why you still need preventive and detective guardrails as backstops.
+
 ### Account Factory for Terraform (AFT)
 
 The real power comes from [Account Factory for Terraform (AFT), which turns account vending into a GitOps workflow](https://docs.aws.amazon.com/controltower/latest/userguide/taf-account-provisioning.html). You define an account in a Terraform file, push to a repo, and AFT provisions the account with all Landing Zone configurations.
@@ -145,6 +159,8 @@ module "team_alpha_prod" {
   }
 }
 ```
+
+The AFT pipeline operates in distinct stages that provide an auditable, repeatable workflow. When a new account request Terraform file lands on the main branch, AFT first validates the request against schema constraints and checks for naming conflicts with existing accounts. Next, it provisions the account through AWS Organizations and moves it into the target OU, which immediately applies the SCPs attached to that OU hierarchy. After the account exists, AFT runs the global customizations pipeline -- a set of Terraform modules that apply organization-wide baselines like VPC Flow Logs, CloudTrail configuration, and mandatory encryption settings. Finally, AFT executes the account-specific customizations referenced in the `account_customizations_name` field, such as the Kubernetes baseline shown below. Each stage produces a log entry, and if any stage fails, the account is flagged for remediation rather than left in a partially-provisioned state. This staged pipeline architecture is the key difference between AFT and a simple `terraform apply`: AFT bakes in the governance workflow alongside the infrastructure, so the audit trail is automatically generated as a byproduct of provisioning.
 
 ### Kubernetes Bootstrap in Account Vending
 
@@ -216,28 +232,30 @@ Azure takes a similar but structurally different approach. Instead of accounts, 
 
 ```mermaid
 flowchart TD
-    Tenant[Azure AD Tenant] --> RootMG[Root Management Group]
-    
+    Tenant[Microsoft Entra ID Tenant] --> RootMG[Root Management Group]
+
     RootMG --> Platform[Platform]
     RootMG --> LZ[Landing Zones]
     RootMG --> Sandbox[Sandbox]
     RootMG --> Decomm[Decommissioned]
-    
+
     Platform --> Mgmt["Management<br/>(Log Analytics, Automation)"]
     Platform --> Ident["Identity<br/>(Active Directory, DNS)"]
     Platform --> Conn["Connectivity<br/>(Hub VNet, ExpressRoute, Firewall)"]
-    
+
     LZ --> Corp["Corp<br/>(internal apps, private networking)"]
     LZ --> Online["Online<br/>(internet-facing apps)"]
-    
+
     Corp --> AlphaCorp[Team-Alpha-Prod Subscription]
     Corp --> BetaCorp[Team-Beta-Prod Subscription]
-    
+
     Online --> AlphaWeb[Team-Alpha-Web Subscription]
     Online --> BetaAPI[Team-Beta-API Subscription]
-    
+
     Sandbox --> DevSubs["Developer subscriptions<br/>(relaxed policies)"]
 ```
+
+The management-group hierarchy deserves deeper attention because it is the control plane for Azure governance. The root management group sits at the tenant level and every subscription is a child of exactly one management group. Azure Policy assignments and Azure RBAC role assignments applied at a management group inherit downward to all child management groups and subscriptions -- this inheritance model is what makes Landing Zones enforceable at scale. The Platform management group hosts shared infrastructure subscriptions that every workload depends on: a connectivity subscription containing the hub virtual network with ExpressRoute circuits, Azure Firewall, and VPN gateways; an identity subscription running domain controllers and DNS private zones; and a management subscription hosting Log Analytics workspaces, Azure Automation accounts, and the centralized monitoring and alerting stack. The Landing Zones management group branches into Corp (internal, private-networking applications) and Online (internet-facing applications) because the network egress patterns and security postures differ: Corp subscriptions typically route all traffic through the centralized firewall in the connectivity hub, while Online subscriptions may need direct internet egress through Azure Front Door or Application Gateway. The Sandbox management group typically has relaxed Azure Policy assignments -- no mandatory private endpoints, no forced firewall routing -- to allow rapid experimentation without the friction of production-grade guardrails. The Decommissioned management group holds subscriptions that are pending deletion, with a policy that denies all write operations to prevent accidental resource recreation during the 30-day retention period before permanent deletion.
 
 ### Subscription Vending with Bicep
 
@@ -289,22 +307,24 @@ module aks 'modules/aks-baseline.bicep' = if (provisionAKS) {
     clusterName: 'aks-${teamName}-${environment}'
     kubernetesVersion: '1.35'
     subnetId: networking.outputs.aksSubnetId
-    aadAdminGroupId: '${teamName}-k8s-admins'  // Azure AD group
+    aadAdminGroupId: '${teamName}-k8s-admins'  // Microsoft Entra ID group
     enableDefender: environment == 'production'
     enablePolicyAddon: true
   }
 }
 ```
 
-### Identity Integration: Azure AD to AKS
+A critical architectural decision in Azure subscription vending is whether to place all subscriptions for a team under the same management group or to split them based on environment classification. Placing all team subscriptions together -- dev, staging, and production under a single team management group -- simplifies RBAC administration because you assign the team's identity at the team management group level and it inherits to all environments. The downside is that Azure Policy assignments at that group level apply uniformly: if you require private endpoints for production, development subscriptions inherit the same constraint and developers may find themselves unable to spin up quick test resources. The Cloud Adoption Framework recommends splitting by environment at the management group level (platform/corp/online for production, sandbox for everything else) and using Azure Policy exemptions scoped to specific subscriptions when a team needs a specific relaxation. The Bicep template above follows this model: production subscriptions land under the corp management group with full guardrails, and non-production subscriptions land under sandbox with relaxed policies.
 
-Azure's biggest advantage for enterprises already using Microsoft is [the seamless identity chain from Azure AD through to Kubernetes RBAC](https://learn.microsoft.com/en-us/azure/aks/azure-ad-rbac):
+### Identity Integration: Microsoft Entra ID to AKS
+
+Azure's biggest advantage for enterprises already using Microsoft is [the seamless identity chain from Microsoft Entra ID through to Kubernetes RBAC](https://learn.microsoft.com/en-us/azure/aks/azure-ad-rbac):
 
 ```bash
-# Azure AD Group → AKS RBAC (no aws-auth equivalent needed)
-# The AKS cluster natively understands Azure AD tokens
+# Microsoft Entra ID group → AKS RBAC (no aws-auth equivalent needed)
+# The AKS cluster natively understands Microsoft Entra ID tokens
 
-# Create an Azure AD group for cluster admins
+# Create a Microsoft Entra ID group for cluster admins
 az ad group create --display-name "aks-team-alpha-admins" \
   --mail-nickname "aks-team-alpha-admins"
 
@@ -334,7 +354,7 @@ az role assignment create \
 ```mermaid
 flowchart TD
     Org["GCP Organization<br/>org-policies/"] --> Folders
-    
+
     subgraph Folders [Folders]
         direction TB
         Boot["Bootstrap<br/>(Terraform state, CI/CD)"]
@@ -343,15 +363,17 @@ flowchart TD
         NonProd["Non-Production"]
         Sand["Sandbox"]
     end
-    
+
     Prod --> AlphaProd[team-alpha-prod]
     Prod --> BetaProd[team-beta-prod]
-    
+
     NonProd --> AlphaDev[team-alpha-dev]
     NonProd --> BetaStaging[team-beta-staging]
-    
+
     Sand --> DevSand[developer-sandbox-*]
 ```
+
+The GCP Organization Policy Service is the counterpart to AWS SCPs and Azure Policy, but it operates on a fundamentally different model that is worth understanding deeply. Unlike SCPs, which deny at the IAM authorization boundary, Organization Policies are constraints evaluated by each GCP service independently at resource creation or update time. A constraint like `constraints/compute.restrictProtocolForwardingCreation` is enforced by the Compute Engine API itself, not by a centralized policy evaluation engine. This distributed enforcement model has practical consequences: Organization Policies apply to resources created through any mechanism -- Console, gcloud CLI, Terraform, or direct API calls -- because the resource's own service API checks the constraint at creation time. There is no equivalent of the CloudFormation Hook limitation in AWS. GCP provides two constraint types. Boolean constraints are simple on/off switches -- for example, `constraints/compute.disableSerialPortAccess` is either enforced or not, with no parameters. List constraints allow or deny specific values from a set -- `constraints/gcp.resourceLocations` accepts an `allowedValues` list of region names, and any resource creation outside those regions is rejected. Custom constraints let organizations define their own policies using Common Expression Language (CEL) against resource properties, enabling rules like "Cloud Storage buckets must have uniform bucket-level access enabled" that are specific to the organization's compliance requirements. The combination of built-in boolean constraints, list constraints, and custom CEL constraints gives GCP a uniquely flexible governance surface that covers both simple on/off decisions and deeply parameterized validation rules.
 
 ### Project Factory with Terraform
 
@@ -422,6 +444,8 @@ module "gke_alpha_prod" {
 }
 ```
 
+The Shared VPC pattern used here is one of GCP's most powerful enterprise features and deserves careful study. In a Shared VPC architecture, a host project owns the VPC networks and subnets, and service projects (the workload projects created by Project Factory) attach to those subnets as consumers. The service project's GKE cluster gets its node IPs, pod IPs, and service IPs from subnets in the host project, which means the network security team manages firewall rules, Cloud NAT, and VPC Flow Logs in one place and every workload project inherits those controls automatically. This model sharply reduces the per-project networking overhead that plagues AWS multi-account architectures where every account must manage its own VPC, route tables, and NAT Gateways. The tradeoff is that Shared VPC introduces a dependency between the service project and the host project: if the host project's subnet runs out of IP space, every service project attached to that subnet is blocked from scaling until the subnet is expanded or a new one is provisioned. This is why the IP allocation strategy -- node subnets sized for the maximum expected node count plus headroom, pod subnets large enough for the maximum pods-per-node configuration, and service subnets with room for the service cluster IP range -- must be designed before the first project is vended.
+
 ---
 
 ## Guardrails: Preventive and Detective Controls
@@ -437,7 +461,9 @@ Landing Zones without guardrails are just organized chaos. In this module, we wi
 | Restrict regions | SCP deny non-approved regions | `AllowedLocations` | `constraints/gcp.resourceLocations` |
 | Limit high-risk privilege escalation paths | Restrict privileged IAM actions with narrowly scoped exceptions | Use policy definitions that block or tightly govern elevated permissions | Use organization policies and IAM controls that reduce risky credential and privilege patterns |
 | Require tags/labels | SCP deny untagged resources | `Require tag` initiative | Custom org policy |
-| Block public Kubernetes API | SCP deny public EKS endpoint | `Deny public AKS` | `constraints/container.restrictPublicCluster` |
+| Block public Kubernetes API | SCP deny public EKS endpoint | `Deny public AKS` | Custom org policy (CEL on `container.googleapis.com/Cluster`, e.g. require `privateClusterConfig.enablePrivateNodes`; or `constraints/compute.restrictPublicIp` for node IPs) |
+
+The guardrail implementation differences across clouds are not just syntactic -- they reflect fundamentally different governance philosophies that shape how your Landing Zone operates day to day. AWS SCPs operate at the IAM authorization boundary, which means they are fast to evaluate and cannot be bypassed by any API mechanism, but they are inherently limited to actions that correspond to IAM permissions. Azure Policy evaluates at the resource provider level after API authorization succeeds, which allows it to enforce configuration properties (like requiring HTTPS-only on storage accounts) that SCPs cannot reach, but this post-authorization evaluation introduces a brief window where a non-compliant resource could be created before policy evaluation completes -- mitigated by the `EnforceRegoPolicy` deny effect in most scenarios. GCP Organization Policies are evaluated by each service's own API at resource creation time, which distributes the enforcement but also distributes the failure modes: a misconfigured constraint on the Compute Engine API has no effect on Cloud Storage, and vice versa. The practical implication for Landing Zone design is that no single cloud's guardrail mechanism is sufficient alone -- you need the layered approach described in the next section, with cloud guardrails forming the outer perimeter and in-cluster policy engines providing defense in depth inside each Kubernetes cluster.
 
 ### Example: AWS SCP for Kubernetes Guardrails
 
@@ -499,7 +525,51 @@ flowchart TD
     L1 --> L2 --> L3 --> L4
 ```
 
+This four-layer model is not theoretical -- it resolves the real operational tension between central governance and team autonomy. Layer 1 ensures that no team can create a cluster with a public endpoint or an unencrypted control plane, regardless of what their Terraform code says. Layer 2 catches misconfigurations in the Infrastructure-as-Code stage before they become running resources, shortening the feedback loop from minutes to seconds. Layer 3 enforces Kubernetes-native constraints like "containers must not run as root" and "all images must come from the internal registry" regardless of whether the cluster was provisioned by Terraform or created manually in a sandbox. Layer 4 provides the final backstop: if a workload is compromised and attempts unexpected behavior -- opening a reverse shell, modifying a system binary, reading a sensitive file -- eBPF-based runtime detection catches it in real time, producing an alert even when every preceding layer was bypassed. The Landing Zone's job is to bootstrap Layers 1 and 2 automatically for every new account, and to ensure that Layers 3 and 4 are installed as part of the cluster baseline so no production cluster ever starts without them.
+
 > **Pause and predict**: Before we look at Backstage, list out the automated steps a pipeline should take to fulfill a 'New Kubernetes Cluster' request. What needs to happen between the developer clicking 'Submit' and them receiving a kubeconfig?
+
+---
+
+## Network Topology: Hub-and-Spoke Patterns Across Clouds
+
+Every Landing Zone must define how accounts connect to each other and to on-premises networks. The dominant pattern across all three clouds is hub-and-spoke, but the implementation details differ enough that choosing the wrong variant for your scale can cause cascading operational problems.
+
+### The Hub-and-Spoke Model
+
+In a hub-and-spoke topology, a central hub network handles all cross-account and external connectivity. Spoke accounts connect to the hub and route traffic through it, but spokes never connect directly to each other. This model centralizes network security inspection, egress control, and DNS resolution in one place, which simplifies operations at the cost of introducing a single point of architectural dependency.
+
+**AWS Transit Gateway** is the hub-and-spoke implementation on AWS. A Transit Gateway in the network hub account acts as a cloud router: every spoke VPC attaches to it, and the Transit Gateway route tables determine which spokes can talk to each other. In a typical Landing Zone, the production OU spokes can route to the shared services hub (for CI/CD, container registry access) and to on-premises via the VPN or Direct Connect attachment, but production spokes cannot route to sandbox OU spokes, enforcing blast-radius isolation at the network layer. Transit Gateway scales to thousands of VPC attachments -- verified by AWS at over 5,000 VPCs per Transit Gateway -- but the cost scales linearly. You pay per attachment per hour plus per GB of data processed. A 200-account Landing Zone with two VPCs per account creates 400 attachments, and the recurring cost can reach five figures monthly before data transfer charges. The cost optimization lever is route table design: default all spoke-to-spoke traffic to blackhole unless a specific route table entry allows it, which also improves security by making east-west traffic opt-in rather than opt-out.
+
+**Azure Virtual WAN** provides the Microsoft-managed hub-and-spoke for Azure Landing Zones. Unlike AWS Transit Gateway, which you configure route tables explicitly, Virtual WAN automates branch-to-branch and spoke-to-spoke connectivity through a Microsoft-managed route propagation model. Spoke VNets connected to a Virtual WAN hub automatically learn routes for all other connected spokes, which simplifies operations but removes the explicit isolation that Transit Gateway route tables provide. For Landing Zones, this means you must use Azure Firewall in the hub to enforce network segmentation policies that Transit Gateway would handle at the route table level. Azure Virtual WAN hubs are regional -- a hub in East US does not automatically route traffic to a hub in West Europe, so multi-region Landing Zones require a hub in each region with inter-hub connectivity configured explicitly. The cost model differs from AWS and separates hub-router capacity from gateway capacity. The virtual hub router scales via Routing Infrastructure Units (RIUs) that you set at hub creation or edit time; Microsoft documents aggregate VNet-to-VNet routing throughput up to about 50 Gbps at maximum RIUs (verify current limits on [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/virtual-wan/hub-settings)). Site-to-site VPN, ExpressRoute, and point-to-site gateways in the same hub scale independently via gateway scale units (~500 Mbps per VPN scale unit, with aggregate VPN throughput up to about 20 Gbps per hub per the Virtual WAN FAQ -- verify current numbers). Virtual WAN billing also includes hub and connection components distinct from per-VNet attachment models on AWS Transit Gateway, so large spoke counts can be more predictable but less granular than TGW per-attachment pricing.
+
+**GCP Shared VPC** takes a fundamentally different approach: instead of a hub-and-spoke network of separate VPCs connected through a transit device, a single host VPC contains all subnets and service projects attach to those subnets as consumers. There is no Transit Gateway or Virtual WAN in the traditional sense because all traffic within the same VPC routes natively without an intermediary. Cross-region traffic between Shared VPC subnets in different regions stays within Google's backbone, and firewall rules are managed centrally in the host project. The operational simplicity of Shared VPC is unmatched -- there are no per-spoke route tables to manage and no per-attachment billing to monitor -- but the blast radius is larger: a misconfigured firewall rule in the host project affects every service project attached to that host VPC simultaneously. This is why large enterprises often split Shared VPCs by environment (production host project, non-production host project) rather than putting everything in one host VPC.
+
+### Choosing Your Network Model
+
+The choice between hub-and-spoke implementations is not primarily about feature checklists. It is about your organization's operational maturity. AWS Transit Gateway's explicit route tables reward organizations that invest in network automation. You can script route propagation based on OU membership and cost-center tags, creating a self-service network model where teams request connectivity through a PR that a Terraform pipeline validates and applies. Azure Virtual WAN's automated route propagation rewards organizations that prefer managed infrastructure and are willing to invest in Azure Firewall policy to achieve equivalent segmentation. GCP Shared VPC rewards organizations that want the simplest possible networking model and can accept the tradeoffs of coarser isolation boundaries. In all three cases, the Landing Zone must answer one question before any accounts are vended: what subnets should exist, and what routes should connect them? Changing the answer after 50 clusters are deployed is a multi-quarter migration project.
+
+---
+
+## Day-2 Operations: Drift Detection and Account Lifecycle
+
+Provisioning a Landing Zone is a one-time project. Operating it over years is the real challenge. The operational patterns that keep a Landing Zone healthy as the organization grows from 5 accounts to 500 are fundamentally different from the patterns used to build it initially.
+
+### Drift Detection
+
+Configuration drift -- the slow accumulation of differences between the Landing Zone baseline and the actual state of individual accounts -- is the most common cause of Landing Zone failures at scale. A team manually opens a security group rule to debug a connectivity issue and forgets to close it. An autoscaling group is resized through the Console during an incident and the Terraform state diverges. A new cloud service is adopted by one team with its own IAM role that violates the principle of least privilege. Each individual drift event is small, but at 100 accounts, the cumulative effect is that no two accounts are actually configured the same way, defeating the entire purpose of the Landing Zone.
+
+AWS Config rules deployed as part of Control Tower provide the detective layer for AWS drift detection. A Config rule like `vpc-sg-open-only-to-authorized-ports` continuously evaluates every security group in every enrolled account and surfaces non-compliant resources in the Control Tower dashboard. Azure Policy in audit mode -- deployed at the management group level and inherited by all subscriptions -- performs the same function for Azure resources, evaluating every resource against a library of built-in policy definitions and flagging drift in the regulatory compliance dashboard. GCP Security Command Center aggregates findings from Security Health Analytics, Event Threat Detection, and third-party integrations into a single pane that covers the entire organization hierarchy. The operational pattern is the same across all three clouds. Define the compliance baseline as code, let the cloud's detective mechanism evaluate continuously, and build a remediation workflow. Auto-remediate drift for low-risk items like mandatory resource tags. Route findings to the owning team's ticketing system for higher-risk items like publicly exposed storage.
+
+### Account Lifecycle Management
+
+Every vended account has a lifecycle: it is provisioned, it operates for months or years, and eventually it must be decommissioned. The Landing Zone must automate all three phases.
+
+**Provision** is the phase this module has focused on: automated account creation with baseline infrastructure, guardrails, and cluster provisioning. Provisioning must produce an auditable artifact -- typically a Terraform state file committed to a versioned backend -- that reconstructs exactly what was created and how.
+
+**Operate** is the longest phase and the one most organizations underinvest in. An operating account needs its baseline updated when the Landing Zone evolves: a new mandatory guardrail, a Kubernetes version upgrade enforced organization-wide, a new subnet added to the Shared VPC. The operating model for updates is identical to the vending model: changes to the baseline are proposed as pull requests to the Landing Zone repository, reviewed by the platform team, and rolled out through the same pipeline that created the accounts. The difference is that updates must respect running workloads -- you cannot destroy and recreate a production EKS cluster to apply a new security group rule. This means every baseline change must be designed for in-place application, tested on non-production accounts first, and rolled out progressively using a canary or blue-green deployment pattern across accounts.
+
+**Decommission** is the phase most organizations neglect entirely. When a team disbands or a project ends, the account must transition from active to suspended to deleted. The Suspended OU (AWS), Decommissioned management group (Azure), or an archived folder (GCP) should have a policy that denies all resource creation and modification but preserves read access for a defined retention period -- typically 30 to 90 days -- so that forensic analysis is possible if a dependency is discovered after decommissioning begins. After the retention period, automated cleanup deletes all resources and finally the account itself. Without an automated decommissioning pipeline, zombie accounts accumulate: they continue to accrue costs for idle resources like unattached EBS volumes or unused static IPs, they remain in security scan scope, and they represent a growing audit surface that generates findings without any owner to remediate them. A mature Landing Zone treats decommissioning as a first-class workflow with the same rigor as provisioning.
 
 ---
 
@@ -630,7 +700,90 @@ spec:
         url: ${{ steps['trigger-pipeline'].output.runUrl }}
 ```
 
-*War Story: Self-service account vending usually reduces setup time dramatically and cuts down on one-off "snowflake" environments because every cluster starts from the same template and baseline.*
+*Hypothetical scenario: A platform team deploys Backstage with an account-vending template. Before the portal, teams averaged 6-8 weeks waiting for manually provisioned environments, each configured differently by the central operations team. After the portal goes live, the time drops to under 30 minutes because every cluster starts from the same pre-approved template and baseline. The key insight is not just speed — it is that automated vending eliminates the configuration drift that makes every manually-built environment a unique debugging challenge.*
+
+---
+
+## Patterns & Anti-Patterns
+
+### Proven Patterns
+
+**Pattern 1: Environment-Scoped Organizational Units.** Place production, staging, and development accounts in separate OUs (or management groups, or folders) with graduated guardrail strictness. Production OUs get full preventive SCPs, mandatory encryption, restricted region policies, and required private endpoints. Non-production OUs get the same detective guardrails but relaxed preventive controls -- for example, allowing public endpoints in development so engineers can iterate quickly. Sandbox OUs get only the minimum guardrails required for compliance (no open S3 buckets, no unencrypted volumes) and no preventive network restrictions. This graduated model balances security with developer velocity: the friction of guardrails scales with the blast radius of the environment. Teams that put all accounts in a single OU with uniform guardrails inevitably create shadow IT when developers circumvent restrictions they find unreasonable for non-production work.
+
+**Pattern 2: GitOps-Driven Account Vending.** Every account request is a pull request to a dedicated repository containing Terraform or Bicep definitions. The PR triggers a plan-only pipeline run that shows exactly what resources will be created, including cost estimates derived from resource type and sizing. A designated approver -- typically the team lead or cost-center owner -- reviews the plan and merges the PR, which triggers the apply pipeline. This pattern gives you a complete audit trail of who requested what, who approved it, and exactly what was provisioned, mapped to a specific Git commit SHA. At 50+ accounts, this audit trail is the difference between a 2-hour compliance evidence collection exercise and a 2-week forensic scramble.
+
+**Pattern 3: Progressive Rollout for Baseline Updates.** When the Landing Zone baseline changes -- a new guardrail, a Kubernetes version requirement, an updated VPC CIDR allocation scheme -- apply the change to a canary set of non-production accounts first, monitor for 24-48 hours of normal operation, then roll out to all non-production accounts, then to a canary production account, and finally to all production. The pipeline should report the deployment status per account and automatically halt if any account's update fails. This pattern prevents the "big bang" baseline update that simultaneously breaks every cluster in the organization, which is a real operational risk at scale because even a small Terraform provider version bump can change resource recreation behavior in unexpected ways.
+
+### Anti-Patterns
+
+| Anti-Pattern | Why Teams Fall Into It | Better Approach |
+|:---|:---|:---|
+| **Single account for everything** | Simplicity bias: "We only have 3 teams, multi-account is over-engineering." The organization grows to 30 teams, and now blast radius, IAM complexity, and quota exhaustion are daily operational issues. | Start with at least separate production and non-production accounts from day one. The overhead of a second account is near-zero with infrastructure as code, and adding it later requires a painful migration with downtime. |
+| **Guardrails designed without developer input** | Security team defines guardrails in isolation based on compliance frameworks without consulting the teams who will work under those guardrails daily. | Co-design guardrails in a working session with security engineers and platform users. Start permissive and tighten based on actual incident data -- a guardrail that blocks 50% of legitimate developer workflows will be worked around, not complied with. |
+| **No IPAM strategy before vending begins** | VPC CIDRs assigned ad-hoc: "We'll figure out addressing later." Later arrives when CIDR overlaps block peering and pod IP exhaustion takes down clusters. | Define a hierarchical IP addressing scheme before the first account is vended. Reserve large blocks for Kubernetes (at least /17 per cluster account to accommodate pod and service CIDRs alongside node subnets). Use cloud IPAM services (AWS IPAM, Azure IPAM) to automate allocation from a centrally managed pool. |
+| **Manual baseline updates** | The Landing Zone is deployed once and then updates are applied manually, account by account, during maintenance windows. By the time the update reaches the 40th account, the first 10 accounts have already drifted. | Treat the Landing Zone as a product with a CI/CD pipeline. Every baseline change is a PR that the pipeline applies progressively across accounts, with automated drift detection running continuously to catch accounts that fell out of sync. |
+| **No decommissioning workflow** | Accounts are forgotten after projects end. They continue to run idle resources, generate security findings, and consume quota -- costing thousands per month in aggregate without delivering any value. | Build a decommissioning pipeline with three stages: suspend (deny writes, preserve reads), retain (30-day hold for forensic access), and delete (automated resource cleanup and account closure). Run a monthly report of accounts with zero activity in the last 60 days and flag them for review. |
+| **Mixing cloud-native and Kubernetes guardrails without a layered model** | Teams apply Kubernetes NetworkPolicies but leave cloud security groups wide open, or vice versa. Each layer assumes the other is handling security, creating gaps that neither layer closes. | Define explicit responsibility boundaries: cloud guardrails protect cloud resources (clusters, storage, IAM), Kubernetes admission policy protects in-cluster objects (pods, services, ingresses), and runtime detection catches anomalous behavior regardless of origin. Document which layer owns each control so there is no ambiguity. |
+
+---
+
+## Decision Framework: Choosing Your Landing Zone Implementation
+
+The three cloud-native Landing Zone options -- AWS Control Tower, Azure Landing Zones, and GCP Organization with Project Factory -- are not interchangeable. Your choice depends on your organization's existing cloud commitments, operational maturity, and governance requirements. The decision matrix below maps the key tradeoffs.
+
+| Factor | AWS Control Tower | Azure Landing Zones (CAF) | GCP Organization + Project Factory |
+|:---|:---|:---|:---|
+| **Setup complexity** | Medium -- Control Tower automates the initial Landing Zone creation but AFT requires Terraform expertise for account vending | Medium -- Bicep or Terraform modules available through the Cloud Adoption Framework reference implementations, but management group design requires upfront architecture decisions | Low to Medium -- Project Factory Terraform module is well-documented and Shared VPC simplifies networking, but Organization Policy Service requires understanding of constraint types |
+| **Guardrail flexibility** | High -- SCPs for preventive, Config rules for detective, CloudFormation Hooks for proactive, covering all three stages of the resource lifecycle | High -- Azure Policy supports Deny, Audit, DeployIfNotExists, and Modify effects with parameterized initiatives that compose dozens of policies into a single assignment | High -- Boolean and list constraints cover common governance scenarios, and custom CEL constraints allow organization-specific rules, though the constraint authoring experience is more programmatic than Azure's GUI-based policy authoring |
+| **Kubernetes integration maturity** | High -- Access Entries for IAM-to-RBAC mapping, EKS add-on management through the vending pipeline, VPC CNI integration with IPAM | Very High -- Native Entra ID to AKS RBAC without an intermediary ConfigMap, Azure Policy for AKS at the management group level, Defender for Containers integrated into the compliance dashboard | High -- Workload Identity Federation for service account to GCP IAM mapping, GKE Config Sync for policy, but fleet management requires GKE Fleets as a separate service |
+| **Network model** | Hub-and-spoke via Transit Gateway with explicit route tables and per-attachment billing | Hub-and-spoke via Virtual WAN with automated route propagation and hub-scale-unit billing | Shared VPC with centralized subnets and Firewall rules in the host project -- simpler to operate but larger blast radius per host project |
+| **Best for** | Organizations already on AWS with Terraform expertise and a need for granular network segmentation between accounts | Organizations on Microsoft 365/Entra ID that want the tightest Kubernetes-identity integration available and prefer managed hub-and-spoke networking | Organizations that value operational simplicity over granular segmentation and want the least per-account overhead of the three clouds |
+| **Cost profile** | Per-account baseline: Control Tower has no additional charge -- you pay for the underlying services it orchestrates (CloudTrail organization trail, AWS Config recorder per account per region, Service Catalog for Account Factory). Transit Gateway: per attachment per hour + per GB processed. | Per-subscription baseline: Azure Policy evaluation (included at no additional cost for Azure commercial cloud) + Log Analytics ingestion costs (the primary variable at scale) + Microsoft Defender for Cloud per-resource pricing. No per-peering charge for VNet peering within the same region. | Per-project baseline: No organization-level management fee. Shared VPC eliminates per-project networking costs. The primary cost driver is log storage in Cloud Logging buckets and Security Command Center tier (Standard vs Premium). |
+
+### Decision Flowchart
+
+```mermaid
+flowchart TD
+    Start([Start: Choose Landing Zone]) --> Cloud{"Which cloud is your<br/>primary platform?"}
+
+    Cloud -->|AWS| AWSK8s{"Heavy Kubernetes<br/>adoption planned?"}
+    AWSK8s -->|Yes| ControlTower["Use AWS Control Tower + AFT<br/>+ EKS baseline customizations"]
+    AWSK8s -->|No| AWSOrg["Use AWS Organizations<br/>+ custom Terraform modules"]
+
+    Cloud -->|Azure| Entra{"Already using<br/>Microsoft 365 / Entra?"}
+    Entra -->|Yes| AzureLZ["Use Azure Landing Zones (CAF)<br/>+ AKS with Entra RBAC"]
+    Entra -->|No| AzureCustom["Use custom management group<br/>hierarchy + Bicep modules"]
+
+    Cloud -->|GCP| GCPShared{"Comfortable with<br/>Shared VPC model?"}
+    GCPShared -->|Yes| ProjectFactory["Use Project Factory +<br/>Shared VPC + Org Policies"]
+    GCPShared -->|No| GCPPerProject["Use per-project VPCs with<br/>VPC Peering (more overhead<br/>but per-team isolation)"]
+
+    Cloud -->|Multi-cloud| MultiCloud["Consider vendor-neutral<br/>approach: Cluster API +<br/>Crossplane + Argo CD"]
+
+    ControlTower --> Scale{"Expecting >50 accounts<br/>within 12 months?"}
+    Scale -->|Yes| FullLZ["Full Landing Zone:<br/>Transit Gateway + AFT +<br/>automated decommissioning"]
+    Scale -->|No| LiteLZ["Lite Landing Zone:<br/>Control Tower defaults +<br/>core guardrails only"]
+
+    AzureLZ --> AzureScale{"Expecting >50 subscriptions<br/>within 12 months?"}
+    AzureScale -->|Yes| FullAzure["Full CAF: Virtual WAN +<br/>Azure Policy initiatives +<br/>automated subscription vending"]
+    AzureScale -->|No| LiteAzure["Lite CAF: management groups +<br/>core Azure Policies + manual<br/>subscription creation"]
+```
+
+The flowchart captures the two critical decision points that determine your Landing Zone investment level: your primary cloud platform and your expected scale within the next year. Organizations building on a single cloud with fewer than 20 accounts can start with a lite Landing Zone -- the cloud-native defaults plus core guardrails -- and graduate to a full Landing Zone as account count grows. Organizations targeting multi-cloud from day one face a harder choice: either maintain separate Landing Zones per cloud (higher operational cost, deeper integration per cloud) or invest in a vendor-neutral abstraction layer via Cluster API and Crossplane (lower per-cloud overhead, shallower cloud feature integration). The vendor-neutral approach is covered in depth in Modules 10.5 (Fleet Management) and 10.6 (Cluster API) -- the Landing Zone decision here determines what those fleet management tools will manage.
+
+---
+
+## The Cost of Landing Zones at Enterprise Scale
+
+Running a Landing Zone is not free, and the costs scale non-linearly with account count in ways that catch platform teams by surprise. A clear understanding of the cost model lets you design the Landing Zone to minimize the expensive dimensions.
+
+**The per-account baseline** is the fixed cost every new account adds regardless of workload. On AWS, this includes the CloudTrail organization trail (one copy of every management event across all accounts, stored in a central S3 bucket) and AWS Config recorder evaluations (one evaluation per resource per rule per account). AWS Control Tower itself is provided at no additional charge; per-account baseline cost is driven by those underlying orchestration services (CloudTrail, Config, Service Catalog for Account Factory -- verify component pricing at [aws.amazon.com/controltower/pricing](https://aws.amazon.com/controltower/pricing/)). At 10 accounts the baseline is noise-level. At 200 accounts, CloudTrail alone can generate terabytes of log data monthly, and the S3 storage cost for the organization trail becomes a material line item. The optimization lever is log lifecycle management: transition CloudTrail logs to S3 Infrequent Access after 30 days and to Glacier after 90 days, and set aggressive retention policies on Config snapshots (you do not need 7 years of Config history for sandbox accounts).
+
+**Cross-account egress** is the hidden cost that scales with account count squared. In a hub-and-spoke Transit Gateway topology, every byte flowing from a spoke VPC to the shared services hub (container images from the central registry, CI/CD artifacts, DNS queries) incurs Transit Gateway data processing charges. In a 100-account organization, the aggregate data processing charges can exceed the compute cost of the workloads themselves if the network topology is not designed for locality -- for example, routing all CI/CD traffic through a single-region hub when build agents are distributed globally. The optimization lever is regional hubs: deploy a Transit Gateway (or Virtual WAN hub, or Shared VPC host project) in each region where you have significant workload presence, and constrain spoke-to-hub traffic to stay within the region wherever possible.
+
+**Idle fleet capacity** is the cost of over-provisioned management infrastructure. The shared services account often runs CI/CD runners, container registries, and monitoring infrastructure that must be sized for peak load. At small scale, over-provisioning is cheap. At enterprise scale, a monitoring stack sized for 500 clusters but currently serving 120 is burning money. The optimization lever is elastic scaling: use spot instances for CI/CD runners, scale monitoring components (Thanos receivers, Grafana instances) based on active time-series count rather than cluster count, and right-size the shared services fleet quarterly based on actual utilization data rather than projected growth.
+
+**Governance drift and rework** is the cost that does not appear on a cloud bill but dominates total cost of ownership. Every hour an engineer spends manually remediating a non-compliant resource that a guardrail should have blocked is an hour of platform engineering capacity lost. At 200 accounts with weekly drift findings, even a 15-minute-per-finding remediation workflow consumes 50 engineering hours per month -- more than a full-time engineer. The optimization lever is automated remediation: detective guardrails should feed directly into remediation runbooks (AWS Systems Manager Automation documents, Azure Policy DeployIfNotExists effects, GCP Recommender auto-applied fixes) for low-risk configuration items like missing tags or disabled logging, so engineer time is reserved for drift events that require human judgment.
 
 ---
 
@@ -638,11 +791,11 @@ spec:
 
 1. AWS Control Tower is built for governing large multi-account AWS environments, and AFT provides a Terraform-based workflow for automating account provisioning.
 
-2. Azure landing zone guidance has evolved over time, and the current approach is more opinionated about common platform decisions than earlier guidance.
+2. Azure landing zone guidance has evolved over time, and the current Cloud Adoption Framework approach is more opinionated about common platform decisions than earlier guidance, including pre-built policy initiatives for PCI-DSS, HIPAA, and ISO 27001 that map compliance controls directly to Azure Policy definitions.
 
-3. The distinction between approval-heavy gates and automated guardrails is a useful way to think about cloud governance. Gates rely on human approval before proceeding, while guardrails encode policy in automation. In Kubernetes terms, automated policy enforcement acts like a guardrail, while manual manifest review acts like a gate.
+3. The distinction between approval-heavy gates and automated guardrails is a useful way to think about cloud governance. Gates rely on human approval before proceeding, while guardrails encode policy in automation. In Kubernetes terms, automated policy enforcement acts like a guardrail, while manual manifest review acts like a gate. A mature Landing Zone aims for guardrails on the critical path and gates only on the business-decision path.
 
-4. Backstage has a broad ecosystem around developer portals and software templates, which makes it a natural fit for self-service infrastructure patterns like account vending.
+4. Backstage has a broad ecosystem around developer portals and software templates, which makes it a natural fit for self-service infrastructure patterns like account vending. The software template engine generates production-ready Terraform or Bicep code from a form, eliminating the "I know what I need but I don't know the exact resource definitions" gap that blocks developer self-service.
 
 ---
 
@@ -655,9 +808,9 @@ spec:
 | **Manual account vending** | "We only create accounts once a quarter, automation is overkill." Then demand spikes and the queue grows to months. | Automate account vending from the start. Even if you provision one account per month, the automation ensures consistency and eliminates human error. |
 | **Guardrails too restrictive** | Security team designs guardrails without developer input. Developers cannot deploy basic workloads. Shadow IT begins. | Co-design guardrails with developers. Start permissive and tighten based on actual incidents. Monitor guardrail denials to find legitimate use cases being blocked. |
 | **No DNS strategy in the Landing Zone** | DNS is treated as an afterthought. Each account manages its own DNS, leading to naming conflicts and resolution failures across the hub-spoke network. | Design DNS delegation as part of the Landing Zone: a central Route53/Azure DNS/Cloud DNS zone with automatic subdomain delegation per account. |
-| **Ignoring IPAM from the start** | VPC CIDR ranges assigned ad-hoc. Over time, overlapping CIDRs can block shared networking and leave too little address space for Kubernetes pods and services. | Use a centralized IPAM approach. Assign CIDRs from a pool that accounts for node IPs, pod IPs, and service IPs per cluster. |
+| **Ignoring IPAM from the start** | VPC CIDR ranges assigned ad-hoc. Over time, overlapping CIDRs can block shared networking and leave too little address space for Kubernetes pods and services. | Use a centralized IPAM approach. Assign CIDRs from a pool that accounts for node IPs, pod IPs, and service IPs per cluster. Allocate at least a /17 per Kubernetes account to avoid IP exhaustion. |
 | **Backstage template without validation** | Templates allow any input. Teams create clusters with names that violate DNS conventions or sizes that exceed their budget approval. | Add JSON Schema validation to Backstage templates. Implement approval workflows for production environments. Connect cost estimation to the template wizard. |
-| **No Landing Zone lifecycle plan** | Landing Zone is deployed once and then rarely updated. Cloud providers release new capabilities, but the baseline never adopts them. | Treat the Landing Zone as a product with a roadmap. Review provider changes regularly and test baseline updates before rollout. |
+| **No Landing Zone lifecycle plan** | Landing Zone is deployed once and then rarely updated. Cloud providers release new capabilities, but the baseline never adopts them. Control Tower guardrails become stale as new services launch without corresponding SCP coverage. | Treat the Landing Zone as a product with a roadmap. Review provider changes regularly (quarterly at minimum) and test baseline updates before rollout. Automate drift detection so you know which accounts are out of compliance with the current baseline. Track a "baseline freshness" metric per account -- the delta between the account's applied configuration version and the current Landing Zone definition -- and set a target (e.g., 95% of accounts within 7 days of the latest baseline). |
 
 ---
 
@@ -690,7 +843,7 @@ The networking team failed to account for the fact that in cloud-native networki
 <details>
 <summary>Question 5: You are designing the identity architecture for a multi-cloud landing zone spanning AWS and Azure. The security mandate requires that a user's corporate identity directly maps to their Kubernetes namespace permissions. Contrast how you will implement this identity propagation mechanism in AWS EKS versus Azure AKS.</summary>
 
-In Azure AKS, the implementation is highly direct because AKS natively integrates with Azure AD (Entra ID). You can directly reference Azure AD Group Object IDs inside your Kubernetes `RoleBinding` manifests, allowing AKS to natively validate the Azure AD tokens passed by developers. In contrast, AWS EKS requires an intermediary translation layer to bridge AWS IAM and Kubernetes RBAC. You must configure EKS Access Entries (or the legacy aws-auth ConfigMap) to explicitly map an AWS IAM Role ARN to a Kubernetes username and group. Therefore, in Azure the identity flows seamlessly from tenant to cluster, whereas AWS requires your vending pipeline to explicitly build and maintain mapping configurations.
+In Azure AKS, the implementation is highly direct because AKS natively integrates with Microsoft Entra ID. You can directly reference Microsoft Entra ID group Object IDs inside your Kubernetes `RoleBinding` manifests, allowing AKS to natively validate Entra ID tokens passed by developers. In contrast, AWS EKS requires an intermediary translation layer to bridge AWS IAM and Kubernetes RBAC. You must configure EKS Access Entries (or the legacy aws-auth ConfigMap) to explicitly map an AWS IAM Role ARN to a Kubernetes username and group. Therefore, in Azure the identity flows seamlessly from tenant to cluster, whereas AWS requires your vending pipeline to explicitly build and maintain mapping configurations.
 </details>
 
 <details>
@@ -703,6 +856,12 @@ The failure occurred because the Landing Zone was designed without accommodating
 <summary>Question 7: A junior developer uses the Backstage portal to request a 100-node production Kubernetes cluster with expensive GPU instances, intended to process a massive new data pipeline. As the platform architect, how should you design the account vending workflow to handle this specific request safely while still maintaining automated self-service?</summary>
 
 The workflow should process this request using an automated business approval gate rather than blocking it for a manual infrastructure code review. Because the Backstage template generates standardized, pre-approved infrastructure code with built-in guardrails, the technical correctness of the cluster is already guaranteed. However, because this request targets a production environment and incurs massive cost, the workflow should pause and automatically route an approval request to the team's cost center owner and the security lead. Once those stakeholders approve the business case and budget, the CI/CD pipeline should resume and automatically provision the cluster without any human engineer needing to touch the provisioning tools.
+</details>
+
+<details>
+<summary>Question 8: Your organization has 80 AWS accounts provisioned through Control Tower. The security team publishes a new mandatory SCP that denies the creation of unencrypted EBS volumes, effective immediately for all accounts. Two weeks later, a developer reports that their Terraform pipeline has been failing for days because it tries to create a test volume without encryption. The SCP correctly blocks it, but the developer never received notice that the guardrail changed. What Landing Zone operational practice is missing, and how do you fix it?</summary>
+
+The missing practice is a baseline update communication and progressive rollout workflow. When a new guardrail is added to the Landing Zone, the change should first be applied to non-production OUs with a notification sent to all team leads explaining what the guardrail does and what configuration changes are required to comply. After a defined notice period (typically 1-2 weeks), the guardrail should be applied to production OUs. During this notice period, detective guardrails (Config rules in audit mode) should run against all accounts to surface resources that would be blocked by the new preventive guardrail, giving teams a concrete list of what to fix before enforcement begins. The fix also requires a mechanism for guardrail versioning: each account should have a visible "guardrail profile version" label that developers can check to see which baseline is active, and a changelog published alongside each Landing Zone update that documents every guardrail change in plain language the application teams can understand.
 </details>
 
 ---
@@ -728,7 +887,7 @@ flowchart TD
             S3["3. Deploy workload cluster (kind-in-kind)"]
             S4["4. Install baseline (monitoring, policy)"]
             S5["5. Register in catalog"]
-            
+
             S1 --> S2 --> S3 --> S4 --> S5
         end
     end
@@ -1020,7 +1179,7 @@ chmod +x /tmp/vend-account.sh
 
 # Verify the vended accounts
 kubectl get namespaces -l managed-by=landing-zone
-kubectl get resourcequota -A -l managed-by!=null 2>/dev/null || kubectl get resourcequota -n alpha-production
+kubectl get resourcequota -A -l managed-by=landing-zone 2>/dev/null || kubectl get resourcequota -n alpha-production
 kubectl get networkpolicy -n alpha-production
 ```
 
@@ -1202,3 +1361,9 @@ With the Landing Zone foundation in place, it is time to go deeper into the poli
 - [Backstage](https://github.com/backstage/backstage) — Official project repository describing Backstage's origins and current CNCF-hosted status.
 - [What Is AWS Control Tower?](https://docs.aws.amazon.com/controltower/latest/userguide/what-is-control-tower.html) — Authoritative overview of AWS Control Tower as a landing-zone and governance service.
 - [What is an Azure landing zone?](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/) — Microsoft's reference guidance for Azure landing-zone architecture and operating model.
+- [AWS Transit Gateway](https://docs.aws.amazon.com/vpc/latest/tgw/what-is-transit-gateway.html) — Reference documentation for Transit Gateway architecture, route tables, attachments, and scaling limits.
+- [Azure Virtual WAN](https://learn.microsoft.com/en-us/azure/virtual-wan/virtual-wan-about) — Microsoft's managed hub-and-spoke networking service for Azure Landing Zones.
+- [GCP Shared VPC overview](https://cloud.google.com/vpc/docs/shared-vpc) — Google's documentation on Shared VPC architecture, host and service project configuration, and IAM roles for network administration.
+- [AWS Organizations SCP syntax](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_syntax.html) — Reference for Service Control Policy structure including condition keys, operators, and best practices.
+- [GCP Organization Policy constraints](https://cloud.google.com/resource-manager/docs/organization-policy/understanding-constraints) — Detailed explanation of boolean constraints, list constraints, and the Organization Policy Service enforcement model.
+- [Azure Policy definition structure](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure) — Reference for Azure Policy definition structure including effects, parameters, and policy rules.
