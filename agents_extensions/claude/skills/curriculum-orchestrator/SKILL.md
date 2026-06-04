@@ -69,22 +69,24 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 - Build green (`npm run build`, ~38s, 0 warnings).
 - For `.github/workflows/**` changes: `uvx zizmor --offline --strict-collection .github/` ([[.claude/rules/github-actions-security]]).
 
-## Agent roster — 2026-05-24 snapshot
+## Agent roster — activity matrix (2026-06-04)
 
-> **2026-05-31 — Cursor upgraded to Pro+ (3×).** Cursor is now the cheapest marginal capacity → make it the high-volume workhorse (bug-fix, cross-family review of codex/claude-authored, edits, **co-primary T0 author** paired with codex R1). Reserve codex's weekly cap for quality-critical authoring + reviewing cursor-authored work. **Stop routing to metered deepseek** — move it to cursor. Subscription-priority: cursor(3×) > codex > agy > gemini-cli > claude; avoid metered hermes/opencode/qwen/deepseek unless only they fit (hermes = x.com fetch only). `cursor --model auto`. See [[feedback_cursor_proplus_3x_roster]].
+> **The full Activity × lane matrix lives in [[dispatch-router]] — consult it before EVERY dispatch.** Route by ACTIVITY (write / code / review / research / mechanical), not just review. Condensed role view below.
 
-| Role | Primary | Fallback | Notes |
+> **What changed (2026-06-04, session 100):** agy `--model` works (#1780) → agy is a Gemini-3.1-Pro-High content/reviewer lane (re-prove write first); cursor is `auto`/`composer-2.5` ONLY (review default fixed off gpt-5.5, #1782); grok via hermes `--provider xai-oauth` (#1783) — grok-4.20-reasoning (content) + grok-build-0.1 (code) validated; **deepseek is dirt-cheap → use freely** as the off-seat cross-family reviewer (NOT avoided). opus headless = the only metered-after-2026-06-15 lane → ≤1–2 hardest reviews/wave.
+
+| Activity | Primary | Cross-family reviewer(s) / fallback | Notes |
 |---|---|---|---|
-| T0 content author (codex cap healthy) | **codex gpt-5.5** | composer-2.5 (cursor), deepseek-v4-pro | Quality-best lane: codex stronger on factual/version/runnability accuracy. Session 52 cursor-authored tooling/api/docs cohort measured 4/7 (57%) first-pass NEEDS_CHANGES — proxy signal, not curriculum-T0 sample. See [[curriculum-writer]]. |
-| T0 content author (codex cap thin / throttle) | composer-2.5 (cursor-agent CLI OR cursor IDE) | deepseek-v4-pro | Verifier-pass ≠ runnability — always pair with codex R1 ([[feedback_composer_2_5_viable_for_t0_content]]). High first-pass NEEDS_CHANGES rate, but fix-pass is reliable. |
-| Bug fixer | composer-2.5 (cursor-agent CLI OR cursor IDE) | codex | Cursor proved 3/3 first-commit on session 51 bug PRs ([[feedback_cursor_is_strong_bug_fixer]]). Use cursor regardless of codex cap state. |
-| Cross-family reviewer of CLAUDE-authored | composer-2.5 (`dispatch_smart review --agent cursor --model composer-2.5`) | codex (fallback) | Decision Card C 2026-05-24 |
-| Cross-family reviewer of COMPOSER-2.5-authored | codex (gpt-5.5, danger mode, worktree) | gemini-3.1-pro-preview | [[feedback_codex_review_danger_mode]] |
-| Cross-family reviewer of CODEX-authored | composer-2.5 OR gemini-3.1-pro-preview OR agy→Claude | claude headless | Mix to avoid OAuth burst |
-| LLM judge / sweep edit | sonnet via `dispatch_smart edit` | — | Throttle window: route review/edit to codex/agy/gemini ([[feedback_claude_tier_discipline_opus_is_constrained]]) |
-| Architecture / consult | codex gpt-5.5 | agy (Claude-Opus tier) | Consult codex before non-trivial decisions ([[feedback_consult_codex_on_decisions]]) |
-| Multi-agent deliberation | `scripts/ab discuss --with claude,codex,gemini` | — | High-leverage only, see [[.claude/rules/decision-card]] |
-| External primary source fetch | `mcp__claude-in-chrome__*` | hermes (grok-4.3 for x.com only) | Browser BEFORE codex writer brief ([[feedback_chrome_for_primary_source_fetch]]) |
+| Curriculum content — WRITE | cursor `--model auto` ‖ codex gpt-5.5 (quality-critical) | opus(≤1/wave) + agy + gemini + deepseek + grok-4.20-reasoning (pick ≥1 diff family) | ≤3 concurrent authors; codex content fixes via `draft`+gpt-5.5+`--timeout 3600` |
+| Curriculum content — REVIEW | — | opus / cursor / agy / gemini / deepseek / grok-4.20-reasoning | mix ≥2 families, ≤2/OAuth, ground-check ALL |
+| Code / tooling — WRITE & FIX | cursor `--model auto` (strongest fixer) | codex (danger+worktree) / opus / grok-build-0.1 / deepseek | [[feedback_cursor_is_strong_bug_fixer]]; feed grok-build COMPLETE diffs |
+| Code / tooling — REVIEW | — | codex (danger+worktree) / opus (best code-correctness) / grok-build-0.1 / deepseek | cross-family to author |
+| Code-heavy MODULE content | codex gpt-5.5 | opus (route ≥1 here) + grok-build-0.1 + deepseek | brief: build-against-pinned-version ([[feedback_code_heavy_review_buildability]]) |
+| Research / architecture / decision | codex (architect) + opus | `ab discuss --with claude,codex,gemini` ([[.claude/rules/decision-card]]) | consult codex on non-trivial scope ([[feedback_consult_codex_on_decisions]]) |
+| Mechanical / deterministic | cursor or codex (cheap tier) | self-verify | gate/link fixes, batched edits |
+| External primary-source fetch | `mcp__claude-in-chrome__*` | hermes grok-4.3 (x.com only) | Browser BEFORE writer brief ([[feedback_chrome_for_primary_source_fetch]]) |
+
+**Cross-family map:** OpenAI=codex · Anthropic=opus · Google=agy+gemini · DeepSeek=deepseek · xAI=cursor(composer)+grok (cursor==grok-composer, can't co-review; grok-4.x is a distinct line).
 
 **During Anthropic throttle window** (2026-05-23/24 instance, recurs):
 - CUT sonnet headless (review/edit/draft/judge1) to preserve shared cap for opus orchestrator.
