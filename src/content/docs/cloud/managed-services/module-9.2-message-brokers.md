@@ -10,7 +10,7 @@ sidebar:
 
 After completing this module, you will be able to:
 
-- **Configure Kubernetes workloads to consume from managed message brokers (Amazon MQ, Cloud Pub/Sub, Azure Service Bus)**
+- **Configure Kubernetes workloads to consume from managed message brokers (SQS/SNS, Cloud Pub/Sub, Azure Service Bus)**
 - **Implement event-driven autoscaling using KEDA with message queue depth as the scaling trigger**
 - **Deploy dead-letter queue patterns and retry logic for reliable message processing in Kubernetes applications**
 - **Compare managed message brokers across clouds and evaluate when to use self-hosted (RabbitMQ, NATS) alternatives on Kubernetes**
@@ -30,6 +30,30 @@ This module teaches you how to integrate managed message brokers -- SQS/SNS, Goo
 ## Messaging Fundamentals for Kubernetes Engineers
 
 Before diving into cloud services, let's establish the core messaging patterns that every integration uses.
+
+### The Three Messaging Shapes
+
+The first design choice is not "which cloud service should we use?" It is "what shape of communication does this workload need?" Managed messaging products overlap heavily in marketing names, but production systems usually need one of three shapes: a point-to-point queue, a publish-subscribe fan-out bus, or a durable log that can be replayed by independent consumers.
+
+A point-to-point queue is a work distributor. One message represents one unit of work, and one consumer instance should complete it. If ten Kubernetes pods poll the same SQS queue, Service Bus queue, or Pub/Sub subscription, they are not all supposed to see every message; they are competing to share the workload. This is the shape for order processing, image conversion, email sending, fraud review, and background tasks where the business wants completion rather than broadcast.
+
+A publish-subscribe system is an announcement channel. One producer publishes an event, and several independent consumers each need their own copy. AWS usually models that with SNS fan-out to SQS queues, EventBridge rules to targets, or SNS FIFO when ordered fan-out is required. Google Pub/Sub models fan-out directly with multiple subscriptions on one topic. Azure Service Bus uses topics and subscriptions for brokered pub/sub, while Event Grid handles event notifications to HTTP, Azure Functions, Service Bus, and other targets.
+
+A durable log or stream is different from both. Messages are appended to ordered partitions, retained for a configured time, and consumed by consumer groups that maintain offsets. Apache Kafka, Amazon MSK, Amazon Kinesis Data Streams, Google Pub/Sub used as a high-throughput event stream, and Azure Event Hubs all fit this mental model to varying degrees. This shape is useful when consumers need replay, windowed analytics, or independent progress through the same ordered history.
+
+Kubernetes does not remove those distinctions. A Deployment can poll a queue, subscribe to a topic, or run Kafka consumers, but the pod lifecycle adds new failure modes. Pods can be rescheduled while holding a message lease, rollouts can double the number of consumers for a short period, and autoscaling can amplify a backlog into sudden pressure on a downstream database. The broker gives you decoupling; Kubernetes decides how much compute attacks the backlog at any moment.
+
+AWS deliberately offers several products because each shape has a different operational contract. SQS is the simple queue for work distribution; SNS is the fan-out topic; EventBridge is an event bus with filtering, routing, retries, and many AWS service integrations; Amazon MQ is the managed broker for teams that need ActiveMQ or RabbitMQ protocols; MSK is managed Kafka; and Kinesis Data Streams is the AWS-native shard-based stream. Choosing among them is mostly about coupling, protocol, ordering, replay, and cost model.
+
+Google Cloud pushes most general messaging toward Pub/Sub, where a topic plus one subscription behaves like a queue and a topic plus many subscriptions behaves like fan-out. Pub/Sub Lite should now be treated as legacy migration material, not a new design target: Google's own documentation lists Pub/Sub Lite as deprecated with a June 30, 2026 turndown, and recommends migrating to Pub/Sub or Google Cloud Managed Service for Apache Kafka. That matters for architecture reviews because "reserved-capacity Pub/Sub Lite is cheaper" is no longer a safe forward-looking answer.
+
+Azure splits the same space into Service Bus, Event Grid, and Event Hubs. Service Bus is the enterprise broker for queues, topics, sessions, transactions, duplicate detection, and dead-lettering. Event Grid is the event distribution service for reactive notifications and CloudEvents-style routing. Event Hubs is the streaming ingestion service with partitions, consumer groups, retention, and Kafka-compatible endpoints for many Kafka clients. The names differ, but the design question remains queue, fan-out, or durable log.
+
+| Shape | AWS Fit | Google Cloud Fit | Azure Fit | Kubernetes Integration |
+|-------|---------|------------------|-----------|------------------------|
+| Point-to-point queue | SQS Standard or FIFO, Amazon MQ queue | Pub/Sub topic with one subscription | Service Bus queue | Deployment consumers, KEDA queue-depth scaler, workload identity |
+| Pub/sub fan-out | SNS to SQS, EventBridge rules, SNS FIFO | Pub/Sub topic with many subscriptions | Service Bus topic/subscriptions, Event Grid | One Deployment per subscription, independent DLQs, per-consumer scaling |
+| Durable log or stream | MSK, Kinesis Data Streams | Pub/Sub for event streams, Managed Service for Apache Kafka | Event Hubs, Event Hubs Kafka endpoint | Stateful consumer groups, KEDA Kafka/Event Hubs lag scalers, offset checkpoints |
 
 ### Point-to-Point vs Publish-Subscribe
 
@@ -58,6 +82,24 @@ graph TD
 | **Exactly-once** | Message delivered exactly 1 time | Higher latency, complexity | Kafka transactions, Pub/Sub with dedup |
 
 Most managed brokers provide **at-least-once** delivery by default. This means your consumer code must be **idempotent** -- processing the same message twice should produce the same result as processing it once.
+
+At-least-once is not a provider weakness; it is the normal contract for reliable distributed messaging. A broker can safely redeliver a message when it cannot prove that the previous consumer finished and committed all side effects. In Kubernetes, that uncertainty appears whenever a pod is killed during a rollout, a node loses network, a process crashes after writing to a database but before acknowledging the message, or an HTTP client times out while the broker may still process the acknowledgement.
+
+AWS SQS Standard queues give very high throughput and at-least-once delivery, but they do not promise strict ordering. SQS FIFO queues add ordering by `MessageGroupId` and deduplication through `MessageDeduplicationId` or content-based deduplication; AWS documents a 5-minute deduplication interval for duplicate suppression. That is powerful, but it is not a license to write non-idempotent consumers, because duplicate business actions can still come from producer retries with different IDs, downstream write retries, manual DLQ redrive, or a consumer bug.
+
+Google Pub/Sub defaults to at-least-once delivery, and a subscription is the unit that controls delivery state. A topic does not remember that "the inventory service" consumed a message; the inventory subscription does. Pub/Sub's exactly-once feature is more precise than a marketing slogan: Google documents it for pull subscriptions, within a cloud region, with successful acknowledgements preventing later redelivery. Your application still needs durable progress tracking because acknowledgement can fail, publisher-side retries can create separate publishes, and multi-region subscriber placement can weaken the guarantee.
+
+Azure Service Bus has a different vocabulary, but the same operational shape. A receiver usually uses peek-lock mode: it locks a message, processes it, and completes it when finished. If the lock expires or the receiver abandons the message, delivery count increases and the message can be retried until `MaxDeliveryCount` sends it to the dead-letter queue. Sessions add ordered processing for related message streams, while duplicate detection suppresses repeated sends with the same message ID during a configured detection window.
+
+Kafka-family systems move the guarantee boundary again. Kafka does not "delete" a message when a consumer finishes; it stores records in partitions and consumers commit offsets. Transactions and idempotent producers can provide exactly-once processing semantics when producers, consumers, and sinks participate correctly, but a Kubernetes consumer that writes to an ordinary database still needs an idempotency key or transactional outbox pattern. The broker can protect the log; it cannot automatically make every external side effect atomic.
+
+This is why message processing code should separate three facts: message receipt, business side effect, and acknowledgement. Receipt means the pod has a leased opportunity to work. The business side effect is the database write, API call, file upload, or notification the system actually cares about. The acknowledgement tells the broker that the message no longer needs delivery. If those three steps are blurred together, a crash can create either lost work or duplicate work.
+
+The practical safety pattern is to choose a stable idempotency key before the first consumer ships. For an order event, that might be `order_id` plus event type; for a payment command, it might be a gateway-provided idempotency key; for a telemetry event, it might be a producer ID plus sequence number. Store that key where the side effect happens, not only in memory inside the pod, because a restarted pod will not remember what the previous pod attempted.
+
+Dead-letter queues are part of the delivery guarantee, not an optional cleanup bin. AWS SQS redrive policy uses `maxReceiveCount`; Pub/Sub dead-letter topics use maximum delivery attempts; Azure Service Bus moves messages after maximum delivery count or explicit dead-letter operations. The DLQ gives operators a place to inspect poison messages without allowing one bad payload to consume every retry slot forever.
+
+The cost of stronger guarantees is usually paid in throughput and coordination. Ordering means fewer independent lanes: one SQS FIFO message group, one Pub/Sub ordering key, one Service Bus session, or one Kafka partition can only advance as fast as its slowest ordered sequence allows. Exactly-once-like features add acknowledgement tracking or transaction coordination. Use them when the business meaning requires them, not because the phrase sounds safer in an architecture diagram.
 
 ```python
 # BAD: Not idempotent -- double processing creates duplicate charges
@@ -101,6 +143,34 @@ When should you run your own broker (like RabbitMQ, Apache Kafka, or NATS) on Ku
 
 > **Stop and think**: Your company mandates that no customer PII (Personally Identifiable Information) can ever leave the physical boundary of your on-premises data center. Can you use AWS SQS for processing user registration events in this environment?
 > *Answer*: No. Managed cloud brokers like AWS SQS operate outside of your cluster on cloud provider infrastructure. Sending PII to SQS would violate the data locality mandate because the data leaves your physical data center. In this strict air-gapped or compliance-heavy scenario, you must use a self-hosted broker like RabbitMQ or NATS deployed directly within your local Kubernetes cluster.
+
+### Provider Fit by Workload
+
+For simple asynchronous work on AWS, start with SQS. It is pull-based, cheap to operate at low and moderate volume, easy to scale with KEDA, and does not force you to size broker nodes or partitions. Add SNS when one event must reach several queues, and add EventBridge when the event needs routing rules, SaaS or AWS service integrations, cross-account event buses, or target retry policies. Reach for Amazon MQ when application compatibility depends on AMQP, MQTT, STOMP, OpenWire, ActiveMQ, or RabbitMQ behavior.
+
+MSK and Kinesis are not "better SQS"; they solve a different problem. MSK is for Kafka applications that need partitioned logs, consumer groups, Kafka APIs, Connect, Streams, or ecosystem compatibility. Kinesis Data Streams is for shard-based AWS-native streaming where producers and consumers coordinate through partition keys and sequence numbers. Both services are good fits when replay and ordered history matter, but they add capacity planning that a simple queue hides.
+
+On Google Cloud, Pub/Sub is the default answer for most Kubernetes eventing unless you have a strong reason to use Kafka. A topic plus one subscription behaves like a work queue, while a topic plus many subscriptions creates fan-out. Because each subscription tracks its own backlog and acknowledgement state, separate Kubernetes Deployments can scale independently from the same topic. That is the cleanest way to let billing, inventory, analytics, and search indexing all react to `OrderCreated` without competing against each other.
+
+Pub/Sub Lite deserves special handling in legacy reviews. Before deprecation, it was attractive when teams wanted reserved capacity and lower predictable cost for very high, steady throughput. In 2026 curriculum work, that should be framed as a migration topic: identify any remaining Lite topics, decide whether standard Pub/Sub or managed Kafka is the target, and avoid teaching new designs that depend on a service scheduled for turndown. That single fact changes the decision matrix for Google messaging.
+
+Azure Service Bus is the strongest Azure fit for command-like messages with business value. Queues handle point-to-point work, topics and subscriptions handle fan-out, sessions preserve ordered processing for related streams, and duplicate detection helps suppress repeated sends during a configured window. These features make it a good match for orders, approvals, billing workflows, and integration workloads where a lost or duplicate command has direct business consequences.
+
+Azure Event Grid is better for notifications that something happened and for reactive glue between services. It pushes events to subscribers, retries delivery, can dead-letter undelivered events, and integrates deeply with Azure services. It is not a durable work queue where a Kubernetes consumer group pulls messages at its own pace. If your pod fleet needs to drain a backlog gradually while protecting a database, Event Grid is usually the wrong primary broker.
+
+Azure Event Hubs is the streaming choice. It uses partitions and consumer groups, supports AMQP and Kafka-compatible clients, and prices capacity around throughput units, processing units, or dedicated capacity depending on tier. Use it for telemetry, clickstreams, logs, IoT events, and analytics ingestion where the business wants time-ordered event history rather than one-and-done work dispatch. KEDA can scale Event Hubs or Kafka consumers by lag, but partition count remains a real ceiling for parallelism.
+
+The vendor-neutral Kubernetes answer is to keep broker ownership outside the application Deployment. Producers should know the topic or queue contract, not the number of consumer pods. Consumers should know how to process one message safely, not how to drain an entire incident backlog. KEDA, workload identity, External Secrets Operator, the Secrets Store CSI Driver, and broker operators are platform tools around the workload; they should not hide the core contract between producer, broker, and consumer.
+
+Hypothetical scenario: a team moves an order pipeline from SQS to Kafka because "streams are more scalable." The first demo looks successful because every order event is now retained and replayable. Two months later, the operations team discovers that a single `customer_id` partition key puts the largest enterprise customer on one hot partition, KEDA cannot scale consumers past useful partition parallelism, and replaying one bug fix competes with live order processing. The better design would have asked whether replay was truly required before trading a simple queue for partition-management work.
+
+| Workload Need | Prefer This Shape | AWS Starting Point | Google Starting Point | Azure Starting Point |
+|---------------|------------------|--------------------|-----------------------|----------------------|
+| One worker should complete each task | Queue | SQS Standard or FIFO | Pub/Sub topic with one subscription | Service Bus queue |
+| Several services need independent copies | Pub/sub fan-out | SNS to SQS or EventBridge | Pub/Sub topic with multiple subscriptions | Service Bus topic or Event Grid |
+| Consumers need replayable history | Durable log/stream | MSK or Kinesis | Pub/Sub or managed Kafka | Event Hubs |
+| Existing app requires broker protocol | Managed broker | Amazon MQ | Managed Kafka or self-hosted broker | Service Bus AMQP or self-hosted broker |
+| Strict ordered workflow per entity | Ordered queue/session/log | SQS FIFO message groups | Pub/Sub ordering keys or Kafka partitions | Service Bus sessions or Event Hubs partitions |
 
 ### AWS SQS/SNS: The Workhorse
 
@@ -165,7 +235,7 @@ az servicebus queue create \
   --name order-processing \
   --max-delivery-count 3 \
   --default-message-time-to-live P14D \
-  --dead-lettering-on-message-expiration true
+  --enable-dead-lettering-on-message-expiration true
 ```
 
 ---
@@ -228,7 +298,7 @@ spec:
 
 ### IAM for Queue Access (IRSA / Workload Identity)
 
-Pods should avoid using static credentials to access message brokers whenever cloud-native workload identity is available. Use cloud-native workload identity.
+Pods should avoid static credentials when cloud-native workload identity is available.
 
 ```yaml
 # AWS: IRSA ServiceAccount
@@ -263,6 +333,27 @@ metadata:
   annotations:
     iam.gke.io/gcp-service-account: pubsub-consumer@my-project.iam.gserviceaccount.com
 ```
+
+```yaml
+# Azure: Entra Workload ID
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: servicebus-consumer
+  namespace: processing
+  annotations:
+    azure.workload.identity/client-id: <client-id>
+```
+
+On AKS, pair this ServiceAccount with a federated identity credential that trusts the cluster OIDC issuer and maps the Kubernetes service account to the Entra application (client) ID shown in the annotation.
+
+Cloud workload identity is the preferred credential boundary for message consumers. On EKS, IRSA and newer EKS Pod Identity patterns connect a Kubernetes ServiceAccount to AWS IAM permissions so pods can receive SQS, SNS, EventBridge, MQ, MSK, or Kinesis permissions without static access keys. On GKE, Workload Identity Federation for GKE lets Kubernetes service accounts receive IAM authorization for Pub/Sub and other Google APIs without service account key files. On AKS, Microsoft Entra Workload ID federates Kubernetes service account tokens with Entra identities for Service Bus, Event Hubs, Event Grid, Key Vault, and other Azure resources.
+
+Static broker credentials still appear in real systems, especially with Amazon MQ, RabbitMQ, Kafka SASL users, legacy AMQP clients, or third-party SaaS brokers. When you cannot use cloud-native workload identity directly, use External Secrets Operator or the Secrets Store CSI Driver to pull credentials from AWS Secrets Manager, Google Secret Manager, Azure Key Vault, Vault, or a similar external store. Avoid pasting connection strings into manifests, because a Git diff then becomes a credential distribution mechanism.
+
+Self-hosted brokers on Kubernetes should be managed through operators only when you accept the operational ownership. Kubernetes documents the operator pattern as a controller plus custom resources that automate application-specific operations. That fits RabbitMQ or Kafka when you need protocol control, private data locality, or specialized topology, but it also means your platform team owns upgrades, persistent volume behavior, backup, restore, partition recovery, and broker-specific alerts.
+
+Networking is part of broker integration, not an afterthought. Managed brokers often support private endpoints, VPC/VNet integration, security groups, firewall rules, or private service connect equivalents, and those choices determine whether consumer traffic leaves private network paths. A pod with perfect IAM permissions still fails if egress policies, DNS, TLS trust, or endpoint routing are wrong. Treat identity, network path, and broker authorization as one design review.
 
 ---
 
@@ -312,7 +403,6 @@ spec:
         queueURL: https://sqs.us-east-1.amazonaws.com/123456789/order-processing
         queueLength: "100"
         awsRegion: us-east-1
-        identityOwner: operator
 ---
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
@@ -321,10 +411,14 @@ metadata:
   namespace: processing
 spec:
   podIdentity:
-    provider: aws-eks
+    provider: aws
 ```
 
+For KEDA 2.13 and later, use `provider: aws` in `TriggerAuthentication` and omit the deprecated `identityOwner: operator` field from the scaler metadata.
+
 The `queueLength: "100"` setting means KEDA will scale to ensure each pod handles at most 100 messages. If there are 1,500 messages in the queue, KEDA scales to 15 pods.
+
+KEDA's SQS scaler treats "messages that need capacity" as more than only visible backlog. Current KEDA documentation describes the default calculation as visible messages plus in-flight messages, because in-flight SQS messages still represent work consuming pods. That is usually correct for batch processors, but it can over-scale a workload with long-running tasks if every pod holds a message for minutes. Tune `queueLength`, max replicas, and visibility timeout together rather than treating them as separate settings.
 
 ### KEDA ScaledObject for Pub/Sub
 
@@ -346,6 +440,8 @@ spec:
         mode: "SubscriptionSize"
         value: "50"
 ```
+
+KEDA deprecated the older `subscriptionSize` parameter in favor of `mode` + `value`; the GCP Pub/Sub scaler itself is supported. Treat this example as the shape of a scaler, then verify the `mode` and `value` fields against the KEDA version running in your cluster.
 
 ### KEDA ScaledObject for Azure Service Bus
 
@@ -370,6 +466,8 @@ spec:
         name: azure-servicebus-auth
 ```
 
+The Azure Service Bus scaler follows the same principle as SQS: choose the target message count per pod from measured service capacity, not guesswork. If one pod can safely process 20 payment commands per minute without exhausting database connections, a target of 50 active messages per pod may already be too aggressive. KEDA can create consumers quickly, but it cannot make the downstream dependency accept more writes.
+
 ### Scale-to-Zero Considerations
 
 KEDA can scale to zero (`minReplicaCount: 0`), which saves costs when queues are empty. But there is a latency cost: when the first message arrives, KEDA must detect it, scale the workload up, and wait for the application to become ready before processing begins.
@@ -386,6 +484,58 @@ KEDA can scale to zero (`minReplicaCount: 0`), which saves costs when queues are
 
 > **Stop and think**: You configure a KEDA ScaledObject for a latency-sensitive fraud detection API queue with `minReplicaCount: 0`. During a low-traffic night, the queue empties and pods scale to zero. Suddenly, a high-priority transaction is flagged for review and enters the queue. What is the customer's experience for this specific transaction?
 > *Answer*: The transaction will likely experience noticeable cold-start delay. KEDA must first detect the message, scale the Deployment from 0 to 1, and Kubernetes must start the application before the message is processed. For latency-sensitive paths, usually keep `minReplicaCount: 1`.
+
+### Throughput, Backpressure, and Cost Lens
+
+Throughput planning starts with the broker's concurrency model. SQS Standard queues support a very high, nearly unlimited number of API calls per second per action, which makes them forgiving for bursty queue workloads. SQS FIFO queues trade some of that freedom for ordering and deduplication; the default non-high-throughput FIFO limits are commonly taught as 300 API actions per second or 3,000 messages per second with batches of ten. High-throughput FIFO can go higher, but the exact quota is region-specific and should be verified before a design review.
+
+Pub/Sub hides more partition math from you, but it does not remove quotas or cost. Publishers and subscribers consume regional quota, message storage grows with retention and unacknowledged backlog, and exactly-once subscriptions add latency and quota considerations. Pub/Sub pricing is based on published, delivered, and stored bytes, with data transfer costs when throughput crosses zone or region boundaries. Batching small messages matters because many pricing and throughput systems have minimum billable units or per-request overhead.
+
+Service Bus and Event Hubs make capacity choices more visible. Service Bus Basic and Standard expose operation-based pricing and fixed operations-per-second limits, while Premium uses Messaging Units and removes some fixed Standard-tier limits. Event Hubs Standard uses throughput units, where one throughput unit provides a published ingress capacity measured in megabytes or events per second and all event hubs in the namespace share the purchased capacity. Event Hubs auto-inflate can scale TUs up, but Azure's documentation says it does not automatically scale them back down.
+
+Kafka and Event Hubs consumers scale by partitions, not by wishful thinking. If a topic has ten partitions, only ten consumers in one consumer group can actively read at the same time unless the implementation allows idle consumers. KEDA's Kafka scaler documentation reflects that reality by defaulting replica count to the number of relevant partitions, nonzero-lag partitions, and `maxReplicaCount`. Setting `maxReplicaCount: 200` on a ten-partition topic may look bold, but most of those pods will sit idle.
+
+Backpressure is the art of slowing down before the dependent system fails. A queue backlog is not automatically bad; it is the buffer doing its job. The real question is whether the queue's age, retry count, and DLQ rate remain inside the business objective. If the consumer pods scale faster than the database, payment processor, or search index can absorb work, the system converts a broker backlog into a dependency outage. A mature KEDA design caps replicas from downstream capacity tests, not from the highest queue depth seen in a dashboard.
+
+High-frequency polling is a hidden cost and load multiplier. SQS charges per API request, and every empty receive still consumes an API call. AWS recommends long polling with wait times up to 20 seconds because it reduces empty responses and false empty responses. The same principle applies beyond SQS: prefer push delivery, streaming pulls, batching, or broker-native long polling when supported. A fleet of idle pods polling a quiet queue every second can spend money and produce noise while doing no business work.
+
+Provisioned capacity has the opposite failure mode. MSK broker-hours, Event Hubs throughput units, Service Bus Premium Messaging Units, and self-hosted Kafka nodes cost money even when the queue is empty. That can be the right trade when traffic is steady, latency is tight, or throughput is predictable. It is wasteful when a workload runs once per night and spends the rest of the day at zero. Match the capacity model to the traffic curve, not to the product that feels most sophisticated.
+
+Replication and region choices can dominate the bill at moderate scale. Cross-region event routing, multi-region consumers, geo-replication, inter-region Pub/Sub delivery, and internet egress can all add charges beyond the broker's headline request or throughput price. A common surprise is a fan-out topic where one business event creates five delivered copies, each copy is retained for retry, and two copies cross a region boundary for analytics. The architecture is correct only if the cost of that fan-out is intentional.
+
+The cheapest reliable message is often the one you do not send. Avoid tiny chatty events when a batch would preserve the same business meaning. Avoid publishing full documents when a stable object-storage pointer and checksum are enough. Avoid fan-out to every team "just in case" when consumers cannot name a specific action they perform. Event-driven architecture should make coupling explicit; it should not turn every state change into a permanent tax on every downstream system.
+
+Kubernetes gives you several control knobs around those costs. `minReplicaCount` controls idle compute spend and cold-start latency. `pollingInterval` controls how quickly KEDA sees backlog changes and how often it calls cloud APIs. `cooldownPeriod` controls whether consumers flap during lumpy traffic. `maxReplicaCount` protects dependencies from a thundering herd. Pod resource requests define cluster capacity consumed during a backlog. None of those values should be copied from a tutorial into production without a load test.
+
+For Kafka or Event Hubs compatible streams, scale on consumer lag rather than CPU. CPU can be low while a consumer waits on downstream I/O, and CPU can be high while lag is already stable. Lag tells you how far behind the consumer group is from the head of the log. A useful target says, "one pod should be responsible for roughly N records of lag," then caps replicas at a value the downstream sink can survive.
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: order-stream-consumer-scaler
+  namespace: processing
+spec:
+  scaleTargetRef:
+    name: order-stream-consumer
+  minReplicaCount: 1
+  maxReplicaCount: 12
+  pollingInterval: 30
+  cooldownPeriod: 180
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: orders-kafka.kafka.svc:9092
+        consumerGroup: order-projector
+        topic: order-events
+        lagThreshold: "500"
+        activationLagThreshold: "50"
+        offsetResetPolicy: latest
+```
+
+This scaler says that one consumer pod should absorb about 500 records of lag, but it also refuses to create more than 12 replicas. If the topic only has eight partitions, a default KEDA Kafka configuration will not make more active consumers than partition ownership allows. That is the important stream lesson: capacity comes from partitions, consumer efficiency, and downstream throughput together, not from replica count alone.
+
+At moderate scale, a cost review should include five numbers. Count broker requests or billable operations, delivered bytes, retained backlog age, cross-zone or cross-region transfer, and idle provisioned capacity. Then connect those numbers to design knobs: batching, long polling, push delivery, retention, DLQ redrive velocity, partition count, replica caps, and per-consumer concurrency. That review usually finds cheaper reliability improvements than a service migration.
 
 ---
 
@@ -577,11 +727,87 @@ while True:
 
 ---
 
+## Patterns & Anti-Patterns
+
+Good messaging architectures make work ownership explicit. A producer owns the schema and meaning of the message, the broker owns durable delivery mechanics, the consumer owns idempotent side effects, and the platform owns safe scaling and credentials. Problems appear when one layer silently assumes another layer solved its part. A FIFO queue cannot fix a consumer that charges twice, and a perfect idempotency key cannot save a system that deletes messages before the database commit.
+
+The most reliable pattern is a dedicated queue or subscription per consumer capability. In AWS, that often means SNS fan-out to one SQS queue per downstream service. In Google Cloud, it means one Pub/Sub subscription per service. In Azure, it means one Service Bus subscription per service on a topic. Each consumer then gets independent backlog, retry policy, DLQ, KEDA scaler, alerting, and deployment cadence. One slow analytics consumer no longer blocks billing or inventory.
+
+Another proven pattern is "lease, process, commit, ack" with idempotency. The consumer receives or locks the message, performs the business write using a stable idempotency key, commits that write, and only then deletes or acknowledges the message. If the pod crashes before the acknowledgement, the broker may redeliver the message, but the idempotency record prevents duplicate business action. That pattern works across SQS visibility timeout, Pub/Sub ack deadlines, Service Bus locks, and Kafka offset commits.
+
+For streams, the mature pattern is lag-based autoscaling with partition-aware caps. KEDA can scale Kafka-compatible consumers from lag, but partition ownership limits useful concurrency. A design that pairs lag thresholds with `maxReplicaCount`, consumer batch size, database connection limits, and partition count behaves predictably during spikes. A design that simply says "scale to 100 pods when lag grows" often creates idle consumers or overloads the sink.
+
+| Pattern | When to Use | Why It Works | Scaling Consideration |
+|---------|-------------|--------------|-----------------------|
+| Dedicated queue or subscription per service | One event must feed independent services | Backlog, DLQ, retries, and deployment ownership stay separate | Scale each consumer from its own backlog rather than shared topic volume |
+| Idempotent consumer with ack-after-commit | Any at-least-once broker feeds business side effects | Redelivery becomes safe because duplicate work is recognized | Store idempotency state in the durable system that observes the side effect |
+| Fan-out topic plus per-service DLQ | Events must reach billing, inventory, analytics, and notifications | A poison message in one consumer does not block the others | Alert on each DLQ independently and throttle redrive by downstream capacity |
+| Lag-based stream consumers | Kafka, MSK, Event Hubs, or Kinesis-like workloads need replay | Consumer lag maps to stream progress better than CPU utilization | Partition count and sink capacity cap useful replicas |
+
+The queue-as-database anti-pattern is the most common failure mode. Teams leave business state only in a queue, assume retention is a database backup, and then discover that message expiry, DLQ moves, reprocessing, or purge operations erased the only copy of important state. Queues are excellent buffers and work distributors, but the durable system of record should be a database, object store, ledger, or event store designed for that role.
+
+Missing DLQs are usually a sign that the happy path was tested but failure was not. Developers often skip DLQs because they do not yet know what a poison message looks like, but that is exactly why the DLQ is needed. Without it, one schema mismatch can create endless retries, repeated pod crashes, and noisy alerts while healthy messages wait behind bad ones. A DLQ is not enough by itself; it needs monitoring, ownership, and a safe redrive procedure.
+
+Non-idempotent consumers are dangerous because they pass every local test. A single message enters the queue, one pod processes it, and the result looks correct. Production adds retries, rollout interruptions, duplicate publishes, network timeouts, DLQ replays, and partial downstream failures. If the consumer cannot recognize that it already processed `payment-123`, the broker will eventually expose the bug.
+
+Over-scaling from backlog is another trap. A queue depth of 100,000 messages looks like a compute problem, so a team raises `maxReplicaCount` from 20 to 200. The queue drains faster for a minute, then the database connection pool, third-party API quota, or search cluster collapses. The better answer is to scale up to the measured safe rate, preserve backlog as a buffer, and use age-of-oldest-message alerts to decide whether business objectives are at risk.
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+|--------------|-----------------|------------------------|--------------------|
+| Queue as database | Message expiry, purge, or redrive changes destroy business state | The queue already looks durable during development | Store authoritative state in a database or event store and use the queue for delivery |
+| No DLQ or unmonitored DLQ | Poison messages retry forever or disappear into an ignored side channel | Failure payloads feel unlikely before launch | Configure DLQ, alert on depth and age, and document redrive ownership |
+| Non-idempotent consumer | Redelivery creates duplicate charges, emails, shipments, or ledger rows | Tests cover one delivery, not crashes between commit and ack | Use durable idempotency keys and commit before ack/delete |
+| One shared queue for many business services | Competing consumers steal messages from each other instead of all seeing events | A queue seems simpler than fan-out topology | Use a topic with one queue or subscription per service |
+| Autoscaling without downstream budget | KEDA turns broker backlog into database or API overload | Replica count is easier to change than dependency capacity | Cap replicas from load tests and throttle DLQ redrive |
+| Ordering everything globally | Throughput collapses behind one ordered lane | "Ordered" sounds safer than per-entity ordering | Order by entity key, session, message group, or partition only where needed |
+
+Hypothetical scenario: an e-commerce team publishes every checkout event to one shared queue and lets billing, warehouse, and email pods all poll it. In testing, it appears to work because the first pod to receive each event happens to run the expected logic. In production, billing consumes some email events, warehouse misses some billing commands, and retries create inconsistent order state. The fix is not a bigger broker; it is changing the topology to fan-out with one durable subscription per service.
+
+## Decision Framework
+
+Choosing between queue, pub/sub, and stream is a business-semantics decision first, then a provider decision. Ask whether one consumer should complete the work, several consumers need independent copies, or future consumers must replay history. Then ask whether ordering matters globally, per entity, or not at all. Only after those answers are clear should the team compare SQS, Pub/Sub, Service Bus, Event Grid, Event Hubs, MSK, Kinesis, or managed Kafka.
+
+```mermaid
+flowchart TD
+    Start[New message-driven workload] --> OneWorker{Should one worker complete each item?}
+    OneWorker -- Yes --> OrderedQueue{Need strict order?}
+    OrderedQueue -- Yes --> FIFO[Ordered queue/session<br>SQS FIFO, Pub/Sub ordering key,<br>Service Bus session]
+    OrderedQueue -- No --> Queue[Standard queue/subscription<br>SQS Standard, Pub/Sub subscription,<br>Service Bus queue]
+    OneWorker -- No --> ManyCopies{Do multiple services need every event?}
+    ManyCopies -- Yes --> Replay{Need replayable event history?}
+    ManyCopies -- No --> Reconsider[Recheck the requirement<br>maybe direct API or database trigger]
+    Replay -- No --> Fanout[Fan-out pub/sub<br>SNS to SQS, Pub/Sub subscriptions,<br>Service Bus topic, Event Grid]
+    Replay -- Yes --> Stream[Durable log or stream<br>MSK, Kinesis, Pub/Sub stream pattern,<br>Event Hubs]
+    FIFO --> K8s[KEDA scaler, idempotent consumer,<br>DLQ, workload identity]
+    Queue --> K8s
+    Fanout --> K8s
+    Stream --> K8sStream[KEDA lag scaler,<br>partition-aware replica cap,<br>offset checkpointing]
+```
+
+Use a standard queue when the business wants work completion and can tolerate duplicate delivery with idempotent consumers. That is the default for background processing, image conversion, order fulfilment commands, and async API offload. On AWS, SQS Standard is usually first. On Google Cloud, Pub/Sub with one subscription gives the same consumption shape. On Azure, Service Bus queues fit when enterprise broker features matter, while Azure Storage Queue may fit simpler Azure-native work not covered deeply in this module.
+
+Use ordered queues, sessions, ordering keys, or partitions only when the order has a named business entity. "All payments globally must be ordered" is usually impossible or unnecessary. "All events for order `O-12345` must be processed in order" is realistic. AWS uses FIFO message groups, Pub/Sub uses ordering keys, Azure Service Bus uses sessions, and Kafka/Event Hubs use partition keys. Each of those choices creates lanes of serialization, so pick the key that preserves correctness without sacrificing unrelated parallelism.
+
+Use pub/sub fan-out when each consumer is a separate business capability. Billing, inventory, email, analytics, and search indexing should not steal messages from one another. Give each service its own subscription or queue and its own DLQ. This adds resources, but it buys fault isolation. The cost of several subscriptions is usually lower than the operational cost of guessing which service failed to receive which event.
+
+Use a durable log or stream when replay is a product requirement, not just an appealing feature. Streams are excellent for analytics, audit trails, event-sourced projections, CDC pipelines, IoT telemetry, and ML feature generation. They are not automatically better for simple task queues. If no team can name who will replay events, how far back they need to replay, and what downstream sink can survive the replay rate, a simple queue is probably the more honest design.
+
+| Decision Question | Queue Answer | Pub/Sub Answer | Stream Answer |
+|-------------------|--------------|----------------|---------------|
+| Who should receive one message? | Exactly one competing consumer | Every subscription gets a copy | Every consumer group can read the retained log |
+| How is progress tracked? | Delete, complete, or acknowledge after processing | Per-subscription acknowledgement state | Consumer-group offsets or checkpoints |
+| What scales consumers? | Queue depth and message age | Subscription backlog and age | Consumer lag and partition ownership |
+| What limits throughput? | API quotas, FIFO groups, consumer capacity | Regional quotas, ack behavior, subscription backlog | Partition count, broker capacity, sink throughput |
+| What does replay mean? | Usually DLQ redrive or re-enqueue | Seek/snapshot features or republish depending on service | Native retained log replay by offsets |
+| What costs spike? | Empty polling, request count, redrive storms | Delivered bytes, storage, cross-region delivery | Broker hours, throughput units, partitions, retained storage |
+
+The decision framework should end with a runbook test. Create a poison message and prove it lands in the DLQ. Kill a pod after the database commit but before the ack and prove idempotency prevents a duplicate side effect. Fill the queue with enough messages to trigger KEDA and prove the database survives the replica cap. Redrive the DLQ slowly and prove dashboards show the recovery. If those tests are missing, the design is still a diagram.
+
 ## Did You Know?
 
-1. **Amazon SQS is one of AWS's earliest services** -- it has been around since the early days of AWS and remains widely used for decoupled messaging workloads.
+1. **SQS retention is bounded but generous** — AWS documents message retention from 1 minute up to 14 days (`MessageRetentionPeriod`), matching the comparison table above.
 
-2. **Google Pub/Sub is designed for very high-scale messaging** across Google's infrastructure and is used for event-driven communication patterns where producers and consumers need to stay decoupled.
+2. **Pub/Sub default retention is shorter than many teams assume** — Google documents 7-day default subscription message retention, with topic retention configurable up to 31 days per quota documentation.
 
 3. **KEDA supports many event sources beyond cloud queues** -- message brokers, databases, metrics backends, schedules, and CI/CD systems can all drive autoscaling.
 
@@ -665,6 +891,7 @@ This exercise uses a local kind cluster with a simulated queue (Redis acting as 
 ```bash
 # Create kind cluster
 kind create cluster --name event-lab
+alias k=kubectl
 
 # Install KEDA
 helm repo add kedacore https://kedacore.github.io/charts
@@ -673,19 +900,50 @@ helm install keda kedacore/keda --namespace keda --create-namespace
 k wait --for=condition=ready pod -l app.kubernetes.io/name=keda-operator \
   --namespace keda --timeout=120s
 
-# Install Redis (simulating a message queue)
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm install redis bitnami/redis --namespace messaging --create-namespace \
-  --set architecture=standalone \
-  --set auth.password=lab-redis-pass \
-  --set master.persistence.enabled=false
-k wait --for=condition=ready pod -l app.kubernetes.io/name=redis \
+# Install Redis (simulating a message queue) — plain Deployment, not Bitnami chart
+k create namespace messaging --dry-run=client -o yaml | k apply -f -
+k apply -f - <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-master
+  namespace: messaging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7
+          args: ["--requirepass", "lab-redis-pass"]
+          ports:
+            - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: messaging
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+EOF
+k wait --for=condition=ready pod -l app=redis \
   --namespace messaging --timeout=120s
 ```
 
 ### Task 1: Deploy a Queue Consumer
 
-Create a Deployment that processes messages from a Redis list (simulating an SQS queue).
+Create a Deployment that processes messages from a Redis list, using Redis as a local stand-in for a cloud queue during the lab.
 
 <details>
 <summary>Solution</summary>
@@ -733,7 +991,7 @@ k apply -f /tmp/consumer.yaml
 
 ### Task 2: Configure KEDA ScaledObject for Redis
 
-Create a KEDA ScaledObject that scales the consumer based on Redis list length.
+Create a KEDA ScaledObject that scales the consumer from the Redis list length, mirroring the same backlog-driven pattern used with managed queues.
 
 <details>
 <summary>Solution</summary>
@@ -745,7 +1003,8 @@ metadata:
   name: redis-auth
   namespace: messaging
 stringData:
-  redis-url: redis://:lab-redis-pass@redis-master.messaging.svc:6379
+  redis-address: redis-master.messaging.svc:6379
+  redis-password: lab-redis-pass
 ---
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
@@ -756,7 +1015,10 @@ spec:
   secretTargetRef:
     - parameter: address
       name: redis-auth
-      key: redis-url
+      key: redis-address
+    - parameter: password
+      name: redis-auth
+      key: redis-password
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -786,7 +1048,7 @@ k apply -f /tmp/keda-scaledobject.yaml
 
 ### Task 3: Generate Load and Watch Scaling
 
-Push 200 messages into the queue and watch KEDA scale the consumer.
+Push 200 messages into the queue, then watch KEDA translate backlog into additional consumer pods while the list drains.
 
 <details>
 <summary>Solution</summary>
@@ -794,7 +1056,7 @@ Push 200 messages into the queue and watch KEDA scale the consumer.
 ```bash
 # Push 200 messages to the queue
 k run redis-producer --rm -it --image=redis:7 --namespace=messaging --restart=Never -- \
-  /bin/sh -c '
+  /bin/bash -c '
   for i in $(seq 1 200); do
     redis-cli -h redis-master -a lab-redis-pass LPUSH order-queue "{\"orderId\": \"order-$i\", \"amount\": $((RANDOM % 1000))}" > /dev/null 2>&1
   done
@@ -810,7 +1072,7 @@ k get pods -n messaging -l app=queue-consumer -w
 
 ### Task 4: Implement a Dead-Letter Queue Pattern
 
-Create a second Redis list as a DLQ and modify the consumer to move failed messages there.
+Create a second Redis list as a DLQ, then modify the consumer so repeated failures are quarantined instead of retried forever.
 
 <details>
 <summary>Solution</summary>
@@ -835,7 +1097,7 @@ spec:
         - name: consumer
           image: redis:7
           command:
-            - /bin/sh
+            - /bin/bash
             - -c
             - |
               RETRY_LIMIT=3
@@ -881,7 +1143,7 @@ k exec -n messaging deploy/queue-consumer-dlq -- \
 
 ### Task 5: Monitor DLQ with an Alert Consumer
 
-Deploy a monitoring pod that watches the DLQ length.
+Deploy a monitoring pod that watches DLQ length and prints an alert when failed messages exceed the configured threshold.
 
 <details>
 <summary>Solution</summary>
@@ -943,7 +1205,9 @@ kind delete cluster --name event-lab
 
 ---
 
-**Next Module**: [Module 9.3: Serverless Interoperability (Lambda / Cloud Functions / Knative)](../module-9.3-serverless/) -- Learn when to use serverless alongside Kubernetes, how to trigger cloud functions from K8s events, and how Knative brings the serverless model directly into your cluster.
+## Next Module
+
+[Module 9.3: Serverless Interoperability (Lambda / Cloud Functions / Knative)](../module-9.3-serverless/) -- Learn when to use serverless alongside Kubernetes, how to trigger cloud functions from K8s events, and how Knative brings the serverless model directly into your cluster.
 
 ## Sources
 
@@ -961,3 +1225,28 @@ kind delete cluster --name event-lab
 - [docs.aws.amazon.com: using messagegroupid property.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagegroupid-property.html) — AWS directly documents that strict ordering requires FIFO queues and that `MessageGroupId` defines ordered groups.
 - [Azure Service Bus queues, topics, and subscriptions](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-queues-topics-subscriptions) — It gives the cleanest vendor overview of queue vs pub/sub semantics in Azure Service Bus.
 - [KEDA upstream repository](https://github.com/kedacore/keda) — Use this as the allowlisted starting point for KEDA concepts while the primary docs host remains off-list.
+- [Amazon SQS message quotas](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html) — AWS documents Standard queue throughput behavior, FIFO throughput limits, batching effects, and message retention bounds.
+- [Amazon SQS long polling best practices](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/best-practices-setting-up-long-polling.html) — AWS explains why long polling reduces empty receives and lists the maximum wait time.
+- [Amazon SQS exactly-once processing for FIFO queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-exactly-once-processing.html) — AWS documents FIFO deduplication behavior and the 5-minute deduplication interval.
+- [Amazon SQS message deduplication ID](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/using-messagededuplicationid-property.html) — AWS explains how `MessageDeduplicationId` prevents duplicate delivery within the deduplication window.
+- [Amazon MQ for ActiveMQ](https://docs.aws.amazon.com/amazon-mq/latest/developer-guide/working-with-activemq.html) — AWS documents Amazon MQ broker creation, supported protocols, and managed ActiveMQ behavior.
+- [Amazon MSK Developer Guide](https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html) — AWS documents Amazon MSK as managed Apache Kafka and explains broker, producer, consumer, and topic concepts.
+- [Amazon EventBridge retry policy](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rule-retry-policy.html) — AWS documents EventBridge retry behavior, default retry duration, and DLQ guidance for undelivered events.
+- [Pub/Sub exactly-once delivery](https://cloud.google.com/pubsub/docs/exactly-once-delivery) — Google documents exactly-once delivery semantics, pull-subscription scope, and regional considerations.
+- [Choose Pub/Sub or Pub/Sub Lite](https://cloud.google.com/pubsub/docs/choosing-pubsub-or-lite) — Google documents Pub/Sub Lite deprecation and the June 30, 2026 turndown date.
+- [Pub/Sub pricing](https://cloud.google.com/pubsub/pricing) — Google documents throughput, storage, and data-transfer pricing behavior for Pub/Sub and Pub/Sub Lite.
+- [Choose between Azure messaging services](https://learn.microsoft.com/en-us/azure/service-bus-messaging/compare-messaging-services) — Microsoft compares Event Grid, Event Hubs, and Service Bus by messaging scenario.
+- [Azure Event Hubs overview](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-about) — Microsoft documents Event Hubs as a managed streaming platform with partitions, consumer groups, and Kafka compatibility.
+- [Azure Event Hubs scalability](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-scalability) — Microsoft documents throughput units, processing units, and auto-inflate scaling behavior.
+- [Azure Event Hubs Kafka configurations](https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations) — Microsoft documents the Kafka-compatible endpoint and configuration differences.
+- [Azure Event Grid delivery and retry](https://learn.microsoft.com/en-us/azure/event-grid/delivery-and-retry) — Microsoft documents Event Grid at-least-once delivery, retry policy, batching, and dead-letter behavior.
+- [KEDA AWS SQS scaler](https://keda.sh/docs/latest/scalers/aws-sqs/) — KEDA documents the `aws-sqs-queue` trigger, queue length target, and in-flight message scaling behavior.
+- [KEDA GCP Pub/Sub scaler](https://keda.sh/docs/latest/scalers/gcp-pub-sub/) — KEDA documents the GCP Pub/Sub scaler, `mode`, `value`, and parameter migration notes.
+- [KEDA Azure Service Bus scaler](https://keda.sh/docs/latest/scalers/azure-service-bus/) — KEDA documents queue and topic scaling for Azure Service Bus using active message count.
+- [KEDA Apache Kafka scaler](https://keda.sh/docs/latest/scalers/apache-kafka/) — KEDA documents Kafka lag scaling and partition-aware replica constraints.
+- [Kubernetes operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) — Kubernetes documents operators as controllers built around custom resources and reconciliation loops.
+- [Secrets Store CSI Driver introduction](https://secrets-store-csi-driver.sigs.k8s.io/introduction) — The project documents mounting external secrets into Kubernetes pods through CSI volumes.
+- [Secrets Store CSI Driver providers](https://secrets-store-csi-driver.sigs.k8s.io/providers) — The project documents supported providers including AWS, Azure, GCP, Vault, and others.
+- [Amazon EKS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — AWS documents IRSA as the mechanism for associating IAM roles with Kubernetes service accounts.
+- [GKE Workload Identity Federation](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Google documents Workload Identity Federation for granting GKE workloads access to Google Cloud APIs without service account key files.
+- [AKS Microsoft Entra Workload ID](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) — Microsoft documents Workload ID federation from Kubernetes service accounts to Microsoft Entra identities.
