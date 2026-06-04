@@ -375,7 +375,10 @@ def _hermes_provider_for_model(model: str) -> str:
     if model.startswith("claude-"):
         return "anthropic"
     if model.startswith("grok-"):
-        return "xai"
+        # xAI is accessed via the OAuth subscription (`hermes login --provider
+        # xai-oauth`), NOT the metered XAI_API_KEY "xai" provider. Override with
+        # KUBEDOJO_HERMES_PROVIDER=xai if you have an API key instead.
+        return "xai-oauth"
     return "openrouter"
 
 
