@@ -6,7 +6,7 @@ sidebar:
   order: 4
 lab:
   id: cka-1.3-helm
-  url: https://killercoda.com/playgrounds/scenario/kubernetes
+  url: https://killercoda.com/kubedojo/scenario/cka-1.3-helm
   duration: "40 min"
   difficulty: intermediate
   environment: kubernetes
