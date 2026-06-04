@@ -7,7 +7,7 @@ sidebar:
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5–6 hours | **Prerequisites:** [NumPy, Pandas & Data Tooling for ML](/ai-ml-engineering/deep-learning/module-1.1-numpy-pandas-data-tooling/)
 
-When Andrej Karpathy taught Stanford’s CS231n course, he opened the convolutional networks lecture with a slide that looked almost insultingly simple: a matrix multiply, a bias vector, and a squashing function. Students who had only used high-level frameworks expected magic; what they got was linear algebra with a nonlinearity sprinkled on top. That honesty is why the “from scratch” track in this curriculum exists. Before PyTorch autograd hides the chain rule behind `loss.backward()`, you need the same fluency Karpathy assumed: shapes that line up, broadcasting that does what you intend, and gradients you can sanity-check with a few lines of NumPy.
+When Andrej Karpathy taught Stanford’s CS231n course, the idea at the heart of a neural network was almost insultingly simple: a matrix multiply, a bias vector, and a squashing function. Students who had only used high-level frameworks expected magic; what they got was linear algebra with a nonlinearity sprinkled on top. That honesty is why the “from scratch” track in this curriculum exists. Before PyTorch autograd hides the chain rule behind `loss.backward()`, you need the same fluency Karpathy assumed: shapes that line up, broadcasting that does what you intend, and gradients you can sanity-check with a few lines of NumPy.
 
 This module is the first step in **Block A — Foundations from scratch**. Every later module in the block extends a single file you keep on disk, `nn.py`, the way Karpathy’s [micrograd](https://github.com/karpathy/micrograd) and [makemore](https://github.com/karpathy/makemore) courses grow one tiny engine across lessons. By the end of Block A you will train a small network in pure NumPy that **you** assembled piece by piece. Here we only lay the mathematical pavement: tensors, broadcasting, matrix multiplication, finite-difference gradients, the chain rule, and the gradient vector as the compass for learning.
 
@@ -102,7 +102,7 @@ b = np.array([0.1, 0.2, 0.3])
 print((H + b).shape)  # (4, 3)
 ```
 
-**Classic bug:** bias must broadcast along the **feature** axis (last axis). Shape `(out_features,)` or `(1, out_features)` adds correctly to `(batch, out_features)`. Shape `(out_features, 1)` does **not** broadcast to `(batch, out_features)` in general—NumPy aligns trailing dims, so `(out, 1)` versus `(batch, out)` requires `1 == out` on the last axis and `out == batch` on the first, which only holds when `batch == out_features`. Transposing `H` to `(out, batch)` without noticing is a separate way to turn a harmless bias add into garbage. When you see a broadcast error, print `arr.shape` for **every** operand; do not chain `.reshape(-1)` until the error disappears.
+**Classic bug:** bias must broadcast along the **feature** axis (last axis). Shape `(out_features,)` or `(1, out_features)` adds correctly to `(batch, out_features)`. Shape `(out_features, 1)` does **not** broadcast to `(batch, out_features)` in general—NumPy aligns trailing dims first, so `(out, 1)` versus `(batch, out)` compares `1` against `out` on the last axis (compatible: the `1` stretches across the features) and then `out` against `batch` on the first axis (compatible only when they are equal). So the add "succeeds" only in the degenerate case `batch == out_features`, and even then it spreads a single value per row across all features instead of one bias per feature. Transposing `H` to `(out, batch)` without noticing is a separate way to turn a harmless bias add into garbage. When you see a broadcast error, print `arr.shape` for **every** operand; do not chain `.reshape(-1)` until the error disappears.
 
 ```python
 # Intentional mismatch: bias length 7 vs feature dimension 5
@@ -176,7 +176,7 @@ Define a small `epsilon`, often `1e-5` for float64 and `1e-3` to `1e-4` for floa
 ```python
 def numerical_grad(f, x, eps=1e-5):
     """f: array -> scalar float; grad same shape as x."""
-    x = np.asarray(x, dtype=float)
+    x = np.array(x, dtype=float, copy=True)  # copy so finite-diff perturbations never mutate the caller's array
     grad = np.zeros_like(x)
     it = np.nditer(x, flags=['multi_index'], op_flags=['readwrite'])
     while not it.finished:
@@ -305,7 +305,7 @@ import numpy as np
 
 def numerical_grad(f, x, eps=1e-5):
     """Centered finite-difference gradient; f must return a scalar loss."""
-    x = np.asarray(x, dtype=float)
+    x = np.array(x, dtype=float, copy=True)  # copy so finite-diff perturbations never mutate the caller's array
     grad = np.zeros_like(x)
     it = np.nditer(x, flags=['multi_index'], op_flags=['readwrite'])
     while not it.finished:
