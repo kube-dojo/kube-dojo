@@ -125,6 +125,19 @@ Choosing between these topologies is a foundational platform engineering decisio
 
 When this pattern appears during diligence, the highest-value move is to separate integration decisions from migration urgency. If you can define a long-lived network contract first, teams are less likely to make dangerous temporary exceptions just to satisfy timelines. The costliest mistakes usually occur when one team forces flat networking despite overlap constraints and then spends months papering over routing defects with manual service lists. In those cases, the architecture debt compounds because every workaround gets replicated across every future cluster purchase.
 
+## Patterns & Anti-Patterns
+
+| Pattern / Anti-Pattern | Problem | Better approach |
+|---|---|---|
+| **Pattern: Island + explicit gateways** | Overlapping pod CIDRs block flat routing | Treat each cluster as an island; expose only gateway-approved services |
+| **Pattern: Topology-aware Services** | Cross-AZ traffic inflates transfer bills | Set `trafficDistribution: PreferClose` and validate with flow telemetry |
+| **Anti-pattern: Forcing flat networking after M&A** | Overlapping `10.244.0.0/16` ranges break routing | Default to island networking until IPAM is reconciled |
+| **Anti-pattern: Hardcoded ClusterIPs** | ClusterIPs are local to one cluster | Use `*.svc.cluster.local`, MCS `*.svc.clusterset.local`, or Cilium global services |
+| **Anti-pattern: ClusterIP for cross-cluster** | No routable endpoint outside the cluster | Use LoadBalancer/NodePort, Cilium `service.cilium.io/global`, or MCS `ServiceExport` |
+| **Anti-pattern: Flat mesh without policies** | Any compromised pod can probe remote pods | Enforce `CiliumNetworkPolicy` / `NetworkPolicy` on cross-cluster paths |
+| **Anti-pattern: DNS-only failover without drills** | TTL caching delays regional cutover | Pair low TTLs with health checks, or use anycast (Global Accelerator / GCP global LB) |
+| **Anti-pattern: Ignoring split-brain** | Partitions cause duplicate writes | Run partition chaos tests; fail write probes and enter safe mode |
+
 ## Cilium Cluster Mesh
 
 Many teams adopt Cilium Cluster Mesh after they have already validated a flat-routing baseline and then discover that IP overlap, operational speed, and zero-change service discovery are the constraints that matter most. This is a practical evolution path because it lets teams preserve existing workload behavior while adding cross-cluster reach. In effect, you can stop treating network boundaries as application concerns and treat them as part of the platform substrate, which is exactly where transport abstractions should live in mature organizations.
@@ -220,8 +233,8 @@ metadata:
   namespace: payments
   annotations:
     # Optional: prefer local endpoints, use remote only as fallback
-    io.cilium/global-service: "true"
-    io.cilium/service-affinity: "local"
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: "local"
 spec:
   selector:
     app: fraud-detection
@@ -229,6 +242,8 @@ spec:
     - port: 8080
       targetPort: 8080
 ```
+
+> **Cilium 1.13+ annotations**: Cluster Mesh services use `service.cilium.io/global` and `service.cilium.io/affinity`. On Cilium releases before 1.13, the legacy spellings `io.cilium/global-service` and `io.cilium/service-affinity` are equivalent.
 
 By default, Cilium load-balances traffic globally. However, for latency-sensitive applications, maintaining local affinity is paramount. You can explicitly define service affinity rules to govern endpoint selection. In failure scenarios, those rules also give you a deterministic fallback strategy, because they control whether local capacity exhaustion will spill traffic to remote endpoints or prioritize consistency by reducing cross-cluster fan-out.
 
@@ -239,17 +254,17 @@ By default, Cilium load-balances traffic globally. However, for latency-sensitiv
 # "none"   - load-balance equally across all clusters (default)
 ```
 
-If you wish to prevent a service from being exposed to the global mesh entirely, you simply omit the `global-service` annotation. Use that boundary intentionally for internal-only APIs, especially when operational risk increases if a debugging pod in one cluster can resolve sensitive endpoints in another without explicit authorization policy.
+If you wish to prevent a service from being exposed to the global mesh entirely, you simply omit the `service.cilium.io/global` annotation. Use that boundary intentionally for internal-only APIs, especially when operational risk increases if a debugging pod in one cluster can resolve sensitive endpoints in another without explicit authorization policy.
 
 ```yaml
 # To make a service available ONLY to the local cluster
-# (not exported to cluster mesh), omit the global-service annotation
+# (not exported to cluster mesh), omit the service.cilium.io/global annotation
 apiVersion: v1
 kind: Service
 metadata:
   name: internal-cache
   namespace: payments
-  # No io.cilium/global-service annotation = local only
+  # No service.cilium.io/global annotation = local only
 spec:
   selector:
     app: redis-cache
@@ -257,7 +272,7 @@ spec:
     - port: 6379
 ```
 
-> **Pause and predict**: If you annotate a service with `io.cilium/service-affinity: "local"`, what happens when all local endpoints for that service crash? Will the requests fail, or will they route to the remote cluster?
+> **Pause and predict**: If you annotate a service with `service.cilium.io/affinity: "local"`, what happens when all local endpoints for that service crash? Will the requests fail, or will they route to the remote cluster?
 
 ### Network Policies Across Boundaries
 
@@ -439,6 +454,8 @@ Monitoring is the difference between “believing” and “proving” where you
 
 To truly optimize costs, you must possess the ability to actively monitor and quantify cross-AZ communication patterns using raw network flow telemetry. Cost optimization without telemetry is guessing, because traffic spikes can appear after a code deployment and remain invisible in coarse service metrics for hours. By instrumenting subnet-level flow analysis, you can distinguish application-driven growth from topology misconfiguration and choose the least risky mitigation with confidence.
 
+> **VPC Flow Logs limitation**: The optional `${az-id}` field records only the Availability Zone of the **logged ENI**, not the destination endpoint's AZ. Native flow logs do **not** expose a `dst_az_id` column. To classify true cross-AZ pod traffic in Athena, enrich records (for example via Amazon Data Firehose plus Lambda) with destination subnet/AZ metadata, or join `srcaddr`/`dstaddr` against your pod→node→subnet→AZ inventory table.
+
 ```bash
 # Use VPC Flow Logs to identify cross-AZ traffic patterns
 # Enable flow logs on each subnet
@@ -450,21 +467,20 @@ aws ec2 create-flow-logs \
   --log-destination arn:aws:s3:::vpc-flow-logs-bucket \
   --log-format '${az-id} ${srcaddr} ${dstaddr} ${bytes} ${flow-direction}'
 
-# Query with Athena to find top cross-AZ talkers
-# (assumes flow logs are partitioned in S3)
+# Query with Athena to rank high-volume pod CIDR flows (native fields only)
+# (assumes flow logs are partitioned in S3; join/enrich for true cross-AZ classification)
 cat <<'SQL'
 SELECT
+  az_id,
   srcaddr,
   dstaddr,
-  az_id,
   SUM(bytes) / 1073741824 AS gb_transferred,
   SUM(bytes) / 1073741824 * 0.01 AS estimated_cost_usd
 FROM vpc_flow_logs
 WHERE srcaddr LIKE '100.64.%'   -- pod CIDR
   AND dstaddr LIKE '100.64.%'   -- pod CIDR
-  AND az_id != dst_az_id         -- cross-AZ
   AND date = '2026-03-24'
-GROUP BY srcaddr, dstaddr, az_id
+GROUP BY az_id, srcaddr, dstaddr
 ORDER BY gb_transferred DESC
 LIMIT 20
 SQL
@@ -495,6 +511,16 @@ Different cloud providers employ drastically different technological approaches 
 - **GCP Ecosystem: Cloud Load Balancing (Global Tier)**
   - Google utilizes a uniquely powerful model providing [a single global Anycast IP address](https://cloud.google.com/load-balancing/docs/load-balancing-overview) that routes HTTP(S), TCP, and UDP traffic across the entire world.
   - It seamlessly features profound, native integration directly with GKE Network Endpoint Groups (NEGs).
+
+- **Azure Ecosystem: AKS networking + global front door**
+  - For cross-cluster east-west on AKS, teams commonly pair [Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay) (overlapping pod space per cluster) with explicit gateways, or adopt [Azure CNI Powered by Cilium](https://learn.microsoft.com/en-us/azure/aks/azure-cni-powered-by-cilium) for Cilium Cluster Mesh–style global services.
+  - For multi-region user ingress, [Azure Front Door](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-overview) (anycast edge + health probes) and [Traffic Manager](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-overview) (DNS-based latency/failover routing) mirror the AWS Global Accelerator / Route53 split.
+
+| Provider | Cross-cluster CNI / discovery | Multi-region external ingress |
+|---|---|---|
+| AWS | VPC CNI flat routes, MCS via fleet patterns | Route53 + Global Accelerator |
+| GCP | GKE MCS API, multi-cluster Gateway | Global external HTTP(S) LB + NEGs |
+| Azure | Azure CNI Overlay or Cilium on AKS | Azure Front Door + Traffic Manager |
 
 ### Provisioning GCP Global Load Balancers with Multi-Cluster Gateways
 
@@ -940,7 +966,7 @@ kind: Service
 metadata:
   name: rebel-base
   annotations:
-    io.cilium/global-service: "true"
+    service.cilium.io/global: "true"
 spec:
   selector:
     app: rebel-base
@@ -980,7 +1006,7 @@ kind: Service
 metadata:
   name: rebel-base
   annotations:
-    io.cilium/global-service: "true"
+    service.cilium.io/global: "true"
 spec:
   selector:
     app: rebel-base
@@ -1015,7 +1041,7 @@ kubectl --context kind-cluster-a run test-client \
 
 # Now test with local affinity
 kubectl --context kind-cluster-a annotate service rebel-base \
-  io.cilium/service-affinity=local --overwrite
+  service.cilium.io/affinity=local --overwrite
 
 # Run the test again - should strongly prefer Cluster A
 kubectl --context kind-cluster-a run test-client-2 \
@@ -1070,3 +1096,8 @@ Review these critical milestones prior to formally closing out your lab session 
 - [docs.aws.amazon.com: introduction how it works.html](https://docs.aws.amazon.com/global-accelerator/latest/dg/introduction-how-it-works.html) — AWS Global Accelerator docs directly state that its static IPs are anycast from the edge network and use the AWS global network.
 - [cloud.google.com: load balancing overview](https://cloud.google.com/load-balancing/docs/load-balancing-overview) — Google's load-balancing overview directly describes a single anycast IP and automatic multi-region failover.
 - [Kubernetes Topology Aware Routing](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) — Explains the core zone-local routing concept and the older topology-hints model behind cost-aware service routing.
+- [docs.cilium.io: global service](https://docs.cilium.io/en/stable/network/clustermesh/global-service/) — Documents `service.cilium.io/global` and `service.cilium.io/affinity` for Cluster Mesh global services (Cilium 1.13+).
+- [docs.aws.amazon.com: flow logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html) — Defines native VPC Flow Log fields, including `${az-id}` for the logged ENI only.
+- [learn.microsoft.com: azure cni overlay](https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay) — Describes per-cluster overlapping pod CIDRs on AKS with overlay routing.
+- [learn.microsoft.com: azure cni powered by cilium](https://learn.microsoft.com/en-us/azure/aks/azure-cni-powered-by-cilium) — Covers AKS with Cilium datapath for advanced cross-cluster networking options.
+- [learn.microsoft.com: front door overview](https://learn.microsoft.com/en-us/azure/frontdoor/front-door-overview) — Azure Front Door anycast edge routing and health-based failover for multi-region ingress.
