@@ -86,7 +86,9 @@ class AgyAdapter:
     """Adapter for the ``agy`` Antigravity CLI."""
 
     name: str = "agy"
-    default_model: str = os.environ.get("KUBEDOJO_AGY_MODEL", "gemini-3.5-flash-high")
+    default_model: str = (
+        os.environ.get("KUBEDOJO_AGY_MODEL") or "gemini-3.5-flash-high"
+    )
     supported_modes: frozenset[str] = frozenset(
         {"read-only", "workspace-write", "danger"}
     )
