@@ -1,0 +1,2 @@
+## 2026-06-04T13:33:26Z — `REVIEW` — `APPROVE`
+Cloud / Managed Services expand-to-floor wave (session 102; candidate-reviewer trial). Reviewer: grok-build-0.1 (cross-family). Azure AI Search is a retrieval/RAG service NOT a direct AKS-log sink (logs go via Azure Monitor/Log Analytics) — scoping fix + helm/version/endpoint nits. Verifier T0/PASS; orchestrator web-verified key facts + ground-checked all fixes; PR #1786.
