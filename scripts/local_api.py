@@ -1418,7 +1418,14 @@ def build_module_state(repo_root: Path, module_key: str) -> dict[str, Any]:
     from status import _build_lab_summary, _extract_frontmatter, _git_head_for_file
     from translation_v2 import detect_module_state
 
-    normalized = module_key[:-3] if module_key.endswith(".md") else module_key
+    # Defense in depth: module_key reaches the filesystem below (en_path.exists(),
+    # _extract_frontmatter(en_path)). Both current callers pre-validate via
+    # _validate_module_key, but re-validate here so the function is safe
+    # regardless of caller and cannot be coerced into reading outside
+    # src/content/docs via "../" traversal (CodeQL py/path-injection, alert #32).
+    normalized = _validate_module_key(repo_root, module_key)
+    if normalized is None:
+        raise ValueError(f"unsafe or invalid module_key: {module_key!r}")
     en_path = repo_root / "src" / "content" / "docs" / f"{normalized}.md"
     uk_path = repo_root / "src" / "content" / "docs" / "uk" / f"{normalized}.md"
     frontmatter = _extract_frontmatter(en_path) if en_path.exists() else {}
@@ -5222,8 +5229,12 @@ def _html_fragment_to_text(fragment: str) -> str:
 
 def _strip_html_noncontent(text: str) -> str:
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
-    text = re.sub(r"<script\b[^>]*>.*?</script\s*>", " ", text, flags=re.IGNORECASE | re.DOTALL)
-    return re.sub(r"<style\b[^>]*>.*?</style\s*>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    # End-tag patterns use `</script\b[^>]*>` (not `</script\s*>`): browsers
+    # accept end tags with trailing junk like `</script\t\n bar>`, so the strict
+    # form would leave script/style content un-stripped (CodeQL py/bad-tag-filter,
+    # alert #31). `\b` keeps `</scriptx>` from matching a different tag name.
+    text = re.sub(r"<script\b[^>]*>.*?</script\b[^>]*>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    return re.sub(r"<style\b[^>]*>.*?</style\b[^>]*>", " ", text, flags=re.IGNORECASE | re.DOTALL)
 
 
 def _extract_html_h1(text: str) -> str | None:
@@ -7182,13 +7193,18 @@ def render_quality_module_page_html(repo_root: Path, module_key: str) -> str | N
     def _relative_path(raw_path: Any) -> str:
         if not raw_path:
             return ""
+        # raw_path is built as repo_root / src/content/docs / <validated key>.md,
+        # so it is already absolute under repo_root. Compute the display path
+        # purely lexically — no .resolve()/filesystem access on a request-derived
+        # value (CodeQL py/path-injection, alert #32) — and reject anything that
+        # escapes repo_root.
         try:
-            resolved = Path(raw_path).resolve()
-            return resolved.relative_to(repo_root).as_posix()
-        except (OSError, ValueError):
-            # Path doesn't exist or escapes repo_root; avoid reflecting arbitrary
-            # user-provided paths into generated HTML.
+            rel = Path(str(raw_path)).relative_to(repo_root)
+        except ValueError:
             return ""
+        if ".." in rel.parts:
+            return ""
+        return rel.as_posix()
 
     gate_items = []
     for item in diagnostics:
