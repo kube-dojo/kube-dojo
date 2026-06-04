@@ -197,7 +197,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
-            "cursor": "gpt-5.5",
+            "cursor": "auto",
             "hermes": "claude-sonnet-4-6",
             "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
