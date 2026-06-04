@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 103 — Cloud Enterprise &amp; Hybrid 10.1–10.10 complete → CLOUD TRACK 92/92</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a;background:#fafafa}
+  h1{font-size:1.6rem;border-bottom:3px solid #2563eb;padding-bottom:.4rem}
+  h2{font-size:1.25rem;margin-top:2rem;color:#1e40af;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+  h3{font-size:1.05rem;margin-top:1.3rem;color:#374151}
+  code{background:#eef2ff;padding:.1rem .35rem;border-radius:4px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem}
+  th,td{border:1px solid #d1d5db;padding:.4rem .6rem;text-align:left;vertical-align:top}
+  th{background:#eef2ff}
+  .tldr{background:#ecfdf5;border-left:4px solid #10b981;padding:.8rem 1rem;border-radius:6px}
+  .win{color:#047857;font-weight:600}
+  .p1{color:#b91c1c;font-weight:600}
+  .meta{color:#6b7280;font-size:.85rem}
+  ul{margin:.4rem 0}
+  li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<h1>Session 103 — Cloud Enterprise &amp; Hybrid 10.1–10.10 → <span class="win">CLOUD TRACK 92/92 COMPLETE</span></h1>
+<p class="meta">Date: 2026-06-04 · Branch: main (clean, pushed) · Orchestrator: Claude Opus 4.8 (interactive) · Continues the cloud expand-to-floor workstream (sessions 96–102), which this session FINISHES.</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> The <strong>last cloud sub-track — Enterprise &amp; Hybrid</strong> — is done. 10 modules (10.1–10.10; 10.11-cloud-custodian was already <code>done</code>) taken to the 5000-word floor where sub-floor and to cross-family <code>done</code> on the review axis via one consolidated PR <strong>#1788</strong> (10 commits, +2,786/−332) + finalize records (e5042d80). <strong>Review-axis 550 → 560 (+10).</strong> <strong>Cloud track: 82/92 → 92/92 — COMPLETE.</strong> Same proven loop: ≤3 concurrent authors (cursor/codex/deepseek, isolated worktrees) → cross-family R1 (opus 4.8 / gemini-3.1-pro / codex / cursor / deepseek, always a different family than the author) → orchestrator web-verifies + ground-checks <em>every</em> finding before any fix ships. Every one of the 10 modules verifies T0; CI fully green (CodeQL, site-health, incident-dedup, gemini cross-family).
+</div>
+
+<h2>What shipped</h2>
+<ul>
+<li><strong>8 sub-floor modules expanded</strong> to ≥5000 body words with genuine multi-cloud + platform-engineering depth (Patterns &amp; Anti-Patterns, Decision Framework, cost lens): 10.1 landing-zones (1217→5984), 10.2 governance (1336→5058), 10.3 compliance (1365→5950), 10.4 hybrid (1910→5262), 10.5 fleet-management (1797→7672), 10.6 cluster-api (2091→5496), 10.7 multi-cloud-mesh (1282→5002), 10.10 enterprise-finops (1804→5070).</li>
+<li><strong>2 at-floor modules</strong> (10.8 enterprise-gitops 5000w, 10.9 zero-trust 5651w) got cross-family review fixes only.</li>
+<li>Authors: <strong>cursor <code>--model auto</code></strong> (10.2, 10.4, 10.7, 10.10 + 6 fixes), <strong>codex gpt-5.5</strong> (10.3, 10.6 + 2 fixes), <strong>deepseek-v4-pro</strong> (10.1, 10.5, 10.8 fix). Reviewers: <strong>opus 4.8</strong> (10.2/10.6/10.7/10.8/10.10), <strong>gemini-3.1-pro</strong> (10.1/10.9), <strong>codex</strong> (10.4), <strong>deepseek</strong> (10.3), <strong>cursor</strong> (10.5).</li>
+</ul>
+
+<h2>Scope discipline (lessons applied up front)</h2>
+<ul>
+<li><strong>Scoped from <code>verify_module.py metrics.body_words</code>, not <code>wc</code></strong> — and from the board review-axis first (10.11 was already <code>done</code> → wave was 10, not 11).</li>
+<li>Caught <strong>latent structure-gate failures the briefs fixed explicitly</strong> so authors wouldn't "preserve" them broken: 10.3 had Quiz <em>after</em> Hands-On (order gate); 10.6/10.7 used the unrecognized <code>## What You Will Be Able to Do</code> heading; 10.6's "Did You Know?" was <strong>empty</strong>; 10.7's success-criteria were all pre-checked <code>[x]</code> (counts as 0 unchecked).</li>
+</ul>
+
+<h2>Cross-family review caught a verifier-blind defect in <em>every</em> module — all ground-checked</h2>
+<p>The pattern from prior cloud waves held: cross-family review surfaced real errors across <strong>every author family</strong> (cursor factual slips, deepseek fabrications, a codex broken-policy + a bitnami lab-breaker).</p>
+<table>
+<tr><th>Module</th><th>Author→Reviewer</th><th>Key ground-checked findings (fixed)</th></tr>
+<tr><td>10.1 landing-zones</td><td>deepseek→gemini</td><td><span class="p1">P1</span> fabricated Control Tower "management fee" (×2 — CT is no-charge); invalid <code>-l managed-by!=null</code> selector; fabricated GCP <code>constraints/container.restrictPublicCluster</code> → custom constraint. P2 Azure AD→Entra, vWAN throughput.</td></tr>
+<tr><td>10.2 governance</td><td>cursor→opus</td><td><span class="p1">P1</span> same fabricated <code>container.restrictPublicCluster</code> (×3). P2 ECR lifecycle-policy mislabeled as image-signing; Azure Policy <strong>add-on</strong> vs Arc <strong>extension</strong>; SCP <code>ForAllValues:StringNotLike</code> footgun→<code>ArnNotLike</code>; GCP CustomConstraint <code>methodTypes</code>; Kyverno <code>validationFailureAction</code> deprecation. <span class="win">Preserved</span> (web-verified): Kyverno CNCF Graduated 2026-03, <code>eks:endpointPublicAccess</code> SCP key (AWS Apr-2026).</td></tr>
+<tr><td>10.3 compliance</td><td>codex→deepseek</td><td><span class="p1">P1 (orchestrator-upgraded)</span> <code>bitnami/kubectl:1.35</code> lab-breaker → <code>rancher/kubectl:v1.35.0</code> (tag web-verified). P2 self-referential Kyverno <code>AnyNotIn</code> no-op policy → <code>apiCall</code> NetworkPolicy-existence check; fragile JSON heredoc; Falco port-vs-TLS rule framing.</td></tr>
+<tr><td>10.4 hybrid</td><td>cursor→codex</td><td><span class="p1">6×P1</span>: service CIDRs taught as BGP-routable (ClusterIPs are virtual); egress billing direction <strong>reversed</strong> (on-prem→cloud is ingress=free); invalid Direct Connect CLI flag; outdated EKS-A <code>register</code>/<code>install package</code>; <strong>fabricated</strong> Did-You-Know stats (Flexera is 89%/73%, not 2.3/1.8); docker IP concat across 2 networks. +5 P2.</td></tr>
+<tr><td>10.5 fleet-management</td><td>deepseek→cursor</td><td><span class="p1">3×P1</span>: Cluster API mislabeled as CNCF (×2 — it's a Kubernetes SIG); GKE fleet <code>--context</code> took an EKS ARN; invalid ApplicationSet progressive-rollout → Progressive Syncs. P2 OSM retired→Istio add-on; invented Flux "sops-decrypt controller"; CAPA control-plane refs; quiz fixes.</td></tr>
+<tr><td>10.6 cluster-api</td><td>codex→opus</td><td>3×P2 (web-verified): Falco RPM repo 404→<code>falcosecurity-rpm.repo</code>; MHC on EKS-managed <code>AWSManagedMachinePool</code> + <code>remediationTemplate</code> misuse; <code>ctr</code> pull → <code>ctr -n k8s.io</code>; cattle.io label→<code>cluster.x-k8s.io</code>. opus web-verified ALL CAPI/CAPA/CAPZ/CAPG API facts correct.</td></tr>
+<tr><td>10.7 multi-cloud-mesh</td><td>cursor→opus</td><td><span class="p1">P1</span> DestinationRule set both <code>failover</code>+<code>failoverPriority</code> (mutually exclusive per Istio API). P2 <code>istioctl authz check</code>→<code>experimental authz check</code> (×2); <code>analyze</code> flag conflict; outcomes lead-in. Facts verified (Istio Graduated, Azure Local, Entra Workload ID, ambient/HBONE).</td></tr>
+<tr><td>10.8 enterprise-gitops</td><td>(at-floor)→opus</td><td><span class="win">APPROVE 4.5/5.</span> P2 ESO <code>v1beta1</code>→<code>v1</code> (×2; repo-standard, CKS 4.3 documents the 0.10 migration). Nits: canary % (30 not 10), SSA rationale, stable doc URLs.</td></tr>
+<tr><td>10.9 zero-trust</td><td>(at-floor)→gemini</td><td><span class="p1">P1</span> <code>nginx:1.27.3</code> app pods lacked <code>curl</code> so NetworkPolicy egress tests false-passed → <code>wbitt/network-multitool:3.22.2</code> (tag web-verified). P2 Azure AD Application Proxy→Microsoft Entra application proxy; Hypothetical label. <strong>Rejected a gemini false positive</strong>: the allow-DNS <code>egress: to: [] ports:53</code> is CORRECT (empty <code>to</code> matches all destinations).</td></tr>
+<tr><td>10.10 enterprise-finops</td><td>cursor→opus</td><td><span class="p1">P1</span> false AWS S3 cross-AZ data-transfer charge (S3 is regional; same-region EC2↔S3 is free) — bad in a FinOps module. P2 uncited "23 dimensions"; EDP discount-stacking hedge; <code>topologySpreadConstraints</code> (scheduling) vs Topology Aware Routing (traffic). <span class="win">Preserved</span>: OpenCost Incubating Oct-2024.</td></tr>
+</table>
+
+<h2>Reverse-saves &amp; false-positive rejections (ground-check, both directions)</h2>
+<ul>
+<li><span class="win">Preserved against reviewer training-lag</span>: Kyverno <strong>Graduated 2026-03-16</strong> (my own review template said "Incubating" — I corrected it mid-wave after opus web-verified); OpenCost <strong>Incubating Oct-2024</strong>; <code>eks:endpointPublicAccess</code> SCP key (AWS Apr-2026); Cluster API is a <strong>Kubernetes SIG</strong>, not CNCF (corrected where authors mislabeled it).</li>
+<li><span class="win">Rejected false positives</span>: gemini's 10.9 "the allow-DNS NetworkPolicy blocks all DNS" — wrong; an egress rule with empty <code>to</code> matches all destinations. The gemini <em>CI</em> review's lone NEEDS_CHANGES ("10.1 Q8 truncated, missing <code>&lt;/details&gt;</code>") was a self-inflicted FP — it truncated its own quoted snippet; the file is complete with balanced 13/13 details tags.</li>
+<li><strong>Web-verified before instructing fixes</strong>: Falco RPM repo URL, Microsoft Entra application-proxy rename, <code>wbitt/network-multitool:3.22.2</code> + <code>rancher/kubectl:v1.35.0</code> tag existence (Docker Hub), S3 same-region-free.</li>
+</ul>
+
+<h2>Process notes / reusable</h2>
+<ul>
+<li><strong>Bitnami sweep</strong> (memory <code>feedback_bitnami_images_moved_to_legacy</code>): grepped all 11 enterprise-hybrid modules → only <strong>one</strong> ref (<code>10.3:345 bitnami/kubectl:1.35</code>), fixed. Rest clean.</li>
+<li>Consolidation: each module fixed in its own worktree → final files pulled into <code>.worktrees/eh-wave</code> off fresh <code>origin/main</code> (each module is a distinct file → no conflicts) → 10 per-module commits → one PR → rebase-merge → <code>finalize-eh.sh</code> (<code>reset-stage</code> DASHED key + force-added <code>.pipeline/reviews/cloud__enterprise-hybrid__module-10.*.md</code>).</li>
+<li><strong>Candidate-reviewer note</strong>: this wave used the proven roster (opus/cursor/codex/deepseek/gemini), not the session-102 grok/agy trial — all five are first-class and faster to ground-check. deepseek worked cleanly as both a reviewer (10.3) and a fixer (10.8), with the orchestrator auditing its diff scope.</li>
+<li>Reusable: <code>logs/remediation/briefs/session103/</code> — <code>_shared-expand-rules-eh.md</code>, <code>review-template-eh.md</code>, <code>hint-10.*.md</code>, <code>fix-10.*.md</code>, <code>finalize-eh.sh</code>, <code>LEDGER.md</code> (full per-finding disposition ledger).</li>
+</ul>
+
+<h2>Next</h2>
+<p><strong>Cloud track is 92/92 — COMPLETE.</strong> Per curriculum order, the next track is <strong>ai-ml-engineering</strong>, then <strong>on-premises</strong>, then <strong>platform</strong> (the big one: Disciplines 45 + Toolkits 36 + Foundations 28 critical). Same expand-to-floor + review-first loop. Remaining review-axis backlog ≈ 166 needs_rewrite + ~77 shipped_unreviewed + 4 needs_review (the 4 needs_review are on-prem/toolkits, score 5.0 — scan at cold-start). Scope each wave from <code>metrics.body_words</code> and the board review-axis first.</p>
+
+</body>
+</html>
