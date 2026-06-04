@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Session 102 — Cloud: Managed Services 9.1–9.10 complete + candidate-reviewer trial</title>
+<style>body{font:15px/1.55 system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:1.6rem;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+code{background:#f3f3f3;padding:.1em .3em;border-radius:3px;font-size:.9em}table{border-collapse:collapse;width:100%;margin:.6rem 0}
+th,td{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;font-size:.9em;vertical-align:top}th{background:#f6f6f6}
+.tl{background:#eef6ff;border-left:4px solid #2b7;padding:.6rem .9rem;border-radius:4px}.warn{color:#a40}.ok{color:#161}</style></head><body>
+<h1>Session 102 — Cloud Managed Services 9.1–9.10 complete + candidate-reviewer trial</h1>
+<p class="tl"><strong>Date:</strong> 2026-06-04 · <strong>Branch:</strong> main (clean, pushed) · <strong>Orchestrator:</strong> Claude Opus 4.8 · continues the cloud workstream (sessions 96–101).<br>
+<strong>TL;DR.</strong> Review-axis <strong>540 → 550 done (+10)</strong>. <strong>Managed Services 9.1–9.10 → 10/10 done</strong> via consolidated PR <strong>#1786</strong> (10 commits, +3,025/−498) + a one-line follow-up <strong>#1787</strong>. Same expand-to-floor loop, but this wave doubled as a <strong>candidate-reviewer trial</strong> (user request): grok-via-hermes + agy with selectable models, run alongside the proven opus/cursor lanes, every finding orchestrator-ground-checked (web-verified) before any fix shipped. <strong>Cloud track now 82/92 done.</strong> Two systemic catches: the Broadcom <strong>Bitnami→bitnamilegacy</strong> image move (broke 4 labs) and a heuristic-scorer <strong>`## Sources` heading</strong> requirement.</p>
+
+<h2>Candidate-reviewer trial — results (the headline)</h2>
+<p>Six candidate reviewer configs were tested, one per module (opus/cursor as proven baselines on the rest). Every candidate finding was web-verified by the orchestrator; quality never depended on the candidate being right.</p>
+<table>
+<tr><th>Lane</th><th>Module(s)</th><th>Verdict</th></tr>
+<tr><td><strong>grok-build-0.1</strong> (grok-4.3 via hermes <code>xai-oauth</code>)</td><td>9.2, 9.6</td><td class="ok"><strong>EXCELLENT — promote.</strong> 2/2 thorough, file:line-specific, web-verifiable. On 9.2 it caught the Pub/Sub Lite turndown date (<strong>opus FALSE-confirmed "March 18"; real = June 30, 2026</strong>) and the <code>az --enable-dead-lettering</code> flag opus missed; on 9.6 the "Azure AI Search as a direct AKS-log sink" error. Complementary to opus (which caught the bitnami P1 grok missed). <span class="warn">Fabricates verification provenance</span> ("ran helm/curl") → ground-check the findings, not its "Verified" block.</td></tr>
+<tr><td><strong>agy · Gemini 3.1 Pro (High)</strong></td><td>9.3</td><td class="ok"><strong>STRONG.</strong> 4/5 web-verified (Azure Functions 500 MB storage, Fargate EFS-not-EBS, API GW VPC_LINK, SnapStart runtimes); 1 FP (<code>condition=ready</code> casing — kubectl is case-insensitive).</td></tr>
+<tr><td><strong>agy · Claude Sonnet 4.6 (Thinking)</strong></td><td>9.4, 9.10</td><td class="ok"><strong>STRONG.</strong> Real bugs (S3 CSI static-only, az federated-credential <code>--name</code>; fake <code>bq update</code> quota flags, KPO dict→<code>V1ResourceRequirements</code>, <code>days_ago</code> removed). Self-resolved false alarms; even ran a citation-verify subagent.</td></tr>
+<tr><td><strong>agy · Claude Opus 4.6 (Thinking)</strong></td><td>9.8</td><td class="ok"><strong>STRONG.</strong> 3 real P1s (Azure CSS YAML indent; VSO + KMS auto-unseal promised-but-uncovered); ran a citation subagent.</td></tr>
+<tr><td><strong>grok-4.20-reasoning</strong> (via hermes)</td><td>9.5</td><td class="warn"><strong>MEDIOCRE.</strong> Returned APPROVE 4.7/5 but <strong>MISSED the bitnami/redis P1</strong> (lab-breaker), over-approved, and fabricated "ran in kind" provenance. Found 1 real P2. Lower priority than grok-build.</td></tr>
+<tr><td><strong>agy · GPT-OSS 120B (Medium)</strong></td><td>9.10</td><td class="warn"><strong>REJECTED.</strong> Hallucinated "all structural sections missing / file ends at line 631" (flatly contradicted by the T0 verifier) and proposed a <em>wrong</em> Redshift "fix" (claimed Redshift can't stream-ingest from Kinesis/MSK — it can; the fix would have introduced an error). Mislabeled itself "Gemini 3.1". Do not use. 9.10 re-reviewed by agy·Claude-Sonnet.</td></tr>
+</table>
+<p><strong>Lessons:</strong> (1) <strong>The model under <code>agy</code> matters enormously</strong> — Claude-Sonnet/Opus + Gemini-3.1-Pro are strong; GPT-OSS-120B hallucinated garbage. agy is a multiplexer; pick the model. (2) <strong>grok-build (code model) ≫ grok-4.20-reasoning (content model)</strong> for review. (3) Candidates are <strong>complementary to opus, not replacements</strong> — grok caught fact/CLI precision opus got wrong/missed; opus caught deep lab-runnability (bitnami, <code>$RANDOM</code>-in-dash, KEDA/Redis scaler contracts, Strimzi KRaft) candidates missed. Best coverage = mix + ground-check. (4) <strong>All candidate "Verified/ran" provenance is suspect</strong> (grok fabricates, agy mislabels its own model) — ground-check the FINDINGS, never the claimed verification.</p>
+<p><strong>Recommendation for the next wave:</strong> fold <strong>grok-build</strong> + <strong>agy(Claude-Sonnet / Gemini-3.1-Pro)</strong> into the regular reviewer rotation (spreads load off opus before the June-15 programmatic-pool billing change); drop grok-4.20 and agy-GPT-OSS; keep ground-checking everything. Memory <code>feedback_grok_cli_candidate_roster</code> updated.</p>
+
+<h2>What shipped (PR #1786, 10 commits; + #1787 one-liner)</h2>
+<table><tr><th>Module</th><th>Reviewer (candidate in bold)</th><th>Notable verifier-blind fixes (all ground-checked)</th></tr>
+<tr><td>9.1 databases</td><td>opus 4.8</td><td>P1 bitnami/pgbouncer→legacy; K8s env-var ordering; PSA≠PSC; CONCURRENTLY+timeout (opus reverse-saved Aurora-10-region, Cosmos, Azure-cross-AZ)</td></tr>
+<tr><td>9.2 message-brokers</td><td><strong>grok-build</strong> + opus (merged)</td><td>bitnami/redis→plain; Pub/Sub Lite June-30; az enable-dead-lettering; KEDA identityOwner; <code>$RANDOM</code>-in-dash; Amazon MQ + Azure WI coverage</td></tr>
+<tr><td>9.3 serverless</td><td><strong>agy·Gemini-3.1-Pro</strong></td><td>Azure Functions 500 MB; Fargate EFS-not-EBS; API GW VPC_LINK; SnapStart Java21/Python/.NET</td></tr>
+<tr><td>9.4 object-storage</td><td><strong>agy·Claude-Sonnet</strong></td><td>S3 CSI static-only; az federated-credential <code>--name</code>; Intelligent-Tiering 128 KB; GCS WI signing; MRAP async</td></tr>
+<tr><td>9.5 caching</td><td><strong>grok-4.20</strong></td><td>bitnami/redis→plain (orchestrator-caught; grok-4.20 missed it); dedupe Next-Module; <code>## References</code>→<code>## Sources</code> (#1787)</td></tr>
+<tr><td>9.6 search</td><td><strong>grok-build</strong></td><td>Azure AI Search is retrieval/RAG, NOT a direct AKS-log sink (→ Azure Monitor/Log Analytics)</td></tr>
+<tr><td>9.7 streaming</td><td>opus 4.8</td><td>P1 Strimzi 0.46+ ZooKeeper removed → KRaft/KafkaNodePool (lab+body); Mermaid; <code>$RANDOM</code> (opus reverse-saved MSK-KRaft, Kinesis On-demand-Advantage)</td></tr>
+<tr><td>9.8 secrets-deep</td><td><strong>agy·Claude-Opus</strong></td><td>Azure CSS YAML indent; added VSO + KMS auto-unseal; AWS rotation table; etcd-encryption provider; wait race</td></tr>
+<tr><td>9.9 api-gateways</td><td>opus 4.8</td><td>gate fix + Envoy BackendTrafficPolicy+Local rate-limit; Azure/AWS/NGINX gRPC facts; kind port-forward; fabricated opener→Hypothetical; leaked DYK meta</td></tr>
+<tr><td>9.10 analytics</td><td><strong>agy·Claude-Sonnet</strong> (agy·GPT-OSS rejected)</td><td>fake <code>bq update</code> quota flags; KPO <code>V1ResourceRequirements</code>×5; <code>days_ago</code> removed; bitnami/kubectl→legacy</td></tr></table>
+
+<h2>Two systemic catches (curriculum-wide)</h2>
+<ul>
+<li><strong>Bitnami → bitnamilegacy.</strong> Broadcom moved all versioned <code>docker.io/bitnami/*</code> image tags to <code>docker.io/bitnamilegacy/*</code> on 2025-08-28 → any pinned <code>bitnami/...</code> lab ref ImagePullBackOffs. Hit 9.1 (pgbouncer), 9.2 + 9.5 (redis helm), 9.10 (kubectl) — all fixed. Verifier-blind + pre-2025-08-cutoff reviewers miss it; opus caught the first via web-verify, then I proactively grepped the rest. ~28 refs across the curriculum = standing cleanup. Memory <code>feedback_bitnami_images_moved_to_legacy</code>.</li>
+<li><strong>Heuristic scorer requires `## Sources`.</strong> 9.5 finalized at T0 but the <code>/quality</code> board kept it <code>needs_rewrite</code> because <code>build_quality_scores</code> caps the score at 1.5 when it can't find a <code>## Sources</code> heading (regex <code>^##\s+Sources\s*$</code>) — 9.5 used <code>## References</code>. The board's done-predicate (<code>local_api.py:3795</code>) needs score ≥3. Renamed → score recomputed 5.0 → done (#1787). 2 other modules curriculum-wide use <code>## References</code> without <code>## Sources</code> (minor follow-up — they'd be capped at 1.5 too).</li>
+</ul>
+
+<h2>Process notes</h2>
+<ul>
+<li>Scope: 9 sub-floor (611–1150 prose words) → 5000w floor; 9.9 was at-floor (targeted gate+content fix). Authors: cursor (4), codex (3), deepseek (2). 3-author cap held; reviews fired as drafts landed.</li>
+<li>9.5 mid-wave wrinkle: the content fix briefly dropped it to T2 (body_words 4999, 1 under floor) → a top-up restored T0 before consolidation.</li>
+<li>Consolidation: per-module worktrees → one <code>ms-wave</code> integration branch (1 commit/module) → PR. CI all green (site-health/build + CodeQL + incident-dedup + gemini review). Finalize: 10 <code>.pipeline/reviews/cloud__managed-services__module-9.*.md</code> records + <code>reset-stage COMMITTED</code>; board confirmed 10/10 done.</li>
+<li>Reusable: <code>logs/remediation/briefs/session102/</code> — shared expand rules, review template, per-module combined/expand/review/fix briefs, <code>finalize-ms.sh</code>, <code>pr-body.md</code>.</li>
+</ul>
+
+<h2>Next</h2>
+<p>Continue cloud in curriculum order: <strong>Enterprise &amp; Hybrid 10.1–10.11 (10)</strong> — the last cloud sub-track (cloud → 92/92). Then ai-ml-engineering → on-premises → platform. Same loop, now with grok-build + agy(Claude/Gemini-3.1-Pro) in the reviewer rotation. Minor follow-ups: 2 modules with <code>## References</code>-not-<code>## Sources</code>; the curriculum-wide bitnami→bitnamilegacy sweep (~24 remaining refs); carryover leak-cleanup (<code>cloud/hyperscaler-rosetta-stone.md</code>, <code>platform/.../mlops/module-5.6-ml-pipelines.md</code>).</p>
+</body></html>
