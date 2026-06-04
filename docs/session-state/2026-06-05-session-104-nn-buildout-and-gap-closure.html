@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 104 — Neural Networks buildout kickoff + gap-issue closure</title>
+<style>
+ body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+ h1{font-size:1.6rem;border-bottom:3px solid #2d6cdf;padding-bottom:.3rem}
+ h2{font-size:1.25rem;margin-top:2rem;border-bottom:1px solid #ddd;padding-bottom:.2rem;color:#2d6cdf}
+ h3{font-size:1.05rem;margin-top:1.3rem}
+ code{background:#f3f3f3;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+ table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.92rem}
+ th,td{border:1px solid #ccc;padding:.4rem .55rem;text-align:left;vertical-align:top}
+ th{background:#f0f4fb}
+ .ok{color:#137333;font-weight:600}.warn{color:#b06000;font-weight:600}.bad{color:#c5221f;font-weight:600}
+ blockquote{border-left:4px solid #2d6cdf;margin:.6rem 0;padding:.3rem .9rem;background:#f7f9fd;color:#333}
+ .tldr{background:#f7f9fd;border:1px solid #cdddf5;border-radius:6px;padding:.8rem 1rem}
+</style>
+</head>
+<body>
+<h1>Session 104 — Neural Networks buildout kickoff + gap-issue closure</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-05 · <strong>Branch:</strong> main (clean) · <strong>Orchestrator:</strong> Claude Opus 4.8 (interactive) · <strong>Pivot:</strong> user redirected off the ai-ml review queue onto (1) closing all gap-related issues and (2) designing+building a real neural-networks track.</p>
+
+<h2>TL;DR</h2>
+<p>User wants all gap issues gone and to "learn more about NN." Verified on disk that <strong>3 of 5 open gap-fill issues were phantom</strong> (already covered) and closed them. Ran a <strong>two-round three-way consult</strong> (codex / cursor / gemini) — all three committed <strong>ON</strong> to a real NN buildout. Discovered the deep-learning section is <strong>partly mislabeled</strong> (RNN module teaches CNNs, Backprop module teaches transformers). Filed <strong>epic #1793</strong> (deep-learning 10→~26 modules) and kicked off <strong>Wave 1 (Block A, 4 from-scratch modules)</strong> — 2 clean T0 passes, 1 trivial fix, 1 (gemini) needs expansion. Cross-family reviews in flight. Also: G2 override accepted (Stage-1 brief authored), G4 confirmed real + queued.</p>
+
+<h2>Gap issues — resolved</h2>
+<table>
+<tr><th>Issue</th><th>Claim</th><th>Reality (verified on disk)</th><th>Action</th></tr>
+<tr><td>G3 #1624</td><td>distributed-systems mental models (2-3 mods)</td><td><code>5.4-partial-failure-and-timeouts</code> 9077w + <code>5.5-clock-skew-and-ordering</code> 8633w</td><td class="ok">CLOSED — already covered</td></tr>
+<tr><td>G5 #1627</td><td>cross-cloud workload-identity rosetta</td><td><code>4.3-cloud-iam</code> 12946w — literal "Cross-Cloud Rosetta" + SPIFFE section</td><td class="ok">CLOSED — already covered</td></tr>
+<tr><td>G6 #1628</td><td>OTel Collector at scale (1-2 mods)</td><td><code>1.12-otel-collector-production</code> 8177w — all 6 topics</td><td class="ok">CLOSED — already covered</td></tr>
+<tr><td>#1609</td><td>NN Fundamentals module</td><td>real gap; superseded by broader epic</td><td class="ok">CLOSED — folded into #1793 Block A</td></tr>
+<tr><td>G4 #1626</td><td>LLM golden path on K8s (2-3 mods)</td><td>scattered, no production synthesis; <code>3.1</code> line 137 forward-refs a non-existent <code>3.3</code></td><td class="warn">REAL — queued (task #5): author 3.2 + 3.3</td></tr>
+<tr><td>G2 #1623</td><td>engineering-craft track (4-5 mods)</td><td>genuinely net-new; self-blocked on Platform-Foundations critical&lt;20 (now 30)</td><td class="warn">User OVERRODE block → Stage-1 brief authored (worktree), modules next</td></tr>
+</table>
+
+<h2>The three-way consult (codex / cursor / gemini)</h2>
+<p>Round 1 (gap + NN scope): all three said <em>expand the deep-learning section, not a new track</em>; G3/G5/G6 close; G4 real; honor G2 block. User pushed back — wanted real NN depth, asked who wants <strong>off the team</strong>. Round 2 (NN buildout, reframed for depth): <strong>all three committed ON</strong>, none off.</p>
+<table>
+<tr><th>Agent</th><th>Commitment</th><th>Self-flagged weak spot (→ covered by cross-family review)</th></tr>
+<tr><td>codex gpt-5.5</td><td class="ok">ON</td><td>low-level mixed-precision / kernel-perf claims</td></tr>
+<tr><td>cursor composer-2.5</td><td class="ok">ON</td><td>GNN/SSL narrative voice; PyTorch version-pin freshness</td></tr>
+<tr><td>gemini 3.1-pro</td><td class="ok">ON</td><td>3D tensor-broadcasting backward edge cases</td></tr>
+</table>
+<p>Convergent insight: the real overlap for a new "NN fundamentals" module is with <code>1.2-pytorch-fundamentals</code> (lines 84–419 teach the from-scratch neuron), <em>not</em> 1.7. Unanimous top-risk: <strong>de-duplicate existing 1.2/1.4/1.5/1.6/1.7 first/with new modules</strong> or it bloats incoherently. Pedagogy: build ONE cumulative micro-framework (Karpathy style).</p>
+
+<h2>Section-mislabel finding (verified on disk)</h2>
+<table>
+<tr><th>File</th><th>Title says</th><th>Body actually teaches</th></tr>
+<tr><td>module-1.4-cnns-computer-vision</td><td>CNNs</td><td>normalization / dropout / init / schedulers (cnn=7)</td></tr>
+<tr><td>module-1.5-rnns-sequence-models</td><td>RNNs</td><td class="bad">CNNs (cnn=46 vs rnn=13)</td></tr>
+<tr><td>module-1.6-backpropagation-deep-dive</td><td>Backprop</td><td class="bad">attention / transformers (attn=166)</td></tr>
+</table>
+
+<h2>Epic #1793 — NN buildout (deep-learning 10 → ~26 modules)</h2>
+<p>Blocks A (foundations from scratch), B (training-as-engineering), C (representations + attention/transformer from scratch), D (fix CNN/RNN labeling + capstone) + 6 re-scopes. Structural approach: <strong>no mass file renames</strong> — new modules use <code>module-1.1.x</code> decimal names + explicit slug + fractional <code>sidebar.order</code> (Block A = 1002.1–1002.8). Full module list + ACs in the issue body.</p>
+
+<h3>Wave 1 (Block A) — 4 drafts authored, reviews in flight</h3>
+<table>
+<tr><th>Module (order)</th><th>Author</th><th>verify_module</th><th>Reviewer (cross-family)</th></tr>
+<tr><td>A1 nn-math-warmup (1002.1)</td><td>cursor auto</td><td class="ok">T0 PASS, 5001w</td><td>codex</td></tr>
+<tr><td>A2 neuron-from-scratch (1002.2)</td><td>codex gpt-5.5</td><td class="warn">T1 — section-order only; 8.1k raw, ran all 8 code blocks</td><td>cursor</td></tr>
+<tr><td>A3 forward-propagation-mlp (1002.3)</td><td>deepseek-v4-pro</td><td class="ok">T0 PASS, 5002w</td><td>gemini</td></tr>
+<tr><td>A4 activation-functions (1002.4)</td><td>gemini-3.1-pro</td><td class="bad">T3 — under density+depth gates; prose 4806w &lt;5000, no next-link</td><td>opus 4.8 (math-critical)</td></tr>
+</table>
+<p><strong>Gemini-write data point (user asked "why not gemini-pro"):</strong> gave it A4. Write is <em>genuine</em> (real 6.6k file, real commit, 325s) — but the verifier shows it came in <strong>under several house-style gates</strong> that cursor/codex/deepseek cleared first-pass. Not a turnkey author lane yet; needs a fix pass. Useful concrete signal, not a blanket no.</p>
+
+<h3>Brief bug fixed mid-wave</h3>
+<p>My Block A shared brief had the section order wrong (put "Why This Module Matters" before "Learning Outcomes") and omitted the required <code>## Next Module</code> link — the verifier's <code>structure_order</code> gate enforces: Learning Outcomes → Why → Did You Know → Common Mistakes → Quiz → Hands-On → Next Module(link). Fixed in <code>logs/remediation/briefs/nn-blockA/_shared-rules.md</code> for A5+. A2/A4 need the order normalized at finalize.</p>
+
+<h2>Next steps (resume here)</h2>
+<ol>
+<li><strong>Process the 4 cross-family reviews</strong> (rev-a1..a4 in <code>logs/dispatch_responses/</code>) — ground-check EVERY math finding both directions before applying.</li>
+<li><strong>Fix:</strong> A2 section-order; A4 expand to density+depth gates + math corrections + next-link + order. Normalize all four to the canonical heading order.</li>
+<li><strong>Consolidated Wave-1 PR</strong> (cherry-pick the 4 branches onto fresh origin/main in a worktree — never branch in primary), <code>npm run build</code> in PRIMARY (schema gate), finalize review records.</li>
+<li><strong>Wave 2 = Block A A5–A8</strong> (loss functions, backprop-by-hand, tiny NumPy lab, rescope 1.7 autograd). Briefs follow the fixed shared-rules.</li>
+<li>Then Blocks B/C/D (task #4) incl. fixing the 3 mislabeled modules.</li>
+<li><strong>G2</strong> (task #3): review the Stage-1 brief in <code>.worktrees/g2-craft</code> (commit 14ab58ca) → PR → author the 4-5 craft modules (override).</li>
+<li><strong>G4</strong> (task #5): author synthesis-apps 3.2 + 3.3.</li>
+</ol>
+
+<h2>Artifacts</h2>
+<ul>
+<li>Consult: <code>logs/consult/2026-06-04/</code> (briefs + 6 verdict files)</li>
+<li>Wave-1 briefs: <code>logs/remediation/briefs/nn-blockA/{_shared-rules.md,_review-rules.md,A1..A4.md}</code></li>
+<li>Author worktrees: <code>.worktrees/nn-a1..a4</code> (branches nn-blockA-a1..a4, each committed)</li>
+<li>G2 brief: <code>.worktrees/g2-craft</code> → <code>docs/research/gap-engineering-craft-stage1-2026-06-05.html</code></li>
+</ul>
+</body>
+</html>
