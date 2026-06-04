@@ -27,11 +27,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In August 2023, a rapidly growing global fintech platform, managing 14 Kubernetes clusters and over 2,800 active pods, experienced a catastrophic observability failure that cost the organization an estimated $2.5 million in strict service-level agreement (SLA) penalties. Their entire monitoring backbone relied on a single, massive Prometheus server. When their engineering teams deployed a major microservices expansion to handle new payment regions, the metric cardinality exploded to over 12 million unique time series within a matter of hours. The Prometheus instance's memory consumption rapidly climbed from 16GB to 64GB, query latency degraded to over 30 seconds, and the server began violently crash-looping with out-of-memory (OOM) errors every two days.
+**Hypothetical scenario:** A platform team operating fourteen Kubernetes clusters across three regions discovers that their single central Prometheus instance now holds more than twelve million active time series after a routine microservices rollout. Memory climbs from sixteen gigabytes to sixty-four gigabytes within hours, PromQL queries time out above thirty seconds, and the Prometheus pod begins crash-looping with out-of-memory errors every few days. The team responds by vertically scaling the pod to one hundred twenty-eight gigabytes of RAM, which briefly stabilizes ingestion until a restart forces a twenty-five-minute Write-Ahead Log replay. During that blind window, a payment gateway degrades while on-call engineers grep unstructured logs across hundreds of nodes because metrics, traces, and centralized dashboards are simultaneously unreliable.
 
-The platform engineering team attempted to mitigate the issue by vertically scaling the Prometheus pod, eventually allocating a staggering 128GB of RAM. While this temporarily stabilized the data ingestion, the architectural side-effects were devastating. Whenever the monolithic pod restarted, replaying the massive Write-Ahead Log (WAL) took upwards of 25 minutes. During one of these vulnerable WAL replay windows, a critical payment gateway service suffered a cascading failure. Because the primary monitoring system was effectively offline and recovering, the on-call engineers were flying completely blind. They were forced to manually parse unstructured text logs across hundreds of nodes using raw `grep` commands, transforming a routine infrastructure blip into a prolonged global outage.
-
-This incident underscores a fundamental truth about cloud-native infrastructure: observability data volume naturally grows at a much faster rate than the underlying applications. The real fix for the fintech company was not adding more RAM; it was a complete architectural overhaul. They needed to shard Prometheus across independent clusters, implement Thanos for long-term distributed queries, aggressively filter and route data using OpenTelemetry collectors, and enforce strict cardinality limits across all development teams. This module will teach you how to build exactly this kind of resilient, multi-cluster observability platform that gracefully handles millions of time series and terabytes of logs without ever becoming the bottleneck.
+This pattern underscores a fundamental truth about cloud-native infrastructure at enterprise scale: observability data volume naturally grows faster than the applications it monitors. The durable fix is rarely more RAM on a monolith. Teams need per-cluster Prometheus (or equivalent scrape agents), a vendor-neutral collection plane with OpenTelemetry, long-term metric storage with downsampling, log pipelines that sample before egress, and trace policies that keep errors without storing every span. On AWS that often means Amazon Managed Service for Prometheus (AMP) plus CloudWatch; on Google Cloud, Managed Service for Prometheus or Cloud Monitoring with Cloud Logging; on Azure, Azure Monitor managed Prometheus and Application Insights. This module teaches how to design that multi-cluster, multi-signal platform so telemetry remains trustworthy when clusters, tenants, and regions multiply.
 
 ---
 
@@ -58,9 +56,68 @@ As demonstrated in the table above, enterprise-scale telemetry demands tiered st
 
 ---
 
+## The Three Pillars at Multi-Cluster Scale
+
+Metrics, logs, and traces answer different questions, and each pillar fails in a predictable way when you treat a fleet of Kubernetes 1.35 clusters like a single laptop deployment. Metrics tell you *how much* and *how fast* through time-series aggregation; logs tell you *what happened in one place* with rich context; traces tell you *how a request moved* across services and regions. At small scale you can colocate all three in one namespace with default Helm charts. At large scale you must separate ingestion paths, retention tiers, and query planes so a logging storm cannot starve metric scrapes, and a cardinality explosion cannot take down trace backends.
+
+Naive single-cluster observability collapses for four structural reasons. First, **network and identity boundaries**: scraping every pod in every cluster from one Prometheus requires cross-VPC connectivity, long scrape intervals, or insecure metric endpoints exposed beyond the cluster perimeter. Second, **cardinality multiplication**: the same HTTP metric with a `pod` label across fifteen thousand pods creates orders of magnitude more series than the same metric aggregated at deployment scope. Third, **egress economics**: shipping raw logs and full-resolution metrics from eu-west-1 to a central us-east-1 store can dominate the observability bill because cloud providers price inter-region and NAT traversal differently on AWS, GCP, and Azure. Fourth, **blast radius**: one oversized ingester or compactor outage should not blank every region’s dashboards simultaneously.
+
+OpenTelemetry (OTel) is the vendor-neutral collection standard that keeps these pillars coherent. Applications and platform agents emit OTLP (OpenTelemetry Protocol) over gRPC or HTTP to an OTel Collector, which applies processors for batching, filtering, attribute enrichment, and sampling before exporting to backends. The Collector can scrape Prometheus endpoints, tail container logs via `filelog`, and receive traces from instrumented services using the same pipeline vocabulary. That uniformity matters when AWS teams standardize on AMP remote write, GCP teams on Google Cloud Managed Service for Prometheus, and Azure teams on Azure Monitor workspace ingestion, while still wanting identical pod labels and trace context in every cluster.
+
+```mermaid
+flowchart TB
+    subgraph Fleet["Many clusters / regions / tenants"]
+        C1[Cluster A metrics logs traces]
+        C2[Cluster B metrics logs traces]
+        C3[Cluster C metrics logs traces]
+    end
+
+    subgraph OTel["OTel Collector tier\nDaemonSet + optional central Deployment"]
+        Proc[Processors:\nfilter batch sample k8sattributes]
+    end
+
+    subgraph Backends["Purpose-built stores"]
+        M[Metrics:\nPrometheus Thanos Mimir AMP]
+        L[Logs:\nLoki Cloud Logging Azure Monitor]
+        T[Traces:\nTempo X-Ray Cloud Trace App Insights]
+    end
+
+    subgraph Consume["Consumption layer"]
+        G[Grafana / Cloud consoles]
+        SLO[SLO + alerting\nerror budgets]
+    end
+
+    C1 --> OTel
+    C2 --> OTel
+    C3 --> OTel
+    OTel --> M
+    OTel --> L
+    OTel --> T
+    M --> G
+    L --> G
+    T --> G
+    M --> SLO
+```
+
+The diagram is intentional: collectors are a **data plane**, backends are **storage/query engines**, and SLO tooling sits on metrics (often with exemplars linking into traces). Platform teams that skip the middle layer usually end up with fifteen different Fluent Bit configs and incompatible label names, which makes multi-cloud incident response painfully slow.
+
+| Pillar | Primary question | Typical failure at scale | Vendor-neutral anchor | AWS | GCP | Azure |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Metrics** | Is the system fast/healthy/right-sized? | OOM from label cardinality; slow PromQL | Prometheus + remote write / Thanos | AMP, CloudWatch metrics | Cloud Monitoring, GMP | Azure Monitor managed Prometheus |
+| **Logs** | What did this pod say when it failed? | Ingest quota blowout; expensive full-text index | Structured logs + label selectors | CloudWatch Logs | Cloud Logging | Log Analytics / Monitor logs |
+| **Traces** | Where did latency accumulate? | Storing 100% spans; broken context | W3C `traceparent` + tail sampling | X-Ray | Cloud Trace | Application Insights |
+
+> **Stop and think**: If your organization mandates Azure Monitor for corporate compliance but cluster teams prefer in-cluster Loki for developer self-service, which pillar needs the strictest write-path governance so you do not pay twice for the same log bytes?
+
+---
+
 ## Multi-Cluster Prometheus with Thanos
 
 Prometheus was originally designed for localized, single-cluster deployments. It utilizes a highly optimized local Time Series Database (TSDB) but lacks native capabilities for distributed querying, horizontal scaling, or seamless long-term object storage. When operating multiple clusters, you need a mechanism to query data across all of them globally, store historical data economically (beyond the brief retention period of local SSDs), and deduplicate incoming metrics from highly available (HA) Prometheus pairs.
+
+On Amazon EKS, the Prometheus Operator pattern remains the default starting point, with optional remote write to AMP when finance wants a managed control plane. On GKE, Google documents using Managed Service for Prometheus collectors or bringing your own Prometheus with consistent workload identity for scrape auth. On AKS, the Azure Monitor metrics addon can replace self-managed scrape infrastructure for teams that accept workspace-based governance. The Kubernetes version (1.35 in this curriculum) does not change these economics; it only shifts which kubelet/cAdvisor metrics appear and how autoscaling endpoints are labeled.
+
+Operational limits you should plan around—verify current numbers in vendor docs rather than memorizing quotas—include TSDB head block size, maximum recommended active series per Prometheus instance, ingester memory for Loki when stream counts spike, and tail-sampling buffer RAM in centralized Collectors. Exceeding any of these limits produces the same user-visible symptom: dashboards go blank during the exact moment leadership asks for a timeline.
 
 ### Thanos Architecture
 
@@ -114,7 +171,7 @@ spec:
     cluster: "prod-us-east-1"
     region: "us-east-1"
   thanos:
-    image: quay.io/thanos/thanos:v0.36.1
+    image: quay.io/thanos/thanos:v0.41.0
     objectStorageConfig:
       key: objstore.yml
       name: thanos-objstore-config
@@ -169,7 +226,7 @@ spec:
     spec:
       containers:
         - name: querier
-          image: quay.io/thanos/thanos:v0.36.1
+          image: quay.io/thanos/thanos:v0.41.0
           args:
             - query
             - --http-address=0.0.0.0:9090
@@ -207,7 +264,7 @@ spec:
     spec:
       containers:
         - name: store
-          image: quay.io/thanos/thanos:v0.36.1
+          image: quay.io/thanos/thanos:v0.41.0
           args:
             - store
             - --data-dir=/data
@@ -232,6 +289,25 @@ spec:
             storage: 20Gi  # Cache for frequently accessed blocks
 ```
 
+**Thanos Receive** (alternative to sidecar upload) accepts Prometheus remote write directly and writes to object storage without waiting for two-hour TSDB blocks. Receive fits burstier workloads and centralized agent models, but it shifts failure modes to the receive hash ring; operations teams must monitor replication factor and backlog queues. Many EKS/GKE/AKS fleets combine sidecar for clusters that already run Prometheus Operator, plus Receive for edge clusters that only run lightweight agents.
+
+Grafana Mimir (Cortex lineage) prefers remote write from the start. A minimal `remote_write` stanza in Prometheus or the OTel exporter points to Mimir distributors:
+
+```yaml
+# prometheus.yml fragment — remote_write to Mimir or AMP-compatible endpoint
+remote_write:
+  - url: https://mimir-distributor.monitoring.svc:8080/api/v1/push
+    headers:
+      X-Scope-OrgID: team-payments
+    queue_config:
+      capacity: 10000
+      max_shards: 50
+      min_shards: 1
+      max_samples_per_send: 5000
+```
+
+Tune `queue_config` when clusters flap during node drains; undersized queues cause sample drops that look like application outages in Grafana. Managed endpoints (AMP, Google Cloud Managed Service for Prometheus, Azure Monitor workspace) publish authentication and endpoint formats in their official docs—swap the URL and signing mechanism, keep the queue discipline.
+
 ### Thanos vs. Cortex vs. Mimir
 
 When architecting for scale, engineers typically weigh Thanos against push-based alternatives like Grafana Mimir. Both solve the long-term storage and global query problem, but they do so using fundamentally different topological designs. 
@@ -246,6 +322,24 @@ When architecting for scale, engineers typically weigh Thanos against push-based
 | Best for | Multi-cluster with existing Prometheus | Large multi-tenant platforms | Large multi-tenant platforms |
 | License | Apache 2.0 | Apache 2.0 | AGPL 3.0 |
 
+### Metrics at Scale: Remote Write, Federation, and Downsampling
+
+Prometheus remains the de facto metrics format on Kubernetes because `ServiceMonitor` objects, kube-state-metrics, and application `/metrics` endpoints already speak it. The core Prometheus project intentionally optimizes for **reliable local scraping** rather than horizontal sharding; when you outgrow one TSDB head, you choose an ecosystem pattern instead of a bigger single pod.
+
+**Remote write** pushes samples from Prometheus (or the OTel `prometheusremotewrite` exporter) to a centralized receiver. Grafana Mimir, Cortex, and Amazon Managed Service for Prometheus all ingest via Prometheus remote write APIs. This model centralizes query and compaction but shifts operational focus to ingestion quotas, per-tenant limits, and deduplication of HA pairs. AWS documents AMP pricing primarily around **samples ingested**, with additional charges for stored samples and query samples processed, which makes remote-write cardinality discipline an FinOps task, not only a reliability task.
+
+**Federation** (`/federate`) lets a global Prometheus pull aggregated series from regional Prometheus servers. Federation is simpler than Thanos for small multi-cluster footprints, but it still concentrates query load on the global instance and encourages up-sum-only workflows that break when labels differ across clusters. Most enterprises beyond roughly ten clusters adopt Thanos, Mimir, or a managed Prometheus-compatible service instead of a federation tree.
+
+**Recording rules** pre-compute expensive PromQL (rates, histogram quantiles, aggregations by deployment) into new lower-cardinality metrics. They are the cheapest performance win because dashboards query `$recording_rule` instead of `sum(rate(...[5m])) by (pod)` across thousands of pods.
+
+**Downsampling** (Thanos Compactor, Mimir/Cortex compaction, or managed retention policies) stores five-second resolution briefly, then one-minute or five-minute resolution for months. Compactor downsampling is how teams keep multi-year SLO history without paying full-resolution storage for every scrape interval.
+
+| Pattern | When it fits | AWS angle | GCP angle | Azure angle |
+| :--- | :--- | :--- | :--- | :--- |
+| Thanos sidecar + object store | Existing per-cluster Prometheus + S3/GCS/Azure Blob | Sidecar uploads to S3; querier in tooling cluster | GCS backend; multi-cluster GKE | Azure Blob + managed identities |
+| Mimir/Cortex remote write | Greenfield central TSDB + strong tenancy | AMP as managed remote-write target | Google Cloud Managed Service for Prometheus | Azure Monitor workspace for Prometheus metrics |
+| Federation only | Few clusters, coarse aggregates | Rare at EKS fleet scale | Rare beyond early GKE pilots | Possible for hub-spoke AKS |
+
 > **Stop and think**: If the Thanos Compactor goes down for 48 hours, what happens to your Grafana dashboards? Would you lose data, or just experience slower queries when looking at historical data from a week ago?
 
 ---
@@ -255,6 +349,10 @@ When architecting for scale, engineers typically weigh Thanos against push-based
 The OpenTelemetry (OTel) Collector acts as a vendor-agnostic ingestion pipeline, standardizing the receipt, processing, and exportation of all telemetry signals: metrics, logs, and distributed traces. At enterprise scale, the Collector becomes the single most critical data router in your architecture.
 
 Deploying OTel as a DaemonSet ensures that every Kubernetes node has a localized agent capable of collecting node-level metrics (from kubelet), intercepting standard out logs, and receiving application traces with minimal network latency.
+
+For fleets larger than a handful of clusters, introduce a **gateway tier**: DaemonSet collectors forward to a regional Deployment that runs tail sampling, sensitive attribute redaction, and rate limiting before remote write leaves the region. This mirrors how cloud providers structure their own pipelines—edge collection, regional aggregation, central query—and prevents every node from holding incomplete traces during `decision_wait`. On AWS, ADOT distributions package collectors with X-Ray exporters; on GCP and Azure, OpenTelemetry distributions target Cloud Trace and Application Insights respectively while still allowing OTLP export to Tempo for multi-cloud neutrality.
+
+When wiring exporters, treat TLS and identity as part of the data plane. Prometheus remote write to AMP or Azure Monitor workspaces should use workload identity (EKS Pod Identity or IRSA, GKE Workload Identity, Entra Workload ID on AKS) instead of long-lived keys embedded in ConfigMaps. The same identity pattern applies to Loki object storage and Thanos S3/GCS/Azure Blob uploads.
 
 ```mermaid
 flowchart LR
@@ -284,7 +382,7 @@ flowchart LR
         end
         subgraph Exporters
             E_Prom[prometheusremotewrite]
-            E_Loki[loki]
+            E_OTLPHTTP[otlphttp → Loki /otlp]
             E_OTLP[otlp to Tempo]
         end
         Receivers --> Processors --> Exporters
@@ -299,7 +397,7 @@ flowchart LR
     NodeExp --> R_Prom
     
     E_Prom --> Thanos[Thanos/Mimir\nmetrics]
-    E_Loki --> Loki[Loki/Elasticsearch\nlogs]
+    E_OTLPHTTP --> Loki[Loki/Elasticsearch\nlogs]
     E_OTLP --> Tempo[Tempo/Jaeger\ntraces]
 ```
 
@@ -397,8 +495,10 @@ spec:
         tls:
           insecure: true
 
-      loki:
-        endpoint: "http://loki-gateway:3100/loki/api/v1/push"
+      otlphttp/loki:
+        endpoint: "http://loki-gateway:3100/otlp"
+        tls:
+          insecure: true
 
       otlp/tempo:
         endpoint: "tempo-distributor:4317"
@@ -414,12 +514,14 @@ spec:
         logs:
           receivers: [filelog]
           processors: [memory_limiter, k8sattributes, batch]
-          exporters: [loki]
+          exporters: [otlphttp/loki]
         traces:
           receivers: [otlp]
           processors: [memory_limiter, k8sattributes, batch]
           exporters: [otlp/tempo]
 ```
+
+Loki 3.x ingests logs natively over OTLP (`/otlp`). The contrib `loki` exporter (`lokiexporter`, push to `/loki/api/v1/push`) was deprecated in 2024-07 and removed from current Collector builds—configs that still reference `exporters: loki` fail decode with `unknown type: loki`. Route log pipelines through `otlphttp` (or `otlp`) to the Loki OTLP endpoint instead.
 
 > **Pause and predict**: If you configure the `memory_limiter` processor in the OTel Collector to drop telemetry when it hits 90% memory, and there is a sudden spike in log volume, which signal (metrics, logs, or traces) gets dropped first? Or are they dropped equally?
 
@@ -462,6 +564,18 @@ flowchart TD
 ```
 
 This deliberate trade-off makes ingestion and long-term storage exponentially cheaper. When executing a search query, Loki quickly identifies the relevant compressed chunks using the label index and then brute-force scans (greps) through the chunk content in memory.
+
+### Structured Logging and Shipping Pipelines
+
+Unstructured printf-style logs force expensive parsing at query time and encourage operators to promote volatile fields (request IDs, user IDs) into labels, which repeats the cardinality mistake from metrics. **Structured logging** (JSON or logfmt with stable keys like `level`, `service`, `trace_id`, `http.route`) lets collectors enrich and filter without guessing. OpenTelemetry Logs Bridge maps existing log streams into OTLP so the same Collector pipeline can route to Loki, Google Cloud Logging, or Azure Monitor.
+
+At node scale, **Fluent Bit** and **Vector** remain the dominant shippers because they are lightweight, support Kubernetes metadata filters, and integrate with cloud-native sinks. A common enterprise pattern is DaemonSet shipper → regional OTel Collector (sampling + PII redaction) → central Loki or cloud logging API. On AWS, FireLens for EKS often fronts CloudWatch Logs; on GCP, logging agents target Cloud Logging with workload identity; on Azure, Container Insights and diagnostic settings feed Log Analytics. The architectural invariant is identical: **filter and sample before cross-region egress**, because log ingestion pricing is volume-based and surprises show up on the invoice before anyone tunes retention.
+
+| Tier | Retention | Query expectation | Cost driver |
+| :--- | :--- | :--- | :--- |
+| Hot | 1–7 days | Fast troubleshooting | In-memory ingesters / indexing |
+| Warm | 30 days | Namespace-scoped investigations | Object storage + compactor |
+| Cold / compliance | 1–7 years | Rare legal or audit pulls | Archive storage + export jobs |
 
 ### Loki Deployment for Multi-Cluster
 
@@ -516,6 +630,10 @@ data:
 
 At a massive scale, an unoptimized service blindly logging at the `DEBUG` level can single-handedly saturate a cluster's network interfaces and exhaust centralized storage budgets. OpenTelemetry allows you to assert authoritative control over log volumes before they ever leave the node.
 
+LogQL queries should mirror how operators actually troubleshoot: start with low-cardinality selectors (`{namespace="payments", app="ledger"}`), narrow time windows, then pipeline filters (`| json | level="error"`). Teaching engineers to search raw text globally without labels recreates Elasticsearch costs inside Loki. For security investigations that truly need full-text search, route a **copy** of specific audit streams to a purpose-built index rather than promoting all application logs to full-text infrastructure.
+
+When bridging clouds, normalize field names (`severity` vs `level`, `trace_id` vs `traceId`) in OTel `transform` processors so Grafana derived fields work across AKS, EKS, and GKE. Consistency beats having the perfect parser per language.
+
 ```yaml
 # OTel Collector: Filter noisy logs before they reach Loki
 processors:
@@ -532,10 +650,10 @@ processors:
           - key: k8s.namespace.name
             value: "kube-system"  # Drop kube-system logs
 
-  # Sample verbose logs (keep 10% of DEBUG logs)
+  # Sample a fixed percentage of log records (not severity-filtered by itself)
   probabilistic_sampler:
     sampling_percentage: 10
-    # Only applied to logs where severity == DEBUG
+  # To keep only DEBUG at 10%, add a filter processor on severity before the sampler
 
   # Transform: drop specific log fields to reduce size
   transform/logs:
@@ -554,6 +672,12 @@ processors:
 ## Cardinality and Cost Management
 
 In time-series databases, cardinality refers to the total number of unique time series actively being tracked. The cardinality of a single metric is determined by multiplying the number of unique values for each associated label. High-cardinality labels—such as explicit IP addresses, unique session tokens, or unsanitized HTTP request paths—are the primary culprits behind Prometheus OOM crashes.
+
+Cardinality is also how managed vendors meter your bill. Amazon Managed Service for Prometheus charges by metric samples ingested; Google Cloud and Azure publish analogous ingestion models for Prometheus metrics and log analytics. That means a label explosion is simultaneously a reliability incident and a procurement incident. FinOps dashboards should plot `prometheus_tsdb_head_series` (or cloud equivalents) alongside daily ingestion cost so product teams see feedback within days, not at quarter close.
+
+Platform engineering teams typically publish a **label contract**: allowed keys (`service`, `http_route_group`, `status_code`, `deployment`), forbidden keys (`user_id`, `email`, raw `url`), and guidance to put high-cardinality identifiers in exemplars, logs, or trace attributes. Enforcement layers include: (1) admission-time linting in CI for custom ServiceMonitors, (2) OTel `transform`/`filter` processors dropping labels at collection, (3) Prometheus `metric_relabel_configs` on scrape, and (4) hard per-tenant limits in Mimir or AMP workspaces. AWS documents cost optimization for AMP emphasizing ingestion control; the same discipline applies whether storage is S3 behind Thanos or a managed workspace.
+
+**Hypothetical scenario:** A team adds `customer_id` as a Prometheus label on an API with two million monthly active users. Even at one sample per minute, series multiplication overwhelms local TSDB RAM and can push remote-write pipelines into throttle. The remediation is not “buy bigger nodes forever”; it is migrate `customer_id` to trace attributes, aggregate counters by `customer_tier`, and add a recording rule for SLA-relevant aggregates only.
 
 ```mermaid
 flowchart TD
@@ -643,7 +767,17 @@ count by (pod) (http_requests_total)
 
 As architectures fracture into dozens of microservices deployed across disparate Kubernetes clusters, traditional single-service logging becomes insufficient for diagnosing systemic latency. Distributed tracing tracks the complete lifecycle of a single request as it traverses network boundaries, database calls, and inter-service HTTP requests. 
 
-This relies heavily on trace context propagation, where standard HTTP headers (such as the W3C standard `traceparent`) are seamlessly injected and extracted by each service.
+This relies heavily on trace context propagation, where standard HTTP headers (such as the W3C `traceparent` header defined in the W3C Trace Context recommendation) are injected at ingress and extracted by each downstream hop. If any service strips headers at a gateway or rewrites outbound calls without propagating context, traces fracture into orphan spans and on-call engineers see “mystery” latency inside the mesh. Service meshes (Istio, Linkerd, Cilium with Hubble) can automate propagation for HTTP/gRPC, but application-owned outbound clients still need explicit instrumentation or eBPF-based capture.
+
+**Head-based sampling** decides keep/drop at trace start (for example “keep 10% of all traces”). It is cheap and easy but statistically discards rare failures. **Tail-based sampling** buffers spans until the trace completes, then applies policies such as “keep all ERROR status” or “keep latency > 2s.” Tail sampling requires a centralized Collector Deployment with enough memory to hold incomplete traces during `decision_wait`, which is why DaemonSet collectors forward spans to a regional aggregator tier.
+
+**Exemplars** link histogram metrics to trace IDs so Grafana can jump from a latency spike in PromQL to the exact trace in Tempo or Jaeger. That bridge is how SLO dashboards become actionable during incidents instead of merely pretty.
+
+| Signal linkage | Mechanism | Operational payoff |
+| :--- | :--- | :--- |
+| Metrics → Traces | Exemplars on histograms | Click from SLO burn to slow trace |
+| Logs → Traces | `trace_id` field in JSON logs | Pivot from error line to waterfall |
+| Traces → Metrics | Span metrics derived in Collector | RED metrics from trace stream |
 
 ```mermaid
 flowchart TD
@@ -678,6 +812,8 @@ flowchart TD
 ### Tail-Based Sampling for Traces
 
 Ingesting and storing 100% of generated distributed traces is often financially unviable. Most systems implement sampling strategies. Standard "head-based" sampling makes a random drop-or-keep decision the moment a request starts. However, this means you will frequently drop traces for transactions that eventually fail later in the pipeline.
+
+For multi-region checkout flows, also verify **baggage and context propagation** across asynchronous boundaries (Kafka, SQS, Pub/Sub, Azure Service Bus). A trace that breaks when a message is enqueued will show a perfect frontend span and a disconnected consumer span, misleading latency analysis. OpenTelemetry propagators must be configured on producers and consumers with the same W3C headers; mesh ingress gateways should forward `traceparent` untouched. When vendors provide managed trace pipelines (X-Ray, Cloud Trace, Application Insights), confirm whether tail sampling happens in your Collector or in the cloud backend, because double-sampling can erase rare errors entirely.
 
 Tail-based sampling resolves this by holding all constituent spans of a trace in a temporary memory buffer until the entire request completes. Only then does it execute policy decisions, guaranteeing that any trace containing an error or exceeding latency thresholds is preserved.
 
@@ -736,17 +872,166 @@ spec:
           exporters: [otlp/tempo]
 ```
 
+### Managed Trace Backends
+
+Vendor-managed trace stores trade operational toil for ingestion pricing and retention limits. **AWS X-Ray** integrates with the CloudWatch agent and ADOT (AWS Distro for OpenTelemetry) collectors on EKS; sampling rules can be configured centrally while still exporting OTLP to self-hosted Tempo when needed. **Google Cloud Trace** accepts OTLP via OpenTelemetry and ties into Cloud Monitoring trace explorer views for GKE workloads. **Azure Application Insights** (workspace-based) ingests OpenTelemetry traces from AKS and links them to smart detection alerts, though teams should treat high-cardinality custom dimensions carefully because they affect both cost and query performance.
+
+---
+
+## Managed Observability: AWS, GCP, and Azure
+
+Build-versus-buy is not a one-time choice; it is a per-signal decision tied to compliance, staffing, and existing cloud commitments. Many enterprises run **open-source backends in-cluster** (kube-prometheus-stack, Loki, Tempo) for engineering velocity while using **managed ingestion and long-term stores** for production SLAs and IAM integration.
+
+| Capability | AWS (EKS-centric) | GCP (GKE-centric) | Azure (AKS-centric) | Kubernetes-neutral |
+| :--- | :--- | :--- | :--- | :--- |
+| Metrics | Amazon Managed Service for Prometheus, CloudWatch | Google Cloud Managed Service for Prometheus, Cloud Monitoring | Azure Monitor managed Prometheus metrics | Prometheus + Thanos/Mimir |
+| Logs | CloudWatch Logs, FireLens | Cloud Logging | Azure Monitor / Log Analytics | Loki, OTel → object store |
+| Traces | X-Ray, ADOT | Cloud Trace | Application Insights | Tempo, Jaeger |
+| Dashboards / SLO UI | Amazon Managed Grafana, CloudWatch | Cloud Monitoring dashboards | Azure Managed Grafana, Monitor workbooks | Grafana |
+| Cost visibility | Cost Explorer + CUR tags | Cloud Billing + labels | Cost Management + tags | Kubecost, OpenCost |
+
+**Amazon Managed Service for Prometheus** offers a Prometheus-compatible remote write endpoint with AWS IAM authentication and automatic scaling; AWS documents ingestion as the dominant cost driver, with tiered per-sample pricing and separate storage and query-sample charges. Teams on EKS often keep a local Prometheus for scraping and alerting while remote-writing to AMP for global query and retention.
+
+**Google Cloud Managed Service for Prometheus** and Cloud Monitoring collect Prometheus metrics from GKE with managed collectors and support PromQL-style querying in the Cloud Monitoring metrics explorer. Google documents metric ingestion and API read costs separately from logging, which matters when autoscaling clusters add kubelet/cAdvisor cardinality automatically.
+
+**Azure Monitor workspace for Prometheus metrics** (managed Prometheus on AKS) ingests Prometheus remote write data into a workspace integrated with Azure Monitor alerts and Grafana. Application Insights provides APM-style trace and dependency views; pairing it with OpenTelemetry SDKs is the supported path as legacy instrumentation agents retire.
+
+The managed path wins when you need **federated identity**, **private endpoints**, and **org-wide SLO reporting** without operating Compactor rings yourself. The self-hosted path wins when you need **multi-cloud identical configs**, **air-gapped regions**, or **aggressive custom sampling** that managed quotas resist.
+
+Hybrid designs are common and valid: scrape and alert locally with Prometheus on every cluster, remote-write long retention to AMP or Azure Monitor, mirror critical logs to Loki for LogQL, and export traces to Tempo plus Cloud Trace for teams that live in GCP consoles. The non-negotiable requirement is a written **telemetry routing policy** so you do not triple-pay for the same DEBUG log stream.
+
+---
+
+## SLOs, Error Budgets, and Symptom-Based Alerting
+
+Telemetry exists to support decisions, not to fill disks. **Service Level Indicators (SLIs)** are precise measurements (availability, latency, freshness) drawn primarily from metrics, with logs and traces as debugging lenses. **Service Level Objectives (SLOs)** set targets over rolling windows (for example 99.9% of checkout requests faster than 500 ms over thirty days). The **error budget** is the allowed unreliability before the SLO fails; when the budget burns quickly, feature work yields to reliability work.
+
+Symptom-based alerting pages humans on user-visible pain (SLO burn rate, failed synthetic probes, elevated 5xx rates) instead of every infrastructure twitch (single pod restart, node NotReady during drain). Multi-window, multi-burn-rate alerts (popularized in Google SRE practice) reduce false positives while still catching fast burns. Implementations typically use recording rules or Mimir/AMP ruler components to evaluate PromQL, then route through Alertmanager, PagerDuty, or cloud notification channels.
+
+**Alert fatigue** arrives when hundreds of threshold rules fire during partial outages, training on-call engineers to ignore pages. The fix is consolidation: one page per customer-facing service with clear severity, runbooks linked from annotations, and automatic silences for known maintenance windows. Multi-cluster environments should include `cluster` and `region` labels in alert templates so responders know which kubeconfig to use without reading a wiki. Managed clouds add native channels—Amazon SNS for CloudWatch alarms, Google Cloud alerting policies, Azure Monitor action groups—but the routing discipline remains the same: symptom first, infrastructure cause second.
+
+Recording rules for SLIs should be owned by the service team that owns the SLO, not only by central platform Prometheus. Central teams provide libraries (`slo:http_availability:ratio_rate5m`, `slo:http_latency:p99_rate5m`) and linting; product teams supply the `service` label selectors. That division prevents platform engineers from becoming bottlenecks every time a new deployment adds an HTTP route.
+
+| Alert type | Example signal | Why it scales |
+| :--- | :--- | :--- |
+| Symptom | `slo:burn_rate5m > 14` for checkout | Correlates to customer pain |
+| Cause | `KubeNodeNotReady` on one node | Useful after symptom fires |
+| Cardinality guard | `prometheus_tsdb_head_series` growth | Prevents observability outage |
+
+> **Pause and predict**: If you alert on CPU > 80% for every pod, but your SLO is latency-based, which alert will wake on-call during a thread-pool exhaustion incident that throttles checkout without high CPU?
+
+---
+
+## Cost Lens: Observability as a Top-3 Cloud Line Item
+
+Observability frequently lands in the top three non-compute cloud spends because pricing is **ingestion-linear**: every extra label value, log line, and span multiplies monthly cost more predictably than CPU throttling. FinOps teams that only right-size nodes while ignoring telemetry volume routinely save compute and still miss six-figure observability invoices.
+
+**Metrics costs** scale with samples ingested per month. High scrape frequency (10s vs 60s), HA duplication without deduplication, and unbounded labels (`user_id`, raw URL paths) explode sample counts. Managed Prometheus services on AWS, GCP, and Azure all document ingestion-tier pricing; verify current rates in official pricing pages because tiers change. Mitigations: increase scrape interval for infra metrics, drop expensive labels in OTel `transform` processors, use recording rules, enable downsampling, and enforce per-team quotas in Mimir or AMP workspace limits.
+
+**Logs costs** scale with gigabytes ingested and indexed. CloudWatch Logs charges ingestion and storage; Google Cloud Logging bills log volume; Azure Monitor log ingestion uses a pay-per-GB model in workspace analytics. Full-text search systems cost more than label-indexed Loki-style stores. Mitigations: structured logging at INFO in production, dynamic DEBUG only on targeted pods, tail sampling for verbose components, exclude health-check bodies, and tier retention (seven-day hot, thirty-day warm, archive for compliance).
+
+**Traces costs** scale with span count. Storing one hundred percent of traces for a high-QPS API is rarely economical; tail sampling that retains errors and slow traces while sampling routine success paths is the standard compromise. Cross-region export of spans mirrors NAT/egress surprises seen in metrics and logs.
+
+**Network costs** are the hidden multiplier. On AWS, NAT Gateway charges per gigabyte processed plus cross-AZ traffic; on GCP, Cloud NAT and inter-zone egress apply; on Azure, NAT Gateway and bandwidth meters add up. Centralizing all telemetry in one region from globally distributed clusters can cost more than the storage itself. Regional aggregation with summarized metrics and sampled logs/traces before cross-region transfer usually pays for itself.
+
+| Knob | Affects | Risk if misapplied |
+| :--- | :--- | :--- |
+| Scrape interval | Metric samples | Miss short incidents |
+| Label allow-lists | Cardinality | Blind spots in drill-down |
+| Log sampling | Log GB/month | Lose rare failure evidence |
+| Trace tail policies | Span storage | Over-retain routine traffic |
+| Retention downsampling | Long-term $ | Lose fine-grain historical queries |
+
+Kubecost and OpenCost attribute spend to namespaces and labels, but they do not replace cloud logging invoices. Use both: in-cluster attribution for engineering accountability, cloud billing exports for finance truth.
+
+### Provider-Specific Cost Gotchas
+
+**AWS:** NAT Gateway processing charges per gigabyte can exceed log storage when all DaemonSet shippers hairpin through a single NAT in a private subnet. Prefer VPC endpoints for S3 (Thanos/Loki blocks), AMP remote write endpoints, and CloudWatch Logs where available. Cross-AZ traffic between Prometheus replicas and ingesters also accrues silently during zone-balanced HA.
+
+**GCP:** Inter-zone egress within a region still carries cost at scale; placing Loki ingesters and GKE nodes in the same zone during labs is fine, but production should document zone spread versus telemetry egress explicitly. Cloud Logging charges log volume; exporting everything at DEBUG from GKE workloads is the most common surprise.
+
+**Azure:** NAT Gateway and bandwidth meters apply similarly to AWS patterns. Log Analytics ingestion bills per gigabyte ingested into a workspace; retaining verbose container stdout without transformation doubles both ingestion and retention cost.
+
+None of these replace fundamental telemetry discipline: fewer labels, shorter retention for noisy signals, and sampling before export.
+
+---
+
+## Patterns & Anti-Patterns
+
+| Pattern | When to Use | Why It Works | Scaling Note |
+| :--- | :--- | :--- | :--- |
+| Per-cluster Prometheus + global query | 3+ EKS/GKE/AKS clusters | Local scrape stays low-latency; global tier federates history | Add `cluster` external label on every write path |
+| OTel Collector DaemonSet + central sampler | Node logs + app OTLP | Distributes CPU; tail sampling needs aggregation tier | Separate memory limits per pipeline signal |
+| Recording rules + downsampling | Dashboards query heavy PromQL | Shrinks query cost and cardinality | Document rule ownership per team |
+| Symptom SLO alerts with multi-burn windows | On-call sustainability | Pages correlate to user pain | Pair with runbooks linking metrics → traces |
+| Regional telemetry aggregation | Multi-region active-active | Cuts NAT/egress before central store | Keep compliance data residency in region |
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+| :--- | :--- | :--- |
+| Central Prometheus scraping all clusters | OOM, cross-network scrape failures, security exposure | In-cluster Prometheus/Agent + Thanos/Mimir/AMP remote write |
+| High-cardinality labels on metrics | TSDB explosion, AMP/Mimir bill spike | Bound labels; put IDs in traces/logs |
+| `request_id` as Loki label | Ingester OOM, index blowout | Keep `request_id` in log line JSON field |
+| 100% trace retention | Span storage dominates budget | Tail sampling for errors/slow paths |
+| DEBUG logging fleet-wide | Log quota exhaustion | Dynamic log level + OTel filters |
+| Duplicate export to cloud + Loki ungoverned | Pay twice for same bytes | Policy: one primary log sink per environment |
+| CPU-threshold-only alerts | Miss latency SLO failures | Alert on SLI burn rates and synthetic checks |
+
+---
+
+## Decision Framework
+
+Use this flow when choosing observability architecture for a new fleet or region expansion. It assumes Kubernetes 1.35, multi-account or multi-project governance, and finance scrutiny on ingestion bills.
+
+```mermaid
+flowchart TD
+    Start[Fleet observability design] --> Clusters{How many clusters/regions?}
+    Clusters -->|1-2| Simple[In-cluster kube-prometheus + Loki single binary]
+    Clusters -->|3+| Global{Need single-pane global PromQL?}
+    Global -->|Yes| Store{Prefer self-hosted object store or managed Prometheus?}
+    Store -->|Self-hosted| Thanos[Thanos sidecar + querier + compactor]
+    Store -->|Managed| CloudMP[AMP / GMP / Azure Monitor workspace RW]
+    Global -->|No per-region only| Regional[Regional stacks + federated dashboards]
+    Clusters -->|Compliance multi-cloud| OTel[OTel Collector standard + dual export policy]
+    OTel --> Signals{Dominant pain today?}
+    Signals -->|Metrics cardinality| Card[Label governance + recording rules + downsampling]
+    Signals -->|Log cost| Log[Structured logs + sampling + retention tiers]
+    Signals -->|Trace volume| Trace[Tail sampling Deployment tier]
+    Card --> SLO[Define SLI/SLO + symptom alerts]
+    Log --> SLO
+    Trace --> SLO
+```
+
+| Decision input | Lean Thanos sidecar | Lean Mimir/AMP remote write | Lean managed logs (CloudWatch / Cloud Logging / Monitor) |
+| :--- | :--- | :--- | :--- |
+| Existing per-cluster Prometheus investment | High | Medium (agent mode) | N/A for metrics |
+| Multi-tenant hard limits required | Medium (label hacks) | High | High (cloud IAM boundaries) |
+| Team lacks TSDB operators | Low | Medium | High |
+| Strict data residency per region | High (region-scoped buckets) | Medium (regional workspaces) | High |
+| FinOps needs sample-level billing visibility | Medium | High on managed Prometheus | High on cloud logging |
+
+### Build vs Buy Summary
+
+| Requirement | Favor self-hosted (Thanos/Loki/Tempo) | Favor managed (AMP/GMP/Azure Monitor) |
+| :--- | :--- | :--- |
+| Identical config across AWS+GCP+Azure | Primary | Secondary (per-cloud workspaces) |
+| Small platform SRE team | Risky unless automated | Strong |
+| Enterprise IAM + PrivateLink | DIY with care | Strong |
+| Custom tail-sampling laws | Full control | Constrained by service limits |
+| Long-term cost at >1B samples/month | Tunable (object store tuning) | Tiered pricing—model before commit |
+
 ---
 
 ## Did You Know?
 
-1. **Prometheus was created at SoundCloud in 2012** and was the second project (after Kubernetes) to join the CNCF in 2016. It now monitors over 10 million Kubernetes clusters worldwide. Despite this ubiquity, Prometheus was never designed for multi-cluster or long-term storage -- those capabilities come from ecosystem projects like Thanos, Cortex, and Mimir. The Prometheus project maintainers have explicitly stated that horizontal scalability is not a goal of the core project.
+1. **Prometheus was created at SoundCloud in 2012** and was the second project (after Kubernetes) to join the CNCF in 2016. Despite this ubiquity, Prometheus was never designed for multi-cluster or long-term storage -- those capabilities come from ecosystem projects like Thanos, Cortex, and Mimir. The Prometheus project maintainers have explicitly stated that horizontal scalability is not a goal of the core project.
 
 2. **A single Kubernetes node generates approximately 500-800 metric time series** just from kubelet and cAdvisor metrics, before any application metrics. A 100-node cluster starts with 50,000-80,000 baseline time series. Application metrics typically add 3-10x on top of this. This means a 100-node cluster with microservices easily reaches 500K-1M time series -- the point where a single Prometheus instance starts struggling.
 
 3. **Grafana Loki's index is 10-100x smaller than Elasticsearch's** for the same log volume. Loki achieves this by indexing only labels (key-value metadata like namespace, pod name, and level), not the full text content. This means Loki is dramatically cheaper for storage but slower for full-text search queries. The design bet is that most log queries in Kubernetes filter by namespace and pod first, then grep through a small subset -- a bet that has proven correct for the majority of operational use cases.
 
-4. **OpenTelemetry became the second most active CNCF project** (after Kubernetes itself) in 2023 by contributor count. The project unified three competing standards: OpenTracing, OpenCensus, and the W3C Trace Context specification. The OTel Collector alone processes billions of telemetry signals per day across production deployments worldwide, making it arguably the most widely deployed data pipeline in cloud-native infrastructure.
+4. **OpenTelemetry became the second most active CNCF project** (after Kubernetes itself) in 2023 by contributor count. The project unified two competing projects, OpenTracing and OpenCensus, and standardized on W3C Trace Context for propagation. The OTel Collector alone processes billions of telemetry signals per day across production deployments worldwide, making it arguably the most widely deployed data pipeline in cloud-native infrastructure.
+
+Platform reviews should treat observability changes like capacity changes: every new label, log field, or span attribute needs an owner, a retention class, and a removal plan. That discipline keeps multi-cloud fleets understandable when AWS, GCP, and Azure invoices arrive in the same week. During incident retrospectives, ask whether missing telemetry caused slower mitigation; if yes, fund pipeline fixes before buying larger Prometheus pods. A one-page telemetry routing diagram prevents most observability gaps in production fleets across clouds.
 
 ---
 
@@ -803,11 +1088,25 @@ You implemented head-based sampling, which makes a randomized keep-or-drop decis
 To prevent a single runaway application from taking down your logging infrastructure, you must implement controls at multiple stages of the telemetry pipeline. First, establish strict log level configurations at the application level to ensure production services default to INFO or WARN, preventing DEBUG spam from ever being emitted. Second, deploy OpenTelemetry Collectors configured with filtering processors to drop known noisy patterns or truncate excessively large log bodies before they consume network bandwidth. Finally, configure tenant-based rate limiting and quota enforcement within Loki itself. This ensures that even if an application bypasses local filters, it will only exhaust its own isolated namespace quota without impacting the observability of other critical infrastructure.
 </details>
 
+<details>
+<summary>7. Your CFO asks why observability spend on AWS doubled after you connected six EKS clusters in eu-west-1 to a central AMP workspace in us-east-1. Prometheus samples look flat, but the bill spiked. Which cost dimensions should you investigate first, and what architectural change usually helps?</summary>
+
+Start with cross-region remote write and NAT egress, because shipping every sample and metadata field across regions can dominate the invoice even when series counts look stable. Next inspect AMP samples ingested (tiered per-sample pricing), duplicate HA pairs without deduplication, and shorter scrape intervals on infrastructure jobs. Query samples processed also accrue when global dashboards run heavy range queries during incidents. The usual architectural fix is regional AMP workspaces (or regional Thanos/Mimir cells) with aggregated recording rules exported globally, plus OTel filters that drop high-cardinality labels before remote write leaves the cluster region.
+</details>
+
+<details>
+<summary>8. Platform leadership wants one SLO dashboard for checkout across AKS, EKS, and GKE, but each cloud team exports metrics differently. What minimum contract should you standardize before picking Thanos versus managed Prometheus?</summary>
+
+Standardize external labels (`cluster`, `region`, `environment`, `team`), metric names for SLIs (availability and latency histograms), and alert labels before debating storage engines. Require OpenTelemetry or Prometheus exporters to expose the same histogram buckets and route through collectors that enforce label allow-lists. With that contract, Thanos or Mimir can federate self-hosted data, while AMP, Google Cloud Managed Service for Prometheus, and Azure Monitor workspaces can remote-write into Grafana with identical PromQL recording rules. Without the contract, any global backend becomes a label zoo and SLO math diverges per cloud.
+</details>
+
 ---
 
 ## Hands-On Exercise: Build a Multi-Cluster Monitoring Stack
 
-In this advanced exercise, you will manually provision and configure a robust monitoring stack featuring Prometheus, a simulated Thanos Sidecar arrangement, an OpenTelemetry Collector, Loki for log aggregation, and Grafana for visualization. 
+In this advanced exercise, you will manually provision and configure a robust monitoring stack featuring Prometheus, a simulated Thanos Sidecar arrangement, an OpenTelemetry Collector, Loki for log aggregation, and Grafana for visualization. The lab intentionally runs on a single kind cluster with Kubernetes 1.35 to keep resource usage manageable, but the configuration patterns mirror production multi-cluster designs: external labels for future federation, DaemonSet collectors for per-node logs, memory limiters to avoid OOM during bursts, and cardinality reports you should run weekly in real fleets.
+
+Before starting, internalize the production mapping: Task 1’s Prometheus external labels correspond to Thanos `cluster` labels; Task 2’s OTel→Loki path corresponds to regional aggregation before cloud logging export; Task 6’s cardinality report is the same PromQL you would paste into an incident channel when AMP ingestion spikes. If any step fails, check pod memory first—observability components are among the first to be starved when nodes are undersized. 
 
 ### Prerequisites
 
@@ -859,14 +1158,15 @@ Establish the log ingestion pathway. You will deploy Loki to store the logs and 
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
-# Install Loki in single-binary mode for the lab
+# Install Loki in monolithic mode for the lab (chart v12+ renamed SingleBinary → Monolithic)
 helm install loki grafana/loki \
   --namespace monitoring \
-  --set deploymentMode=SingleBinary \
+  --set deploymentMode=Monolithic \
+  --set loki.useTestSchema=true \
   --set loki.auth_enabled=false \
   --set loki.commonConfig.replication_factor=1 \
   --set loki.storage.type=filesystem \
-  --set singleBinary.replicas=1
+  --set monolithic.replicas=1
 
 # Install OpenTelemetry Operator/Collector
 helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
@@ -875,6 +1175,9 @@ helm repo update
 # Create OTel Collector values
 cat <<'EOF' > otel-values.yaml
 mode: daemonset
+presets:
+  logsCollection:
+    enabled: true
 config:
   receivers:
     filelog:
@@ -888,14 +1191,14 @@ config:
       send_batch_size: 10000
       timeout: 10s
   exporters:
-    loki:
-      endpoint: "http://loki:3100/loki/api/v1/push"
+    otlphttp:
+      endpoint: http://loki:3100/otlp
   service:
     pipelines:
       logs:
         receivers: [filelog]
         processors: [memory_limiter, batch]
-        exporters: [loki]
+        exporters: [otlphttp]
 EOF
 
 helm install otel-collector open-telemetry/opentelemetry-collector \
@@ -910,15 +1213,15 @@ echo "Loki and OTel Collector deployed successfully"
 ```
 </details>
 
-### Task 3: Deploy Sample Workloads with Metrics
+### Task 3: Deploy Sample Workloads for Log Collection
 
-To verify the ingestion engines are functioning properly, spin up a transient workload emitting standard Nginx metrics. Ensure that the namespace matches the pre-configured scraping annotations.
+Deploy a sample nginx workload so the OTel `filelog` receiver has container logs to ship. Plain `nginx:stable` serves HTTP on port 80 only (no `/metrics`); kube-prometheus-stack discovers targets via ServiceMonitor/PodMonitor, not `prometheus.io/*` pod annotations—this task validates **log** ingestion, not app metric scraping.
 
 <details>
 <summary>Solution</summary>
 
 ```bash
-# Deploy a sample app with Prometheus metrics
+# Deploy a sample app (stdout/stderr logs for filelog → Loki)
 kubectl create namespace sample-app
 
 kubectl apply -f - <<'EOF'
@@ -939,9 +1242,6 @@ spec:
       labels:
         app: web-server
         team: backend
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "80"
     spec:
       containers:
         - name: nginx
@@ -971,7 +1271,7 @@ kubectl wait --for=condition=Ready pod -l app=web-server -n sample-app --timeout
 
 ### Task 4: Query Cross-Cluster Metrics
 
-Execute direct PromQL requests using `curl` against the exposed Prometheus API to validate the existence of cluster external labels—a necessity for multi-cluster disambiguation.
+Execute direct PromQL requests using `curl` against the exposed Prometheus API. Confirm `external_labels` via the status config API—they are attached on federation, remote-write, and Alertmanager paths, not on every local instant-query series.
 
 <details>
 <summary>Solution</summary>
@@ -992,8 +1292,8 @@ curl -s 'http://localhost:9090/api/v1/query?query=count(kube_pod_info)%20by%20(n
 echo "=== Top CPU Consumers ==="
 curl -s 'http://localhost:9090/api/v1/query?query=topk(5,%20sum%20by%20(namespace,%20pod)%20(rate(container_cpu_usage_seconds_total{container!=""}[5m])))' | jq '.data.result[]'
 
-echo "=== Cluster Label (confirms external labels work) ==="
-curl -s 'http://localhost:9090/api/v1/query?query=up{job="kubelet"}' | jq '.data.result[0].metric.cluster'
+echo "=== External labels (configured on Prometheus) ==="
+curl -s 'http://localhost:9090/api/v1/status/config' | jq -r '.data.yaml' | grep -E 'external_labels|cluster:|region:'
 
 # Stop port-forward
 kill %1 2>/dev/null
@@ -1127,8 +1427,8 @@ kind delete cluster --name obs-lab
 
 - [ ] Prometheus correctly deployed with external labels injected (`cluster`, `region`).
 - [ ] Loki and OpenTelemetry Collector daemonsets deployed and streaming unstructured pod logs without crashing.
-- [ ] Sample Nginx workloads successfully scraped by Prometheus and their output logs retrieved by OTel.
-- [ ] Manual PromQL validation queries consistently return JSON results with cluster labels intact.
+- [ ] Sample nginx pods emit logs collected by OTel and queryable in Loki (no app `/metrics` scrape in this lab).
+- [ ] Manual PromQL validation queries return JSON; external labels verified via `/api/v1/status/config` (not on local `up` series).
 - [ ] Native LogQL queries cleanly return application logs from Loki's backend.
 - [ ] The automated cardinality report accurately identifies the specific top metrics driving series count bloat.
 - [ ] The main Grafana service is highly accessible over a secure port forward, with the correct Prometheus data source globally configured.
@@ -1141,5 +1441,19 @@ kind delete cluster --name obs-lab
 
 ## Sources
 
-- [Grafana Loki Overview](https://grafana.com/docs/loki/latest/get-started/overview/) — Covers Loki's label-based indexing model, storage design, and deployment modes for scalable logging.
-- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — Primary overview of the Collector's role as a vendor-agnostic telemetry ingestion, processing, and export pipeline.
+- [Amazon Managed Service for Prometheus](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-AMP.html) — Managed Prometheus-compatible metrics for container workloads on AWS.
+- [Understand and optimize costs in AMP](https://docs.aws.amazon.com/prometheus/latest/userguide/AMP-costs.html) — AWS guidance on ingestion-driven cost drivers and Cost Explorer usage.
+- [Amazon Managed Service for Prometheus pricing](https://aws.amazon.com/prometheus/pricing/) — Official sample-ingestion, storage, and query pricing tiers.
+- [CloudWatch Logs pricing](https://aws.amazon.com/cloudwatch/pricing/) — Ingestion and storage model for AWS log pipelines.
+- [AWS X-Ray developer guide](https://docs.aws.amazon.com/xray/latest/devguide/aws-xray.html) — Trace collection and service map concepts on AWS.
+- [Google Cloud Managed Service for Prometheus](https://cloud.google.com/stackdriver/docs/managed-prometheus) — GKE-oriented managed Prometheus metrics collection and querying.
+- [Cloud Logging pricing](https://cloud.google.com/stackdriver/pricing) — Log volume and retention cost factors on GCP.
+- [Cloud Trace documentation](https://cloud.google.com/trace/docs) — Distributed tracing on Google Cloud.
+- [Azure Monitor managed Prometheus metrics](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/prometheus-metrics-overview) — Managed Prometheus metrics workspaces for AKS and hybrid monitoring.
+- [Application Insights overview](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) — APM, traces, and telemetry for Azure workloads.
+- [Azure Monitor log ingestion and billing](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/cost-logs) — Log Analytics ingestion cost guidance.
+- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — Vendor-neutral telemetry ingestion, processing, and export pipelines.
+- [Prometheus remote write](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write) — Remote storage integration contract used by AMP, Mimir, and Cortex.
+- [Thanos documentation](https://thanos.io/tip/thanos/getting-started.md/) — Multi-cluster long-term metric storage and global query architecture.
+- [Grafana Loki overview](https://grafana.com/docs/loki/latest/get-started/overview/) — Label-based indexing model and scalable logging deployment modes.
+- [Metrics for Kubernetes system components](https://kubernetes.io/docs/concepts/cluster-administration/system-metrics/) — Cluster-level metrics foundations for platform observability.
