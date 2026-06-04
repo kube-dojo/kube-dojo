@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At 02:18 on a Monday morning, a marketplace company's checkout API began returning intermittent 502 errors during what should have been a routine campaign launch. The cluster autoscaler added nodes, the database pool expanded, and the NGINX Ingress controller showed no single client violating its per-IP limit. By sunrise, the support queue had hundreds of angry merchants, the promotion budget was wasted, and the post-incident review estimated six figures of lost gross merchandise value from carts that never completed.
+**Hypothetical scenario:** At 02:18 on a Monday morning, a marketplace company's checkout API began returning intermittent 502 errors during what should have been a routine campaign launch. The cluster autoscaler added nodes, the database pool expanded, and the NGINX Ingress controller showed no single client violating its per-IP limit. By sunrise, the support queue had hundreds of angry merchants, the promotion budget was wasted, and the post-incident review estimated six figures of lost gross merchandise value from carts that never completed.
 
 The uncomfortable discovery was that nothing "broke" in the simple routing layer. The attacker used residential proxies, rotated account tokens, and targeted one expensive endpoint with enough aggregate concurrency to exhaust the database before any one IP address looked suspicious. The team had confused an ingress controller with an API security boundary, so authentication, bot-aware filtering, quota management, and endpoint-level throttling all happened too late or not at all.
 
@@ -82,7 +82,7 @@ flowchart TD
 
 That role split is more than administrative neatness. In a shared cluster, the team running the ingress infrastructure should not need to edit every application route, and application teams should not be able to bind arbitrary hostnames or certificates without approval. Gateway API models this directly with `GatewayClass`, `Gateway`, `HTTPRoute`, `GRPCRoute`, and route attachment rules instead of expecting one overloaded Ingress object to express all relationships.
 
-The following manifest shows the platform team creating a shared HTTPS gateway, while application teams create routes in a namespace labeled for gateway access. The important detail is `allowedRoutes`, because it prevents an accidental or malicious route in an unrelated namespace from attaching itself to the production listener. Kubernetes version 1.35+ keeps these APIs stable for common HTTP routing, although individual implementations still differ in how they expose advanced policies.
+The following manifest shows the platform team creating a shared HTTPS gateway, while application teams create routes in a namespace labeled for gateway access. The important detail is `allowedRoutes`, because it prevents an accidental or malicious route in an unrelated namespace from attaching itself to the production listener. Gateway API v1.0+ keeps the core HTTP routing types stable; `GRPCRoute` is v1 since Gateway API v1.1, although individual implementations still differ in how they expose advanced policies.
 
 ```yaml
 # Platform team creates the Gateway
@@ -268,27 +268,34 @@ aws wafv2 create-web-acl \
 
 # Associate WAF with ALB (used by AWS Load Balancer Controller)
 aws wafv2 associate-web-acl \
-  --web-acl-arn arn:aws:wafv2:us-east-1:123456789:regional/webacl/k8s-api-protection/abc123 \
-  --resource-arn arn:aws:elasticloadbalancing:us-east-1:123456789:loadbalancer/app/k8s-alb/abc123
+  --web-acl-arn arn:aws:wafv2:us-east-1:123456789012:regional/webacl/k8s-api-protection/abc123 \
+  --resource-arn arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/k8s-alb/abc123
 ```
 
 The rule set above combines managed common web protections, SQL injection detection, and a rate-based rule. In production, a team would usually start managed rule groups in count mode or with carefully scoped exceptions, review sampled requests, and then move to blocking after false positives are understood. That review process is not bureaucratic delay; it is how you avoid turning a WAF rollout into a customer-facing outage.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: alb
+spec:
+  controller: ingress.k8s.aws/alb
+---
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-ingress
   namespace: production
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-1:123456789:regional/webacl/k8s-api-protection/abc123
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:us-east-1:123456789012:regional/webacl/k8s-api-protection/abc123
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789:certificate/abc123
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/abc123
     alb.ingress.kubernetes.io/ssl-redirect: "443"
 spec:
+  ingressClassName: alb
   rules:
     - host: api.example.com
       http:
@@ -393,7 +400,7 @@ spec:
     spec:
       containers:
         - name: ratelimit
-          image: envoyproxy/ratelimit:master
+          image: envoyproxy/ratelimit:1e745fc8
           ports:
             - containerPort: 8080
             - containerPort: 8081
@@ -580,10 +587,10 @@ metadata:
   name: jwt-auth
   namespace: gateway-system
 spec:
-  targetRef:
-    group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: api-routes
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: api-routes
   jwt:
     providers:
       - name: google
@@ -608,11 +615,12 @@ gRPC and WebSocket traffic expose assumptions that ordinary REST traffic often h
 | Gateway | gRPC Support | Configuration |
 |---------|-------------|---------------|
 | AWS ALB | Yes (HTTP/2) | Target group protocol: gRPC |
-| AWS API Gateway | Yes (HTTP API) | Integration type: HTTP_PROXY with gRPC |
+| AWS API Gateway | Limited — unary only via HTTP_PROXY passthrough; no streaming; not an officially supported gRPC path | HTTP API HTTP_PROXY integration |
 | GCP GCLB | Yes (HTTP/2) | Backend service protocol: HTTP2 |
-| Azure App Gateway v2 | Yes (HTTP/2) | Backend protocol: HTTP/2 |
+| Azure App Gateway v2 | No (backend is HTTP/1.1) | Classic v2 uses HTTP/2 client-side only; backends are HTTP/1.1 — use Application Gateway for Containers (AGC) for gRPC |
+| Azure Application Gateway for Containers (AGC) | Yes (HTTP/2) | gRPC route |
 | Envoy Gateway | Yes (native) | GRPCRoute resource |
-| NGINX Ingress | Yes | `nginx.org/grpc-services` annotation |
+| NGINX Ingress (community ingress-nginx) | Yes | `nginx.ingress.kubernetes.io/backend-protocol: "GRPC"` |
 
 The most common gRPC failure is a silent protocol downgrade. A gateway listener accepts TLS from the client, but the upstream connection to the service defaults to HTTP/1.1. The result can look like mysterious protocol errors, failed streams, or application-level timeouts even though the service is healthy. Fixing it means configuring the gateway to use gRPC or HTTP/2 on the backend connection, not just opening the right port.
 
@@ -623,11 +631,11 @@ kind: Ingress
 metadata:
   name: grpc-ingress
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/backend-protocol-version: GRPC
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/target-type: ip
 spec:
+  ingressClassName: alb
   rules:
     - host: grpc.example.com
       http:
@@ -709,7 +717,7 @@ Observability is the counterweight that keeps these layers understandable. Edge 
 
 A useful production request path carries one correlation value across all of those layers. The name can vary by organization, but the concept should not. If the WAF blocks a request, the security team should be able to find the request ID in edge logs. If the Kubernetes gateway returns a 503, the platform team should be able to find the route and backend service associated with the same ID. If the application returns a domain error, the service team should not have to guess which public API key or WAF rule was involved.
 
-War story: a platform team once spent a full incident bridge arguing about whether 401 responses came from the application, the OAuth2 proxy, or the cloud API gateway. Each layer logged a different generated request ID, and one layer stripped the incoming value during a rewrite. The fix was technically small but operationally important: the edge generated a canonical ID when missing, every gateway preserved it, and each service logged it without overwriting. The next incident was shorter because the team could follow one request across the entire path.
+Hypothetical scenario: a platform team once spent a full incident bridge arguing about whether 401 responses came from the application, the OAuth2 proxy, or the cloud API gateway. Each layer logged a different generated request ID, and one layer stripped the incoming value during a rewrite. The fix was technically small but operationally important: the edge generated a canonical ID when missing, every gateway preserved it, and each service logged it without overwriting. The next incident was shorter because the team could follow one request across the entire path.
 
 Metrics need similar discipline. A gateway success rate can look healthy while one backend route is burning down, because aggregate HTTP 200 rates hide expensive endpoints and low-volume customers. Track status codes and latency by route, backend, authentication result, WAF action, and rate limit descriptor. The labels should be low-cardinality enough for your metrics system, but specific enough to answer whether `/api/v1/checkout` is failing because of auth, routing, throttling, or application errors.
 
@@ -794,11 +802,11 @@ For production design reviews, require a request-path proof. The diagram should 
 
 ## Did You Know?
 
-1. **Managed WAF services process very large traffic volumes and provide managed rules for common web attacks such as SQL injection and XSS.** Exact fleet-wide request counts, attack-mix percentages, and update cadences should be cited from a dated primary source.
+1. **AWS WAF can inspect web requests at regional and CloudFront edge scopes** and ships managed rule groups for common attacks such as SQL injection and cross-site scripting, with sampled requests and CloudWatch metrics for tuning before blocking.
 
 2. **The Kubernetes Gateway API reached v1.0 (GA) on October 31, 2023** and is the successor to Ingress, whose API is frozen rather than removed. A key motivation was to reduce reliance on vendor-specific annotations by providing a more expressive standard API.
 
-3. **gRPC, introduced by Google, uses Protocol Buffers and HTTP/2-based transport.** Its performance characteristics depend on workload, payload shape, and implementation, so avoid universal speed multipliers or internal adoption percentages unless they are cited from a primary source.
+3. **gRPC uses Protocol Buffers over HTTP/2**, so gateways must preserve HTTP/2 semantics end to end; performance gains versus REST depend on payload size, streaming patterns, and client implementation rather than a fixed speed multiplier.
 
 4. **OAuth2 Proxy began as Bitly's `oauth2_proxy` project** and later moved to the community-maintained `oauth2-proxy/oauth2-proxy` project, which supports many providers including OIDC.
 
@@ -866,6 +874,7 @@ In this exercise, you will build a small Gateway API lab, route traffic between 
 ### Setup
 
 ```bash
+alias k=kubectl
 # Create kind cluster with extra ports
 cat > /tmp/kind-gateway.yaml << 'EOF'
 kind: Cluster
@@ -894,6 +903,8 @@ helm install eg oci://docker.io/envoyproxy/gateway-helm \
 k wait --for=condition=ready pod -l control-plane=envoy-gateway \
   --namespace envoy-gateway-system --timeout=120s
 ```
+
+On vanilla kind, Envoy Gateway's LoadBalancer Service stays `<pending>`, so `Gateway.status.addresses` is never populated. After Task 1 programs the gateway, port-forward the Envoy proxy Service (label `gateway.envoyproxy.io/owning-gateway-name=lab-gateway`) and use `http://localhost:8888` for all lab curls instead of a gateway IP.
 
 ### Task 1: Create a Gateway and Backend Services
 
@@ -995,9 +1006,16 @@ spec:
       port: 80
 ```
 
+Save the manifest above to `/tmp/gateway-setup.yaml`, then apply:
+
 ```bash
 k apply -f /tmp/gateway-setup.yaml
 k wait --for=condition=programmed gateway/lab-gateway --timeout=60s
+
+# kind: reach the Envoy proxy via port-forward (LoadBalancer stays pending)
+ENVOY_SVC=$(k get svc -n default -l gateway.envoyproxy.io/owning-gateway-name=lab-gateway -o jsonpath='{.items[0].metadata.name}')
+k port-forward -n default svc/"$ENVOY_SVC" 8888:80 &
+GATEWAY_URL=http://localhost:8888
 ```
 </details>
 
@@ -1031,17 +1049,18 @@ spec:
           weight: 20
 ```
 
+Save the manifest above to `/tmp/httproute.yaml`, then apply:
+
 ```bash
 k apply -f /tmp/httproute.yaml
 
-# Get the gateway's external address
-GW_IP=$(k get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
-echo "Gateway IP: $GW_IP"
+# Use GATEWAY_URL from Task 1 port-forward (http://localhost:8888 on kind)
+echo "Gateway endpoint: $GATEWAY_URL"
 
 # Test traffic splitting (send 20 requests)
 for i in $(seq 1 20); do
-  k run curl-$i --rm -it --image=curlimages/curl --restart=Never -- \
-    curl -s http://$GW_IP/ 2>/dev/null
+  k run curl-$i --rm -i --image=curlimages/curl --restart=Never -- \
+    curl -s "$GATEWAY_URL/" 2>/dev/null
 done
 ```
 </details>
@@ -1085,14 +1104,14 @@ spec:
           weight: 20
 ```
 
+Save the manifest above to `/tmp/httproute-headers.yaml`, then apply:
+
 ```bash
 k apply -f /tmp/httproute-headers.yaml
 
-GW_IP=$(k get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
-
-# Test header-based routing
-k run header-test --rm -it --image=curlimages/curl --restart=Never -- \
-  curl -s -H "X-Version: v2" http://$GW_IP/
+# Test header-based routing (GATEWAY_URL from Task 1)
+k run header-test --rm -i --image=curlimages/curl --restart=Never -- \
+  curl -s -H "X-Version: v2" "$GATEWAY_URL/"
 # Should always return "Hello from v2 (canary)"
 ```
 </details>
@@ -1105,35 +1124,35 @@ Configure an Envoy Extension Policy to limit requests sent through the Gateway. 
 <summary>Solution</summary>
 
 ```yaml
-# Apply Envoy Gateway ClientTrafficPolicy
+# Apply Envoy Gateway BackendTrafficPolicy (local rate limit — no Redis RLS)
 apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: ClientTrafficPolicy
+kind: BackendTrafficPolicy
 metadata:
   name: rate-limit-policy
   namespace: default
 spec:
-  targetRef:
-    group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: echo-route
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: echo-route
   rateLimit:
-    type: Global
-    global:
+    type: Local
+    local:
       rules:
         - limit:
             requests: 2
             unit: Second
 ```
 
+Save the manifest above to `/tmp/rate-limit.yaml`, then apply:
+
 ```bash
 k apply -f /tmp/rate-limit.yaml
 
-# Test the rate limit through the gateway
-GW_IP=$(k get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
-
-echo "Sending 10 rapid requests to Gateway IP: $GW_IP..."
+# Test the rate limit through the gateway (GATEWAY_URL from Task 1)
+echo "Sending 10 rapid requests to $GATEWAY_URL..."
 for i in $(seq 1 10); do
-  STATUS=$(k run rate-test-$i --rm -i --image=curlimages/curl --restart=Never -- curl -s -o /dev/null -w '%{http_code}' http://$GW_IP/ 2>/dev/null)
+  STATUS=$(k run rate-test-$i --rm -i --image=curlimages/curl --restart=Never -- curl -s -o /dev/null -w '%{http_code}' "$GATEWAY_URL/" 2>/dev/null)
   echo "Request $i returned HTTP $STATUS"
 done
 # You should see HTTP 200 for the first few requests, followed by HTTP 429 (Too Many Requests)
@@ -1155,10 +1174,10 @@ metadata:
   name: jwt-auth
   namespace: default
 spec:
-  targetRef:
-    group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: echo-route
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: echo-route
   jwt:
     providers:
       - name: example
@@ -1166,14 +1185,14 @@ spec:
           uri: https://raw.githubusercontent.com/envoyproxy/gateway/main/examples/kubernetes/jwt/jwks.json
 ```
 
+Save the manifest above to `/tmp/security-policy.yaml`, then apply:
+
 ```bash
 k apply -f /tmp/security-policy.yaml
 
-GW_IP=$(k get gateway lab-gateway -o jsonpath='{.status.addresses[0].value}')
-
-# Test without a token (should return 401 Unauthorized)
+# Test without a token (should return 401 Unauthorized; GATEWAY_URL from Task 1)
 k run auth-test --rm -i --image=curlimages/curl --restart=Never -- \
-  curl -s -o /dev/null -w '%{http_code}' http://$GW_IP/
+  curl -s -o /dev/null -w '%{http_code}' "$GATEWAY_URL/"
 ```
 </details>
 
