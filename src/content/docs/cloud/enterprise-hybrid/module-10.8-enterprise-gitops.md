@@ -627,7 +627,7 @@ External Secrets Operator watches `ExternalSecret` objects and materializes nati
 # helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
 
 # Create a SecretStore that connects to AWS Secrets Manager
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
   name: aws-secrets-manager
@@ -644,7 +644,7 @@ spec:
 
 ---
 # Create an ExternalSecret that syncs a specific secret
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: database-credentials
@@ -671,6 +671,8 @@ spec:
         key: payments/production/database
         property: username
 ```
+
+ExternalSecret moved from `external-secrets.io/v1beta1` to `external-secrets.io/v1` in External Secrets Operator 0.10. Clusters running ESO 0.9.x still use `v1beta1` — replace the `apiVersion` field accordingly.
 
 ### [SOPS](https://github.com/getsops/sops) for Git-Native Secrets
 
@@ -735,7 +737,7 @@ Argo Rollouts is a Kubernetes controller and set of CRDs that provide advanced d
 
 ### The Rollout Resource
 
-The `Rollout` custom resource [acts as a drop-in replacement for the standard Kubernetes `Deployment`](https://argoproj.github.io/argo-rollouts/features/analysis/). It manages the creation, scaling, and deletion of ReplicaSets based on a defined strategy, which means you can express canary steps as data instead of imperative kubectl scripts. The canary snippet below pauses at ten percent traffic for ten minutes, then waits for manual approval before completing, which is a common enterprise compromise between safety and velocity when automated metrics are not yet wired.
+The `Rollout` custom resource [acts as a drop-in replacement for the standard Kubernetes `Deployment`](https://argoproj.github.io/argo-rollouts/features/analysis/). It manages the creation, scaling, and deletion of ReplicaSets based on a defined strategy, which means you can express canary steps as data instead of imperative kubectl scripts. The canary snippet below starts at ten percent traffic for ten minutes, advances to thirty percent, then waits for manual approval before completing — a common enterprise compromise between safety and velocity when automated metrics are not yet wired.
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -889,7 +891,7 @@ When AWS Secrets Manager experiences an outage, ESO cannot refresh the secrets, 
 <details>
 <summary>Question 4: Scenario: Your centralized ArgoCD installation has grown to manage 500 Applications distributed across 20 distinct clusters. Recently, developers have started complaining that sync times are unacceptably slow and the ArgoCD user interface frequently times out. What specific tuning adjustments would you apply to stabilize the system under this load?</summary>
 
-To optimize an ArgoCD instance at this scale, you should first increase the `--app-resync` interval from the default 180 seconds to a higher value like 300 or 600 seconds to reduce the frequency of application state evaluations. Next, enable controller sharding by configuring multiple application controller replicas with the `--shard` flag, allowing each controller to manage a dedicated subset of the 20 clusters. You can also improve performance by enabling Server-Side Apply to reduce the calculation overhead for diffs, and by relying on Git webhooks instead of polling to handle repository changes more efficiently. Finally, ensure Redis and the repo-server are sized and observed appropriately for your workload, and consider splitting the instance by environment if a single centralized installation continues to struggle under the load.
+To optimize an ArgoCD instance at this scale, you should first increase the `--app-resync` interval from the default 180 seconds to a higher value like 300 or 600 seconds to reduce the frequency of application state evaluations. Next, enable controller sharding by configuring multiple application controller replicas with the `--shard` flag, allowing each controller to manage a dedicated subset of the 20 clusters. You can also improve performance by enabling Server-Side Apply to reduce apply conflicts and handle large resources that exceed the `last-applied-configuration` annotation limit, and by relying on Git webhooks instead of polling to handle repository changes more efficiently. Finally, ensure Redis and the repo-server are sized and observed appropriately for your workload, and consider splitting the instance by environment if a single centralized installation continues to struggle under the load.
 </details>
 
 <details>
@@ -1218,10 +1220,10 @@ With the GitOps platform in place, you have a declarative control plane for work
 
 - [github.com: backstage](https://github.com/backstage/backstage) — The Backstage project README directly describes these core platform capabilities.
 - [argo-cd.readthedocs.io: cluster bootstrapping](https://argo-cd.readthedocs.io/en/latest/operator-manual/cluster-bootstrapping/) — Argo CD's cluster bootstrapping documentation explicitly describes App of Apps and warns that it is admin-only.
-- [argo-cd.readthedocs.io: applicationset](https://argo-cd.readthedocs.io/en/release-2.14/operator-manual/applicationset/) — The ApplicationSet documentation describes generator-based creation of Applications from Git, clusters, and other sources.
+- [argo-cd.readthedocs.io: applicationset](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/) — The ApplicationSet documentation describes generator-based creation of Applications from Git, clusters, and other sources.
 - [argo-cd.readthedocs.io: projects](https://argo-cd.readthedocs.io/en/latest/user-guide/projects/) — The Projects documentation lists these exact project-scoping controls.
 - [argo-cd.readthedocs.io: rbac](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/) — The Argo CD RBAC documentation defines these application-specific resources and their scoping format.
-- [argo-cd.readthedocs.io: gpg verification](https://argo-cd.readthedocs.io/en/release-2.9/user-guide/gpg-verification/) — Argo CD's GnuPG verification documentation shows project-level enforcement and the `signatureKeys` field.
+- [argo-cd.readthedocs.io: gpg verification](https://argo-cd.readthedocs.io/en/stable/user-guide/gpg-verification/) — Argo CD's GnuPG verification documentation shows project-level enforcement and the `signatureKeys` field.
 - [argo-cd.readthedocs.io: secret management](https://argo-cd.readthedocs.io/en/latest/operator-manual/secret-management/) — Argo CD's secret-management guidance explicitly recommends the destination-cluster pattern and names these tools.
 - [github.com: sops](https://github.com/getsops/sops) — The SOPS README states the supported file formats and encryption backends directly.
 - [argoproj.github.io: analysis](https://argoproj.github.io/argo-rollouts/features/analysis/) — The Argo Rollouts analysis overview explicitly describes `Rollout` as a drop-in `Deployment` replacement with analysis support.
