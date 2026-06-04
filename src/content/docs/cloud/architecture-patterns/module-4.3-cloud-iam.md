@@ -190,13 +190,13 @@ Inside the pod, the application code or the cloud SDK reads this file. The paylo
 
 ```bash
 # Inside the pod, the token is mounted at a well-known path
-# Let's decode it to see what's inside
+# Let's decode it to see what's inside (requires jwt-cli, or paste into jwt.io)
 cat /var/run/secrets/eks.amazonaws.com/serviceaccount/token | jwt decode -
 
-# Decoded JWT payload:
+# Decoded JWT payload (IRSA — NOT EKS Pod Identity):
 # {
 #   "aud": ["sts.amazonaws.com"],           # Audience: only valid for AWS STS
-#   "exp": 1711296000,                       # Expires in 24 hours
+#   "exp": 1711213200,                       # Expires in ~1 hour (3600s default)
 #   "iat": 1711209600,                       # Issued at
 #   "iss": "https://oidc.eks...ABCDEF",     # Issuer: this cluster's OIDC endpoint
 #   "kubernetes.io": {
@@ -435,6 +435,30 @@ aws eks create-pod-identity-association \
   --namespace production \
   --service-account data-processor \
   --role-arn arn:aws:iam::123456789012:role/data-processor-role
+```
+
+EKS Pod Identity does **not** use the `eks.amazonaws.com/role-arn` annotation on the ServiceAccount. The only binding is the association you create with `aws eks create-pod-identity-association` (cluster, namespace, ServiceAccount name, IAM role ARN). A ServiceAccount with no IRSA annotation and a Deployment that references it is the normal Pod Identity shape:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: data-processor
+  namespace: production
+  # No eks.amazonaws.com/role-arn — Pod Identity ignores this annotation
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-processor
+  namespace: production
+spec:
+  template:
+    spec:
+      serviceAccountName: data-processor
+      containers:
+        - name: processor
+          image: company/data-processor:v1.2
 ```
 
 Because the Pod Identity Agent returns credentials through the container credentials provider, static credentials earlier in the AWS default provider chain can still win if you leave old environment variables mounted. That is useful for staged migration, but dangerous after cutover. A clean migration removes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and old projected Secret references after the workload has proven it can refresh Pod Identity credentials during a long-running test.
@@ -703,31 +727,39 @@ Hypothetical scenario: a payments platform runs one settlement worker in EKS and
 One of the most powerful and often overlooked benefits of federated identity is forensic auditability. Cloud audit logs record the assumed role used by a workload, and some platforms can attach extra session context that helps correlate activity back to Kubernetes identities.
 
 ```bash
-# AWS CloudTrail: Find all S3 calls made by the data-processor pod
+# AWS CloudTrail lookup-events returns MANAGEMENT events only.
+# AssumeRoleWithWebIdentity / AssumeRole are management events — use this to
+# correlate a Kubernetes workload to the IAM role session it opened.
+
 aws cloudtrail lookup-events \
-  --lookup-attributes AttributeKey=ResourceType,AttributeValue=AWS::S3::Object \
-  --query 'Events[?contains(CloudTrailEvent, `data-processor`)].CloudTrailEvent' \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --start-time "2026-03-24T00:00:00Z" \
+  --end-time "2026-03-24T23:59:59Z" \
+  --query 'Events[].CloudTrailEvent' \
   --output text | jq -r '
     select(.userIdentity.type == "AssumedRole") |
+    select(.userIdentity.arn | test("data-processor-role")) |
     {
       time: .eventTime,
       action: .eventName,
-      resource: .requestParameters.bucketName,
       role: .userIdentity.arn,
       sourceIP: .sourceIPAddress,
       sessionIssuer: .userIdentity.sessionContext.sessionIssuer.userName
     }
   '
 
-# Example output:
-# {
-#   "time": "2026-03-24T10:15:23Z",
-#   "action": "GetObject",
-#   "resource": "patient-data-bucket",
-#   "role": "arn:aws:sts::123456789012:assumed-role/data-processor-role/...",
-#   "sourceIP": "10.0.42.17",
-#   "sessionIssuer": "data-processor-role"
-# }
+# S3 GetObject / PutObject are DATA events — NOT returned by lookup-events.
+# Prerequisite: a trail (or organization trail) with S3 data-event selectors
+# (read/write or all) on the buckets you care about. Then query with Athena
+# or CloudTrail Lake, for example:
+#
+#   SELECT eventtime, eventname, useridentity.arn, requestparameters
+#   FROM cloudtrail_logs
+#   WHERE eventname IN ('GetObject','PutObject')
+#     AND useridentity.arn LIKE '%data-processor-role%'
+#     AND eventtime > '2026-03-24 00:00:00'
+#
+# (Table name and column casing depend on your Athena/Glue setup.)
 ```
 
 Combining cloud audit logs with Kubernetes audit and event data can give you a detailed investigation trail from workload identity to cloud API activity. Compare this forensic depth to the archaic static key approach, where the audit log cryptically shows "IAM user data-processor-user" with zero context regarding which cluster, namespace, or pod actually initiated the request.
@@ -746,8 +778,9 @@ To build an end-to-end incident timeline, you can cross-reference the cloud prov
 #
 # 1. Developer "alice@company.com" deploys data-processor (K8s audit)
 # 2. Pod "data-processor-7d4b8c9f" starts (K8s events)
-# 3. Pod assumes role "data-processor-role" (CloudTrail)
-# 4. Pod reads "patient-data-bucket/file.json" (CloudTrail)
+# 3. Pod assumes role "data-processor-role" (CloudTrail — management event)
+# 4. Pod reads "patient-data-bucket/file.json" (CloudTrail — requires S3
+#    data-event logging on the trail; not visible from lookup-events alone)
 #
 # Full chain: Human → Deployment → Pod → Cloud Resource
 ```
@@ -901,7 +934,7 @@ The decision matrix should not be used once and forgotten. Revisit it when the p
 - **Older Kubernetes releases relied on long-lived ServiceAccount token Secrets.** Modern clusters use projected, time-bound tokens obtained through the TokenRequest flow instead, which reduces the operational risk of permanently mounted credentials.
 - **AWS STS web identity federation is heavily used by EKS workloads.** Each request requires token validation before temporary credentials are issued.
 - **The "confused deputy problem" was first described in a 1988 paper** by Norm Hardy. He used the example of a system compiler that could write to any file because it ran with elevated privileges. A malicious user tricked the compiler into overwriting the system's billing file instead of the intended output file. The same architectural flaw exists today when high-privilege services act on behalf of low-privilege callers.
-- **Google's Workload Identity Federation supports many external identity providers**, including AWS, Azure, GitHub Actions, GitLab CI, and OIDC- or SAML-compatible providers. That means external automation can authenticate to Google Cloud without relying on long-lived service account keys.
+- **Google's Workload Identity Federation supports many external identity providers** outside GKE (AWS, Azure, GitHub Actions, GitLab CI, and other OIDC- or SAML-compatible issuers). That is distinct from GKE-native Workload Identity, which maps Kubernetes ServiceAccounts to Google IAM through the cluster's workload pool. Both avoid long-lived service account keys, but the setup paths differ.
 
 ## Common Mistakes
 
@@ -939,7 +972,7 @@ This scenario describes the "confused deputy" problem, where a privileged entity
 <details>
 <summary>4. An attacker manages to exploit a directory traversal flaw in your web app and downloads the `/var/run/secrets/eks.amazonaws.com/serviceaccount/token` file. They copy this JWT to their laptop at a coffee shop and try to call `AssumeRoleWithWebIdentity`. Assuming the IAM trust policy only checks the OIDC subject and audience, will the attacker get AWS credentials? How would you modify the IAM policy to block this?</summary>
 
-Yes, the attacker will successfully get AWS credentials in this scenario. The token is cryptographically valid and signed by the cluster, and since the trust policy only checks the subject and audience, AWS STS will accept it from any IP address. To block this, you should add a condition like `aws:SourceVpc` or `aws:SourceIp` to the IAM role's trust policy. This ensures that even if the token is stolen and exfiltrated, AWS will only allow the `AssumeRoleWithWebIdentity` call if it originates from within your organization's designated network boundary, rendering the stolen token useless at the coffee shop.
+Yes, the attacker will successfully get AWS credentials in this scenario. The token is cryptographically valid and signed by the cluster, and since the trust policy only checks the subject and audience, AWS STS will accept it from any IP address. To reduce exfiltration risk, tighten trust with exact `sub` and `aud`, keep token TTL short, and add egress controls so compromised pods cannot reach STS from arbitrary networks. You can also add `aws:SourceVpc` or `aws:SourceIp` to the trust policy, but `aws:SourceVpc` only blocks exfiltrated tokens when the `AssumeRoleWithWebIdentity` request carries VPC context (for example, STS traffic routed through a VPC endpoint). If that context is missing, the condition may not apply or may deny legitimate in-cluster traffic — test the path before relying on it. Without VPC-aware STS routing, stolen tokens remain usable off-network until they expire.
 </details>
 
 <details>
@@ -951,7 +984,7 @@ The blast radius of this breach is massive because the compromised image resizin
 <details>
 <summary>6. Your organization is scaling from 2 EKS clusters to 50 EKS clusters across different regions. You currently use IRSA (IAM Roles for Service Accounts). As you automate the cluster provisioning, the IAM team complains that the trust policies for your application roles are hitting size limits and becoming unmanageable. Why is this happening with IRSA, and how would migrating to EKS Pod Identity resolve this friction?</summary>
 
-With IRSA, the IAM trust policy for a role must explicitly list the specific OIDC provider URL for every single cluster that needs to assume it. As you scale to 50 clusters, the trust policy grows significantly because you must append 50 different OIDC provider ARNs and conditions, eventually hitting IAM policy size limits and creating a maintenance nightmare. EKS Pod Identity solves this by moving the trust relationship to the EKS service itself, rather than individual cluster OIDC providers. The IAM role's trust policy only needs to trust the EKS Pod Identity principal once, and you manage the specific pod-to-role mappings via API within the EKS clusters, drastically simplifying IAM management at scale.
+With IRSA, each EKS cluster registers a unique IAM OIDC provider ARN for its issuer. A role that workloads in many clusters must assume needs additional federated principal statements (or equivalent trust conditions) per cluster — not the same issuer URL pasted fifty times, but one provider ARN and matching `sub`/`aud` conditions per cluster, which drives IAM policy size and review overhead. EKS Pod Identity centralizes trust on the `pods.eks.amazonaws.com` service principal in the role trust policy and moves per-workload bindings to `aws eks create-pod-identity-association` in each cluster, so IAM policy growth scales with associations in the EKS API rather than with duplicating OIDC provider blocks in every shared role.
 </details>
 
 ## Hands-On Exercise: Build a Zero-Trust Pod Identity Model
@@ -1255,17 +1288,28 @@ aws cloudtrail lookup-events \
     error: .errorMessage
   }'
 
-# Query 3: Unusual API calls for a specific role
-# (e.g., the order-api role calling S3 -- it shouldn't)
+# Query 3: Unusual S3 data-plane calls for a specific assumed role
+# (e.g., the order-api role calling S3 — it shouldn't)
+# Prerequisite: trail with S3 data events enabled. lookup-events does not
+# return GetObject/PutObject; use Athena/CloudTrail Lake or Event History
+# with data logging. For assumed-role sessions, CloudTrail Username is
+# RoleName:role-session-name, not the bare role name — filter on ARN instead.
+#
+# Example Athena predicate (adjust table/columns to your setup):
+#   useridentity.arn LIKE '%assumed-role/order-api-role/%'
+#     AND eventname IN ('GetObject','PutObject','ListBucket')
+#
+# Illustrative jq on exported management/data events (if present in your export):
 aws cloudtrail lookup-events \
-  --lookup-attributes AttributeKey=Username,AttributeValue=order-api-role \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=GetObject \
   --query 'Events[].CloudTrailEvent' \
   --output text | jq -r '
-    select(.eventName | test("^(GetObject|PutObject|ListBucket)")) |
+    select(.userIdentity.arn? | test("assumed-role/order-api-role/")) |
     {
       alert: "ORDER-API ROLE ACCESSING S3 - UNEXPECTED",
       time: .eventTime,
       action: .eventName,
+      roleArn: .userIdentity.arn,
       resource: .requestParameters.bucketName
     }
   '
