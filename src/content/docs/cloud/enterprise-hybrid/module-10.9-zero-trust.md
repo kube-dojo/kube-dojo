@@ -127,7 +127,7 @@ There are several ways to implement an IAP depending on your cloud provider and 
 | :--- | :--- | :--- |
 | **GCP** | Cloud IAP | [Built-in proxy for GCE, GKE, App Engine. Checks Google Identity + device trust via Endpoint Verification.](https://docs.cloud.google.com/iap/docs) |
 | **AWS** | Verified Access | Evaluates identity (IAM Identity Center) + device posture (Jamf, CrowdStrike) per request. Runs at the VPC level. |
-| **Azure** | Azure AD Application Proxy | [Proxies requests to on-prem/cloud apps. Evaluates Conditional Access policies per request.](https://learn.microsoft.com/en-us/azure/active-directory/app-proxy/application-proxy-secure-api-access) |
+| **Azure** | Microsoft Entra application proxy | [Proxies requests to on-prem/cloud apps. Evaluates Conditional Access policies per request.](https://learn.microsoft.com/en-us/azure/active-directory/app-proxy/application-proxy-secure-api-access) |
 | **Open Source** | Self-hosted identity-aware proxies | Self-hosted proxies can integrate with identity providers, but you must operate and secure the access layer yourself. |
 
 ### AWS Verified Access for Kubernetes
@@ -738,7 +738,7 @@ spec:
 
 ## Incident-Derived Migration Pattern: Staging Breach and Policy Hardening
 
-An engineering team trusted a flat staging network because it moved fast and had low perceived risk. During a credential phishing incident, an attacker used valid user credentials to reach staging services, then moved laterally into a payment integration simulator and finally to shared CI artifacts. Security detected the problem only after unexpected jobs ran in the pipeline, which meant the attack had already exercised both access and supply-chain paths.
+Hypothetical scenario: An engineering team trusted a flat staging network because it moved fast and had low perceived risk. During a credential phishing incident, an attacker used valid user credentials to reach staging services, then moved laterally into a payment integration simulator and finally to shared CI artifacts. Security detected the problem only after unexpected jobs ran in the pipeline, which meant the attack had already exercised both access and supply-chain paths.
 
 Post-incident, they did not simply revoke the user account and move on. They introduced default-deny network policies, migrated user access through IAP in parallel with existing VPN patterns, and enforced image signature checks before deployment. The result was twofold: lateral movement became much less likely, and compromised credentials no longer implied broad privilege without additional identity context and policy checks.
 
@@ -970,7 +970,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: nginx:1.27.3
+          image: wbitt/network-multitool:3.22.2
           ports:
             - containerPort: 80
           resources:
@@ -1008,7 +1008,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: nginx:1.27.3
+          image: wbitt/network-multitool:3.22.2
           ports:
             - containerPort: 80
           resources:
@@ -1046,7 +1046,7 @@ spec:
     spec:
       containers:
         - name: database
-          image: nginx:1.27.3
+          image: wbitt/network-multitool:3.22.2
           ports:
             - containerPort: 80
           resources:
@@ -1085,6 +1085,7 @@ Treat these checks as controlled tests, not assumptions. If anything fails here,
 ```bash
 echo "=== BEFORE ZERO TRUST: Flat Network ==="
 echo ""
+# Service DNS may not resolve immediately after pods become Ready; retry or sleep 5s if curl fails with "Could not resolve host"
 echo "Test: Frontend → Backend (should succeed - legitimate)"
 kubectl exec -n payments deploy/frontend -- curl -s --max-time 3 backend.payments.svc.cluster.local || echo "FAILED"
 
