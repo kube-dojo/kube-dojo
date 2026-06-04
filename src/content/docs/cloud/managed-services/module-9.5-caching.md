@@ -1225,7 +1225,7 @@ kind delete cluster --name cache-lab
 
 ---
 
-## References
+## Sources
 
 - [Redis upstream repository](https://github.com/redis/redis) — Data structures and messaging/scripting capabilities
 - [Memcached upstream repository](https://github.com/memcached/memcached) — Multithreaded key/value cache store
