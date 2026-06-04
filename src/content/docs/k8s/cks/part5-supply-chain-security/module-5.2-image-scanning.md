@@ -7,7 +7,7 @@ lab:
   id: cks-5.2-image-scanning
   url: https://killercoda.com/kubedojo/scenario/cks-5.2-image-scanning
   duration: "45 min"
-  difficulty: medium
+  difficulty: intermediate
   environment: kubernetes
 ---
 > **Complexity**: `[MEDIUM]` - Critical CKS skill
