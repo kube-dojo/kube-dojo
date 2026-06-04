@@ -16,6 +16,13 @@ jobs:
   review-gemini-3-1-pro:
     name: Review (gemini-3.1-pro-preview)
     runs-on: ubuntu-latest
+    # Skip on fork PRs: GitHub withholds repo secrets (GEMINI_API_KEY) from
+    # pull_request runs triggered by a fork, so the review can't authenticate
+    # and the job would hard-fail with a misleading red X on every external
+    # contribution (e.g. PR #1742, our first external contributor). Internal
+    # branch PRs still get the cross-family review. See the 2026-06-04 CI
+    # autopsy: docs/bug-autopsies/ci-metadata-blindspot.md (issue #1789).
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     continue-on-error: true
     permissions:

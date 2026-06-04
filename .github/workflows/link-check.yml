@@ -1,14 +1,15 @@
 name: Static internal link check
 
+# Runs on every PR (no `paths:` filter) so it can serve as a universal
+# required status check. A path-filtered required check never reports on PRs
+# that miss those paths, leaving the PR permanently BLOCKED waiting for a check
+# that will never run — the same deadlock the CodeQL `Analyze` contexts caused
+# for docs-only PRs (PR #1742 / the 2026-06-04 CI autopsy). Both steps are fast
+# and dependency-free, so always-on is cheap.
 on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'src/content/docs/**'
-      - 'astro.config.mjs'
-      - 'scripts/check_site_health.py'
-      - '.github/workflows/link-check.yml'
 
 permissions:
   contents: read
@@ -30,3 +31,6 @@ jobs:
 
       - name: Run site health check
         run: python scripts/check_site_health.py
+
+      - name: Check lab URL convention
+        run: python scripts/ci/check_lab_urls.py
