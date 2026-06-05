@@ -8,7 +8,7 @@ citations_verified: true
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 8-10 hours
-> Prerequisites: [Module 1.9: Graph Neural Networks](module-1.9-graph-neural-networks/), [Module 1.6: Backpropagation Deep Dive](module-1.6-backpropagation-deep-dive/), [Module 1.8: Self-Supervised Learning](module-1.8-self-supervised-learning/)
+> Prerequisites: [Module 1.9: Graph Neural Networks](module-1.9-graph-neural-networks/), [Module 1.6: From Backpropagation to Transformers](module-1.6-backpropagation-deep-dive/), [Module 1.8: Self-Supervised Learning](module-1.8-self-supervised-learning/)
 
 ## Learning Outcomes
 

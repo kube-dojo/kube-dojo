@@ -1,5 +1,5 @@
 ---
-title: "RNNs & Sequence Models"
+title: "Convolutional Neural Networks & Computer Vision"
 slug: ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models
 sidebar:
   order: 1006
@@ -1197,7 +1197,7 @@ Success criteria:
 <!-- /v4:generated -->
 ## Next Module
 
-RNN training surfaces gradient pathology — vanishing gradients across long sequences, exploding gradients on bad initializations, and silent backprop bugs in custom recurrent layers. Continue with **[Module 1.6: Backpropagation Deep Dive](./module-1.6-backpropagation-deep-dive/)** for the theory of how those gradients move through computation graphs, then **[Module 1.7: Backpropagation and Autograd from Scratch](./module-1.7-backpropagation-and-autograd-from-scratch/)** to build the autodiff machinery from primitive operations and learn the debugging techniques that catch broken gradient flows before a long training run wastes hours.
+Training deep convolutional networks surfaces gradient pathology — vanishing gradients in very deep stacks, exploding gradients on bad initializations, and silent backprop bugs in custom layers. Continue with **[Module 1.6: From Backpropagation to Transformers](./module-1.6-backpropagation-deep-dive/)** for the theory of how those gradients move through computation graphs and how the same autodiff machinery powers attention, then **[Module 1.7: Backpropagation and Autograd from Scratch](./module-1.7-backpropagation-and-autograd-from-scratch/)** to build the autodiff engine from primitive operations and learn the debugging techniques that catch broken gradient flows before a long training run wastes hours.
 
 ## Sources
 
