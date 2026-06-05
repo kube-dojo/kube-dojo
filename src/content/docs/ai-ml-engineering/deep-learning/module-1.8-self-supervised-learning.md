@@ -7,7 +7,7 @@ sidebar:
 ---
 
 > Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-120 minutes
-> Prerequisites: [Module 1.4: Training Deep Networks: Normalization, Regularization & Optimization](module-1.4-cnns-computer-vision/), [Module 1.6: From Backpropagation to Transformers](module-1.6-backpropagation-deep-dive/), and [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../../machine-learning/module-1.3-model-evaluation-validation-leakage-and-calibration/).
+> Prerequisites: [Module 1.3.1: Initialization & Signal Propagation](module-1.3.1-initialization-signal-propagation/), [Module 1.6: From Backpropagation to Transformers](module-1.6-backpropagation-deep-dive/), and [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../../machine-learning/module-1.3-model-evaluation-validation-leakage-and-calibration/).
 Self-supervised learning, usually shortened to SSL, is the part of deep learning
 where you pretrain a model without human labels by forcing it to predict structure
 that already exists inside the data.
