@@ -788,7 +788,7 @@ print(f"Adam final loss: {adam_losses[-1]:.4f}")
 
 ## Next Module
 
-Continue to [Training Deep Networks: Normalization, Regularization & Optimization](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) — the practical training-stability toolkit that builds directly on optimizer and learning-rate choices.
+Continue to [Regularization & Generalization](/ai-ml-engineering/deep-learning/module-1.3.3-regularization-generalization/) — dropout, weight decay, early stopping, and label smoothing: the toolkit for closing the gap between training and test performance, building directly on the optimizer and learning-rate choices from this module.
 
 ---
 
