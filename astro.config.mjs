@@ -37,6 +37,9 @@ export default defineConfig({
       '/ai/ai-engineering-foundations/module-4.1-symphony-work-orchestration-as-applied-harness/',
     '/ai-ml-engineering/ai-native-development/module-1.6-prompt-engineering-fundamentals/':
       '/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/',
+    // Block A rescope: 1.7 -> 1.1.8 computational graphs & scalar autograd
+    '/ai-ml-engineering/deep-learning/module-1.7-backpropagation-and-autograd-from-scratch/':
+      '/ai-ml-engineering/deep-learning/module-1.1.8-computational-graphs-scalar-autograd/',
   },
   markdown: {
     remarkPlugins: [remarkMath],
