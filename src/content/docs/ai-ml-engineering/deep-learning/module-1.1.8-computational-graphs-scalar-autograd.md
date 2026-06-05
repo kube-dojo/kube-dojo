@@ -92,7 +92,9 @@ dL/dn2 = 1.5,  dL/dn3 = 7.0
 dL/dn1 = 1.5,  dL/dc  = 1.5
 dL/da  = 4.5,  dL/db  = 3.0
 dL/dd  = 7.0
-``` A dense layer's `dL_dW = X.T @ G` is the batched outer-product version of "multiply upstream gradient by the other operand and sum over shared axes."
+```
+
+A dense layer's `dL_dW = X.T @ G` is the batched outer-product version of "multiply upstream gradient by the other operand and sum over shared axes."
 
 ### Reverse mode vs forward mode
 
@@ -132,7 +134,7 @@ numerical = (y_plus - y_minus) / (2 * eps)
 print(y, dy_dx, numerical)
 ```
 
-The backward story mirrors the forward story in reverse: start from `dy/dy = 1`, compute `dy/dg = 3g^2`, then `dg/dx = 2`, multiply to get `dy/dx = 6g^2 = 84` at `x = 1`. Each step is a VJP. The multi-path version is where engines earn their keep. For `y = x*x + x`, the derivative is `2x + 1` because `x` reaches `y` through the square **and** through the addition. An engine that only keeps the last message overwrites one path. A human deriving by hand sums paths explicitly; autograd sums them inside `+=`.
+The backward story mirrors the forward story in reverse: start from `dy/dy = 1`, compute `dy/dg = 3g^2`, then `dg/dx = 2`, multiply to get `dy/dx = 6g^2 = 54` at `x = 1` (`g = 3`). Each step is a VJP. The multi-path version is where engines earn their keep. For `y = x*x + x`, the derivative is `2x + 1` because `x` reaches `y` through the square **and** through the addition. An engine that only keeps the last message overwrites one path. A human deriving by hand sums paths explicitly; autograd sums them inside `+=`.
 
 ```python
 # Multi-path check: y = x*x + x at x = 3
@@ -263,6 +265,15 @@ class Value:
 
         def _backward():
             self.grad += out.grad * out.data
+
+        out._backward = _backward
+        return out
+
+    def log(self):
+        out = Value(math.log(self.data), (self,), "log")
+
+        def _backward():
+            self.grad += out.grad / self.data   # d/dx log(x) = 1/x
 
         out._backward = _backward
         return out
@@ -663,13 +674,21 @@ Change one `+=` to `=` inside `__mul__._backward`, re-run the Step 4 reuse tests
 
 ### Step 6: Optional finite-difference spot check
 
-For `f(x) = log(x.exp())` at `x = 1.5`, compare the engine gradient to a centered finite-difference estimate with `eps = 1e-6` and confirm relative error stays below `1e-5`.
+For `f(x) = log(x.exp())` at `x = 1.5`, compare the engine gradient to a centered finite-difference estimate with `eps = 1e-6` and confirm relative error stays below `1e-5`. Because `log(exp(x)) = x`, the engine gradient should be approximately `1.0` and the finite-difference check confirms it.
 
 Document one failing and one passing assertion in a short comment at the top of `autograd_lab.py` so future you remembers which graph path the accumulation bug broke when `+=` became `=`. That comment is cheap insurance against reintroducing the same silent bug when you port activations or losses from `nn.py` into `Value` ops. Run all checks from the repository root or your lab directory with the command below.
 
 ```bash
 python autograd_lab.py
 ```
+
+---
+
+## Learner check
+
+> An engine that assigns `self.grad = ...` in `_backward` keeps only the last path.
+
+Confirm you understand why gradient accumulation via `+=` is required when a value participates in multiple graph paths.
 
 ---
 
