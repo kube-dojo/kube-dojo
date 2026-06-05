@@ -22,3 +22,21 @@ updates:
       - "ci"
     cooldown:
       default-days: 7
+
+  # npm dependencies (Astro / Starlight site)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "js"
+    cooldown:
+      default-days: 7
+    groups:
+      # Batch minor/patch bumps into one PR to cut review noise; majors stay separate.
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
