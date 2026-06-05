@@ -1120,7 +1120,7 @@ Create `training-readiness.md` summarizing whether your MNIST training script is
 
 ## Next Module
 
-Next: [CNNs & Computer Vision](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) covers convolutional architectures, spatial feature learning, and production image-classification pipelines for vision workloads.
+Next: [Training Deep Networks: Normalization, Regularization & Optimization](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) goes deeper on keeping training stable and generalizing well — normalization layers, regularization, weight initialization, and learning-rate schedules — before [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) introduces convolutional architectures and spatial feature learning.
 
 ---
 

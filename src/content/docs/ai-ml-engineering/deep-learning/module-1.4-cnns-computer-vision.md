@@ -1,5 +1,5 @@
 ---
-title: "CNNs & Computer Vision"
+title: "Training Deep Networks: Normalization, Regularization & Optimization"
 slug: ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision
 sidebar:
   order: 1005
@@ -8,7 +8,7 @@ sidebar:
 ## What You Will Be Able to Do
 
 By the end of this rigorous module, you will be prepared to:
-- **Design** scalable Convolutional Neural Networks utilizing modern PyTorch 2.11 primitives and robust weight initialization schemes for image classification.
+- **Apply** robust weight-initialization schemes (Xavier/He) and modern PyTorch 2.11 primitives to keep signal and gradients healthy as networks get deeper.
 - **Diagnose** and **debug** vanishing or exploding gradient failures across deep architectures using numerical profiling, validation tracking, and gradient clipping constraints.
 - **Implement** production-grade training pipelines featuring early stopping mechanisms, asynchronous checkpointing, and cosine annealing schedules.
 - **Compare** and evaluate Batch Normalization versus Layer Normalization techniques across diverse Computer Vision datasets and memory-constrained batch sizes.
@@ -1694,7 +1694,7 @@ Upon running the script, `BatchNorm` will display a heavily perturbed, unstable 
 
 Now that you have mastered the nuances of parameter initialization, numerical profiling, and optimizing complex pipelines to absolute mathematical stability, you must construct custom architectural backbones tailored to dense unstructured image data streams.
 
-- [Proceed to Module 1.5: RNNs & Sequence Models](./module-1.5-rnns-sequence-models)
+- [Proceed to Module 1.5: Convolutional Neural Networks & Computer Vision](./module-1.5-rnns-sequence-models)
 
 ## Sources
 

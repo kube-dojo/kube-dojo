@@ -1,5 +1,5 @@
 ---
-title: "Backpropagation Deep Dive"
+title: "From Backpropagation to Transformers"
 slug: ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive
 sidebar:
   order: 1007
