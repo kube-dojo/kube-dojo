@@ -671,7 +671,7 @@ show_amp_step()
 
 ## Next Module
 
-[Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) continues the arc by applying these training-stability habits to vision architectures whose convolutions, normalizers, and activations make precision choices visible at scale.
+[Embeddings & Representation Learning](/ai-ml-engineering/deep-learning/module-1.4.1-embeddings-representation-learning/) opens Block C by turning the discrete tokens and categories that real systems ingest into the dense vectors every modern architecture operates on — the first step from training mechanics toward attention and the transformer block.
 
 ## Learner check
 
