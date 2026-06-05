@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 105 — NN Wave 1 merged + mislabeled-module relabel + CI LLM-review removal</title>
+<style>
+  body{font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+  h1{font-size:1.6rem;border-bottom:2px solid #333;padding-bottom:.3rem}
+  h2{font-size:1.2rem;margin-top:2rem;border-bottom:1px solid #ccc;padding-bottom:.2rem}
+  code{background:#f3f3f3;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0}
+  th,td{border:1px solid #ccc;padding:.4rem .6rem;text-align:left;vertical-align:top;font-size:.92rem}
+  th{background:#f3f3f3}
+  .ok{color:#157f3b;font-weight:600}
+  .warn{color:#b35900;font-weight:600}
+  blockquote{border-left:4px solid #888;margin:.8rem 0;padding:.2rem 1rem;background:#fafafa}
+</style>
+</head>
+<body>
+<h1>Session 105 — NN Wave 1 shipped, mislabeled modules relabeled, CI LLM-review removed</h1>
+<p><strong>Date:</strong> 2026-06-05 &nbsp;|&nbsp; <strong>Branch:</strong> main @ <code>717dba64</code> &nbsp;|&nbsp; <strong>Predecessor:</strong> session 104</p>
+
+<h2>TL;DR</h2>
+<p>Continued the session-104 handoff (NN epic #1793). Drove Block A <strong>Wave 1</strong> (4 from-scratch
+deep-learning modules) through fix-passes → consolidated PR → merge (<strong>#1794</strong>). Then, on the
+user's pick, fixed the <strong>3 mislabeled live modules</strong> (title ≠ body) via relabel (<strong>#1795</strong>).
+Finally, on the user's emphatic request, <strong>removed the LLM cross-family review from GitHub Actions
+CI</strong> — it's local-only now (<strong>#1797</strong>, issue #1796). Three PRs merged, all CI green, all
+ground-checked.</p>
+
+<h2>Shipped this session</h2>
+<table>
+<tr><th>PR</th><th>What</th><th>Notes</th></tr>
+<tr><td><strong>#1794</strong></td><td>NN Block A Wave 1 — 4 new modules (1.1.1–1.1.4): nn-math-warmup, neuron-from-scratch, forward-propagation-mlp, activation-functions</td><td>Each authored→cross-family reviewed→fix-passed→orchestrator ground-checked. All <span class="ok">T0</span>. Full astro build 2137 pages, 0 schema errors.</td></tr>
+<tr><td><strong>#1795</strong></td><td>Relabel 3 mislabeled deep-learning modules to match their bodies</td><td>1.4 CNNs→<em>Training Deep Networks</em>; 1.5 RNNs→<em>Convolutional Neural Networks &amp; Computer Vision</em>; 1.6 Backprop→<em>From Backpropagation to Transformers</em>. Slugs unchanged. cursor APPROVE.</td></tr>
+<tr><td><strong>#1797</strong></td><td>Remove LLM cross-family review from CI (issue #1796 closed)</td><td>Deleted <code>cross-family-code-review.yml</code> + orphaned <code>scripts/ci/cross_family_review.sh</code>. zizmor clean.</td></tr>
+</table>
+
+<h2>Wave 1 — what ground-check caught (T0 ≠ correctness)</h2>
+<ul>
+<li><strong>A1</strong> (cursor→codex): half-MSE gradient wrong → <code>(Y−target)/(batch·d_out)</code>; a "ValueError" demo that didn't raise; false NumPy-history claim; later the CI gemini also flagged a broadcasting per-axis reasoning error + an <code>numerical_grad</code> in-place mutation (crashed on read-only) — all fixed.</li>
+<li><strong>A2</strong> (codex→cursor): structural only (Learning Outcomes before Why; Sources before Next; A3 link) — inline fix.</li>
+<li><strong>A3</strong> (deepseek→gemini): a <em>factually wrong</em> "σ′ can't be recovered from A" claim (it's <code>A(1−A)</code>); ReLU example used wrong sign (fixed to negative Z); <code>&gt;0.5</code> threshold so code/prose/trace agree (XOR runs <code>[0,1,1,0]</code>).</li>
+<li><strong>A4</strong> (gemini→opus): math flawless &amp; untouched; <strong>one fabricated source</strong> — an arXiv ID that resolved 200 but pointed at an unrelated braid-theory paper (valid-but-wrong-metadata trap) → replaced with the real Maas Stanford ICML PDF. Added Part-5 derivatives table + ELU impl.</li>
+</ul>
+
+<h2>The mislabeled-module fix (#1795)</h2>
+<p>Verified on disk: content was solid, only labels were wrong (a learner clicking "RNNs" got a CNN lecture).
+Chose <strong>relabel, not slug-rename</strong> — slugs are the quality board's keys, and the epic's Block B/C
+waves will properly restructure/redistribute this content, so renaming slugs now is throwaway + redirect cruft.
+Updated titles + nav + prereq/Next cross-links in 1.3/1.4/1.5/1.8/1.9/1.10, and retargeted ML 2.1/2.2's
+"CNN module" cross-refs from 1.4 to the real CNN module (1.5), de-overclaiming focal-loss/saliency (neither
+module actually covers them).</p>
+
+<h2>CI LLM-review removal (#1797, issue #1796)</h2>
+<p>User: <em>"why do we do ci github action for llm review??? stop doing that!!"</em> — same conclusion as
+learn-ukrainian. Removed the only LLM-API workflow. Cross-family review is now <strong>local-only</strong> via
+<code>dispatch_smart</code>. Key distinction surfaced: the failing CI gemini used a pay-as-you-go
+<code>GEMINI_API_KEY</code> against the OpenAI-compat REST endpoint (returned empty twice on #1795); that's a
+different path from the <em>OAuth</em> gemini the user uses interactively ("works for me"). Required checks
+unchanged (<code>Incident dedup gate</code> + <code>Site health link check</code>). Remaining workflows: deploy,
+incident-dedup, link-check, uk-quality-checks, zizmor. New memory: <code>feedback_no_llm_review_in_ci</code>.</p>
+
+<h2 class="warn">Open items / next</h2>
+<ul>
+<li><strong>NN epic #1793 continues</strong> (open). <strong>Wave 2 = Block A A5–A8</strong>: loss functions &amp; output heads (A5), backprop-by-hand for dense nets (A6), tiny NumPy NN lab — XOR→two-moons→Fashion-MNIST (A7), rescope 1.7 into scalar autograd (A8). Then Blocks B/C/D, which also properly restructure the now-relabeled 1.4/1.5/1.6.</li>
+<li><strong>Roster note:</strong> cursor fabricated 1 source this wave (caught by ground-check — the known breadth-task hazard, not a cursor-specific failure; no reshuffle). Local <strong>gemini-cli headless</strong> review also returned empty this session (flaky) — cursor/codex/opus/deepseek are the reliable local review lanes.</li>
+<li><strong>Manual follow-up (repo owner):</strong> delete the unused <code>GEMINI_API_KEY</code> secret in Settings → Secrets.</li>
+<li><strong>Standing gap:</strong> PR CI still has NO full astro build → frontmatter-schema breaks reach main silently (<code>feedback_pr_ci_has_no_full_astro_build</code>). Candidate to ADD a build/schema gate (not another LLM job). Always <code>npm run build</code> in PRIMARY before declaring a content wave done.</li>
+<li><strong>Also still queued from #104:</strong> G2 #1623 (engineering-craft, Stage-1 brief in <code>.worktrees/g2-craft</code>), G4 #1626 (synthesis-apps 3.2/3.3). Next curriculum-order track after AI/ML = on-premises, then platform.</li>
+</ul>
+</body>
+</html>
