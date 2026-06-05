@@ -35,7 +35,20 @@ ground-checked.</p>
 <tr><td><strong>#1794</strong></td><td>NN Block A Wave 1 — 4 new modules (1.1.1–1.1.4): nn-math-warmup, neuron-from-scratch, forward-propagation-mlp, activation-functions</td><td>Each authored→cross-family reviewed→fix-passed→orchestrator ground-checked. All <span class="ok">T0</span>. Full astro build 2137 pages, 0 schema errors.</td></tr>
 <tr><td><strong>#1795</strong></td><td>Relabel 3 mislabeled deep-learning modules to match their bodies</td><td>1.4 CNNs→<em>Training Deep Networks</em>; 1.5 RNNs→<em>Convolutional Neural Networks &amp; Computer Vision</em>; 1.6 Backprop→<em>From Backpropagation to Transformers</em>. Slugs unchanged. cursor APPROVE.</td></tr>
 <tr><td><strong>#1797</strong></td><td>Remove LLM cross-family review from CI (issue #1796 closed)</td><td>Deleted <code>cross-family-code-review.yml</code> + orphaned <code>scripts/ci/cross_family_review.sh</code>. zizmor clean.</td></tr>
+<tr><td><strong>#1799</strong></td><td>Security hardening (issue #1798, partial)</td><td>npm→Dependabot (7d cooldown + minor/patch grouping); private vulnerability reporting <strong>ON</strong>; CodeQL → <code>security-extended</code>. Audit found 0 open alerts across code/dependabot/secret scanning.</td></tr>
 </table>
+
+<h2 class="warn">⚠️ ACTIVE DIRECTIVES (set at session-105 end — honor these next session)</h2>
+<ul>
+<li><strong>🚫 DO NOT USE CLAUDE until the weekly quota reset.</strong> No work to Claude/opus <em>dispatch</em> lanes (<code>dispatch_smart --agent claude</code>, opus-4.8 headless reviewer). Use cursor / codex / deepseek / agy / gemini-cli for author + review. Conserve the weekly pool; minimize even orchestrator chatter until reset.</li>
+<li><strong>🧪 TEST the agy integration — it will replace gemini-cli soon.</strong> Exercise <code>dispatch_smart --agent agy</code> (Gemini-3.1-Pro model — <em>not</em> Claude models, per the directive above) on real cross-family reviews: confirm a parseable verdict, ground-check findings (agy has fabricated whole reviews before), confirm it does not edit files in review mode. gemini-cli headless returned empty again this session (flaky) → agy is the intended successor.</li>
+</ul>
+
+<h2>Security audit summary (#1798/#1799)</h2>
+<p><strong>Already good:</strong> public repo, 0 open alerts (code scanning / Dependabot / secret scanning), CodeQL default-setup covering all languages, secret scanning + push protection on, Dependabot alerts + security updates on with 7-day cooldown, branch protection blocks force-push/deletion (required checks: Incident dedup + Site health).
+<br><strong>Applied:</strong> npm Dependabot (#1799), private vulnerability reporting, CodeQL → security-extended (may surface new alerts on next run — triage in a day).
+<br><strong>Org-gated (owner must do at <code>kube-dojo</code> org level — affects all repos):</strong> secret-scanning "non-provider patterns" + "validity checks". Tracked in #1798 (left open).
+<br><strong>Left as-is (deliberate):</strong> <code>enforce_admins:false</code> (keeps fork admin-merge), no required PR review (solo maintainer can't self-approve).</p>
 
 <h2>Wave 1 — what ground-check caught (T0 ≠ correctness)</h2>
 <ul>
