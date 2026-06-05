@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 108 — NN Block B Wave 3 (B7/B8) merged · Block B complete</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #326ce5; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .92em; }
+  th, td { border: 1px solid #ddd; padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f4fc; }
+  .tldr { background: #f0f7ff; border-left: 4px solid #326ce5; padding: .8rem 1rem; border-radius: 4px; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .warn { color: #9a6700; }
+  ul { margin: .4rem 0; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 108 — NN Block B Wave 3 (B7/B8) merged · Block B complete</h1>
+<p><em>2026-06-05 · standalone orchestrator session · continues session 107 (NN epic #1793, Phase 2 / Block B)</em></p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Drove <strong>Wave B-3 end-to-end to merge in PR #1805</strong> (main
+<code>6ac7462e</code>), the final wave of <strong>Block B</strong> ("training as engineering").
+Two net-new modules: <strong>B7 <code>1.3.5</code> Training-Diagnostics Playbook</strong> (cursor author)
+and <strong>B8 <code>1.3.6</code> Numerical Stability &amp; Precision</strong> (codex author). Plus the
+long-planned <strong>gut/redirect of the mislabeled <code>1.4</code></strong> (its norm/reg/opt survey is
+now fully owned by <code>1.3.1</code>–<code>1.3.4</code>). Both modules cross-family reviewed, every
+finding orchestrator-ground-checked, full astro build green (2153 pages, 0 schema errors), CI
+site-health + incident-dedup both pass. All dispatch on non-Claude lanes per the active weekly-reset
+directive. <strong>Block B is now complete: B1–B8 all live.</strong>
+</div>
+
+<h2>What shipped — Wave B-3 (PR #1805)</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>Cross-family review</th><th>Fixes applied</th><th>Final</th></tr>
+<tr>
+  <td><code>1.3.5</code> Training-Diagnostics Playbook <em>(net-new)</em></td>
+  <td>cursor <code>auto</code></td>
+  <td>codex R1 — <strong>NEEDS_CHANGES</strong> (5 real, 1 FP)</td>
+  <td>(1) <code>clip_grad_norm_</code> "returns a Python float" → it returns a 0-D <code>Tensor</code> (2 spots + 2 sibling spots cursor caught); (2) Section 7.1 "metrics" loop silently clipped at <code>max_norm=1.0</code> → <code>float("inf")</code> probe; (3) val-loss averaged batch-means → exact per-example (×batch size ÷ dataset); (4) Hands-On bug (b) "val loader without shuffle" is not a bug → unshuffled <em>training</em> loader; (5) duplicate quiz numbering renumbered 1–8. FP: "extra <code>## Learner check</code>" = the Block B convention.</td>
+  <td class="ok">T0 5072w</td>
+</tr>
+<tr>
+  <td><code>1.3.6</code> Numerical Stability &amp; Precision <em>(net-new)</em></td>
+  <td>codex gpt-5.5</td>
+  <td>cursor R1 — <strong>APPROVE_WITH_NITS</strong> (0 code/concept/math/fab)</td>
+  <td>None needed. Nits were navigation only (the <code>1.4</code> fork / B7 forward-ref) — resolved by consolidation. The "1.5-rnns slug" flag was an FP (link text correctly matches the destination CNN title).</td>
+  <td class="ok">T0 5010w</td>
+</tr>
+</table>
+
+<p><strong>Gut/redirect the mislabeled <code>1.4</code>:</strong> <code>module-1.4-cnns-computer-vision.md</code>
+(frontmatter title "Training Deep Networks: Normalization, Regularization &amp; Optimization", still citing
+stale PyTorch 2.11) was a survey of init+opt+reg+norm — content now owned by the <code>1.3.1</code>–<code>1.3.4</code>
+sub-chain. <code>git rm</code> + <code>astro.config.mjs</code> redirect
+<code>…/module-1.4-cnns-computer-vision/</code> → <code>…/module-1.3.1-initialization-signal-propagation/</code>.
+Re-chained Next Module <code>1.3.4</code>→<code>1.3.5</code>→<code>1.3.6</code>→<code>1.5</code> (CNNs);
+re-pointed the two inbound prereq links (<code>1.8</code> SSL, <code>1.9</code> GNN) from <code>1.4</code>
+→ <code>1.3.1</code>; <code>index.md</code> dropped the <code>1.4</code> row and added <code>1.3.5</code>/<code>1.3.6</code>.
+The deep-learning sidebar is <code>autogenerate</code>, so removing the file cleanly drops it.</p>
+
+<h2>Reviewer scorecard (this wave)</h2>
+<ul>
+<li><strong class="ok">codex on B7 — NEEDS_CHANGES, 5 real + 1 FP.</strong> Caught a genuine API error
+(<code>clip_grad_norm_</code> returns a <code>Tensor</code>, not a float — the T0 verifier is blind to this),
+a non-bug presented as an injectable bug in the exercise, and a silent-clip in an "instrumentation" demo.
+The one FP (Learner-check-after-Next-Module) was the predictable kind. Strong, precise review.</li>
+<li><strong class="ok">cursor on B8 — APPROVE_WITH_NITS, no code/concept/math/fabrication errors.</strong>
+Mentally executed the AMP/GradScaler/log-sum-exp paths. Orchestrator <em>independently</em> ground-checked
+the same against PyTorch 2.12 (current <code>torch.amp</code> namespace, GradScaler order, log-sum-exp
+1002.4076, bf16/fp16/fp32 ranges) — all correct. Two of its three nits were FPs relative to the wave plan.</li>
+</ul>
+
+<h2>Process notes / gotchas</h2>
+<ul>
+<li><strong>Code-heavy module + no torch in the venv.</strong> Neither codex (B8 author) nor cursor (B8
+reviewer) could execute the PyTorch snippets ("no torch in venv"). Per the code-heavy-review memory, the
+orchestrator independently verified the fast-churning <code>torch.amp</code> API (vs deprecated
+<code>torch.cuda.amp</code>), the <code>GradScaler</code> call order, and the numeric examples against
+the 2.12 docs. T0 verifier passes are NOT code-correctness signals.</li>
+<li><strong>Sub-floor / fix without expansion → no R2.</strong> B7's fixes were surgical corrections that
+added no content, so a T0 re-verify sufficed (no R2). Contrast B4/B6 in earlier waves, where the fix
+<em>added</em> content and needed an R2.</li>
+<li><strong>codex <code>OK: False</code> on author dispatch = unpushed branch, not failure.</strong> The
+wrapper post-check flags "origin has no branch named nn-b8" because authors commit only to the local
+worktree branch (consolidation pushes the integration branch). The work was committed and clean.</li>
+<li><strong>Net-new NN modules are NOT pipeline-board-tracked.</strong> Both B7/B8 and the already-merged
+B5/B6 return <code>stage: None</code>; there are zero <code>.pipeline/reviews/</code> records for any
+deep-learning module. So no reset-stage / review-record bookkeeping is needed for net-new NN content —
+the cross-family review lives in the PR + ledger + this handoff. (Distinct from the back-catalog 388-review
+loop, where review records and reset-stage DO apply.)</li>
+<li><strong>Consolidation = fresh integration worktree off main</strong> + copy the 2 final files + rebuild
+<code>index.md</code> rows directly + the structural edits, with <code>node_modules</code> symlinked for the
+in-worktree build. Same proven pattern as Waves B-1/B-2.</li>
+</ul>
+
+<h2>State after Wave B-3 (on main <code>6ac7462e</code>)</h2>
+<ul>
+<li><strong class="ok">Block B COMPLETE — B1–B8 all live and merged.</strong> Final numbering:
+<code>1.2</code> PyTorch Bridge · <code>1.3</code> Training Loop · <code>1.3.1</code> Init ·
+<code>1.3.2</code> Optimizers · <code>1.3.3</code> Regularization · <code>1.3.4</code> Normalization ·
+<code>1.3.5</code> Diagnostics · <code>1.3.6</code> Numerical Stability. <code>1.4</code> gutted (redirect).</li>
+<li>Worktrees + author/review/integration branches cleaned (only primary <code>main</code> + the unrelated
+<code>g2-craft</code> remain).</li>
+<li><strong>Active directive unchanged:</strong> no Claude/opus <em>dispatch</em> lanes until the weekly
+reset (orchestrator necessarily runs on Claude). All Wave-3 dispatch on cursor/codex.</li>
+<li>Reusables: <code>logs/remediation/briefs/nn-blockB/{B7,B8,FIX-B7,_shared-rules,_review-rules}.md</code>
++ <code>WAVE-B3-LEDGER.md</code>.</li>
+</ul>
+
+<h2>Resume — next</h2>
+<ul>
+<li><strong>Block C ← IMMEDIATE NEXT:</strong> C1–C4 attention / transformer-by-hand, rescoping the
+mislabeled <code>1.6</code> (file <code>module-1.6-backpropagation-deep-dive</code>, currently titled
+"From Backpropagation to Transformers" — its attention/MHA/positional-encoding content is the source
+material). Same loop: ≤3 authors (cursor/codex/deepseek) → cross-family R1 (codex/cursor/agy; opus only
+after weekly reset) → ground-check every finding → consolidated PR → build in worktree (node_modules
+symlink) → finalize. Then <strong>Block D</strong> (D1–D3 CNN/RNN fix + capstone; the mislabeled
+<code>1.5</code> = CNNs / <code>module-1.5-rnns-sequence-models</code>).</li>
+<li><strong>Filename-vs-title tangle to resolve in Block C/D:</strong> <code>1.5</code> slug says
+<code>rnns-sequence-models</code> but is titled/contented CNNs; <code>1.6</code> slug says
+<code>backpropagation-deep-dive</code> but is titled/contented transformers. Plan the slug cleanup as part
+of those blocks (same gut/redirect technique used for <code>1.4</code> here).</li>
+<li><strong>Other open threads (unchanged):</strong> G2 #1623 engineering-craft Stage-1 (worktree
+<code>g2-craft</code>); G4 #1626 synthesis-apps 3.2/3.3; the 2 org-gated secret-scanning extras (#1798,
+owner action); leaked-meta cleanup in <code>mlops/module-5.6</code> + <code>cloud/hyperscaler-rosetta-stone.md</code>.</li>
+</ul>
+</body>
+</html>
