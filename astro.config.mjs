@@ -43,6 +43,9 @@ export default defineConfig({
     // Block B: 1.4 gutted — its norm/reg/opt survey is now the 1.3.1-1.3.6 sub-chain
     '/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/':
       '/ai-ml-engineering/deep-learning/module-1.3.1-initialization-signal-propagation/',
+    // Block C: 1.6 gutted — its attention/transformer content is now the 1.4.1-1.4.4 sub-chain
+    '/ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive/':
+      '/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/',
   },
   markdown: {
     remarkPlugins: [remarkMath],

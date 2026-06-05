@@ -28,8 +28,11 @@ sidebar:
 | 1.3.4 | [Normalization Layers](/ai-ml-engineering/deep-learning/module-1.3.4-normalization-layers/) |
 | 1.3.5 | [Training-Diagnostics Playbook](/ai-ml-engineering/deep-learning/module-1.3.5-training-diagnostics-playbook/) |
 | 1.3.6 | [Numerical Stability & Precision](/ai-ml-engineering/deep-learning/module-1.3.6-numerical-stability-precision/) |
+| 1.4.1 | [Embeddings & Representation Learning](/ai-ml-engineering/deep-learning/module-1.4.1-embeddings-representation-learning/) |
+| 1.4.2 | [Residual Connections & Deep-Architecture Patterns](/ai-ml-engineering/deep-learning/module-1.4.2-residual-deep-architectures/) |
+| 1.4.3 | [Attention from Scratch](/ai-ml-engineering/deep-learning/module-1.4.3-attention-from-scratch/) |
+| 1.4.4 | [The Transformer Block from Scratch](/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/) |
 | 1.5 | [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) |
-| 1.6 | [From Backpropagation to Transformers](/ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive/) |
 | 1.8 | [Self-Supervised Learning](/ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning/) |
 | 1.9 | [Graph Neural Networks](/ai-ml-engineering/deep-learning/module-1.9-graph-neural-networks/) |
 | 1.10 | [Modern Transformers: RoPE, ALiBi, and Attention Variants](/ai-ml-engineering/deep-learning/module-1.10-modern-transformers-rope-and-attention/) |

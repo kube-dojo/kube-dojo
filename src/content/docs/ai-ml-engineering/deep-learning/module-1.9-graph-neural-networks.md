@@ -7,7 +7,7 @@ sidebar:
 ---
 
 > Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-120 minutes
-> Prerequisites: [Module 1.3.1: Initialization & Signal Propagation](module-1.3.1-initialization-signal-propagation/), [Module 1.6: From Backpropagation to Transformers](module-1.6-backpropagation-deep-dive/), and [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../../machine-learning/module-1.3-model-evaluation-validation-leakage-and-calibration/).
+> Prerequisites: [Module 1.3.1: Initialization & Signal Propagation](module-1.3.1-initialization-signal-propagation/), [Module 1.4.4: The Transformer Block from Scratch](module-1.4.4-transformer-block-from-scratch/), and [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../../machine-learning/module-1.3-model-evaluation-validation-leakage-and-calibration/).
 
 Graph neural networks, usually shortened to GNNs, are the part of deep learning
 that handles inputs whose natural structure is a set of entities connected by

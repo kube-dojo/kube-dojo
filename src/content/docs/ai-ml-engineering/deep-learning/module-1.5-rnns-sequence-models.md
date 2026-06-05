@@ -1197,7 +1197,7 @@ Success criteria:
 <!-- /v4:generated -->
 ## Next Module
 
-Training deep convolutional networks surfaces gradient pathology — vanishing gradients in very deep stacks, exploding gradients on bad initializations, and silent backprop bugs in custom layers. Continue with **[Module 1.6: From Backpropagation to Transformers](./module-1.6-backpropagation-deep-dive/)** for the theory of how those gradients move through computation graphs and how the same autodiff machinery powers attention, then **[Module 1.7: Backpropagation and Autograd from Scratch](./module-1.7-backpropagation-and-autograd-from-scratch/)** to build the autodiff engine from primitive operations and learn the debugging techniques that catch broken gradient flows before a long training run wastes hours.
+Training deep convolutional networks surfaces gradient pathology — vanishing gradients in very deep stacks, exploding gradients on bad initializations, and silent backprop bugs in custom layers. The attention and transformer mechanics those gradients eventually power are built from scratch in **[Module 1.4.3: Attention from Scratch](./module-1.4.3-attention-from-scratch/)** and **[Module 1.4.4: The Transformer Block from Scratch](./module-1.4.4-transformer-block-from-scratch/)**. Continue forward with **[Module 1.8: Self-Supervised Learning](./module-1.8-self-supervised-learning/)** to see how networks learn reusable representations from unlabeled data — the pretraining paradigm behind modern vision and language models.
 
 ## Sources
 
