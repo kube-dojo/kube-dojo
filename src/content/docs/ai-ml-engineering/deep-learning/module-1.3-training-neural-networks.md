@@ -1,1133 +1,709 @@
 ---
-citations_verified: true
-title: "Training Neural Networks"
+title: "The Training Loop: From One Step to a Reproducible Run"
 slug: ai-ml-engineering/deep-learning/module-1.3-training-neural-networks
 sidebar:
   order: 1004
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8 hours
->
-> **Prerequisites**: Python fundamentals, NumPy arrays, matrix multiplication, gradient descent, and the previous neural-network-from-scratch module.
->
-> **Primary tools**: PyTorch, TorchVision, NumPy, local virtual environments, optional CUDA-capable GPU.
+Hypothetical scenario: A model retraining job finishes without an exception, writes a checkpoint, and sends a neat metrics summary to the team channel. The training loss went down, so the run looks healthy at first glance. The next morning, validation accuracy is worse than the baseline, the resumed run uses a different learning rate than the interrupted run, and nobody can reproduce the "good" curve from yesterday because the random split changed. Nothing in that story requires a new derivative formula. It is a training-loop failure: the loop did not clearly separate training from validation, did not save enough state to resume, and did not make the experiment repeatable enough to debug.
 
----
+This module treats the training loop as an engineering object, not as boilerplate around the model. In Block A you wrote the NumPy loop yourself: mini-batches entered, logits came out, stable softmax cross-entropy produced a scalar, backprop filled gradients, and `W -= lr * dW` updated parameters. In B1 you crossed the bridge to PyTorch primitives: `torch.Tensor`, `torch.autograd`, `nn.Linear`, `nn.CrossEntropyLoss`, `DataLoader`, and `torch.optim.SGD`. B2 now asks the practical question: how do those primitives become a run you can trust, stop, resume, compare, and explain?
 
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
 
-1. **Implement** PyTorch tensor, autograd, and `nn.Module` workflows that replace manual NumPy backpropagation without hiding the training mechanics.
-2. **Debug** common training-loop failures, including stale gradients, wrong loss functions, unregistered layers, device mismatches, and evaluation-mode errors.
-3. **Compare** CPU, GPU, mixed-precision, and compiled execution paths, then choose the path that fits a workload's memory, latency, and operational constraints.
-4. **Evaluate** whether a model training script is production-ready by inspecting data loading, checkpointing, validation, logging, reproducibility, and failure detection.
-5. **Design** a complete supervised training pipeline that includes data preparation, model definition, loss selection, optimizer setup, validation, checkpointing, and troubleshooting evidence.
-
----
+- Implement the canonical PyTorch training step in the correct order, then map each line back to the A7 manual NumPy update and B1's tensor, autograd, module, loss, and optimizer primitives.
+- Debug train/validation loop boundaries by verifying `.train()` mode during parameter updates, `.eval()` mode during validation, and `with torch.no_grad():` around evaluation-only forward passes.
+- Design checkpoint dictionaries that restore model parameters, optimizer state, scheduler state, epoch counters, and best validation metrics rather than only reloading weights.
+- Compare reproducibility controls, including Python, NumPy, PyTorch, `DataLoader` worker seeding, and deterministic-algorithm settings, while explaining why bit-identical results across hardware are not guaranteed.
+- Implement metric logging, overfit-one-batch sanity checks, gradient accumulation, and early-stopping hooks, then evaluate whether the resulting script can be interrupted, resumed, validated, and audited with enough evidence to explain a failed or successful run.
 
 ## Why This Module Matters
 
-At 03:12 on a Tuesday morning, a fraud-detection retraining job finishes successfully and ships a model whose predictions are almost random. The platform engineer on call sees no Kubernetes failures, no failed health checks, and no obvious Python exception. The training script printed reassuring loss values for hours, yet the model performs worse than yesterday's baseline because validation ran with dropout still enabled and gradients were silently accumulating across batches.
+The shortest PyTorch training loop is easy to memorize and easy to get subtly wrong. A single missing `optimizer.zero_grad(set_to_none=True)` changes the effective gradient from "this batch" to "this batch plus whatever came before." A single missing `model.eval()` makes validation depend on stochastic dropout masks and batch-normalization batch statistics. A checkpoint that saves only `model.state_dict()` can restart inference, but it cannot faithfully resume training because momentum buffers, adaptive optimizer moments, scheduler counters, and best-metric history are missing. The code still runs, which is why these bugs are more dangerous than syntax errors.
 
-That engineer does not need a definition of a tensor in that moment; she needs a mental model sharp enough to ask the right questions under pressure. Did the optimizer see the parameters? Did the labels match the loss function? Did the model switch from training behavior to inference behavior before validation? Did logging keep full computational graphs alive until the GPU ran out of memory? Those questions separate a person who has merely run a tutorial from a practitioner who can operate machine-learning systems responsibly.
+The loop is also where the Block A mental model becomes operational. `loss.backward()` is the same reverse graph walk your A8 scalar `Value.backward()` performed, except the nodes are tensor operations and PyTorch owns the vector-Jacobian products. `nn.CrossEntropyLoss` is the stable softmax cross-entropy from A5, except the API takes logits and integer class labels instead of an explicit one-hot target matrix. `torch.optim.SGD.step()` is the A7 line `W -= lr * dW`, except the optimizer discovers registered parameters from the `nn.Module` tree and applies the update consistently. PyTorch replaces your hand-written code line-for-line; it does not remove the need to know which line owns which responsibility.
 
-PyTorch makes deep learning accessible because [it lets engineers write ordinary Python while it handles automatic differentiation, device movement, layer registration, and optimizer updates](https://arxiv.org/abs/1912.01703). The accessibility can be dangerous when the learner treats the framework as a black box. This module teaches PyTorch as a set of inspectable mechanisms, so each convenience maps back to a concrete training responsibility that can be verified, debugged, and improved.
+Think of the training loop like a flight checklist. The engine design matters, but crews still use a fixed sequence because order prevents silent state mistakes. In a training step, the checklist is `zero_grad -> forward -> loss -> backward -> step`. In an epoch, the checklist is `train loop -> validation loop -> metrics -> checkpoint -> scheduler/early-stop decision`, with the exact scheduler placement depending on the scheduler type. In a reproducible run, the checklist starts before the first batch with seeds, dataset split policy, device choice, and run metadata. You are not adding ceremony for its own sake; you are making the run inspectable.
 
-The path through the module follows the way training systems actually fail. First you will map data into tensors with explicit shapes, dtypes, and devices. Then you will watch autograd build and clear computation graphs. After that you will construct registered modules, run complete training and evaluation loops, and add the operational controls that keep experiments reproducible and production jobs recoverable.
+This module deliberately avoids re-teaching autograd and `nn.Module`. B1 already covered the bridge, and Block A already made the math visible. Here the emphasis is training discipline: what happens to gradients between steps, what happens to mode-dependent modules between train and validation, what state is needed to continue a run, what numbers should be logged, and what small sanity check should happen before a long job consumes real compute. Optimizer internals belong to B4, initialization to B3, regularization to B5, normalization to B6, detailed diagnostics to B7, and precision to B8. B2 owns the loop that holds all of them together.
 
----
+## Part 1: The Canonical Training Step
 
-## Core Content
+The smallest trustworthy PyTorch training step has five operations in a strict order. First, clear gradients from the previous step. Second, run the model forward on the current mini-batch. Third, compute a scalar loss from model outputs and targets. Fourth, ask autograd to backpropagate through the computation graph. Fifth, ask the optimizer to update the parameters using the gradients that were just computed. This sequence is short, but every line has stateful consequences.
 
-### 1. From Manual Backpropagation to PyTorch Training
-
-The previous module asked you to build neural networks from lower-level pieces so that the chain rule, cached activations, and parameter updates were visible. That work matters because PyTorch does not remove those mechanics; it automates them behind a more reliable interface. When you call `loss.backward()`, PyTorch traverses a computation graph whose nodes correspond to the same intermediate values you cached manually.
-
-A training framework earns trust only when you can connect its abstractions to the work being done. A tensor is not just an array; in PyTorch it can also carry device placement, dtype, gradient-tracking state, and a link to the operation that produced it. A model is not just a Python class; as an `nn.Module`, it registers parameters so optimizers can discover them, save them, move them, and update them.
-
-The central training contract is compact: feed tensors into a registered model, compute a scalar loss, ask autograd for gradients, let an optimizer update registered parameters, and evaluate with behavior appropriate for inference. Most training bugs violate one part of that contract. The module therefore teaches PyTorch by repeatedly checking the contract rather than by listing API calls.
-
-```mermaid
-flowchart LR
-    Data[Input tensors<br>shape dtype device] --> Model[nn.Module<br>registered parameters]
-    Model --> Logits[Raw predictions<br>logits or values]
-    Logits --> Loss[Scalar loss<br>task-specific objective]
-    Loss --> Backward[loss.backward<br>autograd gradients]
-    Backward --> Optimizer[optimizer.step<br>parameter update]
-    Optimizer --> Model
-    Model --> Eval[model.eval plus no_grad<br>validation behavior]
+```text
+A7 NumPy loop                           B2 PyTorch training step
+--------------------------------------------------------------------------------
+dW, db = 0 for this batch            -> optimizer.zero_grad(set_to_none=True)
+logits = layer.forward(xb)           -> logits = model(inputs)
+loss = stable_softmax_ce(logits, y)  -> loss = loss_fn(logits, targets)
+backward cached VJPs through layers  -> loss.backward()
+W -= lr * dW; b -= lr * db           -> optimizer.step()
 ```
 
-| Training responsibility | Manual NumPy version | PyTorch version | Practitioner check |
-|---|---|---|---|
-| Store data in arrays | `np.ndarray` with manually managed shapes | `torch.Tensor` with shape, dtype, device, and gradient flags | Print `shape`, `dtype`, `device`, and `requires_grad` before blaming the model |
-| Track intermediate values | Custom caches inside forward functions | Dynamic computation graph built during tensor operations | Inspect whether tensors still have `grad_fn` when memory grows unexpectedly |
-| Compute gradients | Hand-written derivatives and chain-rule loops | `loss.backward()` over the recorded graph | Verify gradients are finite and reset at the intended time |
-| Update parameters | Manual subtraction using learning rate | `optimizer.step()` over registered parameters | Confirm `len(list(model.parameters()))` is not zero |
-| Move to accelerator | Separate GPU library or custom kernels | `.to(device)` on tensors and modules | Keep model, input tensors, and labels on the same device |
-| Save training state | Custom serialization of arrays and counters | `state_dict()` for model and optimizer | Save both model and optimizer when resuming training |
-
-A PyTorch tensor can represent a scalar loss, a vector of class labels, a matrix of tabular features, a batch of images, or a sequence of token embeddings. The framework does not know the business meaning of those values. It only knows dimensions, numeric types, storage location, and the graph of operations that transform one tensor into another.
-
-```mermaid
-graph TD
-    A[0D scalar<br>single loss value<br>shape: empty] --> B[1D vector<br>class labels or features<br>shape: batch]
-    B --> C[2D matrix<br>tabular batch<br>shape: batch x features]
-    C --> D[3D tensor<br>single image with channels<br>shape: channels x height x width]
-    D --> E[4D tensor<br>image batch<br>shape: batch x channels x height x width]
-    E --> F[5D tensor<br>video batch<br>shape: batch x frames x channels x height x width]
-```
-
-| Tensor rank | Common name | Example training object | Typical shape | Failure to watch for |
-|---|---|---|---|---|
-| 0 | Scalar | Loss value after reduction | `[]` | Calling `backward()` on a non-scalar without supplying a gradient |
-| 1 | Vector | Class labels for a batch | `[batch]` | Passing one-hot labels to `CrossEntropyLoss` when it expects class indices |
-| 2 | Matrix | Tabular features or flattened images | `[batch, features]` | Accidentally transposing batch and feature dimensions |
-| 3 | Tensor | One color image | `[channels, height, width]` | Mixing channel-first PyTorch format with channel-last image libraries |
-| 4 | Batch tensor | Batch of color images | `[batch, channels, height, width]` | Forgetting to flatten before a fully connected network |
-| 5 | Sequence batch | Batch of short video clips | `[batch, frames, channels, height, width]` | Applying image-only layers without deciding how time should be handled |
-
-The first debugging habit is to print tensor metadata before reading stack traces too deeply. Shape errors often look mysterious because the failing operation reports only the immediate mismatch, not the upstream decision that created it. When the network expects `[batch, 784]` and receives `[batch, 1, 28, 28]`, the fix is not inside the optimizer; it belongs at the boundary between the data loader and the model.
+The order matters because PyTorch gradients accumulate by default. Accumulation is useful for gradient accumulation, multi-loss objectives, and some distributed training patterns, but it is wrong for ordinary one-batch-one-step training unless you reset at the start of each step. The current PyTorch optimizer API defaults `zero_grad` to `set_to_none=True`, which sets `.grad` fields to `None` instead of allocating zero tensors. That saves memory and lets you detect parameters that received no gradient, but it also means manual gradient inspection must handle `None` explicitly.
 
 ```python
 import torch
+from torch import nn
 
-images = torch.randn(64, 1, 28, 28)
-labels = torch.randint(0, 10, (64,))
+w = nn.Parameter(torch.tensor([[0.5]]))  # shape: [1, 1]
+optimizer = torch.optim.SGD([w], lr=0.1)
+loss_fn = nn.MSELoss()
 
-print("images:", images.shape, images.dtype, images.device, images.requires_grad)
-print("labels:", labels.shape, labels.dtype, labels.device, labels.requires_grad)
+x = torch.tensor([[2.0]])      # shape: [batch=1, features=1]
+target = torch.tensor([[0.0]]) # shape: [batch=1, outputs=1]
 
-flattened = images.view(images.size(0), -1)
-print("flattened:", flattened.shape)
-```
-
-Active learning prompt: before running the snippet above, predict the shape of `flattened` and identify which dimension represents the batch. If your answer does not preserve the batch dimension, the model may still run for a single example but fail when real batches arrive.
-
-PyTorch and NumPy can share memory when tensors are created with `torch.from_numpy`. That sharing is efficient, but it can surprise you when preprocessing code mutates the original array after creating the tensor. In training code, accidental mutation is especially costly because a model may appear nondeterministic even though the randomness comes from shared storage.
-
-```python
-import numpy as np
-import torch
-
-array = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-tensor = torch.from_numpy(array)
-
-array[0] = 99.0
-print(tensor)
-
-safe_copy = torch.tensor(array)
-array[1] = -5.0
-print("shared:", tensor)
-print("copied:", safe_copy)
-```
-
-Dtype choices also shape the training result. Floating-point tensors are used for model inputs, activations, weights, and losses because gradients require continuous values. Integer tensors are used for indices and class labels because classification losses such as `CrossEntropyLoss` expect each target to name a class, not a floating-point score.
-
-| Dtype | Typical use | Why it matters | Common mistake |
-|---|---|---|---|
-| `torch.float32` | Default model weights, activations, and losses | Good balance of precision and hardware support | Converting labels to float for a classification loss that expects integer indices |
-| `torch.float16` | Mixed-precision training on compatible GPUs | Lower memory use and faster tensor cores when used carefully | Running unstable operations in half precision without automatic scaling |
-| `torch.bfloat16` | Mixed precision on supported accelerators | Wider exponent range than float16 can reduce overflow risk | Assuming every GPU supports it equally well |
-| `torch.long` | Class labels and embedding indices | Many PyTorch indexing operations require 64-bit integer labels | One-hot encoding labels before passing them to `CrossEntropyLoss` |
-| `torch.uint8` | Raw image bytes before conversion | Efficient storage for images in the range 0 to 255 | Training directly on byte images without converting and normalizing |
-
-The second debugging habit is to treat device placement as part of the tensor's type. A CPU tensor and a CUDA tensor are not interchangeable, even if their shapes match. PyTorch will not secretly copy data across the PCIe bus inside a model call because that would hide expensive operations and create unpredictable performance.
-
-```python
-import torch
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-features = torch.randn(32, 128, device=device)
-weights = torch.randn(128, 10, device=device)
-logits = features @ weights
-
-print(logits.shape, logits.device)
-```
-
-When you create new tensors inside `forward`, use the incoming tensor's device or a registered buffer instead of assuming CPU. This matters in production because a script that works on a laptop can crash immediately when the same model moves to GPU. The pattern `torch.zeros_like(x)` is often safer than `torch.zeros(...)` because it inherits shape, dtype, and device from the tensor already flowing through the model.
-
-```python
-import torch
-
-x = torch.randn(8, 16)
-mask = torch.zeros_like(x)
-print(mask.shape, mask.dtype, mask.device)
-```
-
-### 2. Autograd: Turning Computation into Gradients
-
-Autograd is PyTorch's automatic differentiation system, and its core idea is simple enough to test with small tensors. When a tensor has `requires_grad=True`, PyTorch records operations that produce new tensors from it. When you call `backward()` on a scalar result, PyTorch walks that graph backward and accumulates partial derivatives into each leaf tensor's `.grad` field.
-
-```ascii
-+-------------------+       +-------------------+       +-------------------+
-| x requires_grad   | ----> | y = x * x         | ----> | loss = y.sum()    |
-| leaf tensor       |       | recorded op       |       | scalar output     |
-+-------------------+       +-------------------+       +-------------------+
-          ^                                                       |
-          |                                                       |
-          +---------------- gradients via backward ---------------+
-```
-
-The word "accumulates" is the detail that turns into real incidents. PyTorch adds new gradients to existing `.grad` values because some advanced training strategies intentionally combine gradients across multiple micro-batches. In ordinary training loops, you must clear old gradients before computing new ones, or each update is based on the current batch plus leftover information from previous batches.
-
-```python
-import torch
-
-x = torch.tensor([2.0], requires_grad=True)
-
-y = x * 3
-y.backward()
-print("after first backward:", x.grad.item())
-
-y = x * 5
-y.backward()
-print("after second backward:", x.grad.item())
-
-x.grad.zero_()
-y = x * 7
-y.backward()
-print("after reset:", x.grad.item())
-```
-
-Worked example: suppose a model starts with stable loss and then produces `NaN` after several hundred batches. A rushed engineer might blame the dataset or the learning rate. A more reliable investigation first checks whether the training loop calls `optimizer.zero_grad()` before `loss.backward()`, because missing that line causes gradient values to combine across all previous batches.
-
-```python
-import torch
-import torch.nn as nn
-import torch.optim as optim
-
-model = nn.Linear(4, 2)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.1)
-
-x = torch.randn(16, 4)
-y = torch.randint(0, 2, (16,))
-
-for step in range(3):
-    optimizer.zero_grad()
-    logits = model(x)
-    loss = criterion(logits, y)
-    loss.backward()
-
-    total_grad_norm = 0.0
-    for parameter in model.parameters():
-        total_grad_norm += parameter.grad.detach().norm().item()
-
-    optimizer.step()
-    print(f"step={step} loss={loss.item():.4f} grad_norm={total_grad_norm:.4f}")
-```
-
-This worked example demonstrates the healthy sequence: zero stale gradients, run the forward pass, compute a scalar loss, backpropagate, inspect gradients if needed, and only then update parameters. If the gradient norm is infinite, `NaN`, or wildly larger than expected, you have evidence before the optimizer changes the weights. That evidence is more useful than a final failed accuracy number because it points to the exact phase where training broke.
-
-Active learning prompt: remove `optimizer.zero_grad()` in a temporary copy of the script and predict what will happen to the printed gradient norm over repeated steps. Do not focus only on whether the script crashes; focus on whether the update represents one batch or a hidden mixture of many batches.
-
-Autograd records graphs dynamically, which means Python control flow works naturally. An `if` branch, a loop, or a conditional model path can produce a different graph on each forward pass. That flexibility made PyTorch popular for research, but it also means the graph lives only as long as the tensors that reference it.
-
-```python
-import torch
-
-def piecewise_loss(x):
-    if x.mean().item() > 0:
-        return (x ** 2).mean()
-    return (x.abs()).mean()
-
-x = torch.randn(10, requires_grad=True)
-loss = piecewise_loss(x)
+optimizer.zero_grad(set_to_none=True)
+prediction = x @ w             # 2.0 * 0.5 = 1.0
+loss = loss_fn(prediction, target)
 loss.backward()
 
-print("loss:", loss.item())
-print("gradient available:", x.grad is not None)
+print(f"loss before step: {loss.item():.1f}")
+print(f"gradient dloss/dw: {w.grad.item():.1f}")
+
+optimizer.step()
+print(f"w after step: {w.item():.1f}")
 ```
 
-Detaching is how you intentionally stop a value from participating in gradient computation. Metrics, logs, visualizations, and cached predictions usually should not preserve the graph. If you append a loss tensor to a Python list every batch, you keep the graph alive and memory grows with training history; if you append `loss.item()`, you keep only a plain Python number.
+The expected output is `loss before step: 1.0`, `gradient dloss/dw: 4.0`, and `w after step: 0.1`. The derivative is the same calculation you would do by hand: `loss = (2w - 0)^2`, so `dloss/dw = 2 * (2w) * 2 = 4` when `w = 0.5`. The SGD update is the A7 update rule with a registered parameter: `w = 0.5 - 0.1 * 4 = 0.1`. PyTorch did not invent a new rule; it recorded the operations and applied the chain rule you already implemented.
+
+A model-agnostic training step only needs to make batch movement and return values explicit. Notice that the function sets training mode before the forward pass, moves both inputs and targets to the same device as the model, clears gradients before building the graph, and returns detached Python numbers rather than live tensors. Returning live tensors from logging code can accidentally keep graphs alive and increase memory across an epoch.
 
 ```python
-import torch
+def train_step(model, batch, loss_fn, optimizer, device):
+    model.train()
 
-loss_history = []
+    inputs, targets = batch
+    inputs = inputs.to(device)
+    targets = targets.to(device)
 
-x = torch.randn(4, requires_grad=True)
-loss = (x ** 2).mean()
+    optimizer.zero_grad(set_to_none=True)
+    logits = model(inputs)
+    loss = loss_fn(logits, targets)
+    loss.backward()
+    optimizer.step()
 
-loss_history.append(loss.item())
-metric_tensor = loss.detach()
-
-print(type(loss_history[0]))
-print(metric_tensor.requires_grad)
+    batch_size = inputs.shape[0]
+    return loss.detach().item(), batch_size
 ```
 
-`torch.no_grad()` is the larger boundary you use around inference or validation. It tells PyTorch not to build graphs for the operations inside the block, saving memory and compute. It does not change dropout or batch normalization behavior; that is the job of `model.eval()`, which you will use with `no_grad()` during validation.
+The graph lifecycle is worth making concrete. The forward pass creates a dynamic graph because model parameters require gradients. The scalar loss points to the output of that graph. `loss.backward()` walks the graph backward, accumulates gradients into leaf parameters, and normally frees intermediate buffers that are no longer needed. `optimizer.step()` reads parameter `.grad` fields and mutates parameter values. If you call `backward()` twice on the same graph without retaining it, PyTorch complains because the temporary buffers were already released; if you retain every graph for logging, memory grows because you told the runtime not to clean up.
 
-```python
-import torch
-import torch.nn as nn
-
-model = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2))
-x = torch.randn(5, 4)
-
-model.eval()
-with torch.no_grad():
-    logits = model(x)
-    predictions = logits.argmax(dim=1)
-
-print(predictions)
+```text
+inputs + parameters
+        |
+        v
+   model forward  ---- dynamic graph records tensor ops
+        |
+        v
+   scalar loss    ---- one number that still points to the graph
+        |
+        v
+   backward()     ---- parameter.grad fields receive accumulated gradients
+        |
+        v
+   optimizer.step ---- parameters are mutated, graph is no longer needed
 ```
 
-| Situation | Use gradient tracking? | Use `model.train()`? | Use `model.eval()`? | Reason |
-|---|---|---|---|---|
-| Training a batch | Yes | Yes | No | Need gradients and training behavior for dropout or batch normalization |
-| Validating accuracy | No | No | Yes | Need deterministic inference behavior without graph allocation |
-| Logging scalar loss | No after extraction | Usually still training | No | Store `loss.item()` rather than the graph-backed tensor |
-| Freezing a pretrained encoder | Usually no for frozen part | Depends on full model | Depends on phase | Prevent unnecessary gradients through frozen parameters |
-| Computing adversarial examples | Yes for inputs | Often eval | Often yes | Need input gradients while keeping inference behavior stable |
-| Exporting predictions | No | No | Yes | Production inference should be deterministic and memory efficient |
+The common beginner reversal is to call `optimizer.step()` before `loss.backward()`. That step uses old gradients, `None` gradients, or gradients from a previous batch, depending on what happened earlier. Another common reversal is to call `zero_grad` after `backward()` and before `step()`, which erases exactly the gradients the optimizer was supposed to use. Some PyTorch tutorials clear gradients after `step()` so the next iteration starts clean; this module uses the equally valid and more checklist-friendly pattern of clearing before the forward pass. The invariant is the same: each optimizer step must consume exactly the gradients intended for that step.
 
-### 3. Building Models with `nn.Module`
+`nn.CrossEntropyLoss` deserves one boundary reminder because it is the loss most learners use first. It expects raw logits shaped `[batch, classes]` and class-index targets shaped `[batch]` with integer dtype. Do not apply `softmax` before passing logits to this loss. In A5 you wrote stable softmax cross-entropy manually to understand the math; in PyTorch the loss combines the stable log-softmax and negative-log-likelihood pieces internally, so passing probabilities instead of logits weakens numerical stability and changes gradient behavior.
 
-`nn.Module` is the foundation for trainable PyTorch models because it provides registration. Registration means PyTorch knows which tensors are parameters, which nested modules belong to the model, which buffers should move with the model, and which values belong in a checkpoint. A model that computes correct numbers but fails to register parameters will not train because the optimizer has nothing to update.
+The step also defines where it is safe to observe state. Before `backward()`, parameter gradients should usually be `None` because they were cleared and the current graph has not propagated anything yet. After `backward()`, gradients should be finite for parameters that participated in the loss; parameters with `None` gradients may be frozen, unused, detached, or behind a branch that did not execute. After `optimizer.step()`, parameter values should change if the learning rate is nonzero and the gradients are nonzero. These three checkpoints are the first debugging probes for a model that "runs but does not learn," and they are much cheaper than launching another full experiment.
 
-```python
-import torch
-import torch.nn as nn
+In A7 you could inspect `dW` arrays directly because every layer stored its own backward result. PyTorch centralizes that evidence in the `.grad` field of each leaf parameter. That is why a practical training-step smoke test often prints a small table of parameter names, gradient norms, and update norms for one batch. You do not need that table in every production run, but you should know how to produce it when loss is flat. If all gradient norms are zero or `None`, the problem is upstream of the optimizer. If gradients are finite and parameters still do not move, the problem is usually optimizer configuration, frozen parameters, or a learning rate of zero.
 
-class DigitClassifier(nn.Module):
-    def __init__(self, input_features=784, hidden_features=128, classes=10):
-        super().__init__()
-        self.fc1 = nn.Linear(input_features, hidden_features)
-        self.activation = nn.ReLU()
-        self.dropout = nn.Dropout(p=0.2)
-        self.fc2 = nn.Linear(hidden_features, classes)
+## Part 2: The Full Loop: Epochs, Batches, and Validation
 
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = self.fc1(x)
-        x = self.activation(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
+A real training run wraps the training step in two loops: epochs over the dataset and mini-batches inside each epoch. The training `DataLoader` usually shuffles examples because mini-batch SGD relies on different stochastic estimates of the full-dataset gradient. The validation `DataLoader` usually does not need shuffling because validation is a measurement pass, not an optimization pass. A separate validation loop is not optional. If the same loop both updates parameters and reports "validation" metrics, you are measuring training behavior under a misleading name.
 
-model = DigitClassifier()
-print(model)
-print("parameter tensors:", len(list(model.parameters())))
-```
-
-The `super().__init__()` line initializes the machinery that makes registration work. Assigning `self.fc1 = nn.Linear(...)` after that call registers `fc1` as a submodule. If you omit the parent initializer or hide layers inside a plain Python list, the model may still run a forward pass, but optimizer construction can fail or silently exclude layers.
-
-```python
-import torch.nn as nn
-
-class RegisteredStack(nn.Module):
-    def __init__(self, width=32, depth=3):
-        super().__init__()
-        self.layers = nn.ModuleList(
-            [nn.Linear(width, width) for _ in range(depth)]
-        )
-
-    def forward(self, x):
-        for layer in self.layers:
-            x = layer(x).relu()
-        return x
-```
-
-A `ModuleList` is not a stylistic preference; it is the difference between trainable layers and ordinary Python objects. PyTorch recursively searches registered modules when you call `model.parameters()`, `model.to(device)`, `model.state_dict()`, and `model.eval()`. Layers in a regular list are invisible to those recursive operations.
-
-| Container pattern | Registered as trainable? | Moves with `.to(device)`? | Saved in `state_dict()`? | Appropriate use |
-|---|---|---|---|---|
-| `self.layer = nn.Linear(...)` | Yes | Yes | Yes | Fixed layer known during initialization |
-| `self.layers = nn.ModuleList([...])` | Yes | Yes | Yes | Dynamic number of layers iterated in `forward` |
-| `self.blocks = nn.ModuleDict({...})` | Yes | Yes | Yes | Named dynamic branches or configurable stacks |
-| `self.layers = [nn.Linear(...)]` | No | No | No | Avoid for trainable modules |
-| `self.scale = nn.Parameter(...)` | Yes | Yes | Yes | Custom trainable tensor not wrapped by a layer |
-| `self.register_buffer("mean", tensor)` | No optimizer update | Yes | Yes | Non-trainable state such as normalization statistics |
-
-Model output should match the loss function's expectations. For multi-class classification, `nn.CrossEntropyLoss` expects raw logits with shape `[batch, classes]` and labels with shape `[batch]` containing integer class indices. It applies log-softmax internally, so adding a final softmax layer before the loss weakens numerical stability and changes the gradient path.
-
-```python
-import torch
-import torch.nn as nn
-
-logits = torch.randn(32, 10)
-labels = torch.randint(0, 10, (32,))
-
-criterion = nn.CrossEntropyLoss()
-loss = criterion(logits, labels)
-
-print(loss.item())
-```
-
-For regression, the model usually outputs continuous values and the target tensor has a compatible floating-point shape. The loss function encodes what "wrong" means: squared error heavily penalizes large deviations, while absolute error is more robust to outliers. The right choice depends on the business cost of different errors, not on which loss appears first in a tutorial.
-
-| Task type | Model output | Target format | Common loss | Decision cue |
-|---|---|---|---|---|
-| Multi-class classification | Raw logits `[batch, classes]` | Integer labels `[batch]` | `nn.CrossEntropyLoss` | Exactly one class is correct for each example |
-| Binary classification with one output | Logit `[batch, 1]` or `[batch]` | Float labels with zeros and ones | `nn.BCEWithLogitsLoss` | Each example has a yes-or-no target |
-| Multi-label classification | Logits `[batch, labels]` | Float matrix of zeros and ones | `nn.BCEWithLogitsLoss` | Several labels may be true at once |
-| Regression | Continuous values | Continuous target values | `nn.MSELoss` or `nn.L1Loss` | Distance between numeric values matters |
-| Ranking or metric learning | Embeddings or scores | Pairwise or triplet structure | Margin or contrastive loss | Relative ordering matters more than absolute class |
-
-Active learning prompt: a teammate builds a two-class classifier with `nn.MSELoss` because there are only two classes. Predict two symptoms you might observe during training, then identify which target format and loss function would better match the task.
-
-Model inspection is not optional in professional work. Before running a long job, print the architecture, count parameters, and confirm that every expected layer appears in the parameter list. This catches missing `super().__init__()`, plain-list layers, and mismatched dimensions before expensive GPU time is wasted.
-
-```python
-import torch
-import torch.nn as nn
-
-model = DigitClassifier()
-total_parameters = sum(parameter.numel() for parameter in model.parameters())
-
-for name, parameter in model.named_parameters():
-    print(f"{name}: shape={tuple(parameter.shape)} trainable={parameter.requires_grad}")
-
-print(f"total parameters: {total_parameters}")
-```
-
-```mermaid
-flowchart TD
-    Input[Batch of images<br>64 x 1 x 28 x 28] --> Flatten[Flatten inside forward<br>64 x 784]
-    Flatten --> FC1[Linear 784 to 128<br>registered weights and bias]
-    FC1 --> Relu[ReLU activation<br>nonlinear transform]
-    Relu --> Dropout[Dropout during train<br>disabled during eval]
-    Dropout --> FC2[Linear 128 to 10<br>class logits]
-    FC2 --> Loss[CrossEntropyLoss<br>compares logits to labels]
-```
-
-`nn.Sequential` is useful when a model is a straight pipeline with no branching, reused outputs, or conditional logic. A custom class is better when you need named intermediate values, skip connections, multiple inputs, multiple outputs, or richer validation in `forward`. Senior engineers tend to choose the simplest structure that still makes debugging clear.
-
-```python
-import torch.nn as nn
-
-prototype = nn.Sequential(
-    nn.Flatten(),
-    nn.Linear(784, 128),
-    nn.ReLU(),
-    nn.Dropout(0.2),
-    nn.Linear(128, 10),
-)
-```
-
-### 4. Training, Validation, and Checkpointing Loops
-
-A training loop is a control system that repeatedly measures error and changes parameters. The five core steps are stable across many architectures: clear gradients, run the model, compute loss, backpropagate, and update. The surrounding details decide whether the loop is trustworthy: data shuffling, device movement, validation mode, checkpointing, metric logging, and failure checks.
-
-```mermaid
-flowchart TD
-    Start[Start epoch] --> TrainMode[model.train]
-    TrainMode --> Batch[Load batch]
-    Batch --> Device[Move data and labels to device]
-    Device --> Zero[optimizer.zero_grad]
-    Zero --> Forward[Forward pass]
-    Forward --> Loss[Compute loss]
-    Loss --> Backward[loss.backward]
-    Backward --> Step[optimizer.step]
-    Step --> More{More batches?}
-    More -- yes --> Batch
-    More -- no --> EvalMode[model.eval]
-    EvalMode --> NoGrad[Validation inside no_grad]
-    NoGrad --> Checkpoint[Save checkpoint if metric improves]
-```
-
-The following script is intentionally small but complete enough to run when PyTorch and TorchVision are installed. It uses MNIST because the dataset is familiar, downloads automatically, and trains quickly on CPU. The goal is not to chase leaderboard accuracy; the goal is to practice a loop whose mechanics can be transferred to larger projects.
+The complete skeleton below uses a synthetic classification problem so the code is runnable without downloading data. It is intentionally model-agnostic: replace `TinyClassifier` and the dataset with your own module and loaders, and the loop contract stays the same. The model itself is not the lesson; the lesson is the shape of the run. Inputs are `[batch, features]`, logits are `[batch, classes]`, and targets are `[batch]`, exactly the CrossEntropyLoss contract from B1 and A5.
 
 ```python
 import random
-from pathlib import Path
-
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 
-class DigitClassifier(nn.Module):
-    def __init__(self):
+class TinyClassifier(nn.Module):
+    def __init__(self, in_features=8, hidden=32, num_classes=3):
         super().__init__()
-        self.network = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(784, 128),
+        self.net = nn.Sequential(
+            nn.Linear(in_features, hidden),
             nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 10),
+            nn.Linear(hidden, num_classes),
         )
 
     def forward(self, x):
-        return self.network(x)
+        return self.net(x)
 
 
-def set_seed(seed=13):
+def make_synthetic_dataset(n=900, in_features=8, num_classes=3, seed=123):
+    generator = torch.Generator().manual_seed(seed)
+    x = torch.randn(n, in_features, generator=generator)
+    teacher = torch.randn(in_features, num_classes, generator=generator)
+    logits = x @ teacher
+    y = logits.argmax(dim=1)
+    return TensorDataset(x, y)
+
+
+def make_loaders(batch_size=64, seed=123):
+    dataset = make_synthetic_dataset(seed=seed)
+    split_generator = torch.Generator().manual_seed(seed)
+    train_ds, val_ds = random_split(dataset, [720, 180], generator=split_generator)
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
+                              generator=torch.Generator().manual_seed(seed))
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+    return train_loader, val_loader
+
+
+def accuracy_from_logits(logits, targets):
+    predictions = logits.argmax(dim=1)
+    return (predictions == targets).sum().item()
+
+
+def train_one_epoch(model, loader, loss_fn, optimizer, device):
+    model.train()
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+
+    for inputs, targets in loader:
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(inputs)
+        loss = loss_fn(logits, targets)
+        loss.backward()
+        optimizer.step()
+
+        batch_size = inputs.shape[0]
+        total_loss += loss.detach().item() * batch_size
+        total_correct += accuracy_from_logits(logits.detach(), targets)
+        total_examples += batch_size
+
+    return {
+        "loss": total_loss / total_examples,
+        "accuracy": total_correct / total_examples,
+    }
+
+
+@torch.no_grad()
+def evaluate(model, loader, loss_fn, device):
+    model.eval()
+    total_loss = 0.0
+    total_correct = 0
+    total_examples = 0
+
+    for inputs, targets in loader:
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+
+        logits = model(inputs)
+        loss = loss_fn(logits, targets)
+
+        batch_size = inputs.shape[0]
+        total_loss += loss.item() * batch_size
+        total_correct += accuracy_from_logits(logits, targets)
+        total_examples += batch_size
+
+    return {
+        "loss": total_loss / total_examples,
+        "accuracy": total_correct / total_examples,
+    }
+
+
+def fit(epochs=5, seed=123):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
-
-def accuracy_from_logits(logits, labels):
-    predictions = logits.argmax(dim=1)
-    return (predictions == labels).float().mean().item()
-
-
-def main():
-    set_seed()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    data_dir = Path("data")
+    train_loader, val_loader = make_loaders(seed=seed)
 
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ]
-    )
+    model = TinyClassifier().to(device)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.2)
 
-    train_data = datasets.MNIST(data_dir, train=True, download=True, transform=transform)
-    test_data = datasets.MNIST(data_dir, train=False, download=True, transform=transform)
+    history = []
+    for epoch in range(1, epochs + 1):
+        train_metrics = train_one_epoch(model, train_loader, loss_fn, optimizer, device)
+        val_metrics = evaluate(model, val_loader, loss_fn, device)
 
-    train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=512)
-
-    model = DigitClassifier().to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    best_accuracy = 0.0
-    checkpoint_path = Path("mnist-checkpoint.pt")
-
-    for epoch in range(3):
-        model.train()
-        running_loss = 0.0
-
-        for batch_index, (features, labels) in enumerate(train_loader):
-            features = features.to(device)
-            labels = labels.to(device)
-
-            optimizer.zero_grad()
-            logits = model(features)
-            loss = criterion(logits, labels)
-
-            if not torch.isfinite(loss):
-                raise RuntimeError(f"non-finite loss at epoch {epoch}, batch {batch_index}")
-
-            loss.backward()
-            optimizer.step()
-
-            running_loss += loss.item()
-
-        model.eval()
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for features, labels in test_loader:
-                features = features.to(device)
-                labels = labels.to(device)
-
-                logits = model(features)
-                predictions = logits.argmax(dim=1)
-                correct += (predictions == labels).sum().item()
-                total += labels.numel()
-
-        validation_accuracy = correct / total
-        average_loss = running_loss / len(train_loader)
-
+        row = {
+            "epoch": epoch,
+            "train_loss": train_metrics["loss"],
+            "train_acc": train_metrics["accuracy"],
+            "val_loss": val_metrics["loss"],
+            "val_acc": val_metrics["accuracy"],
+        }
+        history.append(row)
         print(
-            f"epoch={epoch} "
-            f"train_loss={average_loss:.4f} "
-            f"validation_accuracy={validation_accuracy:.4f}"
+            f"epoch={epoch:02d} "
+            f"train_loss={row['train_loss']:.4f} train_acc={row['train_acc']:.3f} "
+            f"val_loss={row['val_loss']:.4f} val_acc={row['val_acc']:.3f}"
         )
 
-        if validation_accuracy > best_accuracy:
-            best_accuracy = validation_accuracy
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "validation_accuracy": validation_accuracy,
-                },
-                checkpoint_path,
-            )
-
-    print(f"best validation accuracy: {best_accuracy:.4f}")
+    return model, history
 
 
 if __name__ == "__main__":
-    main()
+    fit()
 ```
 
-Each line in the loop has a reason. `model.train()` enables training-time behavior for dropout and batch normalization. `optimizer.zero_grad()` clears stale gradient buffers. `loss.backward()` fills those buffers with derivatives for the current batch. `optimizer.step()` changes the parameters, and validation happens under `model.eval()` plus `torch.no_grad()` so the reported metric reflects inference behavior.
+The separation between `train_one_epoch` and `evaluate` is more than style. The training function mutates model parameters and therefore must build a graph, call `backward()`, and call `optimizer.step()`. The evaluation function measures the current model and therefore must not build a backward graph or mutate parameters. The `@torch.no_grad()` decorator is equivalent to wrapping the function body in `with torch.no_grad():`; it disables gradient recording for inference-style code and reduces memory use because PyTorch does not keep backward buffers.
 
-The order is not ceremonial. If you call `optimizer.step()` before `loss.backward()`, the optimizer updates using stale or missing gradients. If you forget `model.eval()`, dropout may randomly disable activations during validation. If you forget `torch.no_grad()`, validation may allocate graphs that are never needed, increasing memory use and slowing the job.
+The metric aggregation multiplies each batch loss by `batch_size` before averaging. That small detail matters whenever the last batch is smaller than the others. If you simply average per-batch losses, a final batch of 17 examples receives the same weight as a full batch of 64 examples. The difference may be small, but it is avoidable, and careful aggregation makes metrics easier to compare across batch sizes. Accuracy is counted as correct examples divided by total examples for the same reason.
 
-```mermaid
-sequenceDiagram
-    participant Loader as DataLoader
-    participant Model as nn.Module
-    participant Loss as Loss function
-    participant Auto as Autograd
-    participant Opt as Optimizer
-    Loader->>Model: batch tensors on selected device
-    Model->>Loss: logits or predictions
-    Loss->>Auto: scalar loss with graph
-    Auto->>Model: gradients stored on parameters
-    Opt->>Model: update registered parameters
-    Model->>Loader: next batch repeats the control loop
-```
+Validation is not the test set. The validation split is used repeatedly during development to choose checkpoints, tune early-stopping behavior, and decide whether the training run is improving. The test set should remain untouched until the model-selection process is finished. This module focuses on the train/validation loop because the test protocol depends on project policy, but the engineering rule is stable: do not update parameters on validation examples, and do not make repeated design decisions from the final test set.
 
-Data loading is part of training quality because slow or inconsistent input pipelines create misleading experiments. Shuffling training data reduces order effects, batching trades statistical noise against hardware efficiency, and parallel workers can hide preprocessing latency. Validation data is usually not shuffled because reproducible metric computation matters more than stochastic order.
+Scheduler placement depends on the scheduler. Some schedulers, such as `StepLR`, are commonly stepped once per epoch after the optimizer has completed that epoch. Others, such as `OneCycleLR`, are stepped every optimizer update. `ReduceLROnPlateau` is stepped after validation because it needs the validation metric. B4 will teach learning-rate dynamics in detail; for B2, the important habit is to state when the scheduler moves and to save its state so a resumed run does not repeat or skip scheduler history.
 
-| DataLoader setting | Training effect | Risk when misused | Practical starting point |
-|---|---|---|---|
-| `batch_size` | Controls examples per optimization step | Too large may exceed memory, too small may produce noisy updates | Start with a size that fits comfortably, then measure throughput |
-| `shuffle=True` | Randomizes training order each epoch | Forgetting it can overfit sequence artifacts in ordered datasets | Use for training unless order is meaningful |
-| `shuffle=False` | Keeps validation order stable | Using it for training may hide data-order bias | Use for validation and test loaders |
-| `num_workers` | Loads samples in parallel subprocesses | Too many workers can add overhead or file contention | Start with zero for debugging, then increase while measuring |
-| `pin_memory=True` | Speeds CPU-to-GPU transfer on CUDA systems | Adds little value on CPU-only runs | Enable for CUDA training after correctness is proven |
-| Custom dataset | Loads samples lazily from files or services | Bugs in `__getitem__` can corrupt labels silently | Add small sample visualizations or assertions |
+The epoch boundary is also the right place to make run-level decisions because it is the first moment when training evidence and validation evidence are both available for the same model state. If you save a checkpoint before validation, the checkpoint does not correspond to the validation metric you are about to report. If you update a scheduler from validation loss before writing the checkpoint, the saved scheduler state represents the next epoch rather than the state that produced the metric. Either policy can be valid when documented, but hidden ordering makes resumes confusing. A clean loop chooses an order and makes the checkpoint represent that order.
 
-Optimizers encode assumptions about the loss landscape. Stochastic gradient descent is simple and can generalize well when tuned, but it usually requires more learning-rate care. Adam adapts per-parameter update sizes and often works well early in experimentation. AdamW decouples weight decay from Adam's adaptive update and is a common choice for transformer-style architectures.
+For small local experiments, printing one formatted line per epoch is enough. For longer jobs, write structured records such as JSON Lines, TensorBoard events, or another metrics format your platform can ingest. The record should include epoch or step, train loss, validation loss, task metric, learning rate, checkpoint path, and whether the checkpoint became the new best. That small schema turns the loop into evidence. When a run fails, you can ask whether validation degraded before the learning-rate change, whether the best checkpoint was written, and whether the resumed run continued from the expected epoch.
 
-| Optimizer | Strength | Trade-off | Good use case |
-|---|---|---|---|
-| `SGD` | Simple, inspectable, strong baseline when tuned | Sensitive to learning rate and schedule | Vision models, controlled experiments, teaching gradient behavior |
-| `SGD` with momentum | Smooths noisy gradients | Momentum can overshoot when learning rate is high | Larger batches or losses with noisy local directions |
-| `Adam` | Adapts update size per parameter | Can hide poor scaling or overfit without regularization | Fast prototypes and many tabular or smaller neural networks |
-| `AdamW` | Handles decoupled weight decay cleanly | Still needs learning-rate and decay tuning | Transformers and models where weight decay matters |
-| Learning-rate scheduler | Changes step size over time | Misconfigured schedules can stop learning too early | Longer runs where early exploration and late refinement differ |
-| Gradient clipping | Limits extreme gradient norms | Can mask upstream instability if used blindly | Recurrent models, transformers, or jobs with occasional spikes |
+## Part 3: `.train()` and `.eval()` Mode Discipline
 
-Checkpointing should save enough state to resume training, not just enough state to run inference. Model weights are sufficient for deployment, but optimizer state contains momentum and adaptive statistics that affect future updates. If a long training job crashes and resumes with a fresh optimizer, the loss curve may jump even though the model weights loaded correctly.
+`model.train()` and `model.eval()` toggle the module's `training` flag recursively through child modules. They do not mean "compute gradients" and "do not compute gradients." Gradient recording is controlled by autograd context, such as normal execution, `with torch.no_grad():`, or inference-specific contexts. The mode toggle affects modules whose forward behavior changes between training and evaluation. The two most important examples are dropout and batch normalization, which B5 and B6 teach in depth. In B2, the key point is the mode bug: validation can be wrong even when gradients are disabled if the module remains in training mode.
+
+Dropout randomly zeroes activations during training and becomes an identity operation during evaluation. Batch normalization uses batch statistics during training and running statistics during evaluation when running statistics are tracked. Those behaviors are exactly why the validation loop calls both `model.eval()` and `torch.no_grad()`. The first line changes layer behavior; the second line changes graph recording. They solve different problems and both belong in evaluation code.
 
 ```python
 import torch
+from torch import nn
 
-def save_checkpoint(path, epoch, model, optimizer, validation_accuracy):
+torch.manual_seed(7)
+dropout = nn.Dropout(p=0.5)
+x = torch.ones(12)
+
+dropout.train()
+train_a = dropout(x)
+train_b = dropout(x)
+
+dropout.eval()
+eval_a = dropout(x)
+eval_b = dropout(x)
+
+print("training outputs differ:", not torch.equal(train_a, train_b))
+print("evaluation outputs equal:", torch.equal(eval_a, eval_b))
+print("evaluation is identity:", torch.equal(eval_a, x))
+```
+
+The exact training outputs depend on the random mask, but the pattern is stable: training mode samples masks, evaluation mode does not. If you forget `model.eval()` before validation, the validation metric becomes a noisy measurement of training-time behavior. If you forget `model.train()` after validation, the next epoch may train with dropout disabled and batch normalization frozen in evaluation behavior. Both mistakes can produce plausible metrics for a while, which is why the mode calls should be part of named functions rather than scattered across notebook cells.
+
+| Concern | `model.train()` / `model.eval()` | `with torch.no_grad():` |
+|---|---|---|
+| Primary job | Switch mode-dependent module behavior | Disable recording of backward graph |
+| Affects dropout | Yes, active in train and identity in eval | No, dropout follows module mode |
+| Affects BatchNorm | Yes, batch stats in train and running stats in eval | No, statistics behavior follows module mode |
+| Affects gradient computation | Not directly | Yes, operations stop tracking gradients |
+| Belongs in training loop | `model.train()` before train batches | Usually no, because training needs gradients |
+| Belongs in validation loop | `model.eval()` before validation batches | Yes, because validation does not call backward |
+
+The order inside validation is simple: set eval mode, enter no-grad, run forward passes, aggregate metrics, and leave the function. You do not need to set the model back to training mode at the end of `evaluate` if the next call to `train_one_epoch` always begins with `model.train()`. That style makes each function locally responsible for its required mode and avoids hidden dependence on what the previous function happened to do.
+
+One subtle point is that `model.eval()` changes behavior only for modules that implement mode-specific logic. A plain `nn.Linear` layer returns the same values in train and eval mode. That is why a mode bug may remain invisible in a small MLP and appear later when you add dropout in B5 or batch normalization in B6. Build the habit before the architecture needs it. It costs one line and prevents a class of failures that are painful to diagnose after a long run.
+
+## Part 4: Checkpointing and Resuming
+
+A checkpoint is not just a file with weights. It is a snapshot of the training state needed to continue the run with the same optimization trajectory. For inference, saving `model.state_dict()` is enough because you only need learned parameters and persistent buffers. For training, PyTorch's saving-and-loading guidance is explicit that a general checkpoint should save more than the model state: optimizer state matters because optimizers keep internal buffers and hyperparameter state while training. If you use a scheduler, its counter matters too. If you track "best validation loss," that metric matters because early stopping and best-checkpoint selection depend on it.
+
+The minimal training checkpoint for this module contains five fields: model state, optimizer state, scheduler state or `None`, epoch, and best metric. The scheduler is optional because not every run has one, but the key should still exist so load code has a stable shape. This pattern also leaves room for run metadata such as a seed, git SHA, dataset version, or hyperparameters, but avoid stuffing large datasets or arbitrary Python objects into the checkpoint. The file should restore training state, not become a hidden experiment database.
+
+```python
+from pathlib import Path
+import torch
+
+
+def save_checkpoint(path, model, optimizer, scheduler, epoch, best_metric):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     torch.save(
         {
-            "epoch": epoch,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
-            "validation_accuracy": validation_accuracy,
+            "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
+            "epoch": epoch,
+            "best_metric": float(best_metric),
         },
         path,
     )
 
 
-def load_checkpoint(path, model, optimizer, device):
-    checkpoint = torch.load(path, map_location=device)
+def load_checkpoint(path, model, optimizer, scheduler, device):
+    checkpoint = torch.load(path, map_location=device, weights_only=True)
+
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    return checkpoint["epoch"], checkpoint["validation_accuracy"]
+
+    scheduler_state = checkpoint.get("scheduler_state_dict")
+    if scheduler is not None and scheduler_state is not None:
+        scheduler.load_state_dict(scheduler_state)
+
+    start_epoch = int(checkpoint["epoch"]) + 1
+    best_metric = float(checkpoint["best_metric"])
+    return start_epoch, best_metric
 ```
 
-For inference-only loading, create the architecture, load the model state dict, switch to evaluation mode, and run under `torch.no_grad()`. Avoid loading untrusted pickle-based model files because generic `torch.load` can deserialize Python objects. When publishing models across trust boundaries, prefer safer formats and documented model cards where the serving team can reproduce preprocessing and expected inputs.
+The load order assumes you have already reconstructed the model, moved it to the target device, constructed the optimizer from the model parameters, and constructed the scheduler from the optimizer. Construct the scheduler from the optimizer BEFORE loading any state, then load the saved `state_dict`s in order — model, optimizer, scheduler — and resume at `epoch + 1`. Most schedulers (e.g. `StepLR`) do not change the optimizer's learning rate at construction time; a few (e.g. `OneCycleLR`) set the initial LR when created, which is the specific case where construction order versus state-load order matters. Loading in the model → optimizer → scheduler order is the safe sequence in all cases.
 
 ```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+model = TinyClassifier().to(device)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.2)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+train_loader, val_loader = make_loaders(seed=123)
+loss_fn = nn.CrossEntropyLoss()
+
+save_checkpoint(
+    "checkpoints/best.pt",
+    model=model,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    epoch=0,
+    best_metric=float("inf"),
+)
+
+start_epoch, best_val_loss = load_checkpoint(
+    "checkpoints/best.pt",
+    model=model,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    device=device,
+)
+
+print(start_epoch, best_val_loss)
+```
+
+The common bug is saving the best model weights but not the optimizer or scheduler state, then calling that a resume checkpoint. That is a valid inference checkpoint and a weak training checkpoint. With SGD momentum, the optimizer's velocity buffers affect the next update. With Adam or AdamW, first and second moment estimates shape every update. With schedulers, the current learning rate may depend on how many steps or epochs have already happened. Reloading weights while resetting those states creates a new run that starts from old weights but follows a different trajectory.
+
+Best-checkpoint handling is a separate decision from periodic checkpointing. Periodic checkpoints answer "can I resume after interruption?" Best checkpoints answer "which model should I deploy or evaluate after training?" A robust run often writes both: a latest checkpoint every epoch or every fixed number of steps, and a best checkpoint only when validation improves. For small teaching runs a single best checkpoint is enough to learn the mechanism, but production jobs should choose a policy that matches failure risk and storage constraints.
+
+If exact stochastic replay matters, checkpointing gets more complicated because random-number-generator states and sampler positions matter. This module does not require an exact mid-epoch replay mechanism, and many production teams accept epoch-boundary resumes because they are simpler and reliable enough. Be honest about that boundary. A checkpoint that restores model, optimizer, scheduler, epoch, and best metric can resume training correctly at an epoch boundary. It does not guarantee bit-identical continuation of every augmentation, shuffle, and kernel choice unless you also control and restore those sources of randomness.
+
+Checkpoint files should be treated as write-once artifacts for a particular run state. If a process can be interrupted while writing, prefer writing to a temporary path and then renaming it into place so readers do not see a half-written file. If storage is remote, understand whether the rename operation is atomic for that storage backend before relying on it for failure recovery. This module stays local and uses `torch.save` directly, but the habit scales: checkpointing is part of the failure model of a training system, not a decorative line at the end of an epoch.
+
+The checkpoint should also be load-tested early. A run that saves checkpoints for six hours and only discovers a load error after interruption did not really have checkpointing. During development, save a checkpoint after a tiny epoch, create a fresh model, optimizer, and scheduler, load it, and run one more training step. That test catches mismatched model definitions, missing scheduler state, bad device mapping, and accidental dependence on in-memory variables. It is the checkpoint equivalent of overfitting one batch: prove the recovery path before you need it.
+
+## Part 5: Reproducibility Without False Promises
+
+Reproducibility starts before training. Set Python's `random` seed if your dataset, split code, or transforms use it. Set NumPy's seed if preprocessing or dataset code uses NumPy randomness. Set PyTorch's seed because model initialization, tensor sampling, dropout masks, and PyTorch samplers may use it. If you use a `DataLoader` with worker processes, seed the worker libraries and pass a `torch.Generator` so shuffling and worker base seeds are controlled. These steps do not make every run identical across all machines, but they remove avoidable randomness from the script.
+
+```python
+import random
+import numpy as np
 import torch
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = DigitClassifier().to(device)
 
-checkpoint = torch.load("mnist-checkpoint.pt", map_location=device)
-model.load_state_dict(checkpoint["model_state_dict"])
+def seed_everything(seed, deterministic=False):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    torch.use_deterministic_algorithms(deterministic)
+    if deterministic and torch.backends.cudnn.is_available():
+        torch.backends.cudnn.benchmark = False
+```
+
+PyTorch's reproducibility documentation is careful: completely reproducible results are not guaranteed across releases, commits, platforms, or even CPU versus GPU execution when the same seeds are used. That caveat is not legal fine print; it is a numerical reality. Floating-point reductions can happen in different orders, backend libraries can select different kernels, and deterministic alternatives may not exist for every operation. `torch.use_deterministic_algorithms(True)` asks PyTorch to use deterministic algorithms when available and to raise an error when only nondeterministic implementations are available, but PyTorch also notes that deterministic operations often run slower.
+
+The tradeoff is a policy decision. During debugging, deterministic algorithms can save hours because two runs with the same seed differ less, making regressions easier to isolate. During high-throughput training, strict determinism can reduce performance or block useful operations. A pragmatic workflow is to keep a deterministic debug mode for small reproductions, record seeds and versions for every serious run, and use multiple seeds for conclusions that depend on model quality rather than on debugging a specific failure.
+
+`DataLoader` worker seeding is the place where many "I set the seed" claims fail. Worker processes may call NumPy or Python randomness inside dataset code or transforms. PyTorch documents the pattern: derive a worker seed from `torch.initial_seed()`, use it to seed NumPy and Python in that worker, and pass a seeded `torch.Generator` to the loader. The generator controls random sampling and the worker base seed; the worker function aligns other libraries with that seed.
+
+```python
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+generator = torch.Generator()
+generator.manual_seed(123)
+
+train_loader = DataLoader(
+    make_synthetic_dataset(seed=123),
+    batch_size=64,
+    shuffle=True,
+    num_workers=2,
+    worker_init_fn=seed_worker,
+    generator=generator,
+)
+```
+
+Reproducibility also includes what you write down. A useful run record includes the seed, PyTorch version, device type, dataset version or split seed, model hyperparameters, optimizer settings, scheduler settings, and checkpoint path. If the run is part of a larger platform workflow, record the container image or environment lockfile and the git commit as well. KubeDojo will eventually connect this to platform-level training workflows, but the local habit starts here: a metric curve without run context is a story you cannot verify later.
+
+One more practical boundary: validation reproducibility depends on validation data order only if your metric aggregation is order-sensitive or your validation code has hidden state. For ordinary loss and accuracy, validation shuffling is unnecessary. Leaving it off makes metric traces easier to compare and removes one source of accidental variance. Training shuffling remains useful because the mini-batch sequence influences optimization, which is exactly why it should be seeded and recorded.
+
+Reproducibility is strongest when the dataset split is an artifact rather than an accident. A split created by `random_split(..., generator=seeded_generator)` is reproducible as long as the dataset order is stable, but a later dataset refresh can still change which examples land in validation. For serious experiments, record the dataset version and either persist the split indices or make the split rule deterministic from stable example identifiers. The seed answers "how did the random process run"; the data version answers "what did the random process run on." You need both to compare runs honestly.
+
+Do not confuse deterministic debugging with scientific confidence. A single deterministic seed can make a bug reproducible, but it can also hide the fact that a training recipe is fragile across seeds. Once the loop is correct, important claims about model quality should be checked across a small seed sweep when compute allows. That sweep belongs above the single-run loop, but the loop must expose the seed and write metrics consistently so the sweep can aggregate results without guessing which run produced which checkpoint.
+
+## Part 6: Metrics, Sanity Checks, Accumulation, and Stopping
+
+The training loop should report at least a training loss, a validation loss, and one task metric that a human can understand. For classification, accuracy is often a first metric, even when it is not sufficient for imbalanced datasets. For regression, mean absolute error may be more interpretable than mean squared error. The important engineering habit is to log both the objective the optimizer sees and a metric that reflects the task. A decreasing training loss with a flat validation metric is not automatically a bug, but it is evidence that needs interpretation.
+
+Logging should detach values from the graph. Use `loss.item()` for scalar losses and count metrics from detached logits or no-grad validation outputs. If you store `loss` tensors directly in a list during training, each tensor may keep references to the graph that produced it, and memory can grow across the epoch. This is the same graph-lifetime issue from Part 1, now expressed through logging. Python numbers, detached tensors, and no-grad validation outputs are safer metric artifacts than live graph-connected tensors.
+
+Before a long run, overfit one batch. This sanity check is old practical wisdom, popularized in modern neural-network debugging guides such as Karpathy's training recipe and echoed in CS231n: if a sufficiently expressive model cannot memorize a tiny batch with regularization disabled, the full training job is not worth starting. The failure usually points to a data/label mismatch, wrong loss contract, missing gradient, frozen parameter, impossible learning rate, or mode bug. B7 will turn this into a full diagnostic playbook; B2 uses it as the first smoke test for the loop.
+
+```python
+def overfit_one_batch(model, loader, loss_fn, optimizer, device, steps=200):
+    model.train()
+    inputs, targets = next(iter(loader))
+    inputs = inputs.to(device)
+    targets = targets.to(device)
+
+    losses = []
+    for _ in range(steps):
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(inputs)
+        loss = loss_fn(logits, targets)
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.detach().item())
+
+    return losses
+```
+
+Read this function as a contract test, not as a regular training method. It intentionally reuses the same batch for many updates because the question is whether gradients, labels, loss, and optimizer updates can cooperate on the easiest possible task. If your model includes dropout or heavy data augmentation, disable those influences for the check or use a model variant without them. If the one-batch loss cannot drop sharply, do not proceed to a full dataset and hope the problem disappears.
+
+Gradient accumulation is another loop mechanism that belongs here because it changes when `optimizer.step()` happens. Suppose GPU memory fits a micro-batch of 32 examples, but you want the gradient signal of an effective batch of 128 examples. You can run four forward/backward passes, divide each loss by four, accumulate gradients, then step once. Dividing by the accumulation count preserves the gradient scale you would get from a mean loss over the larger batch. Without that division, the effective gradient is four times larger, which also changes the effective learning rate. B4 will discuss learning-rate scaling; B2 gives you the loop pattern.
+
+```python
+def train_one_epoch_with_accumulation(
+    model,
+    loader,
+    loss_fn,
+    optimizer,
+    device,
+    accumulation_steps=4,
+):
+    model.train()
+    optimizer.zero_grad(set_to_none=True)
+
+    total_loss = 0.0
+    total_examples = 0
+
+    for batch_idx, (inputs, targets) in enumerate(loader):
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+
+        logits = model(inputs)
+        loss = loss_fn(logits, targets) / accumulation_steps
+        loss.backward()
+
+        if (batch_idx + 1) % accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+
+        batch_size = inputs.shape[0]
+        total_loss += loss.detach().item() * accumulation_steps * batch_size
+        total_examples += batch_size
+
+    if len(loader) % accumulation_steps != 0:
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+
+    return {"loss": total_loss / total_examples}
+```
+
+The leftover step at the end handles loaders whose length is not divisible by `accumulation_steps`, but it is slightly under-scaled because those leftover gradients were divided as if a full accumulation group existed. For production code, prefer `drop_last=True` when exact accumulation groups matter, or scale the last group by its actual size with a slightly more complex loop. That nuance is a perfect example of training engineering: a simple pattern is correct under stated assumptions, and those assumptions should be visible.
+
+Early stopping is a validation-driven loop hook. It watches a validation metric, counts how many consecutive checks have failed to improve by at least `min_delta`, and stops when that count reaches `patience`. B5 will cover the regularization interpretation; here the point is mechanism and checkpoint discipline. If you stop because validation stopped improving, restore the best checkpoint rather than leaving the model at the final, possibly worse epoch.
+
+```python
+class EarlyStopping:
+    def __init__(self, patience=3, min_delta=0.0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = float("inf")
+        self.bad_epochs = 0
+
+    def step(self, metric):
+        improved = metric < self.best - self.min_delta
+        if improved:
+            self.best = metric
+            self.bad_epochs = 0
+            return False, True
+
+        self.bad_epochs += 1
+        should_stop = self.bad_epochs >= self.patience
+        return should_stop, False
+```
+
+The hook returns two booleans because the loop has two separate jobs: save the best checkpoint when validation improves, and stop when patience is exhausted. In a real loop, the validation block would call `stopper.step(val_loss)`, save a best checkpoint on improvement, break on stop, and then load the best checkpoint before final evaluation. That design avoids a quiet mismatch between the reported best metric and the in-memory model left after training.
+
+```python
+stopper = EarlyStopping(patience=2, min_delta=1e-4)
+best_path = "checkpoints/best.pt"
+
+for epoch in range(start_epoch, 20):
+    train_metrics = train_one_epoch(model, train_loader, loss_fn, optimizer, device)
+    val_metrics = evaluate(model, val_loader, loss_fn, device)
+    scheduler.step()
+
+    should_stop, improved = stopper.step(val_metrics["loss"])
+    if improved:
+        save_checkpoint(best_path, model, optimizer, scheduler, epoch, stopper.best)
+
+    print(epoch, train_metrics, val_metrics, "best_val_loss", stopper.best)
+
+    if should_stop:
+        print(f"early stopping at epoch {epoch}")
+        break
+
+load_checkpoint(best_path, model, optimizer, scheduler, device)
 model.eval()
-
-with torch.no_grad():
-    sample = torch.randn(1, 1, 28, 28, device=device)
-    logits = model(sample)
-    prediction = logits.argmax(dim=1).item()
-
-print(prediction)
 ```
 
-### 5. Acceleration, Operations, and Senior-Level Debugging
+This snippet assumes an epoch-stepped scheduler such as `StepLR`; a metric-driven scheduler such as `ReduceLROnPlateau` would receive the validation loss instead, and a per-step scheduler would move inside the batch loop. The important point is not one universal scheduler location. The important point is that the training loop names the location, saves the scheduler state, and makes the stop/restore decision from validation evidence rather than from training loss alone.
 
-GPU acceleration changes the economics of training, but it does not change the training contract. The model, input tensors, labels, and any new tensors created during the forward pass must live on compatible devices. A script that moves only the model to CUDA is broken; a script that moves data every batch but creates CPU masks inside `forward` is also broken.
-
-```python
-import time
-import torch
-
-
-def benchmark_matrix_multiply(device, size=2048, iterations=20):
-    x = torch.randn(size, size, device=device)
-    y = torch.randn(size, size, device=device)
-
-    for _ in range(3):
-        _ = x @ y
-
-    if device.type == "cuda":
-        torch.cuda.synchronize()
-
-    start = time.perf_counter()
-
-    for _ in range(iterations):
-        _ = x @ y
-
-    if device.type == "cuda":
-        torch.cuda.synchronize()
-
-    return (time.perf_counter() - start) / iterations
-
-
-cpu_time = benchmark_matrix_multiply(torch.device("cpu"), size=1024, iterations=5)
-print(f"cpu_seconds_per_iteration={cpu_time:.6f}")
-
-if torch.cuda.is_available():
-    gpu_time = benchmark_matrix_multiply(torch.device("cuda"), size=1024, iterations=5)
-    print(f"gpu_seconds_per_iteration={gpu_time:.6f}")
-    print(f"speedup={cpu_time / gpu_time:.2f}")
-else:
-    print("cuda_available=false")
-```
-
-Small workloads may not benefit from a GPU because transfer overhead, kernel launch overhead, and underutilization can dominate. Large matrix multiplications and convolution-heavy models often benefit substantially because the GPU keeps many parallel arithmetic units busy. The senior-level decision is therefore not "GPU is faster"; it is "this workload is large enough, batched enough, and memory-efficient enough to justify GPU scheduling."
-
-```mermaid
-graph TD
-    Workload[Training workload] --> Size{Enough arithmetic per batch?}
-    Size -- no --> CPU[CPU may be simpler and cheaper]
-    Size -- yes --> Memory{Fits accelerator memory?}
-    Memory -- no --> Reduce[Reduce batch size<br>accumulate gradients<br>checkpoint activations]
-    Memory -- yes --> Transfer{Data pipeline keeps GPU busy?}
-    Transfer -- no --> Loader[Tune DataLoader<br>preprocess efficiently<br>use pinned memory]
-    Transfer -- yes --> GPU[Use CUDA path<br>measure throughput and cost]
-```
-
-| Execution path | Best fit | Watch for | Senior decision question |
-|---|---|---|---|
-| CPU training | Small models, debugging, CI smoke tests | Slow epochs on large tensor workloads | Is correctness still being established? |
-| Single GPU | Most local deep-learning experiments | Device mismatches and memory pressure | Is the batch large enough to use the device efficiently? |
-| Mixed precision | Large models on compatible accelerators | Overflow, underflow, and unsupported operations | Does automatic scaling preserve metrics while improving throughput? |
-| `torch.compile` | Stable models with repeated execution paths | Compile overhead and graph breaks | Is the model mature enough to optimize after debugging? |
-| Gradient accumulation | Effective large batch without fitting it at once | Forgetting when to call `optimizer.step()` | Does the accumulated gradient match the intended batch size? |
-| Distributed training | Large datasets or models across devices | Synchronization, reproducibility, and operational complexity | Has single-device training already been made correct and measurable? |
-
-[Mixed precision can reduce memory use and improve throughput on modern accelerators by using lower precision where it is safe. The safe part matters. PyTorch's automatic mixed precision chooses appropriate operations and gradient scaling helps avoid underflow](https://arxiv.org/abs/1710.03740), but the engineer still must compare validation metrics and inspect instability rather than assuming faster means equivalent.
-
-```python
-import torch
-import torch.nn as nn
-import torch.optim as optim
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = nn.Sequential(nn.Linear(128, 256), nn.ReLU(), nn.Linear(256, 10)).to(device)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.AdamW(model.parameters(), lr=0.001)
-
-features = torch.randn(64, 128, device=device)
-labels = torch.randint(0, 10, (64,), device=device)
-
-if device.type == "cuda":
-    scaler = torch.cuda.amp.GradScaler()
-    optimizer.zero_grad()
-
-    with torch.cuda.amp.autocast():
-        logits = model(features)
-        loss = criterion(logits, labels)
-
-    scaler.scale(loss).backward()
-    scaler.step(optimizer)
-    scaler.update()
-else:
-    optimizer.zero_grad()
-    logits = model(features)
-    loss = criterion(logits, labels)
-    loss.backward()
-    optimizer.step()
-
-print(loss.item())
-```
-
-`torch.compile` is an optimization step, not a substitute for a correct model. Compile after the eager-mode model trains, validates, checkpoints, and debugs correctly. This order preserves PyTorch's developer-experience advantage: ordinary Python while you are learning and diagnosing, compilation only when the execution path is stable enough to optimize.
-
-```python
-import torch
-import torch.nn as nn
-
-model = nn.Sequential(nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 2))
-
-if hasattr(torch, "compile"):
-    model = torch.compile(model)
-
-x = torch.randn(8, 32)
-print(model(x).shape)
-```
-
-Production training also needs failure detection. A training script should fail fast when loss becomes non-finite, labels fall outside the expected class range, the optimizer has no parameters, a checkpoint cannot be written, or validation accuracy collapses relative to a baseline. These checks turn silent corruption into actionable errors.
-
-```python
-import math
-import torch
-
-def assert_training_batch(features, labels, num_classes):
-    if not torch.isfinite(features).all():
-        raise ValueError("features contain non-finite values")
-
-    if labels.dtype != torch.long:
-        raise TypeError(f"labels must be torch.long, received {labels.dtype}")
-
-    if labels.min().item() < 0 or labels.max().item() >= num_classes:
-        raise ValueError("labels contain a class index outside the expected range")
-
-
-def assert_loss_is_healthy(loss):
-    value = loss.item()
-    if not math.isfinite(value):
-        raise RuntimeError(f"loss is non-finite: {value}")
-```
-
-A senior debugging workflow narrows the problem by proving simpler claims before investigating complex ones. Can the model overfit one batch? Do gradients exist for every trainable layer? Does validation produce identical predictions twice in a row under `model.eval()` and `torch.no_grad()`? Does a checkpoint restore identical output for the same input? Each question isolates a layer of the training system.
-
-| Debugging probe | What it tests | Healthy signal | Likely issue when it fails |
-|---|---|---|---|
-| Overfit one small batch | Model capacity and training loop mechanics | Loss falls close to zero on the same batch | Wrong loss, missing gradients, bad labels, or no optimizer updates |
-| Print gradient norms | Gradient flow through layers | Non-zero finite gradients where expected | Dead activations, detached tensors, or unregistered parameters |
-| Count optimizer parameters | Registration and optimizer setup | Expected number of tensors in parameter groups | Plain Python lists, missing `super().__init__()`, or frozen parameters |
-| Run validation twice | Deterministic inference behavior | Same predictions for same inputs | Missing `model.eval()` or hidden randomness |
-| Save and reload checkpoint | Serialization and architecture match | Same output after reload for same input | Missing state, wrong architecture, or device loading error |
-| Compare CPU and GPU tiny run | Device-independent correctness | Similar losses within expected numerical tolerance | Device-specific tensor creation or precision assumptions |
-
-The "overfit one batch" test deserves special attention because it is the fastest way to separate data-scale problems from loop correctness problems. If a model cannot memorize a tiny fixed batch, adding more data will not fix it. The bug is usually in architecture wiring, loss-target mismatch, optimizer configuration, gradient flow, or preprocessing.
-
-```python
-import torch
-import torch.nn as nn
-import torch.optim as optim
-
-model = nn.Sequential(nn.Linear(4, 16), nn.ReLU(), nn.Linear(16, 3))
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.05)
-
-features = torch.randn(12, 4)
-labels = torch.randint(0, 3, (12,))
-
-for step in range(200):
-    optimizer.zero_grad()
-    logits = model(features)
-    loss = criterion(logits, labels)
-    loss.backward()
-    optimizer.step()
-
-print(f"final_loss={loss.item():.6f}")
-```
-
-The economics of PyTorch are not only about faster syntax. Framework primitives reduce engineering time, but acceleration can increase infrastructure spend if jobs are poorly batched, frequently restarted, or run without checkpointing. A cheaper GPU hour can be more expensive than a CPU run if half the time is spent waiting for the data loader or repeating failed epochs.
-
-```mermaid
-graph LR
-    Task[Training task] --> Manual[Manual implementation]
-    Task --> Framework[PyTorch implementation]
-    Manual --> Risk1[Higher derivative-code risk]
-    Manual --> Risk2[Longer GPU integration path]
-    Framework --> Benefit1[Autograd and optimizers]
-    Framework --> Benefit2[DataLoader and checkpointing]
-    Framework --> Benefit3[Acceleration path after correctness]
-```
-
-| Cost driver | How PyTorch helps | Remaining engineering responsibility | Operational metric |
-|---|---|---|---|
-| Development time | Provides layers, autograd, losses, optimizers, and loaders | Choose correct abstractions and verify assumptions | Time from baseline idea to validated run |
-| Compute time | Enables GPU, mixed precision, and compilation | Measure utilization and avoid unnecessary graph allocation | Examples per second and cost per epoch |
-| Failure recovery | Supports checkpointing with state dicts | Save complete state and test restore paths | Lost work after interruption |
-| Debugging time | Exposes tensor metadata and gradients | Add assertions, probes, and reproducible seeds | Time to isolate a broken training phase |
-| Deployment risk | Provides eval mode, export paths, and ecosystem tools | Match preprocessing, trust model files, and validate outputs | Difference between validation and serving behavior |
-| Team learning | Uses readable Python and rich ecosystem examples | Teach mechanisms rather than copy patterns blindly | Review quality of training-code changes |
-
-Framework comparisons are useful when they focus on trade-offs rather than identity. PyTorch is a practical default for many teams because it combines readable eager execution with a broad ecosystem. TensorFlow remains important in many production and legacy environments. JAX is attractive for functional transformations, accelerator-oriented research, and workflows where compilation and transformation discipline are central.
-
-| Framework | Strength | Trade-off | Practical selection cue |
-|---|---|---|---|
-| PyTorch | Pythonic eager execution, broad research and application ecosystem | Production path still requires discipline around export, serving, and reproducibility | Choose when team productivity and debuggability are primary |
-| TensorFlow | Mature serving ecosystem and legacy production footprint | Older static-graph patterns can be harder for beginners to debug | Choose when existing platform investment already centers on it |
-| JAX | Powerful functional transformations and strong accelerator workflows | Steeper learning curve and different programming model | Choose when function transforms, compilation, or TPU-oriented work dominate |
-| Manual NumPy | Maximum educational transparency | Impractical for complex models and accelerators | Use for learning internals, not routine production training |
-| Higher-level wrappers | Less boilerplate for common training patterns | Can hide mechanics when learners are still building mental models | Add after the team can debug plain PyTorch loops |
-
-The final mental model is a layered one. Tensors describe numeric data and execution placement. Autograd records differentiable computation. Modules register parameters and organize forward logic. Losses turn predictions into scalar training signals. Optimizers mutate parameters using gradients. Operational controls make the loop repeatable, measurable, recoverable, and safe.
-
----
+The loop mechanisms in this part are intentionally modest, but together they create an engineering runbook. Metrics tell you whether training and validation are moving together or separating. The overfit-one-batch check tells you whether the model can learn at all under idealized conditions. Gradient accumulation tells you how to trade memory pressure for a larger effective batch without changing gradient scale by accident. Early stopping tells you when the validation evidence says to stop spending compute and which checkpoint should represent the run. None of these mechanisms replaces understanding the model, but each one narrows the search space when training does something surprising.
 
 ## Did You Know?
 
-1. [**Reverse-mode automatic differentiation predates modern deep learning**](https://en.wikipedia.org/wiki/Seppo_Linnainmaa): PyTorch's autograd uses ideas that were developed decades before today's large neural networks, and the reason it fits neural networks so well is that training usually has many parameters but one scalar loss.
-
-2. **Gradient accumulation is intentional behavior**: PyTorch adds gradients into `.grad` buffers instead of replacing them because accumulation supports larger effective batches, multi-loss training, and advanced optimization patterns.
-
-3. **`CrossEntropyLoss` expects raw logits**: The loss combines log-softmax with negative log likelihood internally, so adding softmax before it can reduce numerical stability and distort the gradient signal.
-
-4. **Pickle-based model loading is a trust boundary**: Generic PyTorch checkpoint loading can deserialize Python objects, so production teams should treat untrusted model files as executable input and prefer safer distribution formats when appropriate.
-
----
+- PyTorch 2.12 was announced by the PyTorch Foundation on May 13, 2026, and the current docs for this module's APIs are the 2.12 documentation set. That matters because API details move over time; for example, the modern mixed-precision documentation points users toward `torch.amp.autocast("cuda", ...)` instead of the deprecated `torch.cuda.amp.autocast(...)` form.
+- PyTorch's `zero_grad(set_to_none=True)` behavior is not merely cosmetic. Gradients set to `None` can reduce memory use and make it clear which parameters did not receive gradients, but optimizers can treat `None` differently from a zero tensor, so manual gradient code must be written with that distinction in mind.
+- `model.eval()` and `torch.no_grad()` are easy to confuse because both appear in validation code, but they control different systems. Evaluation mode changes layer behavior for modules such as dropout and BatchNorm, while no-grad changes autograd recording and memory use during forward passes.
+- Full reproducibility is an engineering target, not a single function call. PyTorch documents that results are not guaranteed to be reproducible across releases, platforms, or CPU/GPU executions, even with identical seeds, so serious run records should include seeds, versions, device details, and dataset split policy.
 
 ## Common Mistakes
 
-| Mistake | Scenario symptom | Root cause | Corrective action |
-|---|---|---|---|
-| Forgetting `optimizer.zero_grad()` | Loss starts plausible, then gradients grow until updates become unstable or non-finite | PyTorch accumulates gradients across backward calls by default | Clear gradients before each normal training step unless intentional accumulation is documented |
-| Calling softmax before `CrossEntropyLoss` | Classification training improves slowly or becomes numerically fragile | The loss already applies the stable log-softmax calculation internally | Return raw logits from the model and pass integer class labels directly |
-| Using a plain Python list for layers | `model.parameters()` is empty or missing expected tensors | `nn.Module` cannot register modules hidden in ordinary lists | Use `nn.ModuleList`, `nn.ModuleDict`, or direct module attributes |
-| Leaving validation in training mode | Validation metrics fluctuate on identical data, especially with dropout | Dropout and batch normalization keep training-time behavior active | Call `model.eval()` before validation and return to `model.train()` before training |
-| Building validation graphs | GPU memory grows during evaluation even though no learning happens | Inference loop runs without `torch.no_grad()` | Wrap validation and inference operations inside `with torch.no_grad():` |
-| Mixing CPU and GPU tensors | Runtime error reports tensors on different devices | Model, labels, inputs, or newly created tensors live on incompatible devices | Create a `device` variable and move every batch plus the model consistently |
-| Logging full tensors | Memory grows with the number of batches or logged metrics | Stored tensors keep references to computation graphs | Log `loss.item()` or `tensor.detach().cpu()` depending on the metric need |
-| Saving only model weights for resumable jobs | Training resumes but loss curve jumps or behaves differently | Optimizer momentum and adaptive state were discarded | Save model state, optimizer state, epoch, metric history, and configuration together |
-
----
+| Mistake | Problem | Better approach |
+|---|---|---|
+| Calling `optimizer.step()` before `loss.backward()` | The optimizer updates with stale, missing, or previous-batch gradients instead of the current batch's gradients. | Keep the step checklist fixed: zero gradients, forward, loss, backward, optimizer step. |
+| Forgetting `optimizer.zero_grad(set_to_none=True)` | Gradients accumulate across batches and silently change the effective update direction and magnitude. | Clear gradients once per intended optimizer update, usually before the forward pass. |
+| Validating without `model.eval()` | Dropout and BatchNorm behave as if the model is still training, so validation becomes noisy or biased. | Make `evaluate()` call `model.eval()` internally every time it runs. |
+| Validating without `torch.no_grad()` | PyTorch records graphs that will never be backpropagated, wasting memory and sometimes keeping tensors alive through logging. | Wrap validation in `with torch.no_grad():` or use `@torch.no_grad()` on the evaluation function. |
+| Saving only `model.state_dict()` for resume | The model weights reload, but optimizer buffers, scheduler counters, epoch, and best metric reset or disappear. | Save a checkpoint dictionary with model, optimizer, scheduler, epoch, and best validation metric. |
+| Averaging per-batch losses equally | A small final batch receives the same weight as a full batch, making epoch loss slightly wrong. | Multiply each batch loss by batch size, sum, and divide by total examples. |
+| Accumulating gradients without dividing the loss | The gradient is scaled by the number of micro-batches, which changes the effective learning rate. | Divide loss by `accumulation_steps` before `backward()` when using mean-reduced losses. |
+| Reporting training loss as model quality | Training loss can improve while validation quality degrades, especially once a model memorizes training data. | Track train loss, validation loss, and at least one task metric, then choose best checkpoints from validation evidence. |
 
 ## Quiz
 
-1. Your team trains a small image classifier and the training loss decreases, but validation accuracy changes every time you run validation on the same saved checkpoint and same validation set. The model contains dropout. What should you inspect first, and why?
+1. **Why does the canonical step clear gradients before the forward pass in this module?**
 
    <details>
    <summary>Answer</summary>
 
-   Inspect whether the validation loop calls `model.eval()` before inference and uses `torch.no_grad()` around the loop. Dropout remains active in training mode, so repeated validation passes can produce different predictions for the same inputs. `torch.no_grad()` is also appropriate because validation does not need computation graphs, although the nondeterministic metric symptom points most directly to the missing evaluation mode.
+   PyTorch accumulates gradients into parameter `.grad` fields. Clearing gradients before the forward pass makes the invariant obvious: the next `backward()` call should produce exactly the gradients for the current intended update. Clearing after `optimizer.step()` can also work if done consistently, but clearing between `backward()` and `step()` erases the gradients the optimizer needs.
+
    </details>
 
-2. A teammate writes `self.layers = [nn.Linear(128, 128), nn.Linear(128, 10)]` inside an `nn.Module`. The forward pass runs, but the optimizer reports an empty parameter list or the loss never changes. How do you fix the model and prove the fix worked?
+2. **What is the difference between `model.eval()` and `with torch.no_grad():` during validation?**
 
    <details>
    <summary>Answer</summary>
 
-   Replace the plain Python list with `nn.ModuleList` or assign the layers as direct module attributes, and make sure `super().__init__()` is called first. Then print `list(model.named_parameters())` or count `sum(p.numel() for p in model.parameters())` before training. A non-empty parameter list with the expected layer names proves PyTorch registered the trainable tensors.
+   `model.eval()` recursively changes the module's training flag, which affects mode-dependent layers such as dropout and BatchNorm. `torch.no_grad()` disables gradient recording, which reduces memory use and prevents construction of a backward graph during evaluation. Validation usually needs both because correct layer behavior and disabled graph recording are separate concerns.
+
    </details>
 
-3. A fraud model uses `nn.CrossEntropyLoss`, but the labels arrive as one-hot floating-point vectors because a preprocessing job was copied from a different framework. The script crashes or trains poorly after a quick workaround. What target format should the team provide, and why?
+3. **Why is a checkpoint with only `model.state_dict()` insufficient for resuming training?**
 
    <details>
    <summary>Answer</summary>
 
-   The team should provide integer class indices with dtype `torch.long` and shape `[batch]`, while the model returns raw logits with shape `[batch, classes]`. `CrossEntropyLoss` expects each target to name the correct class, not to provide a one-hot probability vector. Keeping logits raw also lets the loss use its numerically stable internal log-softmax path.
+   Model weights are only one part of training state. Optimizers keep momentum or adaptive moment buffers, schedulers keep counters and learning-rate history, and the loop needs the current epoch and best validation metric to make correct stop/save decisions. Loading only weights starts from the same parameters but not from the same optimization trajectory.
+
    </details>
 
-4. During validation, GPU memory usage increases batch after batch until the process fails, even though the script never calls `backward()` in validation. What code pattern is most likely missing, and what secondary logging mistake would you check?
+4. **A validation loop reports lower loss every epoch, but it never calls `torch.no_grad()`. Is the metric necessarily wrong?**
 
    <details>
    <summary>Answer</summary>
 
-   The validation loop is likely missing `with torch.no_grad():`, so PyTorch still builds computation graphs for each forward pass. As a secondary check, inspect whether the script appends graph-backed tensors such as `loss` or `logits` to a list for later reporting. Validation metrics should usually be stored as Python numbers via `.item()` or as detached CPU tensors when detailed analysis is required.
+   The numeric metric may still be correct if the model is in evaluation mode and no accidental mutation occurs, but the loop is wasteful and risky because PyTorch records graphs that are never used for backward. The memory overhead can hide until larger batches or longer validation runs. Correct validation uses no-grad because evaluation is a measurement pass, not a gradient-building pass.
+
    </details>
 
-5. A model trains successfully on CPU, but the first CUDA run fails with a device mismatch inside `forward`. The model and input batch were moved to CUDA. What hidden source of CPU tensors should you look for?
+5. **Why divide the loss by `accumulation_steps` during gradient accumulation?**
 
    <details>
    <summary>Answer</summary>
 
-   Look for tensors created inside `forward` with constructors such as `torch.zeros(...)`, `torch.arange(...)`, or `torch.tensor(...)` that do not specify the incoming tensor's device. Those tensors default to CPU and then collide with CUDA tensors during operations. Prefer `torch.zeros_like(x)`, pass `device=x.device`, or register persistent non-trainable tensors as buffers so they move with the model.
+   Most PyTorch losses default to a mean over the mini-batch. If four micro-batches are backpropagated and each mean loss is used directly, the accumulated gradient is roughly four times the gradient of one effective large batch. Dividing each micro-batch loss by four preserves the gradient scale and avoids accidentally changing the effective learning rate.
+
    </details>
 
-6. A long training job is interrupted after several hours. The engineer saved only `model.state_dict()` and restarts with a fresh Adam optimizer. The job resumes, but the loss curve shifts and convergence differs from the original run. What was missing from the checkpoint?
+6. **What does the overfit-one-batch sanity check prove, and what does it not prove?**
 
    <details>
    <summary>Answer</summary>
 
-   The checkpoint omitted optimizer state, and for Adam that state includes adaptive moment estimates that affect future updates. A resumable checkpoint should include the model state dict, optimizer state dict, epoch or step counters, validation metrics, and enough configuration to reconstruct the run. Model weights alone are appropriate for inference, not for an exact training resume.
+   It proves that the model, data, labels, loss, gradients, and optimizer can cooperate on an intentionally easy memorization task. It does not prove that the model generalizes, that the validation split is clean, or that hyperparameters are optimal. Passing the check is a gate before serious training; failing it is strong evidence of a loop, data, or contract bug.
+
    </details>
 
-7. Your team wants to enable mixed precision because GPU memory is tight. After enabling it, throughput improves but validation quality drops. How should you evaluate whether mixed precision is acceptable rather than assuming the faster run is better?
+7. **Which reproducibility controls belong in a serious PyTorch training run, and why is a seed alone not enough?**
 
    <details>
    <summary>Answer</summary>
 
-   Compare validation metrics, loss curves, and non-finite loss checks against a known float32 baseline using the same data split and seed where possible. Use automatic mixed precision and gradient scaling rather than manually converting every tensor to half precision. If quality drops, inspect numerically sensitive operations, learning rate, loss scaling behavior, and whether the target hardware supports the chosen lower-precision format well.
+   A serious run should record or set Python, NumPy, and PyTorch seeds, use a seeded `torch.Generator` for reproducible sampling, seed `DataLoader` workers when they call Python or NumPy randomness, record the dataset version or split indices, and document whether deterministic algorithms were enabled. A seed alone is not enough because dataset order, worker libraries, backend kernels, hardware, PyTorch versions, and nondeterministic operations can still change the observed result.
+
    </details>
-
-8. A new model cannot overfit a single tiny batch after hundreds of updates. The full dataset is large and noisy, but the one-batch experiment should be easy. What training components should you debug before changing the architecture?
-
-   <details>
-   <summary>Answer</summary>
-
-   Debug the basic training contract first: labels match the loss, model outputs have the expected shape, parameters are registered, gradients are finite and non-zero, `optimizer.zero_grad()` and `optimizer.step()` occur in the correct order, and preprocessing produces sensible inputs. If a model cannot memorize one fixed batch, adding more data or making the architecture more complex usually hides the underlying loop or data bug rather than solving it.
-   </details>
-
----
 
 ## Hands-On Exercise
 
-In this lab you will build a local PyTorch training workflow, introduce controlled failures, and document the evidence you used to diagnose them. The exercise intentionally withholds completed solution files because the goal is active problem-solving. Use the module content as your reference, and write down predictions before running each script.
+Take the synthetic training skeleton from Part 2 and turn it into a small experiment you can repeat. First run it as written for five epochs and record the final train and validation metrics. Then add a `StepLR` scheduler with `step_size=2` and `gamma=0.5`, save a checkpoint whenever validation loss improves, and reload the best checkpoint after training. Finally, run the same script twice with the same seed and confirm that the printed metrics are close enough for your local hardware and PyTorch build.
 
-### Step 1: Prepare a Local Workspace
+For the mode-discipline check, temporarily remove `model.eval()` from `evaluate()` and add `nn.Dropout(p=0.4)` after the ReLU in `TinyClassifier`. Run validation twice in a row without a training step between the two calls. If validation metrics differ noticeably, you have demonstrated why evaluation mode belongs inside the evaluation function. Restore `model.eval()` afterward and confirm that repeated validation is stable for the same model state.
 
-Create an isolated workspace and install the packages needed for the exercise. Use the explicit virtual-environment Python path when running scripts so the commands behave the same way in shells that have different global Python installations.
+For the checkpoint check, train for two epochs, save a latest checkpoint, create a fresh model/optimizer/scheduler trio, load the checkpoint, and continue training from the returned `start_epoch`. Print the learning rate before and after resume so you can see whether scheduler state survived. If the resumed run restarts the learning-rate schedule at the beginning, your checkpoint is missing scheduler state or loading it in the wrong place.
 
-```bash
-mkdir pytorch-training-lab
-cd pytorch-training-lab
-.venv/bin/python -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install torch torchvision numpy
-.venv/bin/python -c "import torch; print(torch.__version__)"
-```
+Success criteria:
 
-- [ ] You created a `pytorch-training-lab` directory.
-- [ ] You created a local `.venv` inside that directory.
-- [ ] You installed `torch`, `torchvision`, and `numpy`.
-- [ ] You verified that importing `torch` prints a version instead of raising an exception.
+- [ ] The training script has separate `train_one_epoch` and `evaluate` functions, and each function owns its required module mode internally.
+- [ ] The checkpoint dictionary contains `model_state_dict`, `optimizer_state_dict`, `scheduler_state_dict`, `epoch`, and `best_metric`.
+- [ ] Repeated validation on the same model state does not change because dropout is disabled by evaluation mode and gradients are not recorded.
+- [ ] The best checkpoint is restored after early stopping or after the final epoch, so the in-memory model matches the best validation metric you report.
+- [ ] The run record includes the seed, PyTorch version, device type, dataset split policy, final metrics, and path to the best checkpoint.
 
-### Step 2: Explore Gradients and Accumulation
+## Key Takeaways
 
-Create `explore_gradients.py`. Your script should create `x = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)` and test four expressions independently: `x.sum()`, `(x ** 2).sum()`, `x.mean()`, and `x.max()`. Before each run, write a comment predicting the gradient, then verify the result with `backward()`.
+The PyTorch training step is the A7 NumPy update loop with better engineering around the same responsibilities. `zero_grad(set_to_none=True)` clears previous gradients, the forward pass builds the graph, the loss produces a scalar objective, `loss.backward()` runs the A8-style reverse graph walk at tensor scale, and `optimizer.step()` performs the parameter update that used to be `W -= lr * dW`.
 
-```python
-import torch
+The full training loop must separate mutation from measurement. Training mode plus gradient recording belongs in the train loop. Evaluation mode plus no-grad belongs in the validation loop. Checkpoints must save enough state to resume optimization, not merely enough weights to run inference. Reproducibility requires seeding multiple libraries, controlling `DataLoader` workers, recording run context, and being honest about hardware and backend limits.
 
-x = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
+The loop is also your first diagnostic surface. Log train loss, validation loss, and a task metric; overfit one batch before launching a long run; use gradient accumulation only when the loss scaling and step timing are explicit; and restore the best checkpoint when early stopping chooses a validation winner. Later Block B modules will tune initialization, optimizers, regularization, normalization, diagnostics, and precision, but every one of those tools enters through this loop.
 
-tests = [
-    ("sum", x.sum()),
-    ("squared_sum", (x ** 2).sum()),
-    ("mean", x.mean()),
-    ("max", x.max()),
-]
+## Learner check
 
-for name, expression in tests:
-    if x.grad is not None:
-        x.grad.zero_()
+The index row for this rescope is intentionally mirrored here so the module and section index stay tied together:
 
-    expression.backward(retain_graph=True)
-    print(name, x.grad)
-```
-
-Run it with:
-
-```bash
-.venv/bin/python explore_gradients.py
-```
-
-- [ ] You predicted each gradient before executing the script.
-- [ ] You reset gradients between tests or otherwise prevented accidental accumulation.
-- [ ] You explained why `x.max()` produces a sparse gradient for this input.
-- [ ] You modified the script once to demonstrate accumulation deliberately, then restored the correct reset behavior.
-
-### Step 3: Build a Complete MNIST Training Script
-
-Create `train_mnist.py` using the complete training-loop pattern from the module, but write the file yourself rather than pasting blindly. Include a registered `nn.Module`, `CrossEntropyLoss`, Adam or AdamW, train and validation loaders, `model.train()`, `model.eval()`, `torch.no_grad()`, finite-loss checks, and checkpoint saving when validation accuracy improves.
-
-```python
-# Fill this file from the module pattern rather than copying a hidden answer.
-# Required components:
-# - DigitClassifier class inheriting from nn.Module
-# - DataLoader objects for train and validation data
-# - CrossEntropyLoss with raw logits and integer labels
-# - optimizer.zero_grad() before loss.backward()
-# - model.eval() and torch.no_grad() during validation
-# - checkpoint dictionary with model and optimizer state
-```
-
-Run it with:
-
-```bash
-.venv/bin/python train_mnist.py
-```
-
-- [ ] The script downloads or reuses MNIST data successfully.
-- [ ] Training loss is printed at least once per epoch.
-- [ ] Validation accuracy is computed under evaluation mode.
-- [ ] A checkpoint file is written when validation accuracy improves.
-- [ ] Your model uses registered layers that appear in `named_parameters()`.
-
-### Step 4: Create and Fix a Broken Model
-
-Create `debug_model.py` with a deliberately broken model containing these issues: missing `super().__init__()`, layers stored in a plain Python list, `MSELoss` used for multi-class labels, missing `optimizer.zero_grad()`, and validation without evaluation mode or `no_grad()`. Then fix the file one bug at a time and record the symptom that led you to each fix.
-
-```python
-# Intentionally create the broken version first.
-# Then fix one issue at a time and keep a short debugging note for each fix.
-```
-
-Run it with:
-
-```bash
-.venv/bin/python debug_model.py
-```
-
-- [ ] You observed at least one failure before applying fixes.
-- [ ] You replaced the plain Python list with a PyTorch registration mechanism.
-- [ ] You changed the loss-target pair to a valid classification setup.
-- [ ] You added gradient reset in the correct part of the loop.
-- [ ] You used `model.eval()` and `torch.no_grad()` for validation.
-- [ ] You confirmed that the fixed script runs without crashing.
-
-### Step 5: Benchmark CPU and Optional GPU Execution
-
-Create `benchmark_devices.py` and compare matrix multiplication time on CPU and CUDA if CUDA is available. Use synchronization around CUDA timing so your measurements reflect completed work rather than queued kernels.
-
-```python
-import time
-import torch
-
-
-def benchmark(device, size, iterations):
-    x = torch.randn(size, size, device=device)
-    y = torch.randn(size, size, device=device)
-
-    for _ in range(3):
-        _ = x @ y
-
-    if device.type == "cuda":
-        torch.cuda.synchronize()
-
-    start = time.perf_counter()
-
-    for _ in range(iterations):
-        _ = x @ y
-
-    if device.type == "cuda":
-        torch.cuda.synchronize()
-
-    return (time.perf_counter() - start) / iterations
-
-
-for size in [512, 1024, 2048]:
-    cpu_time = benchmark(torch.device("cpu"), size=size, iterations=5)
-    print(f"size={size} cpu_seconds={cpu_time:.6f}")
-
-    if torch.cuda.is_available():
-        gpu_time = benchmark(torch.device("cuda"), size=size, iterations=5)
-        print(f"size={size} gpu_seconds={gpu_time:.6f} speedup={cpu_time / gpu_time:.2f}")
-    else:
-        print(f"size={size} cuda_available=false")
-```
-
-Run it with:
-
-```bash
-.venv/bin/python benchmark_devices.py
-```
-
-- [ ] The script prints timing information for all configured matrix sizes.
-- [ ] CUDA timing uses synchronization when a CUDA device is available.
-- [ ] You explain why small matrix sizes may show less impressive speedup than large sizes.
-- [ ] You connect the benchmark result to a training decision, such as batch size or device choice.
-
-### Step 6: Write a Training Readiness Note
-
-Create `training-readiness.md` summarizing whether your MNIST training script is ready for a longer experiment. Treat this as an engineering review, not a tutorial summary. Include evidence from your runs, the bugs you fixed, and any remaining risks you would address before productionizing the workflow.
-
-- [ ] The note identifies the selected model, loss, optimizer, and device path.
-- [ ] The note includes at least three concrete debugging checks you performed.
-- [ ] The note explains how validation differs from training in your script.
-- [ ] The note states what your checkpoint contains and whether it supports training resume.
-- [ ] The note names at least two risks that would matter for a larger dataset.
-- [ ] The note avoids copying module prose and uses your observed results.
-
----
-
-## Next Module
-
-Next: [Training Deep Networks: Normalization, Regularization & Optimization](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) goes deeper on keeping training stable and generalizing well — normalization layers, regularization, weight initialization, and learning-rate schedules — before [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) introduces convolutional architectures and spatial feature learning.
-
----
+> | 1.3 | [The Training Loop: From One Step to a Reproducible Run](/ai-ml-engineering/deep-learning/module-1.3-training-neural-networks/) |
 
 ## Sources
 
-- [PyTorch: An Imperative Style, High-Performance Deep Learning Library](https://arxiv.org/abs/1912.01703) — Primary paper describing PyTorch's imperative execution model, autograd design, and performance goals.
-- [Seppo Linnainmaa](https://en.wikipedia.org/wiki/Seppo_Linnainmaa) — Background on Linnainmaa and the 1970 publication associated with reverse-mode automatic differentiation.
-- [Automatic differentiation](https://en.wikipedia.org/wiki/Automatic_differentiation) — Overview of forward-mode and reverse-mode automatic differentiation and their computational tradeoffs.
-- [Mixed Precision Training](https://arxiv.org/abs/1710.03740) — Primary reference for mixed-precision training, including speed and memory tradeoffs.
-- [Adam: A Method for Stochastic Optimization](https://arxiv.org/abs/1412.6980) — Original paper introducing the Adam optimizer discussed in the module.
+- PyTorch Foundation, "PyTorch 2.12 Release Blog" - https://pytorch.org/blog/pytorch-2-12-release-blog/
+- PyTorch Tutorials, "Training with PyTorch" - https://docs.pytorch.org/tutorials/beginner/introyt/trainingyt.html
+- PyTorch Tutorials, "Saving and Loading Models" - https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html
+- PyTorch 2.12 documentation, `torch.optim.Optimizer.zero_grad` - https://docs.pytorch.org/docs/2.12/generated/torch.optim.Optimizer.zero_grad.html
+- PyTorch 2.12 documentation, `torch.nn.Module.eval` and module mode behavior - https://docs.pytorch.org/docs/2.12/generated/torch.nn.Module.html
+- PyTorch 2.12 documentation, `torch.no_grad` - https://docs.pytorch.org/docs/2.12/generated/torch.no_grad.html
+- PyTorch 2.12 documentation, reproducibility notes and `DataLoader` worker seeding - https://docs.pytorch.org/docs/2.12/notes/randomness.html
+- PyTorch 2.12 documentation, `torch.use_deterministic_algorithms` - https://docs.pytorch.org/docs/2.12/generated/torch.use_deterministic_algorithms.html
+- PyTorch 2.12 documentation, automatic mixed precision deprecation notes for `torch.cuda.amp` - https://docs.pytorch.org/docs/2.12/amp.html
+- Dive into Deep Learning, "Generalization in Deep Learning" - https://d2l.ai/chapter_multilayer-perceptrons/generalization-deep.html
+- Andrej Karpathy, "A Recipe for Training Neural Networks" - https://karpathy.github.io/2019/04/25/recipe/
+- Stanford CS231n, "Neural Networks Part 3: Learning and Evaluation" - https://cs231n.github.io/neural-networks-3/
+
+## Next Module
+
+Next: [Initialization & Signal Propagation](/ai-ml-engineering/deep-learning/module-1.3.1-initialization-signal-propagation/).
