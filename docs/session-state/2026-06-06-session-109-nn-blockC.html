@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 109 — NN Block C (embeddings · residual · attention · transformer) merged</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #326ce5; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .92em; }
+  th, td { border: 1px solid #ddd; padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f4fc; }
+  .tldr { background: #f0f7ff; border-left: 4px solid #326ce5; padding: .8rem 1rem; border-radius: 4px; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .warn { color: #9a6700; }
+  ul { margin: .4rem 0; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 109 — NN Block C (embeddings · residual · attention · transformer-by-hand) merged</h1>
+<p><em>2026-06-06 · standalone orchestrator session · continues session 108 (NN epic #1793, Phase 3 / Block C)</em></p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Drove <strong>Block C end-to-end to merge in PR #1806</strong> (main
+<code>f4a7fa39</code>), <strong>Phase 3 of NN epic #1793</strong> ("Representations &amp; modern blocks").
+Four modules — <strong>1.4.1 Embeddings</strong> (cursor), <strong>1.4.2 Residual &amp; Deep-Architecture
+Patterns</strong> (deepseek), <strong>1.4.3 Attention from Scratch</strong> (codex), <strong>1.4.4 The
+Transformer Block from Scratch</strong> (codex) — all <strong>T0</strong>, each cross-family R1'd, every
+finding orchestrator-ground-checked. The mislabeled <strong>1.6</strong>
+(<code>module-1.6-backpropagation-deep-dive</code>, titled "From Backpropagation to Transformers") was
+<strong>gutted + redirected</strong> to 1.4.4 — its attention/MHA/positional-encoding content is now
+owned by 1.4.3/1.4.4. Build green (2159 pages, 0 schema errors), site-health 0 errors, both required CI
+gates pass. <strong>All dispatch on non-Claude lanes</strong> per the active weekly-reset directive.
+<strong>Block C complete; next is Block D.</strong></div>
+
+<h2>What shipped — Block C (PR #1806)</h2>
+<table>
+<tr><th>Module (1.4.x, order)</th><th>Author</th><th>Cross-family R1</th><th>Fixes applied</th><th>Final</th></tr>
+<tr>
+  <td><strong>1.4.1 Embeddings &amp; Representation Learning</strong> (1005.1, net-new)</td>
+  <td>cursor <code>auto</code></td>
+  <td>codex — <strong>NEEDS_CHANGES</strong> (3 real, all ground-checked)</td>
+  <td>(1) one-hot/matmul equivalence: <code>x @ W.T</code> returns <em>column</em> k of W (= row k of E=Wᵀ), not "row k of W" — the lone inconsistency (Part 2 was already correct); (2) GloVe fits <code>wᵢ·wⱼ+bᵢ+bⱼ=log Xᵢⱼ</code> → log <em>counts</em>, not "log ratios" (ratios are the motivation captured by vector <em>differences</em>); (3) <code>nn.Embedding</code> init is N(0,1) with <em>no</em> scaling.</td>
+  <td>T0 5009w</td>
+</tr>
+<tr>
+  <td><strong>1.4.2 Residual Connections &amp; Deep-Architecture Patterns</strong> (1005.2, net-new; harvest 1.6 §5)</td>
+  <td>deepseek-v4-pro</td>
+  <td>cursor — <strong>APPROVE_WITH_NITS</strong> (5 real, all ground-checked)</td>
+  <td>Authored sub-floor (T3 4230w) → deepseek expand-to-floor (T0 5724w) → cursor R1 fixes: (1) "fixed 50/50 split" is wrong — the <code>+</code> copies the <em>full</em> upstream gradient (contradicted the module's own L151 derivation); (2) <strong>fabrication</strong> — "rejected from CVPR 2016" DYK (ResNet won CVPR 2016 Best Paper) → replaced with verifiable text; (3) opener "8× deeper than the previous year's winner" (winner=GoogLeNet ~22 layers; 8× is vs VGG-19) + 3.57% is the <em>ensemble</em> test result; (4) "adding layers cannot degrade training error" softened (expressiveness guaranteed, optimization only eased); (5) gradient-demo measured <code>x.grad</code> (input) but was labeled "first layer's weight".</td>
+  <td>T0 5758w</td>
+</tr>
+<tr>
+  <td><strong>1.4.3 Attention from Scratch</strong> (1005.3, rescope 1.6 §2–3)</td>
+  <td>codex <code>gpt-5.5</code></td>
+  <td>agy <code>gemini-3.1-pro</code> — <strong>APPROVE</strong> (0 code/concept/math/fab)</td>
+  <td>None. Orchestrator independently ground-checked the whole module: <code>softmax((QKᵀ)/√d_k)V</code>, all shapes, <code>dim=-1</code> over keys, <code>-inf</code>-before-softmax with explicit all-masked-row NaN handling, the √d_k variance derivation (d_k=64→std≈8), multi-head view→transpose→contiguous().view, the F.sdpa <code>True</code>=allowed vs nn.MultiheadAttention <code>True</code>=blocked mask convention, and the worked example outputs <code>[5.755,4.245]/[4.245,5.755]/[5.0,5.0]</code> (hand-verified exact). Zero errors.</td>
+  <td>T0 5022w</td>
+</tr>
+<tr>
+  <td><strong>1.4.4 The Transformer Block from Scratch</strong> (1005.4, rescope 1.6 §4–5)</td>
+  <td>codex <code>gpt-5.5</code></td>
+  <td>cursor — <strong>APPROVE_WITH_NITS</strong> (code/concept/math CLEAN)</td>
+  <td>Only finding: authoring meta-text leak ("the harvested source section", "The source module's positional-encoding section… reusable version") at L101/L103 → rewritten to direct teaching. Code/PE/assembly all verified by both cursor (ran the classes; PE pos=1 diff 5.96e-08) and orchestrator (sinusoidal PE incl. odd-d_model slice, FFN <code>d_ff=4·d_model</code>≈2× attn params, pre-norm <code>x=x+MHA(LN(x)); x=x+FFN(LN(x))</code>, <code>*√d_model</code> embedding scaling, stacking + param walkthrough).</td>
+  <td>T0 5123w</td>
+</tr>
+</table>
+
+<h2>Gut/redirect the mislabeled 1.6</h2>
+<p><code>module-1.6-backpropagation-deep-dive.md</code> (8136w, titled "From Backpropagation to
+Transformers") was an attention/MHA/positional-encoding/residual lecture — the harvest source for
+1.4.2 §5 / 1.4.3 §2–3 / 1.4.4 §4. After the new modules took ownership it was <code>git rm</code>'d with
+an <code>astro.config.mjs</code> redirect <code>…/module-1.6-backpropagation-deep-dive/</code> →
+<code>…/module-1.4.4-transformer-block-from-scratch/</code>. Re-pointed the 4 inbound links to 1.6
+(1.8 SSL prereq, 1.9 GNN prereq, 1.10 modern-transformers prereq, index row) → 1.4.4. Re-chained
+<strong>Next Module</strong> 1.3.6→1.4.1→1.4.2→1.4.3→1.4.4→1.5, and re-pointed <strong>1.5→1.8</strong>
+as a stopgap (1.5's old Next pointed at the gutted 1.6, which after redirect would have created a
+backward <code>C4→1.5→C4</code> nav cycle; Block D rewrites 1.5 itself). The deep-learning sidebar is
+<code>autogenerate</code>, so removing 1.6 auto-drops it and the new 1.4.x files auto-appear by order.</p>
+
+<h2>Reviewer scorecard (this wave)</h2>
+<ul>
+<li><strong>codex on 1.4.1</strong> — NEEDS_CHANGES, 3 real. Caught a transpose error in the module's
+central one-hot/matmul claim (verifier-blind), a subtle GloVe objective imprecision, and a wrong
+<code>nn.Embedding</code> init claim. Precise, all confirmed real.</li>
+<li><strong>cursor on 1.4.2</strong> — APPROVE_WITH_NITS, 5 real including a <em>fabrication</em> (the
+"rejected from CVPR 2016" Did-You-Know) that deepseek invented. The anti-leak / verifier gates are
+blind to this class; only the cross-family read + ground-check caught it.</li>
+<li><strong>agy on 1.4.3</strong> — APPROVE, zero errors. Matched the orchestrator's independent
+ground-check exactly. Second clean agy review run (after the s106 A5/A6 pair) on
+<code>gemini-3.1-pro</code> — the gemini-cli→agy review-lane migration continues to validate.</li>
+<li><strong>cursor on 1.4.4</strong> — APPROVE_WITH_NITS; code/concept/math clean (it executed the
+module's classes). Only an authoring meta-text leak — exactly the class the <code>anti_leak</code>
+gate misses.</li>
+</ul>
+
+<h2>Process notes / gotchas</h2>
+<ul>
+<li><strong>Code-heavy + verifier-blind.</strong> 1.4.3/1.4.4 are pure architecture code; T0 says nothing
+about correctness. Both got a cross-family R1 <em>and</em> a full orchestrator ground-check (attention
+math, PE formula, shapes, mask semantics, parameter counts). All clean — codex authored both well.</li>
+<li><strong>Sub-floor → expand → review (no wasted R1).</strong> 1.4.2 came in at T3 (4230w, 6 LO,
+5 DYK, 5 mistakes). Because it failed the verifier floor, it was expanded to T0 <em>first</em>
+(deepseek), then got its single cross-family R1 on the complete module — no R1 burned on an
+incomplete draft. The <code>did_you_know_4</code> gate wants <em>exactly</em> 4 (not ≥4) and
+<code>sections_present</code> requires 3–5 learning outcomes — both pinned from
+<code>verify_module.py</code>, then baked into the 1.4.4 brief so it didn't repeat the miss.</li>
+<li><strong>Fix briefs from the verdict, never ahead.</strong> Every FIX-* brief was written after the
+reviewer returned, with exact replacement text for fabrication-prone spots (the CVPR DYK, the opener
+figures) so the fixer substituted rather than re-invented.</li>
+<li><strong>Net-new NN modules are NOT pipeline-board-tracked</strong> (same as Block A/B) →
+<code>stage:None</code>, zero <code>.pipeline/reviews/</code> records needed; the cross-family review
+lives in the PR + ledger + this handoff.</li>
+<li><strong>Epic bookkeeping fixed:</strong> #1793 Phases 1+2 (Block A/B, long since merged) were still
+unchecked — checked them along with Phase 3.</li>
+</ul>
+
+<h2>State after Block C (on main <code>f4a7fa39</code>)</h2>
+<ul>
+<li><strong>Deep-learning chapter 1.4 = Block C, complete.</strong> 1.4.1 Embeddings · 1.4.2 Residual ·
+1.4.3 Attention · 1.4.4 Transformer Block. Mislabeled 1.6 gutted (redirect).</li>
+<li><strong>NN epic #1793: Phases 1–3 done</strong> (Block A 1.1.1–1.1.8, Block B 1.2/1.3/1.3.1–1.3.6,
+Block C 1.4.1–1.4.4). Mislabels 1.4 + 1.6 corrected; <strong>1.5 still mislabeled</strong> (slug
+<code>rnns-sequence-models</code> is CNN content) — Block D fixes it.</li>
+<li>Worktrees + branches cleaned (only primary <code>main</code> + the unrelated <code>g2-craft</code>
+remain). Reusables: <code>logs/remediation/briefs/nn-blockC/{_shared-rules,_review-rules,C1–C4,FIX-*,WAVE-C1-LEDGER}.md</code>.</li>
+<li>Active directive unchanged: no Claude/opus dispatch lanes until the weekly reset (orchestrator
+necessarily runs on Claude).</li>
+</ul>
+
+<h2>Resume — next</h2>
+<ul>
+<li><strong>Block D ← IMMEDIATE NEXT</strong> (Phase 4): <strong>D1</strong> consolidate the real CNN
+content from the misfiled <code>1.5</code> (<code>module-1.5-rnns-sequence-models</code>, currently
+CNN-bodied) — gut/redirect or retitle as the proper CNN module; <strong>D2</strong> real RNNs &amp;
+sequence models (net-new, BPTT/LSTM/GRU/teacher-forcing — replaces the misfiled 1.5 body);
+<strong>D3</strong> capstone (dataset→baseline→arch→diagnostics→ablation→runbook). Light-touch
+1.8/1.9/1.10 (add forward-pointers). Same loop: ≤3 authors (cursor/codex/deepseek) → cross-family R1
+(codex/cursor/agy; opus only after the weekly reset) → ground-check every finding → consolidated PR →
+build in worktree (node_modules symlink) → finalize.</li>
+<li><strong>Sidebar-order bug to fix in Block D:</strong> 1.8/1.9/1.10 have <code>sidebar.order</code>
+8/9/10, so they sort <em>before</em> the 1004–1006 (Block B/C) range in the autogenerate sidebar →
+bump to ~1009–1011.</li>
+<li><strong>At epic completion (after Block D):</strong> add a single NN-epic changelog entry (Block A/B/C
+deliberately added none per-wave); close #1609 as superseded (its single module = Block A2/A6).</li>
+<li><strong>Other open threads (unchanged):</strong> G2 #1623 engineering-craft Stage-1
+(<code>.worktrees/g2-craft</code>); G4 #1626 synthesis-apps 3.2/3.3; the 2 org-gated secret-scanning
+extras (#1798, owner action); leaked-meta cleanup in <code>mlops/module-5.6-ml-pipelines.md</code> +
+<code>cloud/hyperscaler-rosetta-stone.md</code>.</li>
+<li><strong>Sitewide cleanup candidate surfaced this wave:</strong> the <code>## Learner check</code>
+section ships with hook-explanation meta-text ("intentionally quoted here so the merge hook can
+verify…") across all of Block A/B/C — it's a merge-hook artifact in learner-facing content. Worth a
+dedicated sitewide pass (reword to a clean blockquote or strip post-hook) once the epic is done; kept
+consistent for now rather than special-casing one block.</li>
+</ul>
+</body>
+</html>
