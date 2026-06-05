@@ -26,7 +26,8 @@ sidebar:
 | 1.3.2 | [Optimizers & Learning-Rate Dynamics](/ai-ml-engineering/deep-learning/module-1.3.2-optimizers-lr-dynamics/) |
 | 1.3.3 | [Regularization & Generalization](/ai-ml-engineering/deep-learning/module-1.3.3-regularization-generalization/) |
 | 1.3.4 | [Normalization Layers](/ai-ml-engineering/deep-learning/module-1.3.4-normalization-layers/) |
-| 1.4 | [Training Deep Networks: Normalization, Regularization & Optimization](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) |
+| 1.3.5 | [Training-Diagnostics Playbook](/ai-ml-engineering/deep-learning/module-1.3.5-training-diagnostics-playbook/) |
+| 1.3.6 | [Numerical Stability & Precision](/ai-ml-engineering/deep-learning/module-1.3.6-numerical-stability-precision/) |
 | 1.5 | [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) |
 | 1.6 | [From Backpropagation to Transformers](/ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive/) |
 | 1.8 | [Self-Supervised Learning](/ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning/) |

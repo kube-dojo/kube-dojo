@@ -656,7 +656,7 @@ Normalization placement in residual blocks — pre-norm versus post-norm — is 
 
 ## Next Module
 
-Continue to [Training Deep Networks: Normalization, Regularization & Optimization](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) — where the normalization machinery in this module combines with explicit regularization techniques (dropout, weight decay in practice, data augmentation) and the optimizer discipline from Module 1.3.2 into a full training-stability toolkit.
+Continue to [Training-Diagnostics Playbook](/ai-ml-engineering/deep-learning/module-1.3.5-training-diagnostics-playbook/) — where the initialization, optimizer, regularization, and normalization machinery from Modules 1.3.1–1.3.4 becomes a systematic process for reading loss curves, gradient norms, and activation statistics to localize why a training run is failing.
 
 ## Learner check
 

@@ -40,6 +40,9 @@ export default defineConfig({
     // Block A rescope: 1.7 -> 1.1.8 computational graphs & scalar autograd
     '/ai-ml-engineering/deep-learning/module-1.7-backpropagation-and-autograd-from-scratch/':
       '/ai-ml-engineering/deep-learning/module-1.1.8-computational-graphs-scalar-autograd/',
+    // Block B: 1.4 gutted — its norm/reg/opt survey is now the 1.3.1-1.3.6 sub-chain
+    '/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/':
+      '/ai-ml-engineering/deep-learning/module-1.3.1-initialization-signal-propagation/',
   },
   markdown: {
     remarkPlugins: [remarkMath],
