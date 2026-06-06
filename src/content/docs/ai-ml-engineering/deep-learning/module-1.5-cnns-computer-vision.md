@@ -318,10 +318,10 @@ class ConvBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, in_ch, H, W)
-        out = self.relu(self.bn(self.conv(x)))  # (B, out_ch, H', W')
+        out = self.bn(self.conv(x))              # (B, out_ch, H', W') — no activation yet
         if self.residual:
-            out = out + self.shortcut(x)
-            out = self.relu(out)
+            out = out + self.shortcut(x)         # additive merge BEFORE the activation
+        out = self.relu(out)                     # post-activation (ResNet convention): relu(bn(conv(x)) + shortcut)
         return out
 
 
@@ -577,7 +577,7 @@ The model is still in **training mode**. `BatchNorm2d` uses batch statistics and
 
 ## Hands-On Exercise
 
-Train and compare a from-scratch `CifarCNN` against a transfer-learning head on CIFAR-10, applying the diagnostics checklist from module 1.3.5. Download the dataset via `torchvision.datasets.CIFAR10` with train/test normalization constants (mean `(0.4914, 0.4822, 0.4465)`, std `(0.2023, 0.1994, 0.2010)`). Implement the complete small `CifarCNN` classifier from Part 5 on CIFAR-10-shaped `(B, 3, 32, 32)` inputs for at least ten epochs while logging train and validation accuracy. Build a second model from `resnet18` ImageNet weights: replace `conv1` with `Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)`, set `maxpool` to `nn.Identity()` for 32×32 inputs, freeze the backbone, and train only the new `fc` for five epochs. Plot or print the train/validation gap for both runs; if train accuracy far exceeds validation accuracy, list which regularization or augmentation change you would try first.
+Train and compare a from-scratch `CifarCNN` against a transfer-learning head on CIFAR-10, applying the diagnostics checklist from module 1.3.5. Download the dataset via `torchvision.datasets.CIFAR10` with train/test normalization constants (mean `(0.4914, 0.4822, 0.4465)`, std `(0.2023, 0.1994, 0.2010)`). Implement the complete small `CifarCNN` classifier from Part 5 on CIFAR-10-shaped `(B, 3, 32, 32)` inputs for at least ten epochs while logging train and validation accuracy. Build a second model from `resnet18` ImageNet weights: replace `conv1` with `Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)`, set `maxpool` to `nn.Identity()` for 32×32 inputs, freeze the pretrained backbone, and train the new `conv1` and `fc` (the only randomly-initialized layers — a frozen random `conv1` would never learn useful features) for five epochs. Plot or print the train/validation gap for both runs; if train accuracy far exceeds validation accuracy, list which regularization or augmentation change you would try first.
 
 - [ ] Explain flattening versus dense layers and weight sharing, then implement the complete small CifarCNN classifier on CIFAR-10-shaped inputs and summarize LeNet, AlexNet, VGG, and ResNet design principles.
 - [ ] Both models accept `(B, 3, 32, 32)` without shape errors and you call `model.eval()` before evaluating validation accuracy.
