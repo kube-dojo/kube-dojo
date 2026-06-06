@@ -64,9 +64,11 @@ def name_from_lock_path(path: str) -> str:
     return path.split("node_modules/")[-1]
 
 
-def declared_install_hooks(node_modules: Path, name: str) -> set[str] | None:
-    """Read the installed package's declared install hooks. None if not installed."""
-    pkg_json = node_modules / Path(*name.split("/")) / "package.json"
+def declared_install_hooks(pkg_dir: Path) -> set[str] | None:
+    """Read declared install hooks from <pkg_dir>/package.json. None if not present.
+    pkg_dir is the package's ACTUAL location (lockfile.parent / lockfile path), so a
+    nested copy is read at its real path — not collapsed to the top-level name."""
+    pkg_json = pkg_dir / "package.json"
     if not pkg_json.is_file():
         return None
     try:
@@ -83,7 +85,6 @@ def main(argv: list[str]) -> int:
     if not lockfile.is_file():
         print(f"ERROR: lockfile not found: {lockfile}", file=sys.stderr)
         return 1
-    node_modules = lockfile.parent / "node_modules"
 
     try:
         packages = json.loads(lockfile.read_text(encoding="utf-8")).get("packages", {})
@@ -97,25 +98,34 @@ def main(argv: list[str]) -> int:
     for path, meta in packages.items():
         if not path or meta.get("link"):  # root package / workspace symlink
             continue
-        name = name_from_lock_path(path)
+        leaf = name_from_lock_path(path)
 
-        # Gate 1 + 2: install scripts
+        # Gate 1 + 2: install scripts. Identity is the FULL lockfile path, NOT the
+        # leaf name. A nested `node_modules/x/node_modules/esbuild` must not inherit
+        # esbuild's allow-list entry — so an allow-listed name is only honoured when
+        # it is the top-level dependency (review: codex R2 demonstrated that bypass).
         if meta.get("hasInstallScript"):
-            install_hook_pkgs.append(name)
-            if name not in ALLOWLIST_INSTALL:
+            install_hook_pkgs.append(path.removeprefix("node_modules/"))
+            is_top_level = path == f"node_modules/{leaf}"
+            if leaf not in ALLOWLIST_INSTALL or not is_top_level:
                 violations.append(
-                    f"[install-hook] {path} — declares an install script and is NOT "
-                    f"on the audited allow-list {sorted(ALLOWLIST_INSTALL)}"
+                    f"[install-hook] {path} — declares an install script and is not a "
+                    f"top-level audited dependency (allow-list {sorted(ALLOWLIST_INSTALL)}, "
+                    f"top-level only)"
                 )
             else:
-                actual = declared_install_hooks(node_modules, name)
-                expected = EXPECTED_HOOKS.get(name, set())
+                # Read hooks from the package's ACTUAL location, not node_modules/<leaf>.
+                actual = declared_install_hooks(lockfile.parent / path)
+                expected = EXPECTED_HOOKS.get(leaf, set())
                 if actual is not None and not actual <= expected:
                     violations.append(
                         f"[allow-list-abuse] {path} — allow-listed but declares "
                         f"unexpected hook(s) {sorted(actual - expected)} "
                         f"(expected ⊆ {sorted(expected) or '∅'})"
                     )
+                # actual is None only for a top-level allow-listed dep not installed on
+                # this runner (e.g. fsevents on Linux); the lockfile `integrity` pins
+                # its tarball and a swap would surface in the lockfile diff.
 
         # Gate 3: non-registry source (git/local/tarball — runs `prepare`, unsigned)
         resolved = meta.get("resolved") or ""
