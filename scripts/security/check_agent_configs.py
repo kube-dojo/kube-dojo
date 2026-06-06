@@ -7,9 +7,16 @@ dropper, or instructions telling the agent to run a remote payload). This tripwi
 is the DETECT control for that variant. Prevention layers: `.npmrc ignore-scripts`
 (#1813), lifecycle-script + provenance + lockfile-integrity tripwires (#1813/#1817).
 
-Whole-file regex scan of agent-config paths for high-signal auto-exec compositions
-only — NOT bare keywords (legitimate configs contain `npm run build`, localhost
-`curl`, and the substring "eval" inside "evaluate").
+Line-by-line regex scan (with shell backslash-continuation joining) of agent-config
+paths for high-signal auto-exec compositions only — NOT bare keywords (legitimate
+configs contain `npm run build`, localhost `curl`, and the substring "eval" inside
+"evaluate"). Residual: a two-step payload split across separate unrelated lines
+(download on one line, execute that file on a later line) is not caught — this is
+a line/continuation scanner, not a full dataflow analyzer.
+
+In-scope paths include `.claude/**`, `.cursor/**`, `.roo/**`, `.vscode/**`,
+`.github/instructions/**`, MCP configs (`.mcp.json`, `mcp.json`), `AGENTS.md`,
+`CLAUDE.md`, `scripts/**` agent-config filenames, etc.
 
 Suppression (acknowledgement marker, NOT an authorization control):
   A finding is suppressed when its line OR the line immediately above contains the
@@ -31,8 +38,10 @@ MAX_REPORT = 50
 MAX_SNIPPET = 120
 SUPPRESSION_MARKER = "agent-config-allow"
 
-EXCLUDE_DIRS = frozenset({".git", "node_modules", "dist", ".worktrees", "scripts"})
-RECURSE_DIRS = frozenset({".claude", ".cursor", ".continue"})
+EXCLUDE_DIRS = frozenset({".git", "node_modules", "dist", ".worktrees"})
+RECURSE_DIRS = frozenset(
+    {".claude", ".cursor", ".continue", ".roo", ".clinerules", ".windsurf", ".vscode"}
+)
 SCAN_FILENAMES = frozenset(
     {
         "AGENTS.md",
@@ -43,6 +52,9 @@ SCAN_FILENAMES = frozenset(
         ".windsurfrules",
         "copilot-instructions.md",
         ".aider.conf.yml",
+        ".aider.conf.yaml",
+        ".mcp.json",
+        "mcp.json",
     }
 )
 
@@ -59,9 +71,32 @@ PATTERNS: dict[str, re.Pattern[str]] = {
         r"base64\s+(?:-d|--decode)\b[^\n|]*\|\s*(?:sh|bash|zsh)\b",
         re.IGNORECASE,
     ),
-    # Download then execute via && chain.
+    # Download then execute via && or ; chain.
     "download-and-run": re.compile(
-        r"(?:curl|wget)\b[^\n]*&&[^\n]*(?:\b(?:sh|bash)\b|chmod\s+\+x)",
+        r"(?:curl|wget)\b[^\n]*(?:&&|;)[^\n]*(?:\b(?:sh|bash)\b|chmod\s+\+x)",
+        re.IGNORECASE,
+    ),
+    # Download to file then execute that file.
+    "download-then-run-file": re.compile(
+        r"(?:curl|wget)\b[^\n]*\s-o\b[^\n]*(?:&&|;)\s*"
+        r"(?:sudo\s+)?(?:sh|bash|zsh|chmod\s+\+x)\b",
+        re.IGNORECASE,
+    ),
+    # Process substitution with downloader (bash <(curl …) or bare <(curl …)).
+    "process-substitution": re.compile(
+        r"(?:bash|sh|zsh|source|\.)\s+<\(\s*(?:curl|wget|fetch)\b|"
+        r"<\(\s*(?:curl|wget|fetch)\b",
+        re.IGNORECASE,
+    ),
+    # Interpreter -c/-e with command substitution on downloader.
+    "interpreter-cmdsubst": re.compile(
+        r"\b(?:python3?|node|sh|bash|zsh|ruby|perl)\s+-[ce]\b[^\n]*"
+        r"\$\(\s*(?:curl|wget|fetch)\b",
+        re.IGNORECASE,
+    ),
+    # source /dev/stdin (remote payload via heredoc or pipe).
+    "source-stdin": re.compile(
+        r"(?:source|\.)\s+/dev/stdin\b",
         re.IGNORECASE,
     ),
     # Shell eval of a command substitution.
@@ -81,11 +116,13 @@ PATTERNS: dict[str, re.Pattern[str]] = {
         r"\b(?:exec|execSync|spawn)\b.*child_process",
         re.IGNORECASE,
     ),
-    # PowerShell Invoke-Expression.
+    # PowerShell Invoke-Expression (case-insensitive).
     "powershell-iex": re.compile(
-        r"(?:Invoke-Expression|\bIEX\b)\b",
+        r"Invoke-Expression",
         re.IGNORECASE,
     ),
+    # Bare PowerShell IEX alias — uppercase only (avoids Elixir `iex` FP).
+    "powershell-iex-bare": re.compile(r"(?-i:\bIEX\b)"),
     # Python remote fetch + execute.
     "python-remote-exec": re.compile(
         r"(?:os\.system|subprocess\.(?:run|call|Popen)|\bexec\()[^\n]*"
@@ -107,6 +144,8 @@ def should_scan_file(rel: Path) -> bool:
     if rel.parts[0] in RECURSE_DIRS:
         return True
     if rel.parts[:2] == (".github", "copilot-instructions.md"):
+        return True
+    if len(rel.parts) >= 2 and rel.parts[:2] == (".github", "instructions"):
         return True
     return rel.name in SCAN_FILENAMES
 
@@ -142,6 +181,44 @@ def is_suppressed(lines: list[str], lineno: int) -> bool:
     return False
 
 
+_SHELL_AFTER_PIPE = re.compile(r"^\|\s*(?:sh|bash|zsh)\b", re.IGNORECASE)
+
+
+def join_line_continuations(lines: list[str]) -> list[str]:
+    """Join shell backslash-continuations before per-line pattern scan.
+
+    Only joins continuations that plausibly complete a download-and-exec pipe
+    (``curl … | \\`` then ``sh``, or ``curl … \\`` then ``| sh``). Legitimate
+    multi-line formatting such as ``curl … \\`` newline ``| python3 -c`` is
+    left split so ``curl | python3`` doc examples do not false-positive.
+    """
+    joined: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        while i + 1 < len(lines):
+            stripped = line.rstrip()
+            if not stripped.endswith("\\"):
+                break
+            next_stripped = lines[i + 1].lstrip()
+            if stripped.endswith("| \\"):
+                line = stripped[:-2].rstrip() + " " + next_stripped
+                i += 1
+                continue
+            if re.match(r"^(?:sh|bash|zsh)\b", next_stripped, re.IGNORECASE):
+                line = stripped[:-1].rstrip() + " " + next_stripped
+                i += 1
+                continue
+            if _SHELL_AFTER_PIPE.match(next_stripped):
+                line = stripped[:-1].rstrip() + " " + next_stripped
+                i += 1
+                continue
+            break
+        joined.append(line)
+        i += 1
+    return joined
+
+
 Finding = tuple[Path, int, str, str]
 
 
@@ -152,17 +229,14 @@ def scan_file(path: Path) -> tuple[list[Finding], str | None]:
     except OSError as exc:
         return [], f"cannot read {rel}: {exc}"
 
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return [], f"skipped binary/undecodable: {rel}"
-
-    lines = text.splitlines()
+    text = raw.decode("utf-8", errors="replace")
+    raw_lines = text.splitlines()
+    scan_lines = join_line_continuations(raw_lines)
     findings: list[Finding] = []
-    for lineno, line in enumerate(lines, start=1):
+    for lineno, line in enumerate(scan_lines, start=1):
         for tag, pattern in PATTERNS.items():
             if pattern.search(line):
-                if is_suppressed(lines, lineno):
+                if is_suppressed(raw_lines, lineno):
                     continue
                 findings.append((rel, lineno, tag, truncate_snippet(line)))
     return findings, None
@@ -191,7 +265,10 @@ def main(argv: list[str]) -> int:
             notes.append(note)
 
     for note in notes:
-        print(f"NOTE: {note}")
+        print(f"NOTE: {note}", file=sys.stderr)
+
+    if notes:
+        return 2
 
     if all_findings:
         print(
@@ -208,7 +285,7 @@ def main(argv: list[str]) -> int:
         print(
             "\n  This is how the Miasma agent-config-injection variant plants "
             "auto-exec payloads in `.claude/`, `.cursor/`, `AGENTS.md`, "
-            "`CLAUDE.md`, etc.\n"
+            "`CLAUDE.md`, MCP configs, etc.\n"
             "  Remediation: remove the payload. If it is a legitimate "
             "documentation example reviewed by a human, add the literal marker "
             f"`{SUPPRESSION_MARKER}` on that line or the line above.\n"

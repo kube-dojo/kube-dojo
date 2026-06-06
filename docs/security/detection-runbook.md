@@ -113,7 +113,7 @@ Layers: **PREVENT** (stop execution) → **DETECT** (surface changes) → **CONT
 
 | | |
 |---|---|
-| **What** | Whole-file regex scan of AI IDE agent-config paths (`.claude/**`, `.cursor/**`, `AGENTS.md`, `CLAUDE.md`, etc.) for high-signal auto-exec compositions — piped-to-shell downloaders, base64-to-shell, `eval` of command substitution, `child_process` exec, PowerShell `IEX`, Python remote-exec patterns. |
+| **What** | Line-by-line regex scan (with shell backslash-continuation joining) of AI IDE agent-config paths — `.claude/**`, `.cursor/**`, `.roo/**`, `.vscode/**`, `.github/instructions/**`, MCP configs (`.mcp.json`, `mcp.json`), `AGENTS.md`, `CLAUDE.md`, etc. — for high-signal auto-exec compositions: piped-to-shell downloaders, process substitution (`<(curl …)`), interpreter `-c`/`-e` with `$(curl …)`, `source /dev/stdin`, download-then-run (`&&`/`;`), base64-to-shell, `eval` of command substitution, `child_process` exec, PowerShell `Invoke-Expression` / uppercase `IEX`, Python remote-exec. **Residual:** two-step payloads on separate unrelated lines (download file on one line, execute that file later) are not caught — this is a line/continuation scanner, not a dataflow analyzer. |
 | **Attack signal** | Miasma agent-config-injection variant — auto-exec payload planted in agent config so it runs when the repo is opened in an AI IDE (e.g. `curl … \| bash`, or instructions to fetch and execute a remote payload). |
 | **Where it surfaces** | Pre-commit hook **agent-config auto-exec injection scan** (local). Workflow **Supply-chain detection** → job `detect` → step **Agent-config injection tripwire**. CI failure (exit 1) with `[tag] path:line` lines. |
 | **Time-to-detect** | Next commit locally (pre-commit) or PR/push to `main` (minutes). |
