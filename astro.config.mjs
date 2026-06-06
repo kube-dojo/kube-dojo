@@ -401,20 +401,110 @@ export default defineConfig({
           items: [
             { label: 'AI/ML Hub', link: '/ai-ml-engineering/' },
             { label: 'Prerequisites', autogenerate: { directory: 'ai-ml-engineering/prerequisites' }, collapsed: true },
-            { label: 'AI-Native Development', autogenerate: { directory: 'ai-ml-engineering/ai-native-development' }, collapsed: true },
-            { label: 'Generative AI', autogenerate: { directory: 'ai-ml-engineering/generative-ai' }, collapsed: true },
-            { label: 'Vector Search & RAG', autogenerate: { directory: 'ai-ml-engineering/vector-rag' }, collapsed: true },
-            { label: 'Frameworks & Agents', autogenerate: { directory: 'ai-ml-engineering/frameworks-agents' }, collapsed: true },
-            { label: 'MLOps & LLMOps', autogenerate: { directory: 'ai-ml-engineering/mlops' }, collapsed: true },
-            { label: 'AI Infrastructure', autogenerate: { directory: 'ai-ml-engineering/ai-infrastructure' }, collapsed: true },
-            { label: 'Synthesis Apps', autogenerate: { directory: 'ai-ml-engineering/synthesis-apps' }, collapsed: true },
-            { label: 'Advanced GenAI & Safety', autogenerate: { directory: 'ai-ml-engineering/advanced-genai' }, collapsed: true },
-            { label: 'Multimodal AI', autogenerate: { directory: 'ai-ml-engineering/multimodal-ai' }, collapsed: true },
-            { label: 'Deep Learning Foundations', autogenerate: { directory: 'ai-ml-engineering/deep-learning' }, collapsed: true },
-            { label: 'Machine Learning', autogenerate: { directory: 'ai-ml-engineering/machine-learning' }, collapsed: true },
-            { label: 'Reinforcement Learning', autogenerate: { directory: 'ai-ml-engineering/reinforcement-learning' }, collapsed: true },
-            { label: 'Bridges to Other Tracks', autogenerate: { directory: 'ai-ml-engineering/bridges' }, collapsed: true },
-            { label: 'Appendix A: History of AI/ML', autogenerate: { directory: 'ai-ml-engineering/history' }, collapsed: true },
+            {
+              label: 'Build AI Apps',
+              collapsed: true,
+              items: [
+                { label: 'AI-Native Development', autogenerate: { directory: 'ai-ml-engineering/ai-native-development' }, collapsed: true },
+                { label: 'Generative AI', autogenerate: { directory: 'ai-ml-engineering/generative-ai' }, collapsed: true },
+                { label: 'Vector Search & RAG', autogenerate: { directory: 'ai-ml-engineering/vector-rag' }, collapsed: true },
+                { label: 'Frameworks & Agents', autogenerate: { directory: 'ai-ml-engineering/frameworks-agents' }, collapsed: true },
+                { label: 'Synthesis Apps', autogenerate: { directory: 'ai-ml-engineering/synthesis-apps' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Model Foundations',
+              collapsed: true,
+              items: [
+                {
+                  // Deep Learning is the deepest section (27 modules); split into sub-chains
+                  // via explicit links so the flat autogenerate list isn't a 27-item wall.
+                  // Links only — no files moved, no URLs changed (issue #1810).
+                  label: 'Deep Learning Foundations',
+                  collapsed: true,
+                  items: [
+                    { label: 'Overview', link: '/ai-ml-engineering/deep-learning/' },
+                    {
+                      label: 'From-Scratch Foundations (NumPy)',
+                      collapsed: true,
+                      items: [
+                        { label: '1.1 · NumPy, Pandas & Data Tooling', link: '/ai-ml-engineering/deep-learning/module-1.1-numpy-pandas-data-tooling/' },
+                        { label: '1.1.1 · Neural Network Math Warm-Up', link: '/ai-ml-engineering/deep-learning/module-1.1.1-nn-math-warmup/' },
+                        { label: '1.1.2 · The Neuron & Perceptron from Scratch', link: '/ai-ml-engineering/deep-learning/module-1.1.2-neuron-from-scratch/' },
+                        { label: '1.1.3 · Forward Propagation in MLPs', link: '/ai-ml-engineering/deep-learning/module-1.1.3-forward-propagation-mlp/' },
+                        { label: '1.1.4 · Activation Functions in Depth', link: '/ai-ml-engineering/deep-learning/module-1.1.4-activation-functions/' },
+                        { label: '1.1.5 · Loss Functions & Output Heads', link: '/ai-ml-engineering/deep-learning/module-1.1.5-loss-functions-output-heads/' },
+                        { label: '1.1.6 · Backprop by Hand for Dense Nets', link: '/ai-ml-engineering/deep-learning/module-1.1.6-backprop-by-hand-dense-nets/' },
+                        { label: '1.1.7 · Tiny NumPy NN Lab', link: '/ai-ml-engineering/deep-learning/module-1.1.7-tiny-numpy-nn-lab/' },
+                        { label: '1.1.8 · Computational Graphs & Scalar Autograd', link: '/ai-ml-engineering/deep-learning/module-1.1.8-computational-graphs-scalar-autograd/' },
+                      ],
+                    },
+                    {
+                      label: 'PyTorch & the Training Loop',
+                      collapsed: true,
+                      items: [
+                        { label: '1.2 · The PyTorch Bridge', link: '/ai-ml-engineering/deep-learning/module-1.2-pytorch-fundamentals/' },
+                        { label: '1.3 · The Training Loop', link: '/ai-ml-engineering/deep-learning/module-1.3-training-neural-networks/' },
+                        { label: '1.3.1 · Initialization & Signal Propagation', link: '/ai-ml-engineering/deep-learning/module-1.3.1-initialization-signal-propagation/' },
+                        { label: '1.3.2 · Optimizers & LR Dynamics', link: '/ai-ml-engineering/deep-learning/module-1.3.2-optimizers-lr-dynamics/' },
+                        { label: '1.3.3 · Regularization & Generalization', link: '/ai-ml-engineering/deep-learning/module-1.3.3-regularization-generalization/' },
+                        { label: '1.3.4 · Normalization Layers', link: '/ai-ml-engineering/deep-learning/module-1.3.4-normalization-layers/' },
+                        { label: '1.3.5 · Training-Diagnostics Playbook', link: '/ai-ml-engineering/deep-learning/module-1.3.5-training-diagnostics-playbook/' },
+                        { label: '1.3.6 · Numerical Stability & Precision', link: '/ai-ml-engineering/deep-learning/module-1.3.6-numerical-stability-precision/' },
+                      ],
+                    },
+                    {
+                      label: 'Representations, Attention & Transformers',
+                      collapsed: true,
+                      items: [
+                        { label: '1.4.1 · Embeddings & Representation Learning', link: '/ai-ml-engineering/deep-learning/module-1.4.1-embeddings-representation-learning/' },
+                        { label: '1.4.2 · Residual Connections & Deep Architectures', link: '/ai-ml-engineering/deep-learning/module-1.4.2-residual-deep-architectures/' },
+                        { label: '1.4.3 · Attention from Scratch', link: '/ai-ml-engineering/deep-learning/module-1.4.3-attention-from-scratch/' },
+                        { label: '1.4.4 · The Transformer Block from Scratch', link: '/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/' },
+                      ],
+                    },
+                    {
+                      label: 'Architectures & Capstone',
+                      collapsed: true,
+                      items: [
+                        { label: '1.5 · CNNs & Computer Vision', link: '/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/' },
+                        { label: '1.6 · Recurrent Networks & Sequence Models', link: '/ai-ml-engineering/deep-learning/module-1.6-rnns-sequence-models/' },
+                        { label: '1.7 · Capstone: Train a Real Net End-to-End', link: '/ai-ml-engineering/deep-learning/module-1.7-capstone-train-a-real-net/' },
+                      ],
+                    },
+                    {
+                      label: 'Advanced Topics',
+                      collapsed: true,
+                      items: [
+                        { label: '1.8 · Self-Supervised Learning', link: '/ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning/' },
+                        { label: '1.9 · Graph Neural Networks', link: '/ai-ml-engineering/deep-learning/module-1.9-graph-neural-networks/' },
+                        { label: '1.10 · Modern Transformers: RoPE & Attention Variants', link: '/ai-ml-engineering/deep-learning/module-1.10-modern-transformers-rope-and-attention/' },
+                      ],
+                    },
+                  ],
+                },
+                { label: 'Machine Learning', autogenerate: { directory: 'ai-ml-engineering/machine-learning' }, collapsed: true },
+                { label: 'Reinforcement Learning', autogenerate: { directory: 'ai-ml-engineering/reinforcement-learning' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Operate & Scale',
+              collapsed: true,
+              items: [
+                { label: 'MLOps & LLMOps', autogenerate: { directory: 'ai-ml-engineering/mlops' }, collapsed: true },
+                { label: 'AI Infrastructure', autogenerate: { directory: 'ai-ml-engineering/ai-infrastructure' }, collapsed: true },
+                { label: 'Advanced GenAI & Safety', autogenerate: { directory: 'ai-ml-engineering/advanced-genai' }, collapsed: true },
+                { label: 'Multimodal AI', autogenerate: { directory: 'ai-ml-engineering/multimodal-ai' }, collapsed: true },
+              ],
+            },
+            {
+              label: 'Reference',
+              collapsed: true,
+              items: [
+                { label: 'Bridges to Other Tracks', autogenerate: { directory: 'ai-ml-engineering/bridges' }, collapsed: true },
+                { label: 'Appendix A: History of AI/ML', autogenerate: { directory: 'ai-ml-engineering/history' }, collapsed: true },
+              ],
+            },
           ],
         },
         {
