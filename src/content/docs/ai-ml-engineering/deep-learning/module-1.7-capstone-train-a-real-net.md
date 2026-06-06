@@ -25,12 +25,11 @@ We will work with CIFAR-10 — 60,000 32×32 color images across ten classes —
 
 By the end of this module, you will be able to:
 
-1. **Implement** a full end-to-end training pipeline — data loading, baseline, architecture, training loop, diagnostics, ablation, and checkpointing — on a real dataset using PyTorch 2.12.
+1. **Implement** a full end-to-end training pipeline — data loading, baseline, architecture selection (MLP versus CNN versus deeper CNN, justified by the data's structural properties from Blocks C and D), training loop, diagnostics, ablation, and checkpointing — on a real dataset using PyTorch 2.12.
 2. **Design** a baseline-first strategy and **interpret** what a simple model's performance reveals about data quality, label consistency, and the difficulty ceiling before investing in architecture.
 3. **Apply** the training-diagnostics playbook (Module 1.3.5) to diagnose convergence failures, overfitting, and optimization stalls in a multi-layer architecture, instrumenting every diagnostic signal from init loss to per-layer gradient norms.
 4. **Run** a controlled ablation study isolating one variable at a time — normalization, depth, learning rate, augmentation — and **tabulate** the effect on a held-out validation metric with honest reporting of variance and seed sensitivity.
 5. **Write** a reproducible engineer's runbook documenting hyperparameters, environment, known failure modes, and the next experiment to try, using `torch.save` and `state_dict` checkpointing as the foundation.
-6. **Compare** architecture choices — MLP versus CNN versus deeper CNN — grounded in the data's structural properties and the principles established in Blocks C and D.
 
 ---
 
@@ -211,7 +210,7 @@ final = overfit_one_batch(baseline, tiny_loader)
 assert final < 0.1, f"Overfit test failed: final loss {final:.4f}"
 ```
 
-**(3) Is there signal in the data?** A logistic regression baseline that achieves 38–42% validation accuracy on CIFAR-10 confirms that linear separability exists in the pixel space — not much, but enough to know the labels are not random. This number is your floor. Every architectural improvement must exceed it, or you are adding complexity that does not pay for itself.
+**(3) Is there signal in the data?** A logistic regression baseline that achieves 38–42% validation accuracy on CIFAR-10 confirms that linear separability exists in the pixel space — not much, but enough to know the labels are not random. This number is your floor. Every architectural improvement must exceed it, or you are adding complexity that does not pay for itself. Interpreting the baseline is a skill, not a checkbox. If validation accuracy lands near 10%, you are at random chance — check label encoding and the train/val split before touching the CNN. If it lands in the 25–35% range, the pipeline works but the linear model is weak; a CNN should add meaningful lift. If it exceeds 45%, CIFAR-10's pixel space is surprisingly linearly separable for your split, and you should expect diminishing returns from depth alone. Record the baseline number in your runbook with the exact epoch count and optimizer settings so you can compare fairly when you swap architectures later.
 
 **(4) What is the difficulty ceiling?** Human accuracy on CIFAR-10 is approximately 94% (Karpathy, 2011). A strong CNN with data augmentation reaches 95–97%. Knowing these numbers gives you a realistic target: anything above 90% is in the "respectable" range; anything above 95% is excellent. If you spend a week chasing 98% on CIFAR-10, you are overfitting to the test set, and the process in Section 2.1 should have warned you.
 
@@ -524,7 +523,7 @@ A few design notes on this loop:
 
 - **AMP context**: `autocast('cuda')` wraps only the forward pass. The loss computation, `backward()`, and optimizer step are outside `autocast` — the scaler handles precision management from there. Wrapping `backward()` in `autocast` is harmless but unnecessary.
 - **Gradient clipping after `unscale_`**: The scaler inflates gradients during `scale(loss).backward()`. Calling `unscale_(optimizer)` restores them to their true magnitudes before clipping, so `max_norm=1.0` is applied to real gradient norms, not inflated ones.
-- **Checkpoint format**: Saving the full training state — model weights, optimizer momentum buffers, scheduler state, AMP scaler internal state, and training history — makes the checkpoint a complete restore point. If training crashes at epoch 47, you resume from epoch 47, not from scratch. This is standard engineering practice and the foundation of the runbook in Part 7.
+- **Checkpoint format**: Saving the full training state — model weights, optimizer momentum buffers, scheduler state, AMP scaler internal state, and training history — makes the checkpoint a complete restore point. If training crashes at epoch 30, you resume from epoch 30, not from scratch. This is standard engineering practice and the foundation of the runbook in Part 7.
 - **Early stopping**: Twelve epochs without validation loss improvement triggers a stop. This patience value is intentionally conservative for CIFAR-10; on larger datasets or with noisier validation metrics, you might use 20–30. The `best_model_state` is restored after training finishes so that any subsequent evaluation uses the checkpoint that achieved the lowest validation loss, not the final (possibly overfit) weights.
 
 ### 4.4 Expected results
@@ -550,6 +549,16 @@ Plot training and validation loss on the same axes. The relationship between the
 **Underfitting**: Both curves remain high and flat. Validation accuracy is only modestly above the baseline. The model does not have enough capacity or is not being trained aggressively enough. Fix: increase model depth or width, increase learning rate, reduce weight decay if it is too strong, or verify that the learning rate is not already at its minimum due to a misconfigured schedule.
 
 **Optimization failure**: Training loss oscillates wildly, contains NaN values, or diverges. The learning rate is too high, or gradient norms are exploding. Fix: reduce learning rate by 3–10×, verify gradient clipping is active, check the per-layer gradient norms from Module 1.3.5 Section 3, and inspect for dead ReLUs in early layers. Module 1.3.6 covers the numerical-stability angle; Module 1.3.1 covers initialization as a root cause.
+
+### 5.1.1 From curve shape to concrete next action
+
+Reading curves is not pattern-matching for its own sake — each shape implies a specific intervention, and applying the wrong fix wastes epochs. When you see **healthy convergence**, log the epoch where validation loss first plateaus and compare it to your cosine schedule: if the plateau arrives while learning rate is still above 1e-4, you may have room to train longer or increase capacity modestly. When you see **overfitting**, do not reach for depth first. Increase regularization in order of cost: tighten early stopping (reduce patience from 12 to 8), raise weight decay from 5e-4 to 1e-3, increase dropout from 0.3 to 0.5, then add augmentation. Only after those levers are exhausted should you shrink the model. When you see **underfitting**, verify the learning rate has not collapsed prematurely — plot the LR curve alongside loss. A cosine schedule that reaches eta_min by epoch 40 on an 80-epoch budget can starve a model that was still improving at epoch 35. If LR is healthy but both curves stay high, add one conv block or widen channels by 50%, not both at once (that violates the ablation discipline in Part 6). When you see **optimization failure**, stop training immediately — continuing past the first NaN corrupts BatchNorm running statistics and wastes checkpoint slots. Reload the last good checkpoint, halve the learning rate, and confirm gradient norms stay below 10.0 for the first five epochs before resuming the full schedule.
+
+The validation-accuracy curve deserves separate attention because it can diverge from loss in informative ways. A rising validation accuracy with flat validation loss usually means the model is sharpening predictions on examples it already classifies correctly — calibration is improving even though the argmax decision boundary is stable. A falling validation accuracy with falling validation loss means the model is becoming overconfident on wrong predictions — a classic sign that you should switch early-stopping criterion to accuracy if your deployment metric is accuracy, not cross-entropy. Plot per-class validation accuracy when aggregate accuracy stalls: CIFAR-10's cat/dog and automobile/truck pairs often dominate the error budget, and fixing class confusion requires targeted augmentation or class-weighted loss, not a global learning-rate change.
+
+### 5.1.2 Using the learning-rate curve as a diagnostic overlay
+
+Your training loop logs learning rate every epoch. Overlay it on the loss plot as a secondary y-axis or a separate panel beneath the loss curves. Three LR-related failure signatures appear repeatedly on CIFAR-10. **Premature annealing**: validation loss decreases until epoch 25, then flatlines while LR is still above 5e-4 — the schedule is too aggressive for your architecture. Extend `T_max` or add a linear warmup of 5 epochs before cosine decay. **LR too high at start**: training loss spikes in epoch 1–3 and never recovers — halve the initial LR and re-run the init-loss check; the spike often correlates with init loss above 3.0. **LR too low throughout**: both curves decrease monotonically but validation accuracy stalls below 85% after 60 epochs — the model is under-exploring the loss landscape. Double the initial LR and verify the overfit-one-batch test still passes; if it does, the higher LR is safe. These LR diagnostics are part of the training-diagnostics playbook from Module 1.3.5 — they turn a vague "it is not converging" complaint into a numbered experiment.
 
 ### 5.2 The overfit-one-batch sanity check, revisited
 
@@ -638,6 +647,14 @@ The numbers in this table are marked illustrative because they depend on your ex
 An ablation table is not a leaderboard. Its purpose is not to show that every design choice was brilliant. If removing BatchNorm *improves* validation accuracy on your setup (unlikely but possible with very small batch sizes where BN statistics are noisy), report it. If doubling the depth degrades performance because the model overfits with only 50,000 images, report it. The table is a diagnostic tool: each row tells you whether a component is pulling its weight. A component that does not improve validation accuracy across three seeds should be removed — it is dead complexity.
 
 The standard deviation column is the honesty column. If your three seeds produce validation accuracies of 88.1%, 90.3%, and 88.9%, the mean is 89.1% and the standard deviation is 0.9%. An ablation that reports 89.5% (a 0.4% improvement) is statistically indistinguishable from the baseline. You should report it as "no significant effect" rather than claiming an improvement. The ML literature is littered with claimed improvements that disappear when you add error bars. Do not contribute to that problem.
+
+### 6.3.1 How to read the ablation table row by row
+
+Treat each row as a hypothesis test, not a scoreboard entry. Start with the **baseline CNN row** — this is your reference distribution. Before comparing any ablation, confirm that the baseline mean and standard deviation are stable across reruns on your hardware. If baseline seed 42 gives 90.2% but seed 123 gives 86.8% on the same code, your environment has nondeterminism you have not controlled; fix seeding and cuDNN flags before interpreting ablations. For the **No BatchNorm row**, expect a 2–5% drop on CIFAR-10 with batch size 128 — if the drop is zero or BatchNorm *helps* training loss but hurts validation, your batch size may be too small for reliable BN statistics (see the runbook failure mode in Section 7.1). For **No augmentation**, a 1–3% drop confirms that your CNN is relying on synthetic diversity; if the drop exceeds 5%, your base model may be overfitting and augmentation is doing heavy lifting — note that in the runbook as a capacity warning. For **LR × 10**, divergence or NaN is the expected outcome; if training completes but validation is worse than baseline by more than 10%, your gradient clipping saved the run but the LR is still too high for stable convergence. For **LR × 0.1**, slower convergence is expected; compare the epoch count at best validation loss, not just the peak accuracy — a model that reaches 89% at epoch 70 with LR × 0.1 may be cheaper to train to the same peak with the default LR in 45 epochs. For **Half depth** and **No dropout**, read the train/val gap: if removing dropout raises train accuracy by 8% but val accuracy falls by 2%, you have isolated overfitting as the binding constraint.
+
+### 6.3.2 Seed variance and when to stop ablating
+
+Running three seeds is a minimum, not a luxury. CIFAR-10's small training set (45,000 images after the val split) amplifies seed sensitivity: different shuffles expose different hard examples early in training, and AdamW's adaptive moments diverge subtly across runs. When seed standard deviation exceeds 1.0% for the baseline CNN, treat any ablation delta smaller than 1.5% as inconclusive and run two additional seeds before drawing conclusions. When standard deviation is below 0.5%, you can trust a 1.0% improvement as real — but still report mean ± std in the runbook, not the best seed alone. The stopping rule for ablation is practical: once you have identified which components matter (typically BatchNorm, augmentation, and depth on CIFAR-10), stop ablating and invest compute in the test-set evaluation and runbook. Ablating every hyperparameter is infinite; the capstone asks you to demonstrate the *discipline* of isolating one variable, not to exhaust the search space.
 
 ---
 
@@ -750,13 +767,13 @@ That is the only number you should ever report as your model's test accuracy. If
 
 ## Did You Know?
 
-> **Did You Know?** Karpathy's "A Recipe for Training Neural Networks" was published as a single blog post in April 2019 and has been cited in thousands of papers, yet it contains no new algorithms — it is purely a process document. The overfit-one-batch test in Section 2.2, the init-loss sanity check in Section 5.4, and the curve-diagnosis framework in Section 5.1 all derive from that post.
+- > **Did You Know?** Karpathy's "A Recipe for Training Neural Networks" was published as a single blog post in April 2019 and has been cited in thousands of papers, yet it contains no new algorithms — it is purely a process document. The overfit-one-batch test in Section 2.2, the init-loss sanity check in Section 5.4, and the curve-diagnosis framework in Section 5.1 all derive from that post.
 
-> **Did You Know?** The CIFAR-10 dataset was created by Alex Krizhevsky, Vinod Nair, and Geoffrey Hinton in 2009 at the University of Toronto as a manageable subset of the 80 Million Tiny Images dataset. It was explicitly designed to be "tractable for teaching and rapid experimentation" — and fifteen years later, it still is.
+- > **Did You Know?** The CIFAR-10 dataset was created by Alex Krizhevsky, Vinod Nair, and Geoffrey Hinton in 2009 at the University of Toronto as a manageable subset of the 80 Million Tiny Images dataset. It was explicitly designed to be "tractable for teaching and rapid experimentation" — and fifteen years later, it still is.
 
-> **Did You Know?** The Cosine Annealing learning rate schedule was proposed by Loshchilov and Hutter in their 2017 paper "SGDR: Stochastic Gradient Descent with Warm Restarts." The key insight — that smoothly decaying the learning rate to near zero produces better final performance than step-wise decay — is now a default in most training pipelines and is built into `torch.optim.lr_scheduler.CosineAnnealingLR`.
+- > **Did You Know?** The Cosine Annealing learning rate schedule was proposed by Loshchilov and Hutter in their 2017 paper "SGDR: Stochastic Gradient Descent with Warm Restarts." The key insight — that smoothly decaying the learning rate to near zero produces better final performance than step-wise decay — is now a default in most training pipelines and is built into `torch.optim.lr_scheduler.CosineAnnealingLR`.
 
-> **Did You Know?** A 2021 study by Bouthillier et al. ("Accounting for Variance in Machine Learning Benchmarks") at NeurIPS demonstrated that the standard deviation of test accuracy across identical training runs with different random seeds often exceeds the claimed improvement of published architectural innovations. In other words, many papers reporting a 0.5% improvement were measuring noise. The multi-seed ablation protocol in Section 6.1 directly addresses this finding.
+- > **Did You Know?** A 2021 study by Bouthillier et al. ("Accounting for Variance in Machine Learning Benchmarks") at NeurIPS demonstrated that the standard deviation of test accuracy across identical training runs with different random seeds often exceeds the claimed improvement of published architectural innovations. In other words, many papers reporting a 0.5% improvement were measuring noise. The multi-seed ablation protocol in Section 6.1 directly addresses this finding.
 
 ---
 
@@ -777,7 +794,7 @@ That is the only number you should ever report as your model's test accuracy. If
 
 ## Quiz
 
-1. **Why must you compute normalization statistics (mean and standard deviation) on the training set only, not on the combined train+val+test set?**
+1. **In an end-to-end training pipeline with data loading and checkpointing, why must you compute normalization statistics (mean and standard deviation) on the training set only, not on the combined train+val+test set?**
 
    <details>
    <summary>Answer</summary>
@@ -786,30 +803,30 @@ That is the only number you should ever report as your model's test accuracy. If
 
    </details>
 
-2. **What does the overfit-one-batch test prove, and what does it not prove?**
+2. **In a baseline-first strategy, what should you interpret from a logistic regression baseline's validation accuracy before investing in a CNN architecture, and what does the overfit-one-batch test prove about the pipeline?**
 
    <details>
    <summary>Answer</summary>
 
-   It proves that the model has sufficient capacity to memorize a small batch, that the loss function matches the output shape, that gradients flow through all parameters, and that the optimizer updates are applied correctly. It is the same contract test you ran in Module 1.3.5 Section 1 and in the Block A Tiny NumPy NN lab. It does **not** prove generalization, correct hyperparameter values, or that the architecture is suitable for the full dataset.
+   The baseline-first strategy uses a simple model's validation accuracy as a sanity floor: 38–42% on CIFAR-10 confirms labels and data loading work; near 10% signals random chance and a broken pipeline; the number sets the minimum lift any CNN must deliver. The overfit-one-batch test proves that the model has sufficient capacity to memorize a small batch, that the loss function matches the output shape, that gradients flow through all parameters, and that the optimizer updates are applied correctly. It is the same contract test you ran in Module 1.3.5 Section 1 and in the Block A Tiny NumPy NN lab. It does **not** prove generalization, correct hyperparameter values, or that the architecture is suitable for the full dataset.
 
    </details>
 
-3. **Your validation loss is decreasing but your validation accuracy is flat. What is the most likely explanation?**
+3. **When applying the training-diagnostics playbook to diagnose convergence failures, your validation loss decreases but validation accuracy stays flat — what pattern is this, and what diagnostic action should you take next?**
 
    <details>
    <summary>Answer</summary>
 
-   The model is becoming more confident in its correct predictions (reducing the loss contribution from correctly classified examples) while continuing to misclassify the same hard examples. The loss measures confidence-calibrated probability mass; accuracy measures only the argmax. This pattern often indicates that the model has saturated on easy examples and needs harder augmentation, a larger model, or a different architecture to separate the difficult classes. Check per-class accuracy — one or two classes are likely dragging down the aggregate number.
+   The model is becoming more confident in its correct predictions (reducing the loss contribution from correctly classified examples) while continuing to misclassify the same hard examples. The loss measures confidence-calibrated probability mass; accuracy measures only the argmax. This pattern often indicates that the model has saturated on easy examples and needs harder augmentation, a larger model, or a different architecture to separate the difficult classes. Apply the diagnostics playbook: check per-class accuracy — one or two classes are likely dragging down the aggregate number — then inspect curve shape (Section 5.1) before changing learning rate.
 
    </details>
 
-4. **You run an ablation comparing a CNN with BatchNorm to one without and find that the BatchNorm model's validation accuracy is 1.5% higher. The standard deviation across three seeds is 2.1%. Is this a significant result?**
+4. **You run a controlled ablation study isolating BatchNorm as the only variable. The BatchNorm model's validation accuracy is 1.5% higher than the no-BatchNorm model, but the standard deviation across three seeds is 2.1%. Should you tabulate this as a significant result?**
 
    <details>
    <summary>Answer</summary>
 
-   No. The effect size (1.5%) is smaller than the noise floor (2.1% standard deviation). A result is statistically meaningful only when the difference between ablations exceeds the run-to-run variance. Report this as "no significant effect detected — more seeds or a larger dataset needed to resolve." The multi-seed protocol in Section 6.1 exists precisely to prevent overinterpreting noise as signal.
+   No. In a controlled ablation study that isolates one variable at a time, the effect size (1.5%) is smaller than the noise floor (2.1% standard deviation across seeds). Tabulate the result honestly as "no significant effect detected — more seeds or a larger dataset needed to resolve." A meaningful ablation row requires the delta to exceed seed variance; the multi-seed protocol in Section 6.1 exists precisely to prevent overinterpreting noise as signal when you run ablations on normalization, depth, learning rate, or augmentation.
 
    </details>
 
@@ -831,7 +848,7 @@ That is the only number you should ever report as your model's test accuracy. If
 
    </details>
 
-7. **You are writing a runbook for a model you trained six weeks ago. You have the `best_model.pt` checkpoint but cannot remember which hyperparameters produced it. What should you have done differently?**
+7. **You are writing a reproducible engineer's runbook for a model you trained six weeks ago. You have the `best_model.pt` checkpoint but cannot remember the hyperparameters that produced it. What should you have documented, and what should you save differently next time?**
 
    <details>
    <summary>Answer</summary>
