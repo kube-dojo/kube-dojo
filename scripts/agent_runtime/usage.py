@@ -129,7 +129,7 @@ def write_record(record: dict[str, Any]) -> None:
     try:
         path = _usage_file(record["agent"], record["entrypoint"])
         line = (json.dumps(record, ensure_ascii=False, default=str) + "\n").encode("utf-8")
-        fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+        fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
         try:
             os.write(fd, line)
         finally:

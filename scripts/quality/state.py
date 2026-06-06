@@ -172,7 +172,7 @@ def state_lease(slug: str, timeout: float = 5.0) -> Iterator["LeasedState"]:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     lock_path = STATE_DIR / f"{slug}.json.lock"
     # Open with O_CREAT so the lock file materializes on first touch.
-    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.monotonic() + timeout
     try:
         while True:

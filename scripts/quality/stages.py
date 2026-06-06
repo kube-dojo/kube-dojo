@@ -1266,7 +1266,7 @@ def _merge_lock(timeout: float = 120.0):
     two workers can't clobber main concurrently (Codex must #5)."""
     import fcntl
     path = _merge_lock_path()
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.monotonic() + timeout
     try:
         while True:
