@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 111 — homepage refresh + Miasma supply-chain hardening + agy write-lane proven</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 111 — homepage refresh + Miasma supply-chain hardening + agy write-lane proven</h1>
+<p class="meta">2026-06-06 · standalone orchestrator session · <strong>pivot off the curriculum track to SITE + SECURITY work</strong> (user-driven). Three PRs merged: a stale-homepage refresh, the Phase-1 supply-chain prevent+detect layer against the Miasma npm worm (3 rounds of cross-family review), and 4 CodeQL fixes. Plus a load-bearing roster correction: <strong>agy is now a proven write lane</strong>, not just review. All dispatch on non-Claude lanes (s105 directive honored).</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1811</td><td><span class="pill merged">MERGED</span> <code>31992384</code></td><td>Homepage stats refresh + AI/ML sidebar regroup + Deep Learning landing + changelog</td><td>built+health-checked in primary → squash-merge</td></tr>
+<tr><td>#1813</td><td><span class="pill merged">MERGED</span> <code>7571003c</code></td><td>Supply-chain Prevent + Detect (Miasma) — Phase 1 of #1812</td><td>R1 codex+deepseek+agy(flash) NEEDS CHANGES → R2 codex → R3 codex → APPROVE/converged → squash-merge</td></tr>
+<tr><td>#1814</td><td><span class="pill merged">MERGED</span> <code>2cbb1c5d</code></td><td>Tighten created-file perms 0o644→0o600 (CodeQL <code>py/overly-permissive-file</code> ×4)</td><td>authored by <strong>agy gemini-3.1-pro</strong>, ground-checked + CodeQL-validated</td></tr>
+<tr><td>#1800</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>Dependabot npm-minor-patch group (8 updates incl. astro 6.1→6.4, starlight 0.38→0.39)</td><td>rebasing (`@dependabot rebase` requested); <strong>needs a local <code>npm run build</code> verify before merge</strong> (framework bump; PR CI has no full build)</td></tr>
+<tr><td>#1810</td><td><span class="pill merged">CLOSED</span></td><td>Issue: homepage refresh + sidebar UX + DL landing (ACs)</td><td>closed by #1811</td></tr>
+<tr><td>#1812</td><td><span class="pill inflight">OPEN</span></td><td>Issue: Miasma defense-in-depth (Prevent/Contain/Detect)</td><td>Phase-1 core merged (#1813); follow-ups remain</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. agy is a capable WRITE lane (both models) — the stale "NOT for write/edit" caution is RETIRED</h3>
+<p>User correction, emphatic. Model-selection (#1780) changed the picture: <strong>gemini-3.1-pro = good writer/coder, gemini-3.5-flash = good coder AND code-reviewer</strong>; agy replaces gemini-cli. Proof this session: agy on gemini-3.1-pro authored the 4 CodeQL perm fixes cleanly (real commit, ground-checked 4/4 correct, ruff clean, zero fabrication — #1814); agy on flash-3.5 did a strong adversarial R1 review of #1813 that <em>demonstrated a live bypass</em> (name-spoof). The old write-fabrication was the FLASH/TUI-bleed era, not 3.1-pro.</p>
+<blockquote>User: "agy is good at writing code and reviewing code as flash 3.5 and gemini 3.1 pro is good at writing… there were changes with agy, now you can select models and agy is replacing gemini-cli" + "use it more so we have more data".</blockquote>
+<p><strong>Route by model:</strong> gemini-3.1-pro for write/edit + content; flash-3.5 (or 3.1-pro) for review. Still ground-check. <strong>Gotcha:</strong> the dispatch wrapper commits locally in the worktree but does NOT push — run <code>git -C &lt;worktree&gt; push -u origin &lt;branch&gt;</code> yourself before the PR. Slugs: <code>gemini-3.1-pro-high</code> / <code>gemini-3.5-flash-high</code>. Memory <code>feedback_agy_gemini_3_5_flash_viable_reviewer</code> updated.</p>
+
+<h3>2. The real homepage is <code>Homepage.astro</code> + <code>src/i18n/homepage.ts</code> — <code>Hero.astro</code> is dead code</h3>
+<p>Cost me a wrong-file pass. The <code>/</code> route is <code>src/pages/index.astro</code> → <code>src/layouts/Homepage.astro</code> (custom layout, bypasses Starlight) driven by the <code>translations</code> in <code>src/i18n/homepage.ts</code> (en + uk). <code>src/components/Hero.astro</code> is a Starlight Hero override that is <strong>not registered</strong> in <code>astro.config.mjs</code> <code>components:</code> and not imported anywhere → unused. <strong>Edit the homepage in <code>homepage.ts</code> (strings) + <code>Homepage.astro</code> (hardcoded stat numbers + terminal), both locales.</strong> Hero.astro should probably be deleted (left in place this session).</p>
+
+<h3>3. Canonical module count = <code>module-*.md</code> files = 824</h3>
+<p>The homepage now uses the same basis as <code>scripts/check_site_health.py</code> (824), so homepage / health-check / STATUS agree. Per top-level dir: prerequisites 44, linux 37, ai 37, k8s 195, cloud 92, ai-ml-engineering 121, on-premises 57, platform 241 = 824. (ai-history's 72 <code>ch-*.md</code> chapters are an appendix, not counted as modules.) Ukrainian <code>module-*.md</code> = 312 (already correct).</p>
+
+<h2>Security: Miasma worm (June 2026) — what it is + what we shipped</h2>
+<p><strong>Threat:</strong> a credential-stealing npm worm that spread from a compromised GitHub Actions OIDC publishing pipeline (<code>@redhat-cloud-services</code>), runs an obfuscated dropper via a malicious <code>preinstall</code>/<code>install</code>/<code>postinstall</code> hook on <code>npm install</code>, steals creds, and republishes the maintainer's packages with <strong>forged provenance</strong>. A variant injects backdoors into AI-coding-agent configs. Hit 73 Microsoft repos.</p>
+<p><strong>Triage (NOT compromised):</strong> 0 refs to the compromised scope; no install hooks in our own <code>package.json</code>; clean git, no injected agent configs; <code>deploy.yml</code> already job-separates the OIDC token from <code>npm ci</code> (build job <code>contents: read</code>, deploy job <code>id-token: write</code> runs no npm); dependabot cooldown + zizmor already present.</p>
+<p><strong>#1813 Phase-1 (Prevent + Detect), live on main:</strong></p>
+<ul>
+<li><strong>Prevent</strong> — <code>.npmrc ignore-scripts=true</code> blocks the hook from executing. The two deps that legitimately need native scripts (<code>esbuild</code>, <code>sharp</code>) are rebuilt explicitly: <code>deploy.yml</code> runs <code>npm rebuild esbuild sharp --ignore-scripts=false</code> (plain <code>npm rebuild</code> honours ignore-scripts → would be a no-op).</li>
+<li><strong>Detect</strong> — <code>scripts/security/check_install_scripts.py</code> scans <code>package-lock.json</code> <code>hasInstallScript</code> (authoritative; catches <code>binding.gyp</code> implicit hooks + OS-gated <code>fsevents</code>), uses the lockfile <strong>path as identity</strong> (kills name-spoof, nested-path, null-name), verifies allow-listed packages' declared hooks ⊆ expected (allow-list abuse), flags npm-alias masquerade + local/<code>file:</code> deps + non-registry sources. Wired into <code>.github/workflows/supply-chain.yml</code> (runs the tripwire + <code>npm audit signatures</code> <strong>hard gate</strong> on every PR/push). Allow-list: <code>esbuild, fsevents, sharp</code>.</li>
+<li><strong>Documented residual:</strong> a same-name rogue hook on an uninstalled OS-gated allow-listed dep (fsevents on Linux) is caught only by lockfile-integrity diff review — and prevention blocks its execution regardless.</li>
+</ul>
+<p><strong>Cross-family review converged after 3 rounds</strong> — every demonstrated bypass closed: R1 (codex+deepseek+agy all NEEDS CHANGES: rebuild no-op, binding.gyp miss, name-spoof, OS-gated miss, soft signature gate) → R2 codex (nested-path bypass, demonstrated) → R3 codex (alias-masquerade + local-link, demonstrated). Key reframe: <strong>prevention is the primary control; the tripwire is secondary "would-we-notice"</strong> — a static lockfile scanner can be gamed at the margins forever, so we fixed every demonstrated bypass and converged rather than chase an infinite R4.</p>
+
+<h2>Homepage refresh (#1811) — what was stale</h2>
+<table>
+<tr><th>Field</th><th>Was</th><th>Now</th></tr>
+<tr><td>Tracks</td><td>6 (Hero.astro) / 8 stale counts (real homepage)</td><td>8, correct</td></tr>
+<tr><td>Modules</td><td>568 / 803</td><td>824</td></tr>
+<tr><td>AI track card</td><td>10 modules</td><td>37</td></tr>
+<tr><td>Cloud / Cert / Platform / On-prem</td><td>116 / 207 / 220 / 59</td><td>92 / 195 / 241 / 57</td></tr>
+<tr><td>"Updated April 17, 2026" line</td><td>shown</td><td><strong>removed</strong> (per user)</td></tr>
+<tr><td>Ukrainian</td><td>312</td><td>312 (already correct)</td></tr>
+</table>
+<p>Also: AI/ML Engineering sidebar regrouped (15 flat sections → 4 buckets; 27-item Deep Learning list → 5 sub-chains, links only, no files moved); Deep Learning landing page (<code>index.md</code>) brought to the <code>machine-learning/</code> sibling pattern; changelog gained the AI Engineering Foundations + Open Models section launches and dropped an internal "Agent runtime / DeepSeek" entry (internal dev tooling on a learner page).</p>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>#1814 CodeQL perm fixes</td><td>agy gemini-3.1-pro</td><td>edit</td><td>✅ clean — 4/4 0o644→0o600, ground-checked, ruff clean (write-lane proof)</td></tr>
+<tr><td>#1813 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS CHANGES — rebuild no-op, binding.gyp/OS-gated miss, name-only allow-list, soft sig gate (all real)</td></tr>
+<tr><td>#1813 R1</td><td>deepseek-v4-pro</td><td>review</td><td>NEEDS CHANGES — prepare hooks, null-name, soft sig gate</td></tr>
+<tr><td>#1813 R1</td><td>agy gemini-3.5-flash</td><td>review</td><td>NEEDS CHANGES — <strong>demonstrated</strong> name-spoof bypass; strong flash-as-reviewer data point</td></tr>
+<tr><td>#1813 R2</td><td>codex gpt-5.5</td><td>review</td><td>4/5 R1 CLOSED; demonstrated a NEW nested-path bypass</td></tr>
+<tr><td>#1813 R3</td><td>codex gpt-5.5</td><td>review</td><td>nested CLOSED; found alias-masquerade + local-link (fixed) + OS-gated residual (documented)</td></tr>
+</table>
+<p>All non-Claude lanes (s105 directive). Orchestrator ground-checked every finding (e.g. confirmed <code>fsevents</code> in the lockfile as the binding.gyp proof; reproduced codex's exact nested + alias probes against the tripwire).</p>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>#1800 (Dependabot)</strong> — rebasing. Content-safe (Astro ecosystem, no Miasma scope, no new install hooks, cooldown respected) but <code>astro 6.1→6.4</code> + <code>starlight 0.38→0.39</code> is a framework minor → <strong>local <code>npm run build</code> verify before merge</strong> (PR CI has no full build; the <code>feedback_pr_ci_has_no_full_astro_build</code> lesson).</li>
+<li><strong>#1812 Phase-1 follow-ups</strong> (separate PRs): harden-runner egress monitoring (needs the StepSecurity GitHub app at the <strong>org</strong> level — owner action, like the #1798 secret-scan extras); lockfile-integrity tripwire; detection runbook; local-dev guidance doc.</li>
+<li><strong>Security Phase 2 (curriculum currency)</strong> — the user's "Reading A" plan: refresh the <code>supply-chain-security</code> / CI-security modules and write new <strong>AI-agent config-injection</strong> content, using a <em>sanitized</em> version of what we built (patterns + tripwire approach, never our actual token scopes/infra). Routes to author lanes.</li>
+<li><strong>Curriculum resume</strong> (unchanged from session 110): NN epic #1793 DONE → next is <code>ai-ml-engineering</code> expand-to-floor/review-first → <code>on-premises</code> → <code>platform</code>.</li>
+<li><strong>PARKED</strong> (user): the <code>ai-ml-engineering → ai</code> content relocation — revisit when green.</li>
+<li>Consider deleting the dead <code>src/components/Hero.astro</code>.</li>
+</ul>
+
+<h2>Files touched</h2>
+<ul>
+<li><code>src/i18n/homepage.ts</code> — real homepage strings, en + uk (counts, track metas, path, removed date render); <code>src/layouts/Homepage.astro</code> — stat numbers + terminal + dropped the <code>heroUpdated</code> line.</li>
+<li><code>src/components/Hero.astro</code> — edited then <strong>reverted</strong> (dead code; not in the final diff).</li>
+<li><code>astro.config.mjs</code> — AI/ML Engineering sidebar regroup (4 buckets + DL 5 sub-chains).</li>
+<li><code>src/content/docs/ai-ml-engineering/deep-learning/index.md</code> — landing page to sibling pattern.</li>
+<li><code>src/content/docs/changelog.md</code> — AI Eng Foundations + Open Models entries; removed internal agent-runtime entry.</li>
+<li><code>.npmrc</code> (new) — <code>ignore-scripts=true</code>; <code>.github/workflows/deploy.yml</code> — rebuild step; <code>.github/workflows/supply-chain.yml</code> (new) — detection workflow; <code>scripts/security/check_install_scripts.py</code> (new) — lockfile tripwire.</li>
+<li><code>scripts/agent_runtime/usage.py</code>, <code>scripts/quality/{stages,state,gates}.py</code> — 0o644→0o600 (CodeQL).</li>
+</ul>
+
+<h2>Memory updated</h2>
+<ul>
+<li><code>feedback_agy_gemini_3_5_flash_viable_reviewer</code> — agy is now a write+review lane (3.1-pro write, flash review/code), "use more for data", wrapper-no-push gotcha.</li>
+</ul>
+
+</body></html>
