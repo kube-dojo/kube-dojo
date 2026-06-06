@@ -35,6 +35,7 @@ jobs:
       - name: Lifecycle-script tripwire
         run: python3 scripts/security/check_install_scripts.py
 
-      - name: Dependency provenance / signature report
-        continue-on-error: true
+      # Hard gate (review: all three reviewers, #1813): an invalid/forged registry
+      # signature fails CI. Verified to exit 0 on the current tree (116 attestations).
+      - name: Verify dependency provenance / signatures
         run: npm audit signatures
