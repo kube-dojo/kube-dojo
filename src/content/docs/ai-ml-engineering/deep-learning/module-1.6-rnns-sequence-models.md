@@ -183,7 +183,7 @@ print(torch.allclose(output[:, -1, :], h_n[-1]))  # True for one-layer, unidirec
 
 That final equality is a useful shape check, not a universal rule to cargo-cult. For a one-layer, unidirectional RNN with no packing complications, the last output along the time axis equals the final hidden state for the last layer. If you add multiple layers, bidirectionality, or packed variable-length inputs, the indexing story changes. In real code, prefer to reason from documented shapes and from the task you are solving: sequence labeling usually needs all `output` states, while sequence classification often uses the final valid state.
 
-Parameter counts also expose the "cell reused over time" idea. A vanilla RNN layer has `input_size * hidden_size` input-to-hidden weights, `hidden_size * hidden_size` hidden-to-hidden weights, and two bias vectors in PyTorch's built-in module. The count does not multiply by `T`. A sequence with 10 timesteps and a sequence with 100 timesteps use the same learned parameters; the longer sequence simply applies them more times and creates a deeper unrolled computation graph.
+Parameter counts also expose the "cell reused over time" idea. A vanilla RNN layer has `input_size * hidden_size` input-to-hidden weights, `hidden_size * hidden_size` hidden-to-hidden weights, and two bias vectors (`bias_ih` and `bias_hh`) in PyTorch's built-in `nn.RNN` module — the from-scratch cell above folds these into one combined `b_h`, which is mathematically equivalent. The count does not multiply by `T`. A sequence with 10 timesteps and a sequence with 100 timesteps use the same learned parameters; the longer sequence simply applies them more times and creates a deeper unrolled computation graph.
 
 This is why recurrent models can generalize across lengths better than a dense model that expects a fixed flattened window. The same cell can process a four-step sequence and a forty-step sequence because the parameters describe a transition rule, not a fixed input slot. That does not guarantee good extrapolation to lengths far beyond training, because the hidden dynamics may drift or saturate. It does mean the architecture expresses the right invariance: "the same kind of update should be useful wherever this event appears in time."
 
@@ -245,7 +245,7 @@ output, _ = model(x)
 # logits: (B, T, num_classes)
 logits = head(output)
 
-# CrossEntropyLoss expects class dimension before flattened classes.
+# CrossEntropyLoss expects (N, num_classes) logits, so flatten batch and time into N.
 loss = loss_fn(logits.reshape(B * T, num_classes), target.reshape(B * T))
 loss.backward()
 
@@ -303,7 +303,7 @@ The diagnostic habit is to separate exploding, vanishing, and data-interface fai
 
 ## Part 4: LSTM
 
-The Long Short-Term Memory architecture was introduced by Sepp Hochreiter and Jurgen Schmidhuber in 1997 to address the difficulty of learning long-term dependencies with gradient descent. The key change is that an LSTM separates the hidden state `h_t`, which is exposed to the output and next computations, from the cell state `c_t`, which acts as a longer-lived memory highway. Instead of replacing memory with a single tanh update, the LSTM uses gates to decide what to forget, what to write, and what to expose.
+The Long Short-Term Memory architecture was introduced by Sepp Hochreiter and Jürgen Schmidhuber in 1997 to address the difficulty of learning long-term dependencies with gradient descent. The key change is that an LSTM separates the hidden state `h_t`, which is exposed to the output and next computations, from the cell state `c_t`, which acts as a longer-lived memory highway. Instead of replacing memory with a single tanh update, the LSTM uses gates to decide what to forget, what to write, and what to expose.
 
 One common LSTM formulation is:
 
