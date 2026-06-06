@@ -96,8 +96,19 @@ def main(argv: list[str]) -> int:
     violations: list[str] = []
 
     for path, meta in packages.items():
-        if not path or meta.get("link"):  # root package / workspace symlink
+        if not path:  # root package
             continue
+
+        # Local/linked deps (`file:` / workspace symlink) run `prepare` on install and
+        # bypass registry signing. We have none — flag any that appear (review: codex R3
+        # demonstrated a `file:` dep slipping past the registry gate).
+        if meta.get("link"):
+            violations.append(
+                f"[local-link] {path} — linked/local dependency "
+                f"(resolved={meta.get('resolved') or '?'}); runs `prepare`, unsigned"
+            )
+            continue
+
         leaf = name_from_lock_path(path)
 
         # Gate 1 + 2: install scripts. Identity is the FULL lockfile path, NOT the
@@ -107,11 +118,20 @@ def main(argv: list[str]) -> int:
         if meta.get("hasInstallScript"):
             install_hook_pkgs.append(path.removeprefix("node_modules/"))
             is_top_level = path == f"node_modules/{leaf}"
+            lock_name = meta.get("name")
             if leaf not in ALLOWLIST_INSTALL or not is_top_level:
                 violations.append(
                     f"[install-hook] {path} — declares an install script and is not a "
                     f"top-level audited dependency (allow-list {sorted(ALLOWLIST_INSTALL)}, "
                     f"top-level only)"
+                )
+            elif lock_name and lock_name != leaf:
+                # `esbuild: npm:evil@x` installs `evil` at node_modules/esbuild but the
+                # lockfile records the REAL name — reject the alias masquerade so it
+                # cannot borrow an allow-listed identity (review: codex R3).
+                violations.append(
+                    f"[alias-masquerade] {path} — lockfile name {lock_name!r} != install "
+                    f"path {leaf!r} (npm alias borrowing an allow-listed name)"
                 )
             else:
                 # Read hooks from the package's ACTUAL location, not node_modules/<leaf>.
@@ -124,8 +144,11 @@ def main(argv: list[str]) -> int:
                         f"(expected ⊆ {sorted(expected) or '∅'})"
                     )
                 # actual is None only for a top-level allow-listed dep not installed on
-                # this runner (e.g. fsevents on Linux); the lockfile `integrity` pins
-                # its tarball and a swap would surface in the lockfile diff.
+                # this runner (e.g. fsevents on Linux). The lockfile `name` is verified
+                # above and `integrity` pins the tarball, so a swap/alias surfaces in the
+                # lockfile diff; PREVENTION (.npmrc ignore-scripts) blocks execution
+                # regardless. Residual: a same-name rogue hook added to an uninstalled
+                # OS-gated dep is caught only by lockfile-integrity diff review.
 
         # Gate 3: non-registry source (git/local/tarball — runs `prepare`, unsigned)
         resolved = meta.get("resolved") or ""
