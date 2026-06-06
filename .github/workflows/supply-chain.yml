@@ -46,6 +46,9 @@ jobs:
             python3 scripts/security/check_lockfile_integrity.py
           fi
 
+      - name: Agent-config injection tripwire
+        run: python3 scripts/security/check_agent_configs.py
+
       # Hard gate (review: all three reviewers, #1813): an invalid/forged registry
       # signature fails CI. Verified to exit 0 on the current tree (116 attestations).
       - name: Verify dependency provenance / signatures

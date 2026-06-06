@@ -109,12 +109,25 @@ Layers: **PREVENT** (stop execution) → **DETECT** (surface changes) → **CONT
 
 ---
 
+### 9. Agent-config injection tripwire (`scripts/security/check_agent_configs.py`) — DETECT
+
+| | |
+|---|---|
+| **What** | Whole-file regex scan of AI IDE agent-config paths (`.claude/**`, `.cursor/**`, `AGENTS.md`, `CLAUDE.md`, etc.) for high-signal auto-exec compositions — piped-to-shell downloaders, base64-to-shell, `eval` of command substitution, `child_process` exec, PowerShell `IEX`, Python remote-exec patterns. |
+| **Attack signal** | Miasma agent-config-injection variant — auto-exec payload planted in agent config so it runs when the repo is opened in an AI IDE (e.g. `curl … \| bash`, or instructions to fetch and execute a remote payload). |
+| **Where it surfaces** | Pre-commit hook **agent-config auto-exec injection scan** (local). Workflow **Supply-chain detection** → job `detect` → step **Agent-config injection tripwire**. CI failure (exit 1) with `[tag] path:line` lines. |
+| **Time-to-detect** | Next commit locally (pre-commit) or PR/push to `main` (minutes). |
+| **Override** | Suppressed if the flagged line or the line immediately above contains literal `agent-config-allow`. **This is an acknowledgement marker, not an authorization control** — anyone who can edit the file can add it; value is forcing human review of flagged auto-exec lines before they ship. |
+| **Response** | 1. Read stderr (`[pipe-to-shell]`, `[eval-cmd-subst]`, etc.). 2. Inspect the flagged file and line — treat as incident unless you can explain it. 3. If malicious, do not merge; rotate tokens; report via [SECURITY.md](../../SECURITY.md). 4. If a legitimate documentation example reviewed by a human, add `agent-config-allow` on that line or the line above **after** review. |
+
+---
+
 ## Quick triage checklist
 
 When any **DETECT** control fires:
 
 1. **Do not merge** until understood.
-2. Run locally: `python3 scripts/security/check_install_scripts.py` and `python3 scripts/security/check_lockfile_integrity.py`.
+2. Run locally: `python3 scripts/security/check_install_scripts.py`, `python3 scripts/security/check_lockfile_integrity.py`, and `python3 scripts/security/check_agent_configs.py`.
 3. Inspect `git diff` for `package-lock.json` and `package.json`.
 4. Check registry pages for affected packages (version, publish date, maintainer).
 5. If incident: rotate npm and GitHub tokens, audit recent publishes, file a security report.
