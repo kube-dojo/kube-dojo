@@ -6,7 +6,7 @@ sidebar:
   order: 5
 ---
 
-> **Discipline Module** | Complexity: `[COMPLEX]` | Time: 55-65 min
+> **Discipline Module** | Complexity: `[COMPLEX]` | Time: 70-85 min
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ After completing this module, you will be able to:
 - **Map** a software supply chain from source commit to Kubernetes deployment and identify where tampering, confusion, or secret exposure can occur.
 - **Generate and evaluate** SBOM evidence so an incident team can answer whether a vulnerable component exists in a released artifact.
 - **Design and verify** an artifact signing flow that binds an image digest to a workload identity, not merely to a mutable tag.
-- **Compare and apply** SLSA, lockfiles, dependency controls, and admission policies to reduce realistic supply chain attack paths.
+- **Compare and apply** SLSA, lockfiles, dependency controls, admission policies, and Prevent · Contain · Detect defenses for realistic supply chain attack paths.
 - **Debug** a failed deployment caused by missing signatures, stale provenance, or unsafe dependency resolution without weakening the control.
 
 ---
@@ -672,6 +672,156 @@ Finally, SLSA and dependency controls should feed platform policy. If a service 
 
 ---
 
+## 6. The 2026 npm-worm wave
+
+The 2026 npm-worm wave changed the shape of the supply-chain lesson. Older dependency attacks often looked like a bad package version, a typosquat, or a vulnerable transitive library. Those still matter, but the newer pattern is more aggressive: the package manager becomes an execution surface, the CI runner becomes a credential source, the publishing workflow becomes a replication path, and the provenance record can become misleading if the trusted workflow itself was abused. The right question is no longer only, "Did this dependency come from the registry?" The sharper question is, "If this dependency executes during install, can it reach anything that lets it publish, deploy, or spread?"
+
+Keep historical backdoor case studies in the right place: use the [KCSA supply-chain module](/k8s/kcsa/part4-threat-model/module-4.4-supply-chain/) for that canonical thread, while this section focuses only on npm worm behavior and the controls that stop it from becoming a platform incident.
+
+Here is the mental model. A normal dependency install should be boring: resolve packages, verify integrity, unpack files, and leave a reviewable lockfile trail. A worm tries to turn that boring path into a launch point. It hides code where installers naturally run code, steals credentials from the environment or host, uses those credentials to modify repositories or publish new packages, and then waits for the next downstream install to repeat the cycle. That is why supply chain security cannot rely on a single trust badge. A valid package name, a signed publish event, or an attestation can still be dangerous when the execution environment behind that evidence has been compromised.
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         NPM WORM CONTROL MODEL                               │
+│                                                                              │
+│  Dependency install                                                          │
+│          │                                                                   │
+│          ▼                                                                   │
+│  PREVENT: block or review install-time execution                              │
+│          │                                                                   │
+│          ▼                                                                   │
+│  CONTAIN: keep publish, cloud, SSH, and deploy credentials unreachable        │
+│          │                                                                   │
+│          ▼                                                                   │
+│  DETECT: flag lockfile drift, native-build execution, and provenance mismatch │
+│                                                                              │
+│  The goal is not "we can never be reached." The goal is "a reached payload    │
+│  cannot execute freely, cannot find useful credentials, and cannot spread     │
+│  without creating evidence."                                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+On 2026-06-01, [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/06/02/preinstall-persistence-inside-red-hat-npm-miasma-credential-stealing-campaign/) and [StepSecurity](https://www.stepsecurity.io/blog/binding-gyp-npm-supply-chain-attack-spreads-like-worm) documented the Miasma npm worm <!-- incident-xref: miasma-npm-worm-2026 -->: 32 `@redhat-cloud-services` npm packages across 90+ versions were trojanized through the upstream RedHatInsights CI/CD pipeline, abusing its legitimate GitHub Actions OIDC publishing workflow. The primary payload executed through an npm `preinstall` hook during `npm install`, including direct and transitive installs, and the obfuscated payload was about 4.2 MB. A "Phantom Gyp" variant used a 157-byte `binding.gyp` file with gyp command substitution, shaped like `"sources": ["<!(node index.js ... && echo stub.c)"]`, so `node-gyp rebuild` ran the payload during install without any `package.json` lifecycle script. The malware harvested GitHub, npm, cloud metadata credentials for AWS IMDS, Azure IMDS, GCP service accounts, SSH material, Kubernetes service-account tokens, and GitHub Actions Runner.Worker process memory. It self-replicated by exchanging stolen npm OIDC tokens for publish rights, committing `.github/setup.js` through the Git Data API, and forging Sigstore/SLSA provenance.
+
+On 2025-09-15, [Unit42](https://unit42.paloaltonetworks.com/npm-supply-chain-attack/), [CISA](https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem), and [Microsoft](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/) described the Shai-Hulud self-replicating worm <!-- incident-xref: shai-hulud-npm-2025 --> as the first npm worm to self-replicate, affecting 500+ packages including `@ctrl/tinycolor`. Entry came through a phishing email mimicking an npm security alert. The payload ran TruffleHog to find secrets, and when it found a GitHub token it created a public repository named `Shai-Hulud` to dump the secrets and pushed a GitHub Actions workflow to every accessible repository. Later, Mini Shai-Hulud on 2026-05-11 became the first campaign to span npm and PyPI.
+
+Those two incidents teach the same platform lesson from different angles. The September 2025 wave showed that stolen maintainer and repository credentials can turn package publishing into automated propagation. The June 2026 wave showed that trusted publishing and provenance can be abused when the legitimate CI path is the thing the attacker controls. A platform that only asks "is this package signed?" misses the second lesson. A platform that only asks "does this package declare a `preinstall` script?" misses the Phantom Gyp lesson. A platform that only rotates one token after a hit misses the worm lesson, because the payload searched across developer, cloud, CI, SSH, npm, and Kubernetes credential surfaces.
+
+The useful defensive frame is **Prevent · Contain · Detect**. Prevent means reducing the chance that dependency code runs at install time. Contain means assuming some code may still run and making sure it cannot reach credentials that let it spread. Detect means treating small supply-chain evidence changes as security signals rather than routine dependency churn. The order matters for teaching, but the controls work as a mesh; none of them is enough alone.
+
+### Prevent: treat install-time code as untrusted
+
+The first prevention control for npm is explicit and boring: set `ignore-scripts=true` in `.npmrc`. That setting prevents npm lifecycle scripts such as `preinstall`, `install`, and `postinstall` from executing during `npm install` and `npm ci`. For a worm whose primary launch point is a lifecycle hook, this is a major reduction in risk because a reached package can still be downloaded but its declared installer code does not automatically run.
+
+```ini
+ignore-scripts=true
+```
+
+This control is especially valuable in CI because CI environments often contain more useful credentials than a developer realizes. Even a read-only repository token can reveal private source context, and a job that can request a publish or deploy identity can become a replication path. Blocking lifecycle scripts turns a dependency update from "download and execute unreviewed code" into "download files and let the next gate inspect them." That is not perfect safety, but it changes the attacker's timing and creates room for review.
+
+The subtle lesson from Phantom Gyp is that `ignore-scripts=true` is not a complete model of install-time execution. Native build tooling can execute commands through files that are not visible as `package.json` lifecycle scripts. A tool that only searches for `preinstall` and `postinstall` can therefore report "nothing to see" while a native build path still runs code during installation. The platform response is not to abandon `ignore-scripts`; it is to pair it with review of native-build files, lifecycle-script allow-lists, and lockfile integrity checks that make a newly introduced build path visible.
+
+```json
+{
+  "targets": [
+    {
+      "target_name": "review-this-native-build",
+      "sources": ["<!(node index.js ... && echo stub.c)"]
+    }
+  ]
+}
+```
+
+That snippet is not a lab command; it is a pattern to recognize during review. The danger is the `<!(` command-substitution shape inside `binding.gyp`, because the package can ask the native build system to run a command as part of preparing source files. A real review should ask why the package needs a native build, who maintains it, whether the lockfile just introduced or changed the native-build metadata, and whether the project has an explicit allow-list for dependencies that are permitted to run installation code.
+
+| Prevent Control | What It Blocks | What It Misses | Pair It With |
+|---|---|---|---|
+| `ignore-scripts=true` | Declared npm lifecycle hooks during install | Native build execution paths that do not appear as lifecycle scripts | Native-build file review and install-script inventory |
+| Install-script allow-list | Surprise `preinstall`, `install`, or `postinstall` declarations | A compromised package already on the allow-list | Expected-hook checks and maintainer review |
+| Frozen lockfile install | Silent transitive dependency movement | A malicious version already recorded in the lockfile | Registry signature and provenance verification |
+| Scoped registry mapping | Dependency confusion for internal packages | Compromise of the legitimate upstream publisher | Token isolation and package provenance checks |
+| Digest-pinned base images | Mutable base image drift | Malicious language package execution | SBOM, signing, and admission enforcement |
+
+Hypothetical scenario: a pull request updates only `package-lock.json`, and the diff adds a transitive dependency with a native build file. Nobody changed `package.json`, and tests pass. A listicle answer says, "The build is green, merge it." A supply-chain answer says, "This is installer-affecting metadata without a manifest change, so review the resolved URL, integrity, dependency edge, install-script flag, and native-build files before trusting the result." The second answer is slower for one PR and much faster during an incident.
+
+Prevention also means being selective about where package installation is allowed. A build job that installs dependencies should not also be the job that publishes packages, signs production artifacts, deploys workloads, or requests privileged cloud credentials. The more capabilities you place next to `npm ci`, the more valuable install-time execution becomes. When teams complain that this separation is inconvenient, remind them what the attacker wants: one process that both runs untrusted dependency code and holds a credential powerful enough to spread.
+
+### Contain: keep credentials out of the blast radius
+
+Containment assumes prevention may fail. A developer may override scripts locally to rebuild an audited native dependency. A CI workflow may install a package before a new detector exists. A dependency may execute later through normal application code rather than during installation. Containment asks what the payload can reach when that happens. If the answer is "a long-lived publish token, cloud credentials, repository write access, and deployment identity," the platform has created a worm-friendly environment.
+
+The safest shape is short-lived, scoped credentials with separate build and release identities. Short-lived means the credential expires quickly enough that theft has a narrow window. Scoped means the credential can do only the job it was minted for. Separate identities mean the job that installs dependencies cannot also mint the identity used to publish or deploy. This is the supply-chain version of least privilege: do not put spread-capable credentials in the process most likely to execute third-party code.
+
+```yaml
+jobs:
+  build:
+    permissions:
+      contents: read
+    steps:
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  publish:
+    needs: build
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - run: echo "Publish a reviewed artifact with a short-lived identity"
+```
+
+This example is intentionally generic. The important boundary is that the build job can resolve dependencies and produce an artifact, but it cannot request the publishing or deployment identity. The publish job can request a short-lived OIDC identity, but it should not run fresh dependency installation from the public registry. If a dependency payload executes during the build job, there is no publish identity nearby. If the publish job is compromised, there should be no reason for it to resolve arbitrary new packages.
+
+Containment also changes token rotation from a panic ritual into a prepared playbook. If an install-time detector fires, rotate credentials that were reachable from the machines and runners that performed the install. That includes package registry tokens, GitHub tokens, cloud credentials, SSH keys, and Kubernetes service-account tokens when they were present in the environment. Do not rotate only the credential named in the first alert. The worm pattern is credential discovery across many stores, so the rotation boundary should be based on exposure, not on the first string a scanner found.
+
+The most common containment mistake is treating OIDC as magic. OIDC-based publishing is better than storing a long-lived token in a repository secret, but it still has a trust boundary: the job that can request the OIDC token becomes the sensitive environment. If untrusted dependency code runs in that same job, the attacker may not need a stored secret. They may only need the ability to ask the trusted workflow for a fresh identity while the job is alive. Build/deploy isolation is therefore not ceremony; it is what keeps a legitimate trusted publisher from becoming a worm's publish engine.
+
+| Containment Decision | Weak Version | Stronger Version |
+|---|---|---|
+| Package publishing | Long-lived token available to all CI jobs | Short-lived publish identity only in the publish job |
+| Cloud access | Build job inherits broad cloud credentials | Build job has no cloud write path; deploy job receives scoped identity |
+| Repository writes | Default token can push workflow changes | Install and test jobs use read-only repository access |
+| Kubernetes access | Runner has a reusable cluster token | Deployment identity is scoped and minted only after artifact verification |
+| Developer machines | Broad personal tokens stay logged in forever | Developers use scoped sessions and rotate after suspicious installs |
+
+Containment is the part learners often skip because it feels less exciting than detection. It is also the part that turns a reached package into a non-event. If the payload cannot execute, prevention wins. If it executes but cannot find a useful credential, containment wins. If it executes and reaches something, detection and response have to move fast enough to stop propagation.
+
+### Detect: make suspicious dependency evidence loud
+
+Detection for npm worms should focus on evidence that changes before, during, or immediately after installation. A lockfile change without a matching manifest change is one of the highest-signal review prompts because `npm ci` trusts the lockfile. The change may be legitimate, but it deserves human attention because it can redirect a transitive dependency to a different tarball, integrity hash, dependency edge, binary entry, operating-system constraint, or install-script flag without an obvious top-level dependency change.
+
+```text
+package.json changed?          no
+package-lock.json changed?     yes
+installer-affecting field?     yes
+
+Result: review as a supply-chain event, not as routine formatting.
+```
+
+Signature and provenance verification are also detection controls, but the June 2026 lesson is that they must be interpreted carefully. `npm audit signatures`, registry attestations, and provenance verification can catch unsigned packages, invalid signatures, or artifacts that do not match expected registry metadata. They are necessary gates. They are not sufficient if the attacker abused the legitimate workflow that creates the provenance. In that case, "valid provenance exists" is weaker than "the expected workflow identity, source, dependency state, and release intent all match what we reviewed."
+
+The strongest provenance review therefore asks three questions. First, is the package or artifact signed or attested by the expected identity, not merely by any valid identity? Second, did the trusted workflow run in a context where untrusted install-time code could reach publish credentials or OIDC token exchange? Third, does the dependency diff make sense for the change being reviewed? A forged or misleading provenance story often relies on defenders stopping after the first green check.
+
+Native-build file review is the Phantom Gyp-specific detection lesson. Reviewers and tools should not only enumerate lifecycle scripts. They should also inspect files that can trigger native build behavior, especially when those files appear in a package that did not previously need native compilation. The suspicious pattern is not "native code exists"; many legitimate packages compile native extensions. The suspicious pattern is a new or changed native-build path that executes a JavaScript payload, shell command, downloader, or opaque bootstrapper during install.
+
+| Detect Signal | Why It Matters | First Review Question | Response Direction |
+|---|---|---|---|
+| Lockfile changes without `package.json` changes | The install graph can change without a visible dependency request | Which installer-affecting fields changed? | Review resolved URL, integrity, dependency edges, script flags, and native metadata |
+| New lifecycle script in a dependency | Install-time code may execute before tests run | Is this package explicitly allow-listed for install scripts? | Block, review maintainer context, or add a narrow reviewed exception |
+| New or changed `binding.gyp` command substitution | Native build tooling can run code without lifecycle scripts | Why does this dependency need command execution during build? | Treat as suspicious unless the native build path is expected and reviewed |
+| Signature or attestation failure | Registry evidence does not verify cleanly | Is the package unsigned, mismatched, or affected by a tooling outage? | Block merge until understood; do not silence the gate casually |
+| Valid provenance from an unexpected workflow | The artifact may be signed by the wrong identity | Which workflow, source ref, and builder identity produced it? | Require expected identity, not any valid signature |
+| Unexpected repository or workflow changes after install | Stolen credentials may have been used to persist or spread | Which token could write those files? | Rotate exposed credentials and audit accessible repositories |
+
+Hypothetical scenario: a registry attestation verifies, but the package was published by a workflow that also ran dependency installation with a publish-capable identity in the same job. That is not the same assurance as a release workflow where the install job cannot mint publish credentials and the publish job only handles a reviewed artifact. The attestation tells you which identity signed; it does not erase the need to inspect what that identity was allowed to do while untrusted code could execute.
+
+The final detection habit is to rehearse the negative case. Create a safe branch that changes lockfile installer metadata without changing the manifest and confirm the tripwire fails. Add a harmless package fixture with an install script and confirm the lifecycle inventory reports it. Add a review-only `binding.gyp` fixture and confirm reviewers know where it would surface. Run provenance verification against an artifact signed by the wrong identity and confirm policy rejects it. A detector that has never failed in a controlled exercise is usually a dashboard, not an operational control.
+
+The 2026 npm-worm wave should leave you with a practical instinct: install-time execution is a privileged event, not a package-manager detail. Treat it the way you treat deployment access. Keep it small, scoped, reviewed, and observable. When a dependency can execute before your code even starts, the supply chain is already part of your runtime security boundary.
+
+---
+
 ## Did You Know?
 
 1. [The SolarWinds compromise](https://www.cisa.gov/news-events/alerts/2021/01/07/supply-chain-compromise) <!-- incident-xref: solarwinds-2020 --> showed that a trusted software update mechanism can become the delivery path for malicious code when the build process itself is compromised. For the full case study, see [CI/CD Pipelines](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
@@ -789,6 +939,19 @@ A scanner step in CI needs read-only access to the repository, but the workflow 
 A compromised scanner action could read the publishing token and upload a malicious package or image under the project's trusted name. The broad version tag adds risk because the action code can change without a reviewed commit update. The scanner becomes a supply chain dependency with access to release credentials.
 
 Redesign the workflow so the scanner job has only read permissions and no publish token. Put publishing in a separate job that runs after tests and scans pass, grant the token only to that job, and pin third-party actions to commit SHAs. If the platform supports OIDC-based publishing or trusted publishing, prefer that over long-lived tokens.
+
+</details>
+
+### Question 8
+
+An npm dependency update has no `preinstall`, `install`, or `postinstall` script in `package.json`, but the diff introduces a native-build file that uses command substitution to run a JavaScript file during installation. Your `.npmrc` already sets `ignore-scripts=true`. What should you conclude, and which controls should you pair with `ignore-scripts`?
+
+<details>
+<summary>Show Answer</summary>
+
+Conclude that lifecycle-script blocking is necessary but not sufficient. `ignore-scripts=true` prevents declared npm lifecycle hooks, but native build tooling can still create install-time execution paths that do not appear as `package.json` scripts. A review that only searches for `preinstall` and `postinstall` can miss the risk.
+
+Pair `ignore-scripts` with lockfile-integrity review, install-script inventory, native-build file review, registry signature or attestation verification, and build/deploy identity isolation. The important design goal is that a reached package cannot execute unnoticed, cannot reach publish or deploy credentials, and cannot produce misleading provenance without another signal changing.
 
 </details>
 
@@ -935,6 +1098,14 @@ Your answers should reveal whether the control design is coherent. If you cannot
 
 ---
 
+## Learner check
+
+> Supply chain security starts with a map, not a scanner.
+
+Use that sentence as a final check on your understanding. Pick one artifact path from this module and name the source evidence, dependency evidence, build identity, registry evidence, admission decision, and runtime evidence you would need during an incident. If your answer stops at "the package was signed" or "the scanner was clean," revisit the 2026 npm-worm section and identify which Prevent, Contain, and Detect layer you skipped.
+
+---
+
 ## Next Module
 
 Continue to [Module 4.5: Runtime Security](../module-4.5-runtime-security/), where you will extend supply chain assurance into running workloads by detecting suspicious behavior, constraining privilege, and responding when prevention is not enough.
@@ -944,3 +1115,12 @@ Continue to [Module 4.5: Runtime Security](../module-4.5-runtime-security/), whe
 - [Sigstore Cosign Quickstart](https://github.com/sigstore/docs/blob/main/content/en/quickstart/quickstart-cosign.md) — Best compact primary walkthrough for keyless signing, verification, and transparency-log concepts used throughout this module.
 - [GitHub Actions Attest](https://github.com/actions/attest) — Shows the current GitHub-native path for signed attestations and SLSA build provenance in CI.
 - [CISA/NIST: Defending Against Software Supply Chain Attacks](https://www.cisa.gov/news-events/alerts/2021/04/26/cisa-and-nist-release-new-interagency-resource-defending-against) — Provides authoritative incident-driven guidance that connects supply-chain controls to real attack patterns and mitigations.
+- [Kubernetes: Images](https://kubernetes.io/docs/concepts/containers/images/) — Upstream reference for image tags, digests, pull behavior, and why deployment by immutable digest matters.
+- [CycloneDX specification](https://github.com/CycloneDX/specification) — Primary specification repository for the SBOM format discussed in the inventory and incident-response sections.
+- [SPDX specification](https://github.com/spdx/spdx-spec) — Primary specification repository for the SPDX SBOM format and its license/compliance-oriented metadata model.
+- [SLSA requirements](https://slsa.dev/spec/v1.2/requirements) — Official requirements reference for the build-level concepts used in the SLSA maturity section.
+- [Microsoft Security Blog, 2026-06-02](https://www.microsoft.com/en-us/security/blog/2026/06/02/preinstall-persistence-inside-red-hat-npm-miasma-credential-stealing-campaign/) — Source for the June 2026 npm trusted-publishing compromise, install-hook execution, OIDC abuse, and provenance-forgery lesson.
+- [StepSecurity, 2026-06-03](https://www.stepsecurity.io/blog/binding-gyp-npm-supply-chain-attack-spreads-like-worm) — Source for the native-build execution path and `binding.gyp` review guidance in the 2026 npm-worm section.
+- [Unit 42 npm supply-chain analysis](https://unit42.paloaltonetworks.com/npm-supply-chain-attack/) — Source for the September 2025 npm self-replication pattern, public repository exposure, and credential-harvesting behavior.
+- [CISA npm ecosystem alert, 2025-09-23](https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem) — Federal alert source for npm ecosystem credential-theft response guidance and organizational triage.
+- [Microsoft Security Blog, 2025-12-09](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/) — Source for later campaign evolution, npm/PyPI scope, and defensive analysis.
