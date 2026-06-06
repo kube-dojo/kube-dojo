@@ -3,7 +3,7 @@ title: "Modern Transformers: RoPE, ALiBi, and Attention-Head Geometry"
 description: "Choose positional encoding and attention-head sharing patterns from first principles: RoPE, ALiBi, YaRN, MHA, MQA, GQA, and MLA, with decision criteria for long context, throughput, edge deployment, and quality-sensitive workloads."
 slug: ai-ml-engineering/deep-learning/module-1.10-modern-transformers-rope-and-attention
 sidebar:
-  order: 1009
+  order: 1011
 citations_verified: true
 ---
 

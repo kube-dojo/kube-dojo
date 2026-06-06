@@ -6,6 +6,10 @@ sidebar:
   label: "What's New"
 ---
 
+## June 2026
+
+- **Neural Networks from scratch — the deep-learning section, rebuilt (10 → 26 modules).** The [AI/ML Engineering deep-learning section](/ai-ml-engineering/deep-learning/) is now a coherent from-scratch arc. It starts in pure NumPy (the perceptron, forward propagation, activation and loss functions, backprop by hand, a scalar autograd engine), bridges to PyTorch with a training-as-engineering block (initialization and signal propagation, optimizers, regularization, normalization layers, a training-diagnostics playbook, numerical stability and mixed precision), then builds the modern architecture primitives by hand — [embeddings](/ai-ml-engineering/deep-learning/module-1.4.1-embeddings-representation-learning/), [residual connections](/ai-ml-engineering/deep-learning/module-1.4.2-residual-deep-architectures/), [attention](/ai-ml-engineering/deep-learning/module-1.4.3-attention-from-scratch/), and [the transformer block](/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/). Block D completes the picture with [convolutional networks](/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/), [recurrent networks and sequence models](/ai-ml-engineering/deep-learning/module-1.6-rnns-sequence-models/), and an [end-to-end capstone](/ai-ml-engineering/deep-learning/module-1.7-capstone-train-a-real-net/) (dataset → baseline → architecture → diagnostics → ablation → runbook). The through-line: a transformer, a CNN, and an RNN are each shown to be the same `nn.Linear` + nonlinearity, trained by the same backprop the learner built by hand. Epic #1793 (supersedes #1609).
+
 ## May 2026
 
 - **AI Engineering Foundations prompt-safety module.** [Prompt Safety and Evaluation](/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation/) adds a prompt-eval harness lesson covering golden-set regression, LLM-as-judge calibration, direct and indirect prompt injection, prompt leakage, jailbreak probes, drift detection, and CI-ready safety gates.

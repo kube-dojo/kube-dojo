@@ -46,6 +46,9 @@ export default defineConfig({
     // Block C: 1.6 gutted — its attention/transformer content is now the 1.4.1-1.4.4 sub-chain
     '/ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive/':
       '/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/',
+    // Block D: old 1.5 slug was mislabeled 'rnns' but bodied CNNs; now the canonical CNN module
+    '/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/':
+      '/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/',
   },
   markdown: {
     remarkPlugins: [remarkMath],

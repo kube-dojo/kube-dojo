@@ -726,7 +726,7 @@ The deep-learning index places this module before the existing CNN destination r
 
 > | 1.3.6 | [Numerical Stability & Precision](/ai-ml-engineering/deep-learning/module-1.3.6-numerical-stability-precision/) |
 > | 1.4.4 | [The Transformer Block from Scratch](/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/) |
-> | 1.5 | [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) |
+> | 1.5 | [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/) |
 
 ## Sources
 
@@ -749,4 +749,4 @@ The deep-learning index places this module before the existing CNN destination r
 
 ## Next Module
 
-Continue to [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) to shift from sequence blocks into visual feature extractors.
+Continue to [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/) to shift from sequence blocks into visual feature extractors.
