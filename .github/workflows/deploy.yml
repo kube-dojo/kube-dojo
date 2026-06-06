@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # .npmrc sets ignore-scripts=true (supply-chain hardening, #1812). `npm rebuild`
+      # ALSO honours ignore-scripts, so it must be re-enabled for JUST these two
+      # audited native deps — otherwise the rebuild is a no-op (review: codex #1813).
+      - name: Rebuild allow-listed native deps
+        run: npm rebuild esbuild sharp --ignore-scripts=false
+
       - name: Build site
         run: npm run build
 
