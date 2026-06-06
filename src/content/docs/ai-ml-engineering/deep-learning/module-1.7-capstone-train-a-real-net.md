@@ -319,7 +319,7 @@ class CIFAR10CNN(nn.Module):
 
 model = CIFAR10CNN()
 print(f"CNN parameters: {sum(p.numel() for p in model.parameters()):,}")
-# CNN parameters: ~620,000
+# CNN parameters: ~670,000
 ```
 
 The architecture follows the principle of increasing channel depth as spatial resolution decreases — the computational budget shifts from spatial dimensions to feature dimensions, trading location precision for semantic richness. This is the same design pattern that scales from LeNet-5 (1998) to EfficientNet (2019): early layers learn edges and textures; deeper layers compose those into parts and objects.
