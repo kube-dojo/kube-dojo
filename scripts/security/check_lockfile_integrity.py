@@ -3,15 +3,16 @@
 
 `.npmrc` sets `ignore-scripts=true` (PREVENTION). `check_install_scripts.py` catches
 non-registry sources, local links, and alias masquerade. THIS tripwire's distinct job is
-to surface any lockfile dependency mutation (`version` / `resolved` / `integrity`) that
-is NOT accompanied by a `package.json` change — the "silent lockfile swap" where an
-attacker edits `package-lock.json` without touching `package.json` and `npm ci` installs
-the malicious artifact without complaint.
+to surface any installer-affecting lockfile metadata change (version, resolved,
+integrity, bin, dependency edges, os/cpu, install-script flag, …) that is NOT
+accompanied by a `package.json` change — the "silent lockfile swap" where an attacker
+edits `package-lock.json` without touching `package.json` and `npm ci` installs a
+different artifact or dependency tree without complaint.
 
 Decision:
-  - dependency tuples unchanged          → PASS (exit 0)
-  - lockfile tuples changed AND package.json also changed → PASS (normal dep bump)
-  - lockfile tuples changed AND package.json UNCHANGED    → FAIL (exit 1)
+  - package fingerprints unchanged       → PASS (exit 0)
+  - lockfile fingerprints changed AND package.json also changed → PASS (normal dep bump)
+  - lockfile fingerprints changed AND package.json UNCHANGED    → FAIL (exit 1)
 
 Override (acknowledgement marker, NOT an authorization control):
   A failure is suppressed when the HEAD commit message contains the literal token
@@ -45,8 +46,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCKFILE = "package-lock.json"
 MANIFEST = "package.json"
-TUPLE_FIELDS = ("version", "resolved", "integrity")
+NOISE_FIELDS = frozenset({"funding", "license", "deprecated"})
 MAX_REPORT = 50
+MAX_FIELD_DISPLAY = 120
 OVERRIDE_TOKEN = "[lockfile-only]"
 
 
@@ -76,15 +78,31 @@ def diff_range(base: str, head: str, three_dot: bool) -> str:
     return f"{base}{sep}{head}"
 
 
+def diff_has_changes(range_spec: str, path: str) -> bool:
+    r = run_git(["diff", "--quiet", range_spec, "--", path], check=False)
+    if r.returncode == 0:
+        return False
+    if r.returncode == 1:
+        return True
+    print(
+        f"ERROR: git diff failed for {path} in {range_spec}: {r.stderr.strip()}",
+        file=sys.stderr,
+    )
+    raise RuntimeError(f"git diff failed for {path}")
+
+
 def manifest_changed_in_range(range_spec: str) -> bool:
-    return run_git(["diff", "--quiet", range_spec, "--", MANIFEST], check=False).returncode != 0
+    return diff_has_changes(range_spec, MANIFEST)
 
 
 def lockfile_changed_in_range(range_spec: str) -> bool:
-    return run_git(["diff", "--quiet", range_spec, "--", LOCKFILE], check=False).returncode != 0
+    return diff_has_changes(range_spec, LOCKFILE)
 
 
-def load_packages_at(ref: str) -> dict[str, dict[str, str | None]] | None:
+PackageFingerprint = dict[str, object]
+
+
+def load_packages_at(ref: str) -> dict[str, PackageFingerprint] | None:
     """Return packages map keyed by lockfile path, or None if lockfile absent at ref."""
     result = run_git(["show", f"{ref}:{LOCKFILE}"], check=False)
     if result.returncode != 0:
@@ -97,7 +115,7 @@ def load_packages_at(ref: str) -> dict[str, dict[str, str | None]] | None:
     return packages_from_json_text(result.stdout, f"{ref}:{LOCKFILE}")
 
 
-def packages_from_json_text(text: str, source: str) -> dict[str, dict[str, str | None]]:
+def packages_from_json_text(text: str, source: str) -> dict[str, PackageFingerprint]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -108,15 +126,15 @@ def packages_from_json_text(text: str, source: str) -> dict[str, dict[str, str |
     if not isinstance(packages, dict):
         return {}
 
-    out: dict[str, dict[str, str | None]] = {}
+    out: dict[str, PackageFingerprint] = {}
     for path, meta in packages.items():
         if not path or not isinstance(meta, dict):
             continue
-        out[path] = {field: meta.get(field) for field in TUPLE_FIELDS}
+        out[path] = {k: v for k, v in meta.items() if k not in NOISE_FIELDS}
     return out
 
 
-def load_packages_worktree(ref: str) -> dict[str, dict[str, str | None]]:
+def load_packages_worktree(ref: str) -> dict[str, PackageFingerprint]:
     """Load lockfile from the worktree when ref is HEAD, else via git show."""
     if ref in ("HEAD", "head"):
         lock_path = REPO_ROOT / LOCKFILE
@@ -134,9 +152,9 @@ def load_packages_worktree(ref: str) -> dict[str, dict[str, str | None]]:
     return pkgs if pkgs is not None else {}
 
 
-def dependency_tuple_changes(
-    before: dict[str, dict[str, str | None]] | None,
-    after: dict[str, dict[str, str | None]],
+def changed_package_paths(
+    before: dict[str, PackageFingerprint] | None,
+    after: dict[str, PackageFingerprint],
 ) -> list[str]:
     before = before or {}
     changed: list[str] = []
@@ -145,6 +163,13 @@ def dependency_tuple_changes(
         if before.get(path) != after.get(path):
             changed.append(path)
     return changed
+
+
+def format_field_value(value: object) -> str:
+    text = repr(value)
+    if len(text) <= MAX_FIELD_DISPLAY:
+        return text
+    return text[: MAX_FIELD_DISPLAY - 3] + "..."
 
 
 def override_active(head: str) -> bool:
@@ -177,7 +202,7 @@ def main(argv: list[str]) -> int:
     base = args.base or "HEAD~1"
     three_dot = args.three_dot
 
-    print(f"Lockfile-integrity tripwire — comparing {LOCKFILE} dependency tuples.")
+    print(f"Lockfile-integrity tripwire — comparing {LOCKFILE} package fingerprints.")
 
     if not ref_exists(head):
         print(f"ERROR: head ref not found: {head}", file=sys.stderr)
@@ -200,22 +225,21 @@ def main(argv: list[str]) -> int:
     try:
         before_pkgs = load_packages_at(base)
         after_pkgs = load_packages_worktree(head)
+        changed_paths = changed_package_paths(before_pkgs, after_pkgs)
+
+        if not changed_paths:
+            print("OK — no installer-affecting lockfile fingerprint changes.")
+            return 0
+
+        # Structured fingerprint compare is authoritative even if git diff merge-base differs.
+        pkg_json_changed = manifest_changed_in_range(range_spec)
+        lockfile_in_diff = lockfile_changed_in_range(range_spec)
     except RuntimeError:
         return 2
 
-    changed_paths = dependency_tuple_changes(before_pkgs, after_pkgs)
-
-    if not changed_paths:
-        print("OK — no dependency tuple changes in lockfile.")
-        return 0
-
-    # Structured tuple compare is authoritative even if git diff merge-base differs.
-    pkg_json_changed = manifest_changed_in_range(range_spec)
-    lockfile_in_diff = lockfile_changed_in_range(range_spec)
-
     if pkg_json_changed:
         print(
-            f"NOTE: {len(changed_paths)} dependency tuple(s) changed and "
+            f"NOTE: {len(changed_paths)} package fingerprint(s) changed and "
             f"{MANIFEST} also changed in {range_spec} — expected for dep bumps."
         )
         print("OK — lockfile change accompanied by manifest change.")
@@ -227,20 +251,20 @@ def main(argv: list[str]) -> int:
             "LOCKFILE_OVERRIDE=1) — acknowledging lockfile-only change."
         )
         print(
-            f"  {len(changed_paths)} dependency tuple(s) changed without "
+            f"  {len(changed_paths)} package fingerprint(s) changed without "
             f"{MANIFEST} change (reviewed/acknowledged)."
         )
         return 0
 
     print(
         f"\n  SUPPLY-CHAIN TRIPWIRE: silent lockfile swap — "
-        f"{len(changed_paths)} dependency tuple(s) changed without a "
+        f"{len(changed_paths)} package fingerprint(s) changed without a "
         f"{MANIFEST} change in {range_spec}:",
         file=sys.stderr,
     )
     if not lockfile_in_diff:
         print(
-            f"  (structured compare detected tuple drift; git diff may use a "
+            f"  (structured compare detected fingerprint drift; git diff may use a "
             f"different merge-base than {range_spec})",
             file=sys.stderr,
         )
@@ -250,10 +274,11 @@ def main(argv: list[str]) -> int:
         before = (before_pkgs or {}).get(path, {})
         after = after_pkgs.get(path, {})
         print(f"    [lockfile-swap] {path}", file=sys.stderr)
-        for field in TUPLE_FIELDS:
+        for field in sorted(set(before) | set(after)):
             if before.get(field) != after.get(field):
                 print(
-                    f"      {field}: {before.get(field)!r} → {after.get(field)!r}",
+                    f"      {field}: {format_field_value(before.get(field))} → "
+                    f"{format_field_value(after.get(field))}",
                     file=sys.stderr,
                 )
 

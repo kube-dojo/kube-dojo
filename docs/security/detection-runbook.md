@@ -52,7 +52,7 @@ Layers: **PREVENT** (stop execution) → **DETECT** (surface changes) → **CONT
 
 | | |
 |---|---|
-| **What** | Git-diff tripwire: any change to a dependency's `version`, `resolved`, or `integrity` in `package-lock.json` **without** a matching `package.json` change in the same range. |
+| **What** | Git-diff tripwire: any installer-affecting metadata change (version, resolved, integrity, bin, dependency edges, os/cpu, install-script flag, …) in `package-lock.json` **without** a matching `package.json` change in the same range. |
 | **Attack signal** | Silent lockfile swap — attacker mutates the lockfile to point at a malicious tarball while leaving `package.json` unchanged; `npm ci` installs it blindly. |
 | **Where it surfaces** | Workflow **Supply-chain detection** → job `detect` → step **Lockfile-integrity tripwire**. CI failure (exit 1) with `[lockfile-swap]` paths. |
 | **Time-to-detect** | Next PR/push (minutes). |
