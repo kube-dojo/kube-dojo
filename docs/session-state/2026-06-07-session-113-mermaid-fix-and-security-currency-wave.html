@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 113 — mermaid render fix + 2026 security-currency wave</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 113 — mermaid render fix + 2026 security-currency wave (#1821)</h1>
+<p class="meta">2026-06-07 · standalone orchestrator session. User-redirected from the queue to a live bug (mermaid diagrams not rendering), then continued into the deferred #1821 security-currency authoring wave. <b>1 PR merged (#1824), 1 in-flight (#1825, gemini APPROVE_WITH_NITS), 1 issue filed (#1823).</b> The session's throughline: <i>verify-first</i> caught real factual drift (a tj-actions date error in our own rule) and a 4×-bigger blast radius than first scoped (mermaid). All dispatch on non-Claude lanes (s105 directive); every finding ground-checked.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR / Issue</th><th>State</th><th>What</th><th>Cycle</th></tr>
+<tr><td>#1824</td><td><span class="pill merged">MERGED</span></td><td>Quote defense-in-depth 4.2 mermaid labels + add <code>scripts/ci/check_mermaid_labels.py</code> lint tool</td><td>build green 2163p → CI 7/7 green → squash-merge</td></tr>
+<tr><td>#1825</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>#1821 security-currency wave — devsecops 4.4 + 4.3 refresh + NEW 4.7 AI-agent-security + rule date fix</td><td>3 authors → orchestrator ground-check → gemini R1 <b>APPROVE_WITH_NITS</b> → <b>pending: nit decision + merge</b></td></tr>
+<tr><td>#1823</td><td><span class="pill inflight">OPEN</span></td><td>Mermaid campaign — 55 broken diagrams / ~50 files / ~18 error classes + comprehensive parser gate (dedicated session)</td><td>filed + scoped; only 4.2+lint shipped (#1824)</td></tr>
+</table>
+
+<h2>Part 1 — Mermaid render bug (user-reported, root-caused; two distinct causes)</h2>
+<p>User: "on some pages the mermaid flows are not rendered, ie: <code>module-4.2-defense-in-depth</code>." Mermaid renders <b>client-side</b> (<code>src/scripts/mermaid-renderer.ts</code> → <code>mermaid.render</code>), so the astro build + site-health are blind to diagram syntax. Found two independent bugs:</p>
+<ol>
+<li><b>Vite stale optimized-deps cache (dev-only)</b> — every diagram on the page failed with <code>Failed to fetch dynamically imported module: …/flowDiagram-*.js?v=…</code>. <code>services.sh stop dev</code> does <code>rm -rf node_modules/.vite</code>; a browser tab left open on the old <code>?v=</code> hash then requests chunk files the restarted server no longer has. <b>Not a content/prod bug</b> (<code>dist/_astro/</code> bundles these with stable hashes). This is what produced the "some pages" symptom. Fix = restart <code>dev</code>; recurrence = hard-reload tabs after any dev restart.</li>
+<li><b>Unquoted <code>(</code> in flowchart node labels (content; affects production)</b> — <code>[Web Server\n(serves static files)]</code> makes the parser read <code>(</code> as a round-node shape and abort the whole diagram (<code>Parse error … got 'PS'</code>). On the live site these render as raw code (the renderer's error state un-hides the <code>&lt;pre&gt;</code>). Quoted the two 4.2 labels → 8/8 render (verified live in Chrome).</li>
+</ol>
+
+<h3>Comprehensive parser audit — the real blast radius</h3>
+<p>Since the regex lint only knows one pattern, ran a one-time audit: extracted all <b>2005 mermaid blocks</b>, exposed <code>mermaid.parse</code> via a temporary dev-only hook, validated every block with the <i>real parser</i>. Result: <b>55 broken diagrams across ~50 files in ~18 distinct error classes</b> — not just parens: <code>PIPE</code> (parens/pipes in edge labels), <code>STR</code> (embedded quotes in unquoted labels), <code>NUM</code> (spaces in node IDs), round-node nested parens (<code>H(Drains (moves))</code>), quadrant/sequence/xychart syntax, even a mojibake <code>stroke: ﬂ°ccc¶ß</code>. This is heterogeneous and needs per-diagram judgment — <b>not</b> a mechanical sweep. <b>User decision: ship only 4.2 + the lint tool now (#1824); the full campaign is a dedicated session (#1823).</b> The temp parse hook was reverted; the 13-file paren-only fix was reverted (reproducible — approach recorded on #1823).</p>
+
+<h2>Part 2 — #1821 security-currency wave (PR #1825, in-flight)</h2>
+<p>Phase 2 of the Miasma security work (Phase 1 infra = #1812). <b>Verify-first</b> per the cloud-wave lesson: web-verified every 2026 incident <i>before</i> authoring (they're past reviewer training cutoffs; authors fabricate dated incidents). Verified-facts brief: <code>logs/remediation/briefs/session113/1821-verified-incident-facts.md</code>.</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>Content</th></tr>
+<tr><td>4.4 supply-chain (edit, +182)</td><td>codex gpt-5.5</td><td>2026 npm-worm wave: Miasma (preinstall + "Phantom Gyp" 157-byte <code>binding.gyp</code> that bypasses <code>ignore-scripts</code>) + Shai-Hulud; Prevent·Contain·Detect; xz cross-ref (not re-told)</td></tr>
+<tr><td>4.3 CI-security (edit, +218)</td><td>cursor auto</td><td>GitHub Actions tag-mutation class: tj-actions <b>2025-03</b> + actions-cool 2026-05; SHA-pin / cooldown / OIDC-isolation / harden-runner</td></tr>
+<tr><td>4.7 AI-agent-security (NEW, +509)</td><td>codex gpt-5.5</td><td>AI-coding-agent config-injection (Miasma Azure/durabletask variant: 6 trigger files auto-exec on folder-open in Claude Code/Cursor/Gemini/VS Code) + sanitized review/tripwire approach</td></tr>
+<tr><td><code>.claude/rules/github-actions-security.md</code></td><td>orchestrator</td><td><b>fix:</b> tj-actions date <code>2026-03</code> → <code>2025-03</code> (CVE-2025-30066) — was a 1-year error</td></tr>
+</table>
+
+<h3>Two corrections web-verification surfaced (the lesson paying off)</h3>
+<ul>
+<li><b>tj-actions is March 2025, not 2026.</b> The AC <i>and</i> <code>github-actions-security.md</code> both said "2026-03"; it is CVE-2025-30066, 2025-03-14/15, ~23,000 repos. Fixed the rule too.</li>
+<li><b>xz (CVE-2024-3094) is already the canonical <code>incident-xref</code></b> in KCSA <code>module-4.4-supply-chain</code> → 4.4 cross-references it instead of re-telling (incident-dedup compliance). 4.4's author omitted it entirely (safe).</li>
+</ul>
+
+<h3>Review record — Anthropic ground-check + GitHub's agent-PR checklist</h3>
+<p>Applied the framework from <a href="https://github.blog/ai-and-ml/generative-ai/agent-pull-requests-are-everywhere-heres-how-to-review-them/">GitHub's "how to review agent PRs"</a> (user-supplied) to the live diffs: <b>CI gaming</b> clean (no gate/workflow/test/config touched); <b>reuse blindness</b> clean (Miasma split into two non-overlapping facets w/ distinct xref ids; <code>incident_dedup_gate</code> PASS on the combined branch); <b>hallucinated correctness</b> — every date/CVE/package traced to a source; <b>untrusted-input</b> N/A. All three pass <code>verify_module.py</code> (T0; 4.7 = 5081 words, mean_wpp 66.9, 11 sources). Build green (2165 pages). <b>gemini R1 = APPROVE_WITH_NITS</b> (it did NOT false-flag the 2026 incidents — the verified-facts brief worked).</p>
+<p><b>The one nit (ground-checked real, NON-blocking):</b> module 4.3's <i>pre-existing</i> workflow examples use <code>aquasecurity/trivy-action@master</code> (8×) and <code>@v4/@v5</code> — inconsistent with the new SHA-pinning section. Decide next session: (a) merge as-is + follow-up to pin examples, or (b) fix examples (esp. the 8× <code>@master</code>) then merge.</p>
+
+<h2>Part 3 — GitHub agent-PR article assessment</h2>
+<p>KubeDojo already applies ~all 5 red flags, usually as domain-specific mechanisms: <b>reuse blindness</b> → <code>incident-dedup</code> gate; <b>hallucinated correctness</b> → web-verify + cross-family ground-check; <b>agentic ghosting</b> → per-module dispatch + literal briefs; <b>untrusted input</b> → no-LLM-in-CI + GHA hardening (+ module 4.7 teaches it); <b>automated pass first</b> → <code>verify_module.py</code> + CI gates. <b>The one genuine gap:</b> no <i>automated</i> CI-gaming guard — nothing fails the build if an agent PR quietly lowers a <code>verify_module.py</code>/<code>config.py</code> threshold or weakens a workflow condition. Worth a small follow-up issue.</p>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>4.4 supply-chain refresh</td><td>codex gpt-5.5</td><td>draft</td><td>clean; verifier+dedup self-run; ground-checked ✓</td></tr>
+<tr><td>4.3 CI-security refresh</td><td>cursor auto</td><td>draft</td><td>clean; verifier pass (9039w); ground-checked ✓</td></tr>
+<tr><td>4.7 AI-agent-security (new)</td><td>codex gpt-5.5</td><td>draft</td><td>clean; verifier T0 (5081w); ground-checked ✓</td></tr>
+<tr><td>#1825 R1 (3 modules)</td><td>gemini (plan)</td><td>review</td><td>APPROVE_WITH_NITS; no false-flag of 2026 incidents; 1 real nit (4.3 @master examples)</td></tr>
+</table>
+
+<h2>What's next</h2>
+<ul>
+<li><b>#1825</b> — decide the 4.3 <code>@master</code>/tag-pin nit (fix-then-merge vs merge + follow-up), then merge → closes #1821.</li>
+<li><b>#1823 mermaid campaign</b> — fix the 55 heterogeneous broken diagrams + decide/build a comprehensive parser-based CI gate (the regex lint covers only 1/18; a jsdom/mmdc parser gate would catch all — adds a dependency, needs sign-off). Dedicated session.</li>
+<li><b>CI-gaming guard</b> — the one real gap from the GitHub article; small follow-up issue.</li>
+<li><b>#1626</b> — the other real gap: 2 net-new <code>ai-ml-engineering/synthesis-apps</code> teaching modules (3.2 LLM-evals-in-CI, 3.3 agent-observability). Prereq-check rubric ≥3 first.</li>
+<li><b>harden-runner</b> — last #1812 item, owner-only (StepSecurity app at org level).</li>
+</ul>
+
+<h2>Files touched (landed on main via #1824)</h2>
+<ul>
+<li><code>src/content/docs/platform/foundations/security-principles/module-4.2-defense-in-depth.md</code> — quoted 2 mermaid labels</li>
+<li><code>scripts/ci/check_mermaid_labels.py</code> — NEW dependency-free lint (unquoted-paren-in-<code>[..]</code>/<code>{..}</code> class) with <code>--selftest</code>; <b>not yet CI-wired</b> (campaign owns that)</li>
+</ul>
+<h2>Files in flight (PR #1825)</h2>
+<ul>
+<li>devsecops <code>module-4.4-supply-chain-security.md</code>, <code>module-4.3-security-cicd.md</code>, NEW <code>module-4.7-ai-agent-security.md</code>, <code>index.md</code></li>
+<li><code>.claude/rules/github-actions-security.md</code> — tj-actions date fix</li>
+</ul>
+
+</body></html>
