@@ -24,8 +24,8 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
         Master <span class="kd-accent">Cloud Native</span><br />from Zero to Production
       </h1>
       <p class="kd-hero-subtitle">
-        The most comprehensive Kubernetes &amp; cloud native curriculum on the internet.
-        Certifications, platform engineering, SRE, DevSecOps, AI/ML — theory-first, hands-on always.
+        The most comprehensive Kubernetes curriculum on the internet.
+        Certifications, platform engineering, SRE, DevSecOps — theory-first, hands-on always.
       </p>
       <div class="kd-hero-cta">
         <a class="kd-btn-primary" href="/prerequisites/">Start Learning →</a>
@@ -33,10 +33,10 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
         <a class="kd-btn-secondary" href="/progress/">My Progress</a>
       </div>
       <div class="kd-hero-stats">
-        <div class="kd-stat"><span class="kd-stat-num">824</span><span class="kd-stat-label">Modules</span></div>
-        <div class="kd-stat"><span class="kd-stat-num">8</span><span class="kd-stat-label">Tracks</span></div>
+        <div class="kd-stat"><span class="kd-stat-num">568</span><span class="kd-stat-label">Modules</span></div>
+        <div class="kd-stat"><span class="kd-stat-num">6</span><span class="kd-stat-label">Tracks</span></div>
         <div class="kd-stat"><span class="kd-stat-num">21</span><span class="kd-stat-label">Certifications</span></div>
-        <div class="kd-stat"><span class="kd-stat-num">327</span><span class="kd-stat-label">Ukrainian translations</span></div>
+        <div class="kd-stat"><span class="kd-stat-num">115</span><span class="kd-stat-label">Ukrainian translations</span></div>
       </div>
     </div>
 
@@ -49,15 +49,13 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
       </div>
       <div class="kd-term-body">
         <span class="t-prompt">$</span> <span class="t-cmd">kubectl get tracks</span><br />
-        <span class="t-out">NAME                 MODULES  STATUS</span><br />
-        <span class="t-hl">fundamentals</span>         <span class="t-ok">44</span>       Ready<br />
-        <span class="t-hl">linux</span>                <span class="t-ok">37</span>       Ready<br />
-        <span class="t-hl">ai</span>                   <span class="t-ok">37</span>       Ready<br />
-        <span class="t-hl">certifications</span>       <span class="t-ok">195</span>      Ready<br />
-        <span class="t-hl">cloud</span>                <span class="t-ok">92</span>       Ready<br />
-        <span class="t-hl">ai-ml-engineering</span>    <span class="t-ok">121</span>      Ready<br />
-        <span class="t-hl">on-premises</span>          <span class="t-ok">57</span>       Ready<br />
-        <span class="t-hl">platform</span>             <span class="t-ok">241</span>      Ready<br />
+        <span class="t-out">NAME              MODULES   STATUS</span><br />
+        <span class="t-hl">fundamentals</span>      <span class="t-ok">33</span>        Ready<br />
+        <span class="t-hl">linux</span>             <span class="t-ok">37</span>        Ready<br />
+        <span class="t-hl">cloud</span>             <span class="t-ok">85</span>        Ready<br />
+        <span class="t-hl">certifications</span>    <span class="t-ok">169</span>       Ready<br />
+        <span class="t-hl">platform</span>          <span class="t-ok">214</span>       Ready<br />
+        <span class="t-hl">on-premises</span>       <span class="t-ok">30</span>        Ready<br />
         <br />
         <span class="t-prompt">$</span> <span class="t-cmd">kubectl apply -f learning-path.yaml</span><br />
         <span class="t-ok">✓</span> <span class="t-out">learningpath/cka-track configured</span>
@@ -68,13 +66,13 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
   <!-- Track Cards -->
   <div class="kd-section">
     <h2 class="kd-section-title">Learning Tracks</h2>
-    <p class="kd-section-desc">Eight structured paths from absolute beginner to production expert.</p>
+    <p class="kd-section-desc">Six structured paths from absolute beginner to production expert.</p>
     <div class="kd-tracks">
       <a class="kd-track t-fund" href="/prerequisites/">
         <div class="kd-track-icon">⚙</div>
         <h3>Fundamentals</h3>
         <p>Zero to Terminal, Cloud Native 101, K8s Basics. Start here if you're new.</p>
-        <span class="kd-track-meta">📚 44 modules · ⏱ ~55h</span>
+        <span class="kd-track-meta">📚 33 modules · ⏱ ~40h</span>
       </a>
       <a class="kd-track t-linux" href="/linux/">
         <div class="kd-track-icon">💻</div>
@@ -82,41 +80,29 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
         <p>Everyday Use + Deep Dive. From basic commands to kernel internals.</p>
         <span class="kd-track-meta">📚 37 modules · ⏱ ~50h</span>
       </a>
-      <a class="kd-track t-ai" href="/ai/">
-        <div class="kd-track-icon">🤖</div>
-        <h3>AI</h3>
-        <p>Use AI well: prompting, AI-native work, local models, AI for platform work. Plus a 72-chapter History of AI.</p>
-        <span class="kd-track-meta">📚 37 modules · ⏱ ~80h</span>
-      </a>
-      <a class="kd-track t-cert" href="/k8s/">
-        <div class="kd-track-icon">🏆</div>
-        <h3>Certifications</h3>
-        <p>CKA, CKAD, CKS, KCNA, KCSA, and ecosystem certs — exam-aligned with practice questions.</p>
-        <span class="kd-track-meta">📚 195 modules · ⏱ ~250h</span>
-      </a>
       <a class="kd-track t-cloud" href="/cloud/">
         <div class="kd-track-icon">☁</div>
         <h3>Cloud</h3>
         <p>AWS, GCP, Azure essentials. EKS/GKE/AKS deep dives. Architecture patterns.</p>
-        <span class="kd-track-meta">📚 92 modules · ⏱ ~130h</span>
+        <span class="kd-track-meta">📚 85 modules · ⏱ ~120h</span>
       </a>
-      <a class="kd-track t-aiml" href="/ai-ml-engineering/">
-        <div class="kd-track-icon">🧠</div>
-        <h3>AI/ML Engineering</h3>
-        <p>Build &amp; operate AI/ML systems: deep learning from scratch, RAG, agents, MLOps, AI infra.</p>
-        <span class="kd-track-meta">📚 121 modules · ⏱ ~270h</span>
+      <a class="kd-track t-cert" href="/k8s/">
+        <div class="kd-track-icon">🏆</div>
+        <h3>Certifications</h3>
+        <p>CKA, CKAD, CKS, KCNA, KCSA — exam-aligned with practice questions.</p>
+        <span class="kd-track-meta">📚 169 modules · ⏱ ~200h</span>
+      </a>
+      <a class="kd-track t-plat" href="/platform/">
+        <div class="kd-track-icon">🛠</div>
+        <h3>Platform Engineering</h3>
+        <p>SRE, GitOps, DevSecOps, MLOps, FinOps, Chaos Engineering. 96 toolkit modules.</p>
+        <span class="kd-track-meta">📚 214 modules · ⏱ ~280h</span>
       </a>
       <a class="kd-track t-prem" href="/on-premises/">
         <div class="kd-track-icon">🏗</div>
         <h3>On-Premises</h3>
         <p>Bare metal K8s from rack to cluster. Networking, storage, operations.</p>
-        <span class="kd-track-meta">📚 57 modules · ⏱ ~85h</span>
-      </a>
-      <a class="kd-track t-plat" href="/platform/">
-        <div class="kd-track-icon">🛠</div>
-        <h3>Platform Engineering</h3>
-        <p>SRE, GitOps, DevSecOps, MLOps, FinOps, Chaos Engineering. 112 toolkit modules.</p>
-        <span class="kd-track-meta">📚 241 modules · ⏱ ~320h</span>
+        <span class="kd-track-meta">📚 30 modules · ⏱ ~45h</span>
       </a>
     </div>
 
@@ -125,18 +111,18 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
     <p class="kd-section-desc">Not sure where to start? Follow this progression.</p>
     <div class="kd-path">
       <div class="kd-path-row">
-        <div class="kd-step s-green"><span class="kd-step-num">1</span> Fundamentals <span class="kd-step-mod">44 modules</span></div>
+        <div class="kd-step s-green"><span class="kd-step-num">1</span> Fundamentals <span class="kd-step-mod">33 modules</span></div>
         <span class="kd-arrow">→</span>
-        <div class="kd-step s-blue"><span class="kd-step-num">2</span> CKA Certification <span class="kd-step-mod">41 modules</span></div>
+        <div class="kd-step s-blue"><span class="kd-step-num">2</span> CKA Certification <span class="kd-step-mod">47 modules</span></div>
         <span class="kd-arrow">→</span>
-        <div class="kd-step s-blue"><span class="kd-step-num">3</span> CKAD + CKS <span class="kd-step-mod">54 modules</span></div>
+        <div class="kd-step s-blue"><span class="kd-step-num">3</span> CKAD + CKS <span class="kd-step-mod">60 modules</span></div>
       </div>
       <div class="kd-path-row">
-        <div class="kd-step s-purple"><span class="kd-step-num">4</span> Cloud Deep Dive <span class="kd-step-mod">92 modules</span></div>
+        <div class="kd-step s-purple"><span class="kd-step-num">4</span> Cloud Deep Dive <span class="kd-step-mod">85 modules</span></div>
         <span class="kd-arrow">→</span>
-        <div class="kd-step s-orange"><span class="kd-step-num">5</span> Platform Engineering <span class="kd-step-mod">241 modules</span></div>
+        <div class="kd-step s-orange"><span class="kd-step-num">5</span> Platform Engineering <span class="kd-step-mod">214 modules</span></div>
         <span class="kd-arrow">→</span>
-        <div class="kd-step s-teal"><span class="kd-step-num">6</span> On-Prem / Extending <span class="kd-step-mod">65 modules</span></div>
+        <div class="kd-step s-teal"><span class="kd-step-num">6</span> On-Prem / Extending <span class="kd-step-mod">38 modules</span></div>
       </div>
     </div>
   </div>
@@ -262,7 +248,6 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
   .t-fund::before { background: #00E676; } .t-linux::before { background: #FFD600; }
   .t-cloud::before { background: #7C4DFF; } .t-cert::before { background: #326CE5; }
   .t-plat::before { background: #FF6D00; } .t-prem::before { background: #00BFA5; }
-  .t-ai::before { background: #EC407A; } .t-aiml::before { background: #5C6BC0; }
 
   .kd-track-icon {
     width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; display: flex;
@@ -271,7 +256,6 @@ const isHomepage = Astro.locals.starlightRoute?.entry?.id === 'index.md'
   .t-fund .kd-track-icon { background: #E8FFF0; } .t-linux .kd-track-icon { background: #FFFDE7; }
   .t-cloud .kd-track-icon { background: #F3EDFF; } .t-cert .kd-track-icon { background: #EBF1FF; }
   .t-plat .kd-track-icon { background: #FFF3E0; } .t-prem .kd-track-icon { background: #E0F7F4; }
-  .t-ai .kd-track-icon { background: #FCE4EC; } .t-aiml .kd-track-icon { background: #E8EAF6; }
 
   .kd-track h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.375rem; color: var(--sl-color-text); }
   .kd-track p { font-size: 0.8rem; color: var(--sl-color-gray-3); margin-bottom: 1rem; line-height: 1.5; }
