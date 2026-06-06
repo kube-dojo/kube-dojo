@@ -507,8 +507,8 @@ spec:
 ```mermaid
 flowchart TD
     Internet((Internet)) --> Firewall[Firewall]
-    Firewall --> WebServer[Web Server\n(serves static files)]
-    WebServer --> AppServer[App Server\n(business logic)]
+    Firewall --> WebServer["Web Server\n(serves static files)"]
+    WebServer --> AppServer["App Server\n(business logic)"]
     AppServer --> Database[(Database\nPostgreSQL)]
 ```
 
