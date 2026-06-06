@@ -3,7 +3,7 @@ title: "Self-Supervised Learning"
 description: "Decide when self-supervised pretraining is the right tool, choose between contrastive / masked / self-distillation families, design augmentation and evaluation protocols, and use DINOv2 / MAE off the shelf when pretraining your own would be wasteful."
 slug: ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning
 sidebar:
-  order: 8
+  order: 1009
 ---
 
 > Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-120 minutes

@@ -32,7 +32,9 @@ sidebar:
 | 1.4.2 | [Residual Connections & Deep-Architecture Patterns](/ai-ml-engineering/deep-learning/module-1.4.2-residual-deep-architectures/) |
 | 1.4.3 | [Attention from Scratch](/ai-ml-engineering/deep-learning/module-1.4.3-attention-from-scratch/) |
 | 1.4.4 | [The Transformer Block from Scratch](/ai-ml-engineering/deep-learning/module-1.4.4-transformer-block-from-scratch/) |
-| 1.5 | [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) |
+| 1.5 | [Convolutional Neural Networks & Computer Vision](/ai-ml-engineering/deep-learning/module-1.5-cnns-computer-vision/) |
+| 1.6 | [Recurrent Networks & Sequence Models](/ai-ml-engineering/deep-learning/module-1.6-rnns-sequence-models/) |
+| 1.7 | [Capstone: Train a Real Net End-to-End](/ai-ml-engineering/deep-learning/module-1.7-capstone-train-a-real-net/) |
 | 1.8 | [Self-Supervised Learning](/ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning/) |
 | 1.9 | [Graph Neural Networks](/ai-ml-engineering/deep-learning/module-1.9-graph-neural-networks/) |
 | 1.10 | [Modern Transformers: RoPE, ALiBi, and Attention Variants](/ai-ml-engineering/deep-learning/module-1.10-modern-transformers-rope-and-attention/) |

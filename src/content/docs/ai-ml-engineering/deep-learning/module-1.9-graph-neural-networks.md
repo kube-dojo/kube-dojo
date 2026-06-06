@@ -3,7 +3,7 @@ title: "Graph Neural Networks"
 description: "Decide when graph-structured inductive bias actually helps, choose between GCN, GraphSAGE, and GAT for the regime you have, recognize over-smoothing, over-squashing, and heterophily as the three GNN-specific failure modes, and use PyTorch Geometric correctly for node, link, and graph-level tasks."
 slug: ai-ml-engineering/deep-learning/module-1.9-graph-neural-networks
 sidebar:
-  order: 9
+  order: 1010
 ---
 
 > Track: AI/ML Engineering | Complexity: Intermediate | Time: 90-120 minutes
