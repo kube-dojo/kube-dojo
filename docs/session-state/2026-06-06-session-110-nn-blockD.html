@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 110 — NN Block D (CNNs · real RNNs · end-to-end capstone) merged → epic #1793 COMPLETE</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; border-bottom: 3px solid #326ce5; padding-bottom: .3rem; }
+  h2 { font-size: 1.2rem; margin-top: 1.8rem; color: #326ce5; }
+  code { background: #f4f4f4; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .92em; }
+  th, td { border: 1px solid #ddd; padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f4fc; }
+  .tldr { background: #f0f7ff; border-left: 4px solid #326ce5; padding: .8rem 1rem; border-radius: 4px; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .warn { color: #9a6700; }
+  ul { margin: .4rem 0; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 110 — NN Block D (CNNs · real RNNs · end-to-end capstone) merged → epic #1793 COMPLETE</h1>
+<p><em>2026-06-06 · standalone orchestrator session · continues session 109 (NN epic #1793, Phase 4 / Block D — the final block)</em></p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Drove <strong>Block D end-to-end to merge in PR #1808</strong> (main
+<code>cb62d38e</code>), <strong>Phase 4 (final) of NN epic #1793</strong>. Three modules — <strong>D1
+1.5 CNNs &amp; Computer Vision</strong> (cursor; rescope of the mis-slugged <code>1.5-rnns</code>,
+expanded T3→T0), <strong>D2 1.6 Recurrent Networks &amp; Sequence Models</strong> (codex; net-new
+BPTT/LSTM/GRU/teacher-forcing), <strong>D3 1.7 Capstone: Train a Real Net End-to-End</strong>
+(deepseek→cursor; net-new) — all <strong>T0</strong>, each cross-family R1'd, every finding
+orchestrator-ground-checked. Reviewers <strong>executed the PyTorch</strong> (agy &amp; cursor ran
+<code>uv run --with torch</code>): verified attention/conv/RNN shapes, the conv output-size formula,
+LSTM/GRU gate equations, the BPTT gradient-sum, param counts (CNN 667,178), AMP on 2.12, and the
+historical dates against primary sources. Consolidation removed the old <code>1.5-rnns</code> file
+(redirect→<code>1.5-cnns</code>), added the 1.6/1.7 index rows, fixed the sidebar-order bug
+(1.8/1.9 sorted before the 1004–1006 block), and re-chained nav 1.4.4→1.5→1.6→1.7→1.8. Build green
+(2163 pages, 0 schema errors), site-health 0 errors, both required CI gates pass. <strong>Epic #1793
+CLOSED</strong> (all 4 phases + every AC; #1609 was already closed). Single NN-epic changelog entry
+added. All dispatch on non-Claude lanes per the active weekly-reset directive.
+<strong>The deep-learning section is now a coherent from-scratch arc (10 → 26 modules).</strong></div>
+
+<h2>What shipped — Block D (PR #1808)</h2>
+<table>
+<tr><th>Module (order)</th><th>Author</th><th>Cross-family R1</th><th>Fixes applied</th><th>Final</th></tr>
+<tr>
+  <td><strong>D1 · 1.5 CNNs &amp; Computer Vision</strong> (1006, rescope+expand)</td>
+  <td>cursor <code>auto</code></td>
+  <td>agy <code>gemini-3.1-pro</code> — <strong>APPROVE</strong> (ran the code; 0 P1/P2)</td>
+  <td>2 nits: (1) the <code>ConvBlock</code> residual did <code>relu</code> <em>before and after</em>
+  the additive merge — non-canonical right after 1.4.2 taught residuals → rewrote to ResNet
+  post-activation <code>relu(bn(conv(x)) + shortcut)</code>; (2) the transfer-learning exercise said
+  "freeze the backbone, train only the new <code>fc</code>" but replaces <code>conv1</code> with a
+  fresh random layer (a frozen random conv1 is broken) → "train the new <code>conv1</code> and
+  <code>fc</code>".</td>
+  <td>T0 5015w</td>
+</tr>
+<tr>
+  <td><strong>D2 · 1.6 Recurrent Networks &amp; Sequence Models</strong> (1007, net-new)</td>
+  <td>codex <code>gpt-5.5</code></td>
+  <td>cursor — <strong>APPROVE_WITH_NITS</strong> (ran all 9 snippets; 0 P1/P2)</td>
+  <td>3 nits: (1) clarify the "two bias vectors" claim is <code>nn.RNN</code>'s
+  <code>bias_ih</code>/<code>bias_hh</code> vs the scratch cell's one combined <code>b_h</code>;
+  (2) precise <code>CrossEntropyLoss</code> comment ((N, num_classes) after reshape); (3) "Jurgen" →
+  "Jürgen" Schmidhuber. Reviewer recomputed the worked recurrence (h₁≈0.462…), verified the LSTM/GRU
+  gate forms + BPTT gradient-sum + packing, and queried arXiv for the LSTM/GRU/seq2seq dates.</td>
+  <td>T0 5286w</td>
+</tr>
+<tr>
+  <td><strong>D3 · 1.7 Capstone: Train a Real Net End-to-End</strong> (1008, net-new)</td>
+  <td>deepseek → cursor (expand-to-T0)</td>
+  <td>agy <code>gemini-3.1-pro</code> — <strong>APPROVE_WITH_NITS</strong> (ran the training loop)</td>
+  <td>deepseek's draft came back <strong>T3, not the T0 it self-reported</strong> — verifier caught
+  body 4618 (&lt;5000), Did-You-Know counted as 1 (bare blockquotes, not bulleted), a <code>has_47</code>
+  leak token ("epoch 47"), 6 LOs (gate wants 3–5), and outcomes-alignment. cursor expand-to-T0 fixed
+  all five; then agy's R1 found 1 nit (a CNN param-count comment said ~620k; actual 667,178 → ~670k).</td>
+  <td>T0 5424w</td>
+</tr>
+</table>
+
+<h2>Consolidation (this PR)</h2>
+<ul>
+<li><strong>Slug fix + redirect.</strong> The old <code>module-1.5-rnns-sequence-models.md</code> had a
+CNN body under an RNN URL (and was already CNN-<em>titled</em> from the session-105 relabel). It was
+<code>git rm</code>'d; the new canonical <code>module-1.5-cnns-computer-vision</code> owns the topic;
+<code>astro.config.mjs</code> redirects the old slug → new.</li>
+<li><strong>Index.</strong> <code>deep-learning/index.md</code> 1.5 row re-pointed + net-new 1.6 / 1.7
+rows added.</li>
+<li><strong>Sidebar-order bug fixed.</strong> 1.8/1.9 carried <code>sidebar.order</code> 8/9 — they
+sorted <em>before</em> the 1004–1006 block in the autogenerate sidebar → bumped to 1009/1010; 1.10
+(already 1009) → 1011.</li>
+<li><strong>Nav re-chain.</strong> 1.4.4 → 1.5(CNN) → 1.6(RNN) → 1.7(capstone) → 1.8; re-pointed two
+<code>machine-learning/</code> modules (2.1, 2.2) off the old slug.</li>
+<li><strong>Changelog.</strong> Single NN-epic entry under a new <code>## June 2026</code> (Blocks A–D
+deliberately added none per-wave) — deep-learning rebuilt 10 → 26 modules.</li>
+</ul>
+
+<h2>Reviewer scorecard (this wave)</h2>
+<ul>
+<li><strong>agy on D1</strong> — APPROVE, 0 errors. Executed the manual conv (matched <code>F.conv2d</code>),
+<code>CifarCNN</code> shapes/params, the transfer model, and AMP/<code>GradScaler</code> on 2.12;
+recomputed every output-size formula and param count; checked all historical dates. Second clean agy
+review lane confirmation this epic.</li>
+<li><strong>cursor on D2</strong> — APPROVE_WITH_NITS; code/concept/math CLEAN. Ran all 9 PyTorch blocks,
+verified BPTT/gate math, and hit the arXiv API to confirm the LSTM/GRU/seq2seq submission dates.</li>
+<li><strong>agy on D3</strong> — APPROVE_WITH_NITS; ran the full training loop (2 epochs, clean) and
+verified CNN geometry 32→16→8→4 + param count 667,178 + the verifier gates. Only a stale param-count
+comment.</li>
+<li><strong>deepseek on D3 (author)</strong> — its self-report claimed T0 / "~5800 prose words / 4 DYK";
+the verifier ground-truth was T3 / 4618 / 1-DYK. <strong>Always verifier-ground-truth a deepseek
+self-report.</strong></li>
+</ul>
+
+<h2>Process notes / gotchas (fold into future briefs)</h2>
+<ul>
+<li><strong>deepseek self-reports are unreliable.</strong> Verify every author claim with
+<code>verify_module.py</code> — do not trust the agent's own "T0 pass" line.</li>
+<li><strong>Did-You-Know must be <em>bulleted</em> blockquotes</strong> (<code>- &gt; **Did You Know?**</code>).
+The verifier's <code>_count_bullets</code> counts bullet items; bare <code>&gt; **Did You Know?**</code>
+blockquotes count as 0–1 → <code>structure_did_you_know_4</code> fails even with four visible callouts.</li>
+<li><strong><code>47</code> is an <code>anti_leak</code> token.</strong> The <code>has_47</code> check
+flags a standalone <code>47</code> in prose (a known LLM-template artifact). "epoch 47" tripped it; use
+a different number.</li>
+<li><strong>The <code>structure_sections_present</code> gate wants 3–5 learning outcomes</strong>, not
+5–7 (the Block-C/D author shared-rules said "5–7" — a brief bug; D1/D2 used 5 and passed, D3 used 6
+and failed). Use exactly 5.</li>
+<li><strong>Sub-floor → expand-to-T0 → R1 (no wasted review).</strong> D3 failed the floor, so it was
+expanded to T0 <em>first</em> (cursor) and only then got its single cross-family R1 — no R1 burned on
+an incomplete draft. (Same pattern as 1.4.2 in Block C.)</li>
+<li><strong>Sibling-grep must be repo-wide, not section-scoped.</strong> My first inbound-link grep only
+covered <code>deep-learning/</code> + <code>astro.config</code>; <code>check_site_health.py</code> caught
+two <code>machine-learning/</code> modules (2.1, 2.2) still pointing at the old slug. A repo-wide
+<code>grep -rl</code> over <code>src/content/</code> is the right scope when renaming a slug.</li>
+<li><strong>Net-new NN modules are NOT pipeline-board-tracked</strong> (same as Blocks A–C) →
+<code>stage:None</code>, no <code>.pipeline/reviews/</code> records; the cross-family review lives in
+the PR + ledger + this handoff.</li>
+<li><strong>Worktree build:</strong> the integration worktree needs a <code>node_modules</code> symlink
+(<code>ln -s ../../node_modules</code>) and the primary <code>.venv</code> python by absolute path for
+<code>check_site_health.py</code> (worktrees have no <code>.venv</code>).</li>
+</ul>
+
+<h2>Epic #1793 — CLOSED (all four phases complete)</h2>
+<ul>
+<li><strong>Phase 1 (Block A 1.1.1–1.1.8)</strong> — NumPy from-scratch foundations + autograd; rescope 1.7.</li>
+<li><strong>Phase 2 (Block B 1.2/1.3/1.3.1–1.3.6)</strong> — PyTorch bridge + training-as-engineering; gut 1.4.</li>
+<li><strong>Phase 3 (Block C 1.4.1–1.4.4)</strong> — embeddings → residual → attention → transformer-by-hand; gut 1.6.</li>
+<li><strong>Phase 4 (Block D 1.5/1.6/1.7)</strong> — CNNs (fix the 1.5 mislabel) + real RNNs + capstone.</li>
+</ul>
+<p>All three mislabeled modules (1.4/1.5/1.6) are now corrected; every AC checked; #1609 closed as
+superseded. The section reads as one progression: a transformer, a CNN, and an RNN are each shown to be
+the same <code>nn.Linear</code> + nonlinearity, trained by the same backprop the learner built by hand.</p>
+
+<h2>Resume — next</h2>
+<ul>
+<li><strong>NN epic is DONE.</strong> Next curriculum work (per <code>feedback_process_worklist_sequentially</code>):
+the rest of <strong><code>ai-ml-engineering</code></strong> (advanced-genai, ai-infrastructure,
+ai-native-development, machine-learning) expand-to-floor / review-first, then <strong><code>on-premises</code></strong>,
+then <strong><code>platform</code></strong> (the big one: Disciplines 45 + Toolkits 36 + Foundations 28
+critical). Same proven loop: scope each wave from <code>verify_module.py metrics.body_words</code> + the
+board review-axis FIRST (some may already be <code>done</code>); ≤3 concurrent authors → cross-family R1
+(different family) → ground-check every finding → consolidated PR → build in worktree → finalize.</li>
+<li><strong>Sitewide cleanup candidate (carried from s109):</strong> the <code>## Learner check</code>
+section ships with hook-explanation meta-text across all of Blocks A–D — a merge-hook artifact in
+learner-facing content. Worth a dedicated sitewide reword/strip pass now the epic is done.</li>
+<li><strong>Pre-existing broken links surfaced this wave:</strong> 1.8 and 1.9 body cross-references point
+at <code>module-1.10-dimensionality-reduction/</code>, which does not exist (predates this epic; not the
+Next-Module nav). Site-health flags them as warnings, not errors. Fix when ai-ml-engineering is revisited.</li>
+<li><strong>Other open threads (unchanged):</strong> G2 #1623 engineering-craft Stage-1
+(<code>.worktrees/g2-craft</code>); G4 #1626 synthesis-apps 3.2/3.3; the 2 org-gated secret-scanning
+extras (#1798, owner action); leaked-meta cleanup in <code>mlops/module-5.6-ml-pipelines.md</code> +
+<code>cloud/hyperscaler-rosetta-stone.md</code>.</li>
+<li><strong>Active directive still in force:</strong> no Claude/opus dispatch lanes until the weekly reset
+(orchestrator necessarily runs on Claude). Reusables: <code>logs/remediation/briefs/nn-blockD/{_shared-rules,_review-rules,D1–D3,WAVE-D-LEDGER}.md</code>.</li>
+</ul>
+</body>
+</html>
