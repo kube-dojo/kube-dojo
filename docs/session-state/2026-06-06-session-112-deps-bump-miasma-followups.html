@@ -16,16 +16,20 @@ th { background: #f8f8f8 }
 blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
 </style></head><body>
 
-<h1>Session 112 — astro/starlight bump (build-verify catch) + Miasma Phase-1 follow-ups</h1>
-<p class="meta">2026-06-06 · standalone orchestrator session · continued session 111's site+security pivot. Two PRs merged: the in-flight Dependabot npm bump (which a local build verify saved from silently breaking <code>main</code>) and the remaining Miasma supply-chain Phase-1 follow-ups (lockfile-integrity tripwire + runbooks). All dispatch on non-Claude lanes (s105 directive honored).</p>
+<h1>Session 112 — deps bump (build-verify catch) + Miasma Phase-1 COMPLETE + README refresh</h1>
+<p class="meta">2026-06-06 · standalone orchestrator session · continued session 111's site+security pivot. <strong>6 PRs merged.</strong> The in-flight Dependabot npm bump (a local build verify saved <code>main</code> from a silent Starlight-0.39 break); the remaining Miasma supply-chain Phase-1 follow-ups (lockfile-integrity tripwire + runbooks) AND the agent-config injection tripwire — <strong>#1812 is now 11/12 (only the owner-only harden-runner remains)</strong>; a full root-README refresh; and the session-handoff docs. Then scoped + filed the curriculum-currency work (#1821) and confirmed #1626 ready, and <strong>paused for a fresh session to author them</strong> (web-verified content wave). All dispatch on non-Claude lanes (s105 directive honored); every agent finding orchestrator-ground-checked.</p>
 
 <h2>Headline</h2>
 <table>
-<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
-<tr><td>#1816</td><td><span class="pill merged">MERGED</span> <code>79e40619</code></td><td>astro 6.1.9→6.4.2 + Starlight 0.38.2→0.39.2 bump + <strong>required sidebar config migration</strong></td><td>local build caught 0.39 breaking change → deterministic migration → codex AST review APPROVE → CI green → squash-merge (supersedes #1800)</td></tr>
+<tr><th>PR / Issue</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1816</td><td><span class="pill merged">MERGED</span> <code>79e40619</code></td><td>astro 6.1.9→6.4.2 + Starlight 0.38.2→0.39.2 bump + <strong>required sidebar config migration</strong></td><td>local build caught 0.39 breaking change → deterministic 104-site migration → codex AST review APPROVE → CI green → squash-merge (supersedes #1800)</td></tr>
 <tr><td>#1817</td><td><span class="pill merged">MERGED</span> <code>d2c94a92</code></td><td>Miasma Phase-1 follow-ups — lockfile-integrity tripwire + detection runbook + local-dev guidance + deploy.yml CONTAIN comment</td><td>cursor author → codex R1 NEEDS_CHANGES (2 validated bypasses) → cursor R2 fix → orchestrator ground-check → CI green → squash-merge</td></tr>
-<tr><td>#1800</td><td><span class="pill merged">CLOSED</span></td><td>Dependabot npm-minor-patch group (8 updates)</td><td>superseded by #1816 (the bump alone breaks the build under 0.39)</td></tr>
-<tr><td>#1812</td><td><span class="pill inflight">OPEN</span></td><td>Issue: Miasma defense-in-depth</td><td><strong>10/12 ACs done</strong>; 2 remain (harden-runner = owner action, agent-config injection alert = next piece)</td></tr>
+<tr><td>#1818</td><td><span class="pill merged">MERGED</span></td><td>session-112 handoff (initial) + STATUS</td><td>docs PR (this file, since expanded)</td></tr>
+<tr><td>#1819</td><td><span class="pill merged">MERGED</span></td><td><strong>root README full refresh</strong> — 8 tracks / 824 modules, fix stale counts + broken links</td><td>stale since Apr-1/pre-Astro; rewrote to canonical counts + live-site links (all verified) → CI green → squash-merge</td></tr>
+<tr><td>#1820</td><td><span class="pill merged">MERGED</span> <code>9cb39b53</code></td><td><strong>agent-config injection tripwire</strong> (Miasma agent-config variant DETECT)</td><td>cursor author → codex R1 NEEDS_CHANGES (proven fail-open + bypass + scope gaps + FP) → cursor R2 fix → orchestrator ground-check → CI green → squash-merge</td></tr>
+<tr><td>#1812</td><td><span class="pill inflight">OPEN</span></td><td>Issue: Miasma defense-in-depth</td><td><strong>11/12 ACs done</strong> — ONLY remaining: harden-runner egress (owner-only org action). Keep open tracking just that.</td></tr>
+<tr><td>#1821</td><td><span class="pill inflight">OPEN (NEW)</span></td><td>Issue: Security Phase 2 — devsecops curriculum currency + AI-agent config-injection content</td><td>filed this session with web-verify-first ACs; <strong>authoring deferred to next session</strong></td></tr>
+<tr><td>#1626</td><td><span class="pill inflight">OPEN</span></td><td>Issue: G4 gap — LLM service golden path (2 teaching modules)</td><td>ready to author (full ACs); prereq rubric check pending. #1625 = already-merged citation_backfill bug fix, NOT a gap.</td></tr>
 </table>
 
 <h2>Load-bearing lesson #1 — the local build verify earned its keep (again)</h2>
@@ -55,8 +59,24 @@ blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
 <tr><td>CONTAIN</td><td>build/deploy job separation (+ lock comment) · least-privilege</td><td>✅ (comment added this session)</td></tr>
 <tr><td>DETECT</td><td>lifecycle-script tripwire · provenance gate · <strong>lockfile-integrity tripwire</strong> · detection runbook</td><td>✅ (last two this session)</td></tr>
 <tr><td>DETECT</td><td>harden-runner egress monitoring</td><td>⏳ owner action (StepSecurity GitHub app at org level, like #1798)</td></tr>
-<tr><td>DETECT</td><td>agent-config injection alert</td><td>⏳ next piece (pre-commit + CI check for auto-exec content in <code>.claude/</code> / <code>.cursor/</code> / <code>AGENTS.md</code> / <code>.cursorrules</code> / <code>copilot-instructions.md</code>)</td></tr>
+<tr><td>DETECT</td><td><strong>agent-config injection alert</strong></td><td>✅ this session (#1820) — see lesson #3</td></tr>
 </table>
+<p><strong>#1812 is now 11/12 ACs. The only remaining item is harden-runner egress (owner-only org action).</strong></p>
+
+<h2>Load-bearing lesson #3 — the agent-config injection tripwire (#1820) + a static scanner's bypass economy</h2>
+<p>The Miasma AI-agent-config-injection variant plants auto-exec payloads in AI IDE config files (<code>.claude/</code>, <code>.cursor/</code>, <code>AGENTS.md</code>, <code>CLAUDE.md</code>, MCP configs, …) that run when the repo is opened in an AI IDE. New control: <code>scripts/security/check_agent_configs.py</code> (pre-commit + the <code>detect</code> CI job) — a whole-file scan for <strong>high-signal auto-exec compositions only</strong> (pipe-to-shell, base64-to-shell, eval-of-cmdsubst/decoded-JS, process-substitution, interpreter-<code>-c</code>+downloader, child_process exec, PowerShell IEX, python-remote-exec) — NOT bare keywords, because this repo's configs are full of legit shell (<code>npm run build</code>, localhost curl) and "eval" inside "evaluate". Verified <strong>0 findings on the current tree</strong> (41 files).</p>
+<p><strong>codex R1 = NEEDS_CHANGES, again with reproduced bypasses</strong> (temp repos): (1) <strong>fail-open</strong> — a non-UTF-8 in-scope file (<code>\xff</code> + <code>curl|sh</code>) was silently skipped despite the "fail-closed" docstring; (2) <strong>missed download-and-execute forms</strong> — <code>bash &lt;(curl…)</code>, <code>python -c "$(curl…)"</code>, <code>sh -c "$(curl…)"</code>, <code>source /dev/stdin</code>, <code>curl -o /tmp/x; bash /tmp/x</code>; (3) <strong>scope gaps</strong> — MCP configs (<code>.mcp.json</code>/<code>.vscode/mcp.json</code> — which literally define commands that run!), <code>.aider.conf.yaml</code>, <code>.roo</code>/<code>.clinerules</code>/<code>.windsurf</code> dirs, <code>.github/instructions/</code>, plus a needless <code>scripts/</code> blind spot; (4) FP — <code>\bIEX\b</code> matched Elixir <code>iex</code>. <strong>R2 fix:</strong> decode <code>errors="replace"</code>+still-scan (fail-closed); +5 downloader-anchored patterns + backslash-continuation joining; scope expanded (MCP + the above, <code>scripts/</code> un-excluded); bare IEX made case-sensitive. <strong>Orchestrator ground-checked all 9 R1-proven payloads → exit 1; non-UTF-8 → exit 1; evil MCP config → exit 1; Elixir iex → exit 0 (FP gone); current tree → exit 0.</strong></p>
+<p><strong>The meta-lesson (reinforced twice this session):</strong> a static pattern scanner can be gamed at the margins forever. The convergence rule from #1813 holds — fix every <em>demonstrated</em> bypass + the structural class (here: fail-open, and downloader-anchored compositions), then converge rather than chase an infinite review loop. The suppression markers (<code>[lockfile-only]</code>, <code>agent-config-allow</code>) are honestly documented as <em>acknowledgement markers, not authorization controls</em> — their value is forcing a human to review a flagged line.</p>
+
+<h2>Root README refresh (#1819)</h2>
+<p>The root <code>README.md</code> was from <strong>April 1 (pre-Astro-migration)</strong> and badly stale: the Status table listed only 4 tracks with wrong counts (23/142/28/102) and <strong>omitted Cloud, AI, AI/ML Engineering, On-Premises entirely</strong>; every track link pointed at MkDocs-era <code>docs/&lt;track&gt;/</code> paths that 404 in the repo. Full refresh → <strong>8 tracks / 824 modules</strong> (counts match the live homepage + <code>check_site_health.py</code>), all links repointed to the live site (every one verified to resolve to an index page), redrew the Learning Path + Where-to-Start, added live-site + tech-stack sections. <strong>Ukrainian framed honestly</strong> (user correction): partial (~40%) and <em>lagging</em> the English (recent rewrites not re-translated) — NOT parity. Kept the 🇺🇦 dedication, Philosophy, License.</p>
+
+<h2>Scoped + handed off (NOT authored this session)</h2>
+<ul>
+<li><strong>Security Phase 2 = NEW issue #1821</strong> (curriculum currency, has web-verify-first ACs): refresh <code>devsecops/4.4-supply-chain-security</code> (add 2026 npm-worm wave: Miasma/Shai-Hulud + xz-utils CVE-2024-3094) + <code>4.3-security-cicd</code> (GitHub Actions tag-mutation class: tj-actions 2026-03, actions-cool 2026-05, SHA-pin/cooldown/OIDC-isolation/harden-runner) + a NEW AI-agent config-injection module/section. Teaching content only (labs→#386); SANITIZED (never our real infra). <strong>WEB-VERIFY every 2026 incident BEFORE authoring</strong> (past reviewer cutoffs; authors fabricate dated incidents — the cloud-wave lesson).</li>
+<li><strong>#1626 (G4) ready to author</strong> (full ACs): 2 net-new teaching modules in <code>ai-ml-engineering/synthesis-apps/</code> — <code>3.2</code> LLM-evals-in-CI + <code>3.3</code> agent-observability-with-OTel (3.1 exists). Prereq check before dispatch: <code>ai-infrastructure/module-1.5-llm-serving</code> + friends rubric ≥3. <strong>#1625 = an already-merged citation_backfill bug fix, NOT a gap</strong> (flag if the user meant #1623/G2 or #1624/G3).</li>
+<li><strong>User decision (this session): pause for a FRESH session to author #1821 + #1626</strong> — a ~4-5 module web-verified wave is highest-quality with fresh context; everything is teed up with ACs.</li>
+</ul>
 
 <h2>Dispatch ledger</h2>
 <table>
@@ -65,23 +85,29 @@ blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
 <tr><td>#1817 batch author</td><td>cursor composer-2.5</td><td>draft</td><td>all 5 deliverables; honest self-validation table</td></tr>
 <tr><td>#1817 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES — <strong>demonstrated</strong> bin + dependency-edge bypasses + fail-open git diff (all real)</td></tr>
 <tr><td>#1817 R2 fix</td><td>cursor composer-2.5</td><td>edit</td><td>full-entry fingerprint + fail-closed git diff; ground-checked by orchestrator</td></tr>
+<tr><td>#1820 author</td><td>cursor composer-2.5</td><td>draft</td><td>scanner + CI + pre-commit + runbook; honest self-validation</td></tr>
+<tr><td>#1820 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES — <strong>proven</strong> fail-open (non-UTF-8) + missed download-exec forms + MCP-config scope gaps + Elixir-iex FP</td></tr>
+<tr><td>#1820 R2 fix</td><td>cursor composer-2.5</td><td>edit</td><td>fail-closed decode + 5 new patterns + scope expansion + IEX case-fix; ground-checked (all 9 payloads → exit 1)</td></tr>
 </table>
+<p>(The README #1819 and the deps-migration in #1816 were done by the orchestrator directly — a deterministic regex transform and a factual doc sync, both gated by build/CI + the codex AST review for #1816.)</p>
 <p>All non-Claude lanes (s105). Orchestrator ground-checked every finding (re-ran the synthetic bin/dependency/integrity swaps against the tripwire; verified the deterministic sidebar transform with a build + grep). Note: the cursor dispatches auto-loaded the <code>curriculum-writer</code> skill (wrong fit for security code) — harmless because the briefs were explicit + the output was ground-checked; consider <code>--skill</code> override for code-class cursor dispatches.</p>
 
-<h2>What's next</h2>
-<ul>
-<li><strong>#1812 remaining:</strong> (a) <strong>harden-runner egress</strong> — owner action (StepSecurity app at the org level); (b) <strong>agent-config injection alert</strong> — the next authorable piece (deterministic pre-commit + CI scanner for newly-added auto-exec content in agent config files; high relevance for this repo's many <code>.claude/</code> files).</li>
-<li><strong>Security Phase 2 (curriculum currency)</strong> — refresh <code>platform/.../devsecops/</code> supply-chain + CI-security modules to the 2026 attack wave + new AI-agent config-injection teaching content (sanitized, never our real infra). Author lanes.</li>
-<li><strong>Curriculum resume</strong> (unchanged): <code>ai-ml-engineering</code> expand-to-floor/review-first → <code>on-premises</code> → <code>platform</code>.</li>
-<li><strong>Gap-fill:</strong> G2 #1623 (Stage-1 brief staged in <code>.worktrees/g2-craft</code>, ready for R1) + G4 #1626 (2 synthesis-apps modules).</li>
-<li>Consider deleting dead <code>src/components/Hero.astro</code> (still present).</li>
-<li>Housekeeping: 6 prunable merged branches (<code>git cleanup-merged</code>); 2 moderate dev-only npm audit vulns (brace-expansion, ws) — fold into a future dependabot cycle.</li>
-</ul>
+<h2>What's next (next session — start here)</h2>
+<ol>
+<li><strong>Author Security Phase 2 = #1821</strong> (the user's chosen "fresh session" target). Web-verify the 2026 incidents FIRST (browser/WebSearch: Miasma June-2026 npm worm, Shai-Hulud, xz-utils CVE-2024-3094, tj-actions/changed-files 2026-03 tag mutation, actions-cool 2026-05) → pin dates/CVEs/sources into the briefs → then dispatch the 4.4 + 4.3 refreshes + the new AI-agent module (≤3 concurrent authors, own worktrees) → cross-family R1 → ground-check → consolidated PR. Teaching content only; sanitized; respect the incident-dedup gate (SolarWinds/Log4Shell already claimed in 4.4).</li>
+<li><strong>Then #1626 (G4)</strong> — prereq rubric check (1.5-llm-serving etc. ≥3) → author <code>3.2</code> + <code>3.3</code> synthesis-apps teaching modules → composer-2.5 R1.</li>
+<li><strong>#1812 close-out:</strong> only harden-runner egress remains (owner-only — install the StepSecurity GitHub App at the kube-dojo org level, like #1798). Keep #1812 open tracking just that.</li>
+<li><strong>Curriculum resume</strong> (the long-term default once security work clears): <code>ai-ml-engineering</code> expand-to-floor/review-first → <code>on-premises</code> → <code>platform</code>.</li>
+<li>Other gap-fill: G2 #1623 (Stage-1 brief staged in <code>.worktrees/g2-craft</code>, ready for R1).</li>
+<li>Minor: delete dead <code>src/components/Hero.astro</code>; 6 prunable merged branches (<code>git cleanup-merged</code>); 2 moderate dev-only npm-audit vulns (brace-expansion, ws) → fold into a future dependabot cycle.</li>
+</ol>
 
 <h2>Files touched (merged)</h2>
 <ul>
 <li><strong>#1816:</strong> <code>astro.config.mjs</code> (104 sidebar sites → 0.39 schema), <code>package.json</code> + <code>package-lock.json</code> (the bump).</li>
 <li><strong>#1817:</strong> <code>scripts/security/check_lockfile_integrity.py</code> (new), <code>.github/workflows/supply-chain.yml</code> (lockfile step + fetch-depth:0), <code>.github/workflows/deploy.yml</code> (CONTAIN comment), <code>docs/security/detection-runbook.md</code> (new), <code>docs/security/local-dev-supply-chain.md</code> (new), <code>SECURITY.md</code> (supply-chain scope).</li>
+<li><strong>#1819:</strong> <code>README.md</code> (full refresh).</li>
+<li><strong>#1820:</strong> <code>scripts/security/check_agent_configs.py</code> (new), <code>.github/workflows/supply-chain.yml</code> (agent-config step), <code>.pre-commit-config.yaml</code> (hook), <code>docs/security/detection-runbook.md</code> (control #9).</li>
 </ul>
 
 <h2>Memory</h2>
