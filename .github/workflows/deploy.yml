@@ -44,6 +44,11 @@ jobs:
         with:
           path: dist
 
+  # CONTAIN boundary (#1812): `build` runs `npm ci` / `npm run build` with only
+  # `contents: read` — NO OIDC or Pages token is available at install time. `deploy`
+  # holds `id-token: write` + `pages: write` but runs NO npm commands. A compromised
+  # dependency executing during `npm ci` cannot reach the OIDC/Pages credential.
+  # Do NOT co-locate `npm install`/`npm ci` with the privileged deploy job.
   deploy:
     environment:
       name: github-pages
