@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node.js
@@ -34,6 +35,16 @@ jobs:
 
       - name: Lifecycle-script tripwire
         run: python3 scripts/security/check_install_scripts.py
+
+      - name: Lockfile-integrity tripwire
+        env:
+          LOCKFILE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/security/check_lockfile_integrity.py --three-dot
+          else
+            python3 scripts/security/check_lockfile_integrity.py
+          fi
 
       # Hard gate (review: all three reviewers, #1813): an invalid/forged registry
       # signature fails CI. Verified to exit 0 on the current tree (116 attestations).
