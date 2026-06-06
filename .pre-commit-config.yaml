@@ -7,3 +7,9 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: agent-config-injection-scan
+        name: agent-config auto-exec injection scan
+        entry: .venv/bin/python scripts/security/check_agent_configs.py
+        language: system
+        pass_filenames: false
+        always_run: true
