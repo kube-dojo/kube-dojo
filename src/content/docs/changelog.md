@@ -12,6 +12,10 @@ sidebar:
 
 ## May 2026
 
+- **AI Engineering Foundations — the engineering spine for working with AI.** A new [AI Engineering Foundations](/ai/ai-engineering-foundations/) section (12 modules) bridges AI literacy and production agent work: prompt design, reasoning, safety, and contracts; context fundamentals, repository engineering for agents, retrieval and memory boundaries, and dynamic context orchestration; harness layers, guardrails, and operating agent loops; plus Symphony-style work orchestration as an applied harness.
+
+- **Open Models & Local Inference.** A new [Open Models & Local Inference](/ai/open-models-local-inference/) section (7 modules) covers model hubs and model cards, Hugging Face for learners, quantization and formats, MLX on Apple Silicon, Linux local inference, and runtime choice across Ollama, MLX, Transformers, and vLLM.
+
 - **AI Engineering Foundations prompt-safety module.** [Prompt Safety and Evaluation](/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation/) adds a prompt-eval harness lesson covering golden-set regression, LLM-as-judge calibration, direct and indirect prompt injection, prompt leakage, jailbreak probes, drift detection, and CI-ready safety gates.
 
 - **Kafka on Kubernetes: MirrorMaker2, partition reassignment, and Cruise Control.** [Module 1.2: Apache Kafka on Kubernetes (Strimzi)](/platform/disciplines/data-ai/data-engineering/module-1.2-kafka/) expanded with three new operator-grade sections covering `KafkaMirrorMaker2` CRD configuration for DR and multi-region topologies (offset translation, heartbeat/checkpoint connectors, active-active vs active-passive patterns), `kafka-reassign-partitions.sh` three-phase workflow (generate/execute/verify with bandwidth throttling), and Cruise Control continuous rebalancing via the `KafkaRebalance` CRD (state machine, goal tiers, self-healing anomaly detection, production tuning). Issue #1324.
@@ -53,12 +57,6 @@ sidebar:
 - **Azure Essentials edge-operations gap filled.** [Azure Application Gateway — Operator Path](/cloud/azure-essentials/module-3.13-application-gateway/) now covers WAF policy tuning, Key Vault-backed TLS, AGIC versus Application Gateway for Containers, autoscaling capacity units, Log Analytics/KQL diagnostics, and v1-to-v2 migration gotchas.
 
 - **Cloud governance gap filled.** [Cloud Custodian -- Policy-as-Code Governance Across Multi-Cloud](/cloud/enterprise-hybrid/module-10.11-cloud-custodian/) now covers declarative multi-cloud remediation, AWS/Azure examples, and production operations.
-
-- **Agent runtime expanded.** DeepSeek V4 Pro and Flash are now integrated as
-  production peer agents via ``hermes --provider deepseek`` with a dedicated adapter,
-  registry entry, and bridge-mode tool/mode wiring. Pro defaults to
-  ``deepseek-v4-pro`` and Flash can be selected through ``AB_DEEPSEEK_MODEL``,
-  including dispatch coverage for review, research, and code lanes.
 
 - **On-prem multi-cluster track complete.** Four new modules in [On-Premises Multi-Cluster](/on-premises/multi-cluster/): [Gardener](/on-premises/multi-cluster/module-5.6-gardener/) (open-source Kubernetes-as-a-Service with a three-tier Gardens/Seeds/Shoots architecture), [Karmada + Liqo + kube-vip](/on-premises/multi-cluster/module-5.7-multi-cluster-on-prem/) (federation and virtual-IP advertisement for on-prem clusters), [OpenStack on Kubernetes](/on-premises/multi-cluster/module-5.8-openstack-on-kubernetes/) (running OpenStack's own control plane as Kubernetes workloads), and [VMware Tanzu](/on-premises/multi-cluster/module-5.9-vmware-tanzu/) (the full Tanzu portfolio — TKG, vSphere with Tanzu, TMC, TAP — plus an honest look at enterprise decisions after the Broadcom acquisition).
 
