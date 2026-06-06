@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # .npmrc sets ignore-scripts=true (supply-chain hardening, #1812), so the
+      # two deps with legitimate native install scripts are rebuilt explicitly.
+      - name: Rebuild allow-listed native deps
+        run: npm rebuild esbuild sharp
+
       - name: Build site
         run: npm run build
 
