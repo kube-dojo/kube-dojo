@@ -247,6 +247,7 @@ Two mechanics show up repeatedly in real incidents. The first is **log exfiltrat
 Defenders should not treat these incidents as exotic zero-days. They are the predictable outcome of mutable references in a privileged automation system. The rest of this section walks through two verified incidents and the layered controls that reduce likelihood and blast radius.
 
 ### Incident: tj-actions/changed-files (March 2025, CVE-2025-30066)
+<!-- incident-xref: tj-actions-2025 -->
 
 In March 2025, the widely used GitHub Action `tj-actions/changed-files` was compromised in a supply-chain incident tracked as **CVE-2025-30066**. Attackers compromised the `@tj-actions-bot` personal access token and **retroactively moved multiple version tags** so they pointed at a single malicious commit. Roughly **23,000 repositories** were affected because many workflows referenced the action by mutable tag rather than by reviewed commit SHA.
 
@@ -259,6 +260,7 @@ The tj-actions incident teaches three pipeline-specific lessons that generalize 
 > A platform team pinned `tj-actions/changed-files@v45.0.7` in a shared workflow template two quarters earlier and never touched the line again. During the March 2025 tag-rewrite window, the tag began resolving to malicious code while the template YAML stayed unchanged. Nightly builds continued to pass functional tests because the action still produced a changed-files list, but workflow logs now contained base64-shaped blobs that matched cloud access key formats. A security researcher notified the team after noticing patterned log output on a public fork. The organization spent the next day rotating registry tokens, revoking OIDC trust relationships, and replacing long-lived cloud keys—work that would not have been necessary if the workflow had used a reviewed full commit SHA and separate deploy identities.
 
 ### Incident: actions-cool tag mutation (May 2026)
+<!-- incident-xref: actions-cool-2026 -->
 
 The **`actions-cool`** maintainer namespace suffered a tag-mutation campaign on **2026-05-18 and 2026-05-19** that demonstrated the same attack class with even broader tag sweep. **Every tag** of two actions—**`actions-cool/issues-helper`** (**53 tags**) and **`actions-cool/maintain-one-comment`** (**15 tags**)—was moved to imposter commits. Responders noted that **53 tags were created or rewritten in roughly three minutes and sixteen seconds**, which is a strong signal of automated tag rewriting rather than manual releases.
 
