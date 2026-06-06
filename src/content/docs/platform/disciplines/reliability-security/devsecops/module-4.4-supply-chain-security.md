@@ -303,7 +303,7 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@8edcb1bdb4e267140fa742c62e395cd74f332709
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set image name
         id: meta
@@ -328,7 +328,7 @@ jobs:
       id-token: write
       packages: write
     steps:
-      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3.9.1
 
       - name: Sign image digest
         run: cosign sign --yes "${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}"
@@ -561,7 +561,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@8edcb1bdb4e267140fa742c62e395cd74f332709
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Build artifact
         run: |
@@ -569,7 +569,7 @@ jobs:
           printf 'release artifact for %s\n' "$GITHUB_SHA" > dist/app.txt
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@1c6080f900062f3ac3f4c313417efc5d40923a8c
+        uses: actions/attest-build-provenance@1c608d11d69870c2092266b3f9a6f3abbf17002c  # v1.4.3
         with:
           subject-path: dist/app.txt
 ```
@@ -676,7 +676,7 @@ Finally, SLSA and dependency controls should feed platform policy. If a service 
 
 The 2026 npm-worm wave changed the shape of the supply-chain lesson. Older dependency attacks often looked like a bad package version, a typosquat, or a vulnerable transitive library. Those still matter, but the newer pattern is more aggressive: the package manager becomes an execution surface, the CI runner becomes a credential source, the publishing workflow becomes a replication path, and the provenance record can become misleading if the trusted workflow itself was abused. The right question is no longer only, "Did this dependency come from the registry?" The sharper question is, "If this dependency executes during install, can it reach anything that lets it publish, deploy, or spread?"
 
-Keep historical backdoor case studies in the right place: use the [KCSA supply-chain module](/k8s/kcsa/part4-threat-model/module-4.4-supply-chain/) for that canonical thread, while this section focuses only on npm worm behavior and the controls that stop it from becoming a platform incident.
+Historical backdoor case studies live in the [KCSA supply-chain module](/k8s/kcsa/part4-threat-model/module-4.4-supply-chain/) as the canonical thread; this section focuses only on npm worm behavior and the controls that stop it from becoming a platform incident.
 
 Here is the mental model. A normal dependency install should be boring: resolve packages, verify integrity, unpack files, and leave a reviewable lockfile trail. A worm tries to turn that boring path into a launch point. It hides code where installers naturally run code, steals credentials from the environment or host, uses those credentials to modify repositories or publish new packages, and then waits for the next downstream install to repeat the cycle. That is why supply chain security cannot rely on a single trust badge. A valid package name, a signed publish event, or an attestation can still be dangerous when the execution environment behind that evidence has been compromised.
 
@@ -701,7 +701,7 @@ Here is the mental model. A normal dependency install should be boring: resolve 
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-On 2026-06-01, [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/06/02/preinstall-persistence-inside-red-hat-npm-miasma-credential-stealing-campaign/) and [StepSecurity](https://www.stepsecurity.io/blog/binding-gyp-npm-supply-chain-attack-spreads-like-worm) documented the Miasma npm worm <!-- incident-xref: miasma-npm-worm-2026 -->: 32 `@redhat-cloud-services` npm packages across 90+ versions were trojanized through the upstream RedHatInsights CI/CD pipeline, abusing its legitimate GitHub Actions OIDC publishing workflow. The primary payload executed through an npm `preinstall` hook during `npm install`, including direct and transitive installs, and the obfuscated payload was about 4.2 MB. A "Phantom Gyp" variant used a 157-byte `binding.gyp` file with gyp command substitution, shaped like `"sources": ["<!(node index.js ... && echo stub.c)"]`, so `node-gyp rebuild` ran the payload during install without any `package.json` lifecycle script. The malware harvested GitHub, npm, cloud metadata credentials for AWS IMDS, Azure IMDS, GCP service accounts, SSH material, Kubernetes service-account tokens, and GitHub Actions Runner.Worker process memory. It self-replicated by exchanging stolen npm OIDC tokens for publish rights, committing `.github/setup.js` through the Git Data API, and forging Sigstore/SLSA provenance.
+On 2026-06-01, [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/06/02/preinstall-persistence-inside-red-hat-npm-miasma-credential-stealing-campaign/) and [StepSecurity](https://www.stepsecurity.io/blog/binding-gyp-npm-supply-chain-attack-spreads-like-worm) documented the Miasma npm worm <!-- incident-xref: miasma-npm-worm-2026 -->: 32 `@redhat-cloud-services` npm packages across 96 versions were trojanized through the upstream RedHatInsights CI/CD pipeline, abusing its legitimate GitHub Actions OIDC publishing workflow. The primary payload executed through an npm `preinstall` hook during `npm install`, including direct and transitive installs, and the obfuscated payload was about 4.3 MB. A "Phantom Gyp" variant used a 157-byte `binding.gyp` file with gyp command substitution, shaped like `"sources": ["<!(node index.js ... && echo stub.c)"]`, so `node-gyp rebuild` ran the payload during install without any `package.json` lifecycle script. The malware harvested GitHub, npm, cloud metadata credentials for AWS IMDS, Azure IMDS, GCP service accounts, SSH material, Kubernetes service-account tokens, and GitHub Actions Runner.Worker process memory. It self-replicated by exchanging stolen npm OIDC tokens for publish rights, committing `.github/setup.js` through the Git Data API, and forging Sigstore/SLSA provenance.
 
 On 2025-09-15, [Unit42](https://unit42.paloaltonetworks.com/npm-supply-chain-attack/), [CISA](https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem), and [Microsoft](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/) described the Shai-Hulud self-replicating worm <!-- incident-xref: shai-hulud-npm-2025 --> as the first npm worm to self-replicate, affecting 500+ packages including `@ctrl/tinycolor`. Entry came through a phishing email mimicking an npm security alert. The payload ran TruffleHog to find secrets, and when it found a GitHub token it created a public repository named `Shai-Hulud` to dump the secrets and pushed a GitHub Actions workflow to every accessible repository. Later, Mini Shai-Hulud on 2026-05-11 became the first campaign to span npm and PyPI.
 

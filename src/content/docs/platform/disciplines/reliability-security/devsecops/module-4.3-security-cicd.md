@@ -274,7 +274,7 @@ The primary control is to replace tag references with **full 40-character commit
 
 ```yaml
 # Prefer immutable commit SHAs with version comments for Dependabot tracking
-- uses: actions/checkout@11bd71901bbe5b1630ea9a554f6b5b8b2a2e1a3f  # v4.2.2
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
   with:
     persist-credentials: false
 
@@ -328,7 +328,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ea9a554f6b5b8b2a2e1a3f  # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           persist-credentials: false
       - name: Run scanners
@@ -343,7 +343,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ea9a554f6b5b8b2a2e1a3f  # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           persist-credentials: false
       - name: Assume cloud role via OIDC
