@@ -590,7 +590,7 @@ Treat the SDK as a harness, not a guarantee. It can provide a disciplined loop, 
 
 ## Did You Know?
 
-- The Claude Agent SDK is the renamed and broader form of the Claude Code SDK, reflecting that the underlying harness can support non-coding agents as well as software-development workflows.
+- As of 2026-06, the Claude Agent SDK is the renamed and broader form of the Claude Code SDK, reflecting that the underlying harness can support non-coding agents as well as software-development workflows.
 - The SDK supports both Python and TypeScript, which lets teams embed agent loops into backend services, automation scripts, developer tools, and web-facing applications.
 - MCP is not a replacement for local tools; it is a protocol boundary for structured external integrations such as SaaS systems, databases, browsers, and internal APIs.
 - Context compaction can help long-running sessions continue, but it can also preserve stale assumptions unless the runtime separates verified facts from temporary hypotheses.
