@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 117 — ai-native-development restructure wave COMPLETE (#1835)</title>
+<style>
+  :root { --fg:#1a1a2e; --muted:#555; --accent:#2a6; --warn:#c60; --bg:#fafafa; --card:#fff; --line:#e3e3e8; }
+  body { font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--fg); background:var(--bg); margin:0; padding:2rem; max-width:1000px; margin-inline:auto; }
+  h1 { font-size:1.6rem; margin:0 0 .25rem; }
+  h2 { font-size:1.15rem; margin:1.8rem 0 .5rem; border-bottom:2px solid var(--line); padding-bottom:.25rem; }
+  h3 { font-size:1rem; margin:1.1rem 0 .3rem; }
+  .sub { color:var(--muted); margin:0 0 1.5rem; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; font-size:.92rem; }
+  th,td { border:1px solid var(--line); padding:.4rem .6rem; text-align:left; vertical-align:top; }
+  th { background:#f0f0f4; }
+  code { background:#f0f0f4; padding:.1rem .3rem; border-radius:3px; font-size:.88em; }
+  .ok { color:var(--accent); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem; margin:.8rem 0; }
+  ul { margin:.4rem 0; padding-left:1.3rem; }
+  li { margin:.25rem 0; }
+  .tldr { background:#eef6f0; border-left:4px solid var(--accent); padding:.8rem 1rem; border-radius:0 6px 6px 0; }
+</style>
+</head>
+<body>
+<h1>Session 117 — ai-native-development restructure wave COMPLETE</h1>
+<p class="sub">2026-06-07 · standalone orchestrator session · "continue from s116 handoff" → drove the full authoring/review/consolidation wave. Issue <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1835">#1835</a>.</p>
+
+<div class="tldr">
+<strong>TL;DR:</strong> Took the session-116 plan to completion. All <strong>8 changed modules</strong> of the <code>ai-native-development</code> sub-track (1.1–1.5, 1.7, 1.8, 1.10; 1.6 doesn't exist, 1.9 was already done) are now <span class="ok">T0 + cross-family reviewed</span>, restructured onto the durable concept spine (harness ⟂ model, L0–L5 autonomy, the Harness Rosetta, dated snapshots, neutral peers, de-fabricated). Consolidated into <strong>one wave branch</strong> <code>and-wave-ai-native-development</code> (8 module branches + the <code>durable-vendor-content.md</code> rule + both handoffs) — <span class="ok">full astro build green (2171 pages)</span>. All authoring/review dispatch stayed <strong>non-Claude</strong> (s105 directive honored). The cross-family review layer + <code>verify_module.py</code> ground-truth were load-bearing: they caught a fabricated stat, a fabricated <em>entire review</em>, a hallucinated bug, and real anti-fab/citation gaps.</p>
+</div>
+
+<h2>1. What shipped — the 8 modules</h2>
+<table>
+<tr><th>Module</th><th>Reframe</th><th>Author</th><th>Cross-family review</th><th>Final</th></tr>
+<tr><td>1.1 landscape</td><td>Rosetta + harness⟂model + L0–L5 (s116)</td><td>cursor</td><td>codex (s116)</td><td class="ok">T0</td></tr>
+<tr><td>1.2 local-models</td><td>→ <strong>the model axis</strong> (pairing, tiers, dated snapshot)</td><td>cursor</td><td>gemini (density-FP overridden)</td><td class="ok">T0 5173w</td></tr>
+<tr><td>1.3 claude-code-cli</td><td>→ <strong>Configuring an Agentic Harness</strong> (rules/AGENTS.md, MCP, hooks, sub-agents)</td><td>codex</td><td>deepseek (hallucinated bug, discarded)</td><td class="ok">T0</td></tr>
+<tr><td>1.4 agent-first-ides</td><td>→ the <strong>IDE form factor</strong> (peers, fit-not-rank)</td><td>cursor</td><td>agy APPROVE</td><td class="ok">T0 5001w</td></tr>
+<tr><td>1.5 cli-agents</td><td>→ <strong>CLI/headless + the autonomy frontier</strong> (Hermes/OpenClaw economics)</td><td>deepseek</td><td>cursor (caught fabricated SO stat)</td><td class="ok">T0</td></tr>
+<tr><td>1.7 code-generation</td><td>de-fab + <strong>heavy expand</strong> (1186→6365w) on "review the output"</td><td>codex</td><td>cursor (real findings, fixed)</td><td class="ok">T0 6365w</td></tr>
+<tr><td>1.8 debugging</td><td>split one 950-line H2 → 7 sections; T0 + anti-fab labels</td><td>deepseek</td><td>codex (3 real must-fixes, fixed)</td><td class="ok">T0 5190w</td></tr>
+<tr><td>1.10 agent-sdk</td><td>→ <strong>assistant→agent runtime</strong>; T3→T0 (4261→6036w, 3→15 src), <code>order 111→211</code></td><td>codex</td><td>deepseek APPROVE_WITH_NITS</td><td class="ok">T0 6036w</td></tr>
+</table>
+<p>1.9 (capstone) was already T0 + board-<code>done</code> — untouched. Every module kept its slug (<strong>zero URL churn</strong>); only content/title reframed.</p>
+
+<h2>2. Process datapoints — the multi-agent layer earned its keep</h2>
+<div class="card">
+<ul>
+<li><span class="ok">cursor (1.5)</span> web-verified and caught a <strong>fabricated Stack Overflow stat</strong> ("72% of devs use the CLI daily, up from 63% in 2020" — no such survey question; real Bash/Shell usage ~34%) + a <strong>100×-overstated per-agent request figure</strong> (7.6M requests was the 100-agent fleet, not one agent). Both fixed.</li>
+<li><span class="ok">codex (1.8)</span> ran the labs (834× optimization speedup confirmed) and found 3 real must-fixes: unlabeled hypothetical metrics, a z-pages maturity caveat, and 3 real historical incidents (Mark II / Therac-25 / Mars Orbiter) missing citations. All fixed.</li>
+<li><span class="warn">agy (1.7) FABRICATED AN ENTIRE REVIEW</span> on gemini-3.1-pro — claimed <code>body_words 1449</code> + a fake "Uber 2019 $500k" incident + a <code># H1</code> + 1 source + "web-verified" facts, none of which exist (the file is T0/6344w/14-src). <strong>Discarded</strong>, re-reviewed by cursor. Memory <code>feedback_agy_gemini_3_5_flash_viable_reviewer</code> updated: agy reviews are mixed-pool-only, never sole, ground-check every claim.</li>
+<li><span class="warn">gemini-cli (1.2)</span> false-positived density (eyeballed "~4100 words" when <code>verify_module</code> = 5173/passed) and invented an "8 activities × 12 items" rule. Overridden.</li>
+<li><span class="warn">deepseek (1.3)</span> reported a P1 "bash syntax bug, missing closing quote" that was a <strong>hallucination</strong> — the line correctly reads <code>"Authorization: Bearer $TOKEN"</code>. Caught by re-reading the line + running <code>verify_module</code>.</li>
+</ul>
+<p><strong>Lesson reinforced:</strong> reviewer findings are leads, not verdicts. The deterministic authority is <code>verify_module.py</code>, which the orchestrator must run itself; ground-check every model claim against the live file. Both Google lanes gave bad reviews this wave — the spine/skin split and the no-fabrication rule held only because the orchestrator cross-checked everything.</p>
+</div>
+
+<h2>3. State &amp; how to finish</h2>
+<ul>
+<li><strong>Wave branch</strong> <code>and-wave-ai-native-development</code> (worktree <code>.worktrees/and-wave</code>): 8 module branches + <code>.claude/rules/durable-vendor-content.md</code> + s116 &amp; s117 handoffs + STATUS, all merged conflict-free (each module touched a distinct file). <span class="ok">Full astro build green: 2171 pages, 0 schema errors</span> (built in PRIMARY via <code>git checkout &lt;branch&gt; -- &lt;path&gt;</code> without switching primary off main, per <code>feedback_pr_ci_has_no_full_astro_build</code> + <code>feedback_never_branch_in_primary_dir</code>).</li>
+<li><strong>Board finalize</strong> (flips <code>/quality</code> to done): 1.1 was <code>needs_rewrite</code>; 1.3/1.4/1.5/1.7 were <code>shipped_unreviewed</code> → write <code>.pipeline/reviews/ai-ml-engineering__ai-native-development__module-X.Y-slug.md</code> with a <code>## &lt;ts&gt; — `REVIEW` — `APPROVE`</code> line, then <code>reset-stage &lt;slug&gt; COMMITTED</code>. 1.2/1.8/1.9/1.10 were already board-<code>done</code> (the wave improved them on the verifier axis without changing review status).</li>
+<li>Review records + briefs preserved under <code>logs/remediation/briefs/session116/</code> (gitignored): all per-module briefs, fix briefs, and the saved reviewer outputs (incl. the discarded agy 1.7 review).</li>
+</ul>
+
+<h2>4. RESUME — next session</h2>
+<ul>
+<li>Merge the wave PR (PR CI = site-health + incident-dedup + CodeQL; the full build was already verified locally).</li>
+<li>Run the board finalize for 1.1 + 1.3/1.4/1.5/1.7 → sub-track fully <code>done</code> on <code>/quality</code>.</li>
+<li>Continue <code>ai-ml-engineering</code> in curriculum order — next volatile sub-tracks (generative-ai → vector-rag → frameworks-agents → mlops → ai-infrastructure → advanced-genai → multimodal-ai), <strong>applying the durable-content rule to each</strong> (concept spine + dated snapshot + Rosetta-style cross-vendor table; no leadership claims). Then on-premises → platform.</li>
+<li>Roster note for next session: <strong>do NOT route reviews to agy as sole reviewer</strong> (s117 whole-review fabrication); prefer codex/cursor/deepseek and always run <code>verify_module.py</code> yourself.</li>
+</ul>
+</body>
+</html>

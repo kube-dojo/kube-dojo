@@ -3,7 +3,7 @@ citations_verified: true
 title: "Anthropic Agent SDK and Runtime Patterns"
 slug: ai-ml-engineering/ai-native-development/module-1.10-anthropic-agent-sdk-and-runtime-patterns
 sidebar:
-  order: 111
+  order: 211
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
@@ -12,7 +12,7 @@ sidebar:
 
 **Prerequisites**: Claude Code & CLI Deep Dive, CLI AI Coding Agents, Building with AI Coding Assistants, and Model Context Protocol for Agents
 
-> **Go deeper:** For retrieval boundaries, dynamic context orchestration, and production harness operation around agent runtimes, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/), [Dynamic Context Orchestration](/ai/ai-engineering-foundations/module-2.4-dynamic-context-orchestration/), and [Operating the Harness](/ai/ai-engineering-foundations/module-3.3-operating-the-harness/).
+> **Go deeper:** For the vendor-neutral tool landscape introduced in this sub-track, revisit [AI Coding Tools Landscape](./module-1.1-ai-coding-tools-landscape/). For retrieval boundaries, dynamic context orchestration, and production harness operation around agent runtimes, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/), [Dynamic Context Orchestration](/ai/ai-engineering-foundations/module-2.4-dynamic-context-orchestration/), and [Operating the Harness](/ai/ai-engineering-foundations/module-3.3-operating-the-harness/).
 
 ---
 
@@ -28,13 +28,21 @@ By the end of this module, you will be able to:
 
 ---
 
+## What You'll Be Able to Do
+
+You will be able to look at an "agent" proposal and separate the model capability from the runtime responsibility. That means you can ask whether the agent has enough context, whether it is allowed to mutate the right things, whether each tool crosses a local or external boundary, and whether the final answer is backed by evidence rather than confidence.
+
+You will also be able to map Anthropic-specific implementation details onto neutral harness concepts. Claude Agent SDK is the worked example in this module, but the durable lesson is portable: every serious agent runtime needs a loop, a tool registry, permission policy, session state, observability, and verification. Other harnesses expose those ideas through different names, but the engineering questions remain the same.
+
+---
+
 ## Why This Module Matters
 
-A platform team ships an internal agent that looks impressive during a demo. It can inspect a repository, edit files, run commands, and explain its changes in confident language. A month later, the same agent becomes a source of operational risk because it edits outside the intended directory, repeats stale assumptions from old sessions, and closes work without running the checks the team normally expects from a human engineer.
+Hypothetical scenario: a platform team ships an internal agent that looks impressive during a demo. It can inspect a repository, edit files, run commands, and explain its changes in confident language. A month later, the same agent becomes a source of operational risk because it edits outside the intended directory, repeats stale assumptions from old sessions, and closes work without running the checks the team normally expects from a human engineer.
 
 The problem is not that the team used an AI model. The problem is that they built a chat loop and treated it like an agent runtime. A serious runtime has to decide which tools are available, which actions need approval, how sessions are resumed, how work is observed, and how each action is verified before the agent continues.
 
-The Claude Agent SDK matters because it [packages many of the runtime patterns behind Claude Code into a programmable form](https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously). Instead of starting with a blank model client and rebuilding tool execution, permissions, hooks, sessions, MCP integration, and context management from scratch, a team can build on a harness designed for iterative agent work.
+The Claude Agent SDK matters because, as of 2026-06, Anthropic describes it as packaging many of the runtime patterns behind Claude Code into a programmable form. Instead of starting with a blank model client and rebuilding tool execution, permissions, hooks, sessions, MCP integration, and context management from scratch, a team can build on a harness designed for iterative agent work.
 
 This module teaches the runtime design behind that harness. You will not only learn what the SDK exposes; you will learn how to reason about when it is appropriate, how to constrain it, and how to recognize the point where explicit workflow code is safer than agent autonomy.
 
@@ -46,7 +54,11 @@ A plain chat integration asks a model to respond to a user message. A plain clie
 
 That distinction matters because most production failures are not caused by the first prompt being poorly worded. They happen when the system gives the model a powerful tool without a permission boundary, loses track of state across a long task, fails to inspect tool output, or treats a generated answer as done before checking the external reality it claims to change.
 
-The Claude Agent SDK is Anthropic's library form of the agent harness behind Claude Code. The current documentation describes it as a way to build agents that can read files, run commands, search the web, edit code, connect to MCP servers, use hooks, track sessions, and manage context. The SDK does not remove the need for engineering judgment; it moves many runtime concerns into a structured place where you can design and inspect them.
+The Claude Agent SDK is Anthropic's library form of the agent harness behind Claude Code. As of 2026-06, the official Agent SDK overview describes agents that can read files, run commands, search the web, edit code, connect to MCP servers, use hooks, track sessions, and manage context. The SDK does not remove the need for engineering judgment; it moves many runtime concerns into a structured place where you can design and inspect them.
+
+That packaging is valuable precisely because it makes the runtime visible. A hand-rolled loop can absolutely be correct, but it often spreads policy across prompt text, helper functions, API wrappers, and ad hoc logs. Once the loop becomes hard to inspect, it becomes hard to answer the operational questions that matter: which tool was called, why was it allowed, what evidence came back, which state was preserved, and what stopped the run from continuing forever.
+
+The neutral comparison from [Module 1.1](./module-1.1-ai-coding-tools-landscape/) still applies here. Claude Agent SDK is the concrete worked example, not the universal answer. A Cursor rule, a Codex harness, a LangGraph node, a CrewAI worker, or a custom service can all express similar runtime concepts. The implementation details differ, but the boundary questions do not.
 
 A useful mental model is that the SDK is not the intelligence layer alone. It is a runtime layer around the intelligence. The model still reasons, but the runtime decides what kind of world the model is allowed to touch, how that world is represented, and what evidence is required before work can be called complete.
 
@@ -70,6 +82,16 @@ A beginner often asks, "What prompt should I use?" A senior engineer asks, "What
 **Stop and think:** If an agent edits a file and then explains why the edit should work, what evidence would convince you that the edit actually worked? Write down two verification signals before reading further, then compare them with the verification patterns in the next section.
 
 The most common answer is "run the test," and that is a good start. A stronger answer includes the specific test, the expected failure before the fix, the expected passing output after the fix, and the file-level diff that proves the change stayed within scope. Verification is not a vibe; it is a runtime behavior.
+
+The first failure mode in this layer is under-gathering. The agent sees one file, assumes it has the whole system, and edits a local symptom while missing configuration, generated code, feature flags, or tests nearby. A good runtime does not solve under-gathering by dumping the entire repository into context. It gives the agent targeted discovery tools, keeps tool output observable, and lets the developer constrain the search surface to the files and systems that matter.
+
+The second failure mode is over-acting. The agent gathers enough context, proposes a reasonable next step, and then uses a tool with broader authority than the task requires. That is how a documentation cleanup turns into dependency installation, generated artifact churn, or external system mutation. The runtime boundary should make the smallest useful action easy and the broader action explicit.
+
+The third failure mode is false verification. The agent runs a command that is convenient but irrelevant, interprets partial output as success, or reports that a check "should pass" because the explanation is coherent. The SDK can expose the message stream, result status, tool calls, and hooks around execution, but your application still has to define which verification signals count. In production, the final answer should be a compact audit record, not just a persuasive narrative.
+
+> ## Learner check
+>
+> Before allowing an agent to act, name the evidence it must gather, the smallest tool set it may use, and the verifier that can prove the result.
 
 ---
 
@@ -98,6 +120,10 @@ The verify stage exists because agent reasoning is not self-validating. A model 
 
 This loop is a runtime pattern, not just a planning slogan. A real implementation has to give the agent tools for gathering, tools for acting, and a policy that treats verification as mandatory for meaningful actions. Otherwise the loop exists only in documentation.
 
+As of 2026-06, Anthropic's Agent SDK loop documentation describes a message lifecycle where the SDK initializes session metadata, the model evaluates the prompt, requested tools execute, results are fed back, and the cycle repeats until the agent returns a final result. That is the mechanical form of gather, act, verify. It is not merely "the model thinks again"; it is a stream of messages, tool results, limits, hooks, and session identifiers that your application can inspect.
+
+The practical implication is that you should design the loop before you design the prompt. If the loop allows unlimited turns, unrestricted Bash, no stop condition, and no audit of tool results, then even a strong prompt is operating inside a weak runtime. If the loop has a turn budget, a cost budget, scoped tools, and a stop policy, then the prompt has a healthier environment to work inside.
+
 Consider a bug-fixing agent. If it can read files and edit files but cannot run tests, it may produce a patch that looks reasonable but cannot establish correctness. If it can run tests but the runtime does not require test execution before returning, the tool exists but the behavior is still weak. If it can run tests and must report the exact command and result, the runtime starts to resemble an engineering workflow.
 
 A senior-level design also asks whether verification can fail safely. The agent should not hide a failing test behind a confident summary. It should stop, report the failure, preserve logs, and either revise the change or ask for help when the failure exceeds its tool scope.
@@ -105,6 +131,8 @@ A senior-level design also asks whether verification can fail safely. The agent 
 **Pause and predict:** Your agent gathers context from an old session, edits a file, and then fails verification. Should it automatically continue with a second edit, rewind the file, ask the user, or open a subagent investigation? The best answer depends on risk, but it should never ignore the failed verification and continue as if nothing happened.
 
 For low-risk local changes, an automatic second attempt can be reasonable if the diff remains small and the verifier is deterministic. For production operations, external mutations, or credential-adjacent workflows, a failed verification should usually stop and escalate. The runtime policy should encode that difference before the incident happens.
+
+This is where the SDK boundary differs from a simple workflow script. In a script, you normally decide every step in advance: read this file, transform this field, run this command, exit. In an agent runtime, the model may decide which file to read next or which verifier to run, but the runtime still decides which categories of decisions are allowed. The SDK gives you a place to express those limits; it does not absolve you from choosing them.
 
 ---
 
@@ -153,6 +181,8 @@ This example is runnable when the `claude-agent-sdk` package is installed and an
 
 A common beginner mistake is to start with every tool enabled because the agent seems more capable. A senior engineer starts with the smallest tool set that can complete the job, then adds tools only when a concrete failure shows the agent lacks a necessary capability. Each tool is both a power and a liability.
 
+The SDK also gives you a useful review surface when you are comparing agent proposals. Ask where each proposal keeps session state, how it exposes tool calls to logs, how it caps runaway loops, and what it returns when the task stops because of a limit rather than success. A proposal that cannot answer those questions is probably still a demo loop, even if it uses a polished model and impressive tool names.
+
 ---
 
 ## 4. Tool Boundaries: Built-In Tools, MCP, and Custom Code
@@ -177,11 +207,17 @@ Custom code is the third option. Sometimes the most reliable tool is a small scr
 
 The design rule is straightforward: built-in tools are the local execution surface, MCP is the external integration surface, and custom tools are the domain-specific business surface. Mixing those roles creates confusion. For example, forcing local file reads through an MCP server adds ceremony without much safety, while using Bash scripts to mutate SaaS systems can bury authentication and audit behavior in fragile command text.
 
+MCP deserves special attention because it is often misunderstood as "tools, but more official." The protocol is a client-server boundary for sharing context and actions between AI applications and external systems. Its core primitives include tools, resources, and prompts, and the architecture separates the host application, the MCP client connection, and the MCP server that provides capabilities. That separation is what gives MCP its value: the external system can expose a typed capability without becoming an unbounded shell command.
+
+Security differs across the three surfaces. Built-in local tools need path boundaries, command allowlists, and workspace isolation. MCP tools need authentication, server trust, transport security, schema clarity, and audit records for external calls. Custom tools need input validation and business-policy enforcement because they often encode rules that should not be left to natural language. Treating all tools as equal is a design smell.
+
 A good agent design also keeps tool names aligned with the action you want the agent to consider. If the common action is "search customer tickets," expose that as a clear capability rather than forcing the agent to compose several low-level API calls every time. Clear tools reduce prompt burden and make logs easier to review.
 
 **Stop and think:** Your incident agent needs to inspect local deployment manifests, query a cloud provider, and open a follow-up ticket. Which capabilities should be built-in, which should be MCP, and which might deserve custom code? Do not answer by naming technologies first; answer by describing the boundary each action crosses.
 
 A defensible design would use built-in file and shell tools for local manifests, MCP or a typed integration for the cloud provider and ticket system, and custom code for any organization-specific policy such as incident severity calculation. The runtime should make those boundaries visible because hidden boundaries are hard to audit.
+
+This is also where the L0-L5 autonomy ladder becomes practical. At L0, the model answers with no tool authority. At L1, it receives curated context. At L2, it can use read-only tools. At L3, it can propose writes behind review. At L4, it can perform bounded low-risk actions directly. At L5, it operates with broad autonomy in a carefully isolated environment. The Agent SDK is most useful around L2-L4 because tool use, approvals, hooks, sessions, and verification all need to be explicit.
 
 The following SDK-shaped configuration shows an MCP server beside built-in read tools. The exact MCP server command depends on the integration, but the pattern is that external services are attached as structured servers rather than improvised through unconstrained shell access.
 
@@ -211,6 +247,8 @@ asyncio.run(main())
 
 The example is small, but the architectural point is large. Reading the local runbook and checking an external ticket are not the same class of action. One belongs in the workspace; the other crosses an organizational boundary and needs authentication, auditability, and clearer semantics.
 
+When the tool boundary is unclear, prefer the boring answer. If a plain client SDK call plus one explicit API request can solve the job, use that. If the agent needs to discover which integration to call, handle several possible external states, and continue after tool results, then MCP inside an agent runtime becomes more defensible. The goal is not to maximize tool count; it is to minimize ambiguous authority.
+
 ---
 
 ## 5. Permissions, Hooks, and Approval Boundaries
@@ -228,6 +266,8 @@ The basic permission question is, "What is the agent allowed to do without askin
 
 Hooks provide runtime interception points. They let your application log, validate, block, or transform behavior around tool use and session events. In a serious system, hooks are how you move policy from "the prompt said not to" into executable control.
 
+As of 2026-06, the SDK documentation describes permissions through allow rules, deny rules, permission modes, approval callbacks, and hook decisions. That means the runtime can do more than ask the model to behave. It can pre-approve read-only tools, block specific commands, ask a human before sensitive actions, and return a denial message to the model when a requested tool call crosses the boundary.
+
 A pre-tool hook can block edits outside an allowed path before the write happens. A post-tool hook can log changed files after an edit. A stop hook can reject completion if verification evidence is missing. A session-start hook can attach run metadata, while a session-end hook can emit cost and audit events.
 
 ```text
@@ -244,6 +284,8 @@ A pre-tool hook can block edits outside an allowed path before the write happens
 ```
 
 The important principle is that hooks should enforce small, concrete rules. "Be safe" is not a hook policy. "Block writes outside `workspace/`," "require approval before Bash commands containing `kubectl apply`," and "refuse to stop unless `logs/verification.txt` exists" are hook policies.
+
+Approval boundaries should be designed around reversibility, not around whether the model sounds confident. A local text edit that can be reverted with a diff is a different class of action from rotating a credential, changing a payment record, or deleting cloud resources. When an action is irreversible, expensive, externally visible, or security-sensitive, the runtime should ask for approval through a structured path and preserve the exact input that was approved.
 
 A hook can also create friction intentionally. Friction is not always bad in agent systems. It is often the difference between useful autonomy and unreviewed mutation. The more irreversible the action, the more the runtime should slow down and ask for explicit confirmation.
 
@@ -284,6 +326,8 @@ asyncio.run(main())
 
 This example still needs surrounding policy before production use. It logs modifications, but it does not by itself prevent a bad modification. In practice, you combine logging hooks with permission configuration, pre-tool validation, and verification requirements.
 
+The safest permission posture usually grows in stages. Start with L2 read-only exploration until you trust the agent's context-gathering behavior. Move to L3 reviewed writes when the diffs are understandable and the verifier is reliable. Move to L4 bounded autonomy only for low-risk actions where rollback, logging, and failure handling have already been exercised. Do not jump from a useful demo to L5 authority because the SDK can technically run a broad loop.
+
 **Pause and predict:** If a hook logs every edit but never blocks any edit, what kind of risk has it reduced and what kind has it left untouched? The audit risk is reduced because the team can inspect what happened later, but the prevention risk remains because the hook does not stop the action before it occurs.
 
 A mature runtime usually needs both prevention and detection. Prevention limits what can happen; detection preserves evidence about what did happen. Verification then decides whether the result is acceptable.
@@ -293,6 +337,8 @@ A mature runtime usually needs both prevention and detection. Prevention limits 
 ## 6. Sessions, Context Compaction, and Drift
 
 Sessions are one of the reasons the Agent SDK is more than a tool wrapper. Real work often spans multiple exchanges, and a useful agent may need to remember what it read, which files it changed, which hypothesis failed, and what goal the user approved. Session continuity can reduce repeated context gathering and preserve momentum.
+
+As of 2026-06, Anthropic's SDK documentation describes session IDs, resume behavior, result messages, and compact-boundary events in the agent stream. Those details matter because session state is not an invisible convenience. It is part of the runtime contract. If your application cannot explain which session was resumed, what facts were carried forward, and where compaction happened, then it cannot reliably debug long-running behavior.
 
 Continuity also creates risk. If the agent carries forward a weak assumption from early in the run, later decisions may inherit that mistake. If the session grows cluttered with obsolete observations, the model may spend attention on stale context. If the user changes the goal and the runtime does not record that change clearly, the agent may optimize for yesterday's task.
 
@@ -315,9 +361,15 @@ Session state should answer three questions after any pause. What is the current
 
 A senior-level agent design also includes a session reset strategy. Sometimes the correct response to drift is not more compaction; it is a clean run with only verified facts carried forward. That is especially true after major goal changes, repeated failed attempts, or tool results that contradict the current plan.
 
+Drift is not only a memory-size problem. It is also a goal-alignment problem. An agent can drift because the user changed the objective, because a subtask produced a misleading summary, because a verifier failed and the failure was softened in the next prompt, or because a compacted summary dropped the reason a risky action was forbidden. Your mitigation should match the cause: restate the goal, preserve failed verifier output, archive the full transcript before compaction, or restart with a verified-facts brief.
+
+The cleanest mitigation pattern is to keep three artifacts outside the model's mutable conversation: a task brief, a verification ledger, and a change log. The task brief states the current objective and non-negotiable boundaries. The verification ledger records commands, external checks, and outcomes. The change log records what the agent actually touched. These artifacts make resumption safer because they outlive compaction and can be inspected by a human or another runtime.
+
 Subagents interact with session design because they can isolate context. A search subagent can inspect a large body of material and return only relevant findings to the main agent. That can reduce clutter, but it also requires accountability: the main agent should know which subagent produced which finding and what evidence supports it.
 
 Use subagents when the work decomposes naturally, the subtasks can proceed independently, and the output boundary is clear. Avoid subagents when the task is small, sequential, or accountability would become harder to trace. Multi-agent architecture is not automatically more advanced; sometimes it is just a more expensive way to lose the thread.
+
+Session discipline is also where SDK runtime and hand-rolled workflow differ sharply. In a hand-rolled workflow, state is usually explicit because the application stores each transition. In an agent runtime, conversation history can tempt teams to treat "the model remembers" as state management. That is not enough. The application should still decide which facts are durable, which summaries are disposable, and which evidence must be rechecked after a resume.
 
 ---
 
@@ -519,11 +571,26 @@ A senior engineer also considers organizational fit. If operators already unders
 
 The safest adoption path is usually incremental. Start with read-only analysis, then allow scoped local edits, then add verification, then add external integrations through MCP, then introduce higher-risk mutations only after hooks, approvals, logs, and rollback paths are proven. Do not begin with broad autonomy simply because the SDK makes it technically possible.
 
+There is one more tradeoff that shows up in real teams: debug visibility. A hand-rolled workflow can be easier to debug because every transition is your code. An SDK runtime can be easier to operate because tool calls, permissions, sessions, and hooks are already first-class concepts. The right answer depends on which visibility your team needs more. If auditors need a fixed state machine, explicit workflow code may win. If operators need to see a messy investigation unfold across tools, an agent runtime may be clearer.
+
+Treat the SDK as a harness, not a guarantee. It can provide a disciplined loop, but you still decide whether the loop is appropriate for the job. A good design review should end with a sentence like: "This workflow earns L3 authority because writes are reviewed, all tools are scoped, and completion is blocked without verifier evidence." If you cannot say that sentence honestly, the runtime is not ready for that level of autonomy.
+
+---
+
+## Key Takeaways
+
+- An agent runtime is the loop around the model: gather context, act through tools, verify results, and decide whether to continue or stop.
+- Claude Agent SDK is the worked example in this module, but the durable concepts transfer to other harnesses: tool registry, policy, hooks, session state, observability, and verification.
+- Built-in tools, MCP servers, and custom code solve different boundary problems; choose the smallest surface that makes the action clear and auditable.
+- Permissions and hooks are executable runtime controls, while prompts are instructions. Serious systems need both, but only controls can prevent or record boundary violations.
+- Long-running sessions need drift mitigation through verified facts, change logs, verification ledgers, and deliberate compaction or reset policies.
+- The SDK is strongest when the job is open-ended and tool-rich; explicit workflow code is stronger when the process is deterministic, regulated, or audit-heavy.
+
 ---
 
 ## Did You Know?
 
-- The Claude Agent SDK is the renamed and broader form of the Claude Code SDK, reflecting that the underlying harness can support non-coding agents as well as software-development workflows.
+- As of 2026-06, the Claude Agent SDK is the renamed and broader form of the Claude Code SDK, reflecting that the underlying harness can support non-coding agents as well as software-development workflows.
 - The SDK supports both Python and TypeScript, which lets teams embed agent loops into backend services, automation scripts, developer tools, and web-facing applications.
 - MCP is not a replacement for local tools; it is a protocol boundary for structured external integrations such as SaaS systems, databases, browsers, and internal APIs.
 - Context compaction can help long-running sessions continue, but it can also preserve stale assumptions unless the runtime separates verified facts from temporary hypotheses.
@@ -795,14 +862,24 @@ grep -R "MCP-style external tools" -n anthropic-agent-runtime-lab/README.md
 
 ---
 
-## Next Modules
+## Next Module
 
-- [Building with AI Coding Assistants](./module-1.9-building-with-ai-coding-assistants/)
-- [Model Context Protocol (MCP) for Agents](../frameworks-agents/module-1.8-model-context-protocol/)
-- [Computer Use and Browser Automation Agents](../frameworks-agents/module-1.9-computer-use-agents/)
+This is the last module in the AI-Native Development sub-track. Next, return to the [AI-Native Development index](./) for review, or continue onward to [Generative AI](../generative-ai/) and [Frameworks & Agents](../frameworks-agents/) when you want deeper model and agent-system architecture.
 
 ## Sources
 
-- [Enabling Claude Code to Work More Autonomously](https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously) — Best allowlisted overview of the Agent SDK's relationship to Claude Code, plus hooks and subagents.
-- [New Capabilities for Building Agents on the Anthropic API](https://www.anthropic.com/news/agent-capabilities-api) — Good adjacent context on Anthropic's broader agent-building primitives, including MCP connectivity and longer-lived context.
-- [Claude Agents](https://www.anthropic.com/solutions/agents) — Useful high-level product framing for how Anthropic positions agents, Claude Code, and agent workflows.
+- [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) - Official Agent SDK overview for built-in tools, hooks, subagents, MCP, permissions, and sessions.
+- [How the agent loop works](https://code.claude.com/docs/en/agent-sdk/agent-loop) - Official runtime-loop reference for message flow, tool execution, permissions, budgets, compaction, and result handling.
+- [Work with sessions](https://code.claude.com/docs/en/agent-sdk/sessions) - Official guidance for SDK session IDs, resume behavior, forks, and continuity patterns.
+- [Handle approvals and user input](https://code.claude.com/docs/en/agent-sdk/user-input) - Official approval and user-input reference for agent runs that need human decisions.
+- [Configure permissions](https://code.claude.com/docs/en/agent-sdk/permissions) - Official permission rules and modes used to constrain tool execution.
+- [Intercept and control agent behavior with hooks](https://code.claude.com/docs/en/agent-sdk/hooks) - Official hook reference for pre-tool, post-tool, compaction, stop, and observability control points.
+- [Give Claude custom tools](https://code.claude.com/docs/en/agent-sdk/custom-tools) - Official custom-tool reference for domain-specific capabilities inside an SDK runtime.
+- [Connect to external tools with MCP](https://code.claude.com/docs/en/agent-sdk/mcp) - Official SDK MCP integration page for external tool boundaries.
+- [Observability with OpenTelemetry](https://code.claude.com/docs/en/agent-sdk/observability) - Official observability page for tracing and runtime monitoring concepts.
+- [Securely deploying AI agents](https://code.claude.com/docs/en/agent-sdk/secure-deployment) - Official deployment security guidance for SDK-based agents.
+- [Architecture overview](https://modelcontextprotocol.io/docs/learn/architecture) - MCP's official architecture explanation of hosts, clients, servers, transports, and primitives.
+- [Security Best Practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices) - MCP's security guidance for trusted servers, user consent, tool descriptions, and authorization boundaries.
+- [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) - Anthropic engineering guidance on workflows versus agents, tool design, ground truth, and stopping conditions.
+- [Enabling Claude Code to Work More Autonomously](https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously) - Anthropic announcement covering Agent SDK, hooks, subagents, and autonomy improvements.
+- [New Capabilities for Building Agents on the Anthropic API](https://www.anthropic.com/news/agent-capabilities-api) - Anthropic announcement for adjacent agent-building primitives, including MCP connector and code execution context.

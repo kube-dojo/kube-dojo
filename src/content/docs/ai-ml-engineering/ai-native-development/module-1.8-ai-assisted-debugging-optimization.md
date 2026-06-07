@@ -30,9 +30,9 @@ AI can reduce that pressure, but only when you use it as part of a disciplined d
 
 This module teaches AI-assisted debugging as a professional workflow rather than a shortcut. You will learn how to collect useful context, ask for analysis instead of blind rewrites, verify proposed fixes with tests, and use traditional tools such as profilers, logs, `kubectl`, and Git history as evidence sources. The goal is not to let AI debug for you; the goal is to become the engineer who can direct the investigation, challenge the answer, and prove the fix.
 
-## Core Content
+The debugging workflows in this module are harness-driven: the same prompt structures, evidence packets, and verification checks work regardless of which AI model or assistant you use. The discipline is in the evidence you collect and the contracts you enforce, not in model-specific features. For prompt architecture and harness fundamentals, see [Module 1.1: Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/).
 
-### 1. The Debugging Contract: Evidence Before Advice
+## The Debugging Contract: Evidence Before Advice
 
 The most important shift in AI-assisted debugging is treating the model as an analysis partner that consumes evidence, not as an oracle that receives frustration. When a prompt says only “this is broken,” the model fills missing details with common patterns from training data. Sometimes that guess lands close enough, but professional debugging cannot depend on luck because the cost of a wrong fix grows with system complexity.
 
@@ -225,7 +225,7 @@ if __name__ == "__main__":
 
 This example uses schema validation to make the failure observable before the tool touches production state. In real AI-native systems, strict schemas and clear validation errors are debugging tools, not just safety features. They turn a vague complaint such as “the agent filed the wrong ticket” into a precise failure such as “the model emitted `ticket` instead of `ticket_id`, and the executor rejected the call.”
 
-### 2. Bug Categories: Where AI Helps, Where It Misleads
+## Bug Categories: Where AI Helps, Where It Misleads
 
 AI models are strongest when the bug matches a common pattern and the relevant context fits into the prompt. Syntax errors, type mismatches, missing imports, obvious null handling, and many framework misuses are good fits because the model has seen thousands of similar examples. The model’s pattern recognition becomes less reliable when the failure depends on runtime timing, hidden state, proprietary business rules, or production-only configuration.
 
@@ -427,7 +427,9 @@ Performance bugs are another category where AI can mislead if you skip measureme
 
 The senior move is to classify before prompting. If the failure is deterministic and local, ask for code analysis. If the failure is environmental, ask for a differential checklist. If the failure is timing-sensitive, ask for instrumentation and reproduction strategy. If the failure is performance-related, profile first and ask about the measured bottleneck.
 
-### 3. Worked Example: From Failure to Verified Fix
+Classification shapes what the model can usefully say. When you tell a model "this is a concurrency defect in a shared counter," you invite it to reason about locks, atomic operations, and memory models. When you instead paste the same code with no category, the model often defaults to local code review — suggesting variable renames or loop rewrites that cannot fix a race condition. The debugging contract and bug classification work together: the contract demands evidence, and classification tells the model which evidence matters most. A prompt that combines both — "I have a concurrency bug, here is the shared state, here is the stress-test output, suggest an instrumentation strategy" — produces analysis that is both faster and more reliable than an undirected plea to "fix my code."
+
+## Worked Example: From Failure to Verified Fix
 
 A worked example makes the debugging workflow concrete. We will use a small Python function because the mechanics are visible, but the same sequence applies to a service endpoint. The function computes a discounted total, and the bug appears only when the cart does not qualify for a discount.
 
@@ -538,7 +540,7 @@ Review your proposed fix against these checks:
 
 This review prompt is especially useful when you are tired or under incident pressure. It slows the model down and makes the answer auditable. You are not asking for more words; you are asking for the reasoning that determines whether the patch is safe.
 
-### 4. Optimization: Profile First, Then Ask the Model
+## Optimization: Profile First, Then Ask the Model
 
 Optimization is debugging with a stopwatch. The bug is not a wrong value; the bug is that the system spends too much time, memory, money, or capacity producing the value. AI can help identify algorithmic complexity, database anti-patterns, unnecessary allocations, and caching opportunities, but only after you identify where the time actually goes.
 
@@ -601,6 +603,8 @@ This example is a good AI optimization target because the bottleneck is clear: m
 
 When you ask AI about performance, include input sizes and call counts. A model may correctly identify that an algorithm is `O(n^2)`, but the business impact depends on whether `n` is ten or ten million. It may recommend caching, but caching can introduce stale data, memory growth, and invalidation complexity. The prompt should force the trade-off into the answer.
 
+**Hypothetical scenario (illustrative prompt input):**
+
 ```text
 Profiling shows this function consumes 68 percent of endpoint time.
 
@@ -639,6 +643,8 @@ def serialize_users(users):
 
 This code may be fine if `user.posts` is already loaded. It may be disastrous if every access lazily hits the database. The correct prompt includes logs or profiler output showing query counts. Ask the model whether eager loading, explicit joins, prefetching, or a separate aggregate query best matches the access pattern.
 
+**Hypothetical scenario (illustrative prompt input):**
+
 ```text
 This endpoint serializes 200 users and emits 201 SQL queries.
 The first query loads users, and each later query loads posts for one user.
@@ -653,17 +659,17 @@ Include a test or instrumentation check that prevents the query count from retur
 
 Performance work in Kubernetes adds another layer because process-level measurements and cluster-level measurements answer different questions. `kubectl top` can show CPU and memory usage, but it depends on Metrics Server and is not a high-resolution profiler. Application profiling tells you where code spends time. Distributed tracing tells you whether time is local, remote, or waiting. AI can help interpret all three, but you should not substitute one for another.
 
-After `kubectl` has been introduced, this module uses `k` as the common alias for `kubectl`. You can define it in a shell with `alias k=kubectl` if your environment uses that convention. The alias is convenient during incident work, but scripts and documentation should remain clear enough that another engineer can follow the commands without guessing.
+The following commands use the full `kubectl` invocation. In your own shell, you may use a shorter alias, but scripts and shared documentation should always expand the command so another engineer can follow every step without guessing. During incident work, clarity matters more than keystroke savings — a pasted command that every team member can read immediately reduces coordination overhead.
 
 ```bash
 kubectl top pod -n payments
-k logs -n payments deploy/checkout-api --since=15m
-k describe pod -n payments checkout-api-abc123
+kubectl logs -n payments deploy/checkout-api --since=15m
+kubectl describe pod -n payments checkout-api-abc123
 ```
 
 These commands collect symptoms, not root causes. High CPU tells you where to look, logs tell you what the application reported, and `describe` tells you whether Kubernetes restarted, throttled, or failed to schedule the Pod. A strong AI prompt includes the relevant snippets and asks what evidence is missing, rather than asking the model to invent a production diagnosis.
 
-### 5. Cloud-Native Debugging With AI and Kubernetes
+## Cloud-Native Debugging With AI and Kubernetes
 
 Kubernetes debugging is a context-management problem. The failure may live in application code, container image contents, environment variables, resource limits, network policy, service discovery, DNS, storage, node pressure, or control-plane state. AI can help organize the search, but only if you provide the right Kubernetes objects and avoid drowning the model in unrelated YAML.
 
@@ -690,7 +696,7 @@ flowchart TD
 A distroless container makes this especially clear. You may not have a shell, package manager, or diagnostic tools inside the application image, and that is a good production-hardening choice. The debugging move is not to rebuild the image with `curl` and `bash` under pressure. The debugging move is to use Kubernetes debug workflows, such as an ephemeral container or a copied Pod, to inspect the environment without changing the application image contract.
 
 ```bash
-k debug -n payments pod/checkout-api-abc123 -it --image=busybox:1.36 --target=checkout-api
+kubectl debug -n payments pod/checkout-api-abc123 -it --image=busybox:1.36 --target=checkout-api
 ```
 
 The command above is an example of attaching a temporary debugging container to a running Pod. In a real cluster, the exact command depends on permissions, runtime support, and the debugging image you choose. The useful AI prompt should include the command you ran, the error you received, the Pod spec, and whether the target container shares process namespace visibility.
@@ -715,12 +721,12 @@ Please:
 3. Suggest the next safest verification command.
 ```
 
-Control-plane and node debugging require additional skepticism. A model can explain common failure modes, but it should not be asked to guess cluster health from a single timeout. You need events, component status, node conditions, and relevant endpoint responses. Kubernetes v1.35+ structured diagnostic endpoints can be especially useful because machine-parseable output is easier for AI to inspect consistently.
+Control-plane and node debugging require additional skepticism. A model can explain common failure modes, but it should not be asked to guess cluster health from a single timeout. You need events, component status, node conditions, and relevant endpoint responses. Kubernetes v1.35+ structured diagnostic endpoints can be especially useful because machine-parseable output is easier for AI to inspect consistently. As of mid-2026, these structured endpoints are still maturing and may require a negotiated `Accept` header (e.g., `Accept: application/json`); verify the feature-gate state for your cluster version before relying on specific output formats.
 
 ```bash
-k get events -A --sort-by=.lastTimestamp
-k get nodes -o wide
-k describe node worker-1
+kubectl get events -A --sort-by=.lastTimestamp
+kubectl get nodes -o wide
+kubectl describe node worker-1
 ```
 
 When feeding Kubernetes output to AI, redact secrets and reduce noise. Do not paste every object in a production namespace if the failure concerns one Deployment. Include labels, selectors, container names, ports, readiness probes, recent events, and the exact command output. Ask the model to verify selector matching, port alignment, and probe behavior before jumping to exotic causes.
@@ -751,14 +757,14 @@ This prompt style catches a common problem: the Service selector does not match 
 Kubernetes metrics need interpretation as well. `kubectl top` depends on Metrics Server and can lag shortly after Pod creation. If the model tells you that missing metrics prove the Pod is idle, challenge that conclusion. Missing metrics might mean the metrics pipeline is not installed, not ready, delayed, or blocked. The absence of data is itself a debugging signal, not proof of health.
 
 ```bash
-k top pod -n payments
-k get deployment -n kube-system metrics-server
-k logs -n kube-system deploy/metrics-server --tail=80
+kubectl top pod -n payments
+kubectl get deployment -n kube-system metrics-server
+kubectl logs -n kube-system deploy/metrics-server --tail=80
 ```
 
 In production, you should combine cluster-level signals with application-level signals. A high CPU Pod might be doing legitimate work, stuck in a retry loop, processing oversized requests, or suffering from a hot loop introduced by a code change. Feed the model CPU graphs, request rates, error rates, and profiler output together. Ask it to separate correlation from causation.
 
-### 6. Debugging AI-Native Systems and Tool Calls
+## Debugging AI-Native Systems and Tool Calls
 
 AI-native applications add a new class of bugs because part of the system is probabilistic while the surrounding application still requires deterministic contracts. A tool-calling workflow might fail because the tool schema is too permissive, the model chooses the wrong tool, the executor accepts invalid arguments, the tool output lacks enough structure, or the final response ignores a failure. Debugging these systems requires traces that preserve every boundary.
 
@@ -870,7 +876,7 @@ Tool output design affects debuggability. A vague output such as `"failed"` forc
 
 The final debugging principle for AI-native systems is to evaluate behavior with scenarios, not just unit tests. Unit tests validate validators and executors. Scenario tests validate whether the assistant asks for clarification, refuses unsafe action, chooses the correct tool, and grounds its final response in tool output. A model upgrade, prompt change, or schema edit can change behavior even when code tests still pass.
 
-### 7. Debugging Patterns for Senior Practice
+## Debugging Patterns for Senior Practice
 
 Binary search debugging is useful when the failure hides inside a long path. The idea is simple: place a checkpoint near the middle of the workflow, determine whether the failure happens before or after that point, and repeat. AI helps by suggesting meaningful checkpoints and the values that should be logged at each checkpoint.
 
@@ -945,7 +951,7 @@ git bisect good main~20
 
 Once Git selects a commit, you run the same test and mark it good or bad. When the first bad commit is found, feed the model the diff, the failing test, and the intended behavior. Ask for causal analysis rather than a rewrite. The question should be “which changed assumption explains the failure?” because regression fixes often require restoring an invariant, not reverting an entire feature.
 
-Hypothesis-driven debugging keeps the investigation disciplined. A hypothesis should be specific enough to test and narrow enough to fail. “Kubernetes is broken” is not a hypothesis. “The Service selector no longer matches the Pod label after the deployment template rename” is a hypothesis because you can prove it with `k get service`, `k get pods --show-labels`, and EndpointSlice output.
+Hypothesis-driven debugging keeps the investigation disciplined. A hypothesis should be specific enough to test and narrow enough to fail. "Kubernetes is broken" is not a hypothesis. "The Service selector no longer matches the Pod label after the deployment template rename" is a hypothesis because you can prove it with `kubectl get service`, `kubectl get pods --show-labels`, and EndpointSlice output.
 
 A good AI prompt can maintain a hypothesis table. Ask for hypothesis, supporting evidence, contradicting evidence, next check, and expected result. This reduces the chance that the conversation becomes a chain of unrelated suggestions. It also makes incident handoff easier because another engineer can see what has already been tested.
 
@@ -959,6 +965,8 @@ A good AI prompt can maintain a hypothesis table. Ask for hypothesis, supporting
 The table is not just documentation; it is a thinking tool. When AI suggests a new cause, put it in the table and ask what evidence would distinguish it from the current leading cause. This keeps the model from wandering into plausible but untested narratives.
 
 Senior debugging also includes rollback judgment. If the system is actively harming users, the correct first move may be rollback, feature-flag disablement, rate limiting, or traffic shifting before root-cause analysis is complete. AI can help list mitigation options, but the team must understand blast radius, data integrity, and operational risk.
+
+**Hypothetical scenario (illustrative prompt input):**
 
 ```text
 We have an active production incident.
@@ -999,16 +1007,16 @@ This prompt is different from a normal debugging prompt because it prioritizes s
 
 ## Quiz
 
-1. Your team deployed a serializer change, and an endpoint now raises `AttributeError: 'dict' object has no attribute 'price'`. The AI suggests changing `item.price` to `item["price"]`. What should you check before accepting that fix?
+1. Your team deployed a serializer change, and an endpoint now raises `AttributeError: 'dict' object has no attribute 'price'`. The AI suggests changing `item.price` to `item["price"]`. How should you evaluate this fix — checking root-cause fit, edge cases, and the upstream contract — before accepting it?
    <details>
    <summary>Answer</summary>
-   Check whether the function is supposed to receive dictionaries or domain objects at that boundary. The suggested patch may handle the symptom, but it could hide a broken serializer contract upstream. You should inspect the recent diff, the caller contract, representative input, and add a regression test that proves the correct type or intentionally updates the contract.
+   Check whether the function is supposed to receive dictionaries or domain objects at that boundary. The suggested patch may handle the symptom, but it could hide a broken serializer contract upstream. You should inspect the recent diff, the caller contract, representative input, and add a regression test that proves the correct type or intentionally updates the contract. When you evaluate AI-generated fixes, checking root-cause fit, edge cases, and regression coverage protects you from accepting a plausible-looking patch that moves the failure downstream.
    </details>
 
-2. A Kubernetes Pod is Running and Ready, but requests to its Service fail. You paste the Deployment YAML into an AI assistant, and it recommends increasing CPU limits. What evidence should you provide instead to debug the routing failure?
+2. A Kubernetes Pod is Running and Ready, but requests to its Service fail. You paste the Deployment YAML into an AI assistant, and it recommends increasing CPU limits. How should you design a proper cloud-native debugging workflow — using logs, selectors, and EndpointSlice evidence — instead of guessing at resource limits?
    <details>
    <summary>Answer</summary>
-   Provide the Service selector, Pod labels, EndpointSlice output, targetPort, containerPort, and recent events. CPU limits are not the leading concern for a Service routing failure. The useful investigation compares selector matching and port mapping, then verifies whether the Pod appears as an endpoint for the Service.
+   Provide the Service selector, Pod labels, EndpointSlice output, targetPort, containerPort, and recent events. CPU limits are not the leading concern for a Service routing failure. The useful investigation compares selector matching and port mapping, then verifies whether the Pod appears as an endpoint for the Service. Designing a cloud-native debugging workflow means combining logs, traces, metrics, and Kubernetes tools before guessing at resource changes.
    </details>
 
 3. A model-generated optimization changes a nested loop to a set lookup and reports a large speedup in a local benchmark. Your endpoint still has poor p95 latency in production. What debugging step should come next?
@@ -1035,13 +1043,13 @@ This prompt is different from a normal debugging prompt because it prioritizes s
    The executor accepted ambiguous and incorrectly typed arguments instead of enforcing a strict schema. It should reject unknown field names such as `ns`, require `namespace`, require `replicas` to be an integer, and apply authorization checks before mutation. The model’s variability must be constrained at tool boundaries.
    </details>
 
-7. A race condition appears only during high concurrency. The AI correctly identifies an unprotected read-modify-write sequence and suggests adding a lock. What should your verification include?
+7. A race condition appears only during high concurrency, and you are comparing debugging strategies across different bug categories. The AI correctly identifies an unprotected read-modify-write sequence and suggests adding a lock. What should your verification include?
    <details>
    <summary>Answer</summary>
-   Verification should include a stress or concurrency test that fails or is risky under the old implementation and passes with the lock, plus review of all access paths to the shared state. You should protect reads and writes consistently, confirm the lock does not create unacceptable contention or deadlock, and document the invariant being protected.
+   Verification should include a stress or concurrency test that fails or is risky under the old implementation and passes with the lock, plus review of all access paths to the shared state. You should protect reads and writes consistently, confirm the lock does not create unacceptable contention or deadlock, and document the invariant being protected. When comparing debugging strategies for concurrency errors and logic bugs, a lock alone is not a guarantee — you must also verify that no other code path accesses the shared state without acquiring it.
    </details>
 
-8. A developer runs `k top pod` immediately after creating a Pod and receives no metrics. The AI says the Pod is not consuming CPU. How should you correct that conclusion?
+8. A developer runs `kubectl top pod` immediately after creating a Pod and receives no metrics. The AI says the Pod is not consuming CPU. How should you correct that conclusion?
    <details>
    <summary>Answer</summary>
    Missing `kubectl top` output does not prove the Pod is idle. The command depends on Metrics Server, and metrics may be delayed shortly after Pod creation. Check Metrics Server health, wait for the metrics pipeline when appropriate, and use application logs or direct profiling if you need immediate evidence.
@@ -1182,7 +1190,7 @@ Success criteria for this step:
 
 ### Step 5: Create and measure an optimization target
 
-Now create a small performance script. It includes a slow list-membership implementation and a faster set-based implementation.
+Now create a small performance script that mirrors the real optimization workflow taught in this module. It includes a slow list-membership implementation and a faster set-based implementation running under identical conditions so you can measure the actual difference.
 
 ```bash
 cat << 'PY' > optimization_lab.py
@@ -1294,6 +1302,14 @@ Success criteria for this step:
 - [ ] Your note asks the AI to rank hypotheses instead of guessing.
 - [ ] Your note identifies the smallest safe next check.
 
+## Learner check
+
+Before moving on, read this passage from the Debugging Contract section aloud:
+
+> The most important shift in AI-assisted debugging is treating the model as an analysis partner that consumes evidence, not as an oracle that receives frustration.
+
+If you can explain why "evidence before advice" is the contract that makes every other technique in this module work, you have grasped the foundation. If you are unsure, re-read the Debugging Contract section and trace one of the worked examples from symptom to verified fix.
+
 ## Next Module
 
 **Module 1.9: Building with AI Coding Assistants**
@@ -1313,3 +1329,6 @@ You have learned how to diagnose failures, challenge model-generated fixes, prot
 - [New tools and features in the Responses API](https://openai.com/index/new-tools-and-features-in-the-responses-api/) — OpenAI announcement summarizing Responses API support for remote MCP servers, image generation, Code Interpreter, and file search.
 - [OpenAI Docs MCP](https://platform.openai.com/docs/docs-mcp) — OpenAI documentation for the public read-only MCP server used to access developer docs.
 - [OpenAI Web Search Guide](https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses) — OpenAI guide for Responses web-search tool behavior, supported modes, and model availability constraints.
+- [Debugging (Wikipedia)](https://en.wikipedia.org/wiki/Debugging) — Covers the Harvard Mark II moth anecdote that helped popularize the term "debugging" in computing culture.
+- [What Have We Learned About Software Engineering?](https://cacm.acm.org/opinion/what-have-we-learned-about-software-engineering/) — ACM article with incident-driven lessons including the Therac-25 accidents and their software-safety implications.
+- [Mars Climate Orbiter](https://en.wikipedia.org/wiki/Mars_Climate_Orbiter) — Wikipedia article documenting the unit-mismatch failure where metric and imperial force units caused the spacecraft loss, a canonical interface-contract debugging lesson.

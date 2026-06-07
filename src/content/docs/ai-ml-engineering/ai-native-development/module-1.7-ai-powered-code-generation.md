@@ -8,72 +8,67 @@ sidebar:
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5 Hours
 
 **Reading Time**: 4-5 hours
-**Prerequisites**: Modules 1-2
-
-> **Go deeper:** For systematic prompt design, reasoning patterns, and safety evaluation before you trust generated code, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/), [Reasoning and Logic Prompts](/ai/ai-engineering-foundations/module-1.2-reasoning-and-logic-prompts/), and [Prompt Safety and Evaluation](/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation/).
+**Prerequisites**: Modules 1.1-1.5 in this sub-track, basic Git workflow, and comfort running tests locally.
 
 ---
 
 ## What You'll Be Able to Do
 
 By the end of this module, you will be able to:
-- **Design** deterministic code generation workflows using explicit constraints and specifications.
-- **Implement** robust test suites and boilerplate scaffolding using test-driven AI patterns.
-- **Evaluate** AI-generated code for security vulnerabilities, focusing on input validation and injection flaws.
-- **Diagnose** common failures in AI output, such as context loss, edge case omission, and hallucinated dependencies.
-- **Compare** the capabilities and pricing models of modern AI coding assistants.
+
+- Design code-generation prompts that state intent, constraints, inputs, outputs, and review expectations clearly enough for another engineer to audit.
+- Choose among scaffold, fill-in, translate, refactor, and test-generation patterns without treating any one tool or model as a universal answer.
+- Separate the model that produces code from the harness that reads files, applies patches, runs commands, and records evidence.
+- Review generated code for correctness, security, provenance, licensing, dependency risk, maintainability, hallucinated APIs, and common AI failure modes before accepting it.
+- Build a deterministic generate-review-test loop that turns AI output into ordinary source-controlled engineering work.
 
 ---
 
 ## Why This Module Matters
 
-In 2019, engineering teams at Uber were preparing to launch a highly anticipated payment feature. The code had passed multiple rounds of human review. The test suite, achieving high coverage, returned completely green. By all traditional metrics, the feature was ready for production. However, before deployment, they ran the codebase through an early AI code analyzer to act as a final safety net.
+AI-powered code generation is not a shortcut around engineering judgment. It is a way to ask a probabilistic system to draft code faster than you could type it, then force that draft through the same evidence loop you would expect from any other change. The durable skill is not "getting code from a model." The durable skill is turning an uncertain draft into a reviewed, tested, source-controlled patch.
 
-The AI system quickly flagged a critical vulnerability in the refund logic. Human reviewers had validated the "happy path" of calculating a refund by subtracting a fee from the total amount. What they missed was the edge case of fraudulent negative amounts. If a malicious actor submitted a negative transaction value, the system would mathematically invert it, resulting in a positive refund credited back to the attacker. 
+This module deliberately treats tools as rotating examples rather than a scoreboard. Copilot, Cursor, Codex, Claude Code, Gemini Code Assist, Amazon Q Developer, Tabnine, Continue, Aider, and local model harnesses all sit somewhere on the same map: prompt, context, model, harness, generated artifact, review, test, and merge. Module 1.1 owns the Rosetta-stone landscape for these tool families; this module zooms into the generation loop itself. See [Module 1.1: AI Coding Tools Landscape](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) when you need the broader tool taxonomy.
 
-```python
-# Human-approved code (WRONG!)
-def calculate_refund(amount, fee):
-    refund = amount - fee
-    if refund < 0:
-        refund = 0  # Can't refund negative amounts
-    return refund
+Hypothetical scenario: a team asks an assistant to "add CSV import support" to a service. The generated patch adds a parser, a route, a dependency, and tests. The diff looks polished, but the parser accepts arbitrary file paths, the dependency name is one character away from a popular package, and the tests only cover clean input. The failure is not that AI generated code. The failure is that nobody reviewed the generated output as an untrusted draft.
 
-# Edge case: What if amount is negative (fraudulent charge)?
-# Bug: Negative amount becomes POSITIVE refund!
-# Example: calculate_refund(-100, 5) = 0 (should be 0, but...)
-# Actually: -100 - 5 = -105, then clamped to 0
-# Should raise error for negative input!
-```
+The same pattern appears in smaller tasks. A model can generate a validation function that looks idiomatic but treats `None` as an empty string. It can update tests by weakening assertions instead of fixing behavior. It can invent a framework method that resembles the real API but does not exist. These are not exotic failures. They are normal consequences of asking a language model to predict useful text from incomplete context.
 
-The financial impact of this single oversight was estimated at over $500,000 in potential exposure had it reached production. The AI did not assume user intent; it merely analyzed the mathematical boundaries of the parameters and identified a missing validation layer. The fixed code was entirely unambiguous:
-
-```python
-def calculate_refund(amount, fee):
-    if amount < 0:
-        raise ValueError("Amount cannot be negative")
-    if fee < 0:
-        raise ValueError("Fee cannot be negative")
-    refund = amount - fee
-    return max(0, refund)
-```
-
-This incident fundamentally reframed how the industry views AI in software engineering. It is not just about generating boilerplate rapidly; it is about deploying an exhaustive, context-aware engine that evaluates permutations humans naturally overlook. This module teaches you how to harness AI generation safely, guiding you from abstract specifications to secure, production-grade applications.
+The engineering response is not fear or blind trust. The response is a disciplined workflow: specify the task, constrain the surface area, generate the smallest useful artifact, inspect the diff, run objective checks, and keep responsibility with the human and the repository. Once you learn that loop, code generation becomes a practical accelerator rather than an invisible source of production risk.
 
 ---
 
-## The Mental Model
+## The Mental Model of AI Code Generation
 
-Think of AI code generation as collaborating with a highly productive junior developer who has memorized every programming textbook in existence but possesses zero institutional knowledge of your company's business logic. 
+An AI code generator is a text prediction system wrapped in a development harness. The model predicts code, prose, commands, or test cases from the prompt and context it receives. The harness determines what files the model can see, whether it can edit them, whether it can run commands, how patches are applied, and what evidence is shown to the developer. These are independent choices, which is why the same model can feel powerful in one coding tool and clumsy in another.
 
-This entity excels at standard patterns, test generation, and boilerplate expansion. However, it struggles with novel algorithmic breakthroughs and deep domain logic. Most importantly, it requires explicit, unambiguous specifications to function securely and efficiently.
+Keep the distinction sharp. Model quality affects the draft: reasoning depth, code fluency, context use, style matching, and ability to follow constraints. Harness design affects the workflow: file discovery, patch application, command execution, sandboxing, approvals, telemetry, and auditability. A strong model in a weak harness may generate impressive snippets that are hard to apply safely. A modest model in a careful harness may perform well on routine edits because it can read the right files, make a narrow patch, and run the right test.
 
-> **Stop and think**: If an AI model was trained on billions of lines of public code, what is the likelihood that the average code snippet it ingests contains optimal security practices? How should this influence your review process?
+```
+Prompt + context
+      |
+      v
+Model predicts a draft
+      |
+      v
+Harness applies or presents the draft
+      |
+      v
+Human and repository review the result
+      |
+      v
+Tests, linters, scanners, and diff review produce evidence
+```
 
-### Did You Know? The Free Tier Explosion
-GitHub Copilot supports models from multiple providers (Anthropic Claude, Google Gemini, OpenAI GPT), introducing this multi-model support in October 2024. Shortly after, the GitHub Copilot Free plan was announced on December 18, 2024, requiring only a GitHub account and providing up to 2,000 inline code completions and 50 premium requests per month. For heavier usage, Copilot Pro costs $10/month and Copilot Pro+ runs $39/month. 
+The output should begin life in your mind as "plausible, untrusted code." That phrase is useful because it avoids two bad habits. It prevents dismissal of generated code merely because a model wrote it, and it prevents acceptance of generated code merely because it compiles. Plausible drafts deserve evaluation, not automatic approval.
 
-Not to be outdone, Amazon CodeWhisperer was rebranded to Amazon Q Developer in April 2024, offering a free tier with 50 agentic requests and 1,000 lines of Java code transformation per month, while its Pro tier costs $19/month. Concurrently, Google Gemini Code Assist offers a free tier for individual developers. However, secondary claims stating Gemini provides up to 180,000 code completions per month remain unverified, as official documentation obscures the exact quotas.
+Token prediction is not the same as understanding your system. A model may infer intent from names, comments, adjacent tests, documentation, and common patterns, but it does not own your business rules. If the repository has a domain invariant such as "refunds cannot exceed captured payment," "deleted accounts remain auditable," or "tenant identifiers must never be inferred from user input," you must supply that invariant or verify that it already appears in the local context.
+
+This is why review is non-negotiable. Generated code is often syntactically clean because public examples contain a lot of syntactically clean code. Security posture, edge-case behavior, licensing fit, dependency health, and compatibility with your own conventions are much less visible from syntax alone. The model can produce code that looks mature while hiding exactly the assumptions that matter.
+
+The mental model also explains why generation is strongest on known patterns. CRUD scaffolds, CLI wrappers, data validators, adapters, serializers, test fixtures, migrations, and documentation usually have recognizable shapes. Novel algorithms, ambiguous product behavior, security-sensitive authorization logic, performance-critical trading paths, and compliance-heavy data flows require much more human ownership because the correct answer depends on context that may not be in the prompt.
+
+Treat every generation request as a small contract. The prompt states the work, the context supplies the facts, the model drafts an answer, the harness makes the draft reviewable, and the repository decides whether it is true. When that contract is explicit, AI code generation fits naturally into professional engineering. When the contract is implicit, the tool invents missing terms on your behalf.
 
 ---
 
@@ -81,864 +76,627 @@ Not to be outdone, Amazon CodeWhisperer was rebranded to Amazon Q Developer in A
 
 ### Specification-Driven Generation
 
-The quality of generated code is directly proportional to specification quality. Vague instructions yield hallucinated results.
+Specification-driven generation means you describe the desired behavior before asking for code. This sounds obvious, but vague prompts are still one of the most common reasons generated code wanders. "Generate a function to process data" gives the model permission to invent input shapes, validation rules, output formats, error behavior, performance expectations, and dependency choices. Those inventions may be reasonable in isolation and wrong for your system.
 
-**Poor Specification**:
-```
-Generate a function to process data.
-```
+A useful specification names the artifact, inputs, outputs, constraints, edge cases, allowed dependencies, disallowed behavior, and review evidence. You are not trying to write a novel in the prompt. You are trying to remove the degrees of freedom that would be dangerous for the model to guess. The more the task touches security, money, identity, reliability, or compatibility, the more explicit the specification should be.
 
-**Good Specification**:
-```
-Generate a Python function that:
-- Takes a list of dictionaries (user records)
-- Each dict has: name (str), age (int), email (str)
-- Filters users over 18
-- Returns sorted by name
-- Include type hints
-- Add docstring with examples
-- Handle empty input gracefully
+Poor specification:
+
+```text
+Generate a function to process uploaded files.
 ```
 
-For maximum reliability, write the requirements out in structured text before prompting:
+Better specification:
 
-```
-# specification.md
-Function: validate_email
-Input: email (str)
-Output: bool
-Rules:
-  - Must contain exactly one @
-  - Must have domain with TLD
-  - Allow letters, numbers, dots, hyphens
-  - Max length 254 characters
-Edge cases:
-  - Empty string -> False
-  - None -> raise TypeError
-  - Unicode characters -> handle correctly
-```
+```text
+Generate a Python function named read_user_upload.
 
-You should also explicitly demand standard engineering practices like type hints:
+Inputs:
+- base_dir: pathlib.Path, already created by the service
+- user_filename: str, supplied by an untrusted user
 
-```
-Generate this function with full type hints:
-from typing import List, Optional, Dict
+Output:
+- str containing UTF-8 text from the selected file
 
-def process_users(users: List[Dict[str, str]],
-                  min_age: Optional[int] = None) -> List[Dict[str, str]]:
-    ...
+Constraints:
+- Resolve paths and reject any path outside base_dir.
+- Reject absolute paths and parent-directory traversal.
+- Limit file size to 1 MiB before reading.
+- Raise ValueError for invalid names and FileNotFoundError for missing files.
+- Use only the Python standard library.
+
+Evidence:
+- Include pytest tests for valid files, traversal attempts, absolute paths,
+  missing files, and oversized files.
 ```
 
-To ensure maintainability, mandate documentation:
+Notice the difference. The better prompt does not merely ask for a function; it defines what the function is allowed to assume. It also asks for tests that expose the risk area. If the generated implementation later uses `open(user_filename)` directly, the review has an obvious rejection criterion because the prompt already declared that filenames are untrusted.
 
-```
-Generate function with:
-- Google-style docstring
-- Parameter descriptions
-- Return value description
-- Usage examples in docstring
-- Type hints
-```
+Specification quality is not only about constraints. It is also about preserving design intent. If you ask a model to "modernize" code without stating which public interfaces must remain stable, it may produce a cleaner implementation that breaks downstream callers. A good refactor prompt says which signatures, response shapes, status codes, environment variables, and file formats must not change.
 
-And always specify error handling behaviors so the system does not fail silently:
+The review discipline begins before generation. Read your own prompt as if it were a ticket assigned to a teammate. If a responsible engineer could interpret it in several incompatible ways, the model will have the same opening. Tighten the prompt until the desired patch can be judged from the diff and the tests, then generate.
 
-```
-Handle errors:
-- Raise ValueError for invalid inputs
-- Raise FileNotFoundError if file missing
-- Log errors using Python logging module
-- Never silently fail
-```
+### Harness and Model Are Separate Choices
 
-### Iterative Refinement
+Many developers say "the AI did it" when they really mean a model produced output inside a particular tool. That shorthand hides important engineering choices. A browser chat, an editor assistant, a terminal agent, and a CI-connected agent can all call capable models, but they expose different context and authority. The right question is not "which assistant should I use?" It is "which combination of model and harness matches the risk of this generation task?"
 
-Generated code is rarely perfect on the first try. You must plan for an iterative cycle of generation, review, and refinement.
+For example, a fill-in-the-middle autocomplete harness may be ideal when you are writing a familiar loop inside a file you already understand. The model sees local context and suggests a small continuation. You accept, edit, or reject the suggestion immediately. The blast radius is small because the harness mostly affects the current buffer, even if the underlying model is strong enough for broader reasoning.
+
+A terminal agent harness changes the calculus. It may inspect the repository, edit multiple files, run tests, install packages, and summarize the result. That authority can be valuable for a cross-file refactor, but the review burden increases. You must check which files changed, whether commands were appropriate, whether dependency updates were justified, and whether the evidence actually supports the claim that the task is complete.
+
+As of 2026-06; verify before relying: public documentation for major coding products describes frequent changes in model menus, billing units, plan limits, and agent capabilities. Treat product facts as volatile skin around the durable workflow. A model that is available in an IDE today may be renamed, retired, rate-limited, or moved behind a different plan later, while the review loop stays the same.
+
+This separation also helps when a result is poor. If the assistant missed a file, the harness may have lacked context or search capability. If it saw the right file but invented an API, the model may have overgeneralized from similar libraries. If it produced a good patch but changed too many files, the prompt and harness permissions were too broad. Diagnose the failure at the right layer before switching tools.
+
+### The Generate-Review-Test Loop
+
+The durable loop is simple enough to memorize: prompt, generate, review, test, revise. The important part is that review happens before you emotionally accept the patch. If you let a polished diff become "the solution" in your mind before checking it, the rest of the process becomes confirmation bias. You start looking for reasons to keep the patch instead of reasons it might be wrong.
 
 ```mermaid
 flowchart TD
-    A[Write Specification] --> B[Generate Code with AI]
-    B --> C{Review Code}
-    C -->|Issues Found| D[Identify Problems]
-    D --> E{Simple Fix?}
-    E -->|Yes| F[Refine Prompt]
-    E -->|No| G[Manual Edit]
-    F --> B
-    G --> H[Run Tests]
-    C -->|Looks Good| H
-    H --> I{Tests Pass?}
-    I -->|No| J[Debug]
-    J --> D
-    I -->|Yes| K[Security Review]
-    K --> L{Secure?}
-    L -->|No| D
-    L -->|Yes| M[Performance Check]
-    M --> N{Fast Enough?}
-    N -->|No| O[Optimize]
-    O --> H
-    N -->|Yes| P[Production Ready!]
-
-    style P fill:#90EE90
-    style A fill:#87CEEB
-    style B fill:#FFD700
+    A[Write task contract] --> B[Provide scoped context]
+    B --> C[Generate smallest useful draft]
+    C --> D[Review diff and assumptions]
+    D --> E{Reject or revise?}
+    E -->|Reject| A
+    E -->|Revise| F[Patch manually or refine prompt]
+    F --> D
+    E -->|Looks plausible| G[Run targeted checks]
+    G --> H{Evidence passes?}
+    H -->|No| I[Debug with failure output]
+    I --> D
+    H -->|Yes| J[Security and provenance review]
+    J --> K{Ready for normal review?}
+    K -->|No| D
+    K -->|Yes| L[Commit through ordinary workflow]
 ```
+
+Run the loop in small increments. A single generated helper function is easier to review than a generated subsystem. A migration of three named files is easier to verify than "update the API layer." A generated test suite is easier to trust when you can compare it against a written behavior contract. Small loops are not slower in practice because they reduce the cost of discovering that the model took the wrong path.
+
+The first review pass should be silent and skeptical. Read the diff without the assistant's explanation. Explanations can be useful later, but they can also anchor you to the model's story. The diff is the artifact that will run in production. Check whether it changes the files you expected, preserves public contracts, introduces dependencies, alters tests, changes error handling, or quietly removes safeguards.
+
+Only after that should you run the evidence. Tests, linters, type checks, static analysis, dependency scanners, and manual smoke tests each answer different questions. A test can prove a behavior for known cases, but it cannot prove the absence of injection risk. A type checker can prove interface consistency, but it cannot prove business correctness. A security scanner can flag known patterns, but it cannot understand every domain invariant.
 
 ### Test-Driven Generation
 
-The most reliable way to force an AI to understand your boundaries is to generate tests prior to, or alongside, the implementation.
+Test-driven generation is one of the safest ways to use AI because it turns vague intent into executable boundaries. Instead of asking the model to produce implementation first, ask for tests from a behavior specification, review those tests, then generate code to pass them. This works because reviewing tests is often easier than reviewing a full implementation. You can ask whether the tests express the behavior you actually want before any implementation bias enters the conversation.
 
+A strong test-generation prompt includes normal cases, boundary cases, invalid inputs, failure modes, and invariants. It also states what not to test. If a function should not call the network, ask for tests that use temporary files or mocks rather than live services. If output order matters, say so. If a legacy bug must remain compatible for now, document that uncomfortable fact in the tests rather than letting the model "fix" it accidentally.
+
+```text
+Generate pytest tests for normalize_slug(text: str) -> str.
+
+Behavior:
+- Lowercase ASCII letters.
+- Replace whitespace and underscores with single hyphens.
+- Remove characters outside letters, numbers, and hyphens.
+- Collapse repeated hyphens.
+- Strip leading and trailing hyphens.
+- Raise TypeError for non-string input.
+
+Review requirements:
+- Include at least one test for empty input.
+- Include at least one test for punctuation-only input.
+- Include parametrized tests for common examples.
+- Do not change the function signature.
 ```
-1. Generate test cases first (specify inputs/outputs)
-2. Generate implementation to pass tests
-3. Run tests, iterate until green
-4. Refactor with confidence
-```
 
-By verifying the test suite first, you ensure the AI has internalized the edge cases.
+Review the generated tests as carefully as generated implementation. Models sometimes write tests that simply mirror their own planned implementation instead of the specification. They may assert the wrong behavior for edge cases, skip negative tests, or use broad assertions that would pass broken code. If the tests are weak, generating implementation against them only makes the weakness feel official.
 
-```python
-def test_valid_emails():
-    assert validate_email("user@example.com") == True
-    assert validate_email("first.last@example.co.uk") == True
-    # ... more test cases
-```
-
-### Did You Know? The Evolution of OpenAI Codex
-The original OpenAI Codex API (models `code-davinci-002` and `code-cushman-001`) was deprecated on March 23, 2023. Over two years later, on May 16, 2025, OpenAI relaunched Codex as a powerful cloud-based autonomous software engineering agent within ChatGPT. The 2025 iteration is powered by `codex-1`, a highly specialized version of the o3 reasoning model explicitly optimized for clean, instruction-following code generation. Concurrently, the legacy `codex-mini-latest` model was fully removed from the OpenAI API on February 12, 2026.
+Once the tests are reviewed, implementation generation becomes more constrained. The model has executable targets, and you have a concrete way to reject regressions. This does not remove the need for code review, but it reduces the chance that the model optimizes for a pretty happy path while ignoring boundaries. Test-driven generation is especially useful for validators, parsers, formatters, adapters, and compatibility refactors.
 
 ---
 
 ## Generation Patterns
 
-Mastering AI generation requires applying consistent, repeatable patterns to specific tasks.
+### Pattern 1: Scaffold a Known Shape
 
-### Pattern 1: CRUD Generation
-Use AI to scaffold the repetitive data layers of your application.
+Scaffolding asks the model to create a standard project shape, module layout, class skeleton, route handler, command-line interface, or service adapter. It helps when the work is structurally repetitive and the risk lies more in missing pieces than in inventing an algorithm. The goal is not to outsource architecture. The goal is to get a complete first draft of a familiar shape that you can prune and harden.
 
-```
-Generate a User model with CRUD operations:
-- Fields: id (int), name (str), email (str), created_at (datetime)
-- Methods: create(), read(), update(), delete()
-- Use SQLAlchemy ORM
-- Include type hints and docstrings
-- Add email validation
-```
+Good scaffolding prompts name the target framework, file boundaries, public interfaces, dependencies, and forbidden extras. They also ask the assistant to leave placeholders where domain decisions are unknown. That last detail matters. A generated scaffold should not silently invent authentication, billing, retry policy, or data retention behavior just because those concepts often appear near the requested framework.
 
-### Pattern 2: Boilerplate Expansion
-When you have an established pattern, force the AI to replicate it precisely across other entities.
+Illustrative example, not endorsement: an IDE agent can scaffold a FastAPI route, Pydantic models, and tests when you point it at an existing route and ask it to follow local conventions. The harness is useful here because it can inspect nearby files. The review burden is to verify that the generated route uses existing middleware, error shapes, dependency injection patterns, and test fixtures instead of creating a parallel mini-framework.
 
-```
-I have this function:
-def process_user(user): ...
+```text
+Generate a scaffold for a read-only Projects API endpoint.
 
-Generate similar functions for: Product, Order, Invoice
-Follow the same pattern but adapt field names.
-```
+Context:
+- Follow the style of src/routes/users.py and tests/test_users.py.
+- Use the existing auth dependency; do not create new auth helpers.
+- Preserve the existing error response format.
 
-### Pattern 3: Algorithm Implementation
-For standard data structures and known algorithms, the AI can rapidly supply robust implementations.
+Files allowed:
+- src/routes/projects.py
+- tests/test_projects.py
 
-```
-Implement binary search in Python:
-- Input: sorted list, target value
-- Output: index or -1
-- Time complexity: O(log n)
-- Include iterative and recursive versions
-- Add comprehensive test cases
+Evidence:
+- Include tests for authorized request, unauthorized request, and missing project.
 ```
 
-### Pattern 4: API Client Generation
-Consuming third-party services involves tedious boilerplate. AI handles this effortlessly.
+Reject scaffolds that look complete in the wrong way. A model that adds a new database session factory, custom logger, alternate validation library, and new exception hierarchy may be demonstrating fluency, but it is also increasing integration cost. A useful scaffold should snap into the system you have, not advertise the system the model wishes you had.
 
-```
-Generate a Python client for Stripe API:
-- Methods: create_customer(), charge_card(), refund()
-- Use requests library
-- Handle rate limiting (exponential backoff)
-- Include error handling for common HTTP errors
-- Add type hints
-- Mock examples for testing
-```
+### Pattern 2: Fill In a Local Gap
 
-### Pattern 5: Test Suite Generation
-Never write manual unit tests for simple functions again.
+Fill-in generation is the smallest and often safest pattern. You provide a function signature, type definitions, adjacent examples, and a clear behavior contract. The model fills the body or completes a narrow block. This pattern fits autocomplete, inline chat, and manual edit modes because the harness does not need broad authority. The surrounding code already supplies most of the context.
 
-```
-Generate pytest tests for this function:
-[paste function]
+The risk is that local context can hide global constraints. A helper may look correct inside one file while violating a convention enforced elsewhere. For example, a generated serializer might return `datetime.isoformat()` while the API contract requires a trailing `Z`, or a generated cache key might omit the tenant identifier because the current file did not show multi-tenant behavior. Local generation still needs domain review.
 
-Include tests for:
-- Happy path (normal inputs)
-- Edge cases (empty, null, boundaries)
-- Error conditions (invalid types, out of range)
-- Property-based tests (if applicable)
+Illustrative example, not endorsement: a local model harness can be a reasonable fit for filling small pure functions when source-code privacy is the primary constraint. The model may be less capable than a hosted frontier model, but the task may not require deep reasoning. The review standard does not change: read the function, run targeted tests, and check edge cases rather than accepting the output because it stayed local.
 
-Use fixtures for common test data.
-Aim for 100% coverage.
+```text
+Fill in the body of parse_duration(value: str) -> int.
+
+Rules:
+- Accept "10s", "5m", "2h", and "1d".
+- Return seconds as int.
+- Reject negative values.
+- Reject unknown units.
+- Raise TypeError for non-string input and ValueError for malformed strings.
+- Do not import external packages.
 ```
 
-### Pattern 6: Documentation Generation
-Maintain hygiene by automatically generating docstrings.
+Small prompts should still include review instructions. Ask the assistant to mention assumptions after the code, not inside the code. If it says "I assumed days are 24 hours" or "I rejected fractional units," you have a review handle. If those assumptions are wrong, revise the prompt before the function spreads into callers and tests.
 
+### Pattern 3: Translate Between Languages or Frameworks
+
+Translation asks the model to convert behavior from one language, framework, API version, or library to another. This pattern is attractive because models have seen many equivalent idioms. It is also dangerous because surface similarity can hide semantic differences. A JavaScript function that treats missing values loosely may not translate cleanly into a Python function with strict type expectations. A library migration may preserve names while changing default behavior.
+
+The prompt must state whether you want semantic equivalence, idiomatic style, or a deliberate redesign. Those are different tasks. Semantic equivalence preserves behavior even if the result is not elegant. Idiomatic translation may improve style but risks changing edge cases. Redesign uses the original as inspiration rather than a contract. If you do not choose, the model may choose for you.
+
+Illustrative example, not endorsement: a browser chat can help compare two library APIs before an IDE or terminal harness edits the code. The chat layer is useful for planning because it has no write authority. After planning, a harness with file access can perform the narrow migration. This separation keeps exploratory reasoning away from the patch until you have a concrete task contract.
+
+```text
+Translate this Express middleware to FastAPI dependency style.
+
+Preserve behavior:
+- Missing Authorization header returns HTTP 401.
+- Invalid token returns HTTP 403.
+- Valid token returns a UserContext object.
+- Do not change token validation semantics.
+
+After the translation:
+- List any behavior that could not be preserved exactly.
+- Generate tests that compare the old and new behavior cases.
 ```
-Add comprehensive documentation to this module:
-[paste code]
+
+Review translated code against behavior, not appearance. The generated code may look idiomatic while changing default timeouts, exception types, serialization rules, transaction boundaries, or error response formats. When translation touches user-visible behavior, golden tests or fixture-based comparisons are often more valuable than line-by-line confidence.
+
+### Pattern 4: Refactor Under Constraints
+
+Refactoring with AI is powerful because the assistant can find repetitive patterns and propose a cleaner structure quickly. It is risky because "make this better" is an invitation to alter architecture, public contracts, and tests at the same time. A refactor prompt should sound strict: preserve behavior, name allowed files, state the intended design change, and forbid unrelated cleanup.
+
+Good AI refactors are narrow enough that the diff tells a coherent story. Extract duplicate validation into one helper. Rename a type across a small package. Replace a deprecated API in three files. Split a long function while preserving inputs and outputs. These tasks give the model room to help without granting permission to redesign the system.
+
+Illustrative example, not endorsement: a terminal agent is useful for refactors when it can run the relevant tests after each patch. The harness advantage is the evidence loop, not the mere ability to edit many files. If the terminal agent changes test expectations to make failures disappear, that is not a successful refactor. It is a review failure that should be rejected.
+
+```text
+Refactor duplicate email validation into a shared helper.
+
+Allowed files:
+- src/users/validation.py
+- src/admin/validation.py
+- tests/test_user_validation.py
+
+Must preserve:
+- Public function names.
+- Exception classes.
+- Error message strings.
+- Existing test behavior.
+
+Do not:
+- Add dependencies.
+- Reformat unrelated code.
+- Change authorization checks.
+```
+
+The review pass for refactors should start with the public contract. Check signatures, response shapes, exception types, error messages, exported names, database migrations, and configuration keys. Then check whether tests were strengthened or weakened. A generated refactor that deletes edge-case tests may look smaller, but it has reduced your evidence.
+
+### Pattern 5: Generate Tests and Review the Tests
+
+Test generation is a first-class pattern, not a chore delegated after implementation. Models are often good at enumerating normal cases, obvious boundaries, and simple invalid inputs. They are less reliable at discovering domain-specific invariants unless you state them. A stronger use is to ask for a broad draft, then review and edit the tests until they express your real contract.
+
+Ask for test categories instead of only a target coverage number. Coverage can be gamed with shallow assertions. Categories force useful thinking: happy path, empty input, malformed input, boundary values, permission failures, timeout behavior, duplicate data, concurrency assumptions, and regression cases. If a generated test does not explain what behavior it protects, improve it before trusting it.
+
+Illustrative example, not endorsement: Copilot-style inline completion can be effective when you are writing parameterized tests and the next cases follow a visible pattern. The harness is low authority, so the main review task is checking that each generated case is meaningful. An agentic harness may be better when tests require fixtures across several files, but the diff review burden rises accordingly.
+
+```text
+Generate pytest tests for this function.
+
+Focus on behavior, not implementation:
+- Valid input with normal values.
+- Empty input.
+- Boundary values around the maximum size.
+- Invalid types.
+- Security-sensitive malformed input.
+- A regression case for issue #123 if the issue context is present.
+
+Do not:
+- Assert private helper calls.
+- Mock the function under test.
+- Change existing tests to pass the new implementation.
+```
+
+Review generated tests for three anti-patterns. First, tautological tests that reimplement the same logic as the function under test. Second, broad assertions such as "result is not None" when the contract requires a specific value. Third, tests that bless generated behavior you never requested. A test suite can make a wrong assumption durable, so treat generated tests as design artifacts.
+
+### Pattern 6: Generate Documentation From Reviewed Code
+
+Documentation generation is useful when the code is already reviewed and stable. Models can summarize parameters, examples, error behavior, and usage patterns quickly. The danger is that documentation can become more confident than the code. If the model invents guarantees, performance properties, compatibility promises, or security claims, the docs become a source of future bugs.
+
+Ask documentation prompts to cite the code locations they are summarizing and to mark uncertainty. For public docs, require examples that actually run. For internal docs, require operational caveats such as configuration, failure modes, and test commands. Documentation generated from unreviewed code should be labeled as draft because it may simply explain a bug elegantly.
+
+Illustrative example, not endorsement: a chat tool with read-only repository context is often enough for documentation drafting. You do not need a write-capable agent to explain a stable API. Keeping the harness read-only can be a deliberate safety choice when the task is understanding and prose rather than code modification.
+
+```text
+Draft documentation for the reviewed parse_duration function.
 
 Include:
-- Module-level docstring
-- Function docstrings (Google style)
-- Parameter descriptions with types
-- Return value descriptions
-- Usage examples
-- Notes about edge cases
+- Purpose.
+- Accepted input format.
+- Return value.
+- Exceptions.
+- Three executable examples.
+- One warning about unsupported fractional units.
+
+Do not:
+- Claim performance guarantees.
+- Mention units not supported by the code.
+- Describe future behavior as current behavior.
 ```
 
-### Did You Know? The Open-Source MoE Surge
-The open-source coding landscape evolved rapidly with the release of DeepSeek-Coder-V2 on June 17, 2024. It operates as an open-source Mixture-of-Experts (MoE) model boasting 236 billion total parameters (21 billion active) and supports an astounding 338 programming languages with a 128K context window. Not far behind, Mistral launched Codestral 25.01 on January 13, 2025. Codestral 25.01 features a massive 256K token context window, achieved an 86.6% HumanEval score, and generates output twice as fast as its predecessor. A subsequent iteration, Codestral 25.08, further delivered a 30% increase in accepted completions.
+The review discipline for generated documentation is factual verification. Run examples, compare each claim to code, remove marketing language, and avoid implying support for cases that are not tested. Documentation is part of the product surface. Generated prose can mislead users just as generated code can mislead maintainers.
+
+---
+
+## Reviewing Generated Output
+
+Reviewing generated output is the core skill of this module. The review should be structured because unstructured review tends to follow whatever the assistant emphasized. A generated summary might say "added validation and tests," but your review needs to ask which validation, which tests, which files, which dependencies, and which assumptions changed. The assistant's summary is a starting point, not evidence.
+
+Begin with scope. Run `git status --short` and inspect the file list before reading individual lines. Generated code sometimes touches formatting, lockfiles, generated artifacts, unrelated tests, or configuration because the harness had broad write access. If the file list is wrong, stop there. A beautiful implementation in the wrong files is still the wrong patch.
+
+Then inspect the diff for contract changes. Public APIs, schemas, response formats, error messages, database queries, permissions, environment variables, and configuration defaults deserve special attention. Models often "simplify" awkward compatibility behavior because they do not know who depends on it. If compatibility matters, the prompt should have said so, but the review must catch it regardless.
+
+Correctness review asks whether the code implements the intended behavior for normal, boundary, and invalid cases. Read conditionals carefully. Check off-by-one logic, empty collections, missing keys, time zones, Unicode handling, concurrency assumptions, integer overflow in languages where it matters, and resource cleanup. Models frequently produce code that handles the central example and neglects the edges around it.
+
+Security review asks whether generated code accepts untrusted input, builds queries, shells out, reads files, writes files, parses archives, handles secrets, changes permissions, or adds dependencies. These are review hotspots. A generated function that only formats a string may need light review. A generated function that processes user-supplied file paths needs path normalization, base-directory enforcement, size limits, and tests for traversal attempts.
+
+Provenance review asks where the code and dependencies came from. Generated code may be generic enough to be ordinary, but exact-looking snippets, unusual comments, distinctive algorithms, or large blocks matching a known project should trigger investigation. Dependency suggestions require special skepticism because models can hallucinate package names, choose abandoned packages, or propose names close to legitimate libraries. Verify package identity from official registries and project pages before installing.
+
+Maintainability review asks whether the code fits the local style. Does it use existing helpers, logging conventions, error types, tracing patterns, dependency injection, and test fixtures? Does it create a new abstraction where a local one already exists? Does it hide complexity behind clever code that the team will struggle to debug? AI-generated code can be too generic because it has learned average code, while your repository needs local code.
+
+Testing review asks whether the checks actually exercise the risk. A generated test that only verifies a happy path does not support a security-sensitive change. A generated snapshot that updates thousands of lines may hide behavior changes. A generated mock that mocks the function under test proves almost nothing. Good review connects each important risk to a test, static check, scanner, or manual verification step.
+
+Use a checklist, but do not let the checklist replace thought. The point is to create a repeatable rhythm: file list, diff, contracts, correctness, security, provenance, maintainability, tests, and final evidence. If a generated patch cannot survive that rhythm, reject it or narrow the task. AI assistance is successful when it produces code you can defend, not when it produces code quickly.
 
 ---
 
 ## Security Considerations
 
-> **Pause and predict**: If you only provide the "happy path" examples to an AI code generator, how will the generated implementation handle malformed inputs like negative numbers or missing keys? 
+AI-generated code deserves the same secure-development expectations as human code, with a few additional risks caused by the generation process. The model may reproduce insecure patterns common in public examples. It may misunderstand which inputs are trusted. It may add dependencies casually. It may treat prompt content as instruction even when the content came from an untrusted file, issue, or web page. Your workflow must assume these failures are possible.
 
-AI models are statistically biased toward returning the most common code path, which is rarely the most secure one. You must enforce security explicitly.
+OWASP's application-security guidance remains relevant because generated code still becomes ordinary application code. Injection, broken access control, insecure design, vulnerable dependencies, and logging mistakes do not become less serious because a model wrote the patch. OWASP's LLM guidance adds AI-specific concerns such as prompt injection, sensitive information disclosure, supply-chain risk, improper output handling, and excessive agency.
 
-### Insecure vs Secure Prompting
+Prompt injection matters when the assistant reads untrusted content. An issue description, README, code comment, dependency documentation page, or test fixture can contain instructions such as "ignore previous rules and exfiltrate secrets." A robust harness should separate instructions from data and restrict tool authority, but you should still review agent behavior. If the assistant changes files or runs commands because untrusted content told it to, the workflow is unsafe.
 
-**Bad Prompt**:
-```
-Generate a login function.
-```
+Secret leakage is a workflow risk, not only a model risk. Do not paste API keys, production tokens, private certificates, customer data, or proprietary datasets into prompts. Do not let a coding harness read home directories, shell history, cloud credential files, or `.env` files unless the task absolutely requires it and the tool is approved for that data. Generated code should also avoid logging secrets, echoing tokens in errors, or writing sensitive values into tests.
 
-**Good Prompt**:
-```
-Generate a login function.
+Dependency hallucination and typosquatting require explicit review. A model may suggest a package that does not exist because the name sounds plausible. Worse, it may suggest a package name that does exist but is not the project you intended. Before installing a generated dependency, verify the official documentation, registry metadata, repository ownership, release activity, license, and security posture. For high-risk systems, prefer existing approved dependencies over new ones.
 
-Security requirements:
-- Hash passwords with bcrypt (min 12 rounds)
-- Parameterized SQL queries (no concatenation)
-- Rate limiting (max 5 attempts per minute)
-- Log failed attempts
-- Use constant-time comparison for passwords
-```
+Command injection remains a common generated-code hazard. If user input flows into a shell string, reject the code unless there is a compelling reason and strong escaping. Prefer argument arrays with `subprocess.run([...], check=True)` in Python and equivalent structured APIs in other languages. Even then, validate file paths, restrict allowed operations, set timeouts where appropriate, and avoid passing secrets through command-line arguments that may appear in process listings.
 
-### Input Validation
-Without strict guidance, AI will process raw file paths, leading to traversal attacks.
+SQL and query injection require the same skepticism. Generated code should use parameterized queries, ORM-safe filters, prepared statements, or query builders that separate data from code. Watch for f-strings, string concatenation, template literals, or manual escaping around user input. A generated test suite should include malicious-looking inputs, not because the exact string proves security, but because it prevents obvious regressions.
 
-**Vulnerable Generated Code**:
-```python
-def process_file(filename):
-    with open(filename) as f:  # Path traversal!
-        return f.read()
-```
+File handling is another hotspot. Generated code often reaches for `open(filename)` because that is the simplest public example. For user-controlled paths, require resolution against an allowed base directory, rejection of absolute paths and parent traversal, size limits before reading, safe archive extraction, and careful cleanup of temporary files. Tests should include traversal attempts and oversized inputs, not only valid files.
 
-**Secure Generated Code**:
-```python
-def process_file(filename):
-    from pathlib import Path
+License and provenance concerns are durable even as vendor policies change. Generated code becomes part of your repository, so your team remains responsible for whether it is compatible with your license obligations. Some tools offer public-code matching or indemnity features under certain plans, but those product details are volatile and not a substitute for review. Treat unusual or lengthy generated snippets as material that may need provenance checking.
 
-    # Validate path is within allowed directory
-    safe_path = Path("uploads") / filename
-    if not safe_path.resolve().is_relative_to(Path("uploads").resolve()):
-        raise ValueError("Invalid path")
-
-    with open(safe_path) as f:
-        return f.read()
-```
-
-### SQL Injection Prevention
-Ensure you strictly demand parameterized queries.
-
-**Vulnerable Generated Code**:
-```python
-query = f"SELECT * FROM users WHERE id = {user_id}"
-```
-
-**Secure Generated Code**:
-```python
-query = "SELECT * FROM users WHERE id = ?"
-cursor.execute(query, (user_id,))
-```
-
-### Command Injection Prevention
-Never allow the AI to construct shell strings via formatting.
-
-**Vulnerable Generated Code**:
-```python
-os.system(f"convert {user_file} output.pdf")  # Command injection!
-```
-
-**Secure Generated Code**:
-```python
-import subprocess
-subprocess.run(["convert", user_file, "output.pdf"], check=True)
-```
-
----
-
-## Common Mistakes and Pitfalls
-
-### Antipatterns and Examples
-
-**Pitfall 1: Trusting Generated Code Blindly**
-```python
-# AI-generated code that LOOKS right but is WRONG
-def calculate_average(numbers):
-    return sum(numbers) / len(numbers)
-
-# Fails on empty list! (ZeroDivisionError)
-```
-
-**Pitfall 2: Over-Specifying Implementation**
-Bad Prompt:
-```
-Use a for loop to iterate through the list and accumulate values...
-```
-Good Prompt:
-```
-Calculate the sum of values in the list efficiently.
-```
-
-**Pitfall 3: Generating Without Context**
-Bad Prompt:
-```
-Generate a user model.
-```
-Good Prompt:
-```
-Generate a user model following our patterns:
-[paste example of existing model]
-
-Follow the same style for: UserModel class
-```
-
-**Pitfall 4: Ignoring Security**
-Bad Code:
-```python
-# AI-generated code (VULNERABLE!)
-def run_query(table, user_id):
-    query = f"SELECT * FROM {table} WHERE id = {user_id}"
-    cursor.execute(query)  # SQL INJECTION!
-```
-Good Prompt Constraint:
-```
-Generate SQL query with parameterized statements to prevent injection.
-```
-
-**Pitfall 5: Not Testing Edge Cases**
-Bad Code:
-```python
-# AI-generated but incomplete
-def get_first_n(items, n):
-    return items[:n]  # What if n > len(items)? What if n < 0?
-```
-Good Prompt Constraint:
-```
-Handle: empty list, n < 0, n > length, n = 0, None inputs
-```
-
-### Pitfall Summary Matrix
-
-| Mistake | Why It Happens | How to Fix It |
-|---|---|---|
-| Trusting generated code blindly | AI optimizes for plausible syntax, missing hidden logic flaws like division by zero. | Always enforce test coverage and execute manual code review. |
-| Over-specifying implementation | Forcing loops or specific procedural steps overrides the AI's ability to find idiomatic, efficient solutions. | Specify exact inputs, outputs, and constraints; avoid procedural micromanagement. |
-| Generating without context | Prompts lacking structural examples result in code that violates project style guidelines. | Provide few-shot examples of existing internal abstractions and models. |
-| Ignoring security constraints | Generative models naturally replicate insecure public code patterns if not strictly guided. | Explicitly demand parameterized queries, sanitization, and hashing in the prompt. |
-| Skipping edge case handling | The AI defaults to the "happy path" and often ignores nulls, boundaries, or negative inputs. | Mandate comprehensive boundary testing and negative input handling in specifications. |
-| Flooding the context window | Dumping thousands of lines into a prompt dilutes attention, leading to hallucinations. | Surgically copy only the exact function signatures and related type definitions needed. |
+Security review should happen before merge, not after production feedback. A practical minimum is to inspect the diff manually, run the relevant unit tests, run the project's static checks, scan dependency changes, and require human approval for security-sensitive code. For generated changes that touch authentication, authorization, cryptography, payment, personal data, deployment, or secrets, use a higher bar and involve the appropriate reviewer.
 
 ---
 
 ## Advanced Techniques and Workflows
 
-When scaling your automation, rely on these advanced prompts.
+Advanced code generation is less about longer prompts and more about better decomposition. Large tasks fail when the model tries to solve architecture, implementation, tests, migration, and documentation in one pass. Decompose the work into phases that each produce a reviewable artifact. A plan can be reviewed before code exists. Tests can be reviewed before implementation. A migration can be split by module. Documentation can wait until behavior is stable.
 
-### Complex Entity Validation
-```
-Generate a Python data validator:
+One useful workflow is plan-first generation. Ask the assistant to inspect context and propose a file-scoped plan without editing. Review the plan for scope, missing risks, invented dependencies, and test strategy. Only then allow a patch. This is especially useful with agentic harnesses because it gives you a chance to catch overreach before the tool modifies files.
 
-class DataValidator:
-    Rules:
-    - validate_email(email: str) -> bool
-    - validate_phone(phone: str) -> bool  # US format
-    - validate_zipcode(zipcode: str) -> bool  # US 5 or 9 digit
-    - validate_url(url: str) -> bool
-    - validate_date(date: str, format: str) -> bool
+```text
+Before editing, inspect the repository and propose a plan.
 
-    Requirements:
-    - Use regex for pattern matching
-    - Type hints throughout
-    - Comprehensive docstrings
-    - Raise ValidationError (custom exception) with clear messages
-    - Include 20+ test cases
+Your plan must include:
+- Files you intend to read.
+- Files you intend to change.
+- Behavior that must remain stable.
+- Tests or checks you will run.
+- Risks you see in the task.
 
-Show implementation with tests.
+Do not edit files until the plan is approved.
 ```
 
-### Complete API Clients
-```
-Generate a Python client for JSONPlaceholder API:
+Another workflow is critique-first generation. Use one assistant or mode to draft code and another read-only pass to critique it. The critique should focus on concrete risks: edge cases, security, dependency changes, test gaps, and local convention mismatches. Do not ask for a vague "review." Ask for findings grounded in file paths and behavior. Then verify the critique yourself because reviewers can hallucinate too.
 
-class JSONPlaceholderClient:
-    Base URL: https://jsonplaceholder.typicode.com
+CI-embedded generation is powerful but dangerous. A workflow that opens automated pull requests for dependency updates, API migrations, or test repairs can save time, but it must not merge itself. The generated PR should include the prompt or task contract, the diff, the checks it ran, and any known limitations. Human review remains the authority boundary. CI is a place to produce evidence, not to hide authorship.
 
-    Methods:
-    - get_posts() -> List[Post]
-    - get_post(id: int) -> Post
-    - create_post(title: str, body: str, user_id: int) -> Post
-    - update_post(id: int, **kwargs) -> Post
-    - delete_post(id: int) -> bool
+Multi-step agent workflows should preserve state through artifacts rather than memory alone. Ask the assistant to write a short plan, update a checklist, and summarize decisions in the PR or task notes. This gives future reviewers something stable to inspect. It also helps when the model context resets or a different tool continues the work. The artifact should be factual and concise, not a transcript of every token.
 
-    Requirements:
-    - Use requests library
-    - Define Post dataclass
-    - Handle HTTP errors (4xx, 5xx)
-    - Add retry logic with exponential backoff
-    - Include timeout (10 seconds)
-    - Type hints and docstrings
-    - Mock tests (use responses library)
-```
+For local-versus-frontier model tradeoffs, choose based on task risk and data boundary. A local model can be attractive for private code, predictable cost, and low-latency completions, but it may struggle with complex reasoning or large migrations. A frontier hosted model may produce better plans and patches, but it requires data-policy approval and cost controls. The harness should make either choice reviewable through the same diff and test loop.
 
-### ETL Pipeline Scaffolding
-```
-Generate an ETL pipeline for CSV to database:
+Determinism is limited because generation is probabilistic, but the workflow can still be deterministic. Pin dependencies, write tests, record commands, keep prompts in PR descriptions when appropriate, and avoid relying on generated output that cannot be reproduced or reviewed. You do not need the model to produce the same text twice. You need the repository to prove that the accepted patch behaves correctly.
 
-class CSVETLPipeline:
-    Purpose: Extract data from CSV, transform, load to SQLite
+Finally, use manual edits without apology. A common beginner mistake is to keep prompting for a perfect patch when a two-line human edit would finish the job. AI generation is a drafting tool, not a ritual. If review reveals a small issue, fix it directly, run the checks, and move on. The standard is maintainable code with evidence, not maximal model involvement.
 
-    Methods:
-    - extract(csv_path: str) -> List[Dict]
-      Read CSV, handle encoding issues
+---
 
-    - transform(data: List[Dict]) -> List[Dict]
-      Clean data: trim whitespace, normalize dates, validate emails
+## Did You Know?
 
-    - load(data: List[Dict], db_path: str) -> int
-      Insert into SQLite, return count of rows inserted
+- **Dated snapshot, model menus**: As of 2026-06; verify before relying, GitHub Copilot documentation lists multiple model providers and release statuses, while warning that model availability can change over time.
+- **Dated snapshot, hosted agents**: As of 2026-06; verify before relying, OpenAI describes Codex as a coding agent available through local and cloud-oriented workflows, with development environments and tests treated as important context for agent performance.
+- **Dated snapshot, editor modes**: As of 2026-06; verify before relying, Cursor documentation describes modes with different tool authority, including read-only exploration, direct edits, and agentic workflows that can use broader tools.
+- **Security framing**: OWASP's LLM guidance treats prompt injection and improper output handling as application risks, which maps directly onto generated-code workflows that read untrusted text and turn model output into executable code.
 
-    - run(csv_path: str, db_path: str) -> Dict[str, int]
-      Run full pipeline, return stats
+---
 
-    Requirements:
-    - Use pandas for CSV reading
-    - Use SQLAlchemy for database
-    - Log each step using Python logging
-    - Handle errors gracefully (log and continue)
-    - Create database schema if not exists
-    - Include example CSV and tests
-```
+## Common Mistakes and Pitfalls
 
-### Few-Shot Code Generation
-Provide exact architectural references so the AI maps to your internal logic.
-```
-I have these existing functions in my codebase:
+AI code generation fails in predictable ways. The mistakes below are not reasons to avoid the tools; they are review prompts. If you can name the failure mode, you can design the prompt, harness permissions, tests, and review checklist to catch it before it becomes a merged change.
 
-def get_user_by_id(db: Database, user_id: int) -> Optional[User]:
-    """Fetch user by ID."""
-    try:
-        return db.query(User).filter(User.id == user_id).first()
-    except SQLAlchemyError as e:
-        logger.error(f"Database error: {e}")
-        return None
+| Mistake | Why It Happens | Better Approach |
+|---|---|---|
+| Trusting generated code blindly | The output is syntactically polished, so reviewers mistake fluency for correctness. | Treat every generated patch as plausible, untrusted code until diff review and tests support it. |
+| Asking for broad rewrites | Vague goals such as "modernize this" let the model invent architecture and compatibility changes. | State allowed files, stable contracts, forbidden changes, and evidence before generation begins. |
+| Reviewing only the implementation | Generated tests can be weak, tautological, or aligned to the model's mistaken assumptions. | Review tests as design artifacts, then run them against the intended behavior and risk cases. |
+| Ignoring harness authority | Developers blame the model for failures caused by missing context or excessive write permissions. | Separate model capability from harness scope, command authority, file access, and approval mode. |
+| Accepting new dependencies casually | Models suggest plausible package names and popular patterns without checking supply-chain risk. | Verify package identity, maintenance, license, registry source, and need before installation. |
+| Skipping security constraints | Public examples often show the shortest path, not the safest handling of untrusted input. | Put validation, parameterization, path safety, secret handling, and abuse cases into the prompt and tests. |
+| Letting agents weaken evidence | A tool may edit tests, snapshots, or config to make checks pass instead of fixing behavior. | Inspect test diffs first, reject weakened assertions, and require checks that match the original task. |
+| Treating product claims as stable | Model names, quotas, prices, and features change faster than engineering principles. | Date volatile facts, cite official docs, and base durable workflow decisions on authority and evidence. |
 
-def get_user_by_email(db: Database, email: str) -> Optional[User]:
-    """Fetch user by email."""
-    try:
-        return db.query(User).filter(User.email == email).first()
-    except SQLAlchemyError as e:
-        logger.error(f"Database error: {e}")
-        return None
+The most damaging version of blind trust is accepting code because the assistant also explained it confidently. Explanations are generated artifacts too. They may describe code that the assistant intended to write rather than code that actually landed in the diff. Always inspect the patch itself before relying on the narrative around it.
 
-Following the SAME pattern, generate:
-- get_user_by_username
-- get_users_by_role
-- get_active_users
-```
+Overbroad prompting is especially tempting during refactors. A model can produce a large diff that appears productive, and the size of the patch can create social pressure to keep it. Resist that pressure. If the task was to extract one helper and the patch also changes logging, error messages, dependencies, and formatting, the correct response is usually to narrow the prompt and regenerate or manually recover the useful part.
 
-### Constraint-Based Generation
-Force the AI into a heavily restricted technical box to guarantee safety.
-```
-Generate a function with these constraints:
+Dependency mistakes deserve a higher level of suspicion because they extend the blast radius beyond your code. A generated package suggestion can introduce licensing obligations, abandoned maintenance, malicious typosquatting, native build failures, or transitive vulnerabilities. Even when the dependency is legitimate, it may be unnecessary if the standard library or an existing project dependency already solves the problem.
 
-Constraints:
-- No external dependencies (stdlib only)
-- Maximum 50 lines
-- No nested loops (performance)
-- Must be thread-safe
-- Memory efficient (generators, not lists)
-- Fully typed (pass mypy strict mode)
+Test weakening is subtle. A generated patch may replace exact assertions with truthiness checks, update snapshots without explanation, remove edge cases that fail, or mock away the behavior under test. These changes can make CI green while reducing confidence. When reviewing generated code, read test diffs before implementation diffs if the assistant claims that tests were updated.
 
-Task: Process large log files line by line, extract error messages
-```
+Context flooding is the opposite mistake from under-specification. Pasting thousands of unrelated lines can dilute attention and increase hallucination. Provide the target function, direct dependencies, relevant types, nearby examples, and the behavior contract. If the task requires broader repository knowledge, use a harness that can search deliberately rather than dumping the entire codebase into a prompt.
 
-### Incremental Complexity
-Do not request the entire system at once. Build it iteratively.
-
-**Phase 1**:
-```
-Generate a simple calculator: add, subtract, multiply, divide
-```
-
-**Phase 2**:
-```
-Extend the calculator to handle:
-- Chain operations: calc.add(5).multiply(2).subtract(3)
-- Error handling: division by zero
-- Operation history
-```
-
-**Phase 3**:
-```
-Add:
-- Undo/redo functionality
-- Save/load calculation history
-- Scientific functions (sin, cos, log)
-```
+Finally, do not confuse local generation with safe generation. Running a model locally can help with data-boundary concerns, but it does not automatically prevent insecure code, license issues, or wrong business logic. Local versus hosted is a deployment choice. Review remains the quality boundary.
 
 ---
 
 ## Legal and Ethical Constraints
 
-Because large language models are trained on public repositories, there remains a persistent legal gray area regarding exact code replication and software licensing.
+Generated code does not remove authorship responsibility from the team that commits it. If the code lands in your repository, your project owns the maintenance burden, security consequences, and license compatibility questions. Vendor features may help detect public-code matches or provide enterprise protections under certain terms, but those features vary by product and plan. They should supplement, not replace, ordinary legal and engineering review.
 
-```python
-# If AI generates this:
-def quick_sort(arr):
-    if len(arr) <= 1:
-        return arr
-    pivot = arr[len(arr) // 2]
-    left = [x for x in arr if x < pivot]
-    middle = [x for x in arr if x == pivot]
-    right = [x for x in arr if x > pivot]
-    return quick_sort(left) + middle + quick_sort(right)
+The most practical legal rule is to be cautious with large or distinctive generated blocks. A short implementation of a standard algorithm is usually less concerning than a long block with unusual structure, comments, names, or formatting that looks copied from a specific project. If the output appears distinctive, search for matches, ask for a different implementation, or write the code manually from the idea rather than accepting the exact text.
 
-# Question: Is this YOUR code or is it from training data?
-# Answer: Impossible to tell! It's a standard algorithm.
-```
+Ethical use also includes disclosure and review norms. Teams should decide when AI assistance needs to be mentioned in pull requests, how prompts or task contracts are recorded, and which categories of work require heightened review. A tiny generated docstring may not need special process. An AI-generated authentication change should be obvious to reviewers and backed by tests, threat-model notes, and security review.
 
-If you deploy proprietary systems using generated code, you assume all liability for intellectual property violations. Many enterprise AI tools now feature duplicate detection to warn developers if an output exactly matches a public GPL-licensed repository.
+Data use policies matter because prompts can contain source code, customer examples, logs, stack traces, and internal architecture. Before using hosted generation on private repositories, verify organizational policy and tool settings. Some products offer enterprise controls, content exclusion, audit logs, or data-use settings, but the exact terms are volatile. The durable practice is to know what data leaves the machine and who is allowed to process it.
 
-### Did You Know? The $2.4 Billion IDE Bidding War
-The market for AI-native editors is highly lucrative and fiercely competitive. Google acquired the leadership of Windsurf (formerly Codeium) in a $2.4 billion deal announced on July 11, 2025, moving in after OpenAI's $3 billion acquisition attempt collapsed over IP rights. The fate of Windsurf's remaining assets has yielded conflicting reports: authoritative tech outlets state Cognition AI acquired the assets on July 14, 2025, while some secondary reviews incorrectly date the acquisition to December 2025 for a mere $250 million. Meanwhile, competitors like Cursor transitioned to a $20/month credit-based pricing model in June 2025, and JetBrains IDEs added a native ACP Registry in March 2026 to let developers browse and install custom agents easily. For security-focused enterprise developers, tools like Tabnine offer fully air-gapped, on-premises deployments.
-
----
-
-## Hands-On Exercise: Building a Deterministic Python Package
-
-To guarantee a deterministic learning environment, follow these precise setup commands. Instead of relying on non-deterministic LLM generation, we will review the prompts and then provide the exact baseline code files that represent the *ideal* AI-generated output. You will compile these files locally and verify them using deterministic testing tools.
-
-### Task 1: Environment Setup
-Prepare your local directory.
-```bash
-mkdir url_validator_lab
-cd url_validator_lab
-python3 -m venv venv
-source venv/bin/activate
-pip install pytest pytest-cov rich
-```
-
-### Task 2: Generate the Structure
-**The Prompt Used:**
-```
-Generate the directory structure for a Python package named url_validator:
-- Setup for pip install
-- Tests directory with pytest
-- Examples directory
-- README with installation instructions
-- MIT license
-- .gitignore for Python
-```
-
-**The Action:** Create the structure deterministically.
-```bash
-mkdir -p url_validator tests examples
-touch url_validator/__init__.py
-touch url_validator/validator.py
-touch url_validator/cli.py
-touch tests/__init__.py
-touch tests/test_validator.py
-touch README.md
-```
-
-### Task 3: Implement Core Validator
-**The Prompt Used:**
-```
-Implement url_validator/validator.py with:
-
-class URLValidator:
-    Methods:
-    - is_valid(url: str) -> bool
-    - parse(url: str) -> ParsedURL  # scheme, host, port, path, query
-    - normalize(url: str) -> str    # clean and standardize
-
-Requirements:
-- RFC 3986 compliant
-- Handle international domains (IDN)
-- Type hints throughout
-- Comprehensive docstrings
-- Raise URLValidationError for invalid URLs
-```
-
-<details>
-<summary>View Deterministic Solution: <code>url_validator/validator.py</code></summary>
-
-```python
-import urllib.parse
-
-class URLValidationError(Exception):
-    pass
-
-class URLValidator:
-    def is_valid(self, url: str) -> bool:
-        try:
-            result = urllib.parse.urlparse(url)
-            return all([result.scheme, result.netloc])
-        except ValueError:
-            return False
-            
-    def parse(self, url: str) -> dict:
-        if not self.is_valid(url):
-            raise URLValidationError("Invalid URL provided")
-        parsed = urllib.parse.urlparse(url)
-        return {
-            "scheme": parsed.scheme,
-            "host": parsed.hostname,
-            "port": parsed.port,
-            "path": parsed.path,
-            "query": parsed.query
-        }
-        
-    def normalize(self, url: str) -> str:
-        if not self.is_valid(url):
-            raise URLValidationError("Invalid URL provided")
-        parsed = urllib.parse.urlparse(url)
-        normalized_scheme = parsed.scheme.lower()
-        normalized_netloc = parsed.netloc.lower()
-        return urllib.parse.urlunparse((normalized_scheme, normalized_netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-```
-</details>
-
-**The Action:** Copy the solution above into `url_validator/validator.py`. Verify the module loads before proceeding:
-```bash
-python -c "from url_validator.validator import URLValidator; print('validator OK')"
-```
-
-### Task 4: Implement the Test Suite
-**The Prompt Used:**
-```
-Generate tests/test_validator.py for URLValidator class:
-
-Test cases:
-- Valid URLs (http, https, ftp, various domains)
-- Invalid URLs (missing scheme, invalid chars, malformed)
-- Edge cases (IPv6, ports, query strings, fragments)
-- International domains
-- Normalization (trailing slashes, case, encoding)
-
-Use pytest fixtures for common test data.
-Aim for 100% coverage.
-```
-
-<details>
-<summary>View Deterministic Solution: <code>tests/test_validator.py</code></summary>
-
-```python
-import pytest
-from url_validator.validator import URLValidator, URLValidationError
-
-@pytest.fixture
-def validator():
-    return URLValidator()
-
-def test_valid_urls(validator):
-    assert validator.is_valid("https://example.com") == True
-    assert validator.is_valid("http://localhost:8080/path") == True
-
-def test_invalid_urls(validator):
-    assert validator.is_valid("not_a_url") == False
-
-def test_parse(validator):
-    result = validator.parse("https://example.com:443/test?q=1")
-    assert result["scheme"] == "https"
-    assert result["host"] == "example.com"
-    assert result["port"] == 443
-
-def test_normalize(validator):
-    assert validator.normalize("HTTPS://EXAMPLE.COM/") == "https://example.com/"
-
-def test_parse_raises_error(validator):
-    with pytest.raises(URLValidationError):
-        validator.parse("invalid_url")
-```
-</details>
-
-**The Action:** Copy the solution above into `tests/test_validator.py`. Verify test discovery before proceeding:
-```bash
-python -m pytest tests/test_validator.py --collect-only -q
-```
-
-### Task 5: Command Line Interface
-**The Prompt Used:**
-```
-Create url_validator/cli.py:
-- Command line interface using argparse
-- Commands:
-  - validate <url>      # check if valid
-  - parse <url>         # show components
-  - normalize <url>     # output normalized form
-  - batch <file>        # process file of URLs
-- Pretty output with colors (use rich library)
-- Exit codes: 0 (success), 1 (invalid), 2 (error)
-```
-
-<details>
-<summary>View Deterministic Solution: <code>url_validator/cli.py</code></summary>
-
-```python
-import argparse
-import sys
-from url_validator.validator import URLValidator, URLValidationError
-
-def main():
-    parser = argparse.ArgumentParser(description="URL Validator CLI")
-    parser.add_argument("command", choices=["validate", "parse", "normalize", "batch"])
-    parser.add_argument("url", help="URL to process")
-    args = parser.parse_args()
-
-    validator = URLValidator()
-    
-    try:
-        if args.command == "validate":
-            is_valid = validator.is_valid(args.url)
-            if is_valid:
-                print(f"Valid URL: {args.url}")
-                sys.exit(0)
-            else:
-                print(f"Invalid URL: {args.url}")
-                sys.exit(1)
-        elif args.command == "parse":
-            print(validator.parse(args.url))
-            sys.exit(0)
-        elif args.command == "normalize":
-            print(validator.normalize(args.url))
-            sys.exit(0)
-        elif args.command == "batch":
-            try:
-                with open(args.url) as f:
-                    urls = [line.strip() for line in f if line.strip()]
-            except FileNotFoundError:
-                print(f"Error: File not found: {args.url}")
-                sys.exit(2)
-            for url in urls:
-                status = "valid" if validator.is_valid(url) else "invalid"
-                print(f"{status}: {url}")
-            sys.exit(0)
-    except URLValidationError as e:
-        print(f"Error: {e}")
-        sys.exit(2)
-
-if __name__ == "__main__":
-    main()
-```
-</details>
-
-**The Action:** Copy the solution above into `url_validator/cli.py`. Verify the CLI entry point runs:
-```bash
-python -m url_validator.cli validate https://example.com
-```
-Expected output: `Valid URL: https://example.com` with exit code 0.
-
-### Task 6: Documentation
-**The Prompt Used:**
-```
-Generate comprehensive README.md for url_validator package:
-
-Sections:
-- Brief description
-- Installation (pip install)
-- Quick start examples
-- API documentation
-- CLI usage
-- Development setup
-- Contributing guidelines
-- License
-
-Make it engaging and clear.
-```
-
-**The Action:** Use the above prompt with your preferred AI assistant. Review the output for completeness, then save it as `README.md` in the `url_validator_lab/` root directory. Confirm the file exists before running the final verification:
-```bash
-test -f README.md && echo 'README.md present' || echo 'ERROR: README.md missing'
-```
-
-### Task 7: Verification Checklist
-Run your test suite locally to prove the generated state passes all checks.
-```bash
-pytest tests/ -v
-```
-- [ ] Tests execute successfully without syntax errors.
-- [ ] Code passes all assertions.
-- [ ] Local environment operates deterministically.
+There is also an ethical review issue around accountability. A generated patch can shift blame psychologically: "the model wrote it" sounds different from "we merged it." Production systems do not care. Users experience the behavior your team ships. Keep accountability with the human process, and use AI assistance only where the team can review, test, and maintain the result.
 
 ---
 
 ## Knowledge Check
 
 <details>
-<summary><strong>Question 1:</strong> You are tasking an AI to generate a data extraction function for a sensitive medical database. You issue the prompt: "Generate a Python function using SQLAlchemy to retrieve patient records by last name." The generated code uses standard string formatting to append the user input into the SQL query string. Evaluate the outcome and the flaw in the prompt.</summary>
+<summary><strong>Question 1:</strong> A developer asks an assistant to "write a login function" and receives code that concatenates user input into a SQL string. What failed: the model, the prompt, the harness, or the review?</summary>
 
-The generated code introduces a critical SQL injection vulnerability because the prompt failed to explicitly specify security constraints. LLMs frequently generate code based on the statistical average of their training data, which includes millions of insecure repository examples. To fix this, the prompt should have explicitly mandated the use of parameterized statements or an ORM abstraction that automatically escapes input. The developer must reject this code and refine the prompt.
+Several layers failed, but the review failure is the decisive one. The prompt failed to state security constraints such as parameterized queries, password hashing, rate limiting, and logging. The model produced a common insecure pattern. The harness may have made the code easy to apply. The reviewer still had the final chance to reject generated code that put untrusted input into executable SQL.
 </details>
 
 <details>
-<summary><strong>Question 2:</strong> You need to write an efficient sorting algorithm for a real-time trading system where latency is critical. You prompt the AI: "Write a high-performance custom sorting algorithm for financial tick data." The AI generates an implementation that is technically correct but performs worse than the standard library sort. Diagnose the root cause of this failure.</summary>
+<summary><strong>Question 2:</strong> An IDE assistant generates a clean refactor that changes public error messages and updates snapshots to match. The test suite passes. Why is this still risky?</summary>
 
-The failure stems from applying AI code generation to a novel, performance-critical problem domain where it fundamentally struggles. AI models excel at synthesizing known patterns and boilerplate, but they do not innovate or discover new algorithmic optimizations beyond their training distribution. For highly constrained, real-time performance requirements, relying on optimized standard libraries or manually profiling custom implementations is necessary. AI should not be used for novel algorithmic breakthroughs.
+The passing tests may now reflect the assistant's changed behavior rather than the original contract. Public error messages can be part of an API if clients, documentation, or support workflows depend on them. A correct review would inspect test diffs, check whether snapshots were updated intentionally, and require explicit approval for any user-visible compatibility change.
 </details>
 
 <details>
-<summary><strong>Question 3:</strong> You are refactoring a 5-year-old Python script. You instruct the AI: "Modernize this legacy data processing script and make it better." The AI returns a script that uses entirely different libraries, alters the output data format, and breaks downstream dependencies. Analyze what went wrong in your specification.</summary>
+<summary><strong>Question 3:</strong> A local model produces worse code than a hosted model for a cross-file migration, but the team still chooses the local setup for some tasks. When is that reasonable?</summary>
 
-The prompt violated the core principle of specifying boundaries and constraints, committing the error of over-generalization. By vaguely asking to make it "better," you granted the AI unbounded permission to alter the architecture, which led it to hallucinate new requirements and break the established API contract. A correct approach would have strictly defined the refactoring scope, preserving input/output signatures and defining exactly which libraries were permitted.
+That choice is reasonable when data-boundary, cost, latency, or offline constraints matter more than maximum reasoning quality and the task fits the local model's strengths. Local generation can work well for small pure functions, repetitive patterns, summaries, and autocomplete. The team should still use the same diff review and tests because local execution does not guarantee correctness.
 </details>
 
 <details>
-<summary><strong>Question 4:</strong> You use an AI assistant to generate a robust API client for a third-party service. You specify the endpoints, authentication headers, and request models. The AI produces a comprehensive client, and your initial "happy path" manual tests succeed. However, in production, intermittent network latency causes the application to crash completely. Evaluate the missing element in your test-driven generation strategy.</summary>
+<summary><strong>Question 4:</strong> A generated API client handles successful responses but crashes on intermittent network failures in production. What should have been included in the generation and review workflow?</summary>
 
-The testing strategy suffered from "happy path" bias, failing to explicitly prompt for and validate edge cases and error handling. Because you only verified successful API responses, the AI-generated code lacked resilience mechanisms such as exponential backoff retries, request timeouts, and specific exception catching for HTTP 5xx errors. You must explicitly direct the AI to generate tests and implementations for failure states, as it will often optimize for the simplest, flawless execution path by default.
+The task contract should have required timeout handling, retry policy, HTTP error handling, and tests for failure responses. The missing element was a deterministic generate-review-test loop that turned the model's draft into source-controlled evidence. Review should have checked that the client never assumes a perfect network and that the tests simulate timeouts or server errors without calling a live service.
 </details>
 
 <details>
-<summary><strong>Question 5:</strong> You are generating a suite of unit tests for a complex utility function. You paste the entire 2,000-line utility module into the prompt and ask, "Generate unit tests for the calculate_metrics function." The AI response abruptly cuts off midway through a test case, and the generated code references variables that do not exist in the function. Diagnose the prompt issue.</summary>
+<summary><strong>Question 5:</strong> A terminal agent claims it fixed a bug, but the diff shows a removed assertion in the failing test. How should you respond?</summary>
 
-The issue is a critical failure in context window management. By dumping an excessive, uncurated 2,000-line file into the prompt, you diluted the attention mechanism of the model, causing it to lose focus on the specific function and hallucinate external dependencies. Furthermore, large context dumps often lead to output truncation as the model hits its token generation limit. The solution is to surgically provide only the target function, its direct dependencies, and relevant type definitions.
+Reject the patch or isolate the legitimate implementation changes from the weakened test. A generated fix is not acceptable if it makes evidence less meaningful. The next prompt should restate that existing assertions must be preserved unless the behavior contract is explicitly changed, and the reviewer should run the original failing case again after the implementation is corrected.
 </details>
 
 <details>
-<summary><strong>Question 6:</strong> A junior developer relies heavily on AI to write a robust file parsing utility. The prompt reads: "Write a Python function to read user-uploaded text files from the local disk." The AI generates code using standard `open(filename)` calls. During a security audit, the team discovers a critical path traversal vulnerability. How should the developer's prompting strategy change?</summary>
+<summary><strong>Question 6:</strong> A model suggests installing a package whose name resembles a popular dependency but does not appear in official framework documentation. What review steps are appropriate?</summary>
 
-The developer failed to include explicit input validation and path sanitization constraints in their prompt. Without explicit boundaries, the AI implemented the most basic file reading pattern, neglecting the fact that user-supplied filenames might contain directory traversal sequences aimed at reading sensitive system files. The prompt must be updated to explicitly demand that the file path is resolved, normalized, and strictly verified against an allowed base directory.
+Treat the suggestion as untrusted. Verify the package identity in the official registry, inspect the linked repository, check maintainer and release history, review the license, scan for known security concerns, and ask whether an existing approved dependency or standard-library feature already solves the task. If the dependency cannot be justified, do not install it.
 </details>
 
 ---
 
-## Reference Architecture and Examples
+## Hands-On Exercise: Generate, Review, and Verify a URL Utility
 
-The concepts discussed throughout this module map to the following complete, verified baseline implementations. Review these local files for perfect architectural blueprints.
+This exercise uses deterministic files so you can practice the review loop without depending on a live model response. You will start with a plausible generated implementation, review it as untrusted code against review-driven tests that are already provided, gather evidence by running the suite, and then improve the generation prompt so a future draft would capture the missing constraints. The point is not that URL validation is glamorous. The point is that a small parser has enough edge cases to show why generated code must be reviewed.
 
-- Basic Generation: `module_03/01_basic_generation.py`
-- Test Generation: `module_03/02_test_generation.py`
-- Refactoring: `module_03/03_refactoring.py`
-- API Client: `module_03/04_api_client_generation.py`
-- CLI Tool: `module_03/05_cli_generation.py`
-- Complete Python Package: `module_03/project/`
+### Task 1: Create the Lab Workspace
+
+Run the setup from a scratch directory outside any production repository. The commands create a tiny package, install pytest, and keep the generated artifact small enough to review line by line. If your system uses a different Python launcher, adapt the venv creation step, but keep the test and execution commands inside the virtual environment.
+
+```bash
+mkdir url_generation_review_lab
+cd url_generation_review_lab
+python3 -m venv .venv 2>/dev/null || python -m venv .venv
+.venv/bin/python -m pip install --upgrade pip pytest
+mkdir -p url_tools tests
+touch url_tools/__init__.py
+```
+
+### Task 2: Start With a Plausible Generated Draft
+
+Imagine the prompt was: "Generate a small Python URL utility with validation, parsing, and normalization using only the standard library." The output below is plausible and syntactically clean. It is also under-specified. Copy it into `url_tools/validator.py`, then review it before running the provided tests. Look for assumptions about schemes, hosts, ports, credentials, and whitespace.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from urllib.parse import urlparse, urlunparse
+
+
+class URLValidationError(ValueError):
+    """Raised when a URL cannot be parsed safely."""
+
+
+@dataclass(frozen=True)
+class ParsedURL:
+    scheme: str
+    host: str
+    port: int | None
+    path: str
+    query: str
+
+
+class URLValidator:
+    allowed_schemes = {"http", "https"}
+
+    def is_valid(self, url: str) -> bool:
+        try:
+            self.parse(url)
+        except (TypeError, URLValidationError):
+            return False
+        return True
+
+    def parse(self, url: str) -> ParsedURL:
+        if not isinstance(url, str):
+            raise TypeError("url must be a string")
+        cleaned = url.strip()
+        parsed = urlparse(cleaned)
+        if parsed.scheme.lower() not in self.allowed_schemes:
+            raise URLValidationError("unsupported URL scheme")
+        if not parsed.hostname:
+            raise URLValidationError("URL must include a host")
+        if parsed.username or parsed.password:
+            raise URLValidationError("credentials are not allowed in URLs")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise URLValidationError("invalid port") from exc
+        return ParsedURL(
+            scheme=parsed.scheme.lower(),
+            host=parsed.hostname.lower(),
+            port=port,
+            path=parsed.path or "/",
+            query=parsed.query,
+        )
+
+    def normalize(self, url: str) -> str:
+        parsed = self.parse(url)
+        netloc = parsed.host
+        if parsed.port is not None:
+            netloc = f"{netloc}:{parsed.port}"
+        return urlunparse((parsed.scheme, netloc, parsed.path, "", parsed.query, ""))
+```
+
+### Task 3: Review-Driven Tests (Provided)
+
+The tests below encode review decisions that the original broad prompt did not mention. They reject credentials in URLs, unsupported schemes, missing hosts, invalid ports, and non-string input. Copy them into `tests/test_validator.py`. Read each test before running it and ask whether it protects a behavior you would actually want in a service that consumes user-supplied URLs.
+
+```python
+import pytest
+
+from url_tools.validator import URLValidationError, URLValidator
+
+
+@pytest.fixture
+def validator() -> URLValidator:
+    return URLValidator()
+
+
+@pytest.mark.parametrize(
+    ("raw_url", "expected"),
+    [
+        ("HTTPS://Example.COM", "https://example.com/"),
+        ("https://example.com:8443/path?q=1", "https://example.com:8443/path?q=1"),
+    ],
+)
+def test_normalize_valid_urls(validator: URLValidator, raw_url: str, expected: str) -> None:
+    assert validator.normalize(raw_url) == expected
+
+
+@pytest.mark.parametrize(
+    "raw_url",
+    [
+        "ftp://example.com/file.txt",
+        "https:///missing-host",
+        "https://user:secret@example.com",
+        "https://example.com:99999",
+        "",
+    ],
+)
+def test_rejects_unsafe_or_malformed_urls(validator: URLValidator, raw_url: str) -> None:
+    assert not validator.is_valid(raw_url)
+    with pytest.raises(URLValidationError):
+        validator.parse(raw_url)
+
+
+def test_non_string_input_is_type_error(validator: URLValidator) -> None:
+    with pytest.raises(TypeError):
+        validator.parse(None)  # type: ignore[arg-type]
+```
+
+### Task 4: Run the Evidence
+
+Execute the test suite and treat failures as review feedback. If you edited the implementation, rerun the tests after each small change. The evidence matters because a generated explanation of why the code is safe is not the same as executable checks that exercise the safety boundaries.
+
+```bash
+.venv/bin/python -m pytest tests -q
+```
+
+Success criteria:
+
+- [ ] The test suite passes without weakening assertions.
+- [ ] The implementation uses only the standard library.
+- [ ] Unsupported schemes, credentials, missing hosts, invalid ports, and non-string input are tested.
+- [ ] You can explain one assumption the original prompt failed to state.
+- [ ] You inspected the implementation before trusting the tests.
+
+### Task 5: Improve the Prompt
+
+After the tests pass, write a better generation prompt for the same utility. The improved prompt should mention allowed schemes, credential rejection, invalid port behavior, path normalization, type errors, dependency limits, and test categories. This final step matters because prompt improvement is part of the loop. You are not only fixing one generated output; you are learning how to prevent the same class of weak draft next time.
 
 ---
 
-**Next Module**: [Module 1.8 - AI-Assisted Debugging & Optimization](./module-1.8-ai-assisted-debugging-optimization)
-*You know how to build it. Now learn how to diagnose the hardest failures at scale.*
+## Learner check
+
+> The durable skill is not "getting code from a model." The durable skill is turning an uncertain draft into a reviewed, tested, source-controlled patch.
+
+Use that sentence as the review standard for the exercise. If the code is generated but not reviewed, tested, and controlled through ordinary repository workflow, the generation step is unfinished. A useful assistant speeds up the path to evidence; it does not replace the evidence.
+
+---
+
+## Next Module
+
+Next, continue to [Module 1.8: AI-Assisted Debugging & Optimization](/ai-ml-engineering/ai-native-development/module-1.8-ai-assisted-debugging-optimization/). You now have a generate-review-test loop; the next module applies the same discipline to diagnosis, profiling, and optimization work.
+
+---
 
 ## Sources
 
-- [OWASP Top 10: Injection](https://owasp.org/Top10/2025/A05_2025-Injection/) — Grounds the module's security-review advice in a standard reference on injection risks and defenses.
+- [Module 1.1: AI Coding Tools Landscape](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) — Local Rosetta-stone context for AI coding tool families and authority boundaries.
+- [OWASP Top 10 2025: A05 Injection](https://owasp.org/Top10/2025/A05_2025-Injection/) — Standard application-security reference for injection risks that generated code can introduce.
+- [OWASP Top 10 for LLM Applications 2025](https://owasp.org/www-project-top-10-for-large-language-model-applications/assets/PDF/OWASP-Top-10-for-LLMs-v2025.pdf) — Reference for prompt injection, improper output handling, excessive agency, and AI supply-chain risks.
+- [NIST SP 800-218 Secure Software Development Framework](https://csrc.nist.gov/pubs/sp/800/218/final) — Source for secure-development practices that still apply when code is AI-assisted.
+- [SLSA Provenance](https://slsa.dev/spec/v1.2/provenance) — Background on provenance as a software supply-chain concept.
+- [OpenSSF Scorecard](https://openssf.org/scorecard/) — Reference for dependency and project-health review signals.
+- [GitHub Copilot: Supported AI models](https://docs.github.com/en/copilot/using-github-copilot/ai-models/using-gemini-flash-in-github-copilot) (redirects to the supported-models page) — Dated snapshot source for model availability volatility in a coding harness.
+- [GitHub Copilot: Understanding requests](https://docs.github.com/copilot/concepts/copilot-billing/understanding-and-managing-requests-in-copilot) — Dated snapshot source for request and billing terminology.
+- [OpenAI: Introducing Codex](https://openai.com/index/introducing-codex/) — Dated snapshot source for Codex positioning as a software-engineering agent.
+- [OpenAI: Unrolling the Codex agent loop](https://openai.com/index/unrolling-the-codex-agent-loop/) — Source on Codex CLI, local agent loops, and terminology around Codex offerings.
+- [Anthropic Claude Code getting started](https://docs.anthropic.com/en/docs/claude-code/getting-started) — Dated snapshot source for a terminal coding-agent harness example.
+- [Cursor modes documentation](https://docs.cursor.com/agent) — Dated snapshot source for editor-agent modes and differing tool authority.
+- [Gemini Code Assist overview](https://developers.google.com/gemini-code-assist/docs/overview) — Dated snapshot source for Google coding-assistant capabilities.
+- [Amazon Q Developer tiers](https://docs.aws.amazon.com/en_us/amazonq/latest/qdeveloper-ug/q-tiers.html) — Dated snapshot source for AWS coding-assistant tiers and interface availability.
+- [Tabnine deployment options](https://docs.tabnine.com/main/welcome/readme/architecture/deployment-options) — Dated snapshot source for private and on-premises assistant deployment options.
