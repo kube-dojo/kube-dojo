@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 116 — durable-content convention + ai-native-development restructure (#1835)</title>
+<style>
+  :root { --fg:#1a1a2e; --muted:#555; --accent:#2a6; --warn:#c60; --bg:#fafafa; --card:#fff; --line:#e3e3e8; }
+  body { font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--fg); background:var(--bg); margin:0; padding:2rem; max-width:1000px; margin-inline:auto; }
+  h1 { font-size:1.6rem; margin:0 0 .25rem; }
+  h2 { font-size:1.15rem; margin:1.8rem 0 .5rem; border-bottom:2px solid var(--line); padding-bottom:.25rem; }
+  h3 { font-size:1rem; margin:1.1rem 0 .3rem; }
+  .sub { color:var(--muted); margin:0 0 1.5rem; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; font-size:.92rem; }
+  th,td { border:1px solid var(--line); padding:.4rem .6rem; text-align:left; vertical-align:top; }
+  th { background:#f0f0f4; }
+  code { background:#f0f0f4; padding:.1rem .3rem; border-radius:3px; font-size:.88em; }
+  .ok { color:var(--accent); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem; margin:.8rem 0; }
+  ul { margin:.4rem 0; padding-left:1.3rem; }
+  li { margin:.25rem 0; }
+  .tldr { background:#eef6f0; border-left:4px solid var(--accent); padding:.8rem 1rem; border-radius:0 6px 6px 0; }
+</style>
+</head>
+<body>
+<h1>Session 116 — durable-content convention + ai-native-development restructure</h1>
+<p class="sub">2026-06-07 · standalone orchestrator session · started "continue from s115" → user pivoted into a design conversation about fast-moving AI-tool content. Issue <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1835">#1835</a>.</p>
+
+<div class="tldr">
+<strong>TL;DR:</strong> Began the <code>ai-ml-engineering</code> track (curriculum-order next after cloud), lead sub-track <code>ai-native-development</code> (43/124 modules not-done). The user raised the core problem — AI-coding-tool content churns faster than the curriculum can be revised. We locked a <strong>project-wide durable-content convention</strong> (teach the concept spine; isolate volatile vendor facts into a dated snapshot + a cross-vendor "AI Coding Harness Rosetta Stone"; decompose orthogonal axes — <strong>harness ⟂ model</strong>; <strong>no leadership/"best-tool" claims</strong>), wrote it to <code>.claude/rules/durable-vendor-content.md</code>, web-verified + <strong>triangulated</strong> a fact-base (agy + grok-build + orchestrator), and shipped the <strong>foundational module 1.1</strong> (Rosetta + harness⟂model + L0–L5 autonomy ladder + dated 2026 snapshot) through the full loop to <span class="ok">T0, codex-reviewed, fixed</span>. All dispatch non-Claude (s105 honored).
+</div>
+
+<h2>1. The decision (user-driven, #1835)</h2>
+<p>While scoping <code>ai-native-development</code>, a read of the flagship module 1.3 (Claude Code CLI) found it <strong>fabrication-heavy + currency-stale</strong> (fake metrics "127,432 tokens/4h23m", fake stats table, invented quotes, a factual error "Dario Amodei studied CS at Princeton" — he's a physicist). The user's framing: every frontier vendor now ships multiple form factors (Claude Code CLI+desktop, Codex CLI+web, Gemini-CLI→Antigravity, Cursor IDE+CLI, plus aider/opencode/Copilot/hermes); <em>"who knows what the situation will be in 6 months?"</em></p>
+<p>Two AskUserQuestion rounds locked: <strong>(1) strategy = concepts spine + Harness Rosetta</strong>; <strong>(2) scope = project-wide rule.</strong> Then two more refinements: <strong>no leadership/market-share claims</strong> (the most volatile fact of all — "claude code is not the leader anymore, codex is; the <code>claude -p</code> nerf will lose Claude share") and <strong>harness ⟂ model</strong> as a first-class orthogonal axis ("what if I power Hermes/OpenClaw with a local Gemma 4?").</p>
+
+<h2>2. What was produced</h2>
+<table>
+<tr><th>Artifact</th><th>State</th></tr>
+<tr><td><code>.claude/rules/durable-vendor-content.md</code> — project-wide rule (concept spine; isolate volatile into dated snapshot/Rosetta; decompose orthogonal axes; no-leadership clause; applies to cloud pricing, CNCF maturity, AI tools, model IDs)</td><td>written in PRIMARY working tree — <span class="warn">to commit (see §6)</span></td></tr>
+<tr><td><code>logs/remediation/briefs/session116/FACT-BASE.md</code> — triangulated, dated, sourced fact-base + the Rosetta + the 9-module map + wave authoring rules + fact-check log §H</td><td>on disk (gitignored working artifact)</td></tr>
+<tr><td>Module <strong>1.1 ai-coding-tools-landscape</strong> — enhanced with harness⟂model, L0–L5 ladder, Rosetta, dated 2026 snapshot</td><td><span class="ok">T0 (6,433w), codex-reviewed, fixed</span>; branch <code>and-1.1-rosetta</code> (2 commits)</td></tr>
+<tr><td>Memories: <code>feedback_durable_content_for_fast_moving_topics</code>, <code>user_multi_agent_neutrality_philosophy</code></td><td>saved + MEMORY.md indexed</td></tr>
+<tr><td>Issue <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1835">#1835</a> with full ACs + neutrality-refinement comment</td><td>open</td></tr>
+</table>
+
+<h3>The restructure map (9 slugs KEPT — zero URL churn; reframe content)</h3>
+<table>
+<tr><th>Layer</th><th>Module</th><th>Action</th></tr>
+<tr><td>Foundations</td><td>1.1 landscape</td><td><span class="ok">DONE</span> — Rosetta + axes + ladder + snapshot</td></tr>
+<tr><td>Form factors</td><td>1.4 agent-first-ides / 1.5 cli-agents / 1.2 local-models</td><td>1.4 IDE form factor; 1.5 CLI+headless+<strong>autonomy frontier</strong> (Hermes/OpenClaw); 1.2 = the model axis</td></tr>
+<tr><td>Extensibility</td><td>1.3 claude-code-cli / 1.10 agent-sdk</td><td>1.3 = "configuring an agentic harness" (rules/AGENTS.md, MCP, hooks, sub-agents; rotated examples; <strong>de-fab</strong>); 1.10 = agent runtimes + fix <code>order:111→211</code></td></tr>
+<tr><td>Practice</td><td>1.7 code-gen / 1.8 debugging / 1.9 capstone</td><td>1.7 de-fab+expand; 1.8 fix one-giant-H2; 1.9 light review (already T0/done)</td></tr>
+</table>
+
+<h2>3. Fact-base triangulation — the multi-agent thesis paid off</h2>
+<p>Per the user's request, the research was cross-checked by <strong>grok</strong> + a second fact-checker. Outcome (logged in FACT-BASE §H):</p>
+<ul>
+<li><strong>agy (gemini-3.1-pro, web-grounded)</strong> — confirmed all 9 claims, breadth refinements (Antigravity individual-tier sunset; GPT-5.5 Pro/Instant; neutrality caution). But <span class="warn">false-confirmed two claims.</span></li>
+<li><strong>grok-build (direct CLI; the hermes/xai-oauth relay was DOWN — 2× "no final response" — re-routed to <code>grok --prompt-file … -m grok-build --output-format plain</code>, web search on)</strong> — disciplined, primary-sourced, and <strong>caught both of agy's overclaims:</strong>
+  <ul>
+  <li><strong>Claude Code does NOT natively read AGENTS.md</strong> (uses CLAUDE.md; AGENTS.md = open request). agy said "fallback" — wrong.</li>
+  <li><strong>OpenClaw's $1.3M bill did NOT "cause" Anthropic's billing change</strong> — the $1.3M was OpenAI API spend; Anthropic's Apr-ban→May-reversal→June-15 Agent-SDK-credit split was driven by broad third-party usage. Two real but distinct facts; the causal link is not primary-sourceable.</li>
+  </ul>
+</li>
+<li><strong>Orchestrator</strong> independently web-verified the high-scrutiny items (OpenClaw $1.3M = 603B tok/7.6M req/Fast-Mode, ~$300k standard, OpenAI-covered; Cursor + Copilot autonomy ceiling = L4; model-coupling) via Tom's Hardware / VentureBeat / The New Stack / Cursor docs / GitHub changelog.</li>
+</ul>
+<p><strong>Lesson (saved):</strong> agy needs a disciplined second (grok-build) to catch its false-confirms; a single fact-checker would have shipped two plausible-but-wrong "facts" into the curriculum. Also: the OpenClaw episode is the verified backdrop of this project's own <code>claude -p</code> billing change (<code>feedback_claude_billing_reroute</code>).</p>
+
+<h2>4. The foundational module 1.1 — full loop, proven</h2>
+<p>fact-base → self-contained brief → <strong>cursor</strong> author (didn't auto-commit → orchestrator committed) → orchestrator ground-check (used only verified facts; both grok corrections honored) → <strong>codex</strong> cross-family R1 (<code>NEEDS_CHANGES</code>, 5 findings) → findings ground-checked → fix → re-verify.</p>
+<p>codex findings: 3 applied (neutrality slip "fastest-growing in GitHub history"→neutral; autonomy-ladder conflated <em>action-autonomy</em> with <em>connectivity/MCP</em>→separated; "modules 1.2–1.10 refer back"→forward-looking), 1 partial (coupling examples labeled illustrative + point to dated Rosetta), 1 rejected FP ("Exercise scenario:" labels are fine). Final: <span class="ok">T0, 6,433 words, zero failing gates, neutral.</span></p>
+
+<h2>5. Roster / process datapoints</h2>
+<ul>
+<li><strong>grok lane:</strong> the hermes→xai-oauth relay (<code>dispatch_smart --agent hermes</code>) is DOWN (2× fast "no final response"). The <strong>direct <code>grok</code> CLI works</strong> (grok.com login; <code>grok-build</code> default; <strong>web search on by default</strong> — a genuinely web-capable fact-checker). Prefer the direct CLI for grok until the relay is fixed.</li>
+<li><strong>cursor edit</strong> did not auto-commit the worktree (known gotcha) — orchestrator committed.</li>
+<li>All author/review dispatch stayed on non-Claude lanes (s105 directive). The weekly-reset status for Claude lanes was never confirmed this session — defaulted to non-Claude.</li>
+</ul>
+
+<h2>6. State &amp; commit hygiene (read before continuing)</h2>
+<ul>
+<li><strong>Branch <code>and-1.1-rosetta</code></strong> (worktree <code>.worktrees/and-1.1</code>): the finished 1.1 module, 2 commits. <strong>Pushed to origin.</strong> NOT merged — it joins the consolidated <code>ai-native-development</code> wave PR with the trio next session (or merge standalone — it's self-contained, forward-looking refs).</li>
+<li><strong>To commit to main:</strong> <code>.claude/rules/durable-vendor-content.md</code> (new), this handoff HTML, and the STATUS.md update are in the PRIMARY working tree. Fold them into the wave PR (or a small docs PR). Do NOT lose the rule.</li>
+<li><code>.gemini/settings.json</code> untracked in primary = a #1827 gemini-MCP pilot residual — leave it (don't commit).</li>
+<li>Build NOT run this session (1.1 is a content edit, no frontmatter change → ~zero schema-break risk); build the whole wave in PRIMARY before merging per <code>feedback_pr_ci_has_no_full_astro_build</code>.</li>
+</ul>
+
+<h2>RESUME — next session</h2>
+<ul>
+<li><strong>Author the trio</strong> 1.3 (Claude Code → "configuring an agentic harness", de-fab, rotated examples) / 1.4 (IDE form factor) / 1.5 (CLI+headless + autonomy frontier Hermes/OpenClaw) — ≤3 concurrent non-Claude authors, own worktrees, briefs from <code>FACT-BASE.md §F/§G</code> (inline the verified facts; worktrees won't have the gitignored fact-base). Cross-family review each, ground-check every finding.</li>
+<li>Then 1.2 (model axis) / 1.7 (de-fab+expand) / 1.8 (fix one-giant-H2) / 1.10 (expand T3→T0 + fix <code>order:111→211</code>) and a light review of 1.9.</li>
+<li><strong>Consolidate</strong> the whole sub-track into one wave PR + the rule + handoff; build green in PRIMARY; finalize to board <code>done</code> (<code>reset-stage</code> DASHED key; <code>.pipeline/reviews/&lt;key&gt;.md</code> force-added).</li>
+<li>Reusables: <code>logs/remediation/briefs/session116/{FACT-BASE.md, brief-1.1.md, review-1.1.md, factcheck-brief.md}</code>.</li>
+<li>After ai-native-development: continue <code>ai-ml-engineering</code> in curriculum order (generative-ai → vector-rag → frameworks-agents → … 43 not-done total) → on-premises → platform — applying the durable-content rule to each volatile sub-track.</li>
+</ul>
+
+</body>
+</html>
