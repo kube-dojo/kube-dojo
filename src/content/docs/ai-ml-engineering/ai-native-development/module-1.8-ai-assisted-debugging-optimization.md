@@ -427,6 +427,8 @@ Performance bugs are another category where AI can mislead if you skip measureme
 
 The senior move is to classify before prompting. If the failure is deterministic and local, ask for code analysis. If the failure is environmental, ask for a differential checklist. If the failure is timing-sensitive, ask for instrumentation and reproduction strategy. If the failure is performance-related, profile first and ask about the measured bottleneck.
 
+Classification shapes what the model can usefully say. When you tell a model "this is a concurrency defect in a shared counter," you invite it to reason about locks, atomic operations, and memory models. When you instead paste the same code with no category, the model often defaults to local code review — suggesting variable renames or loop rewrites that cannot fix a race condition. The debugging contract and bug classification work together: the contract demands evidence, and classification tells the model which evidence matters most. A prompt that combines both — "I have a concurrency bug, here is the shared state, here is the stress-test output, suggest an instrumentation strategy" — produces analysis that is both faster and more reliable than an undirected plea to "fix my code."
+
 ## Worked Example: From Failure to Verified Fix
 
 A worked example makes the debugging workflow concrete. We will use a small Python function because the mechanics are visible, but the same sequence applies to a service endpoint. The function computes a discounted total, and the bug appears only when the cart does not qualify for a discount.
@@ -653,12 +655,12 @@ Include a test or instrumentation check that prevents the query count from retur
 
 Performance work in Kubernetes adds another layer because process-level measurements and cluster-level measurements answer different questions. `kubectl top` can show CPU and memory usage, but it depends on Metrics Server and is not a high-resolution profiler. Application profiling tells you where code spends time. Distributed tracing tells you whether time is local, remote, or waiting. AI can help interpret all three, but you should not substitute one for another.
 
-After `kubectl` has been introduced, this module uses `k` as the common alias for `kubectl`. You can define it in a shell with `alias k=kubectl` if your environment uses that convention. The alias is convenient during incident work, but scripts and documentation should remain clear enough that another engineer can follow the commands without guessing.
+The following commands use the full `kubectl` invocation. In your own shell, you may use a shorter alias, but scripts and shared documentation should always expand the command so another engineer can follow every step without guessing. During incident work, clarity matters more than keystroke savings — a pasted command that every team member can read immediately reduces coordination overhead.
 
 ```bash
 kubectl top pod -n payments
-k logs -n payments deploy/checkout-api --since=15m
-k describe pod -n payments checkout-api-abc123
+kubectl logs -n payments deploy/checkout-api --since=15m
+kubectl describe pod -n payments checkout-api-abc123
 ```
 
 These commands collect symptoms, not root causes. High CPU tells you where to look, logs tell you what the application reported, and `describe` tells you whether Kubernetes restarted, throttled, or failed to schedule the Pod. A strong AI prompt includes the relevant snippets and asks what evidence is missing, rather than asking the model to invent a production diagnosis.
@@ -690,7 +692,7 @@ flowchart TD
 A distroless container makes this especially clear. You may not have a shell, package manager, or diagnostic tools inside the application image, and that is a good production-hardening choice. The debugging move is not to rebuild the image with `curl` and `bash` under pressure. The debugging move is to use Kubernetes debug workflows, such as an ephemeral container or a copied Pod, to inspect the environment without changing the application image contract.
 
 ```bash
-k debug -n payments pod/checkout-api-abc123 -it --image=busybox:1.36 --target=checkout-api
+kubectl debug -n payments pod/checkout-api-abc123 -it --image=busybox:1.36 --target=checkout-api
 ```
 
 The command above is an example of attaching a temporary debugging container to a running Pod. In a real cluster, the exact command depends on permissions, runtime support, and the debugging image you choose. The useful AI prompt should include the command you ran, the error you received, the Pod spec, and whether the target container shares process namespace visibility.
@@ -718,9 +720,9 @@ Please:
 Control-plane and node debugging require additional skepticism. A model can explain common failure modes, but it should not be asked to guess cluster health from a single timeout. You need events, component status, node conditions, and relevant endpoint responses. Kubernetes v1.35+ structured diagnostic endpoints can be especially useful because machine-parseable output is easier for AI to inspect consistently.
 
 ```bash
-k get events -A --sort-by=.lastTimestamp
-k get nodes -o wide
-k describe node worker-1
+kubectl get events -A --sort-by=.lastTimestamp
+kubectl get nodes -o wide
+kubectl describe node worker-1
 ```
 
 When feeding Kubernetes output to AI, redact secrets and reduce noise. Do not paste every object in a production namespace if the failure concerns one Deployment. Include labels, selectors, container names, ports, readiness probes, recent events, and the exact command output. Ask the model to verify selector matching, port alignment, and probe behavior before jumping to exotic causes.
@@ -751,9 +753,9 @@ This prompt style catches a common problem: the Service selector does not match 
 Kubernetes metrics need interpretation as well. `kubectl top` depends on Metrics Server and can lag shortly after Pod creation. If the model tells you that missing metrics prove the Pod is idle, challenge that conclusion. Missing metrics might mean the metrics pipeline is not installed, not ready, delayed, or blocked. The absence of data is itself a debugging signal, not proof of health.
 
 ```bash
-k top pod -n payments
-k get deployment -n kube-system metrics-server
-k logs -n kube-system deploy/metrics-server --tail=80
+kubectl top pod -n payments
+kubectl get deployment -n kube-system metrics-server
+kubectl logs -n kube-system deploy/metrics-server --tail=80
 ```
 
 In production, you should combine cluster-level signals with application-level signals. A high CPU Pod might be doing legitimate work, stuck in a retry loop, processing oversized requests, or suffering from a hot loop introduced by a code change. Feed the model CPU graphs, request rates, error rates, and profiler output together. Ask it to separate correlation from causation.
@@ -945,7 +947,7 @@ git bisect good main~20
 
 Once Git selects a commit, you run the same test and mark it good or bad. When the first bad commit is found, feed the model the diff, the failing test, and the intended behavior. Ask for causal analysis rather than a rewrite. The question should be “which changed assumption explains the failure?” because regression fixes often require restoring an invariant, not reverting an entire feature.
 
-Hypothesis-driven debugging keeps the investigation disciplined. A hypothesis should be specific enough to test and narrow enough to fail. “Kubernetes is broken” is not a hypothesis. “The Service selector no longer matches the Pod label after the deployment template rename” is a hypothesis because you can prove it with `k get service`, `k get pods --show-labels`, and EndpointSlice output.
+Hypothesis-driven debugging keeps the investigation disciplined. A hypothesis should be specific enough to test and narrow enough to fail. "Kubernetes is broken" is not a hypothesis. "The Service selector no longer matches the Pod label after the deployment template rename" is a hypothesis because you can prove it with `kubectl get service`, `kubectl get pods --show-labels`, and EndpointSlice output.
 
 A good AI prompt can maintain a hypothesis table. Ask for hypothesis, supporting evidence, contradicting evidence, next check, and expected result. This reduces the chance that the conversation becomes a chain of unrelated suggestions. It also makes incident handoff easier because another engineer can see what has already been tested.
 
@@ -999,16 +1001,16 @@ This prompt is different from a normal debugging prompt because it prioritizes s
 
 ## Quiz
 
-1. Your team deployed a serializer change, and an endpoint now raises `AttributeError: 'dict' object has no attribute 'price'`. The AI suggests changing `item.price` to `item["price"]`. What should you check before accepting that fix?
+1. Your team deployed a serializer change, and an endpoint now raises `AttributeError: 'dict' object has no attribute 'price'`. The AI suggests changing `item.price` to `item["price"]`. How should you evaluate this fix — checking root-cause fit, edge cases, and the upstream contract — before accepting it?
    <details>
    <summary>Answer</summary>
-   Check whether the function is supposed to receive dictionaries or domain objects at that boundary. The suggested patch may handle the symptom, but it could hide a broken serializer contract upstream. You should inspect the recent diff, the caller contract, representative input, and add a regression test that proves the correct type or intentionally updates the contract.
+   Check whether the function is supposed to receive dictionaries or domain objects at that boundary. The suggested patch may handle the symptom, but it could hide a broken serializer contract upstream. You should inspect the recent diff, the caller contract, representative input, and add a regression test that proves the correct type or intentionally updates the contract. When you evaluate AI-generated fixes, checking root-cause fit, edge cases, and regression coverage protects you from accepting a plausible-looking patch that moves the failure downstream.
    </details>
 
-2. A Kubernetes Pod is Running and Ready, but requests to its Service fail. You paste the Deployment YAML into an AI assistant, and it recommends increasing CPU limits. What evidence should you provide instead to debug the routing failure?
+2. A Kubernetes Pod is Running and Ready, but requests to its Service fail. You paste the Deployment YAML into an AI assistant, and it recommends increasing CPU limits. How should you design a proper cloud-native debugging workflow — using logs, selectors, and EndpointSlice evidence — instead of guessing at resource limits?
    <details>
    <summary>Answer</summary>
-   Provide the Service selector, Pod labels, EndpointSlice output, targetPort, containerPort, and recent events. CPU limits are not the leading concern for a Service routing failure. The useful investigation compares selector matching and port mapping, then verifies whether the Pod appears as an endpoint for the Service.
+   Provide the Service selector, Pod labels, EndpointSlice output, targetPort, containerPort, and recent events. CPU limits are not the leading concern for a Service routing failure. The useful investigation compares selector matching and port mapping, then verifies whether the Pod appears as an endpoint for the Service. Designing a cloud-native debugging workflow means combining logs, traces, metrics, and Kubernetes tools before guessing at resource changes.
    </details>
 
 3. A model-generated optimization changes a nested loop to a set lookup and reports a large speedup in a local benchmark. Your endpoint still has poor p95 latency in production. What debugging step should come next?
@@ -1035,13 +1037,13 @@ This prompt is different from a normal debugging prompt because it prioritizes s
    The executor accepted ambiguous and incorrectly typed arguments instead of enforcing a strict schema. It should reject unknown field names such as `ns`, require `namespace`, require `replicas` to be an integer, and apply authorization checks before mutation. The model’s variability must be constrained at tool boundaries.
    </details>
 
-7. A race condition appears only during high concurrency. The AI correctly identifies an unprotected read-modify-write sequence and suggests adding a lock. What should your verification include?
+7. A race condition appears only during high concurrency, and you are comparing debugging strategies across different bug categories. The AI correctly identifies an unprotected read-modify-write sequence and suggests adding a lock. What should your verification include?
    <details>
    <summary>Answer</summary>
-   Verification should include a stress or concurrency test that fails or is risky under the old implementation and passes with the lock, plus review of all access paths to the shared state. You should protect reads and writes consistently, confirm the lock does not create unacceptable contention or deadlock, and document the invariant being protected.
+   Verification should include a stress or concurrency test that fails or is risky under the old implementation and passes with the lock, plus review of all access paths to the shared state. You should protect reads and writes consistently, confirm the lock does not create unacceptable contention or deadlock, and document the invariant being protected. When comparing debugging strategies for concurrency errors and logic bugs, a lock alone is not a guarantee — you must also verify that no other code path accesses the shared state without acquiring it.
    </details>
 
-8. A developer runs `k top pod` immediately after creating a Pod and receives no metrics. The AI says the Pod is not consuming CPU. How should you correct that conclusion?
+8. A developer runs `kubectl top pod` immediately after creating a Pod and receives no metrics. The AI says the Pod is not consuming CPU. How should you correct that conclusion?
    <details>
    <summary>Answer</summary>
    Missing `kubectl top` output does not prove the Pod is idle. The command depends on Metrics Server, and metrics may be delayed shortly after Pod creation. Check Metrics Server health, wait for the metrics pipeline when appropriate, and use application logs or direct profiling if you need immediate evidence.
@@ -1182,7 +1184,7 @@ Success criteria for this step:
 
 ### Step 5: Create and measure an optimization target
 
-Now create a small performance script. It includes a slow list-membership implementation and a faster set-based implementation.
+Now create a small performance script that mirrors the real optimization workflow taught in this module. It includes a slow list-membership implementation and a faster set-based implementation running under identical conditions so you can measure the actual difference.
 
 ```bash
 cat << 'PY' > optimization_lab.py
