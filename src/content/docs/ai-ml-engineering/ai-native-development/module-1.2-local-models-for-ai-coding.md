@@ -9,7 +9,9 @@ sidebar:
 
 **Reading Time**: 3-4 hours
 
-**Prerequisites**: Module 1.1 complete, comfort using a terminal, basic Git workflow, and at least 8 GB RAM. A 16 GB machine is strongly recommended for the examples in this module.
+**Prerequisites**: [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) complete, comfort using a terminal, basic Git workflow, and at least 8 GB RAM. A 16 GB machine is strongly recommended for the examples in this module.
+
+**Sub-track axis:** This module is the **MODEL axis** of AI-Native Development. [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) maps the **harness** axis — where the assistant runs, what it can touch, and how much authority it has. Here you choose the **brain**: frontier API models, hosted open-weights APIs, or open-weights models on your own machine. Those are separate decisions. A model-agnostic harness can swap models; a model-locked harness couples the two.
 
 ---
 
@@ -17,15 +19,15 @@ sidebar:
 
 By the end of this module, you will be able to:
 
-1. **Compare** local, API, and hybrid AI coding workflows against cost, privacy, latency, quality, and operational constraints.
+1. **Place** models on the capability axis — frontier API, hosted open-weights API, and local open-weights — and compare them on cost, privacy, latency, context, and fit for a task.
 
-2. **Design** a local-model setup using Ollama, Aider, and Continue.dev that matches a developer workstation's memory and workflow needs.
+2. **Pair** a model with a harness: know which tools accept bring-your-own or local models versus which lock you to a vendor model.
 
-3. **Evaluate** when a coding task should stay local and when it should be escalated to a stronger API model.
+3. **Design** a local-model setup using Ollama, Aider, and Continue.dev that matches a developer workstation's memory and workflow needs, and **evaluate** when a coding task should stay on a cheaper or local tier versus escalate to a stronger model.
 
 4. **Debug** common local-model failures such as missing Ollama services, oversized model downloads, slow inference, and tool configuration errors.
 
-5. **Implement** a repeatable hybrid workflow that uses local models for routine coding and API models for high-reasoning tasks.
+5. **Implement** a repeatable hybrid workflow that routes routine work to local or fast tiers and reserves frontier models for high-reasoning tasks.
 
 > **Go deeper:** For prompt design and context budgeting that make local and hybrid workflows predictable, see [Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/) and [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/).
 
@@ -33,23 +35,29 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-Marcus was not trying to become an AI infrastructure engineer when his monthly API bill crossed three hundred dollars. He was trying to build an internal code analysis tool after work, and the cost grew quietly because every small experiment felt harmless. A prompt to generate tests became another prompt to revise the tests, which became another prompt to explain a failing edge case, which became another prompt to refactor the helper function.
+Hypothetical scenario: Marcus was not trying to become an AI infrastructure engineer when his monthly API bill crossed three hundred dollars. He was trying to build an internal code analysis tool after work, and the cost grew quietly because every small experiment felt harmless. A prompt to generate tests became another prompt to revise the tests, which became another prompt to explain a failing edge case, which became another prompt to refactor the helper function.
 
-By the time he looked at the credit card statement, the problem was no longer a single expensive request. The problem was that he had built a workflow where every tiny coding thought required a paid round trip to somebody else's server. His code left his machine, his work stopped when the network was unstable, and his budget depended on how often he experimented.
+By the time he looked at the credit card statement, the problem was no longer a single expensive request. The problem was that he had built a workflow where every tiny coding thought required a paid round trip to somebody else's server — always through the same model-locked harness, with no cheaper tier in the loop. His code left his machine, his work stopped when the network was unstable, and his budget depended on how often he experimented.
 
-Local models changed the shape of that workflow. Marcus did not replace every API call, and that distinction matters. He started using local models for boilerplate, tests, documentation, small refactors, and exploratory prompts where speed and privacy mattered more than peak reasoning. He still used strong hosted models for architecture decisions and subtle debugging, but those calls became deliberate instead of automatic.
+Marcus fixed the workflow in two layers, not one. He kept a capable harness for repository work (the topic of Module 1.1's landscape map and its **model coupling** row in the tool Rosetta). He then moved the **model** decision onto an axis: local open-weights for bulk and privacy-sensitive drafts, frontier API for architecture and subtle debugging, hosted open-weights APIs when he wanted strong reasoning without running weights on his laptop. Local inference was one point on that axis, not the whole story.
 
-That is the senior-level lesson in this module. Local models are not magic, and they are not automatically better than hosted models. They are another execution environment for AI coding work, with different economics and constraints. A strong practitioner knows how to place the right task in the right environment, just as they know when to run a service locally, deploy it to staging, or hand it to a managed cloud service.
+That is the senior-level lesson in this module. Choosing a model is separate from choosing a harness. Local open-weights trade some peak capability for near-zero marginal token cost and data that stays on-prem. Frontier APIs trade recurring cost for stronger reasoning and larger context. The durable skill is **pairing the model tier, the harness, and the task** — the same judgment you use when deciding whether work belongs on a laptop, in staging, or on a managed cloud service. [Module 1.5](/ai-ml-engineering/ai-native-development/module-1.5-cli-ai-coding-agents/) goes deeper on harness choice and autonomy cost at the CLI layer; this module owns the model side of that pairing.
 
 ---
 
 ## 1. Build The Mental Model First
 
-A local model is an AI model that runs on your machine instead of a provider's servers. The model weights are downloaded to disk, loaded into memory, and executed by your CPU, GPU, or Apple Silicon accelerator. Tools such as Ollama hide much of that complexity, but the basic trade-off remains: you exchange cloud cost and network dependency for local resource usage and setup responsibility.
+Think of the **model axis** as three deployment shapes on one line, not a single "local versus cloud" switch:
 
-API models are the opposite deployment shape. You send prompts and context to a provider, the provider runs inference on their infrastructure, and you receive the response over the network. This is usually faster to start, often stronger for complex reasoning, and easier to use across machines, but it introduces recurring cost, external data handling, rate limits, and dependency on internet access.
+| Position on the axis | Where inference runs | Typical trade-off |
+|---|---|---|
+| **Frontier API** | Vendor-hosted proprietary models (Claude, GPT, Gemini families) | Strongest reasoning and context; recurring token cost; prompts leave your boundary unless enterprise terms say otherwise |
+| **Hosted open-weights API** | Provider runs open-weights models (DeepSeek API, Together, Groq-style hosts, etc.) | Stronger than laptop-local for many tasks; still network-bound and metered; policy depends on the host |
+| **Local open-weights** | Your machine via Ollama, llama.cpp, or similar | Near-zero marginal token cost and on-prem data; hardware and setup are your problem; smaller tiers for routine work |
 
-Hybrid workflows combine both. They use local models for high-volume, lower-risk, repetitive work and reserve API models for the smaller number of tasks where quality matters more than cost. This is the pattern most professional teams eventually land on because it treats AI coding like any other engineering resource: cheap capacity handles routine throughput, while expensive capacity is saved for decisions where quality changes the outcome.
+A **local model** is the third shape: weights on disk, loaded into CPU, GPU, or Apple Silicon memory, with runtimes like Ollama hiding most of the plumbing. **API models** — frontier or hosted open-weights — send prompts to someone else's infrastructure. None of these replaces the harness decision from [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/). The harness decides permissions, edit loop, and connectors; the model decides reasoning depth, speed, cost per token, and where bytes leave your machine.
+
+Hybrid workflows combine tiers on purpose. Local or fast tiers absorb high-volume, lower-risk, repetitive work; frontier or stronger hosted tiers handle the smaller set of tasks where reasoning quality changes the outcome. Professional teams treat this like any other capacity plan: cheap throughput for routine drafts, expensive capacity for decisions that matter.
 
 ```ascii
 +-------------------------+       +---------------------------+
@@ -87,15 +95,64 @@ The deployment model also changes behavior. When every prompt costs money, learn
 | API | Provider infrastructure | Strong quality and large context | Cost, network dependency, data handling | Architecture, subtle bugs, large analysis |
 | Hybrid | Both local and API | Balanced cost and quality | Requires deliberate routing | Professional daily workflow |
 
-The table shows why "local versus API" is a false binary for serious work. The real skill is task routing. You want a mental habit where you quickly classify a request before choosing a model. Routine, low-risk, repetitive, and privacy-sensitive tasks usually start local. High-risk, ambiguous, cross-system, or large-context tasks usually deserve an API model or at least a second pass from one.
+The table shows why "local versus API" is a false binary for serious work. The real skill is task routing across **both** axes: pick the harness that matches the authority the task needs (Module 1.1), then pick the model tier that matches risk and cost. Routine, low-risk, repetitive, and privacy-sensitive tasks usually start on a local or fast tier inside a harness you already trust. High-risk, ambiguous, cross-system, or large-context tasks usually deserve a frontier model or at least a second pass from one.
+
+### Pairing models with harnesses
+
+**Harness ⟂ model** means you can change one without automatically changing the other — but only if the harness allows it.
+
+| Harness style | Examples | Model coupling | Local / BYO fit |
+|---|---|---|---|
+| **Model-agnostic (BYO)** | Aider, Continue, Cline, OpenCode, Hermes, OpenClaw | You supply API key or local endpoint | Can point at `ollama/...` or any OpenAI-compatible URL |
+| **Model-locked** | Claude Code → Anthropic models, Codex → OpenAI, Antigravity → Gemini | Vendor pairs harness and default model | Usually no local weights; escalation is a different product or BYO harness |
+| **Hybrid products** | Some IDE agents | Default hosted model, optional BYO key or local provider in settings | Check per product; local often needs explicit config |
+
+Route by task, not by habit:
+
+- **Bulk and privacy-sensitive drafts** (tests, docs, boilerplate, small refactors): BYO harness + local-small or fast hosted tier.
+- **Hard reasoning** (architecture, security-sensitive design, cross-repo migration plans): frontier API inside the harness that already has the right file and command authority — or a deliberate handoff from a local draft to a frontier review pass.
+- **Headless / CI / bastion work**: see [Module 1.5](/ai-ml-engineering/ai-native-development/module-1.5-cli-ai-coding-agents/) for harness autonomy and cost; this module supplies the model tier you plug into that harness.
+
+The hybrid strategy in Section 5 is the same idea expressed as a daily routing table: cheap model capacity for throughput, frontier capacity for judgment — with the harness providing the edit-and-verify loop on either side.
+
+### When BYO/local pairing wins versus frontier-locked harnesses
+
+A **frontier-locked harness** (Claude Code, Codex CLI, Antigravity-style products) ships with a default vendor model, tight integration, and often the best out-of-the-box reasoning for that product's edit loop. That pairing is rational when your organization already standardized on one vendor, when enterprise data-handling terms are negotiated with that vendor, or when the team values a single supported path over configuration flexibility. The cost is coupling: swapping to local weights or a cheaper API usually means switching harnesses, not flipping a settings toggle.
+
+A **BYO or local pairing** (Aider, Continue, Cline, OpenCode with `ollama/...` or an OpenAI-compatible endpoint) wins when marginal token cost matters, when proprietary code must not leave the machine, when you want one harness policy but multiple model tiers behind it, or when you are comparing open-weights families before committing team budget. The trade-off is operational: you own runtime health, model pulls, quantization choices, and escalation rules. Module 1.1's **model coupling** row is the quick reference; this module is where you fill in the model side of that matrix.
+
+Worked example: a team drafts payment-service unit tests daily. A frontier-locked harness would send every prompt to a metered API even when the task is repetitive and fully verified by pytest. A BYO harness plus a local-small tier absorbs those sessions at near-zero marginal cost; the same harness can still call a frontier API for the quarterly authorization redesign because the harness permissions (file access, diff review) stay constant while only the model endpoint changes. The senior judgment is not "local good, API bad" — it is whether the harness you already trust can accept the model tier the task deserves.
 
 ---
 
 ## 2. Choose Models By Constraint, Not Hype
 
-Most beginners choose local models by reputation, download size, or benchmark screenshots. That is understandable, but it leads to predictable problems. A model that looks impressive on a leaderboard may be unusable on an 8 GB laptop, and a model that fits comfortably may be weak for the task you are assigning it. The first practical constraint is memory, not marketing.
+Most beginners choose models by reputation, download size, or benchmark screenshots. That is understandable, but it leads to predictable problems. A tier that looks impressive in a screenshot may be unusable on an 8 GB laptop, and a tier that fits comfortably may be weak for the task you assign it. The first practical constraint is memory and task fit, not marketing.
 
-The model name often includes a size such as `7b`, `14b`, `16b`, or `32b`. The `b` means billions of parameters. More parameters can improve capability, but they also require more memory and usually run more slowly. Quantization reduces memory use by storing parameters in fewer bits, which is why a `7b` model can often fit in several gigabytes instead of requiring the full memory implied by raw sixteen-bit weights.
+Think in **capability tiers** (durable) rather than today's leaderboard winner (volatile):
+
+| Tier | Role in a coding workflow | Selection criteria |
+|---|---|---|
+| **Frontier** | Architecture, subtle bugs, large-context integration | Reasoning quality, context window, data policy, cost per hard task |
+| **Balanced** | Everyday refactors, multi-file edits with review | Quality/cost ratio on your harness; good default for paid API work |
+| **Fast** | High-volume suggestions, first drafts, autocomplete | Latency and price; acceptable quality drop for routine text |
+| **Local-small** | Private bulk work, offline, zero marginal token cost | RAM/VRAM fit, coding specialization, acceptable error rate after tests |
+
+Open-weights local models often encode size in the name (`7b`, `14b`, `32b` = billions of parameters). More parameters can improve capability but need more memory and usually run slower. Quantization stores weights in fewer bits so a mid-size model can fit on a laptop; that is why tier choice and hardware must be decided together.
+
+### Choosing a tier by constraint, not leaderboard rank
+
+Capability tiers are durable because they describe **roles in a workflow**, not a single winner on a benchmark screenshot. Start from constraints in this order:
+
+1. **Data boundary** — Must prompts or generated patches leave the machine? If yes, local-small or on-prem hosted open-weights; if no, frontier APIs become eligible.
+2. **Verification cost** — Can you cheaply prove correctness with tests, linters, and diff review? High verification lowers the risk of using a weaker tier for first drafts.
+3. **Context appetite** — How many files, logs, or design notes must sit in one prompt? Local tiers often degrade earlier as context grows; frontier and hosted APIs usually offer larger windows (see model cards as of 2026-06).
+4. **Latency sensitivity** — Autocomplete and inline edits need sub-second feel; batch refactors tolerate slower tokens per second.
+5. **Marginal economics** — How many similar sessions per week? High volume on a metered API amplifies small per-token prices; local shifts that curve toward electricity and RAM instead ([Module 1.5](/ai-ml-engineering/ai-native-development/module-1.5-cli-ai-coding-agents/) covers harness-side autonomy cost in more detail).
+
+The **frontier** tier is for tasks where wrong reasoning is expensive: security architecture, subtle distributed bugs, compliance-sensitive wording, or integration plans spanning many services. The **balanced** tier is the everyday paid default when you want strong quality without always paying for the largest context or slowest model. The **fast** tier (smaller APIs or aggressive quantization) is for autocomplete, first-pass summaries, and high-churn chat where a human or test suite will catch mistakes. **Local-small** is for private bulk work, offline travel, and experiments you would skip if every attempt cost money.
+
+Families churn — Qwen Coder, Llama, Gemma, DeepSeek Coder, and Phi-class models rotate through Ollama's library — but the tier logic survives vendor renames. Pick the tier first, then pick a current name that fits RAM and passes one scoped task on your harness.
 
 ```ascii
 +----------------------+----------------------+----------------------+
@@ -109,22 +166,41 @@ The model name often includes a size such as `7b`, `14b`, `16b`, or `32b`. The `
 +----------------------+----------------------+----------------------+
 ```
 
-Treat these numbers as operational estimates, not guarantees. The exact memory footprint depends on quantization, context length, runtime settings, and what else is running on your machine. A developer with 16 GB RAM may run a `16b` model acceptably when the editor and browser are modest, then experience heavy swapping when a container stack and many browser tabs are also open.
+Treat these numbers as operational estimates, not guarantees. The exact memory footprint depends on quantization, context length, runtime settings, and what else is running on your machine. A developer with 16 GB RAM may run a mid-size local tier acceptably when the editor and browser are modest, then experience heavy swapping when a container stack and many browser tabs are also open.
 
-For this module, start with `qwen2.5-coder:7b` because it is a practical default for many learners. It is small enough to run on common developer machines while still being useful for coding tasks. If you have 16 GB RAM or more, add `deepseek-coder-v2:16b` as a higher-quality option for more difficult refactors. If your machine is constrained, use a smaller model and route complex work to an API.
+For hands-on work in this module, pick a **local-small** tier that fits your RAM, then escalate tier or harness when quality plateaus after a good prompt. The exercises below use concrete Ollama tags; names and sizes churn — use the snapshot for current examples, not as permanent recommendations.
 
-| Situation | Recommended local model | Why this choice works | When to escalate |
+| Situation | Tier to start | Why | When to escalate |
 |---|---|---|---|
-| 8 GB laptop | `qwen2.5-coder:7b` or smaller | Fits common machines and handles routine coding | Architecture, large context, subtle bugs |
-| 16 GB laptop | `qwen2.5-coder:7b` plus `deepseek-coder-v2:16b` | Balances speed and quality | Security design or complex debugging |
-| 32 GB workstation | `qwen2.5-coder:32b` or similar larger model | Better output for heavier code tasks | Whole-repo reasoning or high-stakes decisions |
-| Low-resource machine | `phi3.5:3.8b` or another small model | Fast enough for simple prompts | Most production-quality coding decisions |
+| 8 GB laptop | Local-small | Fits common machines; routine coding and tests | Architecture, large context, subtle bugs → balanced or frontier |
+| 16 GB laptop | Local-small + one balanced local weight | Daily driver plus heavier local option for refactors | Security design or complex debugging → frontier API |
+| 32 GB workstation | Balanced local or larger open-weights | Better output for heavier code tasks | Whole-repo reasoning or high-stakes decisions → frontier |
+| Low-resource machine | Fast / smallest local tier | Latency and memory survival | Most production-quality design decisions → API |
+
+> **Model snapshot (as of 2026-06; model names and sizes churn fast — verify before relying)**
+>
+> | Tier | Example names (illustrative) | Typical use in coding harnesses |
+> |---|---|---|
+> | Frontier API | Claude Sonnet/Opus class, GPT-5 class, Gemini Pro class | Architecture, security-sensitive review, large-context integration |
+> | Hosted open-weights API | DeepSeek API, Qwen API, Llama hosted endpoints | Strong reasoning without local GPU; still metered and network-bound |
+> | Balanced local | `deepseek-coder-v2:16b`, `qwen2.5-coder:14b` class | Harder refactors on a 16 GB+ machine |
+> | Local-small (module default) | `qwen2.5-coder:7b`, `phi3.5:3.8b` class | Tests, docs, boilerplate via Ollama + Aider/Continue |
+>
+> Context windows, per-million-token prices, and exact version strings change quarterly. Before building team policy on a name, confirm RAM fit with `ollama list`, read the provider's current card, and re-run one scoped task on your harness.
 
 A senior practitioner also considers context size. A local model may answer well when you give it one function, but degrade when you paste several files and ask for a design decision. Hosted models often support larger context windows and stronger retrieval workflows. If the task depends on understanding many modules, a local model might still help summarize individual files, but the final integration decision may belong to a stronger model or a human review.
 
 **Stop and think:** Suppose a local model generates a correct-looking patch for a billing calculation. The patch is small, the tests pass, and the model explains itself confidently. What extra evidence would you require before merging if the code affects real customer invoices? Your answer should include more than "use a bigger model."
 
 The answer is engineering evidence: focused tests, edge-case analysis, code review, and comparison against the business rule. Model choice is only one layer of quality control. Local models lower the cost of producing candidate changes, but they do not lower the standard for accepting those changes.
+
+### Privacy and marginal cost economics
+
+Frontier APIs bill per token (input and output priced separately on most providers as of 2026-06). A habit of "one more clarifying prompt" compounds quietly — Marcus's invoice story is the consumer version of what platform teams see when dozens of engineers share one org key without routing rules. **Local open-weights** shift spend from variable API meters to fixed hardware: RAM, GPU or Apple Silicon neural engines, disk for weight files, and electricity during inference. Marginal cost per additional prompt approaches zero once the model is loaded, which changes behavior: developers iterate more, throw away weak drafts, and run comparative prompts without a finance review.
+
+That does not make local "free." A 14B model on a laptop during a long pairing session can cost hours of developer attention if responses are slow or the machine swaps memory. Opportunity cost matters too — time waiting for tokens is time not shipping. Hybrid routing exists because **the cheapest tier is the one that finishes the task with acceptable risk**, not the tier with the lowest sticker price.
+
+Privacy follows a similar split. Local inference keeps prompts and retrieved code on the workstation boundary, which helps proprietary algorithms, unreleased features, and regulated data classes — provided you do not paste secrets into logs, commit generated credentials, or enable editor plugins that phone home. Frontier APIs can offer enterprise retention terms, but the default consumer path often processes prompts on provider infrastructure. Hosted open-weights APIs sit in the middle: open weights, but bytes still cross the network to someone else's GPUs. Document which task classes are allowed on which tier; "we use AI" is not a policy, but "tests and docs local, customer PII never in external prompts" is.
 
 ---
 
@@ -307,9 +383,9 @@ The practical split is straightforward. Use Continue when you are reading, askin
 
 ## 5. Route Tasks With A Hybrid Strategy
 
-A local model is most valuable when it becomes part of a routing strategy. Without routing, teams swing between two bad habits. They either send every task to the most expensive model because it feels safest, or they force every task through a local model because it feels cheapest. Both habits waste something important.
+A model tier is most valuable when it sits inside a routing strategy that also respects harness choice. Without routing, teams swing between two bad habits. They either send every task to the most expensive frontier model because it feels safest, or they force every task through a local-small tier because it feels cheapest. Both habits waste something important — and both ignore whether the harness even has the authority to run tests, read the right files, or stay off the public internet.
 
-A good hybrid strategy starts by classifying the task. Ask whether the work is routine or novel, low-risk or high-risk, small-context or large-context, private or shareable, and reversible or hard to undo. This classification is faster than it sounds once the team practices it. It becomes a short design reflex before choosing the model.
+A good hybrid strategy starts by classifying the task on two axes. **Harness axis (Module 1.1):** does this need autocomplete, editor edits, terminal commands, or connectors? **Model axis (this module):** does this need frontier reasoning, balanced quality, fast throughput, or local-private inference? Ask whether the work is routine or novel, low-risk or high-risk, small-context or large-context, private or shareable, and reversible or hard to undo. This classification becomes a short reflex before you touch `--model` or open a settings panel.
 
 | Task type | Start with local? | Escalate to API when | Verification required |
 |---|---|---|---|
@@ -368,6 +444,16 @@ It is primarily a review problem. The model may have followed a reasonable refac
 ## 6. Debug And Operate The Local Workflow
 
 Local AI coding introduces a small operational surface area. You now have a runtime service, downloaded model artifacts, editor configuration, terminal tools, memory pressure, and sometimes GPU acceleration. The upside is control; the cost is that you must debug the stack when something breaks.
+
+### Quantization, context windows, and throughput
+
+**Quantization** reduces the number of bits stored per weight (common labels include Q4, Q5, Q8, and vendor-specific schemes in Ollama tags). Lower bit widths shrink disk footprint and RAM usage so a 14B-class model can run where an unquantized build would not, at the cost of occasional quality regression on hard reasoning or long chains of logic. Treat quantization as a **capacity knob**, not a moral choice: if Q4 fits your machine and passes your test suite on representative tasks, it is a valid daily driver; if refactors keep missing invariants, step up to Q5/Q8 or a larger tier before blaming "local models."
+
+**Context window limits** bound how much code, log output, and instruction text you can stuff into one request. Local runtimes often advertise large theoretical windows, but quality frequently degrades well before the hard limit — attention cost grows, and smaller models lose thread on file boundaries. Operational rule: prefer **scoped context** (one module, one failure trace) on local tiers; reserve whole-repo questions for frontier APIs or decompose the task into local summaries plus a final integration pass.
+
+**Latency versus throughput** shows up in daily feel. **Latency** is time to first token and time to complete a short answer — critical for autocomplete and chat while you read code. **Throughput** is tokens per second over a long generation — critical for multi-hundred-line test files. A model that feels fine in `ollama run` may still choke Continue autocomplete if it reloads weights or competes with browser and IDE memory. Many teams run a **small fast model** for tab completion and a **larger local model** for deliberate Aider sessions, still without touching a metered API.
+
+**When local quality is "good enough"** is an engineering judgment, not a vibe. Good enough means: outputs pass your verification bar (tests, lint, review checklist) at acceptable wall-clock time, without repeated prompt thrashing. If two well-scoped prompt revisions still miss the contract, escalate tier or harness — free tokens that waste an hour are more expensive than a short API call.
 
 Start every diagnosis at the bottom of the stack. If Continue.dev cannot find a model, first verify Ollama. If Aider is slow, first check whether the model is too large for available memory. If responses are low quality, first check whether the task is too complex for the selected model before assuming local models are useless.
 
@@ -437,6 +523,19 @@ aider --model gemini/gemini-2.5-flash src/parser.py tests/test_parser.py docs/pa
 ```
 
 The senior move is to make these decisions visible to the team. Document which local model is the daily default, which one is the heavier local option, which API model is approved for escalation, and what kinds of code must not be sent to external providers. Without that shared agreement, each developer invents their own policy, and the team's privacy and cost posture becomes accidental.
+
+---
+
+## Key Takeaways
+
+- The **model axis** (frontier API, hosted open-weights API, local open-weights) is separate from the **harness axis** in Module 1.1; durable workflows pair tier, harness, and task deliberately.
+- Choose capability **tiers** (frontier, balanced, fast, local-small) by data boundary, verification cost, context needs, latency, and volume — not by benchmark hype.
+- **BYO harnesses** (Aider, Continue, Cline, OpenCode) let you swap local and API endpoints; **model-locked harnesses** trade flexibility for vendor integration — escalation often means a different product.
+- **Ollama** plus a coding-specialized open-weights tag is the default local runtime path in this module; verify with `ollama list` and `ollama run` before debugging editor JSON.
+- **Quantization** trades a little quality for RAM fit; **context** and **throughput** limits mean scoped prompts and sometimes two local models (fast autocomplete vs heavier chat).
+- **Hybrid routing** sends routine, verifiable work to local or fast tiers and reserves frontier capacity for high-reasoning, high-risk decisions — always with tests and review.
+- **Marginal cost** shifts from per-token API meters to hardware and time; **privacy** improves on-prem but does not replace secret hygiene or team policy.
+- Re-run the dated **model snapshot** before team standards freeze on a name; sizes and families churn quarterly.
 
 ---
 
@@ -678,6 +777,14 @@ You are ready for the next module when the following are true:
 
 ---
 
+## Learner check
+
+Before moving on, explain in your own words why **harness ⟂ model** matters for Marcus-style hybrid workflows. Your answer should mention at least one BYO harness and one model-locked harness.
+
+> **Harness ⟂ model** means you can change one without automatically changing the other — but only if the harness allows it.
+
+---
+
 ## Next Module
 
 Next: **[Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/)**
@@ -689,5 +796,13 @@ In the next module, you will learn how to write prompts that produce better code
 ## Sources
 
 - [Ollama README](https://github.com/ollama/ollama) — Primary upstream entry point for installing Ollama and understanding how local model runtimes work.
+- [Ollama HTTP API documentation](https://github.com/ollama/ollama/blob/main/docs/api.md) — How editor tools and CLIs call the local inference server on port 11434.
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) — Reference runtime and quantization ecosystem underlying many local inference stacks (as of 2026-06).
+- [Qwen2.5-Coder model card](https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct) — Open-weights coding model family used in module exercises; verify size tags before pull.
+- [Qwen2.5-Coder announcement](https://qwenlm.github.io/blog/qwen2.5-coder/) — Vendor context on coding specialization and benchmark positioning (dated snapshot).
+- [Llama 3.2 model card](https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct) — Illustrative small-tier open weights for low-RAM machines.
+- [Gemma 2 model card](https://huggingface.co/google/gemma-2-9b-it) — Illustrative balanced-tier open weights from another major family.
 - [Aider README](https://github.com/Aider-AI/aider) — Primary upstream reference for using Aider with cloud and local models.
+- [Aider Ollama configuration](https://aider.chat/docs/llms/ollama.html) — Official BYO path for `ollama/...` model strings in terminal pair programming.
+- [Continue model setup](https://docs.continue.dev/setup/select-model) — Editor-side provider and `apiBase` configuration for local endpoints.
 - [DeepSeek-R1 model card](https://huggingface.co/deepseek-ai/DeepSeek-R1) — Useful primary source for current open reasoning-model capabilities and distilled local variants.
