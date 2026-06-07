@@ -8,7 +8,7 @@ sidebar:
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-5 Hours
 
 **Reading Time**: 4-5 hours
-**Prerequisites**: Modules 1.1-1.6 in this sub-track, basic Git workflow, and comfort running tests locally.
+**Prerequisites**: Modules 1.1-1.5 in this sub-track, basic Git workflow, and comfort running tests locally.
 
 ---
 
@@ -76,7 +76,7 @@ Treat every generation request as a small contract. The prompt states the work, 
 
 ### Specification-Driven Generation
 
-Specification-driven generation means you describe the desired behavior before asking for code. This sounds obvious, but vague prompts are still the most common reason generated code wanders. "Generate a function to process data" gives the model permission to invent input shapes, validation rules, output formats, error behavior, performance expectations, and dependency choices. Those inventions may be reasonable in isolation and wrong for your system.
+Specification-driven generation means you describe the desired behavior before asking for code. This sounds obvious, but vague prompts are still one of the most common reasons generated code wanders. "Generate a function to process data" gives the model permission to invent input shapes, validation rules, output formats, error behavior, performance expectations, and dependency choices. Those inventions may be reasonable in isolation and wrong for your system.
 
 A useful specification names the artifact, inputs, outputs, constraints, edge cases, allowed dependencies, disallowed behavior, and review evidence. You are not trying to write a novel in the prompt. You are trying to remove the degrees of freedom that would be dangerous for the model to guess. The more the task touches security, money, identity, reliability, or compatibility, the more explicit the specification should be.
 
@@ -518,9 +518,9 @@ Treat the suggestion as untrusted. Verify the package identity in the official r
 
 ---
 
-## Hands-On Exercise: Generate, Review, and Harden a URL Utility
+## Hands-On Exercise: Generate, Review, and Verify a URL Utility
 
-This exercise uses deterministic files so you can practice the review loop without depending on a live model response. You will start with a plausible generated implementation, review it as untrusted code, add tests that expose its assumptions, and then harden the implementation. The point is not that URL validation is glamorous. The point is that a small parser has enough edge cases to show why generated code must be reviewed.
+This exercise uses deterministic files so you can practice the review loop without depending on a live model response. You will start with a plausible generated implementation, review it as untrusted code against review-driven tests that are already provided, gather evidence by running the suite, and then improve the generation prompt so a future draft would capture the missing constraints. The point is not that URL validation is glamorous. The point is that a small parser has enough edge cases to show why generated code must be reviewed.
 
 ### Task 1: Create the Lab Workspace
 
@@ -529,7 +529,7 @@ Run the setup from a scratch directory outside any production repository. The co
 ```bash
 mkdir url_generation_review_lab
 cd url_generation_review_lab
-python -m venv .venv
+python3 -m venv .venv 2>/dev/null || python -m venv .venv
 .venv/bin/python -m pip install --upgrade pip pytest
 mkdir -p url_tools tests
 touch url_tools/__init__.py
@@ -537,7 +537,7 @@ touch url_tools/__init__.py
 
 ### Task 2: Start With a Plausible Generated Draft
 
-Imagine the prompt was: "Generate a small Python URL utility with validation, parsing, and normalization using only the standard library." The output below is plausible and syntactically clean. It is also under-specified. Copy it into `url_tools/validator.py`, then review it before writing tests. Look for assumptions about schemes, hosts, ports, credentials, and whitespace.
+Imagine the prompt was: "Generate a small Python URL utility with validation, parsing, and normalization using only the standard library." The output below is plausible and syntactically clean. It is also under-specified. Copy it into `url_tools/validator.py`, then review it before running the provided tests. Look for assumptions about schemes, hosts, ports, credentials, and whitespace.
 
 ```python
 from __future__ import annotations
@@ -600,7 +600,7 @@ class URLValidator:
         return urlunparse((parsed.scheme, netloc, parsed.path, "", parsed.query, ""))
 ```
 
-### Task 3: Write Review-Driven Tests
+### Task 3: Review-Driven Tests (Provided)
 
 The tests below encode review decisions that the original broad prompt did not mention. They reject credentials in URLs, unsupported schemes, missing hosts, invalid ports, and non-string input. Copy them into `tests/test_validator.py`. Read each test before running it and ask whether it protects a behavior you would actually want in a service that consumes user-supplied URLs.
 
@@ -691,7 +691,7 @@ Next, continue to [Module 1.8: AI-Assisted Debugging & Optimization](/ai-ml-engi
 - [NIST SP 800-218 Secure Software Development Framework](https://csrc.nist.gov/pubs/sp/800/218/final) — Source for secure-development practices that still apply when code is AI-assisted.
 - [SLSA Provenance](https://slsa.dev/spec/v1.2/provenance) — Background on provenance as a software supply-chain concept.
 - [OpenSSF Scorecard](https://openssf.org/scorecard/) — Reference for dependency and project-health review signals.
-- [GitHub Copilot: Supported AI models](https://docs.github.com/en/copilot/using-github-copilot/ai-models/using-gemini-flash-in-github-copilot) — Dated snapshot source for model availability volatility in a coding harness.
+- [GitHub Copilot: Supported AI models](https://docs.github.com/en/copilot/using-github-copilot/ai-models/using-gemini-flash-in-github-copilot) (redirects to the supported-models page) — Dated snapshot source for model availability volatility in a coding harness.
 - [GitHub Copilot: Understanding requests](https://docs.github.com/copilot/concepts/copilot-billing/understanding-and-managing-requests-in-copilot) — Dated snapshot source for request and billing terminology.
 - [OpenAI: Introducing Codex](https://openai.com/index/introducing-codex/) — Dated snapshot source for Codex positioning as a software-engineering agent.
 - [OpenAI: Unrolling the Codex agent loop](https://openai.com/index/unrolling-the-codex-agent-loop/) — Source on Codex CLI, local agent loops, and terminology around Codex offerings.
