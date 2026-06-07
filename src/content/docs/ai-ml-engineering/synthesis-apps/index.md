@@ -6,7 +6,7 @@ sidebar:
   label: "Synthesis Apps"
 ---
 
-> **AI/ML Engineering Track** | Phase 7 | 3-module mini-arc
+> **AI/ML Engineering Track** | Phase 7 | 4-module mini-arc
 
 ---
 
@@ -23,10 +23,11 @@ and gives the application layer enough failure vocabulary to implement retries
 and quality gates.
 
 This mini-arc closes that gap by building one LLM-native application substrate
-in three passes.
+in four passes.
 The first module wires the backing services.
 The second module adds the orchestration service and state handling.
-The third module adds production gates for evaluation, tracing, and scaling.
+The third module gates deployments with automated LLM evals in CI.
+The fourth module makes agent behavior observable with OpenTelemetry tracing.
 The point is not to celebrate another tool stack; it is to teach the operational
 boundaries between the layers so you can replace individual tools later without
 losing the architecture.
@@ -39,18 +40,19 @@ If inference and memory are not healthy as Kubernetes services, a LangGraph,
 LangChain, LlamaIndex, or custom orchestration layer has no stable substrate.
 Once those services are verified, the second module can teach application logic
 against known failure modes instead of hoping the backend is fine.
-The final module then makes quality and observability part of the delivery path,
-not a dashboard someone opens after users complain.
+The third module makes evaluation a deployment gate, and the fourth makes the
+running system observable, so quality and visibility are part of the delivery
+path, not a dashboard someone opens after users complain.
 
 ```text
-Module 3.1        Module 3.2             Module 3.3
-+-------------+   +-------------------+   +----------------------+
-| Backing     |-->| Orchestration     |-->| Production gates     |
-| services    |   | service + state   |   | evals + tracing + HPA|
-+-------------+   +-------------------+   +----------------------+
- vLLM + Qdrant      LangGraph shape        DeepEval / Promptfoo
- GPU + storage      Redis checkpointing     LangFuse / metrics
- NetworkPolicy      retries + budgets       readiness criteria
+ Module 3.1          Module 3.2          Module 3.3          Module 3.4
++----------------+  +----------------+  +----------------+  +----------------+
+| Backing        |->| Orchestration  |->| Eval gates in  |->| Observability  |
+| services       |  | service+state  |  | CI             |  | with OTel      |
++----------------+  +----------------+  +----------------+  +----------------+
+ vLLM + Qdrant       LangGraph shape     promptfoo/ragas     agent span tree
+ GPU + storage       Redis checkpoints   golden/regression   gen_ai.* attrs
+ NetworkPolicy       retries + budgets   rollout gate        cost + traces
 ```
 
 ## Modules
@@ -58,8 +60,9 @@ Module 3.1        Module 3.2             Module 3.3
 | Module | Learning Outcome |
 |--------|------------------|
 | [3.1 LLM-Native Stack: Inference and Memory on Kubernetes](module-3.1-llm-native-stack-k8s/) | Deploy vLLM and Qdrant as coordinated Kubernetes services, bound by namespace resource policy and NetworkPolicy, then verify and break the stack deliberately. |
-| 3.2 Wiring the LLM App: The Orchestration Layer | Build a Kubernetes-deployed orchestration service that calls the Module 3.1 services, persists state, and handles backend failure modes explicitly. |
-| 3.3 Production Gates: Evals, Observability, and Scaling | Gate deployments with automated LLM evals, trace requests across the stack, and scale inference with signals that match GPU serving behavior. |
+| [3.2 Wiring the LLM App: The Orchestration Layer](module-3.2-orchestration-layer/) | Build a Kubernetes-deployed orchestration service that calls the Module 3.1 services, persists state with Redis checkpointing, and handles backend failure modes explicitly. |
+| [3.3 Production Gates: LLM Evals in CI](module-3.3-llm-evals-in-ci/) | Gate deployments with automated LLM eval suites in CI — golden-vs-regression thresholds, what to gate on, and where the gate sits in the rollout. |
+| [3.4 Agent Observability with OpenTelemetry](module-3.4-agent-observability-otel/) | Trace agent and LLM calls with OpenTelemetry — an agent span tree, token-cost span attributes, and feeding production traces back into the eval set. |
 
 ## What This Section Assumes
 
@@ -93,11 +96,11 @@ what must be true for the request to be reliable?
 
 ## Recommended Order
 
-Read the three modules in order.
+Read the four modules in order.
 The first module produces the backing service substrate that the second module
 depends on.
-The second module gives the application layer the failure handling vocabulary
-that the third module tests and observes.
+The second module gives the application layer the failure-handling vocabulary
+that the third module gates on and the fourth observes in production.
 Skipping ahead is possible if you already operate this kind of stack, but it
 removes the main teaching benefit for most learners.
 
@@ -112,6 +115,9 @@ Synthesis Apps 3.2
       |
       v
 Synthesis Apps 3.3
+      |
+      v
+Synthesis Apps 3.4
       |
       v
 Advanced GenAI & Safety
@@ -136,7 +142,7 @@ then harden the resulting system.
 
 ## Output Of The Mini-Arc
 
-By the end of the three modules, you will have a working shape for a private,
+By the end of the four modules, you will have a working shape for a private,
 Kubernetes-native LLM application.
 It will not be a toy notebook and it will not be a black-box platform service.
 It will be a service graph whose responsibilities you can name, probe, restart,

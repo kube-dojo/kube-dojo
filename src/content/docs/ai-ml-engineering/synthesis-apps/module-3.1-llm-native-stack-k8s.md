@@ -1367,4 +1367,7 @@ Success criteria:
 
 ## Next Module
 
-*Next module coming soon.*
+The backing services are healthy — now build the application that drives them.
+[Wiring the LLM App: The Orchestration Layer](../module-3.2-orchestration-layer/)
+adds the orchestration service that calls vLLM and Qdrant, persists state, and
+handles backend failure explicitly.
