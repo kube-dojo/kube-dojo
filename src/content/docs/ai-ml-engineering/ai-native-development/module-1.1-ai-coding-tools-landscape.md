@@ -62,7 +62,109 @@ The landscape also has a billing boundary that is easy to misunderstand. A consu
 | Terminal agent | Read, edit, run commands, use Git | Multi-step tasks with verification | Unsafe command or dependency changes |
 | Connected agent | Use files plus external tools | Internal docs, tickets, databases, deployment checks | Data exposure and workflow authority |
 
+The authority diagram above is informal shorthand. The next section names the same progression as a durable autonomy ladder (L0–L5) so you can compare tools by how far up they go, not by marketing labels.
+
+## Harness And Model Are Orthogonal Axes
+
+A second durable axis sits beside authority: **harness** and **model** are independent choices. Confusing them leads to bad stack decisions — buying a subscription for a model you never use, or pairing a powerful harness with a model too weak for the task.
+
+**Harness** is the agentic scaffold around the model: the loop that plans, calls tools, requests permissions, holds memory, and presents a UI or form factor (IDE panel, terminal CLI, desktop app, messaging gateway). The harness decides what the model can *do* in your environment — read files, run shell commands, open pull requests, reach MCP servers — regardless of which brain sits behind it.
+
+**Model** is the brain: a frontier API (Claude, GPT, Gemini, and peers), a local open-weights stack (Gemma, Llama, Qwen via Ollama or similar), or specialized reasoning models (DeepSeek and others). Same harness, different model — different cost, latency, privacy boundary, and capability ceiling.
+
+**Coupling** is how tightly harness and model are bound:
+
+| Coupling style | What it means | Examples (capability class, not rankings) |
+|---|---|---|
+| Model-locked | Harness ships with one vendor model family | Claude Code → Claude; Codex → OpenAI; Antigravity → Gemini |
+| Model-agnostic / BYO | You supply API keys or run local weights | aider, Cline, opencode, Hermes, OpenClaw |
+
+A model-agnostic harness on a **local** open-weights model flips the economics: marginal token cost drops toward zero, privacy improves because prompts stay on your hardware, and capability often trades down versus a frontier API. That tradeoff is intentional — not a defect — when the work is repetitive, sensitive, or cost-bound. The Rosetta Stone table later maps which tools sit in which coupling bucket.
+
+**Durable trend (as of 2026-06; verify before relying):** model coupling is loosening. Cursor accepts bring-your-own API keys and multiple frontier providers (including xAI Grok). GitHub Copilot added a model picker (December 2025 and February 2026 releases). First-party vendor CLIs remain the most locked category, though even those are opening slightly. The pattern: **harness vendors compete on autonomy ceiling and form factor; model vendors compete on reasoning quality; open standards (MCP, AGENTS.md) decouple both from any single product.**
+
+When you evaluate a stack, ask two questions on separate lines: (1) how much authority does this *harness* grant? (2) which *model* (and billing path) powers it? A strong model in a chat-only harness still cannot run your tests. A capable harness on a weak local model may fail on hard refactors but excel at scoped edits under a privacy policy.
+
+## The Autonomy Ladder (L0–L5)
+
+The authority diagram in the previous section maps to a named autonomy ladder — the AI-coding analog of SAE driving levels. Levels describe **how much driving the tool does**, not which vendor built it. Do not use product names (such as a well-known "copilot" brand) as level labels; those names collide with products and vague marketing.
+
+```
+Less autonomy                                                          More autonomy
+
+L0          L1           L2              L3                 L4                    L5
+Autocomplete  Chat assist  Inline edits    Supervised agent   Autonomous/background  Persistent autonomous
+     |            |             |                 |                    |                      |
+  you drive   you apply    you approve      you checkpoint      minimal per-step       long-lived,
+  suggestions  answers      each multi-file   plans + acts in     approval; cloud/       messaging-driven,
+               manually     diff              permission          background;            self-directed
+                                                boundary            opens a PR            across sessions
+```
+
+| Level | Name | You do | Tool does | Typical form factor |
+|---|---|---|---|---|
+| **L0** | Autocomplete | Drive every keystroke | Suggest inline completions at the cursor | IDE extension |
+| **L1** | Chat assist | Ask; copy or apply answers manually | Reason over pasted or indexed context; no write loop | Browser, app, or IDE chat panel |
+| **L2** | Inline edits | Approve each proposed patch | Propose multi-file diffs inside the editor | IDE agent |
+| **L3** | Supervised agent | Checkpoint plans and risky actions | Plan and act over many steps inside a permission boundary | Terminal CLI, IDE agent mode |
+| **L4** | Autonomous / background | Set task; review outcome | Run a whole task toward completion with minimal per-step approval; often cloud or background; may open a PR | Coding agent, cloud worker |
+| **L5** | Persistent autonomous agent | Define goals and guardrails | Long-lived, self-directed, messaging-driven; persists and may self-improve across sessions | Desktop gateway, messaging bridge |
+
+**Key teaching point (durable):** **L1 chat is near-universal — table stakes, not a differentiator.** Most products ship chat. The informative signals are (1) the **autonomy ceiling** — how far up the ladder the tool can go on real work — and (2) whether it offers **L0 autocomplete**, which tracks the IDE form factor and daily flow-state coding. Compare tools on those axes plus harness–model coupling, not on whether they have a chat panel.
+
+When the Rosetta Stone lists an autonomy ceiling, it means the highest level the product class supports today, not the level you must use on every task. Mature workflows mix levels: L0 for typing, L1 for design critique, L3 for test repair, L4 only with strong contracts and review.
+
+## AI Coding Harness Rosetta Stone
+
+**Snapshot as of 2026-06.** The AI-coding-tool landscape reorders fast — verify against each tool's docs before relying on specifics. Tools are peers; this maps capabilities, not a ranking.
+
+| Capability | Claude Code | Codex | Antigravity | Cursor | GitHub Copilot | aider | Hermes | OpenClaw |
+|---|---|---|---|---|---|---|---|---|
+| Vendor | Anthropic | OpenAI | Google | Cursor | GitHub/Microsoft | open-source | Nous Research | OpenClaw Foundation |
+| Form factors | CLI + IDE + desktop | CLI + cloud + app | IDE + desktop + CLI + SDK | IDE + CLI | IDE + CLI + coding agent | CLI | desktop + CLI + chat gateway | messaging gateway |
+| Autonomy ceiling | L4 | L4 (cloud) | L4 (multi-agent) | L4 (background agents) | L4 (coding agent) | L3 | L5 (persistent) | L5 (persistent) |
+| L0 autocomplete | no | no | yes (editor) | yes | yes | no | no | no |
+| Model coupling | locked (Claude) | locked (OpenAI) | locked (Gemini) | BYO + frontier | frontier-pick (no local) | BYO + local | BYO + local | BYO + local |
+| Rules file | CLAUDE.md (AGENTS.md NOT native) | AGENTS.md | AGENTS.md | .cursorrules + AGENTS.md | copilot-instructions + AGENTS.md | AGENTS.md | — | — |
+| MCP client | yes | yes | yes | yes | yes | varies | varies | varies |
+| Open-source | no | CLI yes | no | no | no | yes | yes (MIT) | yes |
+
+**How to read this table:** pick the row that matches your work — form factor (IDE vs CLI vs gateway), autonomy ceiling (L3 vs L4 vs L5), and model coupling (locked frontier vs BYO vs local) — not the vendor logo. A tool with L4 background agents and no L0 autocomplete fits a different daily rhythm than an IDE with autocomplete and L3 supervised mode only. Two columns recur across many rows: **MCP** for tool connectivity and **AGENTS.md** (or product-specific equivalents) for hierarchical agent instructions. Those open standards are the durable cross-tool layer; the snapshot cells above will drift — the axes will not.
+
+Modules 1.2–1.10 in this sub-track refer back to this Rosetta when comparing local models, harness configuration, and agent economics.
+
+## Landscape Snapshot As Of 2026-06
+
+**As of 2026-06; the landscape moves fast — verify before relying.** Product names, tiers, and prices change quarterly. The sections above teach durable evaluation axes; **this section holds volatile product and market facts only.**
+
+### Open standards under neutral governance
+
+The field is converging on **neutral, foundation-governed open standards** that decouple harness ⟂ model ⟂ vendor:
+
+- **MCP (Model Context Protocol)** — Anthropic introduced it on November 25, 2024; the protocol was **donated to the Linux Foundation's Agentic AI Foundation on December 9, 2025** (co-founded by Anthropic, Block, and OpenAI, with Google, Microsoft, and AWS backing). By early 2026 the MCP SDK saw on the order of ~97M monthly downloads. MCP is the cross-vendor way tools reach files, databases, and APIs instead of bespoke integrations per product.
+- **AGENTS.md** — a plain-Markdown, hierarchical (nearest-file-wins) agent-instructions convention, **also stewarded by the Agentic AI Foundation**. Codex, Cursor, Aider, Devin, Copilot, Gemini CLI, Windsurf, opencode, Zed, and others read it natively across 60,000+ projects. **Claude Code uses `CLAUDE.md` and does not currently natively read AGENTS.md** (community requests exist). Plan instructions per harness until that gap closes.
+
+Together, MCP and AGENTS.md let teams port *policy* and *connectivity* across harness changes without rewriting everything when the model or IDE shifts.
+
+### Form-factor convergence
+
+Every major vendor now ships multiple form factors rather than a single surface: Anthropic (Claude Code CLI, IDE, and desktop), OpenAI (Codex CLI, cloud, and app), Google (**Gemini CLI**; **Code Assist sunsets the individual tier on June 18, 2026**, folded into Antigravity — enterprise Code Assist remains), Cursor (IDE and CLI). Convergence means your choice is often *which harness loop* you live in daily, not whether a vendor offers only chat or only an IDE.
+
+### The autonomy frontier (L4→L5) and its economics
+
+Persistent and background autonomy (L4–L5) is where **agentic scaling economics** bite — independent of any single vendor narrative.
+
+Open-source persistent agents gained visibility in this window: **Hermes** (Nous Research; desktop preview around June 2026; messaging-gateway form factor; BYO/local model) and **OpenClaw** (Peter Steinberger; runs on your own hardware; **~302k GitHub stars by April 2026**, described as the fastest-growing open-source project in GitHub history; creator joined OpenAI in February 2026; project moved toward an independent foundation).
+
+**Cost reality (verified, neutral):** running on the order of ~100 autonomous Codex agents for 30 days cost OpenClaw's creator **$1.3M in OpenAI API tokens** (603B tokens / 7.6M requests; that figure reflected Codex "Fast Mode" — standard mode was approximately **$300k**; the bill was covered by OpenAI). The durable lesson: **L4/L5 autonomy on a frontier API can cost thousands per agent per month**; the **same harness class on a local open-weights model** carries **~zero marginal token cost**, trading capability for cost and privacy. Neither side is universally "better" — the fit depends on task difficulty, data boundary, and budget.
+
+**Billing decoupling (verified; both directions):** in 2026, vendors moved programmatic and agent usage onto **separate metered credits** rather than folding unlimited agent turns into flat subscriptions. Anthropic introduced separate Agent SDK credits (effective June 15, 2026) for `claude -p`, Agent SDK, and Actions, following an April 2026 restriction and May reversal. OpenAI meters Codex Cloud and API usage similarly. Read this as the industry adjusting prices to agentic-scale economics — not as proof that any one vendor is uniquely expensive or anti-open-source.
+
+When you reach for L4 or L5, pair the autonomy ceiling in the Rosetta with a **cost boundary** in your adoption worksheet: expected tokens per task, credit pools, and whether a local model on a BYO harness is enough for the same scope.
+
 ## Tool Families And Their Engineering Fit
+
+The Rosetta Stone and autonomy ladder give you a cross-vendor map; this section translates those axes into **engineering fit** — which tool *class* matches which kind of repository work. When a row below mentions "IDE agent" or "terminal agent," map it to an L-level and harness form factor from the sections above rather than to a single product name.
 
 Autocomplete-first tools are the lowest-friction entry point. GitHub Copilot, Tabnine, Codeium-style completion, VS Code Copilot features, and similar products watch the local editing context and propose the next line, block, or small function. They work well when you already know the shape of the solution and want to reduce typing. They are less useful when the correct answer depends on files the assistant cannot see or on decisions it cannot validate.
 
@@ -74,7 +176,7 @@ Terminal agents such as Codex-style tools, Claude Code, Gemini CLI, Aider, Goose
 
 Local-model and self-hosted coding assistants solve a different problem: control. A local stack may be slower, less capable, or more operationally demanding than a hosted frontier model, but it can be attractive when source code cannot leave a machine or when a team wants predictable cost for routine suggestions. Local tools are often best for autocomplete, search, summarization, and repetitive transformations rather than for the hardest reasoning tasks. The engineering decision is whether privacy and cost control outweigh the additional setup and quality tradeoff.
 
-Protocol-connected tools change the question from "can the assistant edit code?" to "what systems can the assistant reach?" MCP is the most visible example of this shift: it gives tools a common way to connect to filesystems, issue trackers, databases, documentation, and custom services. That is powerful for internal platform work because an agent can answer questions from live context instead of stale memory. It is also risky because tool access turns a coding assistant into a workflow participant.
+Protocol-connected tools change the question from "can the assistant edit code?" to "what systems can the assistant reach?" MCP is the most visible example of this shift: it gives tools a common way to connect to filesystems, issue trackers, databases, documentation, and custom services. That is powerful for internal platform work because an agent can answer questions from live context instead of stale memory. It is also risky because tool access turns a coding assistant into a workflow participant. The 2026-06 landscape snapshot notes MCP's move to foundation governance — the protocol is the durable layer; individual product MCP menus change faster.
 
 Before running this comparison on your own setup, choose one recent task from your Git history. Would it have benefited more from faster typing, better explanation, multi-file editing, command execution, or access to an external system such as tickets or docs? The answer tells you which tool family to evaluate first. If you choose by popularity instead, you may buy an agent when you only needed autocomplete, or install autocomplete when your bottleneck is repository-wide diagnosis.
 
@@ -139,7 +241,7 @@ The first-month plan below is intentionally conservative. It introduces value ea
 
 This staged rollout avoids two common extremes. It does not pretend AI tools are harmless text expanders, and it does not treat them as autonomous engineers. It gives the tools real work while keeping the blast radius small enough for a learner or team lead to understand. After a month, you should have concrete evidence about which tasks became faster, which review checks caught mistakes, and which permissions were unnecessary.
 
-Cost evaluation belongs in the same worksheet as technical evaluation. A tool that looks cheap per month can become expensive if every agentic turn consumes metered credits, and a tool that looks expensive can be reasonable if it replaces several separate subscriptions. Track cost by workflow, not by brand. "One test-fix session," "one multi-file refactor," and "one day of autocomplete" are more meaningful units than a plan name that may change next quarter.
+Cost evaluation belongs in the same worksheet as technical evaluation. A tool that looks cheap per month can become expensive if every agentic turn consumes metered credits, and a tool that looks expensive can be reasonable if it replaces several separate subscriptions. Track cost by workflow, not by brand. "One test-fix session," "one multi-file refactor," and "one day of autocomplete" are more meaningful units than a plan name that may change next quarter. For L4–L5 work, add expected token or credit burn using the economics notes in the landscape snapshot — frontier API autonomy and local open-weights autonomy are different cost classes even when the harness looks similar.
 
 ## Worked Example: Choosing Tools For A Repository Migration
 
@@ -359,6 +461,12 @@ Your result should be a short evaluation note, not a feeling. For example: "Appr
 - [ ] The final diff is reviewed manually.
 - [ ] The final decision names at least one approved use and one restricted use.
 
+## Learner check
+
+Before moving on, confirm you can explain the two orthogonal axes and use the Rosetta without treating it as a ranking. In your own words, answer: which autonomy level is table stakes, and which levels actually differentiate tools?
+
+> **Key teaching point (durable):** **L1 chat is near-universal — table stakes, not a differentiator.** Most products ship chat. The informative signals are (1) the **autonomy ceiling** — how far up the ladder the tool can go on real work — and (2) whether it offers **L0 autocomplete**, which tracks the IDE form factor and daily flow-state coding. Compare tools on those axes plus harness–model coupling, not on whether they have a chat panel.
+
 ## Sources
 
 - [OpenAI Codex documentation](https://developers.openai.com/codex)
@@ -376,7 +484,18 @@ Your result should be a short evaluation note, not a feeling. For example: "Appr
 - [Tabnine getting started documentation](https://docs.tabnine.com/main/getting-started/install)
 - [Open Interpreter introduction](https://docs.openinterpreter.com/getting-started/introduction)
 - [Goose official repository](https://github.com/aaif-goose/goose)
+- [Anthropic: MCP donated to Agentic AI Foundation](https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation)
+- [Linux Foundation: Agentic AI Foundation formation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [AGENTS.md specification](https://agents.md/)
+- [Google Developers Blog: Transitioning Gemini CLI to Antigravity CLI](https://developers.googleblog.com/en/an-important-update-transitioning-gemini-cli-to-antigravity-cli/)
+- [OpenClaw (Wikipedia)](https://en.wikipedia.org/wiki/OpenClaw)
+- [Nous Research](https://nousresearch.com/)
+- [Tom's Hardware: OpenClaw Codex token cost report](https://www.tomshardware.com/tech-industry/artificial-intelligence/openclaw-creator-burns-through-1-3-million-in-openai-api-tokens-in-a-single-month)
+- [The Next Web: autonomous agent API economics at scale](https://thenextweb.com/news/openclaw-peter-steinberger-1-3-million-openai-token-bill)
+- [Anthropic Support: Claude Agent SDK and subscription credits](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)
+- [The New Stack: Anthropic Agent SDK credit pools](https://thenewstack.io/anthropic-agent-sdk-credits/)
 
 ## Next Module
 
-Next: [Local Models for AI Coding](/ai-ml-engineering/ai-native-development/module-1.2-local-models-for-ai-coding/) - learn when local inference, privacy boundaries, and self-hosted assistants are worth the operational tradeoff.
+Next: [Local Models for AI Coding](/ai-ml-engineering/ai-native-development/module-1.2-local-models-for-ai-coding/) — the **model axis**: local vs cloud inference, and pairing models with harnesses from the Rosetta Stone.
