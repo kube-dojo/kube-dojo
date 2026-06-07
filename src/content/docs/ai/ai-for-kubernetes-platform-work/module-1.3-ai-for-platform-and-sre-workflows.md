@@ -39,7 +39,7 @@ In Kubernetes, this distinction matters because signals are spread across contro
 
 Good targets therefore share three properties. First, they use data the team can inspect directly, such as events, logs, runbooks, incident notes, manifests, or change tickets. Second, they produce drafts, summaries, comparisons, or questions that a human can review. Third, they leave the irreversible steps outside the model, including approvals, production writes, policy changes, and public incident conclusions. That boundary is what lets the team move faster without hiding accountability inside a chat transcript.
 
-The original lesson used the phrase "contextual enrichment" for this work, and that phrase is still useful. Traditional alert grouping can connect signals through labels, time windows, and static routing rules. A language model can add semantic correlation by noticing that a pending pod event, an `OOMKilled` event, and an application startup failure may belong in the same investigation packet, even when the labels do not line up perfectly. The value is not magic diagnosis; it is faster assembly of the first coherent hypothesis set.
+We can call this work "contextual enrichment." Traditional alert grouping can connect signals through labels, time windows, and static routing rules. A language model can add semantic correlation by noticing that a pending pod event, an `OOMKilled` event, and an application startup failure may belong in the same investigation packet, even when the labels do not line up perfectly. The value is not magic diagnosis; it is faster assembly of the first coherent hypothesis set.
 
 The following example preserves that advisory role. The command gathers Kubernetes events for one object and sends the JSON to an LLM-integrated CLI for analysis, but the prompt asks for correlations rather than an action. It is intentionally framed as input to human hypothesis testing. A responder still needs to inspect the events, compare them with node state and logs, and decide what verification step comes next.
 
@@ -118,7 +118,7 @@ For example, before a platform migration, a good prompt might ask the assistant 
 
 The "during" stage is where speed matters most and boundaries matter most. The assistant can convert incoming evidence into a living packet: timeline, symptoms, hypotheses, rejected explanations, open questions, and next verification checks. This is valuable because incident channels are noisy and humans lose context under pressure. The packet must explicitly mark uncertainty, because a neat timeline without uncertainty can become more misleading than the raw chat it replaced.
 
-The original incident-note prompt captures that discipline and should remain part of the module. It asks for structure, but it also tells the model not to infer unverified root cause. That last instruction is not a decorative safety phrase. It changes the output from a conclusion engine into a documentation assistant, which is exactly the role we want during the work.
+The incident-note prompt captures that discipline. It asks for structure, but it also tells the model not to infer unverified root cause. That last instruction is not a decorative safety phrase. It changes the output from a conclusion engine into a documentation assistant, which is exactly the role we want during the work.
 
 ```text
 Convert these raw incident notes into:
@@ -511,7 +511,7 @@ The exercise is complete when the final packet proves that AI stayed in a suppor
 - [Open Policy Agent Gatekeeper Documentation](https://open-policy-agent.github.io/gatekeeper/website/docs/)
 - [Prometheus Alerting Overview](https://prometheus.io/docs/alerting/latest/overview/)
 - [Google SRE Book: Postmortem Culture](https://sre.google/sre-book/postmortem-culture/)
-- [NIST AI Risk Management Framework](https://nist.gov/itl/ai-risk-management-framework)
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
 
 ## Next Module
 

@@ -70,7 +70,7 @@ The high-risk rung covers production changes, destructive shell commands, securi
 
 For technical work, moving up the ladder means moving from passive reading to systematic triangulation. A model might suggest Kubernetes syntax that was valid in an older API version, a Terraform argument from a provider release you do not use, or a command-line flag that exists in a different tool. The verification task is not to ask the model whether it is confident. The task is to compare the generated claim against the tool, version, and environment that will actually execute it.
 
-The following example preserves the core habit from the earlier draft of this module. If a model suggests a command, do not only inspect whether the command looks familiar. Ask the local tool whether the flag exists, run a dry plan when the tool supports it, and inspect the proposed change before allowing state to move. Small deterministic checks can catch large probabilistic mistakes.
+The following example demonstrates the core habit. If a model suggests a command, do not only inspect whether the command looks familiar. Ask the local tool whether the flag exists, run a dry plan when the tool supports it, and inspect the proposed change before allowing state to move. Small deterministic checks can catch large probabilistic mistakes.
 
 ```bash
 # Verify if the AI-suggested flag actually exists in your current CLI version
