@@ -4,64 +4,74 @@ slug: ai-ml-engineering/ai-native-development/module-1.4-agent-first-ides
 sidebar:
   order: 205
 ---
-> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-6
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 4-6 hours
 
 ---
-**Prerequisites**: Module 1.1-1.3 complete
+
+**Prerequisites**: [Module 1.1: AI Coding Tools Landscape](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) and Modules 1.2–1.3 complete
 
 > **Go deeper:** For how applications package context and how harness layers record agent work, see [Context Engineering Fundamentals](/ai/ai-engineering-foundations/module-2.1-context-fundamentals/) and [Harness Fundamentals — Layers and System of Record](/ai/ai-engineering-foundations/module-3.1-harness-fundamentals-layers-and-system-of-record/).
-
----
-
-San Francisco. November 18, 2025. 10:17 AM. Sarah Chen stared at her screen in disbelief. Her team had just received early access to Google Antigravity, and what she saw fundamentally changed how she thought about coding.
-
-In an agent-first IDE, a prompt like this can be split across planning, implementation, and testing steps, and a capable tool may complete a substantial amount of work quickly. The exact speed and code quality still depend on the task, codebase, and how closely you review the result.
-
-"This isn't coding anymore," she told her team lead. "This is... directing."
-
-> "The shift from autocomplete to autonomous agents is the biggest change in software development since the invention of the IDE itself. We're not writing code anymore—we're managing code-writing agents."
-> — Dario Amodei, CEO of Anthropic, commenting on the 2025 agent revolution
-
-This module explores the agent-first IDE paradigm that's transforming professional development in 2025. You'll learn to leverage tools like Google Antigravity, Windsurf, and Cline—not as fancy autocomplete, but as autonomous systems that can reason, plan, and execute complex software engineering tasks.
 
 ---
 
 ## What You'll Be Able to Do
 
 By the end of this module, you will:
-- Understand the paradigm shift from autocomplete to autonomous agents
-- Master Google Antigravity's multi-agent orchestration
-- Use Windsurf's Cascade system for complex tasks
-- Configure Cline as an open-source agent in VS Code
-- Compare Cursor's Composer with other agent approaches
-- Choose the right IDE for different development scenarios
+
+- Map IDE tool modes to autonomy levels L0–L5 and explain how agent-first delegation differs from autocomplete-first editing inside the editor.
+- Separate harness design (permissions, artifacts, billing, data path) from raw model capability when evaluating IDE-integrated tools.
+- Compare GitHub Copilot, Cursor, Google Antigravity, Windsurf, and Cline as peer illustrations using fit-based reasoning rather than brand rankings.
+- Decide when the IDE form factor fits a task versus when a CLI or headless agent is the better match, including cross-reference to Module 1.5.
+- Apply task scoping, artifact review, and approval policies that reduce over-delegation and security risk in shared repositories.
 
 ---
 
-## The Agent-First Revolution
+## Why This Module Matters
 
-### From Autocomplete to Autonomy
+Hypothetical scenario: two engineers on the same team both say they "use AI in the IDE." One accepts inline completions while typing; the other delegates a three-file refactor to an agent panel and reviews a batch of diffs at the end of the session. They are using the same form factor — an editor with AI — but granting very different authority to the tool, which means their risk profile, review burden, and recovery options diverge even though the user interface looks similar.
 
-Think of the evolution of AI coding tools like the evolution of transportation. Autocomplete was like a bicycle—you still do all the pedaling, but it makes you faster. Chat-based AI was like a motorcycle—more power, but you're still steering every turn. Agent-first IDEs are like having a chauffeur: you tell them where you want to go, and they handle the driving while you focus on what matters.
+That gap matters because IDE-integrated agents can change production code, run shell commands, open browsers, and create files you did not anticipate. The comfortable editing surface does not make those actions low-risk. Teams that treat every IDE assistant as "just smarter autocomplete" often discover the difference when an agent widens scope beyond the ticket, skips edge cases that tests never cover, or adds a credential file that never appeared in the diff they skimmed before merge.
 
-**The Evolution of AI Coding Tools:**
+This module teaches the durable concepts behind IDE-integrated agents: how autocomplete-first and agent-first modes differ, how harness design shapes safety, and how major products illustrate those concepts as peers rather than ranked winners. Product names, model lineups, and pricing change quarterly; the form-factor tradeoffs — editor as system of record, diff review, artifacts, permission gates — last longer. For the cross-tool Rosetta Stone on authority, evaluation worksheets, and vendor-claim testing, see [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/). For the contrasting CLI and headless form factor, see [Module 1.5: CLI AI Coding Agents](/ai-ml-engineering/ai-native-development/module-1.5-cli-ai-coding-agents/).
 
-```
-2021: GitHub Copilot     → "Smart autocomplete" (predict next line)
-2023: ChatGPT + Code     → "Ask questions, get snippets"
-2024: Cursor Composer    → "Edit multiple files with context"
-2025: Agent-First IDEs   → "Delegate entire tasks to AI agents"
-```
+---
 
-**The key shift**: You're no longer writing code with AI assistance—you're **managing AI agents** that write code for you.
+## The IDE-Integrated Form Factor
 
-> **Did You Know?** The term "vibe coding" is commonly used for describing intent in natural language and letting AI generate much of the implementation. Reported productivity gains vary widely, and many developers worry about losing familiarity with their codebase.
+An IDE-integrated AI coding tool keeps the agent inside the editor you already use. The editor remains the system of record: you open files, read diffs, run tests from the terminal panel, and commit through Git. The agent does not replace that surface; it operates within it, which is why IDE agents feel familiar to developers who already live in VS Code, JetBrains, or a forked editor while still expanding what the assistant is allowed to do on your behalf.
+
+What this form factor buys you is a tight loop between intent, action, and review. Inline L0 autocomplete offers ghost-text suggestions as you type with minimal context switching. In-context multi-file edits let the agent propose patches across several files while you review diff-by-diff before accepting anything into the branch. Artifacts and checkpoints — plans, checklists, screenshots, command logs — document what the agent did without forcing you to read every line on the first pass. Configurable autonomy through approval gates for terminal commands, browser actions, and file creation lets teams match tool authority to repository sensitivity instead of accepting vendor defaults.
+
+This is materially different from browser chat, which has no direct edit path into your tree, and from headless CLI agents, which prioritize composability and log streams over inline visual diffs. Module 1.1 maps the full tool landscape by authority — what each tool can read, edit, and execute. This module zooms in on one layer of that map: tools where the editor is home base and the human reviewer is expected to stay in the loop for most production work.
+
+**The workshop analogy:** a browser chat is like calling a consultant on the phone — useful advice, but you still carry every change back to the bench yourself. An IDE-integrated agent is like a skilled assistant standing beside you at the workbench: they can hand you parts, mark up your blueprint, and run the test jig while you watch. You still own the final assembly; the difference is how much of the loop happens in one place without switching applications.
+
+---
+
+## Landscape Snapshot (Volatile Details)
+
+Product facts below are a point-in-time snapshot. Verify pricing, models, and feature names on official documentation before adopting them in production or writing team policy around them.
+
+> **As of 2026-06** — the IDE agent landscape moves fast; confirm details before relying on them.
+
+| Topic | Snapshot |
+|-------|----------|
+| **Google Antigravity** | Google's agent-first platform: multi-agent manager surface, editor view, CLI, and SDK; Gemini-powered. Google announced sunsetting the Gemini CLI and Code Assist *individual* tier on **June 18, 2026**, folding individual-tier workflows into Antigravity; enterprise Code Assist is retained. |
+| **Cursor** | VS Code–forked IDE; inline completion, Composer-style multi-file agent, background agents; BYO API key and frontier model picker. |
+| **Windsurf** | VS Code–forked IDE; Cascade agent with Flows session memory; browser and terminal integration. |
+| **Cline** | Open-source VS Code extension; BYO cloud APIs and local models (for example via Ollama); human-in-the-loop approvals. |
+| **GitHub Copilot** | Editor extension and Copilot Chat; frontier model picker in supported configurations; no local-model path in the standard product — cloud-hosted models only. |
 
 ---
 
 ## What Makes an IDE "Agent-First"?
 
-### Traditional AI IDE (Autocomplete-First)
+### Autocomplete-First vs Agent-First
+
+Think of the evolution inside the editor as increasing delegation surface, not just smarter next-token prediction. Autocomplete-first tools keep the buffer primary: you write, the model suggests the next line or block, and you accept or reject each suggestion without handing over a multi-step goal. Agent-first tools elevate a task panel or manager surface so you describe outcomes in natural language, the harness plans and acts within permission boundaries, and you review artifacts and diffs before the work lands on main. The diagrams below contrast autocomplete-first (editor-primary) and agent-first (delegation co-primary) layouts.
+
+**Autocomplete-first (editor-primary):**
+
 ```
 ┌─────────────────────────────────────────┐
 │  Editor (primary)                       │
@@ -69,899 +79,378 @@ Think of the evolution of AI coding tools like the evolution of transportation. 
 │  │ Your code here...               │   │
 │  │ AI suggests: next line ████     │   │
 │  └─────────────────────────────────┘   │
-│                                         │
 │  [AI Chat Panel - secondary]            │
 └─────────────────────────────────────────┘
-
-You write → AI assists → You accept/reject
+You write → AI assists → You accept/reject each suggestion
 ```
 
-### Agent-First IDE
+**Agent-first (delegation co-primary):**
+
 ```
 ┌─────────────────────────────────────────┐
-│  Agent Manager (primary)                │
+│  Agent panel / manager (co-primary)     │
 │  ┌─────────────────────────────────┐   │
-│  │ Agent 1: "Fix auth bug" [████░░]│   │
-│  │ Agent 2: "Add tests"    [██████]│   │
-│  │ Agent 3: "Refactor DB"  [██░░░░]│   │
+│  │ Task: "Fix auth bug"     [████░░]│   │
+│  │ Task: "Add tests"        [██████]│   │
 │  └─────────────────────────────────┘   │
-│                                         │
-│  [Editor Panel - secondary]             │
+│  [Editor - diffs, review, manual edits] │
 └─────────────────────────────────────────┘
-
-You delegate → Agents execute → You review artifacts
+You delegate → Agent plans and acts → You review artifacts and diffs
 ```
+
+The shift is not merely that AI appeared in the IDE; autocomplete has been there for years. The shift is that the default interaction can become task delegation — natural-language goals, multi-step plans, tool use, and evidence artifacts — while the editor stays the place you approve or reject outcomes.
+
+### Autonomy Levels in the IDE (L0–L5)
+
+Module 1.1 describes tool classes by authority. Inside the IDE form factor, map common modes to an autonomy ladder. Vendors mix levels in one product; the labels are pedagogical, not rigid product tiers.
+
+| Level | Mode | Typical IDE behavior | Review burden |
+|-------|------|----------------------|---------------|
+| **L0** | Inline completion | Ghost text at cursor; single-line or block suggestions | Low — local accept/reject |
+| **L1** | Editor chat | Explain selection, draft snippets, no file writes | Low — nothing commits without you |
+| **L2** | Scoped multi-file edit | Agent proposes patches across named files; diff review | Medium — read each hunk |
+| **L3** | Tool-using agent | Terminal commands, test runs, browser steps with approval gates | Medium–high — commands plus diffs |
+| **L4** | Parallel / background agents | Multiple tasks or agents concurrently; async completion | High — track several artifact streams |
+| **L5** | Sustained headless autonomy | Long-running loops with minimal UI (often CLI — see Module 1.5) | Highest — needs strong harness plus CI |
+
+The IDE form factor is the natural home for L0 through L3 and increasingly L4 as background agents mature. L5 workflows — scripted pipelines, bastion-host repair, CI-integrated agents — usually fit the CLI form factor better because they prioritize composability and stdout evidence over inline diffs.
+
+> **Did You Know?** The term "vibe coding" describes stating intent in natural language and letting AI generate much of the implementation. Reported productivity effects vary widely by task type, and many teams note that review time rises when agents edit more files per turn.
+
+### Harness ⟂ Model
+
+A common mistake is conflating the IDE harness — permissions, UI, indexing, artifact format, billing — with the model behind it. They are independent axes that you evaluate separately before standardizing on a stack.
+
+| Product | Harness notes | Model flexibility |
+|---------|---------------|-------------------|
+| **Cursor** | Full IDE fork; Composer, agents, codebase index | BYO API key plus frontier model picker |
+| **GitHub Copilot** | Extension inside VS Code and other hosts | Frontier model picker; **no local models** |
+| **Cline** | VS Code extension; MCP tools; per-action approval | BYO cloud providers and local (Ollama, etc.) |
+| **Google Antigravity** | Manager surface plus editor plus CLI/SDK | Gemini-powered; lineup tied to Google stack |
+| **Windsurf** | Cascade agent; Flows memory | Vendor-managed models plus selectable hosted options |
+
+Choosing an IDE form factor is therefore two decisions: whether the editing and review loop fits your task, and whether the model and data path fit your security and cost constraints. A flexible harness with a weaker model may lose on hard reasoning; a strong model behind a harness that cannot run your tests may lose on verification even when the prose looks confident.
 
 ---
 
-## Google Antigravity
+## Peer Tour: Five IDE-Integrated Illustrations
 
-### Overview
+The sections below describe durable capabilities each product illustrates. Names and feature labels change; compare current documentation when evaluating. For the cross-tool view of authority and evaluation methodology, see [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/). Illustrative examples rotate which tool leads each concept; they are not endorsements.
 
-Think of Google Antigravity like a mission control center for code. While traditional IDEs give you a single pilot's seat, Antigravity lets you command a fleet of AI agents—each tackling a different part of your codebase simultaneously. It's the difference between being a solo pilot and being a squadron commander.
+### GitHub Copilot — Inline-First with Agent Chat
 
-Released November 18, 2025 alongside Gemini 3, Google Antigravity represents Google's bet on agent-first development.
+GitHub Copilot established the mainstream pattern of L0 inline completion inside widely used editors. Copilot Chat and agent-style features extend the same harness with conversational and multi-step edits while keeping the developer in VS Code, Visual Studio, JetBrains IDEs, or other supported hosts, which matters for enterprises that cannot mandate a forked IDE.
 
-| Aspect | Details |
-|--------|---------|
-| **Base** | VS Code fork (possibly Windsurf fork) |
-| **Primary Model** | Gemini 3 Pro |
-| **Other Models** | Multiple selectable models may be available, but the exact lineup changes over time. |
-| **Cost** | Free preview with generous rate limits |
-| **Platforms** | Windows, macOS, Linux |
+Copilot illustrates low-friction L0 entry where completions trigger from typing with context from the open file and nearby symbols. It also shows how chat can stay inside the editor for explanations and patch proposals without a separate browser tab. Enterprise governance surfaces — organizational policies, seat billing, data-handling options — are part of the harness story and are distinct from consumer chat products even when the vendor name matches.
 
-> **Did You Know?** In July 2025, Google hired Windsurf's founding team and licensed their technology for approximately $2.4 billion. Antigravity and Windsurf surface similar agent-first ideas, but without a published technical teardown you should not claim shared internal implementation details.
+In fit terms, Copilot suits teams that want IDE-native assistance with a mature extension ecosystem and are satisfied with cloud-hosted frontier models, while deep parallel-agent orchestration or open-source harness auditability may point you toward other peers from Module 1.1.
 
-### Key Features
+### Cursor — Diff-Centric Multi-File Agent
 
-#### 1. Multi-Agent Manager ("Mission Control")
+Cursor is a VS Code–forked IDE that popularized Composer-style multi-file editing: you attach files to context, describe a change, and review unified diffs before applying. Its durable lesson is that codebase indexing plus diff-first review can outperform raw autonomy on established repositories where consistency matters more than speed.
 
-The killer feature: run **5+ agents simultaneously** on different tasks.
+Cursor illustrates L2–L3 agent loops where you plan, patch, and iterate in a side panel with terminal integration and configurable auto-run policies. Background agents (L4) continue work asynchronously while you edit elsewhere, converging back to reviewable diffs rather than silent commits. Model flexibility through subscription plus BYO API keys lets teams separate harness choice from model choice when policy allows.
 
-```
-┌─────────────────────────────────────────────────┐
-│  Mission Control                                │
-├─────────────────────────────────────────────────┤
-│   Agent 1: "Fix login validation bug"         │
-│     Status: Analyzing codebase... (2 min)       │
-│     Files: auth.py, validators.py               │
-│                                                 │
-│   Agent 2: "Add unit tests for User model"    │
-│     Status: Writing tests... (5 min)            │
-│     Files: test_user.py                         │
-│                                                 │
-│   Agent 3: "Refactor database connections"    │
-│     Status: Planning... (1 min)                 │
-│     Files: db.py, models/*.py                   │
-│                                                 │
-│   Agent 4: [Available]                        │
-│   Agent 5: [Available]                        │
-└─────────────────────────────────────────────────┘
-```
+Cursor's inline-edit and diff-first model fits established codebases where pattern consistency and reviewability dominate, and it is a weaker fit when the primary need is a mission-control view of many concurrent autonomous agents because that pattern is what Antigravity's manager surface targets explicitly.
 
-**Workflow**:
-1. Describe task in natural language
-2. Agent creates a plan
-3. Agent executes (with your approval settings)
-4. Review artifacts (diffs, screenshots, recordings)
-5. Accept or request changes
+### Google Antigravity — Multi-Agent Manager Surface
 
-#### 2. Browser Integration
+Antigravity is Google's agent-first IDE with a prominent manager surface: multiple agents can run tasks in parallel while you monitor status, artifacts, and outcomes from one cockpit-style view rather than serial chat threads.
 
-Antigravity agents can control Chrome directly:
+Antigravity illustrates L4 parallel delegation where backend, frontend, tests, and documentation can progress concurrently with separate artifact streams. Rich artifacts — plans, checklists, diffs, screenshots, recordings — address the trust gap when agents touch many files. Browser integration lets agents drive Chrome for web testing or flow validation behind URL allowlists. Security controls include terminal execution policies, command allow/deny lists, and browser restrictions that teams should treat as part of the harness contract, not optional advanced settings.
 
-```
-You: "Scrape the pricing table from competitor.com and
-      create a comparison spreadsheet"
+**Illustrative workflow:** describe a task in natural language; the agent produces a plan whose depth depends on mode; the agent executes within permission settings; you review artifacts before accepting; you reject or request revision if evidence fails. Antigravity fits parallel independent workstreams in one session and workflows that benefit from browser-led verification, while it is a weaker fit when you require local-only models, minimal Google-stack coupling, or the lightest extension inside stock VS Code.
 
-Agent actions:
-1. Opens Chrome (via extension)
-2. Navigates to competitor.com
-3. Extracts pricing data
-4. Creates comparison.csv
-5. Generates summary report
-```
+### Windsurf — Cascade and Flows Session Memory
 
-**Use cases**:
-- Test your web app automatically
-- Research and extract information
-- Fill forms, click buttons, navigate flows
-- Screenshot and record interactions
+Windsurf ships a VS Code–forked IDE built around Cascade, an agentic engine with Flows — persistent session memory across turns, terminal output, and corrections. Its durable lesson is that multi-step debugging fails when each turn forgets what you already tried.
 
-#### 3. Artifacts System
+Cascade separates context indexing, planning, and execution across files, terminal, and browser. Flows contrasts with stateless chat: when you say "that fix failed," a Flows-aware agent can reference the prior patch, terminal error, and rejected approach instead of asking you to restate the entire debugging narrative. Inline commands bridge L0 and L2 for quick edits without leaving the buffer.
 
-Every agent task produces rich documentation:
+Windsurf fits multi-step debugging and iterative refactors where session continuity reduces repeated explanation, and Cascade's memory model fits long single-thread sessions more than a manager UI optimized for unrelated parallel agents, so compare against Antigravity when parallelization is the main goal.
 
-```
-Task: "Add user authentication"
-────────────────────────────────
-Artifacts generated:
-├──  implementation_plan.md
-├──  task_checklist.md
-├──  code_diff.patch
-├──  screenshots/
-│   ├── login_page.png
-│   └── dashboard.png
-├──  browser_recording.mp4
-└──  verification_report.md
-```
+### Cline — Open Extension, BYO and Local Models
 
-This addresses the **trust gap**—you can verify what the agent did without reading every line of code.
+Cline runs as a VS Code extension, illustrating how to add agent capabilities inside an editor your organization already standardized on without migrating to a new application shell.
 
-#### 4. Planning Modes
+Cline illustrates harness portability on stock VS Code, model agnosticism across Anthropic, OpenAI, OpenRouter, and Ollama-local endpoints, human-in-the-loop approval for file edits and shell commands by default, and MCP integration for custom tools such as internal APIs or ticket systems. The approval UI pattern — view diff, approve, reject, or edit before run — is the harness expressing conservative defaults that teams can relax only after they have evidence.
 
-| Mode | Use Case | Planning Depth |
-|------|----------|----------------|
-| **Planning** | Complex tasks, research | Deep analysis, extensive output |
-| **Fast** | Simple, localized changes | Minimal planning, quick execution |
+Cline fits organizations that mandate stock VS Code, need auditable open-source harness code, or want local models for air-gapped or cost-predictable work, with the tradeoff that per-action approval is safer but slower than more autonomous defaults on greenfield tasks.
 
-#### 5. Security Controls
+### Rotating Illustrations: Same Task, Different Peers
 
-```yaml
-# Example Antigravity security configuration
-terminal:
-  execution_policy: "review"  # off, review, auto, turbo
-  allow_list:
-    - "npm *"
-    - "python *"
-    - "git *"
-  deny_list:
-    - "rm -rf *"
-    - "sudo *"
-
-browser:
-  url_allowlist:
-    - "localhost:*"
-    - "*.mycompany.com"
-  # Prevents prompt injection from malicious sites
-```
-
-### Getting Started with Antigravity
-
-```bash
-# 1. Download from https://antigravity.google.com
-# 2. Install and launch
-# 3. Sign in with Google account
-# 4. Install Chrome extension for browser control
-```
-
-**First task to try**:
-```
-Create a simple Flask web app with:
-- A homepage that says "Hello World"
-- A /about page with placeholder text
-- Basic CSS styling
-- Run it locally and show me the result
-```
+To internalize peer neutrality, take one bounded task — add a `/health` route with a JSON body and a single integration test — and imagine how each peer would likely frame the work. Copilot might accelerate L0 typing inside the handler you write yourself. Cursor might attach `routes.ts` and `tests/health.test.ts` to a Composer session and return a diff for review. Antigravity might schedule the route, test, and a browser screenshot of the response as separate streams on a manager surface. Windsurf might keep your failed first attempt in Flows memory when the test assertion expects a different content-type. Cline might ask you to approve each file write and `curl` command explicitly. None of these stories makes a universal winner; they show how harness shape changes the loop even when the model family is similar.
 
 ---
 
-## Windsurf
+## Fit-Based Comparison
 
-### Overview
+Use this matrix to match capabilities to constraints, not to crown a winner. Empty cells mean "not a primary design center today," not "missing forever."
 
-Windsurf (by Codeium) pioneered the "Cascade" agentic system that Google later licensed.
+| Capability | Copilot | Cursor | Antigravity | Windsurf | Cline |
+|------------|---------|--------|-------------|----------|-------|
+| **L0 inline completion** | Primary | Yes | Yes | Yes | Via editor |
+| **L2 multi-file diffs** | Chat/agent features | Primary | Yes | Yes | Yes |
+| **L4 parallel agents** | Limited | Background agents | Primary | Secondary | No |
+| **Session memory (Flows-style)** | Partial | Partial | Artifacts | Primary | Partial |
+| **Browser automation** | Varies | Varies | Primary | Yes | Yes |
+| **Open-source harness** | No | No | No | No | Yes |
+| **Local models** | No | Via config | No | No | Yes |
+| **Frontier model picker** | Yes | Yes | Google stack | Hosted options | BYO |
+| **Rich artifacts** | Varies | Diffs plus logs | Primary | Varies | Partial |
 
-| Aspect | Details |
-|--------|---------|
-| **Base** | VS Code fork |
-| **Primary Model** | Proprietary + Claude, gpt-5 |
-| **Unique Feature** | "Flows" - persistent agent memory |
-| **Cost** | Free tier + Pro ($15/month) |
-
-> **Did You Know?** Windsurf was the first IDE to implement "Flows"—a system where the AI maintains memory of your entire development session, including terminal outputs, file changes, and your corrections. This context persistence makes multi-step tasks much more reliable.
-
-### Cascade System
-
-Cascade is Windsurf's agentic engine:
-
-```
-┌─────────────────────────────────────────────┐
-│                 CASCADE                      │
-├─────────────────────────────────────────────┤
-│  CONTEXT LAYER                              │
-│  ├── Codebase understanding                 │
-│  ├── Session history (Flows)                │
-│  ├── Terminal output memory                 │
-│  └── User corrections/preferences           │
-├─────────────────────────────────────────────┤
-│  PLANNING LAYER                             │
-│  ├── Task decomposition                     │
-│  ├── Dependency analysis                    │
-│  └── Risk assessment                        │
-├─────────────────────────────────────────────┤
-│  EXECUTION LAYER                            │
-│  ├── File operations                        │
-│  ├── Terminal commands                      │
-│  ├── Browser actions                        │
-│  └── Verification steps                     │
-└─────────────────────────────────────────────┘
-```
-
-### Key Differentiators
-
-1. **Flows Memory**: Remembers your entire session
-2. **Inline Commands**: Cmd+I for quick edits without leaving editor
-3. **Supercomplete**: More aggressive autocomplete than Copilot
-4. **Free Tier**: Generous free usage
-
-### The Power of Flows: A Deep Dive
-
-Flows represent Windsurf's most underappreciated innovation. Traditional AI assistants suffer from what developers call "goldfish memory"—each interaction starts fresh, with no recollection of what you discussed moments ago. Flows changes this fundamentally.
-
-Imagine you're debugging a complex issue. With a traditional AI assistant, you might have this frustrating experience:
-
-```
-You: "Why is my authentication failing?"
-AI: [Analyzes code, suggests fix]
-You: [Apply fix, test]
-You: "That didn't work, it's still failing"
-AI: [Has no idea what you just tried, asks you to explain everything again]
-```
-
-With Flows, the experience transforms:
-
-```
-You: "Why is my authentication failing?"
-Cascade: [Analyzes code, suggests fix]
-You: [Apply fix, test]
-You: "That didn't work"
-Cascade: "I see the error in your terminal—the fix I suggested didn't handle
-         the edge case where the token is expired but still valid. Let me
-         try a different approach that checks expiration before validation..."
-```
-
-The key insight: Cascade observes your terminal output, file changes, and corrections. It learns your preferences mid-session. If you reject a suggestion and write something different, Cascade notices and adjusts future suggestions accordingly.
-
-> **Did You Know?** Windsurf documents persistent memories and rules that help Cascade carry context across conversations, but it does not publicly document the exact internal data structures used to do that.
-
-### Cascade vs. Traditional Agents: Architectural Differences
-
-Most AI coding assistants use a simple request-response model: you ask, they answer. Cascade uses a fundamentally different architecture—a persistent reasoning engine that maintains state across your entire development session.
-
-The Cascade architecture includes three key components:
-
-**The Context Engine**: Continuously indexes your project, watching for file changes, terminal outputs, and your cursor position. When you ask a question, the context engine has already pre-computed what might be relevant.
-
-**The Session Memory**: Unlike chat history (which is just text), session memory includes structured representations of what you've tried, what worked, what failed, and why. This allows Cascade to avoid suggesting things you've already rejected.
-
-**The Correction Learning System**: When you edit Cascade's suggestions before accepting them, or reject them entirely and write something different, Cascade updates its understanding of your preferences. After a few interactions, it generates code more aligned with your style.
-
-This architecture explains why Windsurf users report that the tool "gets smarter" as they use it within a session—it literally does.
+Products in this space borrow from one another: IDE forks add background agents, extensions add memory, manager UIs add stricter approval modes. End every comparison with a fit statement — "Tool X fits constraint Y; Tool Z fits constraint W" — and prefer the peer whose data path and harness defaults match governance rules when two tools fit the same task.
 
 ---
 
-## Cline (Open Source)
+## IDE Form Factor vs CLI Form Factor
 
-### Overview
+Prefer IDE-integrated workflows when you need visual diff review on every change, the team already lives in VS Code or a forked IDE, tasks sit at L0–L4 with frequent human steering, UI screenshots and inline breakpoints matter for verification, or you are onboarding developers who learn by reading patches in context. Prefer CLI and headless workflows — detailed in [Module 1.5](/ai-ml-engineering/ai-native-development/module-1.5-cli-ai-coding-agents/) — when you work on remote servers, containers, or CI workers; when you want Unix-style composability through pipes, scripts, and logs; when sessions are long, non-interactive, or automation-driven; when the autonomy target is L5 with evidence in stdout and exit codes; or when IDE installation is impractical or policy-blocked.
 
-Think of Cline like choosing to cook at home versus eating at a restaurant. The restaurant (proprietary IDEs) handles everything for you—convenient but you're locked into their menu and prices. Cooking at home (Cline) gives you complete control over ingredients (models), recipes (prompts), and costs (API usage). More work to set up, but infinitely more flexible.
-
-Cline is the **open-source alternative** to proprietary agent IDEs. It runs as a VS Code extension, giving you agent capabilities without switching editors.
-
-| Aspect | Details |
-|--------|---------|
-| **Type** | VS Code Extension |
-| **Models** | [Any (OpenRouter, Anthropic, OpenAI, local)](https://github.com/cline/cline) |
-| **Cost** | Free (you pay for API usage) |
-| **Users** | a large and active developer community |
-| **License** | [Apache 2.0](https://github.com/cline/cline) |
-
-> **Did You Know?** Cline started as "Claude Dev" - a side project to bring Claude's capabilities into VS Code. It grew so popular that it rebranded to Cline and now supports any LLM provider. Its open-source nature means no vendor lock-in.
-
-### Why This Module Matters
-
-```
-Proprietary IDEs:           Cline:
-─────────────────           ──────
- Vendor lock-in            Use any model
- Subscription fees         Pay only for API usage
- Closed source             Fully auditable
- Limited customization     Extensible via MCP
- New app to learn          Stays in VS Code
-```
-
-### Key Features
-
-#### 1. Model Agnostic
-
-```javascript
-// Use any provider
-{
-  "cline.provider": "anthropic",  // or openai, openrouter, ollama
-  "cline.model": "claude-sonnet-4-20250514",
-  "cline.apiKey": "sk-ant-..."
-}
-
-// Or use local models
-{
-  "cline.provider": "ollama",
-  "cline.model": "deepseek-coder:33b"
-}
-```
-
-#### 2. Human-in-the-Loop
-
-Unlike fully autonomous agents, Cline asks permission for each action:
-
-```
-┌─────────────────────────────────────────────┐
-│  Cline wants to:                            │
-│                                             │
-│   Edit file: src/auth/login.py           │
-│     [View Diff]                             │
-│                                             │
-│   Run command: pip install bcrypt         │
-│                                             │
-│  [Approve] [Approve All] [Reject] [Edit]    │
-└─────────────────────────────────────────────┘
-```
-
-This is **safer** for production codebases but **slower** for greenfield projects.
-
-#### 3. MCP Integration
-
-Cline can create and use custom tools via Model Context Protocol:
-
-```
-You: "Add a tool that checks our company's internal API"
-
-Cline:
-1. Creates MCP server in ~/.cline/mcp-servers/
-2. Implements the tool logic
-3. Registers it with the extension
-4. Now available in future sessions
-```
-
-#### 4. Browser Capabilities
-
-Like Antigravity, Cline can control browsers:
-
-```
-You: "Test the login flow on localhost:3000"
-
-Cline:
-1. Opens browser to localhost:3000
-2. Fills in test credentials
-3. Clicks login button
-4. Verifies redirect to dashboard
-5. Reports success/failure with screenshots
-```
-
-### Installation
-
-```bash
-# Install from VS Code marketplace
-# Search for "Cline" or install via CLI:
-code --install-extension saoudrizwan.claude-dev
-
-# Configure your API key in settings
-# Open Cline panel: Cmd+Shift+P → "Cline: Open Panel"
-```
+The form factors are complements. Many engineers use Copilot or Cursor for daily edits and a terminal agent for SSH sessions or batch refactors. The mistake is assuming one surface covers every authority level Module 1.1 describes.
 
 ---
 
-## Cursor
+## Configuring Permission Gates in IDE Agents
 
-### Overview
+IDE harnesses expose permission gates that are easy to overlook because the editor still feels like a familiar typing environment. In practice you are approving a bundle of capabilities: read access to workspace files, write access to paths inside or outside the repo, shell execution with or without prompts, network access for package installs or API calls, and browser control for localhost or arbitrary URLs. Mature teams document which gate settings are allowed on shared repositories versus disposable branches, because the same model behind two different policies produces radically different risk.
 
-Cursor pioneered many concepts now common in agent-first IDEs. It remains popular for its polished UX and "Composer" feature.
+Start with terminal execution policy. Review mode means the agent proposes commands and waits for human approval — slower but appropriate for unfamiliar codebases, production-adjacent services, and onboarding exercises where the learner must see each command. More automatic modes can be acceptable on throwaway clones when the worst case is deleting a local folder, but they are a poor default when the workspace contains deployment keys, customer data fixtures, or monorepo siblings the agent was never asked to touch. Pair execution policy with explicit allow and deny lists: allow routine test and build commands your stack uses daily, deny destructive patterns and privilege escalation, and treat package-manager installs as a separate approval class because dependency changes outlive the chat session.
 
-| Aspect | Details |
-|--------|---------|
-| **Base** | VS Code fork |
-| **Models** | gpt-5, Claude |
-| **Unique Feature** | Composer for multi-file edits |
-| **Cost** | Free tier + Pro ($20/month) |
+Browser gates deserve the same discipline. Agents that can open arbitrary URLs are vulnerable to prompt-injection via malicious pages and to accidental exfiltration if the page content becomes model context. Restricting automation to `localhost` and known staging hosts is a common pattern for login-flow exercises and UI smoke tests. File-creation gates matter because agents solve problems creatively: a missing credential for a local test can become a new `.env` file that never appears in the diff panel you focused on. Review `git status` after every agent session and treat new paths with the same suspicion as modified hunks.
 
-### Composer Mode
+Indexing and context scope are permission decisions too. A harness that indexes the entire monorepo may retrieve irrelevant or sensitive modules when you asked for a one-file fix. Naming directories and files in the task contract — the same discipline Module 1.1 recommends — reduces retrieval noise and prevents the agent from "helpfully" refactoring cousins of the module you cared about. If your harness supports rules files or project instructions, keep them under version control so the team shares boundaries instead of each developer improvising prompts.
 
-Cursor's Composer is a hybrid between chat and agent:
-
-```
-┌─────────────────────────────────────────────┐
-│  Composer                                   │
-├─────────────────────────────────────────────┤
-│  Files in context:                          │
-│  ├── src/api/routes.py                      │
-│  ├── src/models/user.py                     │
-│  └── tests/test_api.py                      │
-│                                             │
-│  "Add a /users/{id}/profile endpoint that   │
-│   returns user profile data with caching"   │
-│                                             │
-│  [Generate] [Add Files] [Settings]          │
-└─────────────────────────────────────────────┘
-```
-
-**Strengths**:
-- Excellent codebase understanding
-- Fast iteration cycles
-- Good for incremental changes
-
-**Limitations**:
-- More review-oriented and diff-centric than a mission-control-style IDE, though Cursor also offers agent workflows and parallel subagents.
-- The product emphasis here is codebase-aware editing and agent workflows rather than browser-led validation.
-- Less autonomous than Antigravity/Windsurf
-
-### Cursor's Philosophy: The "Copilot That Understands Your Codebase"
-
-Cursor took a different approach than fully autonomous agents. Their bet: most developers don't want to hand over control entirely. They want AI that deeply understands their codebase and can make intelligent suggestions—but with the developer still driving.
-
-This philosophy manifests in several design decisions:
-
-**Context is King**: Cursor invests heavily in codebase understanding. Its RAG system indexes your entire project, learns your patterns, and retrieves relevant context before generating any code. When you ask Cursor to add a feature, it examines how similar features were implemented elsewhere in your codebase and mimics that style.
-
-**Diffs Over Wholesale Generation**: Instead of generating complete files, Cursor shows diffs—precise changes to existing code. This makes review faster and keeps you in control of the final state. You see exactly what's changing and why.
-
-**Conversation as Iteration**: Cursor's chat interface isn't a separate tool; it's the primary way you develop. You describe what you want, see a proposal, refine it through conversation, and apply the final result. This iterative loop is faster than the "delegate and wait" model of fully autonomous agents.
-
-> **Did You Know?** Cursor documents codebase indexing and context-aware generation, but it does not publicly document the exact internal representation used to adapt to a project's style.
-
-### When Cursor Wins Over Autonomous Agents
-
-Cursor's approach has advantages in specific scenarios:
-
-**Large, established codebases**: When consistency matters more than speed, Cursor's pattern-matching shines. Autonomous agents often generate code that's correct but stylistically inconsistent.
-
-**Security-sensitive work**: When you need to review every change carefully, Cursor's diff-based approach makes review tractable. Fully autonomous agents can make dozens of changes across multiple files, making review overwhelming.
-
-**Learning new codebases**: If you're joining an existing project, using Cursor helps you learn the patterns while you develop. Delegating to autonomous agents teaches you nothing about the codebase.
-
-**Incremental improvements**: For small features and bug fixes, Cursor's fast iteration loop beats the overhead of setting up agent tasks. Not everything needs a mission control center.
+Finally, separate **who pays** from **what runs**. A BYO API key in Cursor or Cline routes billing and data-policy questions to your cloud account; a Copilot seat routes them to GitHub's enterprise terms; Antigravity ties you to Google's stack and announced transition timelines. None of that is a quality judgment — it is a fit question. The harness you choose should make those boundaries visible before you grant L3 or L4 authority on a shared branch.
 
 ---
 
-## Comparison Matrix
+## Team Governance Without Tool Sprawl
 
-| Feature | Antigravity | Windsurf | Cline | Cursor |
-|---------|-------------|----------|-------|--------|
-| **Multi-agent** |  5+ agents |  |  |  |
-| **Browser control** |  |  |  |  |
-| **Open source** |  |  |  |  |
-| **Use any model** | Partial | Partial |  | Partial |
-| **Session memory** |  |  Flows | Partial |  |
-| **Free tier** |  Generous |  |  (API costs) |  Limited |
-| **Enterprise** | Coming |  |  |  |
-| **Artifacts/proofs** |  Rich |  | Partial |  |
-| **Learning curve** | Medium | Medium | Low | Low |
+Teams adopt IDE agents faster than they adopt shared rules, which creates invisible automation: each developer picks a fork or extension, uses a personal API key, and merges agent-generated patches that reviewers cannot distinguish from hand-written code. Governance does not require banning agents; it requires making their use legible in code review and incident response.
 
-### The Convergence Trend
+A lightweight policy can fit on one page. Name approved harness classes for each repository tier: autocomplete-only on regulated services, IDE agents with review-mode terminals on product repos, parallel agents only on feature branches or prototypes. Require a task contract in the ticket or PR description — scope files, forbidden changes, success command — so reviewers can tell whether the agent stayed inside bounds. Store evaluation notes when pilots finish, using the three-pass read-only, narrow-edit, and recovery-test sequence from Module 1.1.
 
-An interesting pattern emerges when comparing these tools over time: they're converging. Cursor is adding more autonomous capabilities. Windsurf is improving its codebase understanding. Antigravity is refining its human-in-the-loop controls. Cline is adding session memory features.
+Reviewers should ask agent-specific questions during pull request review: Does this patch match the stated contract? Are tests asserting real behavior or encoding the agent's guess? Did any new files appear? Does the transcript or artifact explain a design choice that looks unusual? Teaching reviews — where a senior engineer walks through an agent-generated change with the author — reduce understanding debt without pretending agents are forbidden.
 
-This convergence suggests that the "agent-first vs. human-first" debate may be a false dichotomy. The winning approach combines both: deep codebase understanding (like Cursor), session memory (like Windsurf), autonomous execution when appropriate (like Antigravity), and user control when needed (like Cline).
-
-The tools that will dominate in 2026 and beyond will likely offer a spectrum of autonomy—from simple autocomplete to fully autonomous agents—and let developers choose the right level for each task. The question isn't "which approach is better" but "which approach is better for this specific task."
-
-> **Did You Know?** Many agent IDEs expose settings that let developers choose how much autonomy to give the assistant, suggesting a broader shift toward adjustable human oversight.
+Cost governance belongs in the same conversation. IDE subscriptions, API metered usage, and parallel background agents can spike when developers delegate large refactors without scoping. Track spend by workflow type, not by moral panic: a team that spends credits fixing tests with evidence may be healthier than a team that saves credits but merges unreviewed megadiffs. Rotate a boring benchmark task quarterly and re-run it after major harness upgrades; model and permission defaults change behavior even when the product name stays the same.
 
 ---
 
-## When to Use Which
+## Artifacts, Checkpoints, and the Trust Gap
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  DECISION TREE: Choosing Your Agent IDE                 │
-└─────────────────────────────────────────────────────────┘
+When agents edit one file, diff review scales. When agents edit twenty files, run commands, and browse localhost, diff-only review breaks down. IDE harnesses therefore export artifacts: implementation plans, task checklists, patch summaries, terminal transcripts, screenshots, and verification notes. Treat these as first-class review inputs alongside `git diff`.
 
-Need multiple parallel agents?
-├── YES → Google Antigravity
-└── NO ↓
-
-Want to stay in VS Code?
-├── YES → Cline (open source, any model)
-└── NO ↓
-
-Need browser automation built-in?
-├── YES → Windsurf or Antigravity
-└── NO ↓
-
-Prefer polished UX over raw power?
-├── YES → Cursor
-└── NO → Windsurf
-
-Budget constrained?
-├── YES → Cline (pay per API call)
-└── NO → Antigravity or Windsurf Pro
-```
+A practical artifact review order: read the plan and confirm scope matches your ticket; scan the file list for paths you did not expect; read the diff or patch summary for risky areas such as auth, payments, and schema migrations; run the verification commands the agent recorded or your own targeted tests; run `git status` for new files the diff view might not highlight. Skipping artifacts is how credential files and test fixtures slip into commits while the developer only reviewed the "main" code hunks.
 
 ---
 
-## Hands-On Exercises
+## Worked Example: Fit-Based IDE Choice
 
-The best way to understand agent-first IDEs is to use them for a real task. These exercises take you through progressively more complex scenarios—starting with parallel agents, moving to local models, and finishing with browser automation.
+Hypothetical scenario: you must add a profile endpoint to an existing TypeScript API with strict style conventions, no new dependencies, and a mandatory integration test. Parallel agents are unnecessary; reviewability and pattern matching matter most.
 
-### Exercise 1: Antigravity Multi-Agent
-
-Think of this exercise like being a project manager who can clone themselves. Instead of sequentially asking one developer to do three tasks, you're assigning three developers to work simultaneously.
-
-```
-Task: Use Antigravity to build a simple task manager app
-
-1. Launch 3 agents simultaneously:
-   - Agent 1: "Create Flask backend with SQLite"
-   - Agent 2: "Create React frontend with Tailwind"
-   - Agent 3: "Write integration tests"
-
-2. Observe how they work in parallel
-3. Review the artifacts each produces
-4. Merge their work into a running application
-
-Success: App runs locally with all features working
-```
-
-### Exercise 2: Cline with Local Models
-
-```
-Task: Set up Cline with a local model for offline development
-
-1. Install Ollama: brew install ollama
-2. Pull a coding model: ollama pull deepseek-coder:6.7b
-3. Configure Cline to use Ollama
-4. Test with a simple task: "Add input validation to this form"
-
-Success: Cline works completely offline
-```
-
-### Exercise 3: Browser Automation Comparison
-
-```
-Task: Compare browser automation across tools
-
-1. Create a simple login flow on localhost
-2. Test it with:
-   - Antigravity's browser control
-   - Cline's browser capabilities
-   - Windsurf's browser integration
-
-3. Document:
-   - Setup complexity
-   - Reliability of interactions
-   - Quality of screenshots/recordings
-
-Success: Document pros/cons of each approach
-```
-
----
-
-## Common Pitfalls
-
-### 1. Over-Delegation
-
-```
- Bad: "Build me a full e-commerce platform"
-   (Too vague, agent will make wrong assumptions)
-
- Good: "Create a product listing page with:
-   - Grid of 12 products from /api/products
-   - Each card shows: image, title, price
-   - Click opens product detail modal
-   - Use our existing Button and Card components"
-```
-
-### 2. Ignoring Artifacts
-
-```
- Bad: Accept agent's changes without reviewing artifacts
-
- Good: Always check:
-   - implementation_plan.md (did it understand correctly?)
-   - code_diff.patch (are changes reasonable?)
-   - test_results.md (did tests pass?)
-```
-
-### 3. Security Complacency
-
-```
- Bad: Set terminal policy to "turbo" on production codebase
-
- Good:
-   - Use "review" mode for unfamiliar codebases
-   - Configure allow/deny lists carefully
-   - Never give browser access to sensitive URLs
-```
-
----
-
-## Did You Know? The Philosophy Debate
-
-The rise of agent-first IDEs has sparked philosophical debates in the developer community:
-
-**Pro-Agent View**:
-> "Why should I spend 4 hours implementing something an agent can do in 10 minutes? My job is to architect solutions, not type boilerplate."
-
-**Skeptical View**:
-> "If you can't write the code yourself, how do you know the agent wrote it correctly? We're creating a generation of developers who can't debug their own systems."
-
-**Pragmatic View**:
-> "Use agents for boilerplate and exploration. Write critical business logic yourself. The skill is knowing which is which."
-
-The debate extends to hiring and education. Some companies now explicitly ask candidates whether they use AI coding tools—not to disqualify them, but to understand how they use them. The question "How do you decide when to delegate to an AI agent?" has become a legitimate interview topic.
-
-Educational institutions are grappling with similar questions. Educational institutions are still experimenting with where AI tools belong in programming curricula, especially in the tension between faster short-term progress and deeper debugging skill development.
-
-The emerging consensus: AI agents are tools that amplify existing skills. A developer who understands algorithms deeply can use agents to implement them faster. A developer who doesn't understand algorithms will struggle to verify agent output or debug when things go wrong. The fundamentals haven't changed—but the meta-skill of "knowing when to use which tool" has become essential.
-
----
-
-## Deliverables
-
-### Primary Deliverable: IDE Comparison Benchmark
-
-Build a toolkit that:
-1. Runs the same coding task across multiple IDEs
-2. Measures: time to completion, code quality, test coverage
-3. Generates comparison report
-4. Helps teams choose the right tool
-
-**Files**: `examples/module_01.4/deliverable_ide_benchmark.py`
-
-### Success Criteria
-
-- [ ] Successfully used Google Antigravity with multiple agents
-- [ ] Configured Cline with at least 2 different model providers
-- [ ] Completed browser automation exercise in at least one IDE
-- [ ] Built the IDE Comparison Benchmark deliverable
-- [ ] Can articulate when to use each IDE
+**Contract:** edit only `src/routes/users.ts`, `src/services/profile.ts`, and `tests/profile.test.ts`; preserve error response shapes; success is `npm test -- profile.test.ts`. **Copilot** fits L0–L2 assistance if you drive the edits. **Cursor** fits L2–L3 if you want indexed context and diff review in one fork. **Antigravity** is heavier than needed unless you also want browser screenshots of a local demo. **Cline** fits if policy requires stock VS Code with per-command approval. **Windsurf** fits if you expect several iterative test failures and want session memory across attempts. End with a fit statement, not a universal winner.
 
 ---
 
 ## The History of AI-Powered Development Environments
 
-Understanding how we arrived at agent-first IDEs helps you appreciate what makes them revolutionary—and what lessons from the past inform their design.
+Early smart environments were compilers and analyzers: syntax highlighting, symbol navigation, and refactor tools on parsed ASTs rather than neural networks. Microsoft's IntelliSense (1996) established the expectation that editors should predict what you might type next from structure. Research on the naturalness of code ([Hindle et al., 2012](https://cacm.acm.org/research/on-the-naturalness-of-software/)) motivated statistical and neural completion through the 2010s.
 
-### The Pre-AI Era: Intelligence in Compilers (1960s-2000s)
+[GitHub Copilot](https://github.com/features/copilot) (2021) brought neural completion to mainstream editors at scale but remained reactive — suggestions followed your cursor without planning loops or tool use. Integrations such as Cursor and Copilot Chat (2023–2024) moved L1 conversation beside the buffer, but shallow session memory and limited execution evidence remained bottlenecks. Current IDE agents add planning, tool use, memory, multi-file edits, and artifacts — shifting from "predict the next line" to "execute a bounded engineering task and show evidence," still reviewed in the editor.
 
-The earliest "intelligent" development environments were compilers themselves. In 1957, FORTRAN's compiler was considered revolutionary because it could optimize code automatically. Developers didn't have to hand-write assembly—the compiler was "smart enough" to generate efficient machine code.
-
-By the 1990s, IDEs like Visual Studio and Eclipse added features that felt magical at the time: syntax highlighting, autocomplete for method names, and refactoring tools that could rename a variable across thousands of files without breaking anything. These weren't AI—they were clever parsing and static analysis—but they established the expectation that development tools should be intelligent.
-
-> **Did You Know?** Microsoft's IntelliSense, introduced in 1996 with Visual Basic 5.0, was based on parsing code to understand types and offer contextual suggestions. The core technology—analyzing code structure to predict what you might type next—laid the conceptual foundation for neural code completion 25 years later.
-
-### The Statistical Era: From N-grams to Neural Networks (2010-2020)
-
-In 2012, researchers at Microsoft published a paper called "Natural Language Models for Predicting Programming Language." They trained statistical models on code repositories and found that [source code was surprisingly predictable—more predictable than English text, in fact](https://cacm.acm.org/research/on-the-naturalness-of-software/). This insight launched a decade of research into code completion.
-
-Early systems used n-gram models (predicting the next token based on the previous n tokens). Then came neural networks: first RNNs, then LSTMs, then transformers. Each generation could capture longer-range dependencies and generate more coherent code suggestions.
-
-IntelliCode (2018) brought neural code completion to Visual Studio. Kite (2016-2022) offered standalone completions for Python. These tools were genuinely useful but limited—they could complete a line or two, not understand your intent.
-
-### The Copilot Revolution (2021-2023)
-
-GitHub Copilot, launched in June 2021, changed everything. Trained on billions of lines of public code and powered by OpenAI's Codex model, Copilot could generate entire functions from comments. The demos were stunning: write a comment describing what you want, and the code appears.
-
-But Copilot was still fundamentally autocomplete. It responded to what you had already written. It couldn't ask clarifying questions, couldn't execute code to verify it worked, couldn't look up documentation. It was a very smart typewriter, not a collaborator.
-
-> **Did You Know?** Very early on, GitHub reported that AI-assisted coding was already contributing a substantial share of newly written code in some environments. Critics warned this would create "cargo cult coding"—developers accepting suggestions without understanding them. Supporters argued it freed developers to think at higher levels of abstraction.
-
-### The Chat Era: Collaboration with Context (2023-2024)
-
-ChatGPT's release in November 2022 introduced a new interaction pattern: conversation. Instead of predicting your next line, you could describe what you wanted in natural language and iterate with follow-up questions.
-
-Cursor (2023) integrated this chat-based interaction directly into the IDE. You could select code, ask questions about it, request changes, and see diffs applied in real-time. The chat panel wasn't separate from coding—it was woven into the coding workflow.
-
-But chat had limitations. Each interaction was stateless (the model didn't remember previous conversations). You had to provide context manually. And the model couldn't take actions beyond generating text—it couldn't run tests, execute code, or verify its suggestions worked.
-
-### The Agent Era: Autonomous Execution (2025-Present)
-
-Agent-first IDEs represent the next leap: AI that can reason, plan, and act. The key innovations:
-
-1. **Planning**: Before writing code, the agent creates a plan and shows it to you
-2. **Tool use**: Agents can run commands, browse files, execute tests
-3. **Memory**: Sessions persist across interactions
-4. **Multi-agent**: Multiple agents work on different tasks simultaneously
-5. **Verification**: Agents check their own work by running tests and examining outputs
-
-The agent doesn't just generate code—it develops software. It has access to the same tools you do: terminal, browser, file system. The shift is from "AI that writes code" to "AI that develops software."
+The history lesson for practitioners is conservative: every wave reused the previous editor shell while changing authority. IntelliSense did not replace typing; it assisted it. Copilot did not replace IntelliSense; it added probabilistic generation. Agent panels do not replace diffs; they add delegation with artifacts. Teams that align review habits with the current authority level adopt new tools without surprise incidents, while teams that stay mentally at L0 while operating at L3 accumulate understanding debt and security debt in equal measure.
 
 ---
 
-## Production War Stories: Agent IDEs in the Real World
+## Connecting to Module 1.1 and Module 1.5
 
-### The Junior Developer and the 100x Project
+Module 1.1 gives you the Rosetta Stone for authority across autocomplete, chat, IDE agents, terminal agents, and connected tools. This module is not a duplicate of that map — it is a magnifying glass on the IDE column. When you evaluate Copilot versus Cursor versus Antigravity, you are still answering Module 1.1 questions: what can it read, what can it write, what can it execute, what evidence does it return, and who pays for the data path. The IDE form factor simply makes those questions feel more comfortable because the violations show up as diffs in a familiar buffer.
 
-Less-experienced developers can sometimes ship much faster with agentic tools, but that speed can hide gaps in understanding if they are not forced to explain and debug what was built.
-
-His tech lead was initially impressed. Then concerned. "Do you understand how the auth flow works?" Marcus hesitated. He had delegated the implementation to Cascade and reviewed the code, but hadn't written it himself.
-
-The wake-up call came two weeks later when a subtle bug appeared in the session management. Marcus spent three days trying to fix it—longer than it would have taken to write the original code manually. The agent had written correct but complex code that Marcus couldn't debug because he hadn't internalized the patterns.
-
-**The lesson**: Agent-augmented productivity is real, but it creates a new risk—the "understanding debt." You can ship faster than you can learn. Teams now implement "teaching reviews" where senior developers walk through agent-generated code to ensure juniors understand what was built.
-
-> **Did You Know?** Surveys consistently show a tradeoff: many developers report faster task completion with AI coding tools, while a substantial minority say debugging unfamiliar AI-written code is difficult. The correlation was strongest among developers with less than 2 years of experience.
-
-### The Startup That Bet Everything on Agents
-
-A small team can prototype unusually quickly with agentic tools, but investors or senior reviewers may still find inconsistent patterns, weak abstractions, and missing edge cases if the team never established architectural constraints.
-
-Then came due diligence for their Series A. Investors brought in a technical advisor to review the codebase. The report was brutal: inconsistent patterns (each agent task had its own style), no shared abstractions (agents don't naturally extract common code), and missing edge cases (agents optimize for the happy path).
-
-The startup spent six weeks refactoring before closing their round. Their CTO's retrospective: "Agents are incredible for exploration and prototyping. But we should have defined architectural patterns upfront and used agents to implement within those constraints, not let agents define the architecture."
-
-**The lesson**: Agent IDEs need architectural guardrails. They're excellent executors but poor architects. Define your patterns, conventions, and boundaries first. Let agents implement within those constraints.
-
-### The Security Incident Nobody Saw Coming
-
-**Remote Team. April 2025.** A developer at a fintech company used an agent IDE to add a feature. The agent needed to test against their staging database, so it helpfully created a `.env.local` file with database credentials. The developer reviewed and approved the code changes but didn't notice the new environment file.
-
-If an agent creates local environment files or test credentials and your ignore rules are wrong, sensitive data can be committed and remain exposed until a later security review catches it.
-
-Investigation revealed the root cause: the agent had been helpful—too helpful. It needed credentials to test, so it created them. The developer was reviewing code diffs, not new files. The agent's "create file" action slipped through human review.
-
-**The lesson**: Agent capabilities require new security practices. Review new file creation as carefully as code changes. Configure agents with security-aware allow/deny lists. Assume agents will try to solve problems in ways you didn't anticipate.
+Module 1.5 covers the CLI and headless column where L5 autonomy, log streams, and composability dominate. Many production incidents happen where GUIs are absent, which is why the curriculum treats IDE and CLI form factors as partners. Choose IDE-integrated agents when visual review and tight edit loops are the bottleneck; choose CLI agents when the environment is remote, non-interactive, or script-driven. Returning to Module 1.1 after trying both form factors helps you articulate a starter stack instead of a pile of subscriptions.
 
 ---
 
-## Interview Prep: Agent-First IDEs
+## Hypothetical Scenario: Failure Modes in IDE Agents
 
-As agent IDEs become mainstream, interview questions are evolving. Here's how to demonstrate expertise.
+> **Hypothetical scenario** — composite illustration of real failure patterns; not a specific company or incident.
 
-### Common Questions
-
-**Q: "How do you decide when to use agent-assisted coding versus writing code manually?"**
-
-**Strong Answer**: "I use a mental model I call 'risk-weighted delegation.' For low-risk, well-understood tasks—boilerplate, standard patterns, test scaffolding—I delegate aggressively. For high-risk code—authentication, payment processing, security-critical logic—I write it myself and use agents only for review and testing. The key factor is reversibility: if agent-generated code has a bug, how expensive is it to find and fix? Boilerplate bugs are cheap; security bugs are catastrophic. I also consider learning: if it's a pattern I don't understand well, I write it manually first to build intuition, then use agents for similar future tasks."
-
-**Q: "What are the biggest risks of agent-first development, and how do you mitigate them?"**
-
-**Strong Answer**: "Three main risks. First, 'understanding debt'—shipping code faster than you can learn it. Mitigation: conduct 'teaching reviews' where developers walk through agent-generated code, and maintain a personal 'patterns journal' documenting new techniques. Second, 'architectural drift'—agents optimize locally without global consistency. Mitigation: define architectural guidelines upfront and include them in agent context, use linting and static analysis to catch pattern violations. Third, 'security surface expansion'—agents take actions you don't anticipate. Mitigation: configure conservative allow/deny lists, treat new file creation as carefully as code changes, and run security scans as part of agent workflows."
-
-**Q: "Describe a situation where an agent-first approach would be inappropriate."**
-
-**Strong Answer**: "Greenfield architectural decisions. When starting a new system, the most important decisions are architectural: what patterns to use, how to structure modules, what abstractions to create. Agents optimize for immediate implementation, not long-term maintainability. I'd design the architecture manually—creating the folder structure, defining interfaces, writing a few reference implementations—then use agents to fill in the implementation within those constraints. Another case: security-critical code paths. Agents can introduce subtle vulnerabilities that are hard to catch in review. For auth, permissions, and data validation, I write the code myself and use agents only for testing and review."
-
-**Q: "How do you evaluate whether agent-generated code meets production quality standards?"**
-
-**Strong Answer**: "I use a checklist: First, does it have tests? Agents should generate tests, not just implementation. If there are no tests, I either ask the agent to add them or consider it incomplete. Second, does it follow our patterns? I compare against existing code to ensure consistency. Third, does it handle edge cases? Agents often implement the happy path. I specifically ask 'what happens if X is null' or 'what if the network fails.' Fourth, performance: for any non-trivial code, I benchmark before and after. Fifth, security review: I run security linters and manually inspect any code that handles user input, authentication, or sensitive data."
+A developer asks an IDE agent to "add OAuth login." The agent modifies several files and reports success. The developer reviews the code diff in the editor but does not notice a new `.env.local` the agent created for testing. The file is not covered by an ignore rule; credentials are committed. Failure modes: over-delegation from vague scope; artifact blind spot from reviewing only highlighted diffs; permission defaults that auto-approved file creation. Mitigations: name files and boundaries in the task contract; review `git status` and new paths; use review-mode execution policies; treat artifact bundles as mandatory review inputs.
 
 ---
 
-## The Economics of Agent-First Development
+## Evaluating IDE Agents on Your Repository
 
-### Cost Structures
+Before standardizing on any IDE-integrated harness, run the same three-pass evaluation Module 1.1 describes, adapted to the editor context. Pass one is read-only grounding: ask the tool to locate where a specific invariant is enforced — authorization on one route, retry limits in a config file, or the fixture that creates a disabled test account — and require file paths in the answer. Pass two is a narrow edit with a written contract naming allowed files, forbidden files, and the single success command. Pass three is recovery: introduce or use an existing failing test, let the agent attempt a fix, and observe whether it interprets stderr without widening scope to unrelated modules.
 
-Agent-first IDEs have radically different cost structures than traditional development.
+Record results in engineering language, not enthusiasm. "Composer produced a three-file diff that passed `npm test -- users` but invented a helper not used elsewhere" is actionable. "Felt smart" is not. Note whether the harness respected review mode for terminal commands, whether artifacts matched the final diff, and whether session memory helped on pass three or the agent repeated a rejected approach. If a product passes pass one and two on a toy repo but fails pass three on your real tree, approve it for explanation and boilerplate only until recovery improves.
 
-| Cost Type | Traditional Dev | Agent-First Dev |
-|-----------|----------------|-----------------|
-| Developer time | High (hours writing) | Lower (minutes directing) |
-| API costs | None | $10-500/month depending on usage |
-| Review overhead | Low (you wrote it) | High (you didn't write it) |
-| Debugging time | Medium | Higher for complex agent code |
-| Learning investment | Gradual | Front-loaded (learning to prompt) |
+Pay attention to data path during evaluation. Indexing that uploads embeddings to a vendor cloud may be acceptable on public samples and unacceptable on private monorepos. BYO-key extensions route prompts to whichever account you configure — which can be a feature for billing control or an accident if the key is personal while the code is employer-owned. Copilot seats route through GitHub's policies; Antigravity routes through Google's announced stack transitions. Fit is constraint satisfaction, not a scoreboard.
 
-### When Agent-First Pays Off
+Finally, rehearse rollback. IDE agents make editing feel reversible because Git is right there, yet agents can run commands that mutate state outside Git — databases, local caches, global package installs, browser sessions with cookies. Your evaluation should include whether the harness logs commands clearly enough to undo side effects. A tool that excels at diffs but obscures shell history fails the evidence loop Module 1.1 emphasizes even if the model is strong.
 
-**High ROI scenarios:**
-- Boilerplate generation (CRUD, admin panels, scaffolding)
-- Exploration and prototyping
-- Test generation (agents excel at test coverage)
-- Documentation generation
-- Refactoring existing code
+When the evaluation finishes, write two fit statements: one task this harness may handle next sprint, and one task it may not handle yet. Share those notes with reviewers so pull requests carry expectations about how the branch was produced. That single habit prevents the common failure mode where reviewers treat agent-generated patches as if they were typed line-by-line and apply the wrong review depth.
 
-**Low ROI scenarios:**
-- Novel algorithms (agents regurgitate patterns, don't invent)
-- Security-critical code (review cost exceeds generation savings)
-- Highly optimized code (agents don't naturally optimize)
-- Learning new domains (you need to write to learn)
+### Editor as System of Record: What Stays Human-Owned
 
-### The Productivity Multiplier
+Even in agent-first workflows, certain artifacts remain human-owned because they encode judgment rather than implementation. Architecture diagrams that commit to coupling boundaries, threat models for auth flows, naming conventions for public APIs, and rollback plans for migrations are poor candidates for full delegation regardless of how polished the IDE panel looks. Agents excel at filling in implementations once those boundaries exist; they are weaker at deciding which boundaries should exist in the first place. Teams that confuse fast implementation with fast architecture often pay interest during the next incident, when nobody can explain why the agent chose a pattern that contradicts the rest of the service.
 
-Reported productivity gains vary sharply by task type: teams usually see the biggest wins on repetitive implementation work and much smaller gains on architectural decision-making.
+The editor reinforces human ownership when you keep using it the way senior reviewers expect: blame-aware Git history, meaningful commit messages that describe intent, and PR descriptions that link to tickets. If the agent wrote eighty percent of the lines but you approved the plan and the scope, your name on the merge still means you vouch for the change. IDE integrations that hide command output or squash every intermediate commit can make that accountability harder, so prefer harness settings that preserve inspectable steps unless you have another audit trail.
 
-| Task Type | Productivity Multiplier | Notes |
-|-----------|------------------------|-------|
-| Boilerplate | 5-10x | Agents excel here |
-| Standard features | 3-5x | With good prompting |
-| Complex features | 1.5-2x | More iteration needed |
-| Debugging | 0.8-1.2x | No significant change |
-| Architecture | 0.5-1x | Agents can slow you down |
+Finally, treat the IDE as a teaching surface for junior engineers even when agents are available. Reading diffs, stepping through tests, and comparing the agent's plan to the ticket are skills that remain valuable when the model vendor changes next quarter. The form factor lasts because editing is still how most software teams reconcile intent with reality — agents just moved the frontier of what "editing" can mean from keystrokes to delegation, artifacts, and review.
 
-The aggregate multiplier for a typical feature team is around 2-3x—significant, but not the 10x that marketing claims. The gains are concentrated in certain task types.
-
-> **Did You Know?** Some teams report net productivity gains from AI coding tools even after accounting for heavier review overhead, but the exact impact depends on workflow and governance. The net productivity gain was about 15%—meaningful but not transformative. The biggest wins came from reduced context-switching: developers could stay in flow state longer when agents handled routine tasks.
+Pause and predict: if your team disabled all agent panels tomorrow but kept Git, tests, and code review, which parts of your delivery would slow down first — typing speed, multi-file refactors, or architectural decisions? Teams that answer "typing speed" are good candidates for stronger autocomplete; teams that answer "multi-file refactors with evidence" are asking for IDE agents with tight harnesses; teams that answer "architecture" need human-led design before any delegation tier. Write your answer in one sentence and compare it with Module 1.1's authority worksheet — the overlap tells you which IDE or CLI form factor to pilot first on your repository.
 
 ---
 
 ## Key Takeaways
 
-1. **Agent-first IDEs represent a paradigm shift**, not just better autocomplete. You're managing AI agents that reason, plan, and act—not predicting your next keystroke.
-
-2. **Multi-agent orchestration is the killer feature** of tools like Antigravity. Running 5+ agents on parallel tasks can compress a week's work into hours.
-
-3. **Open-source alternatives like Cline give you control** over models and costs. You're not locked into vendor pricing or model choices.
-
-4. **Understanding debt is real**: shipping code faster than you can learn it creates debugging nightmares. Implement teaching reviews and maintain learning discipline.
-
-5. **Architectural guardrails are essential**: define patterns before delegating implementation. Agents optimize locally; you're responsible for global coherence.
-
-6. **Security requires new practices**: agents take actions you don't anticipate. Review file creation, configure allow/deny lists, and assume helpful agents will be too helpful.
-
-7. **The productivity gains are real but nuanced**: 2-3x for typical work, 5-10x for boilerplate, 0.5-1x for architectural work. Know which is which.
-
-8. **The right tool depends on context**: Antigravity for parallel agents, Windsurf for session memory, Cline for open-source control, Cursor for polished UX.
-
-9. **Human judgment remains irreplaceable**: agents implement, you architect. Agents generate, you evaluate. The skill is knowing when to delegate and when to do it yourself.
-
-10. **The future is collaboration, not replacement**: the best developers will be those who can effectively orchestrate AI agents while maintaining deep technical understanding.
+1. IDE-integrated agents keep the editor as system of record while expanding authority from L0 completion through L4 parallel work.
+2. Harness ⟂ model — evaluate permissions, artifacts, and data paths separately from model intelligence.
+3. Peers, not rankings — Copilot, Cursor, Antigravity, Windsurf, and Cline illustrate different fits; end comparisons with constraint-based fit statements.
+4. Artifacts exist for trust — review plans and file lists, not only the final diff.
+5. IDE vs CLI — visual review and daily editing favor the IDE; automation, remote hosts, and L5 loops favor CLI (Module 1.5).
+6. Scope tasks like tickets — vague delegation produces vague, risky code.
+7. Security follows the harness — execution policies and new-file review matter as much as model choice.
+8. Volatile details expire — snapshot product facts and re-verify on official docs.
 
 ---
 
-## Further Reading
+## Did You Know?
 
-- [Google Antigravity Codelab](https://codelabs.developers.google.com/getting-started-google-antigravity)
-- [Windsurf Documentation](https://docs.codeium.com/windsurf)
-- [Cline GitHub Wiki](https://github.com/cline/cline/wiki)
-- [Cursor Documentation](https://docs.cursor.com)
-- [The "Vibe Coding" Debate on Hacker News](https://news.ycombinator.com/item?id=45967814)
+- IDE agents expose adjustable autonomy — approval per command, per session, or per risk class — because unrestricted tool use in a shared repo fails quickly in practice.
+- Artifacts (plans, recordings, checklists) exist because diff-only review does not scale when agents touch dozens of files; the harness exports narrative evidence on purpose.
+- Open-source extensions like Cline prove that the IDE form factor does not require a proprietary fork — only a host editor, a panel, and disciplined permissions.
+- Background and parallel agents (L4) reintroduce coordination cost: someone must merge concurrent changes and resolve conflicts humans did not see being introduced.
 
----
+## Common Mistakes
 
-<!-- v4:generated type=no_quiz model=codex turn=1 -->
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Treating IDE agents as autocomplete | The UI feels familiar so authority creep goes unnoticed | Map each session to an L0–L5 level and match review depth to that level |
+| Choosing by model name only | Marketing emphasizes models, not harness permissions | Evaluate context scope, execution policy, and artifacts on a benchmark task |
+| Over-delegating with vague prompts | Natural language feels fast | Write contracts with files, forbidden changes, and success commands |
+| Reviewing diffs but not new files | Diff UIs highlight edits, not always creates | Run `git status` and scan artifact file lists before merge |
+| Ignoring artifacts | Developers want to ship quickly | Review plan, verification output, and command logs first |
+| Setting fully automatic terminal policy on sensitive repos | Speed is tempting on trusted-looking code | Use review mode with allow/deny lists until the harness earns trust |
+| Ranking peers instead of fitting tasks | Blog posts declare winners | End with fit statements tied to constraints from Module 1.1 |
+
 ## Quiz
 
-
-**Q1.** Your team needs to add three independent pieces to a new internal app this afternoon: a Flask backend with SQLite, a React frontend with Tailwind, and integration tests. You want the IDE that best supports running those efforts in parallel from one interface instead of handling them one by one. Which tool is the best fit, and why?
-
-<details>
-<summary>Answer</summary>
-Google Antigravity is the best fit because its core strength is multi-agent orchestration. The module describes Antigravity's "Mission Control" as supporting 5+ agents simultaneously, making it ideal for parallel tasks like backend, frontend, and testing work. Tools like Cursor are better for focused multi-file editing, but not for coordinating multiple concurrent agents.
-</details>
-
-**Q2.** You asked an agent to add OAuth login and it returned working code across several files. Before approving the changes, your tech lead wants the fastest way to verify what the agent actually did without manually reading every line. In this situation, what should you review first, and why?
+**Q1.** Your team needs three independent pieces this afternoon: a small API backend, a frontend shell, and integration tests — ideally monitored from one IDE session with parallel progress. Which capability pattern fits best, and which peer primarily illustrates it?
 
 <details>
 <summary>Answer</summary>
-You should review the generated artifacts first, especially items like `implementation_plan.md`, `code_diff.patch`, screenshots, recordings, and verification reports. The module explains that Antigravity's artifacts system is designed to close the trust gap by showing what the agent planned, changed, and tested. This lets you validate intent and outcomes before diving into raw code.
+L4 parallel or manager-surface delegation fits best. Google Antigravity primarily illustrates multi-agent orchestration with a manager-style UI and rich artifacts. Cursor background agents can approach this pattern with different UX; Cline does not center parallel agents. State fit in terms of capability, not brand loyalty.
 </details>
 
-**Q3.** You're debugging a stubborn authentication issue. After trying one fix, you tell the AI, "That didn't work," and you want the assistant to remember the terminal error, the files you changed, and the fact that its first suggestion already failed. Which IDE feature is most valuable here, and which tool is known for it?
+**Q2.** An agent returns OAuth-related changes across several files. Your lead wants the fastest trust check before deep code review. What should you open first?
 
 <details>
 <summary>Answer</summary>
-Windsurf's Flows memory is the most valuable feature here. The module explains that Flows preserves session history, terminal output, file changes, and your corrections, which helps the agent avoid repeating failed suggestions. That persistent session memory is what makes Windsurf especially strong for multi-step debugging.
+Review artifacts first when available: implementation_plan.md, task checklist, code_diff or per-file diffs, test or verification reports, and screenshots. Also run `git status` for new files the diff view might not highlight.
 </details>
 
-**Q4.** Your company requires developers to stay in VS Code, avoid vendor lock-in, choose between cloud and local models, and approve every file edit or command before it runs. Which tool best matches those constraints, and what tradeoff comes with that choice?
+**Q3.** During debugging you say "that fix failed" and want the assistant to recall terminal errors and prior attempts. Which durable concept matters most, and which peer emphasizes it?
 
 <details>
 <summary>Answer</summary>
-Cline best matches those constraints. It runs as a VS Code extension, supports many model providers including local ones like Ollama, and uses a human-in-the-loop approval flow for actions. The tradeoff is speed: the module notes that this approach is safer for production codebases but slower than more autonomous tools, especially on greenfield work.
+Session memory beyond raw chat text — structured recall of attempts, terminal output, and rejections. Windsurf Flows emphasizes this in Cascade. Match the tool to continuity requirements rather than assuming all chat panels are equal.
 </details>
 
-**Q5.** You joined a large established codebase with strict conventions, and your first task is a small feature addition plus a bug fix. The team wants fast iteration, strong codebase pattern matching, and easy review of precise diffs rather than handing the whole task to autonomous agents. Which IDE is the best fit for this scenario, and why?
+**Q4.** Policy requires stock VS Code, open-source harness, optional local models, and per-action approval. Which peer fits, and what is the tradeoff?
 
 <details>
 <summary>Answer</summary>
-Cursor is the best fit. The module presents Cursor as strong for large established codebases, incremental improvements, and security-sensitive review because it emphasizes codebase understanding, pattern matching, and diff-based changes. Its Composer mode is less autonomous than Antigravity or Windsurf, but that is an advantage when consistency and reviewability matter more than raw autonomy.
+Cline fits: VS Code extension, Apache-licensed harness, BYO and Ollama-local providers, explicit approve/reject on edits and commands. Tradeoff: slower iteration on greenfield work than more autonomous defaults.
 </details>
 
-**Q6.** An engineer enables very permissive automation on a production-adjacent repository because they want the AI to move faster. Another teammate argues this is risky and recommends a more conservative setup. Based on the module, what configuration choice is safer, and what specific risks is it meant to reduce?
+**Q5.** On a large codebase you need small incremental changes with strong pattern matching and readable diffs — not five autonomous agents. Which peer's design center aligns, and why?
 
 <details>
 <summary>Answer</summary>
-Using a review-based execution policy with carefully defined allow/deny lists is safer. The module specifically recommends review mode for unfamiliar or sensitive codebases and shows deny-list examples like blocking `rm -rf *` and `sudo *`, along with browser URL allowlists. This reduces the risk of destructive terminal commands, prompt-injection exposure, and other unintended agent actions.
+Cursor centers diff-centric, codebase-indexed multi-file edits with review in the IDE fork. That fits established repos where consistency and reviewability dominate. Antigravity's manager surface fits better when parallelization is the primary goal.
 </details>
 
-**Q7.** A junior developer used an agent IDE to ship a complex admin dashboard quickly, but later struggled for days to fix a subtle session-management bug in code they had not really internalized. As the team lead, what problem does this illustrate, and what practice from the module would help reduce it?
+**Q6.** An engineer enables fully automatic terminal execution on a sensitive repo. What safer configuration reduces risk, and what failures does it target?
 
 <details>
 <summary>Answer</summary>
-This illustrates understanding debt: shipping code faster than the developer can actually learn and debug it. The module warns that agent-generated productivity can create this gap, especially for less experienced developers. A recommended mitigation is teaching reviews, where senior developers walk through the generated code so the person using it understands the implementation rather than just accepting it.
+Use review-mode execution with explicit allow/deny lists (block destructive commands and unrestricted browser access). This reduces unreviewed credential file creation, destructive shell commands, and prompt-injection via browsed content.
 </details>
 
-<!-- /v4:generated -->
-## Next Steps
+**Q7.** Hypothetical: a developer ships a feature quickly with an IDE agent but struggles for days debugging session logic they never internalized. What concept does this illustrate, and what practice helps?
 
-Continue to **Module 1.5: CLI AI Coding Agents** to learn about terminal-based agents like Claude Code, Aider, and Goose—the power user's choice for scriptable, automatable AI development.
+<details>
+<summary>Answer</summary>
+Understanding debt — output outran comprehension. Mitigations: smaller scoped tasks, mandatory self-explanation before merge, senior walkthrough of agent-generated patches, and keeping security-critical paths human-authored.
+</details>
+
+**Q8.** Inline ghost-text at the cursor is autocomplete-first behavior at which autonomy level (L0–L5), and a manager surface running three concurrent agents is agent-first behavior closest to which level? Why must review depth differ? A teammate says the newest frontier model makes IDE agents safe — which harness ⟂ model controls matter more?
+
+<details>
+<summary>Answer</summary>
+Autocomplete-first inline ghost-text is L0; agent-first parallel manager surfaces are L4. Review depth must scale: L0 needs local accept/reject, while L4 needs artifact streams, merge coordination, and new-file checks. Harness ⟂ model refutes model-only safety — terminal review mode with deny lists and mandatory artifact plus `git status` review matter more than model vintage.
+</details>
+
+## Hands-On Exercises
+
+These exercises teach form-factor skills that transfer across products. Use whichever IDE-integrated tool you have access to; substitute peers with equivalent capabilities where noted.
+
+### Exercise 1: Parallel Task Delegation (Antigravity or equivalent)
+
+*Illustrative lead tool: Google Antigravity — any product with parallel agent or background-task support can substitute.*
+
+Build a minimal task-manager slice with three independent workstreams (backend API, frontend shell, integration tests) using parallel agents or background tasks. Launch three concurrent agent tasks, observe how the tool surfaces status per stream, collect artifacts from each (plans, diffs, test output), and merge into one runnable project locally only after you have reviewed every artifact stream.
+
+- [ ] All three streams produce reviewable artifacts before merge
+- [ ] Application runs locally with create/list working
+- [ ] You can explain one change you rejected and why
+
+### Exercise 2: Local Model via Cline (or BYO extension)
+
+Run an IDE agent offline on a small change to experience harness ⟂ model separation: install Ollama or your org-approved local runtime, pull a coding model with `ollama pull deepseek-coder:6.7b`, configure Cline or another BYO-capable extension to use the local endpoint, and task the agent to add input validation to a toy form component while approving each action explicitly.
+
+- [ ] No cloud API calls during the session if policy requires offline work
+- [ ] Agent proposes a diff; you approve explicitly
+- [ ] You record latency and quality tradeoffs versus a hosted frontier model
+
+### Exercise 3: Browser Automation Comparison
+
+Compare how IDE peers handle the same login smoke test on localhost by running a trivial login flow, executing the test in two or three tools with browser control (for example Antigravity, Cline, Windsurf), and documenting setup steps, selector reliability, and screenshot quality using fit statements rather than a ranked winner.
+
+- [ ] Written comparison ending in fit statements per tool
+- [ ] Notes on URL allowlisting and credential handling
+- [ ] At least one failure mode observed and explained
 
 ---
 
-_Last updated: 2025-12-09_
-_Module status: Complete_
+## Learner check
+
+Before moving on, confirm you can explain the IDE form factor in your own words. The core idea:
+
+> The IDE-integrated form factor keeps the editor as the system of record while the agent proposes multi-file changes, runs tools under permission gates, and leaves artifacts you review before anything ships.
+
+---
+
+## Next Module
+
+Continue to [Module 1.5: CLI AI Coding Agents](/ai-ml-engineering/ai-native-development/module-1.5-cli-ai-coding-agents/) for terminal-based agents — the complement to IDE-integrated work when you need scriptable, headless, or remote-server autonomy.
+
+---
+
+_Last updated: 2026-06-07_
 
 ## Sources
 
-- [Gemini 3 is available for enterprise](https://cloud.google.com/blog/products/ai-machine-learning/gemini-3-is-available-for-enterprise?linkId=17778299) — This is Google's primary announcement tying Gemini 3 to Antigravity and the broader agentic-coding push.
-- [Cline GitHub Repository](https://github.com/cline/cline) — This is the primary source for Cline's licensing, provider support, browser use, MCP support, and approval model.
+- [An important update: Transitioning Gemini CLI to Antigravity CLI](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) — Google's announcement on sunsetting individual-tier Gemini CLI / Code Assist and folding workflows into Antigravity (June 18, 2026).
+- [Getting started with Google Antigravity codelab](https://codelabs.developers.google.com/getting-started-google-antigravity) — Official onboarding for Antigravity's manager surface, editor, and agent workflows.
+- [Cursor documentation](https://docs.cursor.com) — Composer, agents, indexing, and model configuration.
+- [Windsurf documentation](https://docs.codeium.com/windsurf) — Cascade, Flows, and agent features.
+- [Cline GitHub repository](https://github.com/cline/cline) — Licensing, provider support, MCP, browser use, and approval model.
+- [Cline documentation](https://docs.cline.bot/home) — Setup, configuration, and feature reference for the VS Code extension.
+- [GitHub Copilot documentation](https://docs.github.com/en/copilot) — Editor integration, chat/agent features, and model options.
+- [Visual Studio Code Copilot overview](https://code.visualstudio.com/docs/copilot/overview) — How Copilot integrates with the VS Code editing surface.
+- [Responsible use of GitHub Copilot features](https://docs.github.com/en/copilot/responsible-use-of-github-copilot-features) — Governance and limitation guidance from GitHub.
+- [Model Context Protocol introduction](https://modelcontextprotocol.io/docs/getting-started/intro) — Protocol background for Cline-style tool connectors.
+- [On the Naturalness of Software](https://cacm.acm.org/research/on-the-naturalness-of-software/) — Hindle et al. (2012); background for statistical code completion research cited in the history section.
