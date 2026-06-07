@@ -138,6 +138,9 @@ worktrees/
 # agy / Antigravity CLI local state
 .antigravitycli/
 
+# gemini-cli local state (MCP server registrations etc.; per-developer, points at localhost services)
+.gemini/
+
 batch_state/
 logs/
 .envrc
