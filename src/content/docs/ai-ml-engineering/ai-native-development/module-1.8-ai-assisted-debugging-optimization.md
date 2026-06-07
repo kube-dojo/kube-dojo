@@ -603,6 +603,8 @@ This example is a good AI optimization target because the bottleneck is clear: m
 
 When you ask AI about performance, include input sizes and call counts. A model may correctly identify that an algorithm is `O(n^2)`, but the business impact depends on whether `n` is ten or ten million. It may recommend caching, but caching can introduce stale data, memory growth, and invalidation complexity. The prompt should force the trade-off into the answer.
 
+**Hypothetical scenario (illustrative prompt input):**
+
 ```text
 Profiling shows this function consumes 68 percent of endpoint time.
 
@@ -640,6 +642,8 @@ def serialize_users(users):
 ```
 
 This code may be fine if `user.posts` is already loaded. It may be disastrous if every access lazily hits the database. The correct prompt includes logs or profiler output showing query counts. Ask the model whether eager loading, explicit joins, prefetching, or a separate aggregate query best matches the access pattern.
+
+**Hypothetical scenario (illustrative prompt input):**
 
 ```text
 This endpoint serializes 200 users and emits 201 SQL queries.
@@ -717,7 +721,7 @@ Please:
 3. Suggest the next safest verification command.
 ```
 
-Control-plane and node debugging require additional skepticism. A model can explain common failure modes, but it should not be asked to guess cluster health from a single timeout. You need events, component status, node conditions, and relevant endpoint responses. Kubernetes v1.35+ structured diagnostic endpoints can be especially useful because machine-parseable output is easier for AI to inspect consistently.
+Control-plane and node debugging require additional skepticism. A model can explain common failure modes, but it should not be asked to guess cluster health from a single timeout. You need events, component status, node conditions, and relevant endpoint responses. Kubernetes v1.35+ structured diagnostic endpoints can be especially useful because machine-parseable output is easier for AI to inspect consistently. As of mid-2026, these structured endpoints are still maturing and may require a negotiated `Accept` header (e.g., `Accept: application/json`); verify the feature-gate state for your cluster version before relying on specific output formats.
 
 ```bash
 kubectl get events -A --sort-by=.lastTimestamp
@@ -961,6 +965,8 @@ A good AI prompt can maintain a hypothesis table. Ask for hypothesis, supporting
 The table is not just documentation; it is a thinking tool. When AI suggests a new cause, put it in the table and ask what evidence would distinguish it from the current leading cause. This keeps the model from wandering into plausible but untested narratives.
 
 Senior debugging also includes rollback judgment. If the system is actively harming users, the correct first move may be rollback, feature-flag disablement, rate limiting, or traffic shifting before root-cause analysis is complete. AI can help list mitigation options, but the team must understand blast radius, data integrity, and operational risk.
+
+**Hypothetical scenario (illustrative prompt input):**
 
 ```text
 We have an active production incident.
@@ -1323,3 +1329,6 @@ You have learned how to diagnose failures, challenge model-generated fixes, prot
 - [New tools and features in the Responses API](https://openai.com/index/new-tools-and-features-in-the-responses-api/) — OpenAI announcement summarizing Responses API support for remote MCP servers, image generation, Code Interpreter, and file search.
 - [OpenAI Docs MCP](https://platform.openai.com/docs/docs-mcp) — OpenAI documentation for the public read-only MCP server used to access developer docs.
 - [OpenAI Web Search Guide](https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses) — OpenAI guide for Responses web-search tool behavior, supported modes, and model availability constraints.
+- [Debugging (Wikipedia)](https://en.wikipedia.org/wiki/Debugging) — Covers the Harvard Mark II moth anecdote that helped popularize the term "debugging" in computing culture.
+- [What Have We Learned About Software Engineering?](https://cacm.acm.org/opinion/what-have-we-learned-about-software-engineering/) — ACM article with incident-driven lessons including the Therac-25 accidents and their software-safety implications.
+- [Mars Climate Orbiter](https://en.wikipedia.org/wiki/Mars_Climate_Orbiter) — Wikipedia article documenting the unit-mismatch failure where metric and imperial force units caused the spacecraft loss, a canonical interface-contract debugging lesson.
