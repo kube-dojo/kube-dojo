@@ -214,7 +214,7 @@ The decision framework is therefore a loop rather than a single page. Identify t
 ## Did You Know?
 
 - Hugging Face model cards are inspired by the broader "Model Cards for Model Reporting" idea introduced in 2019, which pushed model publishers to describe intended use, evaluation, and limitations rather than only sharing performance numbers.
-- Transformers grew from natural language processing tooling into a broad library for text, vision, audio, multimodal, and reinforcement learning workflows, so its documentation can describe software patterns that span many different repository types.
+- Transformers grew from natural language processing tooling into a broad library for text, vision, audio, and multimodal workflows (with RL post-training handled by sibling libraries such as TRL), so its documentation can describe software patterns that span many different repository types.
 - Hugging Face Spaces can run demos backed by frameworks such as Gradio or Streamlit, which means a learner may be seeing an application layer rather than the model repository itself.
 - Safetensors was designed as a safer tensor storage format than pickle-based weight loading, which matters because model files are executable-adjacent artifacts that learners should treat with care.
 

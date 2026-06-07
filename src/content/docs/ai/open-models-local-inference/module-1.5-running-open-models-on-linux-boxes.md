@@ -102,6 +102,8 @@ Think of accelerator memory like a workbench, not a warehouse. Disk is where mod
 
 Containerized GPU workflows add another layer. A container image can include the user-space libraries needed by a runtime, but the host still provides the driver and device access. NVIDIA's container tooling exists because ordinary containers do not automatically make accelerators available inside the process namespace. If you use containers for local serving, the test is not merely "does Docker run?" The test is whether the container can see the device, allocate memory, and run the same framework path you validated outside the container.
 
+The CUDA base-image tag below is illustrative (as of 2026-06); verify the current tag on Docker Hub against your host driver before relying on it.
+
 ```bash
 docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu24.04 nvidia-smi
 ```
@@ -162,7 +164,7 @@ Which approach would you choose here and why: a direct Python script that prints
 
 A repeatable host profile is the document that lets you rerun the experiment next month and understand what changed. It should be small enough to maintain, but complete enough to explain performance, failures, and constraints. At minimum, record hardware class, CPU model, system memory, GPU model if present, GPU memory, driver version, operating system release, storage location for model files, runtime name, model artifact, model format, intended use, and whether the setup is interactive or persistent.
 
-You can keep the profile in markdown because the first audience is the learner, not an automation system. Later, you might turn the same fields into YAML, inventory data, or a deployment record, but plain text is enough to build the habit. The key is consistency. Every runtime experiment should update the same fields so comparisons are based on facts rather than memory. "It felt faster last week" is less useful than "the quantized model produced nine tokens per second on the same prompt."
+You can keep the profile in markdown because the first audience is the learner, not an automation system. Later, you might turn the same fields into YAML, inventory data, or a deployment record, but plain text is enough to build the habit. The key is consistency. Every runtime experiment should update the same fields so comparisons are based on facts rather than memory. "It felt faster last week" is less useful than "the quantized model recorded a measured token rate on the same prompt."
 
 ```markdown
 ## Linux Inference Host Profile

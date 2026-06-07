@@ -102,7 +102,7 @@ read -p "Confirm: Does the diff align with the architectural intent? [y/N] " con
 
 The phrase adversarial audit matters because the reviewer should not read the diff as a fan of the proposal. They should read it as the person who will have to explain the change in an incident review if it fails. That mindset changes the questions from "does this look plausible" to "what assumption would make this dangerous, and where would I see evidence that the assumption is true."
 
-In Kubernetes 1.35 and later, that evidence often includes API version compatibility, resource requests and limits, security context, namespace scope, labels, rollout strategy, and service exposure. A model can generate syntactically correct manifests while still choosing defaults that are inappropriate for your environment. HITL review exists because correctness is not only syntax; it is fit against the live system and the team's operating constraints.
+When reviewing manifests for a Kubernetes 1.35 target cluster, that evidence often includes API version compatibility, resource requests and limits, security context, namespace scope, labels, rollout strategy, and service exposure. A model can generate syntactically correct manifests while still choosing defaults that are inappropriate for your environment. HITL review exists because correctness is not only syntax; it is fit against the live system and the team's operating constraints.
 
 For content work, the same habit applies with different evidence. A generated explanation should be checked against primary sources, the module's learning outcomes, and the audience's current level. The reviewer should ask whether the answer is accurate, whether it teaches the right habit, and whether it introduces unsupported claims that a learner may later repeat in production.
 
@@ -127,7 +127,7 @@ The following decision table is a practical way to decide whether the loop needs
 
 The table also helps prevent review fatigue. If everything is marked critical, reviewers eventually skim because the workflow has taught them that every approval looks the same. Useful HITL design makes the high-risk moments stand out, so a reviewer can spend more attention when the action is dangerous and less attention when the task is truly low impact.
 
-The original module described mandatory review as a simple rule: require it when the output affects customers, learners, or public readers; when the system can take action rather than merely suggest; when privacy, security, money, or compliance are involved; and when the cost of error is higher than the cost of review. That rule is still the core. The deeper habit is to encode the rule into workflow design instead of relying on everyone to remember it under pressure.
+A simple rule for mandatory review: require it when the output affects customers, learners, or public readers; when the system can take action rather than merely suggest; when privacy, security, money, or compliance are involved; and when the cost of error is higher than the cost of review. That rule is still the core. The deeper habit is to encode the rule into workflow design instead of relying on everyone to remember it under pressure.
 
 A small wrapper or workflow policy can express that habit in code. The numbers below are illustrative, not universal, because confidence scores and entropy estimates vary by system. The important lesson is the shape of the gate: production context plus uncertainty should escalate to a human rather than quietly proceeding.
 
@@ -249,7 +249,7 @@ This compounding effect is why HITL habits belong in team practice rather than o
 
 ## Build Habits That Survive Scale
 
-The original module named healthy small-scale habits: inspect before acting, keep evidence visible, note what still needs checking, and keep changes reversible. Those habits are still the foundation. At small scale, one careful engineer can often hold the task, evidence, and risk model in their head long enough to make a good decision.
+Healthy small-scale habits include: inspect before acting, keep evidence visible, note what still needs checking, and keep changes reversible. Those habits are still the foundation. At small scale, one careful engineer can often hold the task, evidence, and risk model in their head long enough to make a good decision.
 
 At larger scale, memory is not enough. Teams need formal checkpoints, explicit owners, audit trails, and clear escalation when output is uncertain. The goal is not to create paperwork; the goal is to make the same good judgment repeatable when there are more modules, more services, more contributors, more agents, and more chances for context to be lost.
 
@@ -431,4 +431,4 @@ Success criteria:
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [AI Building](../../ai-building/module-1.1-from-chat-to-ai-systems/) to start building AI systems beyond single-tool assistance.

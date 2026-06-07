@@ -66,7 +66,7 @@ Before running this, what output do you expect to separate a scheduling problem 
 
 Evidence also includes negative evidence, meaning facts that rule out attractive explanations. If one Service can reach the database from the same node while another cannot, a broad node-network failure becomes less likely. If old Pods remain healthy while new Pods fail, a full cluster outage is less likely than a rollout-specific change, and the model should be told that boundary before it ranks hypotheses.
 
-The following triage packet is a useful template because it treats AI as a reader of evidence rather than a replacement for collection. It preserves the original module's safest prompt shape and adds just enough structure to prevent a generic answer. The final request asks for ranked hypotheses and uncertainty-reducing checks, which makes the model show its reasoning path instead of jumping straight to a fix.
+The following triage packet is a useful template because it treats AI as a reader of evidence rather than a replacement for collection. It uses the safest prompt shape and adds just enough structure to prevent a generic answer. The final request asks for ranked hypotheses and uncertainty-reducing checks, which makes the model show its reasoning path instead of jumping straight to a fix.
 
 ```text
 Help me triage this Kubernetes rollout issue.
@@ -163,7 +163,7 @@ Evidence-weighted ranking counters that bias by asking the model to score each h
 
 This table is not a replacement for judgment, but it gives the AI answer a shape you can audit. Each row has a reason, a check, and an action boundary, so you can reject rows that do not fit the evidence. When a model returns a list without that structure, ask it to rewrite the list as a hypothesis table before running anything.
 
-The original module's constraint-driven prompt is still a useful escalation pattern when a generic answer is too broad. It tells the model what has already been ruled out, names the technology context, and asks about two specific branches. The important part is that the prompt includes negative evidence, because negative evidence prunes the hypothesis tree and keeps the model from repeating checks the team has already completed.
+The constraint-driven prompt is a useful escalation pattern when a generic answer is too broad. It tells the model what has already been ruled out, names the technology context, and asks about two specific branches. The important part is that the prompt includes negative evidence, because negative evidence prunes the hypothesis tree and keeps the model from repeating checks the team has already completed.
 
 ```text
 [Context: Pods stuck in CrashLoopBackOff after ConfigMap update]

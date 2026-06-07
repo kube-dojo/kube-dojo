@@ -432,7 +432,7 @@ In this exercise, you will design a repeatable AI workflow for a real task, with
 
   Use these verification commands to confirm the lab artifact exists and still matches the workflow requirement before moving to the next task.
   ```bash
-  grep -n 'pass\|fail\|format\|source\|owner' workflow-brief.md
+  grep -nE 'pass|fail|format|source|owner' workflow-brief.md
   ```
 
 - [ ] Run one dry run of the workflow with a sample input. Use a short example input, produce a draft with AI, evaluate it against your rubric, and record whether it passed, failed, and what should change before the next run.
@@ -459,7 +459,7 @@ In this exercise, you will design a repeatable AI workflow for a real task, with
 
   Use these verification commands to confirm the lab artifact exists and still matches the workflow requirement before moving to the next task.
   ```bash
-  grep -n 'revision\|verify\|owner\|input' workflow-brief.md
+  grep -nE 'revision|verify|owner|input' workflow-brief.md
   wc -l workflow-brief.md
   ```
 

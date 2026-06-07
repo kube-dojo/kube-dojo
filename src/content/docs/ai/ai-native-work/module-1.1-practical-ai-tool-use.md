@@ -45,7 +45,7 @@ Pause and predict: if you ask a general chat tool to audit a repository without 
 
 The third split is whether the tool only helps you think or is allowed to act. A tool that drafts a message has a small operational footprint because you can read the message before sending it. A tool that opens pull requests, edits configuration, runs shell commands, or calls APIs has a different accountability model. Once a tool can act, you need explicit boundaries, logging, review gates, and rollback paths because the failure mode is no longer just a bad sentence.
 
-Here is the original task model from this module, preserved as a compact way to describe a multi-step root-cause analysis. Notice that the task is not assigned to one magic interface. Each step is matched to the tool that can see the needed evidence and support the next verification step.
+Here is a task model that compactly describes a multi-step root-cause analysis. Notice that the task is not assigned to one magic interface. Each step is matched to the tool that can see the needed evidence and support the next verification step.
 
 ```bash
 # Example: A multi-step 'Root Cause Analysis' task definition
@@ -81,7 +81,7 @@ Agentic or workflow tools are best for repeated, bounded, multi-step work where 
 
 The move from chat to workflow changes the safety problem. In chat, the main question is whether the answer is useful and true enough for the next human step. In workflow execution, the question becomes whether the tool should have permission to take the next step at all. That is why action-taking tools need explicit fail-safes, such as read-before-write, dry-run before apply, approval before destructive operations, and a clear condition for stopping.
 
-The original module used this validator pattern to express one useful boundary. It is preserved here because it teaches a habit that transfers beyond any single vendor or interface: every proposed action should come with a validation command, and inability to validate should halt the workflow rather than encourage guessing.
+This validator pattern expresses one useful boundary. It teaches a habit that transfers beyond any single vendor or interface: every proposed action should come with a validation command, and inability to validate should halt the workflow rather than encourage guessing.
 
 ```markdown
 # Role: Senior Site Reliability Engineer
@@ -119,16 +119,16 @@ The fourth question is about action rights. A system that can read files is diff
 
 Which approach would you choose here and why: a teammate asks for help choosing between two Kubernetes autoscaling settings, but the answer depends on current cluster metrics that the AI tool cannot see? A disciplined answer might use chat to frame the tradeoffs, terminal commands to collect metrics, and a human review to decide. The AI tool can support the reasoning, but it should not pretend to know the missing measurements.
 
-The original triage example is preserved below because it captures a realistic distinction. A Kubernetes RBAC audit is not merely a search task, even though documentation may help. It requires reasoning over permissions, parsing structured output, and checking whether a ServiceAccount can reach privileged actions. The recommended strategy is therefore a reasoning model with an execution sandbox for analysis, not a plain conversation based on memory.
+The triage example below captures a realistic distinction. A Kubernetes RBAC audit is not merely a search task, even though documentation may help. It requires reasoning over permissions, parsing structured output, and checking whether a ServiceAccount can reach privileged actions. The recommended strategy is therefore a reasoning model with an execution sandbox for analysis, not a plain conversation based on memory.
 
-```yaml
+```text
 # Triage Example: Selecting a tool for a Kubernetes RBAC Audit
 task: "Audit ClusterRoleBindings for potential privilege escalation"
 requirements:
   reasoning_density: "High" (Tracing ServiceAccount permissions to Pod execution)
   knowledge_freshness: "Medium" (RBAC primitives are stable)
   execution_layer: "High" (Requires parsing JSON/YAML output to verify logic)
-recommended_strategy: "Use a reasoning model with an execution sandbox for log analysis"
+recommended_strategy: "Use a reasoning model with an execution sandbox for analysis"
 ```
 
 Notice the phrase "execution sandbox" rather than "production access." For analysis, a sandbox can parse JSON, compare YAML, calculate statistics, or run tests against a safe fixture. That is different from letting the tool modify the cluster. In many workflows, the best design is to give the AI enough execution ability to verify its reasoning while withholding the authority to perform irreversible operations.
