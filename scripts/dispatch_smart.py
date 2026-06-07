@@ -771,6 +771,14 @@ def main() -> int:
     task_id = args.task_id or make_task_id(args.task_class, args.agent)
 
     if args.mcp is not None:
+        if args.task_class not in {"review", "search"}:
+            p.error(
+                f"--mcp is only supported for read task classes (review, search); "
+                f"got task_class={args.task_class!r}. Write classes would either "
+                f"cripple claude (allowedTools restricted to RAG+Read, no write) or "
+                f"silently scope-creep; use the write-mode dispatch.py --mcp path for "
+                f"translation authoring."
+            )
         if args.agent not in MCP_SUPPORTED_AGENTS:
             p.error(
                 f"--mcp tool access is only supported for claude and gemini "
