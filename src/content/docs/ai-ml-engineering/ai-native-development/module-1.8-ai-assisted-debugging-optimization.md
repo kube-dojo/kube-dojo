@@ -30,9 +30,9 @@ AI can reduce that pressure, but only when you use it as part of a disciplined d
 
 This module teaches AI-assisted debugging as a professional workflow rather than a shortcut. You will learn how to collect useful context, ask for analysis instead of blind rewrites, verify proposed fixes with tests, and use traditional tools such as profilers, logs, `kubectl`, and Git history as evidence sources. The goal is not to let AI debug for you; the goal is to become the engineer who can direct the investigation, challenge the answer, and prove the fix.
 
-## Core Content
+The debugging workflows in this module are harness-driven: the same prompt structures, evidence packets, and verification checks work regardless of which AI model or assistant you use. The discipline is in the evidence you collect and the contracts you enforce, not in model-specific features. For prompt architecture and harness fundamentals, see [Module 1.1: Prompt Fundamentals](/ai/ai-engineering-foundations/module-1.1-prompt-fundamentals/).
 
-### 1. The Debugging Contract: Evidence Before Advice
+## The Debugging Contract: Evidence Before Advice
 
 The most important shift in AI-assisted debugging is treating the model as an analysis partner that consumes evidence, not as an oracle that receives frustration. When a prompt says only “this is broken,” the model fills missing details with common patterns from training data. Sometimes that guess lands close enough, but professional debugging cannot depend on luck because the cost of a wrong fix grows with system complexity.
 
@@ -225,7 +225,7 @@ if __name__ == "__main__":
 
 This example uses schema validation to make the failure observable before the tool touches production state. In real AI-native systems, strict schemas and clear validation errors are debugging tools, not just safety features. They turn a vague complaint such as “the agent filed the wrong ticket” into a precise failure such as “the model emitted `ticket` instead of `ticket_id`, and the executor rejected the call.”
 
-### 2. Bug Categories: Where AI Helps, Where It Misleads
+## Bug Categories: Where AI Helps, Where It Misleads
 
 AI models are strongest when the bug matches a common pattern and the relevant context fits into the prompt. Syntax errors, type mismatches, missing imports, obvious null handling, and many framework misuses are good fits because the model has seen thousands of similar examples. The model’s pattern recognition becomes less reliable when the failure depends on runtime timing, hidden state, proprietary business rules, or production-only configuration.
 
@@ -427,7 +427,7 @@ Performance bugs are another category where AI can mislead if you skip measureme
 
 The senior move is to classify before prompting. If the failure is deterministic and local, ask for code analysis. If the failure is environmental, ask for a differential checklist. If the failure is timing-sensitive, ask for instrumentation and reproduction strategy. If the failure is performance-related, profile first and ask about the measured bottleneck.
 
-### 3. Worked Example: From Failure to Verified Fix
+## Worked Example: From Failure to Verified Fix
 
 A worked example makes the debugging workflow concrete. We will use a small Python function because the mechanics are visible, but the same sequence applies to a service endpoint. The function computes a discounted total, and the bug appears only when the cart does not qualify for a discount.
 
@@ -538,7 +538,7 @@ Review your proposed fix against these checks:
 
 This review prompt is especially useful when you are tired or under incident pressure. It slows the model down and makes the answer auditable. You are not asking for more words; you are asking for the reasoning that determines whether the patch is safe.
 
-### 4. Optimization: Profile First, Then Ask the Model
+## Optimization: Profile First, Then Ask the Model
 
 Optimization is debugging with a stopwatch. The bug is not a wrong value; the bug is that the system spends too much time, memory, money, or capacity producing the value. AI can help identify algorithmic complexity, database anti-patterns, unnecessary allocations, and caching opportunities, but only after you identify where the time actually goes.
 
@@ -663,7 +663,7 @@ k describe pod -n payments checkout-api-abc123
 
 These commands collect symptoms, not root causes. High CPU tells you where to look, logs tell you what the application reported, and `describe` tells you whether Kubernetes restarted, throttled, or failed to schedule the Pod. A strong AI prompt includes the relevant snippets and asks what evidence is missing, rather than asking the model to invent a production diagnosis.
 
-### 5. Cloud-Native Debugging With AI and Kubernetes
+## Cloud-Native Debugging With AI and Kubernetes
 
 Kubernetes debugging is a context-management problem. The failure may live in application code, container image contents, environment variables, resource limits, network policy, service discovery, DNS, storage, node pressure, or control-plane state. AI can help organize the search, but only if you provide the right Kubernetes objects and avoid drowning the model in unrelated YAML.
 
@@ -758,7 +758,7 @@ k logs -n kube-system deploy/metrics-server --tail=80
 
 In production, you should combine cluster-level signals with application-level signals. A high CPU Pod might be doing legitimate work, stuck in a retry loop, processing oversized requests, or suffering from a hot loop introduced by a code change. Feed the model CPU graphs, request rates, error rates, and profiler output together. Ask it to separate correlation from causation.
 
-### 6. Debugging AI-Native Systems and Tool Calls
+## Debugging AI-Native Systems and Tool Calls
 
 AI-native applications add a new class of bugs because part of the system is probabilistic while the surrounding application still requires deterministic contracts. A tool-calling workflow might fail because the tool schema is too permissive, the model chooses the wrong tool, the executor accepts invalid arguments, the tool output lacks enough structure, or the final response ignores a failure. Debugging these systems requires traces that preserve every boundary.
 
@@ -870,7 +870,7 @@ Tool output design affects debuggability. A vague output such as `"failed"` forc
 
 The final debugging principle for AI-native systems is to evaluate behavior with scenarios, not just unit tests. Unit tests validate validators and executors. Scenario tests validate whether the assistant asks for clarification, refuses unsafe action, chooses the correct tool, and grounds its final response in tool output. A model upgrade, prompt change, or schema edit can change behavior even when code tests still pass.
 
-### 7. Debugging Patterns for Senior Practice
+## Debugging Patterns for Senior Practice
 
 Binary search debugging is useful when the failure hides inside a long path. The idea is simple: place a checkpoint near the middle of the workflow, determine whether the failure happens before or after that point, and repeat. AI helps by suggesting meaningful checkpoints and the values that should be logged at each checkpoint.
 
@@ -1293,6 +1293,14 @@ Success criteria for this step:
 - [ ] Your note includes at least one application signal and one Kubernetes signal.
 - [ ] Your note asks the AI to rank hypotheses instead of guessing.
 - [ ] Your note identifies the smallest safe next check.
+
+## Learner check
+
+Before moving on, read this passage from the Debugging Contract section aloud:
+
+> The most important shift in AI-assisted debugging is treating the model as an analysis partner that consumes evidence, not as an oracle that receives frustration.
+
+If you can explain why "evidence before advice" is the contract that makes every other technique in this module work, you have grasped the foundation. If you are unsure, re-read the Debugging Contract section and trace one of the worked examples from symptom to verified fix.
 
 ## Next Module
 
