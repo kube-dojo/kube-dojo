@@ -62,7 +62,7 @@ The landscape also has a billing boundary that is easy to misunderstand. A consu
 | Terminal agent | Read, edit, run commands, use Git | Multi-step tasks with verification | Unsafe command or dependency changes |
 | Connected agent | Use files plus external tools | Internal docs, tickets, databases, deployment checks | Data exposure and workflow authority |
 
-The authority diagram above is informal shorthand. The next section names the same progression as a durable autonomy ladder (L0–L5) so you can compare tools by how far up they go, not by marketing labels.
+The authority diagram above is informal shorthand. The next section formalizes its **action-autonomy** dimension as a durable ladder (L0–L5) so you can compare tools by how far up they go, not by marketing labels. Note that the diagram's "connected agent" end is a *separate* authority dimension: **connectivity** (reaching external systems via MCP) widens what a tool can touch, not how autonomously it acts — which is why the Rosetta Stone tracks MCP as its own row rather than as a higher autonomy rung.
 
 ## Harness And Model Are Orthogonal Axes
 
@@ -74,7 +74,7 @@ A second durable axis sits beside authority: **harness** and **model** are indep
 
 **Coupling** is how tightly harness and model are bound:
 
-| Coupling style | What it means | Examples (capability class, not rankings) |
+| Coupling style | What it means | Illustrative examples (current per-tool specifics live in the dated Rosetta below) |
 |---|---|---|
 | Model-locked | Harness ships with one vendor model family | Claude Code → Claude; Codex → OpenAI; Antigravity → Gemini |
 | Model-agnostic / BYO | You supply API keys or run local weights | aider, Cline, opencode, Hermes, OpenClaw |
@@ -131,7 +131,7 @@ When the Rosetta Stone lists an autonomy ceiling, it means the highest level the
 
 **How to read this table:** pick the row that matches your work — form factor (IDE vs CLI vs gateway), autonomy ceiling (L3 vs L4 vs L5), and model coupling (locked frontier vs BYO vs local) — not the vendor logo. A tool with L4 background agents and no L0 autocomplete fits a different daily rhythm than an IDE with autocomplete and L3 supervised mode only. Two columns recur across many rows: **MCP** for tool connectivity and **AGENTS.md** (or product-specific equivalents) for hierarchical agent instructions. Those open standards are the durable cross-tool layer; the snapshot cells above will drift — the axes will not.
 
-Modules 1.2–1.10 in this sub-track refer back to this Rosetta when comparing local models, harness configuration, and agent economics.
+Later modules in this sub-track build on this Rosetta when comparing local models, harness configuration, and agent economics.
 
 ## Landscape Snapshot As Of 2026-06
 
@@ -154,7 +154,7 @@ Every major vendor now ships multiple form factors rather than a single surface:
 
 Persistent and background autonomy (L4–L5) is where **agentic scaling economics** bite — independent of any single vendor narrative.
 
-Open-source persistent agents gained visibility in this window: **Hermes** (Nous Research; desktop preview around June 2026; messaging-gateway form factor; BYO/local model) and **OpenClaw** (Peter Steinberger; runs on your own hardware; **~302k GitHub stars by April 2026**, described as the fastest-growing open-source project in GitHub history; creator joined OpenAI in February 2026; project moved toward an independent foundation).
+Open-source persistent agents gained visibility in this window: **Hermes** (Nous Research; desktop preview around June 2026; messaging-gateway form factor; BYO/local model) and **OpenClaw** (Peter Steinberger; runs on your own hardware; reaching **~302k GitHub stars by April 2026** (unusually rapid star growth); creator joined OpenAI in February 2026; project moved toward an independent foundation).
 
 **Cost reality (verified, neutral):** running on the order of ~100 autonomous Codex agents for 30 days cost OpenClaw's creator **$1.3M in OpenAI API tokens** (603B tokens / 7.6M requests; that figure reflected Codex "Fast Mode" — standard mode was approximately **$300k**; the bill was covered by OpenAI). The durable lesson: **L4/L5 autonomy on a frontier API can cost thousands per agent per month**; the **same harness class on a local open-weights model** carries **~zero marginal token cost**, trading capability for cost and privacy. Neither side is universally "better" — the fit depends on task difficulty, data boundary, and budget.
 
