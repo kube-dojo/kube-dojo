@@ -26,8 +26,8 @@ After completing this module, you will be able to:
 - **Design** a layered CI/CD security pipeline that places secrets scanning, SAST, SCA, image scanning, IaC scanning, and deployment policy checks at the stages where they provide the strongest signal.
 - **Evaluate** security findings by severity, exploitability, reachability, asset exposure, and deployment context so that gates block dangerous changes without creating constant false emergencies.
 - **Debug** a failing security gate by tracing which tool produced the finding, which artifact was scanned, which policy decided the result, and what remediation path fits the risk.
-- **Implement** a runnable GitHub Actions security workflow that uploads findings, limits token permissions, separates untrusted scan jobs from publish jobs, and blocks unsafe releases.
-- **Compare** pipeline security trade-offs such as fast pull-request scans versus deeper scheduled scans, mutable action tags versus pinned references, and warning gates versus blocking gates.
+- **Implement** a runnable GitHub Actions security workflow that uploads findings, limits token permissions, separates untrusted scan jobs from publish jobs, blocks unsafe releases, and hardens third-party `uses:` references against tag-mutation supply-chain attacks.
+- **Compare** pipeline security trade-offs such as fast pull-request scans versus deeper scheduled scans, mutable action tags versus SHA-pinned references, Dependabot cooldown windows, and warning gates versus blocking gates.
 
 ---
 
@@ -200,7 +200,198 @@ jobs:
 
 This example still uses action version tags because the workflow must be directly runnable in a new repository. In a production program, teams commonly add an action-pinning policy, an allowlist of approved actions, and an automated update process that resolves tags to reviewed immutable references. The key teaching point is that the scanner and publisher should not share the same token boundary.
 
-> **Active check:** Look at one CI/CD workflow you maintain or have used recently. Identify the job with the broadest permissions and write down whether that job runs untrusted pull-request code, trusted main-branch code, or release-only code. If you cannot answer from the YAML alone, the workflow needs clearer boundaries.
+> **Active check:** Look at one CI/CD workflow you maintain or has used recently. Identify the job with the broadest permissions and write down whether that job runs untrusted pull-request code, trusted main-branch code, or release-only code. If you cannot answer from the YAML alone, the workflow needs clearer boundaries.
+
+---
+
+## The GitHub Actions Supply-Chain Attack Class
+
+GitHub Actions makes it easy to compose delivery pipelines from reusable steps published by other maintainers. That convenience hides a supply-chain fact that container teams already understand from image tags: **a version tag is a mutable pointer, not a promise about content**. When your workflow says `uses: example-org/report-action@v2`, GitHub resolves that tag to whatever commit the tag currently names in the upstream repository. If an attacker can move the tag, every workflow that trusts the tag name without reviewing the underlying commit will start executing new code on the next run.
+
+Tag-mutation attacks are especially dangerous in CI because the runner is a secret-rich environment by design. Workflow jobs often receive cloud credentials through OIDC, registry tokens, package-manager API keys, deployment keys, and short-lived `GITHUB_TOKEN` values scoped to repository contents or packages. A compromised action step runs with the same process memory, filesystem, and network access as your own scripts. The attacker's goal is rarely to break the build visibly. The goal is to harvest credentials quietly and exfiltrate them before anyone notices that a third-party step changed behavior.
+
+This attack class is distinct from a maintainer publishing a malicious release on purpose. In a tag-mutation incident, consumers believe they pinned a known-good semver such as `v45.0.7` or `v3.1.0`, but the tag now points at a different commit than the one they reviewed last month. Retroactive mutation is the key word: workflows that already passed review can begin running poisoned code without a pull request in the consumer repository. That is why "we only update actions occasionally" is not a sufficient control. The upstream tag can change while your workflow file stays frozen.
+
+```ascii
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                 TAG-MUTATION SUPPLY-CHAIN ATTACK (CONCEPTUAL)                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Consumer workflow (unchanged YAML)                                           │
+│  uses: vendor/helper-action@v3.2.0  ──▶ resolves tag ──▶ commit SHA today   │
+│                                                                              │
+│  Yesterday: tag v3.2.0 ──▶ commit A (reviewed, benign)                       │
+│  Today:     tag v3.2.0 ──▶ commit B (attacker-moved tag, malicious payload)    │
+│                                                                              │
+│  SHA-pinned consumer                                                          │
+│  uses: vendor/helper-action@abc123…full40  # v3.2.0  ──▶ always commit A     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+The diagram is simplified, but the defensive lesson is not: **tags move; full commit SHAs do not**. Security programs therefore treat third-party Actions the same way they treat base images—pin immutable content, review updates deliberately, and assume any step can become hostile until proven otherwise.
+
+### How tag mutation turns into credential theft
+
+Most tag-mutation payloads follow a repeatable pattern. The imposter commit keeps the action's public interface familiar so workflows do not fail immediately. Behind that interface, the action downloads a secondary tool, scans environment variables, reads files the runner wrote, attaches to local processes, or posts data to an external domain. Public workflow logs become an exfiltration channel when secrets are printed or encoded into log lines on repositories where logs are visible to more principals than the secret owner intended.
+
+Two mechanics show up repeatedly in real incidents. The first is **log exfiltration**, where stolen secrets appear in CI output that is retained, searchable, or public. The second is **in-process memory harvesting**, where malware reads secrets from the GitHub Actions worker process while a job is still running. Both mechanics exploit the same root cause: the pipeline granted the action enough access to see secrets and enough network freedom to move them out.
+
+| Stage | Attacker action | Why CI/CD amplifies impact |
+|---|---|---|
+| Credential access | Steal maintainer token or compromise release automation | Allows retroactive tag moves across many semver labels at once |
+| Tag rewrite | Point popular tags at one malicious commit | Consumers who trust tag names inherit poison without editing YAML |
+| Payload execution | Run during `uses:` step on consumer runners | Inherits job permissions, injected env vars, and checkout credentials |
+| Exfiltration | Send secrets to attacker infrastructure or embed in logs | CI logs and outbound HTTPS often lack the same controls as production apps |
+
+Defenders should not treat these incidents as exotic zero-days. They are the predictable outcome of mutable references in a privileged automation system. The rest of this section walks through two verified incidents and the layered controls that reduce likelihood and blast radius.
+
+### Incident: tj-actions/changed-files (March 2025, CVE-2025-30066)
+<!-- incident-xref: tj-actions-2025 -->
+
+In March 2025, the widely used GitHub Action `tj-actions/changed-files` was compromised in a supply-chain incident tracked as **CVE-2025-30066**. Attackers compromised the `@tj-actions-bot` personal access token and **retroactively moved multiple version tags** so they pointed at a single malicious commit. Roughly **23,000 repositories** were affected because many workflows referenced the action by mutable tag rather than by reviewed commit SHA.
+
+The injected payload was Python code embedded in the action runtime. During affected workflow runs, that code **dumped CI/CD secrets into workflow logs**, including access keys, personal access tokens, npm tokens, and RSA private keys. On repositories where logs were broadly visible, those secrets were effectively **publicly exposed** even though the workflow file itself never changed. The active window reported by responders was **2025-03-14 through 2025-03-15 UTC**. A patched release **`v46.0.1`** addressed the issue. A sibling action, **`reviewdog/action-setup`**, was associated with **CVE-2025-30154** in the same campaign. Public sources include [CISA's March 18, 2025 alert](https://www.cisa.gov/news-events/alerts/2025/03/18/supply-chain-compromise-third-party-tj-actionschanged-files-cve-2025-30066-and-reviewdogaction), Wiz research coverage, and GitHub Advisory [GHSA-mrrh-fwg8-r2c3](https://github.com/advisories/GHSA-mrrh-fwg8-r2c3).
+
+The tj-actions incident teaches three pipeline-specific lessons that generalize beyond one vendor. First, **semver tags are not integrity controls** when the tag namespace can be rewritten by a stolen maintainer credential. Second, **secret exposure through logs is a first-class incident**, not a secondary embarrassment—teams must rotate every credential that could have appeared in logs during the window, then tighten log visibility and masking. Third, popular utility actions accumulate enormous fan-out; one compromised tagging credential becomes thousands of organization breaches without a single malicious pull request in consumer repos.
+
+> **Hypothetical scenario: The Green Build That Leaked Production Keys**
+>
+> A platform team pinned `tj-actions/changed-files@v45.0.7` in a shared workflow template two quarters earlier and never touched the line again. During the March 2025 tag-rewrite window, the tag began resolving to malicious code while the template YAML stayed unchanged. Nightly builds continued to pass functional tests because the action still produced a changed-files list, but workflow logs now contained base64-shaped blobs that matched cloud access key formats. A security researcher notified the team after noticing patterned log output on a public fork. The organization spent the next day rotating registry tokens, revoking OIDC trust relationships, and replacing long-lived cloud keys—work that would not have been necessary if the workflow had used a reviewed full commit SHA and separate deploy identities.
+
+### Incident: actions-cool tag mutation (May 2026)
+<!-- incident-xref: actions-cool-2026 -->
+
+The **`actions-cool`** maintainer namespace suffered a tag-mutation campaign on **2026-05-18 and 2026-05-19** that demonstrated the same attack class with even broader tag sweep. **Every tag** of two actions—**`actions-cool/issues-helper`** (**53 tags**) and **`actions-cool/maintain-one-comment`** (**15 tags**)—was moved to imposter commits. Responders noted that **53 tags were created or rewritten in roughly three minutes and sixteen seconds**, which is a strong signal of automated tag rewriting rather than manual releases.
+
+The malicious commits downloaded the **Bun runtime** and used it to **read memory from the GitHub Actions `Runner.Worker` process**, harvesting in-flight secrets during active jobs. Stolen material was **exfiltrated to an attacker-controlled domain** later linked to the **Shai-Hulud npm campaign**. Consumers who pinned **`uses:` references to a full 40-character commit SHA** were unaffected because their workflows never followed the moved tags. Sources include StepSecurity's incident report and [The Hacker News coverage dated 2026-05-19](https://thehackernews.com/2026/05/github-actions-supply-chain-attack.html).
+
+Where tj-actions emphasized log dumping, actions-cool showed that **memory scraping on the runner** can bypass naive assumptions such as "we never echo secrets in `run:` steps." Secrets injected by GitHub into the worker process for OIDC exchange, package publishing, or cloud role assumption can still be visible to code executing inside a compromised action step. That is why egress control and job isolation matter alongside pinning.
+
+### Defense: SHA-pin every `uses:` reference
+
+The primary control is to replace tag references with **full 40-character commit SHAs** and keep human-readable versions in trailing comments so update automation still works:
+
+```yaml
+# Prefer immutable commit SHAs with version comments for Dependabot tracking
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+  with:
+    persist-credentials: false
+
+- uses: example-org/report-action@9f3c2a1b0e4d8c7f6a5b4c3d2e1f0a9b8c7d6e5f  # v3.2.0
+```
+
+Resolve SHAs from the **upstream repository**, not from a blog post or third-party gist. A maintainer or security engineer should verify the SHA against the tagged release in the action's home repository before merging a workflow change:
+
+```bash
+# Resolve a tag to its current commit SHA in the upstream action repository
+gh api /repos/example-org/report-action/git/refs/tags/v3.2.0 --jq '.object.sha'
+```
+
+If the resolved SHA does not match the SHA already pinned in your workflow, stop and investigate before merging. Tag-mutation attacks often leave semver labels intact while changing the underlying commit; the SHA comparison is the integrity check tags cannot provide.
+
+Pinning increases update friction, and that friction is the point. Dependabot and similar bots can propose SHA bumps when paired with version comments, but a human or automated policy check should confirm the new SHA matches the intended upstream tag before adoption.
+
+### Defense: Dependabot cooldown for github-actions
+
+Automatic action updaters solve drift, yet they can also become the delivery mechanism for a poisoned tag if they merge too quickly during the disclosure window. Configure a **cooldown** so newly published tags are not auto-proposed immediately:
+
+```yaml
+# .github/dependabot.yml (illustrative)
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+```
+
+A seven-day cooldown does not eliminate risk, but it gives the community time to detect retroactive tag moves and publish indicators of compromise before your repository auto-adopts a rewritten tag. Cooldown complements SHA pinning; it does not replace manual review for high-privilege workflows.
+
+**Do not enable auto-merge on `github-actions` Dependabot pull requests** when those workflows can publish artifacts, assume cloud roles, or deploy to protected environments. The highest-impact merge in many repositories is not application code—it is a one-line SHA change in a workflow that already runs with powerful credentials.
+
+### Defense: OIDC, token isolation, and checkout hardening
+
+Tag pinning reduces the chance you execute attacker code. Token isolation reduces what attacker code can reach if pinning fails or a trusted action is compromised through a different path.
+
+Separate **build and scan jobs** from **deploy jobs** at the identity layer. Scan jobs on pull requests should use **`contents: read`** and should **not** request **`id-token: write`** unless a scan truly needs federated identity. Deploy jobs on protected branches may require **`id-token: write`** to exchange a JWT for cloud credentials, but that scope should exist only on the deploy job that needs it—not on every lint or test job running untrusted fork code.
+
+```yaml
+permissions: {}
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run scanners
+        run: ./scripts/run-scanners.sh
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-scan
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Assume cloud role via OIDC
+        run: ./scripts/deploy-with-oidc.sh
+```
+
+Set **`persist-credentials: false`** on **`actions/checkout`** unless the workflow must push commits back to the repository. Without that setting, the job token can remain in git configuration for later steps—including compromised third-party actions—to read and exfiltrate.
+
+Workflow-level **`permissions:`** should start from least privilege, often **`contents: read`**, and expand only on jobs that require publish or deploy scopes. This pattern directly answers the threat model from the tj-actions and actions-cool incidents: stolen secrets are less useful when the compromised job never received production cloud roles or long-lived PATs in the first place.
+
+### Defense: harden-runner egress monitoring
+
+Memory scraping and HTTPS exfiltration both require the runner to reach attacker infrastructure. **Harden-runner**-style controls (egress monitoring and allow-listing on GitHub-hosted or larger self-hosted runners) add a detective and preventive layer when a step tries to phone home to an unknown domain during a job that should only talk to your registry, package mirror, and cloud STS endpoints.
+
+Treat egress allow lists as part of the pipeline's security architecture, not as optional networking trivia. When a compromised action attempts to download a runtime from an unapproved domain—as in the actions-cool incident pattern—egress monitoring can block or alert before secrets leave the environment. No single vendor control replaces SHA pinning, but egress restrictions reduce the success rate of exfiltration after a step executes.
+
+Hypothetical scenario: A service team adopts harden-runner allow lists that permit only `ghcr.io`, `api.github.com`, and their cloud provider STS hostname. During a tag-mutation incident on a comment-helper action, the job attempts to reach `exfil-example.com`. The job fails closed, security receives an alert with the workflow name and SHA pin under review, and responders freeze Dependabot action updates until tags are validated.
+
+### Defense: reviewing Dependabot github-actions pull requests safely
+
+When Dependabot proposes a SHA bump, treat the pull request as a **supply-chain change**, not housekeeping. Before merge:
+
+1. Read the PR diff and note the **new full SHA** and the **version comment** (`# vX.Y.Z`).
+2. Query the upstream action repository for the tag named in the comment.
+3. Confirm the tag's resolved SHA **equals** the SHA Dependabot proposes.
+4. Scan release notes or compare commit messages for unexpected runtime downloads or permission changes.
+5. Run the workflow on a non-production branch and inspect outbound network behavior if egress tooling is available.
+
+```bash
+# Verify Dependabot's proposed SHA matches the upstream tag object
+gh api /repos/example-org/report-action/git/refs/tags/v3.2.1 --jq '.object.sha'
+# Compare output to the SHA in the Dependabot diff; reject on mismatch
+```
+
+If the SHAs diverge, **do not merge**. That mismatch is exactly what tag-mutation attacks produce: a semver label that no longer points at the commit consumers expect. Also reject PRs that change multiple unrelated actions simultaneously without explanation, or that arrive outside your normal update cadence during an public incident window.
+
+| Control | What it prevents | Operational cost |
+|---|---|---|
+| Full SHA pin with version comment | Silent retroactive tag rewrite | Manual review on each action update |
+| Dependabot cooldown | Auto-adoption during disclosure window | Slower patch uptake for actions |
+| Job-scoped OIDC and `permissions:` | Stolen job tokens reaching deploy planes | More YAML structure per workflow |
+| `persist-credentials: false` | Checkout token reuse by later steps | Must re-auth if a job truly needs push |
+| harden-runner egress allow lists | Runtime download and HTTPS exfiltration | Curated domain lists per workflow class |
+| Dependabot SHA/tag verification | Merging a poisoned SHA while tag lies | Minutes of review per action bump |
+
+> **Stop and think:** Open a workflow that uses third-party actions and classify each `uses:` line as **tag pin**, **SHA pin**, or **floating reference** (`@main`, `@master`). For every tag pin, ask who last verified the underlying commit and whether a tag rewrite could run malicious code tonight without a PR in your repository. If you cannot answer, your first remediation is SHA pinning plus cooldown—not another scanner.
+
+Tags are mutable pointers; full commit SHAs are not. That sentence is the hinge for the entire GitHub Actions supply-chain attack class. Scanning tools tell you whether your container or dependency graph is vulnerable; pinning and identity boundaries tell you whether your delivery system will execute attacker-controlled code with production credentials. Mature DevSecOps programs implement both.
 
 ---
 
@@ -750,9 +941,9 @@ This is the difference between a beginner and a senior response to security gate
 
 ---
 
-## War Story: The Pipeline That Saved a Release Window
+## Case Study: The Pipeline That Saved a Release Window
 
-An e-commerce company planned a major checkout release shortly before its busiest sales weekend. The platform had strong unit tests and good deployment automation, but security checks were uneven. Some services ran SAST, a few teams used dependency scanning, and most container images were pushed to the registry without a blocking image scan. The organization believed it had "shifted left" because developers saw some warnings in pull requests, but the final runtime artifacts were not consistently inspected.
+Hypothetical scenario: An e-commerce company planned a major checkout release shortly before its busiest sales weekend. The platform had strong unit tests and good deployment automation, but security checks were uneven. Some services ran SAST, a few teams used dependency scanning, and most container images were pushed to the registry without a blocking image scan. The organization believed it had "shifted left" because developers saw some warnings in pull requests, but the final runtime artifacts were not consistently inspected.
 
 Two days before the release freeze, the platform team added a container scan to the shared build template. The first run was painful. Multiple services carried critical vulnerabilities in base-image packages, several images ran as root, and some services included build tools that were never needed at runtime. The findings were not new risks introduced that day; they were accumulated risk made visible by a stronger checkpoint.
 
@@ -967,7 +1158,7 @@ The strongest pipelines also teach. A good finding links to remediation guidance
 | Blocking all scanner output without tuning | Developers see noise as arbitrary failure and start looking for bypasses | Block severe high-confidence risks, baseline legacy findings, and tune rules with owners |
 | Treating `continue-on-error` as harmless | Security jobs may fail while the workflow still appears successful | Use it only when a later gate job explicitly evaluates the result and blocks if needed |
 | Scanning templates instead of rendered manifests | Helm, Kustomize, or environment values may create unsafe final YAML not visible in source templates | Render the deployment artifact and scan the exact manifest intended for the environment |
-| Using mutable tags for promotion | The deployed artifact may differ from the scanned artifact | Promote image digests and preserve provenance from build through deployment |
+| Using mutable tags for promotion or third-party Actions | The deployed artifact or action step may differ from what you reviewed; tag-mutation attacks run without a consumer workflow change | Promote image digests, pin every `uses:` to a full commit SHA with a version comment, and verify Dependabot bumps against upstream tags |
 | Ignoring transitive dependencies | Vulnerable packages can enter through libraries the team never directly selected | Inspect dependency trees, update direct parents, use overrides carefully, and verify tests |
 | Creating permanent exceptions | Temporary risk acceptance silently becomes normal policy | Require owner, justification, compensating control, review link, and expiration date |
 
@@ -1063,6 +1254,19 @@ A deployment job uses `myapp:latest`, but the image scan job scans `myapp:${{ gi
 The flaw is that the pipeline scanned one artifact and deployed another artifact identified by a mutable tag. Tags can move, so the scan evidence did not prove the safety of the deployed image. The fix is to promote immutable image digests through the pipeline. The build job should output the digest, the scan job should scan that digest, the signing or attestation step should bind evidence to that digest, and the deployment job should deploy the approved digest.
 
 Using tags for human readability is fine, but gates and deployments should rely on immutable references. This ensures that production runs the exact artifact that passed security checks.
+
+</details>
+
+### Question 8
+
+Your workflow references `example-org/helper-action@v2.1.0` in a shared template. During a public tag-mutation incident, responders report that the tag now resolves to a commit that downloads an unapproved runtime and reads `Runner.Worker` memory. Your security lead asks for immediate mitigations without waiting for a full pipeline redesign. Which combination addresses the attack class most directly?
+
+<details>
+<summary>Show Answer</summary>
+
+Replace tag references with **reviewed full commit SHAs** (keeping `# v2.1.0` comments for update tracking), **rotate credentials** that could have been exposed during the incident window, and **split job permissions** so scan jobs on pull requests never receive `id-token: write` or publish scopes. Add a **Dependabot cooldown** before auto-merging future action updates, and verify each proposed SHA matches the upstream tag before merge.
+
+Egress allow-listing or harden-runner monitoring helps detect or block exfiltration, but pinning and credential rotation are the first moves because they stop executing the imposter commit and invalidate secrets that may already have leaked. Simply pinning `@v2.1.1` without a SHA continues to trust mutable tags. Disabling all third-party actions may be impossible operationally; controlled pinning plus least privilege is the sustainable fix.
 
 </details>
 
@@ -1383,12 +1587,22 @@ Write a short note in your pull request or learning journal explaining which job
 
 ---
 
+## Learner check
+
+> Tags are mutable pointers; full commit SHAs are not. That sentence is the hinge for the entire GitHub Actions supply-chain attack class.
+
+---
+
 ## Next Module
 
 Continue to [Module 4.4: Supply Chain Security](../module-4.4-supply-chain-security/) to learn how source identity, artifact provenance, signing, SBOMs, dependency trust, and deployment admission fit together across the full software supply chain.
 
 ## Sources
 
+- [cisa.gov: supply chain compromise tj actionschanged files cve 2025 30066 and reviewdogaction](https://www.cisa.gov/news-events/alerts/2025/03/18/supply-chain-compromise-third-party-tj-actionschanged-files-cve-2025-30066-and-reviewdogaction) — CISA's March 18, 2025 alert documents the tj-actions/changed-files compromise, CVE-2025-30066, and the related reviewdog/action-setup incident CVE-2025-30154.
+- [github.com: advisories ghsa mrrh fwg8 r2c3](https://github.com/advisories/GHSA-mrrh-fwg8-r2c3) — GitHub Advisory GHSA-mrrh-fwg8-r2c3 lists affected tj-actions/changed-files versions through 45.0.7 and patched release v46.0.1.
+- [stepsecurity.io: actions cool issues helper github action compromised all tags point to imposter commit that exfiltrates ci cd credentials](https://www.stepsecurity.io/blog/actions-cool-issues-helper-github-action-compromised-all-tags-point-to-imposter-commit-that-exfiltrates-ci-cd-credentials) — StepSecurity's report describes the May 2026 actions-cool tag-mutation campaign across issues-helper and maintain-one-comment.
+- [thehackernews.com: github actions supply chain attack](https://thehackernews.com/2026/05/github-actions-supply-chain-attack.html) — The Hacker News coverage dated 2026-05-19 summarizes the actions-cool incident and links it to broader npm supply-chain activity.
 - [kubernetes.io: images](https://kubernetes.io/docs/concepts/containers/images/) — The Kubernetes images documentation directly states that digests are immutable hashes of image content and that tags can be moved.
 - [github.com: codeql action](https://github.com/github/codeql-action) — The upstream CodeQL Action repository directly documents `upload-sarif` and the required `security-events: write` permission.
 - [github.com: trivy action](https://github.com/aquasecurity/trivy-action) — The upstream Trivy Action README documents `fs`, `image`, and config-oriented scan modes plus SARIF output examples.

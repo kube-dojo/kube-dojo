@@ -6,7 +6,7 @@ Defensive rules for `.github/workflows/**` and `.github/actions/**`. Enforced by
 
 Format: `uses: owner/repo@<40-char SHA>  # vX.Y.Z`
 
-Why: tags are mutable. The 2026-05-19 actions-cool incident moved every tag of two actions to imposter commits in attacker-controlled forks; only SHA-pinned consumers were unaffected. Same attack class hit `tj-actions/changed-files` in 2026-03. Org-agnostic — applies to `actions/*` (GitHub's own org) just as much as third-party.
+Why: tags are mutable. The 2026-05-19 actions-cool incident moved every tag of two actions to imposter commits in attacker-controlled forks; only SHA-pinned consumers were unaffected. Same attack class hit `tj-actions/changed-files` in 2025-03 (CVE-2025-30066, ~23,000 repos; tags retroactively moved to a malicious commit that dumped CI/CD secrets into workflow logs). Org-agnostic — applies to `actions/*` (GitHub's own org) just as much as third-party.
 
 The version comment matters: it tells Dependabot what tag this SHA tracks, so Dependabot updates can flow.
 

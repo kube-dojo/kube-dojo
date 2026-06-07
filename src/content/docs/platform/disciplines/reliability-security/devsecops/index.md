@@ -4,13 +4,13 @@ sidebar:
   order: 0
   label: "DevSecOps"
 ---
-> **Discipline Track** | 6 Modules | ~3.5 hours total
+> **Discipline Track** | 7 Modules | ~4.25 hours total
 
 ## Overview
 
 DevSecOps integrates security into the DevOps workflow. Instead of security as a gate at the end, it's embedded throughout the software development lifecycle.
 
-This track covers the complete DevSecOps journey—from shift-left practices and CI/CD security to supply chain protection and runtime defense—culminating in building a security-first culture.
+This track covers the complete DevSecOps journey—from shift-left practices and CI/CD security to supply chain protection, runtime defense, security-first culture, and AI-agent safe development workflows.
 
 ## Prerequisites
 
@@ -31,6 +31,7 @@ Before starting this track:
 | -- | [Supply Chain Defense Guide](supply-chain-defense-guide/) | Reference | 20-25 min |
 | 4.5 | [Runtime Security](module-4.5-runtime-security/) | `[COMPLEX]` | 40-45 min |
 | 4.6 | [Security Culture & Automation](module-4.6-security-culture/) | `[MEDIUM]` | 30-35 min |
+| 4.7 | [AI Coding Agent Security](module-4.7-ai-agent-security/) | `[COMPLEX]` | 40-45 min |
 
 ## Learning Outcomes
 
@@ -41,6 +42,7 @@ After completing this track, you will be able to:
 3. **Protect the supply chain** — SBOMs, image signing, SLSA provenance
 4. **Defend at runtime** — Falco, network policies, Pod Security Standards
 5. **Build security culture** — Champions programs, metrics, automation
+6. **Secure AI coding agents** — Agent-config review, tripwires, sandboxing, least privilege
 
 ## Key Concepts
 
@@ -114,6 +116,9 @@ Module 4.5: Runtime Security
      │
      ▼
 Module 4.6: Security Culture & Automation
+     │
+     ▼
+Module 4.7: AI Coding Agent Security
      │
      ▼
 [Track Complete] → Security Tools Toolkit
