@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 114 — #1821 merge + reviewer tool-access tooling + tool-on review pilot</title>
+<style>
+ body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1000px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+ h1{font-size:1.5rem;border-bottom:2px solid #2563eb;padding-bottom:.3rem}
+ h2{font-size:1.15rem;margin-top:1.8rem;color:#1e40af}
+ h3{font-size:1rem;margin-top:1.2rem;color:#374151}
+ code{background:#f1f5f9;padding:.1em .35em;border-radius:3px;font-size:.88em}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.9em}
+ th,td{border:1px solid #d1d5db;padding:.35rem .55rem;text-align:left;vertical-align:top}
+ th{background:#f8fafc}
+ .ok{color:#15803d;font-weight:600}.bug{color:#b91c1c;font-weight:600}.warn{color:#b45309;font-weight:600}
+ blockquote{border-left:3px solid #2563eb;margin:.6rem 0;padding:.2rem .9rem;background:#f8fafc;color:#334155}
+ ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 114 — #1821 security-currency MERGED + reviewer tool-access tooling (#1827/#1828/#1830) + tool-on review pilot</h1>
+<p><strong>2026-06-07 · standalone orchestrator session.</strong> Picked up session 113's in-flight <strong>PR #1825</strong> (#1821 Phase-2 security curriculum) with green CI but <em>no review</em>, drove it through an independent cross-family R1 + orchestrator web-verification to merge, then — prompted by the user's questions about <em>why reviewers misbehave</em> — built the tooling to give reviewers the right read-tool per task, ran a calibration pilot, and discovered the gemini path is still inert. All dispatch on non-Claude lanes (s105 directive honored).</p>
+
+<h2>TL;DR — what merged</h2>
+<table>
+<tr><th>PR/issue</th><th>What</th><th>State</th></tr>
+<tr><td><strong>#1825</strong> (#1821)</td><td>devsecops 2026 supply-chain refresh: 4.4 (Miasma/Shai-Hulud npm-worm), 4.3 (GHA tag-mutation), NEW 4.7 (AI-agent config-injection)</td><td class="ok">MERGED → #1821 closed</td></tr>
+<tr><td><strong>#1828</strong> (#1827b)</td><td><code>--mcp SERVER</code> read-tool flag for <code>dispatch_smart</code> review classes</td><td class="ok">MERGED</td></tr>
+<tr><td><strong>#1830</strong> (#1827c)</td><td>cross-family-reviewer skill: "sandboxed-from-tools → mark UNVERIFIABLE" rule</td><td class="ok">MERGED</td></tr>
+<tr><td><strong>#1827</strong></td><td>reviewer tool-access tooling + pilot</td><td class="warn">OPEN — gemini <code>--mcp</code> fix + <code>--web</code> + glossary-path remain</td></tr>
+<tr><td><strong>#1829</strong></td><td>corpus re-review backlog (~151 EN + UK subset)</td><td class="warn">OPEN — gated on the #1827 pilot</td></tr>
+</table>
+
+<h2>1. PR #1825 — the missing cross-family R1 (the real continuation)</h2>
+<p>Session 113 authored #1825 and left it green-but-unreviewed. Ran <strong>two independent cross-family reviewers</strong> (deepseek + gemini; both different family than the codex/cursor authors) + <strong>orchestrator web-verification of every post-cutoff 2026 fact</strong> (StepSecurity / SafeDep / The Next Web). Both reviewers said NEEDS_CHANGES.</p>
+<h3>Real findings fixed (commit <code>504d803d</code>)</h3>
+<ul>
+<li class="bug">Fabricated commit SHAs in the SHA-pinning lesson (deepseek caught; I confirmed via <code>gh api</code>): <code>actions/checkout</code> <code>11bd71901…b2a2e1a3f</code> → real v4.2.2 <code>…ceea73d27597364c9af683</code>; <code>attest-build-provenance</code> <code>1c6080f9…</code> → real v1.4.3 <code>1c608d11…</code>. A security module that teaches "verify SHAs upstream" shipping <em>fake</em> SHAs.</li>
+<li class="bug">4.7 §3 AI-agent incident drift (orchestrator web-verify; reviewers can't catch post-cutoff facts): removed fabricated "1,718 stars"; <code>.claude/setup.mjs</code>→<code>.claude/settings.json</code> (SessionStart hook); "stolen PAT"→"compromised credentials"; "dormant branch"→commit was on <code>main</code>; dropped unverified fingerprint count. Kept verified: 2026-06-05, 73 repos/4 Microsoft orgs, Azure/durabletask, Bun, credential set.</li>
+<li>Sanitization: genericized two internal <code>#1812</code> self-references (both reviewers). 4.4 payload 4.2→4.3 MB and 90+→96 versions (per source).</li>
+</ul>
+<h3>Rejected (ground-checked false positives)</h3>
+<ul>
+<li>gemini: "Dependabot <code>cooldown</code> schema doesn't exist" — <strong>it's real</strong> (our own <code>github-actions-security.md</code> §5 mandates it; zizmor enforces it).</li>
+<li>deepseek: "<code>checkout@8edcb1…</code> not found" — <strong>it's a real commit</strong>.</li>
+</ul>
+<p>All 3 modules verify_module <span class="ok">T0 PASS</span>; full <code>npm run build</code> in primary <span class="ok">green (2165 pages, 0 schema errors)</span>. #1821 closed.</p>
+
+<h2>2. Why reviewers misbehave + tool-access tooling (#1827)</h2>
+<p>User asked why the reviewers threw false positives and whether we have trusted reviewers. Root cause: <strong>model reviewers run sandboxed from fact-check tools</strong> (no web, no <code>gh api</code>, no MCP) so they pattern-match from training → confident FPs on external-state &amp; post-cutoff claims. <strong>No model reviewer is merge-on-faith trustworthy</strong>; the deterministic tools (<code>verify_module.py</code>, <code>gh api</code>, WebFetch, incident-dedup) + orchestrator ground-check are the trusted layer.</p>
+<p>Two restrictions were conflated: <strong>write-blocking</strong> (deliberate, correct — keep) vs <strong>no read tools</strong> (the gap). Built/landed:</p>
+<ul>
+<li><strong>#1828:</strong> <code>--mcp SERVER</code> for <code>dispatch_smart</code> review/search classes (scoped to the named server, writes blocked). codex R1 caught a real footgun — claude <code>edit --mcp</code> restricted <code>allowedTools</code> to RAG+Read = silently crippled write → restricted <code>--mcp</code> to read classes.</li>
+<li><strong>#1830:</strong> reviewer-skill rule — when sandboxed, mark live-SHA/post-cutoff/maturity/version claims <code>UNVERIFIABLE</code>, never assert real/fake.</li>
+</ul>
+<h3>Opus-review economics (saved to memory)</h3>
+<p>Three wallets: <code>claude -p</code> = capped programmatic pool (post-2026-06-15); <strong>Agent-tool subagent = main quota</strong> (avoids the pool but token-heavy + competes with the orchestrator); non-Claude = neither. Rule: default reviews on flat-rate non-Claude subs; Opus only for the 1–2 hardest/wave, via <strong>subagent not <code>-p</code></strong>, front-loaded at session start; hand off "Opus review pending" rather than cram a depleted session.</p>
+
+<h2>3. The pilot (#1827 observation pass) — "see how agents review with tools on"</h2>
+<p>Same reviewer (gemini-3.1-pro), same UK module <code>module-3.6-network-policies</code> (1211 ln), sandboxed vs <code>--mcp rag</code>, orchestrator-ground-checked with the RAG tools directly.</p>
+<table>
+<tr><th>Finding</th><th>Result</th></tr>
+<tr><td>gemini-cli "sandboxed" mode</td><td class="warn">NOT toolless — has built-in <code>google_web_search</code> (verified блокіровка via google, correctly). codex/deepseek are the truly-sandboxed lanes.</td></tr>
+<tr><td>new skill UNVERIFIABLE rule</td><td class="ok">Works — both runs honored it.</td></tr>
+<tr><td>orchestrator + RAG</td><td class="ok">The working trusted layer — verified блокіровка (not in VESUM, russian-shadow 1.0 = real Russicism), блокування (valid), дозвільно (exists) in seconds.</td></tr>
+<tr><td><code>--mcp rag</code> for gemini</td><td class="bug">INERT. Run reported "NO RAG TOOLS." Root cause: gemini-cli's <code>--allowed-mcp-server-names</code> only <em>allows</em> a server already registered via <code>gemini mcp add</code>; registering at project scope (<code>✓ rag … Connected</code> interactively) STILL didn't expose tools in the headless <code>--approval-mode=plan</code> review. Deeper headless/plan-mode MCP-loading issue. Only claude's <code>--mcp-config</code> path is correct.</td></tr>
+<tr><td>gemini magnitude estimates</td><td class="warn">Unreliable — "80% omitted" was actually ~65% (UK 3,557 vs EN 10,062 words).</td></tr>
+<tr><td>glossary path</td><td class="warn">Meta-bug: glossary is at <code>src/content/docs/glossary.md</code>; <code>gemini-workflow.md</code> said <code>docs/glossary.md</code> (fixed this session).</td></tr>
+</table>
+<p><strong>Calibrate-before-scaling validated:</strong> draining #1829 on gemini <code>--mcp rag</code> would have produced toolless reviews masquerading as tool-enabled.</p>
+<p>Real content datapoint (representative of the #1829 backlog): UK 3.6 is a ~65%-abbreviated rewrite with glossary violations (Под/Інгрес) + a confirmed Russicism (блокіровка) — the known EN-expanded-after-translation lag.</p>
+
+<h2>4. Behavior correction (memory)</h2>
+<blockquote>"why are you pushing the responsibility of your work back to me? i gave clear instructions. this is physically impossible for humans to do or it will take years."</blockquote>
+<p>I had been bouncing routine merge decisions back to the user for reviewed+green+endorsed work. Saved <code>feedback_drive_dont_bounce_merge_decisions</code>: merge endorsed+reviewed+green PRs and move on; ask only for genuinely new irreversible/ambiguous/policy actions; for a standing directive pick the safe default and note it.</p>
+
+<h2>Memories written</h2>
+<ul>
+<li><code>feedback_reviewers_sandboxed_from_factcheck_tools</code> — match read-tool to task; orchestrator+tools is the trusted layer.</li>
+<li><code>feedback_opus_subagent_review_economics</code> — subagent=main quota vs <code>-p</code>=capped pool; cap+front-load.</li>
+<li><code>feedback_drive_dont_bounce_merge_decisions</code> — drive endorsed work to done.</li>
+</ul>
+
+<h2>RESUME — next-session follow-ups (all tracked)</h2>
+<ul>
+<li><strong>#1827 gemini <code>--mcp</code> fix</strong> — non-trivial: headless + <code>--approval-mode=plan</code> doesn't load project MCP servers. Investigate gemini-cli headless MCP loading (different approval mode? <code>--trust</code>? <code>--allowed-tools</code>?). Re-run the pilot after. <code>.gemini/settings.json</code> left registered (project, untracked, harmless localhost URL).</li>
+<li><strong>#1827 glossary path</strong> — fixed in <code>gemini-workflow.md</code> this session.</li>
+<li><strong>#1827 reviewer <code>--web</code></strong> — for codex/deepseek (truly-sandboxed lanes) so currency reviews self-verify on flat-rate, not orchestrator.</li>
+<li><strong>#1829 corpus re-review drain</strong> — gated on the gemini fix + pilot re-run; flat-rate lanes; after the un-green backlog.</li>
+<li>Curriculum: <strong>#1626</strong> (G4 — 2 synthesis-apps teaching modules) ready; then ai-ml-engineering → on-premises → platform.</li>
+<li>Carryover: #1823 mermaid campaign; CI-gaming guard; dead <code>Hero.astro</code>.</li>
+</ul>
+<p><em>Standing: s105 "no Claude/opus dispatch lanes" honored all session (safe default until weekly reset / 2026-06-15 pool flip). agy = write+review lane (3.1-pro write, flash review).</em></p>
+</body>
+</html>
