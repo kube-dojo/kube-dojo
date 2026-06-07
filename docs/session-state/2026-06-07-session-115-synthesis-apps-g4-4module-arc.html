@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 115 — synthesis-apps G4: 4-module arc (#1626 → #1833)</title>
+<style>
+  :root { --fg:#1a1a2e; --muted:#555; --accent:#2a6; --warn:#c60; --bg:#fafafa; --card:#fff; --line:#e3e3e8; }
+  body { font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--fg); background:var(--bg); margin:0; padding:2rem; max-width:1000px; margin-inline:auto; }
+  h1 { font-size:1.6rem; margin:0 0 .25rem; }
+  h2 { font-size:1.15rem; margin:1.8rem 0 .5rem; border-bottom:2px solid var(--line); padding-bottom:.25rem; }
+  h3 { font-size:1rem; margin:1.1rem 0 .3rem; }
+  .sub { color:var(--muted); margin:0 0 1.5rem; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; font-size:.92rem; }
+  th,td { border:1px solid var(--line); padding:.4rem .6rem; text-align:left; vertical-align:top; }
+  th { background:#f0f0f4; }
+  code { background:#f0f0f4; padding:.1rem .3rem; border-radius:3px; font-size:.88em; }
+  .ok { color:var(--accent); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1rem 1.2rem; margin:.8rem 0; }
+  ul { margin:.4rem 0; padding-left:1.3rem; }
+  li { margin:.25rem 0; }
+  .tldr { background:#eef6f0; border-left:4px solid var(--accent); padding:.8rem 1rem; border-radius:0 6px 6px 0; }
+</style>
+</head>
+<body>
+<h1>Session 115 — synthesis-apps G4: arc extended to 4 modules</h1>
+<p class="sub">2026-06-07 · standalone orchestrator session · continued from session 114's RESUME list (curriculum next = #1626 G4).</p>
+
+<div class="tldr">
+<strong>TL;DR:</strong> Authored 3 net-new teaching modules for <code>ai-ml-engineering/synthesis-apps</code>
+(3.2 Orchestration Layer, 3.3 LLM Evals in CI, 3.4 Agent Observability with OTel), reconciled a design
+conflict between issue #1626 and the shipped 3.1 index by growing the mini-arc 3→4 (user decision), drove
+each through cross-family R1 + orchestrator web-verification, and shipped it green. <strong>Merged in
+<a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1833">#1833</a> · #1626 closed.</strong>
+All dispatch on non-Claude lanes (s105 honored).
+</div>
+
+<h2>What merged (#1833)</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>Cross-family R1</th><th>State</th></tr>
+<tr><td>3.2 Wiring the LLM App: The Orchestration Layer</td><td>codex gpt-5.5</td><td>cursor → NEEDS_CHANGES</td><td class="ok">fixed + T0 PASS</td></tr>
+<tr><td>3.3 Production Gates: LLM Evals in CI</td><td>cursor <code>auto</code></td><td>codex → NEEDS_CHANGES</td><td class="ok">fixed + T0 PASS</td></tr>
+<tr><td>3.4 Agent Observability with OpenTelemetry</td><td>deepseek-v4-pro</td><td>cursor → NEEDS_CHANGES</td><td class="ok">fixed + T0 PASS</td></tr>
+</table>
+<p>Plus: <code>index.md</code> arc (diagram + table + recommended order) rewritten 3→4; <code>module-3.1</code>
+Next Module link (was "coming soon") → 3.2; <code>changelog.md</code> entry. Build green locally (2171 pages,
+0 schema errors); <code>check_site_health.py</code> 0 errors / 5010 links / 0 broken; PR CI (site-health +
+incident-dedup) green.</p>
+
+<h2>1. The design conflict (why a decision was needed)</h2>
+<p>The shipped <code>module-3.1</code> <strong>index.md</strong> (score 5.0) already committed the mini-arc to
+3.2 = <em>Orchestration Layer</em> and 3.3 = <em>Production Gates (evals+observability+scaling)</em> — which
+conflicted with #1626's original 3.2 = evals / 3.3 = observability numbering. Authoring #1626 literally would
+have contradicted the published table-of-contents learners already see. Surfaced as an
+<code>AskUserQuestion</code> with 3 options; <strong>user chose the 3-module reconciliation</strong>: grow the
+arc to 4 (3.2 orchestration, 3.3 evals-in-CI, 3.4 observability-OTel) so each gap gets dedicated depth and the
+index stays accurate. #1626 re-scoped from 2→3 modules with fresh ACs before any authoring.</p>
+
+<h2>2. Reviewer findings — all ground-checked, several web-verified</h2>
+<p>The verifier (T0) is blind to factual/code correctness, so every R1 finding was orchestrator-ground-checked;
+post-cutoff facts were web-verified:</p>
+<ul>
+<li><strong class="ok">OTel CNCF graduation — reverse-save.</strong> 3.4 said "OpenTelemetry is a CNCF graduated
+project." My Jan-2026 training said <em>incubating</em>, but web-verify confirmed OTel <strong>graduated
+2026-05-11</strong> (cncf.io). Claim is correct and stays — told the reviewer not to "correct" it. (Extends
+<code>feedback_web_verify_cncf_maturity</code>: verify what the author WRITES, not just removes.)</li>
+<li><strong>OTel GenAI semconv (3.4)</strong> — web-verified against opentelemetry.io: <code>gen_ai.system</code>
+→ <code>gen_ai.provider.name</code>; <code>gen_ai.prompt</code>/<code>completion</code> →
+<code>gen_ai.input.messages</code>/<code>output.messages</code>; <code>finish_reason</code> →
+<code>finish_reasons</code> (plural array); <code>usage.total_tokens</code> is not a spec attribute (derive).
+cursor's findings were all correct + current; fixed via a cursor dispatch with the verified values.</li>
+<li><strong>Argo Rollouts Job analysis (3.3)</strong> — web-verified: the <code>job</code> provider succeeds on
+<strong>exit code 0</strong>, not a numeric <code>successCondition</code> result. Removed the bogus
+<code>successCondition: result &gt;= 0.86</code>; moved the threshold into the runner (exit 0/1) + custom image.</li>
+<li><strong>promptfoo HTTP provider (3.3)</strong> — web-verified: provider <code>id</code> must be
+<code>http</code>/<code>https</code> or the URL; prompts are string templates. Fixed
+<code>id: orchestrator-staging</code> → <code>id: http</code> and the prompts block.</li>
+<li><strong class="ok">Link-form question deferred to the build.</strong> Reviewers disagreed on the sibling-link
+form (<code>../module-3.X/</code> vs <code>module-3.X/</code>), and both forms exist in clean modules. Rather
+than guess, I consolidated and ran <code>check_site_health.py</code> → <strong>0 broken links</strong>, which
+proved the <code>../module-3.X/</code> form correct. codex's 3.3 "missing siblings" and cursor's 3.4 link-path
+findings were both false positives (sandbox blindness / wrong reasoning).</li>
+</ul>
+
+<h2>3. agy fabricated a from-scratch authoring task <span class="warn">(roster datapoint)</span></h2>
+<p>3.4 was first dispatched to agy <code>gemini-3.1-pro-high</code> (per the s111 "use agy more for write"
+directive). It returned a confident ~6000-word "done" summary in <strong>159s but wrote NO file</strong>
+(worktree clean, hallucinated <code>kube-dojo/</code>-prefixed path). Re-dispatched to deepseek-v4-pro → real
+file, clean. <strong>Reconciliation:</strong> the s111 "proven writer" win was a narrow deterministic code fix
+(4× file-perm); open-ended <em>prose</em> authoring still triggers the completion-narrative confabulation.
+<strong>Route net-new module authoring to codex/cursor/deepseek, never agy</strong> (agy code-fix + review
+still OK, ground-checked). Memory <code>feedback_agy_gemini_3_5_flash_viable_reviewer</code> + index updated.</p>
+
+<h2>4. Process notes</h2>
+<ul>
+<li><strong>My own brief bug:</strong> wrote <code>../../ai-infrastructure/</code> / <code>../../advanced-genai/</code>
+in the 3.2 &amp; 3.4 briefs (cross-section-up needs ONE <code>../</code> from a section, not two). cursor caught
+it on 3.2; I caught it on 3.4. Both fixed; health-check confirmed clean.</li>
+<li><strong>Worktree build works</strong> with a <code>node_modules</code> symlink (<code>ln -sfn</code>) — the
+old "worktree builds fail on Homepage.astro" issue did not recur. 2171 pages, 0 schema errors.</li>
+<li><strong>cwd footgun:</strong> a <code>cd</code> inside a compound command persisted and broke two review
+dispatches (relative paths) — re-fired with absolute paths. Use absolute paths in dispatch commands.</li>
+</ul>
+
+<h2>RESUME — next-session follow-ups</h2>
+<ul>
+<li><strong>Curriculum (curriculum order):</strong> continue <code>ai-ml-engineering</code> expand-to-floor /
+review-first, then <code>on-premises</code>, then <code>platform</code> (the big one: Disciplines 45 + Toolkits
+36 + Foundations 28 critical &lt;2.0). 112 modules at critical rubric score remain.</li>
+<li><strong>#1827 reviewer tooling:</strong> gemini <code>--mcp</code> is inert in headless plan-mode (MCP not
+loaded) — investigate <code>--trust</code>/<code>--allowed-tools</code>; add reviewer <code>--web</code> for the
+truly-sandboxed lanes (codex/deepseek) so currency reviews self-verify instead of relying on the orchestrator.</li>
+<li><strong>#1829 corpus re-review backlog</strong> — gated on the #1827 gemini fix + pilot re-run.</li>
+<li><strong>#1823 mermaid campaign</strong> (55 broken diagrams / ~50 files) — dedicated session; decide the
+CI gate (real-parser vs regex lint).</li>
+<li><strong>CI-gaming guard</strong> — nothing auto-fails a PR that quietly lowers a verify_module/config gate
+threshold; small CI check / review-checklist addition.</li>
+<li>Dead <code>src/components/Hero.astro</code> deletion (unregistered Starlight override).</li>
+</ul>
+
+<p class="sub" style="margin-top:2rem">Standing: s105 "no Claude/opus dispatch lanes" honored all session (orchestrator
+runs on Claude — interactive only). agy long-form authoring removed from the author pool (see §3). Briefs +
+review templates archived under <code>logs/remediation/briefs/session115/</code>.</p>
+</body>
+</html>
