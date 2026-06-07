@@ -72,6 +72,7 @@ Reuse with --dry-run to print the chosen plan without firing.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import shutil
@@ -96,6 +97,8 @@ PRIMARY_REPO = _primary_checkout_root(REPO)
 # fragment the audit trail across .worktrees/*/logs/.
 LOG_PATH = PRIMARY_REPO / "logs" / "smart_dispatch.jsonl"
 RESPONSE_DIR = PRIMARY_REPO / "logs" / "dispatch_responses"
+MCP_CONFIG_PATH = PRIMARY_REPO / ".mcp.json"
+MCP_SUPPORTED_AGENTS = frozenset({"claude", "gemini"})
 
 # Skill auto-loading — R2 follow-up to PR #1575 and the agents_extensions/
 # layout introduced there.
@@ -286,6 +289,116 @@ def make_task_id(task_class: str, agent: str) -> str:
     return f"smart-{agent}-{task_class}-{int(time.time())}"
 
 
+def _available_mcp_servers() -> list[str]:
+    """Return sorted MCP server names from the repo-root ``.mcp.json``."""
+    if not MCP_CONFIG_PATH.is_file():
+        return []
+    try:
+        data = json.loads(MCP_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    servers = data.get("mcpServers")
+    if not isinstance(servers, dict):
+        return []
+    return sorted(servers.keys())
+
+
+def _load_claude_translation_tools() -> str:
+    """Read ``CLAUDE_TRANSLATION_TOOLS`` from ``scripts/dispatch.py`` without importing it."""
+    dispatch_path = REPO / "scripts" / "dispatch.py"
+    tree = ast.parse(dispatch_path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "CLAUDE_TRANSLATION_TOOLS":
+                value = ast.literal_eval(node.value)
+                if isinstance(value, str):
+                    return value
+                raise ValueError("CLAUDE_TRANSLATION_TOOLS must be a string")
+    raise ValueError("CLAUDE_TRANSLATION_TOOLS not found in scripts/dispatch.py")
+
+
+def _import_dispatch_mcp_constants() -> tuple[str, str]:
+    """Reuse the curated RAG allowlist from ``scripts/dispatch.py``."""
+    return str(MCP_CONFIG_PATH), _load_claude_translation_tools()
+
+
+def _build_mcp_tool_config(agent: str, mcp_server: str) -> dict:
+    """Build adapter ``tool_config`` for read-only MCP tool access."""
+    if agent == "claude":
+        mcp_config_path, allowed_tools = _import_dispatch_mcp_constants()
+        return {
+            "mcp_config_path": mcp_config_path,
+            "allowed_tools": allowed_tools,
+        }
+    if agent == "gemini":
+        return {"mcp_server_names": [mcp_server]}
+    return {}
+
+
+def _allowed_tools_count(allowed_tools: str) -> int:
+    return len([tool for tool in allowed_tools.split(",") if tool.strip()])
+
+
+def _dry_run_runtime_argv(
+    *,
+    agent: str,
+    prompt: str,
+    mode: str,
+    model: str,
+    worktree: Path | None,
+    task_id: str,
+    tool_config: dict | None,
+) -> list[str]:
+    """Resolve the runtime adapter argv for dry-run verification."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    from agent_runtime.delegate_config import merge_delegate_claude_tool_config
+    from agent_runtime.runner import _load_adapter
+
+    adapter = _load_adapter(agent)
+    effective_tool_config = merge_delegate_claude_tool_config(
+        agent,
+        "delegate",
+        tool_config,
+    )
+    plan = adapter.build_invocation(
+        prompt=prompt,
+        mode=mode,
+        cwd=worktree or Path.cwd(),
+        model=model,
+        task_id=task_id,
+        session_id=None,
+        tool_config=effective_tool_config,
+    )
+    return plan.cmd
+
+
+def _print_dry_run_mcp(agent: str, tool_config: dict) -> None:
+    """Print resolved MCP wiring for ``--dry-run`` verification."""
+    if agent == "gemini":
+        names = tool_config.get("mcp_server_names") or []
+        joined = ",".join(names)
+        print(f"[dry-run] mcp_servers={joined}")
+        if joined:
+            print(f"[dry-run] mcp_flag=--allowed-mcp-server-names {joined}")
+        return
+
+    if agent == "claude":
+        mcp_config_path = tool_config.get("mcp_config_path")
+        allowed_tools = tool_config.get("allowed_tools") or ""
+        count = _allowed_tools_count(allowed_tools)
+        print(
+            f"[dry-run] mcp_config={mcp_config_path} "
+            f"allowed_tools_count={count}"
+        )
+        if mcp_config_path and allowed_tools:
+            print(
+                f"[dry-run] mcp_flags=--mcp-config {mcp_config_path} "
+                f"--allowedTools <{count} tools>"
+            )
+
+
 def ensure_worktree(worktree: Path, new_branch: str | None, base: str = "main") -> None:
     """Create a worktree if it doesn't exist; reuse if it does.
 
@@ -469,6 +582,7 @@ def fire(
     worktree: Path | None,
     task_id: str,
     timeout_s: int,
+    tool_config: dict | None = None,
 ) -> int:
     print(
         f"[smart] agent={agent} task_class={task_class} model={model} "
@@ -512,6 +626,7 @@ def fire(
                 cwd=worktree,
                 model=model,
                 task_id=task_id,
+                tool_config=tool_config,
                 entrypoint="delegate",
                 hard_timeout=timeout_s,
             )
@@ -636,6 +751,17 @@ def main() -> int:
         action="store_true",
         help="Disable skill auto-loading entirely.",
     )
+    p.add_argument(
+        "--mcp",
+        metavar="SERVER",
+        default=None,
+        help=(
+            "Enable a named MCP server's read tools for this dispatch "
+            "(e.g. --mcp rag for Ukrainian-translation fact-checking). "
+            "Only rag is configured today. Honored for claude and gemini "
+            "agents only."
+        ),
+    )
     args = p.parse_args()
 
     cfg = TASK_CLASSES[args.task_class]
@@ -643,6 +769,23 @@ def main() -> int:
     mode = args.mode or cfg.default_mode
     timeout_s = args.timeout or cfg.default_timeout_s
     task_id = args.task_id or make_task_id(args.task_class, args.agent)
+
+    if args.mcp is not None:
+        if args.agent not in MCP_SUPPORTED_AGENTS:
+            p.error(
+                f"--mcp tool access is only supported for claude and gemini "
+                f"(got agent={args.agent!r})"
+            )
+        available = _available_mcp_servers()
+        if args.mcp not in available:
+            p.error(
+                f"unknown MCP server {args.mcp!r}; "
+                f"available: {', '.join(available) or '(none)'}"
+            )
+
+    tool_config = (
+        _build_mcp_tool_config(args.agent, args.mcp) if args.mcp else None
+    )
 
     # Codex always runs in danger mode — read-only starves it of
     # network/filesystem and produces garbage (rc=-9 stale-rollout salvage).
@@ -753,12 +896,19 @@ def main() -> int:
         _wt_label = worktree or f"(none — {mode})"
         print(f"[dry-run] worktree={_wt_label}")
         print(f"[dry-run] task_id={task_id}")
+        if tool_config:
+            _print_dry_run_mcp(args.agent, tool_config)
         print(f"[dry-run] prompt_chars={len(prompt)}")
         print("[dry-run] prompt_begin")
         print(prompt)
         print("[dry-run] prompt_end")
         if args.agent in {"cursor", "hermes", "opencode"}:
             print(f"[dry-run] argv={_router_command(args.agent, model, prompt)!r}")
+        elif tool_config and args.agent in MCP_SUPPORTED_AGENTS:
+            print(
+                f"[dry-run] argv="
+                f"{_dry_run_runtime_argv(agent=args.agent, prompt=prompt, mode=mode, model=model, worktree=worktree, task_id=task_id, tool_config=tool_config)!r}"
+            )
         return 0
 
     if worktree and mode != "read-only":
@@ -773,6 +923,7 @@ def main() -> int:
         worktree=worktree,
         task_id=task_id,
         timeout_s=timeout_s,
+        tool_config=tool_config,
     )
 
 
