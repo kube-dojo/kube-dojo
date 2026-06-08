@@ -5,1020 +5,771 @@ sidebar:
   order: 405
 ---
 
-## The Bereavement Fare Disaster: When Hallucination Carries a Price Tag
-
-In November 2022, a grieving passenger visited Air Canada's website to book a last-minute flight for a funeral. The airline's newly deployed AI customer service chatbot confidently hallucinated a non-existent bereavement fare policy, explicitly instructing the passenger that they could purchase a full-price ticket immediately and claim a retroactive refund within 90 days. When the customer subsequently applied for the refund, Air Canada refused, stating the chatbot's advice directly violated their actual corporate policy.
-
-The passenger sued the airline for negligent misrepresentation. In February 2024, a civil tribunal ruled against Air Canada, ordering them to pay direct damages and tribunal fees. Beyond the tribunal award, the case became a public example of the legal and reputational risk of publishing incorrect chatbot guidance. Air Canada attempted to argue that the chatbot was a "separate legal entity" responsible for its own actions—an argument the judge swiftly dismantled.
-
-The technical root cause of this failure was a fundamental limitation of basic Retrieval-Augmented Generation (RAG). The system retrieved generic ticketing documents but failed to cross-reference the strict constraints of the bereavement policy. Worse, the system lacked any self-reflective capability to recognize that its generated response contradicted the retrieved facts. Additional grounding and answer-verification steps could have reduced the risk of this kind of failure, but no single architecture guarantees prevention. 
-
-```mermaid
-flowchart LR
-    subgraph Basic RAG
-        Q1[Query] --> E1[Embed] --> S1[Search] --> T1[Top-K] --> G1[Generate]
-    end
-    subgraph Advanced RAG
-        Q2[Query] --> E2[Expand] --> H2[Hybrid Search] --> R2[Rerank] --> RE2[Reflect] --> G2[Generate]
-    end
-```
-
 ## What You'll Be Able to Do
 
-By the end of this intensive module, you will be able to:
-- **Design** a GraphRAG architecture to extract and traverse entity relationships across disconnected documents.
-- **Evaluate** the linguistic mismatch between user queries and technical documents using Hypothetical Document Embeddings (HyDE).
-- **Implement** a two-stage hybrid retrieval system combining BM25 lexical search and cross-encoder reranking.
-- **Diagnose** hallucination vulnerabilities by applying Self-RAG reflective tokens to critique retrieval quality.
-- **Deploy** a production-grade RAG evaluation pipeline to a Kubernetes v1.35 cluster.
+By the end of this module, you will be able to evaluate and improve Retrieval-Augmented Generation systems with the same discipline you would apply to search, reliability, and production software changes. These outcomes focus on measurement, diagnosis, and controlled iteration rather than on adding more retrieval patterns by instinct.
 
----
+- **Choose and compute** retrieval metrics such as recall@k, precision@k, hit-rate, MRR, and nDCG for a labeled RAG evaluation set.
+- **Evaluate** generated answers with faithfulness, groundedness, answer relevance, context precision, and context recall checks.
+- **Build** golden and synthetic evaluation sets that separate offline regression testing from online production monitoring.
+- **Apply** LLM-as-judge methods with rubrics, calibration, pairwise comparisons, multiple judges, and bias controls.
+- **Gate** RAG changes in CI by running the measure -> diagnose -> tune -> re-measure loop against stable thresholds.
 
-## The Evolution of RAG: From Simple to Sophisticated
+## Why This Module Matters
 
-Before diving into the optimization patterns, it helps to understand why they exist. [Basic RAG emerged in 2020](https://arxiv.org/abs/2005.11401) as an elegant solution to the limitations of model training: instead of cramming all knowledge into static model weights, retrieve relevant information dynamically at query time. 
+Hypothetical scenario: a product team builds a support assistant over a private knowledge base. The first demo is excellent because the sample questions were chosen from recently indexed documents, the answers are short, and the team already knows which source pages should be retrieved. After launch, the corpus changes, old documents remain in the index, a prompt edit weakens citation discipline, and a new embedding model slightly shifts the ranking. The assistant still sounds confident, so the regression is not obvious until users start escalating tickets that the demo never covered.
 
-But as engineering teams deployed RAG to production, they discovered that some queries fail because user phrasing and source documents do not line up cleanly. In practice, terminology mismatches and domain-specific language can cause important evidence to be missed. 
+That kind of failure is not unusual because RAG systems are compound systems. Retrieval can miss the right evidence. Ranking can bury the right evidence below weaker chunks. The generator can ignore relevant context, overuse irrelevant context, or cite a source that does not support the answer. Long prompts can hide the key passage in the middle. A cost optimization can lower `k` and silently hurt rare query classes. A prompt that improves one product line can make another product line worse. Without measurement, every "optimization" is mostly a story.
 
-Each specific failure spawned a targeted solution. The query-document mismatch problem led to HyDE. The need for absolute precision over broad recall led to reranking. The challenge of traversing connected knowledge led to GraphRAG. The extreme danger of confident, wrong answers led to Self-RAG. What you are learning in this module is a set of patterns designed to address recurring retrieval and grounding failure modes. By the end, you will know exactly when and how to deploy each pattern.
+Reliable RAG teams treat evaluation as a continuous discipline, not as a one-time launch review. They keep a golden set of questions, expected answers, expected source documents, and known failure classes. They run offline evaluations before deployment, monitor online behavior after deployment, and keep regression gates so a fix for one query does not quietly break another. The best evaluation programs do not worship one score. They combine retrieval metrics, generation metrics, human labels, LLM-assisted judging, latency, cost, and user feedback into a practical engineering loop.
 
----
+The analogy is an instrumented aircraft cockpit. A pilot does not "feel" altitude, fuel, heading, and engine temperature by confidence alone; the cockpit exposes measurements that make diagnosis possible before a bad decision compounds. A RAG system needs the same cockpit. Retrieval recall tells you whether the right evidence entered the candidate set. Ranking metrics tell you whether it was near the top. Faithfulness checks tell you whether the answer stayed inside the evidence. Latency and cost metrics tell you whether the quality gain can survive production traffic.
 
-## 1. GraphRAG: Knowledge Graphs Meet RAG
+This module deliberately does not re-teach the retrieval architecture patterns themselves. For the retrieval patterns themselves, see [Module 1.3: Advanced RAG Patterns](./module-1.3-advanced-rag-patterns/). Here, the question is different: once you have a RAG system, how do you know whether it works, how do you diagnose why it fails, and how do you improve it without losing control of correctness, cost, and latency?
 
-### The Problem with Flat Retrieval
+## Evaluation Starts with a Test Collection
 
-Traditional RAG treats documents as isolated, flat chunks of text. But real knowledge is deeply connected. Imagine you are researching corporate history and ask: "What technologies did companies founded by Stanford graduates use?" 
+RAG evaluation begins before metric formulas. You need a test collection: questions, relevant evidence, expected behavior, and sometimes expected answers. Traditional information retrieval evaluation uses a collection of documents, a set of information needs, and relevance judgments. RAG adds a generation layer, but the foundation is the same. If you do not know which chunks or documents should be considered relevant for a query, recall and ranking metrics become guesses instead of measurements.
 
-With flat retrieval, you would need documents that explicitly mention both "Stanford graduates" and specific "technologies" in the exact same paragraph. But the actual knowledge is spread across a corpus: one document mentions a founder's university, another names the company they founded, and a third describes the technologies that company uses. No single document answers the question. You must connect the dots.
+A practical RAG evaluation record usually has five fields. The `question` is the user-facing input. The `relevant_doc_ids` field identifies the source chunks or parent documents that should be retrieved. The `reference_answer` captures the answer a well-grounded assistant should produce, preferably written or reviewed by a domain expert. The `must_cite` field records evidence that must appear in citations or support checks. The `tags` field labels failure classes such as exact identifier lookup, policy conflict, multi-document synthesis, freshness, long-context placement, or out-of-scope abstention.
 
-GraphRAG operates exactly like building a social network for your documents. Instead of isolated posts, you define entities (people, companies, concepts) connected by semantic relationships (founded, studied at, uses). When you search, you do not just find static documents; you traverse relationships to discover connected context.
+The tags matter because a single average score can hide the most important failures. A retrieval system can score well on common conceptual questions while failing exact part numbers, error codes, or legal citations. A generator can appear faithful on short answers while failing conflict-resolution questions where two documents disagree. Segmenting the eval set by query class lets you see whether a change improves the easy majority while harming the rare but costly minority.
 
-```mermaid
-graph TD
-    subgraph Traditional RAG
-        A["Chunk about 'Python lists'"]
-        B["Chunk about 'Python dicts'"]
-        C["Chunk about 'data structures'"]
-    end
-    subgraph GraphRAG
-        D["Python lists"] --> F["data structures"]
-        E["Python dicts"] --> F
-        F --> G["algorithms"]
-    end
-```
+Golden datasets are slow to build because someone has to decide what "right" means. That labor is still cheaper than debugging production by anecdote. Start with real query logs after removing private or sensitive data. Add known support escalations, questions from subject-matter experts, policy-edge cases, and examples where the current system fails. Keep the first set small enough that humans can audit it carefully. A 100-question set with clean labels is usually more useful than a 5,000-question set with ambiguous relevance judgments.
 
-### How GraphRAG Works
+Synthetic eval generation can help expand coverage, but it should not replace human review. A common workflow is to sample source documents, ask a model to propose questions that require those documents, ask another pass to identify the supporting passages, and then have a human accept, reject, or edit the cases. Synthetic questions are valuable for broad coverage and regression stress tests. They are risky when treated as ground truth because the generator may write questions that are too easy, too artificial, or accidentally answerable from the wrong source.
 
-[GraphRAG combines a standard Vector Store with a Knowledge Graph to enable multi-hop reasoning.](https://arxiv.org/abs/2404.16130) 
+Offline evaluation runs before deployment against a frozen corpus, a frozen pipeline configuration, and a stable eval set. It answers questions such as "does this embedding model improve recall on our policy corpus?" or "does this reranker improve top-three citation quality without unacceptable latency?" Online evaluation runs in production through logs, sampled human review, user feedback, A/B experiments, and drift monitoring. It answers questions such as "are real users asking new question types?" and "did yesterday's document ingestion change answer behavior?"
 
-```python
-# GraphRAG Architecture
-class GraphRAG:
-    """
-    1. Extract entities and relationships from documents
-    2. Build a knowledge graph (Neo4j, NetworkX)
-    3. On query:
-       a. Find relevant entities via embedding search
-       b. Traverse graph to find connected entities
-       c. Retrieve chunks for all relevant entities
-       d. Generate response with rich context
-    """
-```
+Regression testing connects both worlds. Every serious RAG change should run against a stable eval set and report metric deltas by tag. If a chunking change improves broad conceptual recall but breaks exact identifier queries, the CI report should make that visible before the branch ships. If a prompt change improves answer tone but increases unsupported claims, the generation gate should fail. Evaluation is not a trophy score; it is a guardrail for controlled change.
 
-### Entity Extraction
+## Retrieval Metrics: Did the Right Evidence Arrive?
 
-The most critical and challenging step is extracting entities and relationships accurately from unstructured text. This requires heavily structured prompting.
+Retrieval metrics evaluate the context selection stage before the LLM writes anything. This separation is essential because an answer can fail for different reasons. If the right evidence never entered the context window, the generator cannot reliably produce a grounded answer. If the right evidence was retrieved but ranked too low, the generator may miss it or the prompt may truncate it. If the right evidence was present and prominent, the failure likely belongs to generation, instruction following, citation discipline, or long-context use.
+
+`recall@k` asks what fraction of the relevant documents appeared in the top `k` retrieved results. It is the most important first-pass metric when missing evidence is expensive. If a user asks about a policy that has three relevant clauses and only one appears in the top five, recall@5 is one third. High recall does not mean the context is clean; it means the needed evidence has a chance to reach the generator.
+
+`precision@k` asks what fraction of the top `k` retrieved results are relevant. It matters when context budget is tight or irrelevant context creates hallucination risk. A retriever that returns one correct chunk and nine distracting chunks may have acceptable hit-rate but poor precision@10. That can hurt generation because the model must decide which evidence to trust under token pressure.
+
+`hit-rate@k` asks whether at least one relevant document appeared in the top `k`. It is useful for dashboards because it is easy to interpret: did the retriever surface any usable evidence? It is less informative than recall when a query needs multiple sources. A multi-policy synthesis question can have hit-rate@5 equal to 1 while still missing the clause that changes the answer.
+
+`MRR`, or mean reciprocal rank, rewards systems that place the first relevant document early. For each query, find the rank of the first relevant result and take `1 / rank`. A query whose first relevant result is rank 1 gets 1.0; rank 4 gets 0.25; no relevant result gets 0.0. MRR is useful for assistants that usually need one decisive source, such as "what is the refund deadline?" or "where is this error documented?"
+
+`nDCG`, or normalized discounted cumulative gain, handles graded relevance and ranking position. It is useful when some documents are fully relevant, some are partially relevant, and some are only background. The metric discounts lower-ranked results because evidence at rank 8 is less likely to be used than evidence at rank 1. Normalization compares your ranking to the ideal ranking for that query, so scores land on a 0 to 1 scale.
+
+The following code computes the core retrieval metrics against labeled eval cases. It uses document identifiers, not raw text, because real evaluation should compare stable source IDs instead of brittle string snippets. The `relevance_grades` map is optional for nDCG; use binary relevance when your labels only know "relevant" and "not relevant."
 
 ```python
-# Using LLM for entity extraction
-ENTITY_EXTRACTION_PROMPT = """
-Extract entities and relationships from the following text.
-Return JSON format:
+from __future__ import annotations
 
-{
-  "entities": [
-    {"name": "entity_name", "type": "PERSON|ORG|CONCEPT|TECH|..."}
-  ],
-  "relationships": [
-    {"source": "entity1", "target": "entity2", "type": "relationship_type"}
-  ]
-}
+from dataclasses import dataclass
+from math import log2
 
-Text: {text}
-"""
 
-# Example output for a tech document:
-{
-  "entities": [
-    {"name": "Python", "type": "PROGRAMMING_LANGUAGE"},
-    {"name": "list", "type": "DATA_STRUCTURE"},
-    {"name": "append", "type": "METHOD"},
-    {"name": "Guido van Rossum", "type": "PERSON"}
-  ],
-  "relationships": [
-    {"source": "Python", "target": "list", "type": "HAS_FEATURE"},
-    {"source": "list", "target": "append", "type": "HAS_METHOD"},
-    {"source": "Guido van Rossum", "target": "Python", "type": "CREATED"}
-  ]
-}
-```
+@dataclass(frozen=True)
+class RetrievalCase:
+    question: str
+    retrieved_doc_ids: list[str]
+    relevant_doc_ids: set[str]
+    relevance_grades: dict[str, int]
 
-### Graph-Enhanced Retrieval
 
-Once the graph is built, retrieval becomes a multi-step traversal process. We find the starting nodes via vector search, and then "hop" across edges to gather full context.
+def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    top_k = retrieved[:k]
+    if not top_k:
+        return 0.0
+    return sum(1 for doc_id in top_k if doc_id in relevant) / len(top_k)
 
-```python
-def graph_enhanced_retrieval(query: str, k: int = 5) -> List[Document]:
-    """
-    1. Semantic search for initial entities
-    2. Graph traversal for connected context
-    3. Retrieve documents for all relevant entities
-    """
-    # Step 1: Find query-relevant entities
-    query_embedding = embed(query)
-    initial_entities = vector_search(query_embedding, k=3)
 
-    # Step 2: Expand via graph traversal (1-2 hops)
-    expanded_entities = set(initial_entities)
-    for entity in initial_entities:
-        neighbors = graph.get_neighbors(entity, max_hops=2)
-        expanded_entities.update(neighbors)
+def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    if not relevant:
+        return 1.0
+    top_k = retrieved[:k]
+    return sum(1 for doc_id in top_k if doc_id in relevant) / len(relevant)
 
-    # Step 3: Retrieve chunks for all entities
-    chunks = []
-    for entity in expanded_entities:
-        entity_chunks = get_chunks_for_entity(entity)
-        chunks.extend(entity_chunks)
 
-    # Step 4: Rank by relevance to original query
-    ranked_chunks = rerank(query, chunks)
+def hit_rate_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    top_k = retrieved[:k]
+    return 1.0 if any(doc_id in relevant for doc_id in top_k) else 0.0
 
-    return ranked_chunks[:k]
-```
 
-### GraphRAG with Neo4j
+def reciprocal_rank(retrieved: list[str], relevant: set[str]) -> float:
+    for index, doc_id in enumerate(retrieved, start=1):
+        if doc_id in relevant:
+            return 1.0 / index
+    return 0.0
 
-For larger workloads, in-memory graphs can become a bottleneck, so teams often move graph storage into a database or service built for larger datasets. The Cypher query language allows for expressive, rapid relationship traversal.
 
-```python
-from neo4j import GraphDatabase
-
-class Neo4jGraphRAG:
-    def __init__(self, uri, user, password):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
-
-    def add_entity(self, entity_id: str, entity_type: str, embedding: List[float]):
-        with self.driver.session() as session:
-            session.run("""
-                MERGE (e:Entity {id: $id})
-                SET e.type = $type, e.embedding = $embedding
-            """, id=entity_id, type=entity_type, embedding=embedding)
-
-    def add_relationship(self, source: str, target: str, rel_type: str):
-        with self.driver.session() as session:
-            session.run("""
-                MATCH (s:Entity {id: $source})
-                MATCH (t:Entity {id: $target})
-                MERGE (s)-[r:RELATES {type: $rel_type}]->(t)
-            """, source=source, target=target, rel_type=rel_type)
-
-    def find_connected_entities(self, entity_id: str, max_hops: int = 2) -> List[str]:
-        with self.driver.session() as session:
-            result = session.run("""
-                MATCH (start:Entity {id: $id})-[*1..$hops]-(connected:Entity)
-                RETURN DISTINCT connected.id as entity_id
-            """, id=entity_id, hops=max_hops)
-            return [record["entity_id"] for record in result]
-```
-
-> **Pause and predict**: If your entity extraction model captures "Apple" as a fruit in one document and "Apple" as a technology company in another, what will happen to your Neo4j graph queries? How would you architect a solution to prevent this contamination?
-
----
-
-## 2. HyDE: Hypothetical Document Embeddings
-
-### The Query-Document Mismatch Problem
-
-Users ask questions. Documents contain answers. They rarely share the same linguistic structure.
-
-Imagine walking into a massive library. Instead of asking the librarian, "Where are the books on advanced Python?", you are forced to describe the exact sentences you expect to find inside the book. That is precisely what semantic search does—it attempts to match the syntax and latent meaning of your question directly to the syntax of a statement.
-
-```text
-User query: "How do I make my code run faster?"
-Document:   "Performance optimization techniques include caching,
-             algorithmic improvements, and parallel processing..."
-
-The QUESTION doesn't match the ANSWER linguistically!
-```
-
-### The HyDE Solution
-
-HyDE (Hypothetical Document Embeddings) solves this mismatch with a stroke of genius: instead of searching with the user's raw question, [you use an LLM to generate a hypothetical, perfectly written answer. You then embed this hypothetical answer and search your vector database.](https://arxiv.org/abs/2212.10496) 
-
-Because the hypothetical answer uses the authoritative tone, vocabulary, and structure of a true document, it maps flawlessly into the same vector space as your real documents.
-
-```mermaid
-flowchart LR
-    subgraph Traditional
-        A1[Query] --> B1[Embed Query] --> C1[Search]
-    end
-    subgraph HyDE
-        A2[Query] --> B2[Generate Hypothetical Answer] --> C2[Embed Answer] --> D2[Search]
-    end
-```
-
-### How HyDE Works
-
-```python
-def hyde_search(query: str, k: int = 5) -> List[Document]:
-    """
-    1. Generate hypothetical document that would answer the query
-    2. Embed the hypothetical document
-    3. Search for real documents similar to the hypothetical
-    """
-
-    # Step 1: Generate hypothetical answer
-    hypothetical_prompt = f"""
-    Write a detailed passage that would perfectly answer this question:
-
-    Question: {query}
-
-    Write as if this is from an authoritative document. Include specific details.
-    """
-
-    hypothetical_doc = llm.generate(hypothetical_prompt)
-
-    # Step 2: Embed the hypothetical document
-    hyde_embedding = embed(hypothetical_doc)
-
-    # Step 3: Search with hypothetical embedding
-    results = vector_store.search(hyde_embedding, k=k)
-
-    return results
-```
-
-### A Practical HyDE Example
-
-```python
-# Query
-query = "Why is my Python code slow?"
-
-# Traditional embedding search might miss documents about:
-# - "Performance bottlenecks in Python applications"
-# - "Optimizing interpreter overhead"
-# - "GIL and threading limitations"
-
-# HyDE generates:
-hypothetical = """
-Python code performance issues commonly stem from several factors.
-The Global Interpreter Lock (GIL) prevents true parallel execution
-of threads. Interpreted languages have inherent overhead compared
-to compiled languages. Common bottlenecks include inefficient loops,
-excessive memory allocation, and I/O blocking operations. Solutions
-include using NumPy for vectorized operations, multiprocessing for
-CPU-bound tasks, asyncio for I/O-bound operations, and profiling
-tools like cProfile to identify hotspots.
-"""
-
-# This hypothetical document uses the SAME LANGUAGE as real documents!
-# Searching with its embedding finds much better matches.
-```
-
-### Multi-HyDE: Generating Multiple Angles
-
-A single hypothetical document might guess the wrong angle. Multi-HyDE generates several distinct hypotheticals, embeds all of them, aggregates the results, and deduplicates.
-
-```python
-def multi_hyde_search(query: str, k: int = 5, n_hypotheticals: int = 3) -> List[Document]:
-    """Generate multiple hypotheticals for better coverage."""
-
-    all_results = []
-
-    for i in range(n_hypotheticals):
-        prompt = f"""
-        Write a unique passage answering this question from a different angle:
-
-        Question: {query}
-        Angle {i+1}: Focus on {'theory' if i==0 else 'practical examples' if i==1 else 'common mistakes'}
-        """
-
-        hypothetical = llm.generate(prompt)
-        embedding = embed(hypothetical)
-        results = vector_store.search(embedding, k=k)
-        all_results.extend(results)
-
-    # Deduplicate and rerank
-    unique_results = deduplicate(all_results)
-    return rerank(query, unique_results)[:k]
-```
-
----
-
-## 3. Self-RAG: Self-Reflective Retrieval
-
-### The "Garbage In, Garbage Out" Problem
-
-Basic RAG blindly trusts the vector database. It assumes that whatever the retriever returns is gospel truth. But what if the retrieved documents are completely irrelevant? What if they contradict one another? 
-
-When basic RAG retrieves irrelevant context, the LLM treats it as an absolute constraint. It bends logic, invents facts, and confidently hallucinates an answer just to satisfy the prompt's demand to "use the provided context."
-
-### The Self-RAG Architecture
-
-Self-RAG forces the LLM to behave like a critical thinker. It inserts evaluation checkpoints where the model asks itself: "Is this passage genuinely relevant to the query?" and "Does my generated answer actually rely on the retrieved facts?"
-
-```mermaid
-flowchart LR
-    subgraph Basic RAG
-        A1[Retrieve] --> B1[Generate]
-    end
-    subgraph Self-RAG
-        A2[Retrieve] --> B2[Critique Retrieval] --> C2[Generate] --> D2[Critique Generation] --> E2[Refine]
-    end
-```
-
-By adding these critique layers, Self-RAG increases latency but can be worth the tradeoff in high-stakes domains where grounding matters.
-
-```python
-class SelfRAG:
-    def __init__(self, llm, retriever):
-        self.llm = llm
-        self.retriever = retriever
-
-    def answer(self, query: str) -> str:
-        # Step 1: Retrieve
-        passages = self.retriever.search(query, k=5)
-
-        # Step 2: Critique retrieval (filter irrelevant)
-        relevant_passages = self.critique_retrieval(query, passages)
-
-        if not relevant_passages:
-            return self.answer_without_retrieval(query)
-
-        # Step 3: Generate answer
-        answer = self.generate_answer(query, relevant_passages)
-
-        # Step 4: Critique generation
-        is_supported, critique = self.critique_generation(query, answer, relevant_passages)
-
-        if not is_supported:
-            # Step 5: Refine or regenerate
-            answer = self.refine_answer(query, answer, critique, relevant_passages)
-
-        return answer
-
-    def critique_retrieval(self, query: str, passages: List[str]) -> List[str]:
-        """Filter out irrelevant passages."""
-        relevant = []
-        for passage in passages:
-            prompt = f"""
-            Query: {query}
-            Passage: {passage}
-
-            Is this passage relevant to answering the query?
-            Answer only: RELEVANT or IRRELEVANT
-            """
-            verdict = self.llm.generate(prompt).strip()
-            if verdict == "RELEVANT":
-                relevant.append(passage)
-        return relevant
-
-    def critique_generation(self, query: str, answer: str, passages: List[str]) -> Tuple[bool, str]:
-        """Check if answer is supported by passages."""
-        prompt = f"""
-        Query: {query}
-        Retrieved Passages: {passages}
-        Generated Answer: {answer}
-
-        Evaluate the answer:
-        1. Is the answer factually supported by the passages?
-        2. Does the answer actually address the query?
-        3. Are there any unsupported claims?
-
-        Respond with:
-        SUPPORTED: [Yes/No]
-        CRITIQUE: [Brief explanation]
-        """
-        response = self.llm.generate(prompt)
-        is_supported = "SUPPORTED: Yes" in response
-        critique = response.split("CRITIQUE:")[-1].strip()
-        return is_supported, critique
-```
-
-Advanced implementations of [Self-RAG fine-tune models to output specific control tokens directly](https://arxiv.org/abs/2310.11511), entirely avoiding the need for multi-shot prompting:
-
-```text
-[Retrieve]: Should I retrieve? (Yes/No/Continue)
-[IsRel]:    Is passage relevant? (Relevant/Irrelevant)
-[IsSup]:    Is response supported? (Fully/Partially/No)
-[IsUse]:    Is response useful? (5/4/3/2/1)
-```
-
----
-
-## 4. Hybrid Search: Combining Lexical and Semantic Power
-
-### Why Hybrid?
-
-Semantic search and keyword search act like two distinct detectives. Semantic search understands meaning and intent—it knows that "automobile" and "car" are identical concepts. Lexical keyword search (BM25) lacks understanding but possesses a photographic memory for exact matches.
-
-```text
-Query: "error code 0x80070005"
-Semantic search might return docs about "error handling" instead of
-docs containing that exact error code!
-```
-
-```text
-Query: "how to fix slow code"
-BM25 won't find docs about "performance optimization" unless they
-contain "slow" and "code"!
-```
-
-### Understanding BM25
-
-BM25 (Best Match 25) relies on term frequency and inverse document frequency, heavily penalizing long documents that merely repeat a keyword to game the system.
-
-```python
-# Simplified BM25 scoring
-def bm25_score(query_terms, document, corpus):
-    score = 0
-    for term in query_terms:
-        tf = term_frequency(term, document)
-        idf = inverse_document_frequency(term, corpus)
-        doc_length = len(document)
-        avg_length = average_document_length(corpus)
-
-        # BM25 formula
-        k1, b = 1.5, 0.75  # tuning parameters
-        numerator = tf * (k1 + 1)
-        denominator = tf + k1 * (1 - b + b * doc_length / avg_length)
-        score += idf * (numerator / denominator)
-
+def dcg_at_k(ranking: list[str], relevance_grades: dict[str, int], k: int) -> float:
+    score = 0.0
+    for index, doc_id in enumerate(ranking[:k], start=1):
+        grade = relevance_grades.get(doc_id, 0)
+        score += (2**grade - 1) / log2(index + 1)
     return score
+
+
+def ndcg_at_k(retrieved: list[str], relevance_grades: dict[str, int], k: int) -> float:
+    ideal = sorted(relevance_grades, key=lambda doc_id: relevance_grades[doc_id], reverse=True)
+    ideal_score = dcg_at_k(ideal, relevance_grades, k)
+    if ideal_score == 0.0:
+        return 0.0
+    return dcg_at_k(retrieved, relevance_grades, k) / ideal_score
+
+
+def summarize_retrieval(cases: list[RetrievalCase], k: int = 5) -> dict[str, float]:
+    totals = {
+        "precision_at_k": 0.0,
+        "recall_at_k": 0.0,
+        "hit_rate_at_k": 0.0,
+        "mrr": 0.0,
+        "ndcg_at_k": 0.0,
+    }
+    for case in cases:
+        totals["precision_at_k"] += precision_at_k(case.retrieved_doc_ids, case.relevant_doc_ids, k)
+        totals["recall_at_k"] += recall_at_k(case.retrieved_doc_ids, case.relevant_doc_ids, k)
+        totals["hit_rate_at_k"] += hit_rate_at_k(case.retrieved_doc_ids, case.relevant_doc_ids, k)
+        totals["mrr"] += reciprocal_rank(case.retrieved_doc_ids, case.relevant_doc_ids)
+        totals["ndcg_at_k"] += ndcg_at_k(case.retrieved_doc_ids, case.relevance_grades, k)
+    return {name: value / len(cases) for name, value in totals.items()}
 ```
 
-### Implementing Hybrid Search
+The right metric depends on the product question. For a developer assistant where one exact runbook page is usually enough, MRR and hit-rate@3 may be the primary signals. For a compliance assistant that must collect every relevant clause, recall@10 and context recall matter more. For a research assistant where some evidence is central and some is background, nDCG captures ranking quality better than binary precision. Metric choice should match user harm, not what the library prints by default.
 
-To implement Hybrid Search, we run both algorithms concurrently, normalize their scores to a 0-1 scale, and apply a configurable `alpha` weight. 
+## Generation Metrics: Did the Answer Stay Grounded?
+
+Generation evaluation asks whether the final answer is useful, relevant, and supported by the retrieved context. RAGAS-style evaluation popularized a helpful decomposition: evaluate the retrieved context, evaluate the answer, and evaluate the relationship between the two. The exact tooling changes quickly, but the conceptual components are durable. You want to know whether the answer is faithful to the context, whether it answers the user question, whether the context was precise, and whether the context covered the needed evidence.
+
+Faithfulness, often called groundedness, asks whether claims in the answer are supported by the retrieved context. This catches the classic RAG failure where the retriever found useful documents but the model added unsupported facts, overgeneralized a policy, or invented a condition that was not present. Faithfulness does not require the answer to be complete. It only asks whether the claims that appear are backed by evidence.
+
+Answer relevance asks whether the answer addresses the user's question. A response can be faithful to the context and still fail relevance by summarizing the wrong section, refusing unnecessarily, or answering a nearby question. This matters when the retriever returns broadly related documents and the generator produces a generic answer that sounds plausible but does not resolve the user's actual intent.
+
+Context precision asks how much of the retrieved context is useful for the question. Low context precision means the prompt is padded with distractors. Distractors increase token cost and can create contradictions, especially when the corpus contains stale documents or similar policies for different products. Context precision is a retrieval quality metric expressed from the generator's perspective: did we feed the model focused evidence?
+
+Context recall asks whether the retrieved context contains enough information to answer the question. A system can have high context precision but low context recall if it retrieves one perfectly relevant clause while missing the second clause needed to answer safely. Context recall is especially important for synthesis questions, policy exceptions, multi-document workflows, and any case where abstention is better than a partially grounded answer.
+
+Reference answer similarity can be useful, but it should not dominate RAG evaluation. Many valid answers use different wording from the reference. A concise answer with correct citations may be better than a verbose answer that copies the reference. When you use reference answers, judge semantics and required facts rather than exact phrasing. For regulated or safety-sensitive domains, prefer explicit required facts and prohibited claims over fuzzy similarity alone.
+
+The following code sketches a RAGAS-style faithfulness check. It extracts atomic claims from the answer, asks a judge whether each claim is supported by the retrieved contexts, and returns a score plus unsupported claims. In production, you would calibrate the judge against human labels, pin the model version, log prompts and verdicts, and treat the result as one signal rather than as a proof of truth.
 
 ```python
-from rank_bm25 import BM25Okapi
-import numpy as np
+from __future__ import annotations
 
-class HybridSearch:
-    def __init__(self, documents: List[str], embeddings: np.ndarray):
-        self.documents = documents
-        self.embeddings = embeddings
+import json
+from typing import Protocol
 
-        # Initialize BM25
-        tokenized_docs = [doc.lower().split() for doc in documents]
-        self.bm25 = BM25Okapi(tokenized_docs)
 
-    def search(self, query: str, k: int = 5, alpha: float = 0.5) -> List[Tuple[str, float]]:
-        """
-        Hybrid search with configurable weighting.
-        alpha: weight for semantic (1-alpha for BM25)
-        """
-        # Semantic search
-        query_embedding = embed(query)
-        semantic_scores = cosine_similarity([query_embedding], self.embeddings)[0]
+class JudgeModel(Protocol):
+    def complete(self, prompt: str) -> str:
+        """Return a JSON string from a deterministic, low-temperature judge call."""
 
-        # BM25 search
-        tokenized_query = query.lower().split()
-        bm25_scores = self.bm25.get_scores(tokenized_query)
 
-        # Normalize scores to [0, 1]
-        semantic_scores = self.normalize(semantic_scores)
-        bm25_scores = self.normalize(bm25_scores)
-
-        # Combine with weighting
-        hybrid_scores = alpha * semantic_scores + (1 - alpha) * bm25_scores
-
-        # Get top-k
-        top_indices = np.argsort(hybrid_scores)[::-1][:k]
-
-        return [(self.documents[i], hybrid_scores[i]) for i in top_indices]
-
-    def normalize(self, scores: np.ndarray) -> np.ndarray:
-        """Min-max normalization."""
-        min_score, max_score = scores.min(), scores.max()
-        if max_score == min_score:
-            return np.zeros_like(scores)
-        return (scores - min_score) / (max_score - min_score)
-```
-
-Instead of manually tuning `alpha`, many production systems use Reciprocal Rank Fusion (RRF). RRF calculates a final score based purely on the combined ordinal ranks provided by each system, mitigating the risk of heavily skewed normalization values.
-
-```python
-def reciprocal_rank_fusion(rankings: List[List[int]], k: int = 60) -> List[int]:
-    """
-    Combine multiple rankings using RRF.
-
-    RRF Score = sum(1 / (k + rank_i)) for each ranking list
-
-    k=60 is the standard constant (reduces impact of high ranks)
-    """
-    scores = {}
-
-    for ranking in rankings:
-        for rank, doc_id in enumerate(ranking):
-            if doc_id not in scores:
-                scores[doc_id] = 0
-            scores[doc_id] += 1 / (k + rank + 1)  # +1 because rank is 0-indexed
-
-    # Sort by RRF score
-    sorted_docs = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-    return sorted_docs
-```
-
-> **Stop and think**: If your legal platform users primarily search for specific court case citations like "Smith v. Jones, 542 U.S. 296", should your hybrid search alpha lean closer to 1.0 (semantic) or 0.0 (lexical BM25)? Why?
-
----
-
-## 5. Reranking with Cross-Encoders
-
-### The Bi-Encoder vs Cross-Encoder Trade-off
-
-The embeddings used for fast retrieval (Bi-encoders) are fundamentally limited. They compress a massive document into a single coordinate point independently of the query. They are extremely fast but lack deep contextual reasoning.
-
-Cross-encoders evaluate the query and the document simultaneously through the transformer network. They can see the deep structural relationship between the words in the query and the words in the document.
-
-```mermaid
-flowchart LR
-    subgraph Bi-Encoder
-        Q1[Query] --> E1[Encoder] --> QE[Query Embedding]
-        D1[Doc] --> E2[Encoder] --> DE[Doc Embedding]
-        QE --> S1[Score = cosine_similarity]
-        DE --> S1
-    end
-    subgraph Cross-Encoder
-        P2[Query, Doc] --> E3[Encoder] --> RS2[Relevance Score]
-    end
-```
-
-Because Cross-encoders must process the query and document together, you cannot pre-compute their embeddings. Running a Cross-encoder across a million documents at query time is usually computationally impractical. This enforces the **Two-Stage Retrieval** pattern.
-
-```mermaid
-flowchart TD
-    A[1000 docs] -->|Stage 1: Fast, Recall-focused| B[Bi-encoder]
-    B --> C[Top 100 candidates]
-    C -->|Stage 2: Slow, Precision-focused| D[Cross-encoder]
-    D --> E[Top 10 final results]
-```
-
-### Implementing Reranking
-
-```python
-from sentence_transformers import CrossEncoder
-
-class RerankedSearch:
-    def __init__(self, bi_encoder, cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
-        self.bi_encoder = bi_encoder
-        self.cross_encoder = CrossEncoder(cross_encoder_model)
-
-    def search(self, query: str, k: int = 5, candidates: int = 50) -> List[str]:
-        """
-        Two-stage retrieval with reranking.
-        """
-        # Stage 1: Fast retrieval with bi-encoder
-        initial_results = self.bi_encoder.search(query, k=candidates)
-
-        # Stage 2: Rerank with cross-encoder
-        pairs = [[query, doc] for doc in initial_results]
-        scores = self.cross_encoder.predict(pairs)
-
-        # Sort by cross-encoder score
-        ranked_results = sorted(zip(initial_results, scores), key=lambda x: x[1], reverse=True)
-
-        return [doc for doc, score in ranked_results[:k]]
-```
-
-### Popular Cross-Encoder Models
-
-| Model | Speed | Quality | Use Case |
-|-------|-------|---------|----------|
-| `cross-encoder/ms-marco-MiniLM-L-6-v2` | Fast | Good | General purpose |
-| `cross-encoder/ms-marco-MiniLM-L-12-v2` | Medium | Better | Balanced |
-| `BAAI/bge-reranker-base` | Medium | Best | High quality |
-| `BAAI/bge-reranker-large` | Slow | Best | Maximum quality |
-
-For enterprise systems without deep infrastructure, managed endpoints offer instant relief:
-
-```python
-import cohere
-
-co = cohere.Client("your-api-key")
-
-def cohere_rerank(query: str, documents: List[str], top_n: int = 5) -> List[str]:
-    response = co.rerank(
-        query=query,
-        documents=documents,
-        top_n=top_n,
-        model="rerank-english-v2.0"
+def faithfulness_prompt(question: str, answer: str, contexts: list[str]) -> str:
+    numbered_contexts = "\n\n".join(
+        f"Context {index}: {context}" for index, context in enumerate(contexts, start=1)
     )
+    return f"""
+You are evaluating whether an answer is supported by retrieved context.
+Break the answer into atomic factual claims. For each claim, decide whether
+the claim is fully supported by the provided context. Do not use outside knowledge.
 
-    return [documents[result.index] for result in response.results]
+Question:
+{question}
+
+Retrieved context:
+{numbered_contexts}
+
+Answer:
+{answer}
+
+Return JSON with this schema:
+{{
+  "claims": [
+    {{"claim": "short claim text", "supported": true, "evidence_context_ids": [1]}}
+  ]
+}}
+"""
+
+
+def score_faithfulness(judge: JudgeModel, question: str, answer: str, contexts: list[str]) -> dict:
+    raw = judge.complete(faithfulness_prompt(question, answer, contexts))
+    parsed = json.loads(raw)
+    claims = parsed.get("claims", [])
+    if not claims:
+        return {"faithfulness": 0.0, "unsupported_claims": ["judge returned no claims"]}
+    supported = [claim for claim in claims if claim.get("supported") is True]
+    unsupported = [claim.get("claim", "") for claim in claims if claim.get("supported") is not True]
+    return {
+        "faithfulness": len(supported) / len(claims),
+        "unsupported_claims": unsupported,
+        "claim_count": len(claims),
+    }
 ```
 
----
+Notice what the code does not claim. It does not prove that the context itself is true. It does not prove that the judge is unbiased. It does not guarantee that every claim was extracted perfectly. It simply makes a hidden failure mode visible: the answer contains claims, some claims have evidence, and some do not. That visibility is enough to drive useful engineering decisions when paired with retrieval metrics and human review.
 
-## 6. Parent Document Retrieval
+## LLM-as-Judge: Useful Tool, Not an Oracle
 
-A classic dilemma plauges static chunking: small chunks provide excellent, precise search vectors but starve the generation LLM of surrounding context. Large chunks provide rich context for generation, but their embeddings are noisy and dilute search accuracy.
+LLM-as-judge evaluation uses a model to score or compare model outputs. In RAG, a judge may rate faithfulness, relevance, citation support, abstention quality, or answer completeness. This is attractive because natural-language answers are hard to score with exact-match rules. A judge can read the question, retrieved context, reference answer, and generated answer, then produce a structured verdict. The danger is that the judge is also a model with failure modes.
 
-The elegant solution is Parent Document Retrieval. You chunk the document into tiny fragments for the vector search index, but when a match is found, you return the entire parent section to the LLM. 
+Position bias appears when a judge prefers the answer shown first or second in a pairwise comparison because of placement rather than quality. Verbosity bias appears when a judge rewards longer answers even when the extra words add no supported information. Self-preference appears when a judge favors outputs from its own model family or style. Non-determinism appears when repeated judge calls return different verdicts because the prompt, sampling, provider behavior, or model version changed. These pitfalls do not make LLM judges useless; they mean judge design must be engineered.
+
+Rubrics are the first defense. Do not ask "is this answer good?" Ask small, observable questions: "Does every factual claim have supporting context?", "Does the answer cite the source IDs it used?", "Does the answer refuse when context is insufficient?", and "Does the answer directly answer the user's question?" Atomic criteria reduce the judge's freedom to reward style over correctness. They also produce actionable failure labels.
+
+Pairwise judging is often more stable than asking for a raw numeric score, but pairwise judging must randomize answer order and record which variant appeared in each slot. If answer A wins only when it appears second, you have detected a judge artifact, not a product improvement. For high-impact gates, run both orders and require the same winner or treat the result as uncertain. This costs more, but it prevents a biased comparison from steering the roadmap.
+
+Multiple judges can improve robustness when their errors are not perfectly correlated. A small panel might combine one large general model, one smaller calibrated evaluator, and deterministic checks for citations and exact identifiers. The value is not magical voting. The value is disagreement. When judges split, send the case to human review or keep the old pipeline until the failure is understood.
+
+Calibration against human labels is mandatory for production confidence. Sample cases, have domain reviewers label them, and compare judge verdicts to those labels. Track false positives, false negatives, disagreement by query tag, and drift over time. A judge that agrees with humans on FAQ questions but fails policy-conflict questions should not gate policy-conflict launches. Keep calibration cases private from prompt-tuning experiments so you do not overfit the judge.
+
+The following harness shows a safer pattern for LLM-assisted judging. It evaluates atomic criteria, randomizes pairwise order, supports multiple judges, and keeps raw records for audit. The code is intentionally framework-neutral; you can implement the `complete` method with your provider, local model, or evaluation framework of choice.
 
 ```python
-class ParentDocumentRetriever:
-    """
-    Store two versions:
-    1. Small chunks (for search)
-    2. Parent documents (for context)
+from __future__ import annotations
 
-    Search finds relevant small chunks,
-    then returns their parent documents.
-    """
+import json
+import random
+from dataclasses import dataclass
+from typing import Protocol
 
-    def __init__(self):
-        self.small_chunks = {}  # chunk_id -> small chunk text
-        self.parent_docs = {}   # parent_id -> full document
-        self.chunk_to_parent = {}  # chunk_id -> parent_id
-        self.vector_store = VectorStore()
 
-    def add_document(self, doc_id: str, full_text: str, chunk_size: int = 200):
-        # Store full document
-        self.parent_docs[doc_id] = full_text
+class ChatJudge(Protocol):
+    name: str
 
-        # Create and index small chunks
-        chunks = split_into_chunks(full_text, chunk_size)
-        for i, chunk in enumerate(chunks):
-            chunk_id = f"{doc_id}_chunk_{i}"
-            self.small_chunks[chunk_id] = chunk
-            self.chunk_to_parent[chunk_id] = doc_id
+    def complete(self, prompt: str) -> str:
+        """Return JSON with criterion-level pass or fail decisions."""
 
-            # Index small chunk
-            embedding = embed(chunk)
-            self.vector_store.add(chunk_id, embedding)
 
-    def search(self, query: str, k: int = 3) -> List[str]:
-        # Search in small chunks
-        query_embedding = embed(query)
-        chunk_ids = self.vector_store.search(query_embedding, k=k*2)  # Get more to dedupe parents
+@dataclass(frozen=True)
+class JudgeCase:
+    question: str
+    contexts: list[str]
+    reference_answer: str
+    candidate_answer: str
 
-        # Get unique parent documents
-        parent_ids = list(set(self.chunk_to_parent[cid] for cid in chunk_ids))
 
-        # Return parent documents (not small chunks!)
-        return [self.parent_docs[pid] for pid in parent_ids[:k]]
+CRITERIA = [
+    "Every factual claim in the candidate is supported by the contexts.",
+    "The candidate directly answers the user question.",
+    "The candidate cites source identifiers when it uses source-specific facts.",
+    "The candidate refuses or scopes the answer when the contexts are insufficient.",
+]
+
+
+def rubric_prompt(case: JudgeCase) -> str:
+    criteria_text = "\n".join(f"{index}. {criterion}" for index, criterion in enumerate(CRITERIA, start=1))
+    contexts = "\n\n".join(f"Source {index}: {text}" for index, text in enumerate(case.contexts, start=1))
+    return f"""
+Evaluate the candidate answer using only the supplied sources and rubric.
+
+Question:
+{case.question}
+
+Sources:
+{contexts}
+
+Reference answer for calibration, not for copying:
+{case.reference_answer}
+
+Candidate answer:
+{case.candidate_answer}
+
+Rubric:
+{criteria_text}
+
+Return JSON:
+{{
+  "criteria": [
+    {{"id": 1, "pass": true, "reason": "brief evidence-based reason"}}
+  ],
+  "overall_pass": true
+}}
+"""
+
+
+def judge_single(judge: ChatJudge, case: JudgeCase) -> dict:
+    parsed = json.loads(judge.complete(rubric_prompt(case)))
+    return {"judge": judge.name, "verdict": parsed}
+
+
+def pairwise_prompt(question: str, contexts: list[str], answers: list[tuple[str, str]]) -> str:
+    sources = "\n\n".join(f"Source {index}: {text}" for index, text in enumerate(contexts, start=1))
+    answer_text = "\n\n".join(f"{label}: {answer}" for label, answer in answers)
+    return f"""
+Choose the better answer for the question using only the sources.
+Prefer the answer that is more faithful, more directly relevant, and better cited.
+Do not reward extra length unless it adds supported information.
+
+Question:
+{question}
+
+Sources:
+{sources}
+
+Answers:
+{answer_text}
+
+Return JSON: {{"winner": "A", "reason": "brief reason"}}
+"""
+
+
+def judge_pairwise(judge: ChatJudge, question: str, contexts: list[str], first: str, second: str) -> dict:
+    answers = [("A", first), ("B", second)]
+    random.shuffle(answers)
+    raw = judge.complete(pairwise_prompt(question, contexts, answers))
+    parsed = json.loads(raw)
+    winner_label = parsed["winner"]
+    winner_text = dict(answers)[winner_label]
+    return {
+        "judge": judge.name,
+        "slot_order": [label for label, _ in answers],
+        "winner_is_first_candidate": winner_text == first,
+        "reason": parsed.get("reason", ""),
+    }
+
+
+def panel_vote(judges: list[ChatJudge], case: JudgeCase) -> dict:
+    records = [judge_single(judge, case) for judge in judges]
+    passes = sum(1 for record in records if record["verdict"].get("overall_pass") is True)
+    return {
+        "overall_pass": passes >= (len(judges) // 2 + 1),
+        "judge_records": records,
+    }
 ```
 
-```mermaid
-graph TD
-    L0["Level 0: Full document (10,000 tokens)"] --> L1["Level 1: Sections (1,000 tokens)"]
-    L1 --> L2["Level 2: Paragraphs (200 tokens)"]
-    L2 --> L3["Level 3: Sentences (20-50 tokens)"]
-    style L3 stroke:#f66,stroke-width:2px,stroke-dasharray: 5 5
-```
+Dated tooling note, June 2026: RAGAS, TruLens, DeepEval, promptfoo, and similar projects can all be used to express parts of this evaluation workflow, but they should be treated as peer implementation options rather than as a permanent ranking. Pin versions, log judge prompts, keep raw outputs, and keep the conceptual tests portable so a tooling migration does not rewrite your quality standard.
 
----
+## Building Eval Sets That Catch Real Regressions
 
-## 7. The Full Production RAG Pipeline
+A golden eval set is a curated collection of cases whose expected behavior is stable enough to gate changes. It should include normal user questions, adversarial edge cases, abstention cases, stale-document cases, and questions that require exact source attribution. The point is not to cover every future user query. The point is to represent the product promises you are unwilling to break silently.
 
-Integrating these patterns yields a robust, fault-tolerant RAG engine capable of serving enterprise demands securely.
+Good golden cases are concrete. A weak case says "How does authentication work?" and marks a broad wiki page as relevant. A stronger case says "Which environment variable controls token expiration for the staging API?" and marks the exact runbook section plus the current deployment note as relevant. The stronger case tells retrieval what must be found and tells generation what fact must be supported.
 
-```python
-class ProductionRAG:
-    """
-    Combines multiple advanced patterns:
-    1. HyDE for query expansion
-    2. Hybrid search (BM25 + semantic)
-    3. Parent document retrieval
-    4. Cross-encoder reranking
-    5. Self-critique before generation
-    """
+Every case should carry source version information. If the policy document changes, the expected answer may need to change too. Keep document IDs, revision hashes, dates, or content checksums where possible. Otherwise, you can accidentally punish the RAG system for answering from an updated source while the eval set still expects an older answer. Evaluation data is production data; it needs ownership, review, and change control.
 
-    def answer(self, query: str) -> str:
-        # 1. HyDE: Generate hypothetical answer
-        hyde_embedding = self.hyde_expand(query)
+Synthetic cases are useful for coverage expansion. A controlled synthetic workflow can generate candidate questions from each document section, require the model to cite the exact source span, and then run a filter that rejects questions answerable without that span. Human reviewers can then approve a subset. This is much more reliable than asking a model to invent a whole benchmark with no grounding. The source span is the anchor that keeps the synthetic case tied to the corpus.
 
-        # 2. Hybrid search with parent retrieval
-        bm25_results = self.bm25_search(query, k=30)
-        semantic_results = self.semantic_search(hyde_embedding, k=30)
-        candidates = self.merge_results(bm25_results, semantic_results)
+Online evaluation should not wait for explicit thumbs-up and thumbs-down feedback. Users rarely provide enough labels for full coverage, and unhappy users often leave silently. Log retrieval results, context IDs, prompt versions, answer citations, latency, token counts, refusal decisions, and user follow-up behavior. Sample production traces for human review, especially after corpus migrations, model changes, ingestion bugs, or unexpected traffic shifts.
 
-        # 3. Get parent documents
-        parent_docs = self.get_parents(candidates)
+Regression testing should preserve known failures even after they are fixed. When a user escalation reveals that the assistant missed an exception clause, add that query to the eval set with the expected source and answer behavior. The next pipeline change should prove it did not reintroduce the failure. This habit turns incidents into durable test cases rather than temporary fixes.
 
-        # 4. Rerank with cross-encoder
-        reranked = self.rerank(query, parent_docs, k=5)
+Separate development, validation, and holdout slices. Use the development slice while tuning chunk sizes, retrieval weights, prompts, or thresholds. Use the validation slice to choose a candidate configuration. Keep a small holdout slice for periodic sanity checks and human review. If every threshold is tuned directly against the same cases, the system can overfit the eval set while failing fresh user questions.
 
-        # 5. Self-critique: filter irrelevant
-        relevant = self.filter_relevant(query, reranked)
+## Diagnosing Failures from Metric Signatures
 
-        if not relevant:
-            return "I don't have enough information to answer this question."
+The most useful evaluation report does more than print scores. It turns score patterns into failure hypotheses. A low recall@k across many tags suggests missing documents, broken ingestion, mismatched embedding versions, overly aggressive metadata filters, or chunk boundaries that split evidence away from its meaning. A high recall@50 with low recall@5 suggests the evidence exists but ranking is weak. High retrieval scores with low faithfulness suggests the generator is ignoring or misusing the context. Strong offline scores with poor production feedback suggests the eval set no longer represents live traffic.
 
-        # 6. Generate with critique
-        answer = self.generate(query, relevant)
+Build the report so an engineer can read it like a diagnostic panel. For each eval case, store the retrieved IDs, their ranks, their scores, the expected IDs, the answer, the citations, the prompt version, the retriever version, the corpus version, and the failure tags. Aggregate metrics are useful for release gates, but the per-case trace is what makes debugging possible. Without the trace, a failed threshold only says "quality is down." With the trace, the same failure can say "the new chunker removed the section heading from four policy-exception cases."
 
-        # 7. Verify answer is supported
-        if not self.verify_supported(answer, relevant):
-            answer = self.regenerate_with_constraints(query, relevant)
+A retrieval miss has a distinctive shape. The relevant source ID is absent from top-k and often absent from a much larger candidate pool. Before changing the model, verify that the source exists in the index, the metadata filter permits it, the document version is current, and the query and document embeddings were produced by compatible model versions. Many expensive RAG "quality" projects have started as simple indexing bugs. Evaluation should make those bugs visible quickly.
 
-        return answer
-```
+A chunking failure often appears as partial recall with poor answer quality. The retriever finds a chunk that contains a keyword or entity, but the chunk omits the definition, exception, date, or preceding paragraph that makes the answer safe. In those cases, changing the generator prompt will not reliably fix the problem because the model never receives the missing context. The right experiment is to compare chunk size, overlap, semantic boundaries, parent-section reconstruction, and source metadata while measuring both retrieval precision and answer faithfulness.
 
-### Pattern Selection and Economics
+A ranking failure appears when the expected source is retrievable but buried. The candidate pool contains the right document at rank 18, while the prompt only includes the top six. This failure is common when semantic similarity rewards broad topical overlap while the actual answer depends on exact identifiers, current dates, or policy authority. The right experiment is to inspect rank movement after lexical weighting, reranking, freshness boosts, or candidate diversification. Always compare the before and after ranking for the same case; otherwise, you cannot tell whether the new layer helped or merely changed the failure.
 
-| Pattern | When to Use | Latency Impact | Quality Impact |
-|---------|-------------|----------------|----------------|
-| **HyDE** | Q&A, technical docs | Extra generation step; latency depends on model and infrastructure | Often helpful when query and document phrasing differ |
-| **Hybrid Search** | Mixed queries | Extra scoring cost depends on the retrieval stack | Often improves robustness on mixed lexical and semantic queries |
-| **GraphRAG** | Connected knowledge | Graph construction and traversal add overhead; cost depends on implementation | Can help on corpus-level or multi-hop questions |
-| **Reranking** | When precision matters | Second-stage model pass over candidates; cost depends on candidate count and model size | Often improves ranking quality on a shortlisted set |
-| **Self-RAG** | High-stakes applications | Multiple critique steps increase latency; impact depends on implementation | Can improve grounding when factuality matters |
-| **Parent Docs** | Long documents | Minimal | Medium |
+A generation failure appears when the right sources are present near the top, yet the answer is unsupported, incomplete, or poorly cited. This is where claim-level checks are most valuable. Split the answer into claims, link each claim to a source, and classify unsupported claims by type: invented number, wrong date, overbroad policy, missing exception, unsupported recommendation, or citation mismatch. Each category suggests a different fix. An invented number may need stricter source quoting, while a missing exception may need an answer schema that forces the model to list constraints before conclusions.
 
-| Technique | Quality Improvement | Latency Cost |
-|-----------|-------------------|--------------|
-| HyDE | Recall can improve when query and document phrasing differ | Additional generation step adds latency |
-| Hybrid Search | Precision often improves on mixed lexical and semantic queries | Extra scoring cost depends on the retrieval stack |
-| Reranking | Precision often improves on a reranked shortlist | Added model pass over candidates |
-| Self-RAG | Accuracy and factuality can improve when critique loops help | Multiple critique steps add noticeable latency |
-| GraphRAG | Can help on complex multi-hop or corpus-level questions | Graph construction and traversal add overhead |
+An abstention failure deserves its own tag. Some RAG products are safer when they say they do not have enough information. Evaluation should include questions whose correct answer is a refusal, a clarification request, or a scoped answer. If all golden cases are answerable, the assistant can learn to answer everything. In production, that behavior is dangerous because out-of-scope questions are inevitable. Measure false refusals and false answers separately, because improving one can worsen the other.
 
----
+A citation failure is not always the same as a factual failure. An answer may state the right fact but cite a source that does not support it, or cite a broad index page when the exact policy paragraph was required. In audit-heavy systems, that is still a failure because users and reviewers need provenance. Treat citations as structured outputs, not decorative links. Validate that every citation ID exists in the retrieved context, points to an allowed source, and supports the nearby claim.
+
+A freshness failure appears when an older source outranks a newer authoritative source. These failures are common in corpora with historical documents, release notes, archived policies, or duplicated pages across product versions. The fix may be retrieval metadata, source authority rules, ingestion deletion, or prompt instructions for conflict handling. The eval case should include both old and new sources so the gate verifies the system chooses the current authority rather than succeeding only in a cleaned corpus.
+
+Human review is still part of the diagnostic loop. Use humans where judgment is expensive but important: calibrating judge labels, reviewing ambiguous failures, approving synthetic cases, and adjudicating changes to high-risk thresholds. Do not ask reviewers to read every trace. Give them focused packets: the question, expected source, retrieved sources, generated answer, judge verdict, and the specific disagreement. Good tooling makes human review sharper instead of turning it into manual log archaeology.
+
+Dashboards should separate release gating from operations. A CI report can be strict, deterministic, and tied to a fixed eval set. A production dashboard must handle drift, sampling, privacy, and changing traffic. It should show query volume by tag, retrieval miss rate, citation failure rate, refusal rate, latency percentiles, token cost, and representative failed traces. If online data reveals a new query class, add reviewed examples to the offline eval set. That feedback loop keeps the benchmark alive.
+
+Finally, write evaluation findings in the same language as engineering tickets. "Faithfulness dropped three points" is less actionable than "policy-conflict cases now cite the archived handbook instead of the approved handbook." The metric is the smoke alarm, not the repair plan. A strong RAG evaluation culture translates numbers into failure labels, failure labels into targeted experiments, and experiments into regression tests that stay in the suite after the immediate incident is gone.
+
+## The Optimization Loop: Measure, Diagnose, Tune, Re-measure
+
+Optimization starts after measurement, not before. The loop is simple: measure the current system, diagnose the failure layer, tune the smallest appropriate knob, and re-measure the same cases. The discipline is resisting the urge to change retrieval, ranking, prompt, and model all at once. Compound changes can improve the headline score while making the root cause invisible.
+
+A retrieval miss means the relevant document never entered the candidate set. Check indexing first. The document might be absent, stale, filtered by metadata, embedded with the wrong model version, or split so badly that the relevant phrase no longer has enough context. Good first knobs are ingestion freshness, metadata filters, chunk boundaries, chunk overlap, embedding model choice, and retrieval `k`. If recall@50 is low, reranking cannot fix the problem because the evidence never reached the reranker.
+
+A ranking or reranking miss means the relevant document was retrieved somewhere but not placed high enough. If recall@50 is good and recall@5 is poor, tune ranking. Good knobs include retrieval score normalization, hybrid lexical-semantic weighting, candidate diversity, reranker choice, reranker candidate count, and source freshness boosts. The key is to compare pre-rerank and post-rerank rankings. If the reranker demotes exact evidence, it may be optimizing semantic fluency instead of domain relevance.
+
+A generation or grounding failure means the right context was present but the answer still made unsupported claims, missed required facts, or cited weak evidence. Good knobs include stricter prompts, citation-required output schemas, abstention rules, answer length limits, evidence-before-answer formatting, and claim-level post-checks. Do not use prompt language such as "be accurate" as your only fix. Make the model show which source supports each factual claim, then reject or repair answers that cannot provide support.
+
+A lost-in-the-middle failure means the answer changes when the same evidence appears at different positions in a long context. Diagnose it by moving the expected source to the beginning, middle, and end while holding everything else constant. Good knobs include reducing context size, ordering sources by relevance, placing required evidence near the answer instruction, using source manifests, splitting tasks into retrieve-then-synthesize stages, or using long-context strategies from the next module when the task truly needs broad evidence.
+
+A data conflict failure means the retrieved context contains multiple plausible answers from different versions, tenants, products, or dates. Good knobs include metadata filters, source authority ranking, freshness windows, conflict-aware prompts, and explicit answer policies such as "prefer the newest approved policy document unless the question asks for historical behavior." The evaluation case should include the conflicting sources so the system is tested on the real ambiguity rather than a cleaned-up version.
+
+The correct knob is usually the one closest to the failure. If the corpus lacks a document, change ingestion. If the document is present but not found, change retrieval. If it is found but buried, change ranking. If it is visible but ignored, change prompt and grounding checks. If the answer is faithful but too slow, change economics. This layer-by-layer diagnosis keeps optimization from becoming random architecture churn.
+
+Thresholds should be explicit and tag-aware. A team might require recall@10 of 0.90 overall, recall@10 of 0.98 for policy-critical cases, faithfulness of 0.95 for customer-facing answers, and p95 latency below a product-specific limit. These numbers must be chosen from product risk and baseline behavior, not copied from another project. A threshold that blocks every deploy will be bypassed. A threshold that permits known harmful failures is not a gate.
+
+## Latency and Cost Optimization Without Quality Blindness
+
+RAG quality improvements often add cost. More retrieved candidates increase vector database work. Larger `k` increases prompt tokens. Reranking improves precision but adds a second model pass. LLM judges improve evaluation coverage but can become expensive when run against every production trace. Optimization therefore needs two dashboards: one for quality and one for economics. A cheaper system that fails silently is not cheaper; it has moved cost into user harm and support work.
+
+Rerank only a bounded top-N candidate set. If recall@100 is high, you can test whether reranking the top 50 produces nearly the same nDCG as reranking the top 100. If it does, the smaller candidate count saves latency and model cost. If it does not, segment by query type because exact identifier queries and broad conceptual queries may need different candidate budgets.
+
+Cache deterministic work. Embeddings for repeated queries, retrieval results for popular questions, source manifests for stable documents, and evaluation judge outputs for unchanged cases can often be cached. Cache keys must include model version, corpus version, prompt version, filters, and tenant scope. A cache that ignores corpus version can preserve stale retrieval results after the index changes, turning an optimization into a correctness bug.
+
+Use asynchronous evaluation where possible. Production answers often need fast retrieval and generation, while deeper judge-based evaluation can run on sampled traces after the response. The online path can enforce deterministic gates such as citation presence, source ID validity, and refusal rules. The asynchronous path can run claim-level faithfulness checks, multiple judges, and human-review sampling without adding user-visible latency.
+
+Keep evaluation cost proportional to risk. Run full judge panels on release candidates, high-risk tags, and sampled production traces. Run cheaper deterministic checks on every request. Run retrieval metrics on every CI change because they are inexpensive when the eval set is local. This layered approach preserves strong quality control without sending every trace through the most expensive evaluator.
+
+Optimize prompts with evidence budgets. A prompt that includes 20 chunks may perform worse and cost more than a prompt with six well-ranked chunks and source metadata. Track token counts per source, answer length, citation count, and unsupported claim rate. If adding context lowers faithfulness, the system may be drowning the model in distractors. Context is not free just because it fits.
+
+Finally, treat cost changes as eval changes. Lowering retrieval `k`, reducing reranker candidates, changing chunk size, removing a judge, or shortening the prompt should trigger the same regression suite as a quality improvement. Many production regressions come from "small" cost cleanups that were not evaluated because they did not look like feature changes.
 
 ## Did You Know?
 
-1. HyDE was introduced in 2022 as a retrieval method that generates a hypothetical document before dense search.
-2. BM25 has been a core lexical ranking method in information retrieval for decades and remains a common baseline in search systems.
-3. GraphRAG has been demonstrated on large text corpora to surface clusters and relationships that are hard to recover with flat retrieval alone.
-4. Because cross-encoders score query-document pairs jointly, they are far slower than bi-encoders at large retrieval scales and are usually used as a second-stage reranker.
+- **RAG evaluation separates retrieval from generation**: a bad answer can come from missing evidence, poor ranking, weak prompt constraints, or unsupported generation, and each failure needs a different fix.
+- **nDCG supports graded relevance**: it can reward a ranking that places essential evidence above merely background evidence, which binary hit-rate cannot express.
+- **LLM judges need calibration**: judge prompts, model versions, answer order, and rubric wording can change verdicts, so human-labeled calibration sets remain important.
+- **Regression cases become assets**: every production miss can become a permanent eval case that prevents the same query class from breaking again.
 
----
+## Common Mistakes
 
-## Common Mistakes in Production RAG
-
-| Mistake | Why it Fails | The Fix |
-|---------|-------------|---------|
-| **Relying solely on semantic search** | Embeddings perfectly capture general meaning but often completely miss precise keyword matches or specific system IDs. | Implement a robust hybrid search pipeline combining BM25 scoring and vector similarity. |
-| **Using cross-encoders for initial retrieval** | Cross-encoders evaluate pairs of query and document simultaneously, rendering an O(N) complexity that guarantees system timeouts. | Adopt two-stage retrieval: use fast bi-encoders for the top 100 results, then apply cross-encoders only to that shortlist. |
-| **Chunking documents too small** | Tiny chunks provide excellent search precision but entirely deprive the generation LLM of necessary surrounding narrative context. | Implement Parent Document Retrieval to search small chunks but return the full parent section to the LLM. |
-| **Failing to handle entity coreferences** | Mentions of "Apple" and "the iPhone maker" will create disconnected graph nodes, violently fracturing the knowledge base. | Build a dedicated entity resolution and clustering step immediately after the initial LLM extraction phase. |
-| **Applying HyDE to exact-match queries** | Generating a hypothetical document for a query like "Error 0x80070005" will introduce noise and dilute the specific keyword payload. | Route queries dynamically; strictly reserve HyDE for natural language exploration queries. |
-| **Ignoring retrieval critique layers** | Assuming all retrieved documents are flawlessly relevant leads to confident hallucinations when the vector database returns noisy matches. | Implement Self-RAG reflection tokens to violently filter irrelevant context prior to generation. |
-| **Setting a static 50/50 hybrid weight** | A perfectly split alpha parameter between BM25 and vector search rarely reflects the nuanced reality of your actual user query distribution. | Continuously analyze query logs to tune the alpha parameter, typically favoring BM25 for technical and legal domains. |
-
----
+| Mistake | Why it fails | Better approach |
+|---|---|---|
+| Optimizing one headline score | Averages hide failures in rare but important query classes such as exact identifiers, conflicts, or policy exceptions. | Report metrics by tag, risk level, product area, and query type before accepting a change. |
+| Treating hit-rate as enough | Finding one relevant source does not prove that all required evidence reached the generator. | Use recall@k and context recall for questions that require multiple supporting sources. |
+| Judging answers without retrieved context | The evaluator may reward a correct-looking answer that was not actually supported by the RAG pipeline. | Give the judge the question, retrieved context, candidate answer, and citation requirements. |
+| Letting the judge be vague | Broad prompts reward style, length, and confidence rather than grounded correctness. | Use atomic rubrics with explicit pass or fail criteria and short evidence-based reasons. |
+| Changing several knobs at once | A combined chunking, prompt, model, and reranker change can improve the total score while hiding the real cause. | Change one layer at a time unless an incident requires a coordinated rollback. |
+| Ignoring latency and token cost | A high-quality eval result may be unusable if it doubles p95 latency or sends too much context to the model. | Track quality, latency, candidate count, prompt tokens, judge cost, and cache hit rate together. |
+| Reusing stale golden labels | Source documents change, but old reference answers can keep expecting outdated behavior. | Version eval cases with source revisions and review labels when authoritative documents change. |
 
 ## Knowledge Check
 
 <details>
-<summary>1. Scenario: You are engineering a medical RAG pipeline to flag severe drug interactions. Due to regulatory constraints, your system cannot afford to provide advice based on partially irrelevant clinical trials. Which pattern must you implement immediately?</summary>
-You must implement Self-RAG. By injecting a reflection and critique checkpoint prior to the generation step, the LLM will aggressively filter out retrieved documents that do not directly pertain to the specific interaction query, preventing confident hallucinations that could cause medical harm.
+<summary>1. Your retriever has recall@50 of 0.94 but recall@5 of 0.41 on policy questions. Which layer should you inspect first?</summary>
+
+This points to a ranking or reranking problem rather than a raw indexing problem. The relevant evidence is entering the wider candidate set, so the next step is to compare pre-rerank and post-rerank positions, candidate diversity, hybrid weighting, freshness boosts, and reranker behavior on the affected query tags.
 </details>
 
 <details>
-<summary>2. Scenario: Your customer support bot handles inquiries for hardware tools. Users search using exact manufacturer part numbers, but your vector database keeps returning documentation for physically similar tools rather than the specific requested part. How do you resolve this?</summary>
-You need to introduce Hybrid Search combining BM25 and your semantic vectors. Vector databases struggle with isolated alphanumeric strings like part numbers, mapping them poorly in the latent space. BM25 excels at pinpointing exact lexical matches, making it much more likely the exact part number surfaces quickly.
+<summary>2. Why can an answer be faithful but still irrelevant?</summary>
+
+Faithfulness only checks whether the answer's claims are supported by the supplied context. The answer can accurately summarize a retrieved source while failing to address the user's actual question, especially when retrieval returned a broadly related document and the generator followed the wrong thread.
 </details>
 
 <details>
-<summary>3. Scenario: A law firm tasks you with analyzing a massive corporate email leak. They need to understand the chain of custody regarding financial fraud. Why will a traditional semantic RAG approach completely fail here?</summary>
-Traditional RAG relies on flat retrieval, meaning it can only return documents where the query's concepts co-occur in the same paragraph. Uncovering a chain of custody requires multi-hop reasoning across disconnected emails, often making GraphRAG a strong architectural choice for traversing relationships.
+<summary>3. A pairwise LLM judge always prefers the answer shown second. What should you do before trusting the comparison?</summary>
+
+Randomize answer order, run both orderings, and inspect whether the winner changes with position. If position changes the outcome, treat the result as uncertain and use a stricter rubric, multiple judges, deterministic checks, or human labels before using the comparison as a deployment gate.
 </details>
 
 <details>
-<summary>4. Scenario: Your internal wiki RAG returns excellent semantic matches, but the LLM constantly complains that the retrieved text snippets are too fragmented to form a cohesive summary. How do you optimize the pipeline without ruining search accuracy?</summary>
-Implement Parent Document Retrieval. You keep the small chunking strategy active for the vector search phase to ensure high precision matching, but map those tiny chunks back to larger logical sections (like a full chapter) to provide the LLM with dense, cohesive context for generation.
+<summary>4. When is synthetic eval generation useful, and what is the main risk?</summary>
+
+Synthetic generation is useful for expanding coverage across many source documents, especially when each generated question is anchored to a cited source span and then reviewed. The main risk is treating model-generated labels as unquestioned truth, which can create artificial, easy, or incorrectly grounded cases.
 </details>
 
 <details>
-<summary>5. What is the critical architectural distinction between a bi-encoder and a cross-encoder that prevents you from using a cross-encoder against a raw database of one million documents?</summary>
-A bi-encoder embeds the query and the document independently, allowing you to pre-compute document embeddings offline. A cross-encoder feeds both the query and the document into the transformer simultaneously to calculate attention across both texts. This deep interaction makes it drastically slower and usually too computationally expensive to execute across millions of documents at runtime.
+<summary>5. Your faithfulness score drops after increasing retrieval k from 5 to 20. What diagnosis is plausible?</summary>
+
+The additional context may be lowering context precision by adding distractors, stale documents, or conflicting passages. The generator now has more text but weaker signal. Inspect unsupported claims, cited source IDs, prompt token allocation, and whether the most relevant sources are still near the top of the context bundle.
 </details>
 
 <details>
-<summary>6. How does Hypothetical Document Embeddings (HyDE) directly circumvent the linguistic mismatch problem inherent to Q&A systems?</summary>
-It forces the system to translate the user's raw question into the authoritative format of a hypothetical document. Because vector spaces group text by syntax and latent meaning, matching a "document-style" hypothetical answer against real "document-style" data yields significantly higher recall than attempting to map a question directly to a statement.
+<summary>6. Why should CI gates report metrics by query tag instead of only reporting one average?</summary>
+
+One average can hide regressions in small but high-risk slices. A change that improves common FAQ questions can break exact-match identifiers, conflict-resolution cases, or abstention cases. Tag-level reporting exposes those tradeoffs before a branch ships and makes threshold decisions defensible.
 </details>
 
----
+## Hands-On Exercise: Deploying a RAG Evaluation Pipeline on Kubernetes
 
-## Hands-On Lab: Deploying a RAG Evaluation Pipeline on Kubernetes
+In this lab, you will deploy a small evaluation API to a local Kubernetes v1.35 cluster. The service does not call an external LLM because the goal is to make the evaluation gate deterministic and cheap enough for CI. It computes retrieval metrics, runs a simple groundedness check against expected source IDs, and fails the response when thresholds are not met. In a real system, you would replace the mock candidate answers with outputs from your RAG pipeline and optionally add the LLM judge harness from earlier in the module.
 
-In this comprehensive lab, you will build and deploy a Two-Stage Retrieval pipeline API to a local Kubernetes v1.35 cluster. You will configure Hybrid Search, implement Cross-Encoder reranking, and verify state through cluster logs.
+### Step 1: Prepare the cluster and namespace
 
-### Step 1: Environment and Cluster Preparation
-
-We require a strictly modern environment. We will provision a local Kubernetes cluster explicitly targeting v1.35 using Kind.
+- [ ] Create a local Kind cluster targeting the course Kubernetes version, create a namespace, and confirm that the control plane is reachable before building the evaluation service.
 
 ```bash
-# Provision the local cluster
 kind create cluster --name rag-eval-cluster --image kindest/node:v1.35.0
-
-# Create the dedicated namespace
 kubectl create namespace rag-system
-
-# Prepare your local Python environment for building the API
-python3 -m venv rag-env
-source rag-env/bin/activate
-pip install fastapi uvicorn sentence-transformers rank_bm25 numpy
+kubectl get nodes
 ```
 
-### Step 2: Implement the Retrieval API
+### Step 2: Create the evaluation service
 
-Create a new file named `app.py`. This FastAPI application implements our mock two-stage retrieval combining BM25 and semantic embedding, followed by a cross-encoder.
+- [ ] Create a file named `rag_eval_service.py` with the following FastAPI application. The app holds a tiny golden set, computes recall@k, precision@k, hit-rate, MRR, and nDCG, and applies explicit thresholds before returning a pass or fail result.
 
 ```python
+from __future__ import annotations
+
+from math import log2
+
 from fastapi import FastAPI
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer, CrossEncoder
-from rank_bm25 import BM25Okapi
-import numpy as np
 
-app = FastAPI(title="RAG Pipeline API")
 
-# Load our Bi-encoder and Cross-encoder into memory
-bi_encoder = SentenceTransformer('all-MiniLM-L6-v2')
-cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+app = FastAPI(title="RAG Evaluation Gate")
 
-# Mock Knowledge Base
-DOCUMENTS = [
-    "Error code 0x80070005 indicates an access denied permissions issue.",
-    "To optimize Python execution, implement multiprocessing.",
-    "System crash logs are stored in /var/log/syslog.",
-    "Performance optimization requires deep algorithmic analysis.",
-    "Ensure the network daemon is running before accessing 0x80070005."
-]
 
-# Pre-compute BM25 and Embeddings for rapid Stage 1 retrieval
-tokenized_docs = [doc.lower().split() for doc in DOCUMENTS]
-bm25 = BM25Okapi(tokenized_docs)
-doc_embeddings = bi_encoder.encode(DOCUMENTS)
+class CandidateRun(BaseModel):
+    retrieved_doc_ids: list[str]
+    answer: str
+    cited_doc_ids: list[str]
 
-class QueryRequest(BaseModel):
-    query: str
 
-@app.post("/search")
-def search(request: QueryRequest):
-    query = request.query
-    
-    # STAGE 1: Hybrid Search (Bi-encoder + BM25)
-    query_emb = bi_encoder.encode(query)
-    semantic_scores = np.dot(doc_embeddings, query_emb)
-    
-    bm25_scores = bm25.get_scores(query.lower().split())
-    
-    # Simple normalization and alpha weighting (0.5)
-    semantic_norm = semantic_scores / (np.max(semantic_scores) + 1e-9)
-    bm25_norm = bm25_scores / (np.max(bm25_scores) + 1e-9)
-    hybrid_scores = 0.5 * semantic_norm + 0.5 * bm25_norm
-    
-    # Grab Top 3 candidates from Stage 1
-    top_indices = np.argsort(hybrid_scores)[::-1][:3]
-    candidates = [DOCUMENTS[i] for i in top_indices]
-    print(f"Stage 1 Candidates: {candidates}")
-    
-    # STAGE 2: Reranking (Cross-encoder)
-    pairs = [[query, doc] for doc in candidates]
-    rerank_scores = cross_encoder.predict(pairs)
-    
-    # Sort the final candidates by the strict Cross-encoder score
-    ranked_results = sorted(zip(candidates, rerank_scores), key=lambda x: x[1], reverse=True)
-    
-    return {"query": query, "results": [{"doc": doc, "score": float(score)} for doc, score in ranked_results]}
+class EvaluationRequest(BaseModel):
+    run: dict[str, CandidateRun]
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+GOLDEN = {
+    "q1": {
+        "question": "Which document explains access denied error 0x80070005?",
+        "relevant": {"runbook-permissions", "windows-error-index"},
+        "grades": {"runbook-permissions": 3, "windows-error-index": 2},
+        "required_phrase": "access denied",
+    },
+    "q2": {
+        "question": "What should the assistant do when no source supports an answer?",
+        "relevant": {"rag-answer-policy"},
+        "grades": {"rag-answer-policy": 3},
+        "required_phrase": "refuse",
+    },
+}
+
+
+THRESHOLDS = {
+    "recall_at_3": 0.75,
+    "precision_at_3": 0.50,
+    "hit_rate_at_3": 1.00,
+    "mrr": 0.75,
+    "ndcg_at_3": 0.75,
+    "groundedness": 0.75,
+}
+
+
+def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    top_k = retrieved[:k]
+    if not top_k:
+        return 0.0
+    return sum(1 for doc_id in top_k if doc_id in relevant) / len(top_k)
+
+
+def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    if not relevant:
+        return 1.0
+    return sum(1 for doc_id in retrieved[:k] if doc_id in relevant) / len(relevant)
+
+
+def hit_rate_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    return 1.0 if any(doc_id in relevant for doc_id in retrieved[:k]) else 0.0
+
+
+def reciprocal_rank(retrieved: list[str], relevant: set[str]) -> float:
+    for rank, doc_id in enumerate(retrieved, start=1):
+        if doc_id in relevant:
+            return 1.0 / rank
+    return 0.0
+
+
+def dcg_at_k(ranking: list[str], grades: dict[str, int], k: int) -> float:
+    return sum((2 ** grades.get(doc_id, 0) - 1) / log2(rank + 1) for rank, doc_id in enumerate(ranking[:k], start=1))
+
+
+def ndcg_at_k(retrieved: list[str], grades: dict[str, int], k: int) -> float:
+    ideal = sorted(grades, key=lambda doc_id: grades[doc_id], reverse=True)
+    ideal_score = dcg_at_k(ideal, grades, k)
+    if ideal_score == 0.0:
+        return 0.0
+    return dcg_at_k(retrieved, grades, k) / ideal_score
+
+
+def groundedness(case: dict, candidate: CandidateRun) -> float:
+    cites_relevant_source = any(doc_id in case["relevant"] for doc_id in candidate.cited_doc_ids)
+    # Teaching simplification: real systems use claim-level faithfulness (see faithfulness_prompt above), not substring matching
+    answer_mentions_required_fact = case["required_phrase"].lower() in candidate.answer.lower()
+    return (float(cites_relevant_source) + float(answer_mentions_required_fact)) / 2
+
+
+@app.post("/evaluate")
+def evaluate(request: EvaluationRequest) -> dict:
+    totals = {metric: 0.0 for metric in THRESHOLDS}
+    per_case = {}
+    for case_id, case in GOLDEN.items():
+        candidate = request.run[case_id]
+        retrieved = candidate.retrieved_doc_ids
+        relevant = case["relevant"]
+        scores = {
+            "recall_at_3": recall_at_k(retrieved, relevant, 3),
+            "precision_at_3": precision_at_k(retrieved, relevant, 3),
+            "hit_rate_at_3": hit_rate_at_k(retrieved, relevant, 3),
+            "mrr": reciprocal_rank(retrieved, relevant),
+            "ndcg_at_3": ndcg_at_k(retrieved, case["grades"], 3),
+            "groundedness": groundedness(case, candidate),
+        }
+        per_case[case_id] = scores
+        for metric, value in scores.items():
+            totals[metric] += value
+
+    aggregate = {metric: value / len(GOLDEN) for metric, value in totals.items()}
+    failed = {metric: value for metric, value in aggregate.items() if value < THRESHOLDS[metric]}
+    return {
+        "pass": not failed,
+        "thresholds": THRESHOLDS,
+        "aggregate": aggregate,
+        "failed_metrics": failed,
+        "per_case": per_case,
+    }
 ```
 
-### Step 3: Containerization and Loading
+### Step 3: Build and load the container image
 
-Create the exact `Dockerfile` in the same directory:
+- [ ] Create a `requirements.txt` file and `Dockerfile`, then build the image locally and load it into the Kind node so the deployment does not depend on an external registry.
+
+```text
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+```
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
-
-RUN pip install fastapi uvicorn sentence-transformers rank_bm25 numpy
-COPY app.py /app/app.py
-
-# Pre-download models during build phase to prevent runtime latency
-RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('all-MiniLM-L6-v2'); CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+COPY requirements.txt /app/requirements.txt
+RUN python -m pip install --no-cache-dir -r /app/requirements.txt
+COPY rag_eval_service.py /app/rag_eval_service.py
 
 EXPOSE 8000
-
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "rag_eval_service:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
-
-Build the image locally and inject it directly into the Kind cluster runtime to avoid needing an external registry.
 
 ```bash
-docker build -t rag-api:latest .
-kind load docker-image rag-api:latest --name rag-eval-cluster
+docker build -t rag-eval-gate:latest .
+kind load docker-image rag-eval-gate:latest --name rag-eval-cluster
 ```
 
-### Step 4: Deploying to Kubernetes (v1.35)
+### Step 4: Deploy the evaluator
 
-Create the declarative manifest `rag-deployment.yaml`. This utilizes current `apps/v1` standards.
+- [ ] Create `rag-eval-deployment.yaml`, apply it, and wait until Kubernetes reports the deployment as available.
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rag-pipeline
+  name: rag-eval-gate
   namespace: rag-system
-  labels:
-    app: rag-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: rag-api
+      app: rag-eval-gate
   template:
     metadata:
       labels:
-        app: rag-api
+        app: rag-eval-gate
     spec:
       containers:
-      - name: api
-        image: rag-api:latest
-        imagePullPolicy: Never
-        ports:
-        - containerPort: 8000
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "1000m"
+        - name: api
+          image: rag-eval-gate:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: rag-service
+  name: rag-eval-gate
   namespace: rag-system
 spec:
   selector:
-    app: rag-api
+    app: rag-eval-gate
   ports:
-    - protocol: TCP
+    - name: http
       port: 80
       targetPort: 8000
 ```
 
-Apply the deployment and firmly block execution until the pods report availability.
-
 ```bash
-kubectl apply -f rag-deployment.yaml
-kubectl wait --for=condition=available deployment/rag-pipeline -n rag-system --timeout=120s
+kubectl apply -f rag-eval-deployment.yaml
+kubectl wait --for=condition=available deployment/rag-eval-gate --namespace rag-system --timeout=120s
 ```
 
-### Step 5: Execution and Verification
+### Step 5: Run a passing evaluation
 
-Forward the cluster service port to your local machine and execute a test query targeting an exact lexical match mixed with semantic intent.
-
-```bash
-# Run in background
-kubectl port-forward svc/rag-service 8080:80 -n rag-system &
-
-# Execute the test payload
-curl -X POST http://localhost:8080/search \
-     -H "Content-Type: application/json" \
-     -d '{"query": "How do I troubleshoot 0x80070005?"}'
-```
-
-Verify that the Cross-encoder successfully reordered the initial hybrid candidates by auditing the pod logs:
+- [ ] Forward the service to your workstation, send a candidate run that retrieves and cites the right sources, and confirm that the evaluation gate passes.
 
 ```bash
-kubectl logs -l app=rag-api -n rag-system
+kubectl port-forward service/rag-eval-gate 8080:80 --namespace rag-system
 ```
 
-### Success Checklist
-- [ ] Local Kind cluster running Kubernetes v1.35.0.
-- [ ] FastAPI container successfully built and loaded into the node cache.
-- [ ] Deployment transitioned to `Available` status without OOM kills.
-- [ ] The `curl` response correctly elevates the exact error code document to index 0.
+```bash
+curl -s -X POST http://127.0.0.1:8080/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "run": {
+      "q1": {
+        "retrieved_doc_ids": ["runbook-permissions", "windows-error-index", "general-troubleshooting"],
+        "answer": "Error 0x80070005 is an access denied issue.",
+        "cited_doc_ids": ["runbook-permissions"]
+      },
+      "q2": {
+        "retrieved_doc_ids": ["rag-answer-policy", "prompt-style-guide", "fallback-copy"],
+        "answer": "When no source supports the answer, the assistant should refuse or ask for better context.",
+        "cited_doc_ids": ["rag-answer-policy"]
+      }
+    }
+  }'
+```
 
----
+### Step 6: Run a failing evaluation and inspect why
+
+- [ ] Send a candidate run with weak retrieval and unsupported citations, then identify which metric failed before changing the pipeline.
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "run": {
+      "q1": {
+        "retrieved_doc_ids": ["general-troubleshooting", "network-overview", "release-notes"],
+        "answer": "The error is probably a network issue.",
+        "cited_doc_ids": ["network-overview"]
+      },
+      "q2": {
+        "retrieved_doc_ids": ["prompt-style-guide", "fallback-copy", "general-faq"],
+        "answer": "The assistant should answer confidently.",
+        "cited_doc_ids": ["general-faq"]
+      }
+    }
+  }'
+```
+
+The failing response should show low recall, low hit-rate, low MRR, low nDCG, and low groundedness. That output is the optimization map. The first fix is not "use a bigger model." The first fix is to restore retrieval of `runbook-permissions`, `windows-error-index`, and `rag-answer-policy`, then re-run the same gate before touching the answer prompt.
+
+### Step 7: Clean up the lab environment
+
+- [ ] Remove the namespace or cluster when you are finished so the local machine does not keep running unused resources.
+
+```bash
+kubectl delete namespace rag-system
+kind delete cluster --name rag-eval-cluster
+```
 
 ## Next Module
 
-[Module 1.5: Long Context & Prompt Caching](./module-1.5-long-context-prompt-caching) - Compare retrieval against long-context strategies, learn when prompt caching pays off, and design cost-aware context windows for large-scale AI systems.
-
----
-
-_Last updated: 2026-04-13_
-_Module 14 of Neural Dojo v4.0_
+[Module 1.5: Long-Context LLMs and Prompt Caching](./module-1.5-long-context-prompt-caching/) continues the sub-track by comparing retrieval against long-context strategies, explaining lost-in-the-middle behavior in more depth, and showing how prompt caching changes cost and latency tradeoffs.
 
 ## Sources
 
-- [arxiv.org: 2005.11401](https://arxiv.org/abs/2005.11401) — The foundational RAG paper was published in 2020 and is an appropriate primary source for the date.
-- [arxiv.org: 2212.10496](https://arxiv.org/abs/2212.10496) — The HyDE paper abstract directly describes generating a hypothetical document and encoding it for retrieval.
-- [arxiv.org: 2404.16130](https://arxiv.org/abs/2404.16130) — The GraphRAG paper abstract directly describes deriving a graph index from source documents for question answering over corpora.
-- [arxiv.org: 2310.11511](https://arxiv.org/abs/2310.11511) — The Self-RAG paper abstract explicitly states that the model uses special reflection tokens for retrieval and self-reflection.
-- [en.wikipedia.org: Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) — General lesson point for an illustrative rewrite.
-- [arxiv.org: 1901.04085](https://arxiv.org/abs/1901.04085) — General lesson point for an illustrative rewrite.
-- [arxiv.org: 1908.10084](https://arxiv.org/abs/1908.10084) — General lesson point for an illustrative rewrite.
+- [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) - Foundational RAG paper describing parametric and non-parametric memory for knowledge-intensive generation.
+- [Ragas: Automated Evaluation of Retrieval Augmented Generation](https://arxiv.org/abs/2309.15217) - Primary source for RAGAS-style decomposition of retrieval and generation evaluation dimensions.
+- [ARES: An Automated Evaluation Framework for Retrieval-Augmented Generation Systems](https://arxiv.org/abs/2311.09476) - Research framework for automated RAG evaluation using generated labels and lightweight judges.
+- [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685) - Core LLM-as-judge reference discussing model-based evaluation and judge bias concerns.
+- [G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment](https://arxiv.org/abs/2303.16634) - Reference for structured LLM-based evaluation of generated text and alignment with human judgments.
+- [Evaluating Verifiability in Generative Search Engines](https://arxiv.org/abs/2304.09848) - Groundedness and citation-support reference for generated answers over retrieved sources.
+- [Lost in the Middle: How Language Models Use Long Contexts](https://arxiv.org/abs/2307.03172) - Empirical reference for position-sensitive context use in long inputs.
+- [Evaluation in Information Retrieval](https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-in-information-retrieval-1.html) - Stanford IR book chapter covering test collections and retrieval evaluation principles.
+- [BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models](https://arxiv.org/abs/2104.08663) - Retrieval benchmark reference for evaluating search systems across diverse tasks.
+- [MTEB: Massive Text Embedding Benchmark](https://arxiv.org/abs/2210.07316) - Embedding evaluation reference useful when choosing or comparing embedding models.
+- [Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) - Ranking-fusion reference relevant when combining lexical and semantic retrieval signals.
+- [RAGAS Documentation](https://docs.ragas.io/en/stable/) - Tooling reference for implementing RAG evaluation metrics while keeping concepts portable (accessed 2026-06).
+- [TruLens Documentation](https://www.trulens.org/getting_started/) - Tooling reference for feedback functions and RAG evaluation instrumentation (accessed 2026-06).
+- [DeepEval Documentation](https://docs.confident-ai.com/) - Tooling reference for test-style LLM application evaluation (accessed 2026-06).
+- [promptfoo Documentation](https://www.promptfoo.dev/docs/intro/) - Tooling reference for prompt and model regression tests in development workflows (accessed 2026-06).
