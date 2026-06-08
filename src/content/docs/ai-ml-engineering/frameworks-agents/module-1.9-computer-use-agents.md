@@ -15,7 +15,7 @@ Upon successful completion of this module, you will be able to:
 - Implement a screenshot-driven feedback loop for coordinate-based visual grounding using the Anthropic Computer Use API.
 - Evaluate the security boundaries of headless browser automation versus full OS-level agent access to determine the appropriate architecture for a given task.
 - Diagnose and resolve common failures in DOM navigation and selector-based visual grounding caused by asynchronous dynamic layouts.
-- Compare the architectural tradeoffs between visual-only agents (Operator) and hybrid DOM/visual agents in terms of latency, token cost, and reliability, and implement state-reduction algorithms, such as image diffing, to manage context window bloat during long-running agent sessions.
+- Compare the architectural tradeoffs between visual-only browser agents and hybrid DOM/visual agents in terms of latency, token cost, and reliability, and implement state-reduction algorithms, such as image diffing, to manage context window bloat during long-running agent sessions.
 
 > **Go deeper:** For dynamic context orchestration and harness guardrails around perception-action loops, see [Dynamic Context Orchestration](/ai/ai-engineering-foundations/module-2.4-dynamic-context-orchestration/) and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
 
@@ -31,7 +31,7 @@ For AI/ML engineers, the central question is not whether a model can click a but
 
 > **Computer-use landscape snapshot — as of 2026-06. Verify against vendor docs before relying on specifics.**
 >
-> OpenAI introduced Operator on January 23, 2025 as a browser-using research preview. OpenAI's own July 17, 2025 update states that Operator was integrated into ChatGPT as ChatGPT agent, and the current ChatGPT agent help article says Operator functionality is now in ChatGPT agent mode and the standalone Operator website is no longer accessible. OpenAI describes ChatGPT agent as using a visual browser, a terminal, apps, and other tools while keeping user confirmations and safety controls in the loop.
+> OpenAI introduced Operator on January 23, 2025 as a browser-using research preview. OpenAI's own July 17, 2025 update states that Operator was integrated into ChatGPT as ChatGPT agent, and the current ChatGPT agent help article says Operator functionality is now in ChatGPT agent mode and the standalone Operator website has since been sunset. OpenAI describes ChatGPT agent as using a visual browser, a terminal, apps, and other tools while keeping user confirmations and safety controls in the loop.
 >
 > Anthropic's current public documentation names the capability the "computer use tool." It is documented as a beta feature for Claude API users, with screenshot capture plus mouse and keyboard control implemented by the developer's container or virtual machine environment. The important architectural point is stable even if tool version strings change: the model does not directly own your desktop; your application receives tool-use requests, decides whether to execute them, captures results, and returns those results to the model.
 >
@@ -178,12 +178,12 @@ Pixel automation sees what the user sees. That makes it valuable for canvas appl
 
 The cost is that visual automation has weaker guarantees. The model must infer whether a visual object is clickable, whether text is part of the page or part of an image, whether a spinner means loading or decoration, and whether a click happened in the intended target. It also consumes more tokens and time because each decision may require an image. For long workflows, a pure pixel agent can spend more budget observing the interface than reasoning about the task.
 
-The hybrid approach is often the best engineering compromise. The controller extracts DOM candidates, computes each candidate's bounding box, filters out invisible or disabled elements, overlays stable numbers on the screenshot, and gives the model both the image and a compact element map. The model can reason visually while choosing a symbolic mark, and the controller can execute the action through a verified locator or a bounding-box center. This is the idea behind Set-of-Mark style prompting: mark the perceptual field so the model can refer to visual regions without inventing precise coordinates.
+The hybrid approach is often a strong engineering compromise. The controller extracts DOM candidates, computes each candidate's bounding box, filters out invisible or disabled elements, overlays stable numbers on the screenshot, and gives the model both the image and a compact element map. The model can reason visually while choosing a symbolic mark, and the controller can execute the action through a verified locator or a bounding-box center. This is the idea behind Set-of-Mark style prompting: mark the perceptual field so the model can refer to visual regions without inventing precise coordinates.
 
 ```mermaid
 sequenceDiagram
     participant Agent as Vision-Language Model
-    participant Middleware as Node.js Middleware
+    participant Middleware as Controller (Python)
     participant Browser as Headless Playwright Instance
 
     Agent->>Middleware: Tool Call: Navigate to URL
@@ -344,7 +344,7 @@ The precise model is default-deny egress with narrow exceptions. The sandbox sho
 
 <details>
 <summary>4. Why is "Kubernetes v1.35+ native sandboxing" an unsafe shorthand for computer use agent isolation?</summary>
-It suggests that one Kubernetes version supplies a complete built-in sandbox boundary, which overstates the platform. Kubernetes can orchestrate isolated workloads, but the boundary comes from multiple configured layers: Pod Security Admission, security contexts, seccomp, dropped capabilities, NetworkPolicy with an enforcing CNI, resource limits, RuntimeClass with an installed sandboxed runtime when needed, and user namespaces where supported. User namespaces reached GA in Kubernetes v1.36, and gVisor is an external runtime selected through RuntimeClass rather than a native Kubernetes feature.
+It suggests that one Kubernetes version supplies a complete built-in sandbox boundary, which overstates the platform. Kubernetes can orchestrate isolated workloads, but the boundary comes from multiple configured layers: Pod Security Admission, security contexts, seccomp, dropped capabilities, NetworkPolicy with an enforcing CNI, resource limits, RuntimeClass with an installed sandboxed runtime when needed, and user namespaces where supported. User namespaces reached GA in a recent Kubernetes release (see the dated landscape snapshot for the exact version), and gVisor is an external runtime selected through RuntimeClass rather than a native Kubernetes feature.
 </details>
 
 <details>
@@ -402,9 +402,16 @@ RUN apt-get update \
         scrot \
         xvfb \
         x11-apps \
+        python3-tk \
+        libx11-6 \
+        libxtst6 \
+        libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir pyautogui==0.9.54 pillow==10.4.0
+# python-xlib is PyAutoGUI's Linux backend and is NOT pulled in automatically by
+# `pip install pyautogui`; the libX11/libXtst/libXext shared libraries above are
+# what its mouse, keyboard, and screenshot calls bind to at runtime.
+RUN pip install --no-cache-dir pyautogui==0.9.54 pillow==10.4.0 python-xlib==0.33
 RUN useradd --create-home --uid 10001 agentuser
 
 USER agentuser
@@ -415,7 +422,7 @@ CMD ["sh", "-c", "Xvfb :99 -screen 0 1024x768x24 >/tmp/xvfb.log 2>&1 & fluxbox >
 EOF
 ```
 
-Build the image and confirm the tag exists locally. The build needs network access because Docker must pull the base image and packages, but the later sandbox run will explicitly disable runtime network access.
+Build the image and confirm the tag exists locally. The build needs network access because Docker must pull the base image and packages, but the later sandbox run will explicitly disable runtime network access. The agent scripts are intentionally not baked into the image: Step 4 bind-mounts them into `/app` at runtime (read-write, so the host can also read screenshots back out), which keeps the image generic. Running this image without that mount will fail because `/app` would be empty.
 
 ```bash
 docker build -t computer-use-sandbox:lab .
@@ -569,7 +576,10 @@ def execute_computer_tool(tool_input: dict[str, object]) -> str | list[dict[str,
         check=True,
     )
     time.sleep(0.8)
-    return f"executed {action}; request a screenshot before deciding the next action"
+    # Return a fresh screenshot after every action so each model decision is
+    # grounded in current pixels — the screenshot-driven loop invariant — instead
+    # of trusting the model to ask for one.
+    return screenshot_content()
 
 
 def call_model(messages: list[dict[str, object]]) -> dict[str, object]:
