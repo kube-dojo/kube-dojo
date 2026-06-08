@@ -5,19 +5,10 @@ sidebar:
   order: 608
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-## A Familiar Failure Mode: When Unversioned Training Data Derails a Launch
 
-**Imagine a model team in the final hours before launch.**
+## Hypothetical Scenario: When Unversioned Training Data Derails a Launch
 
-A team was preparing to launch a new personalized pricing model after months of work, with very little margin for last-minute uncertainty about the training data.
-
-The model had performed beautifully in testing. A/B tests showed a 23% increase in conversion rates. Leadership was ecstatic. The CEO had already announced the launch to investors.
-
-In one common failure mode, a team realizes just before launch that nobody can say with confidence which dataset produced the candidate model.
-
-Her stomach dropped.
-
-She opened the data folder and found chaos:
+**Hypothetical scenario:** A model team is in the final hours before launch after months of work on a personalized pricing model, with very little margin for last-minute uncertainty about the training data. Offline evaluation looked strong and leadership has already communicated the launch externally. Then someone asks a basic question nobody can answer with confidence: which exact dataset version produced the candidate model about to ship? The engineer who opens the shared folder finds a graveyard of ambiguous filenames rather than a catalog of record:
 
 ```
 data/
@@ -31,37 +22,83 @@ data/
 └── train_march_update.csv
 ```
 
-"Which one did we use for the production model?" she typed back, dreading the answer.
+When the team traces filenames against experiment notes, they discover the launch candidate was trained on a different file than the one used in validation — `train_v3_FINAL_REAL.csv` versus `train_FINAL_USE_THIS.csv` are not the same dataset. The launch slips, engineering time is spent re-running training and audits, and the team implements the data versioning and pipeline controls that should have existed from the beginning.
 
-Silence. Then: "I... I'm not sure. I think Dave used one of them but he's on vacation."
-
-The team eventually discovered that the launch candidate had been trained on the wrong dataset version, so the model they planned to ship did not match the one they had validated. The model they'd tested had used `train_v3_FINAL_REAL.csv`. They were completely different datasets.
-
-The launch was delayed, the team absorbed significant business and engineering costs, and they ultimately had to implement the data versioning practices that should have existed from the beginning.
-
-> "We version our code religiously. But our data was stored like photos on my grandmother's computer—folders named 'vacation pics' and 'vacation pics (2)'. That inconsistency cost us everything."
-> — A common MLOps failure pattern.
-
-This module teaches you how to avoid Jennifer's nightmare. You'll learn to version data like code, manage features across teams, and validate data quality automatically. These aren't nice-to-haves—they're the foundation of production ML that actually works.
-
-The stakes are higher than you might think. In ML, your model is only as good as your data—and your data is only as valuable as your ability to track, version, and validate it. A model trained on corrupted data doesn't throw errors. It doesn't crash. It quietly makes terrible predictions that destroy trust, revenue, and sometimes careers.
-
-By the end of this module, you'll have the tools and practices to ensure that never happens to you.
+This pattern is common in teams that version code in Git but treat datasets as disposable files on shared drives. In ML, your model is only as good as your data — and your data is only as trustworthy as your ability to track, version, validate, and orchestrate it through reproducible pipelines. A model trained on corrupted or mismatched data rarely throws errors; it quietly makes bad predictions that erode trust and revenue until someone traces the failure back to the data layer.
 
 ---
 
-## What You'll Be Able to Do
+## What You'll Be Able To Do
 
-By the end of this module, you will:
-- Master DVC for dataset and model versioning—the industry standard for tracking datasets like code
+After working through the theory, tool walkthroughs, and hands-on checkpoints below, you should be able to explain how each layer of the stack fits together and implement the core workflows yourself:
+- Master DVC for dataset and model versioning—a widely adopted approach for tracking datasets like code
 - Understand feature stores and implement Feast—the solution to feature engineering chaos
 - Implement data validation with Great Expectations—unit tests for your data
-- Build reproducible ML pipelines with versioned data—because "it worked on my machine" isn't acceptable
+- Build reproducible ML data pipelines with versioned data, scheduling, and orchestrated dependencies
 - Understand data lineage and governance—tracing data from source to model for debugging and compliance
 
 ---
 
-##  Theory
+## Why This Module Matters
+
+Machine learning systems fail in production far more often at the data layer than at the model layer. Teams invest months tuning architectures while their training tables live in folders named `final_v2_REAL.csv`, their feature definitions diverge across three services, and their nightly ingestion jobs fail silently because nobody wired dependencies or validation gates. Data pipelines — the scheduled, dependency-aware workflows that ingest, transform, validate, and publish ML-ready datasets — are how you turn ad-hoc scripts into infrastructure you can trust.
+
+Without orchestrated data pipelines, every retrain becomes forensic archaeology: which upstream export ran, which transformation version produced this partition, and whether validation ran before training started. With them, you declare dependencies explicitly, backfill historical partitions safely, and block training when expectations fail. The durable concepts — DAGs, idempotency, ETL versus ELT, lineage — outlast any single orchestrator; the tools (Airflow, Dagster, Prefect, and others) are interchangeable implementations of the same operational spine.
+
+This module teaches that spine alongside the data-management tools that sit inside it: DVC for versioning, Feast for consistent features, Great Expectations for validation, and lineage systems for auditability. Module 1.8 goes deeper on ML workflow orchestration for training and deployment; here you focus on the data moving through those workflows.
+
+---
+
+## Data Pipelines for ML: Orchestration, ETL, and Dependencies
+
+### What Counts as a Data Pipeline?
+
+An ML data pipeline is a repeatable workflow that moves raw inputs through transformation and validation stages until they are safe to consume for training or serving. Unlike a one-off notebook export, a pipeline declares what runs, in what order, on what schedule, and what must succeed before downstream steps proceed. Orchestrators such as [Apache Airflow](https://airflow.apache.org/docs/apache-airflow/stable/), [Dagster](https://docs.dagster.io/), and [Prefect](https://docs.prefect.io/) exist to express that graph — historically as task-based DAGs (Airflow, Prefect) or asset-based graphs where data products are first-class (Dagster).
+
+Think of the pipeline as a factory line for datasets. Ingestion stations pull from APIs, databases, or object storage. Transformation stations clean, join, and engineer features. Quality stations run expectations before anything reaches the training floor. Storage stations write versioned artifacts and register metadata. If any station skips a step or uses a different recipe than yesterday, the finished product — your training table — is not the same product even when the filename unchanged.
+
+### ETL Versus ELT: Where Transformation Runs
+
+**ETL (Extract, Transform, Load)** transforms data before it lands in the warehouse or lake. Extraction pulls from sources into a staging area; transformation applies business rules, aggregations, and feature logic; load writes curated tables downstream jobs consume. ETL keeps heavy computation close to the pipeline engine and produces narrow, ML-ready tables early. It suits teams with strict schema contracts and centralized data engineering ownership.
+
+**ELT (Extract, Load, Transform)** loads raw data first, then transforms inside the warehouse or lakehouse using SQL or Spark. Extraction and load prioritize speed and completeness; transformation happens where storage and compute colocate. ELT suits exploratory feature work and teams that want raw history preserved for reprocessing when definitions change. ML teams often hybridize: ELT for raw retention, ETL-style Python or Spark steps for complex feature engineering that SQL cannot express cleanly.
+
+The choice affects pipeline design. ETL pipelines fail fast when upstream schemas drift because transforms run before load commits. ELT pipelines defer failure to transform time but preserve raw inputs for backfills when you fix a bug in feature logic. Neither is universally correct; the tradeoff is where you pay transformation cost and how easily you can recompute history.
+
+### Scheduling, Sensors, and Data Dependencies
+
+Production data rarely arrives at a fixed clock. A nightly sales export might land at 02:10 some days and 03:40 others. Hard-coding `sleep(3600)` between jobs creates flaky pipelines. Orchestrators express **dependencies** explicitly: task B runs only after task A succeeds, or after a **sensor** detects that today's partition exists in object storage.
+
+Scheduling defines the cadence (`@daily`, cron expressions, or event triggers). **Backfills** replay historical intervals — essential when you fix a transformation bug and must rebuild three months of feature tables without manual one-off scripts. Safe backfills require **idempotent** tasks: re-running the same date partition overwrites or upserts deterministically instead of duplicating rows.
+
+Data dependencies also cross team boundaries. Your training pipeline may depend on a finance team's ledger export and a product team's event stream. Document those edges in lineage metadata and alert upstream owners when your SLA misses — otherwise ML becomes the last team to discover a silent upstream failure.
+
+### Backfills: Replaying History Safely
+
+**Hypothetical scenario:** A data engineer discovers that a window function in the daily feature job used the wrong partition column for three weeks. Training and serving both consumed the bad feature, but offline metrics looked stable because the bug was consistent — not random noise. Fixing the SQL is easy; rebuilding trust requires reprocessing every affected date partition and proving downstream models retrained on the corrected tables. Stakeholders will ask whether predictions issued during the bad window must be re-scored; lineage and partition metadata are how you scope that answer without reprocessing the entire history of the business.
+
+Backfills are how you replay orchestrated pipelines across historical intervals. The orchestrator schedules the same DAG once per date (or hour) in a range, writing into deterministic partition paths such as `s3://features/ds=2026-05-01/`. Idempotency is non-negotiable: each replay must replace that partition entirely or upsert on a primary key so retries and overlaps do not duplicate rows. Coordinate with consumers — freeze training jobs, bump feature-store materialization versions, or mark partitions as `staging` until validation passes — so models do not blend old and new statistics in the same batch.
+
+Operational teams often maintain a backfill playbook: identify blast radius with lineage, run Great Expectations on a canary partition, replay in ascending date order to simplify dependency checks, and attach the rebuilt dataset hash to experiment metadata before promoting models. That playbook turns a scary "recompute three weeks" request into a routine pipeline operation rather than a weekend of manual CSV juggling. Document the playbook beside the DAG so on-call engineers inherit the sequence instead of reinventing it during an incident. Treat backfill drills as routine capacity tests, not emergency-only procedures, so the team practices partition replays before production pressure hits.
+
+### Feature Pipelines Inside the Data Layer
+
+Feature pipelines are specialized data pipelines that compute, validate, and publish features for both offline training and online serving. They sit between raw ingestion and model training, often feeding a feature store. The failure mode you are preventing is training-serving skew: training reads batch-computed features while serving recomputes with slightly different code or timestamps.
+
+A mature feature pipeline version-controls transformation code (Git), version-controls outputs (DVC or warehouse time travel), validates with Great Expectations checkpoints, and registers definitions in a feature store so serving pulls the same logic. Orchestration ties the stages together so materialization runs after upstream facts land and before training DAGs start.
+
+> **Landscape snapshot — as of 2026-06. Verify against vendor docs before relying on specifics.**
+>
+> | Capability | Apache Airflow | Dagster | Prefect |
+> |------------|----------------|---------|---------|
+> | Primary abstraction | Task-based DAG | Software-defined assets | Python `@flow` / `@task` |
+> | Typical metadata store | Airflow metastore (often PostgreSQL) | Dagster instance storage | Prefect server / cloud API |
+> | Common ML use | Batch ingestion, sensors, cron retraining triggers | Data-aware pipelines with typed assets | Dynamic Python-native flows with hybrid execution |
+> | Docs entry point | [airflow.apache.org](https://airflow.apache.org/docs/apache-airflow/stable/) | [docs.dagster.io](https://docs.dagster.io/) | [docs.prefect.io](https://docs.prefect.io/) |
+
+---
+
+## Theory
 
 ### The Data Management Problem
 
@@ -73,7 +110,7 @@ The data management problem has three layers, each more insidious than the last:
 
 **Layer 2: Feature Inconsistency.** Different teams compute the same features differently. Your data science team calculates "user_age" one way in Python. Your backend team calculates it another way in SQL. Your mobile team calculates it a third way in Swift. Same concept, three implementations, three bugs waiting to happen.
 
-**Layer 3: Silent Quality Degradation.** Data drifts silently. Your training data had 2% missing values. New production data has 15% missing. Your model doesn't fail—it just makes increasingly worse predictions. By the time someone notices, the damage is done.
+**Layer 3: Silent Quality Degradation.** **Hypothetical scenario:** Data drifts silently. Suppose your training snapshot had roughly 2% missing values, but new production batches arrive with roughly 15% missing — your model doesn't fail; it just makes increasingly worse predictions. By the time someone notices, the damage is done.
 
 Think of data versioning like a time machine for your datasets. Git lets you travel back in time through your code history. DVC lets you do the same with your data. You can answer questions like "What dataset did model v2.3 use?" and "What changed between training runs?" Instead of guessing, you can know.
 
@@ -105,19 +142,12 @@ With DVC:
     - commit ghi789: "Initial train data v3.0 (40K samples)"
 ```
 
-### Did You Know? The 85% Failure Rate
+### Did You Know? Why Data Quality Decides Production Success
 
 Data quality and data management problems are a common reason ML systems fail to deliver in production, which is one reason data-centric approaches gained traction.
 
 The Data-Centric AI movement represents a philosophical shift in how we think about ML. For years, the ML community focused on model architecture—new layers, new attention mechanisms, new training techniques. Kaggle competitions rewarded clever model ensembles. Research papers emphasized architectural innovations.
 
-Andrew Ng challenged this orthodoxy. In his now-famous "Landing AI" presentation, he showed that systematic data improvement often beats sophisticated modeling. A company using a simple model on carefully curated data consistently outperformed competitors using state-of-the-art architectures on messy data.
-
-The key insight: models are commoditizing, but data remains differentiating. Anyone can download the same open-source model. Not everyone has clean, well-versioned, high-quality data. The competitive advantage has shifted from "who has the best model" to "who has the best data."
-
-Andrew Ng put it bluntly in a 2021 keynote:
-
-> "In AI, data is food. You can have the most sophisticated kitchen in the world, but if your ingredients are rotten, your meal will be terrible. We've been obsessing over the kitchen while ignoring the pantry."
 
 ---
 
@@ -125,7 +155,7 @@ Andrew Ng put it bluntly in a 2021 keynote:
 
 ### What is DVC?
 
-[DVC (Data Version Control) is Git for data and ML models](https://github.com/iterative/dvc). Think of it like a librarian for your datasets—it keeps track of every version, knows where everything is stored, and can retrieve any historical version on demand.
+[DVC (Data Version Control) is Git for data and ML models](https://dvc.org/doc). Think of it like a librarian for your datasets—it keeps track of every version, knows where everything is stored, and can retrieve any historical version on demand.
 
 To understand why DVC matters, imagine trying to manage a library without a catalog system. Every book is somewhere on the shelves, but nobody knows where. Readers wander the stacks hoping to stumble across what they need. When someone asks "do we have the 1985 edition of this textbook?" the librarian can only shrug.
 
@@ -133,7 +163,7 @@ That's what data management looks like without DVC. Datasets exist somewhere on 
 
 DVC creates that missing catalog. Every dataset gets a unique identifier. Every version is tracked. Every change is logged. When someone asks "what data trained model v2.3?" the answer is one command away.
 
-The core insight is elegant: Git is terrible at tracking large files, but great at tracking small text files. So [DVC creates small "pointer" files (`.dvc` files) that Git tracks, while the actual data lives in external storage (S3, GCS, Azure, or local disk)](https://github.com/iterative/dvc). It's like keeping a library card catalog in Git while the actual books sit on warehouse shelves.
+The core insight is elegant: Git is terrible at tracking large files, but great at tracking small text files. So [DVC creates small "pointer" files (`.dvc` files) that Git tracks, while the actual data lives in external storage (S3, GCS, Azure, or local disk)](https://dvc.org/doc/user-guide/data-management/remote-storage). It's like keeping a library card catalog in Git while the actual books sit on warehouse shelves.
 
 ```
 DVC ARCHITECTURE
@@ -163,9 +193,9 @@ DVC ARCHITECTURE
 
 The DVC workflow mirrors Git closely enough that much of it will feel familiar if you already know Git. This wasn't accidental—Dmitry Petrov deliberately designed DVC to feel familiar. When you've been using Git for a decade, the last thing you want is to learn a completely new paradigm for data.
 
-The mental model is simple: DVC handles big files the same way Git handles small files. `git add` becomes `dvc add`. `git push` becomes `dvc push`. `git pull` becomes `dvc pull`. The commands feel natural because they are natural—just extended to work with data.
+The mental model is simple: DVC handles big files the same way Git handles small files. `git add` becomes `dvc add`. `git push` becomes `dvc push`. `git pull` becomes `dvc pull`. The commands feel natural because they extend a workflow you already know — just applied to datasets and model artifacts that Git was never designed to store inline.
 
-The key commands map directly:
+The key commands map directly to that mental model:
 
 ```bash
 # Initialize DVC in a Git repo
@@ -201,7 +231,7 @@ outs:
     path: train.csv
 ```
 
-This file is like a receipt. It says "the file `train.csv` has this specific hash and this size." When you `dvc pull`, DVC uses this receipt to fetch the exact right version from storage.
+This file is like a receipt. It says "the file `train.csv` has this specific hash and this size." When you `dvc pull`, DVC uses this receipt to fetch the exact right version from storage, which is why reproducing a teammate's environment reduces to matching Git commits and running one pull command.
 
 ### DVC Pipelines: Reproducibility Built In
 
@@ -251,7 +281,7 @@ stages:
           cache: false
 ```
 
-[DVC automatically builds a dependency graph and only re-runs stages when their inputs change](https://github.com/iterative/dvc). Changed the preprocessing script? Only preprocessing and downstream stages re-run. Changed a hyperparameter? Only training and evaluation re-run. It's incremental builds for ML.
+[DVC automatically builds a dependency graph and only re-runs stages when their inputs change](https://dvc.org/doc/user-guide/pipelines). Changed the preprocessing script? Only preprocessing and downstream stages re-run. Changed a hyperparameter? Only training and evaluation re-run. It's incremental builds for ML.
 
 ```
 DVC PIPELINE DAG
@@ -290,22 +320,15 @@ DVC PIPELINE DAG
 
 ### Did You Know? The Origin of DVC
 
-DVC was created by **Dmitry Petrov**, a former Microsoft data scientist, in 2017. The name is a play on "CSV" (Comma-Separated Values), which is ironic since DVC handles any file type. Dmitry founded **Iterative.ai**, the company behind DVC, which raised $20M in funding.
+DVC was created by Dmitry Petrov in 2017 and is maintained by Iterative.ai with a large open-source community. The name plays on CSV even though DVC handles any file type — a reminder that the project began with everyday tabular datasets before expanding to pipelines, metrics, and model artifacts.
 
-The project started from Dmitry's frustration at Microsoft:
+The success of DVC highlights an important lesson: ML tools succeed when they meet practitioners where they are. DVC did not ask data scientists to learn a completely new paradigm. It built on Git, which most developers already know. The learning curve is gentle because the concepts are familiar — just applied to a new domain.
 
-> "I kept seeing the same pattern. Teams would build amazing models, then spend weeks trying to reproduce them because nobody knew which data version they'd used. Git solved this for code 20 years ago. Why were we still living in the dark ages for data?"
-> — Dmitry Petrov, DVC creator
-
-DVC has a large open-source community.
-
-The success of DVC highlights an important lesson: ML tools succeed when they meet practitioners where they are. DVC didn't ask data scientists to learn a completely new paradigm. It built on Git, which most developers already know. The learning curve is gentle because the concepts are familiar—just applied to a new domain.
-
-This is why DVC won against more ambitious alternatives like Pachyderm (which required Kubernetes and a complete infrastructure overhaul). DVC is a scalpel where others offered chainsaws. You can add it to an existing project in five minutes and see immediate benefits. That simplicity drove adoption, and adoption drove community, and community drove features.
+This tradeoff explains why many teams adopt DVC before heavier platforms such as Pachyderm, which targets Kubernetes-native data versioning and typically demands more infrastructure upfront. DVC is a scalpel where others offered chainsaws. You can add it to an existing project in five minutes and see immediate benefits. That low-friction onboarding drove community adoption, which in turn expanded the feature set.
 
 ### DVC Experiments
 
-DVC also tracks experiments, letting you run multiple training configurations and compare results:
+Experiment tracking is where DVC overlaps with dedicated tools like MLflow, but stays tightly coupled to your data and pipeline hashes. You can run multiple training configurations, compare metrics side by side, and promote the winning run to a branch without maintaining a separate spreadsheet of hyperparameters:
 
 ```bash
 # Run experiment with parameter changes
@@ -332,16 +355,10 @@ This is like git branches for hyperparameters. You can try dozens of configurati
 
 Feature engineering is where data science meets software engineering—and usually crashes. The problem isn't computing features; it's managing them across teams, environments, and time.
 
-Here's a scenario that happens at virtually every company using ML. Your recommendation team builds a user embeddings feature. It works great. Your fraud team hears about it and wants to use it too. But they can't just import it—they're using different languages, different databases, different deployment infrastructure. So they reimplement it. Three months later, a third team reimplements it again.
-
-Now you have three implementations of the "same" feature:
-- Team A: Python, computes on-demand, uses birthdate field
-- Team B: SQL, batch computed nightly, uses signup_year minus birth_year
-- Team C: Java, cached in Redis, uses age_bucket categories
+**Hypothetical scenario:** Your recommendation team builds a user embeddings feature. It works well in offline tests. Your fraud team hears about it and wants the same signal, but they cannot import the code directly — different language, database, and deployment stack — so they reimplement it. Three months later, a third team reimplements it again. You now have three implementations of the same conceptual feature: Team A computes on-demand in Python from birthdate; Team B computes nightly in SQL from signup year minus birth year; Team C serves cached age buckets from Redis in Java.
 
 Same concept. Three implementations. Three sources of bugs. When Team A discovers an edge case and fixes it, Teams B and C continue using buggy versions. When the underlying data schema changes, each team scrambles independently to fix their code.
 
-This is feature engineering chaos, and it's shockingly common. A 2020 Tecton survey found that **87% of ML practitioners had experienced feature engineering bugs** in production. Feature stores exist to solve this problem.
 
 Think of it like a restaurant kitchen without recipes. Every chef makes their own version of "garlic sauce"—some add cream, some don't, some roast the garlic first. Customers get inconsistent dishes, and when a chef leaves, their recipes leave with them.
 
@@ -380,21 +397,7 @@ The most insidious problem in production ML is **training-serving skew**. Your m
 
 It's like training a translator on formal English, then deploying them in a room full of teenagers using slang. The "language" is different enough that the skills don't transfer.
 
-Here's a concrete example of how this happens. Your training pipeline computes "days_since_last_purchase" using this logic:
-
-```python
-# Training: Spark job running on historical data
-days_since = (snapshot_date - last_purchase_date).days
-```
-
-Your serving pipeline computes it using this logic:
-
-```python
-# Serving: Python running in real-time
-days_since = (datetime.now() - last_purchase_date).days
-```
-
-Spot the difference? Training uses `snapshot_date` (the date when the training data was created). Serving uses `datetime.now()` (the current moment). If your training data is two weeks old, every serving prediction has a 14-day bias. Your model learned that "20 days since last purchase" means one thing. In production, it means something different.
+Here's a concrete example of how training-serving skew appears in practice. Your training pipeline computes `days_since_last_purchase` in a Spark job using a fixed snapshot date baked into the historical extract, while your serving pipeline computes the same feature name in Python with `datetime.now()` at request time. If training data was materialized two weeks ago, every live prediction carries a systematic offset the model never saw during training — the feature name matches, but the semantics drift.
 
 This bug doesn't crash your system. It doesn't throw exceptions. It just makes your model subtly wrong—and wrong in a way that's almost impossible to debug without understanding the training-serving gap.
 
@@ -434,30 +437,24 @@ FEAST ARCHITECTURE
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-The architecture has two key components:
-- **Offline Store**: For historical data and training. Think "data warehouse for features."
-- **Online Store**: For low-latency serving. Think "Redis with ML superpowers."
+The architecture deliberately separates concerns so each store can optimize for its access pattern without forcing one database to do everything poorly:
+
+- **Offline Store**: For historical data and training — a warehouse or lakehouse optimized for scans and joins.
+- **Online Store**: For low-latency serving — often Redis, DynamoDB, or Postgres tuned for key lookups.
+
+Let's walk through a complete feature definition example that shows how entities, sources, and TTL interact. Feast uses Python for definitions — the lingua franca of most data science teams — so feature views live in version-controlled code beside training scripts rather than in a proprietary UI-only format:
 
 ### Feast Feature Definitions
-
-Feast uses Python to define features—like schemas for your ML data. This is a deliberate design choice: Python is the lingua franca of data science, so feature definitions live in Python rather than YAML or a proprietary format.
-
-The mental model is similar to database schemas. Just as a database schema defines what columns a table has and what types they contain, a Feast feature view defines what features exist and how to compute them. The difference is that Feast adds ML-specific concepts: entities (what you're predicting about), timestamps (for point-in-time correctness), and TTL (how long features remain valid).
-
-Let's walk through a complete example:
 
 ```python
 # feature_repo/features.py
 from datetime import timedelta
-from feast import Entity, Feature, FeatureView, FileSource, ValueType
+from feast import Entity, FeatureView, Field, FileSource
+from feast.types import Float32, Int64, String
 
 # Define entity (the thing we're making predictions about)
 # Like a primary key in a database
-user = Entity(
-    name="user_id",
-    value_type=ValueType.INT64,
-    description="User identifier"
-)
+user = Entity(name="user", join_keys=["user_id"])
 
 # Define data source (where features come from)
 user_features_source = FileSource(
@@ -470,17 +467,17 @@ user_features_source = FileSource(
 # Like a table in a database
 user_features = FeatureView(
     name="user_features",
-    entities=["user_id"],
+    entities=[user],
     ttl=timedelta(days=365),  # How long features are valid
-    features=[
-        Feature(name="age", dtype=ValueType.INT64),
-        Feature(name="total_purchases", dtype=ValueType.INT64),
-        Feature(name="avg_order_value", dtype=ValueType.FLOAT),
-        Feature(name="days_since_last_purchase", dtype=ValueType.INT64),
-        Feature(name="favorite_category", dtype=ValueType.STRING),
+    schema=[
+        Field(name="age", dtype=Int64),
+        Field(name="total_purchases", dtype=Int64),
+        Field(name="avg_order_value", dtype=Float32),
+        Field(name="days_since_last_purchase", dtype=Int64),
+        Field(name="favorite_category", dtype=String),
     ],
     online=True,  # Available for real-time serving
-    source=user_features_source
+    source=user_features_source,
 )
 ```
 
@@ -527,29 +524,20 @@ online_features = store.get_online_features(
 
 ### Did You Know? The Origin of Feature Stores
 
-Feature stores emerged from **Uber's Michelangelo platform** in 2017. Large ML organizations repeatedly report feature-engineering inconsistencies, training-serving skew, and stale features as major sources of production issues.
-
-Their solution, Michelangelo's feature store, became the template for an industry. **Willem Pienaar**, who worked on Michelangelo, later created Feast at Gojek and donated it to the Linux Foundation AI & Data.
-
-Today, every major cloud provider has their own feature store:
-- AWS SageMaker Feature Store
-- GCP Vertex AI Feature Store
-- Azure Machine Learning Feature Store
-
-The open-source Feast remains the most flexible option, supporting multiple backends and deployment patterns.
+Feature stores emerged from Uber's Michelangelo platform in 2017, where feature inconsistency and training-serving skew showed up repeatedly at scale. Willem Pienaar, who worked on Michelangelo, later created Feast at Gojek and contributed it to the Linux Foundation AI & Data. Hyperscale vendors also offer managed feature-store products (for example [Amazon SageMaker Feature Store](https://docs.aws.amazon.com/sagemaker/latest/dg/feature-store.html), [Vertex AI Feature Store](https://cloud.google.com/vertex-ai/docs/featurestore), and [Azure Machine Learning managed features](https://learn.microsoft.com/en-us/azure/machine-learning/concept-asset-management)) alongside open-source options such as Feast, which supports multiple offline and online backends when you need hybrid deployment patterns.
 
 ---
 
 ## 3. Data Validation with Great Expectations
 
-### Why This Module Matters
+### Why Data Validation Belongs in the Pipeline
 
 Data validation is like quality control in manufacturing. You wouldn't ship products without inspection, so why train models on uninspected data?
 
 The problem is that data fails silently. Your pipeline runs successfully, your model trains successfully, your deployment succeeds—and then your model makes terrible predictions because the input data was garbage.
 
-Consider a real scenario. Your e-commerce model predicts customer churn. It's trained on customer data: age, purchase history, days since last login, etc. One day, your upstream data team changes the age calculation. Instead of computing age from birthdate, they now use a self-reported age field. This field has:
-- Missing values for 20% of users (who didn't fill it out)
+**Hypothetical scenario:** Your e-commerce model predicts customer churn. It's trained on customer data: age, purchase history, days since last login, and so on. One day, your upstream data team changes the age calculation. Instead of computing age from birthdate, they now use a self-reported age field. That field might have:
+- Missing values for a sizable share of users who skipped the optional field
 - Outliers like "999" (from users trying to skip the field)
 - String values like "twenty-five" (from users who didn't follow instructions)
 
@@ -561,9 +549,9 @@ Data validation prevents this. You define what "good data" looks like upfront. B
 DATA QUALITY ISSUES
 ===================
 
-Common Problems:
-────────────────
-• Missing values increased from 1% to 15%
+Common Problems (illustrative examples):
+──────────────────────────────────────
+• Missing values increased sharply (for example, from a low single-digit rate to a much higher one)
 • Categorical column has new unexpected values
 • Numerical column has outliers (negative ages)
 • Data distribution shifted (concept drift)
@@ -615,112 +603,118 @@ GREAT EXPECTATIONS ARCHITECTURE
 
 ### Common Expectations
 
-Great Expectations provides many built-in expectations—pre-built validation rules you can apply to your data. The name "expectations" is intentional: these are assertions about what your data should look like. Think of them as unit tests for data.
+Great Expectations provides many built-in expectations — pre-built validation rules you can apply without writing custom assertion code for every column. Instead of hand-rolling Python checks for "does this column exist?" you call `expect_column_to_exist("user_id")`; instead of bespoke range logic you call `expect_column_values_to_be_between("age", 0, 120)`. The API reads like documentation of your data contract, which makes suites reviewable by stakeholders who do not read pipeline code.
 
-The genius of Great Expectations is its expressiveness. Instead of writing custom Python code to check "does this column exist?" you call `expect_column_to_exist("user_id")`. Instead of writing validation logic for "are all values between 0 and 100?", you call `expect_column_values_to_be_between("age", 0, 100)`. The code reads like English documentation of your data contract.
-
-Here are the essential expectations every data scientist should know:
+Here are the essential expectations every data scientist should know when bootstrapping a training-table suite:
 
 ```python
 import great_expectations as gx
+import great_expectations.expectations as gxe
 
-# Create context and validator
 context = gx.get_context()
-validator = context.get_validator(...)
 
-# Column existence - does the data have the columns we expect?
-validator.expect_column_to_exist("user_id")
-validator.expect_column_to_exist("age")
-validator.expect_column_to_exist("email")
-
-# Data types - are values the right type?
-validator.expect_column_values_to_be_of_type("user_id", "int64")
-validator.expect_column_values_to_be_of_type("age", "int64")
-validator.expect_column_values_to_be_of_type("email", "str")
-
-# Null checks - are required fields populated?
-validator.expect_column_values_to_not_be_null("user_id")
-validator.expect_column_values_to_not_be_null("email")
-
-# Value ranges - are values within reasonable bounds?
-validator.expect_column_values_to_be_between("age", min_value=0, max_value=120)
-validator.expect_column_values_to_be_between("purchase_amount", min_value=0)
-
-# Uniqueness - are IDs actually unique?
-validator.expect_column_values_to_be_unique("user_id")
-validator.expect_column_values_to_be_unique("email")
-
-# Patterns - do strings match expected formats?
-validator.expect_column_values_to_match_regex(
-    "email",
-    r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+# GX 1.x: register a batch definition, then attach expectations to a suite
+batch_definition = (
+    context.data_sources.add_pandas(name="my_datasource")
+    .add_dataframe_asset(name="user_data")
+    .add_batch_definition_whole_dataframe(name="user_data_batch")
 )
 
-# Categorical values - are categories from expected set?
-validator.expect_column_values_to_be_in_set(
-    "country",
-    ["US", "UK", "CA", "DE", "FR"]
+suite = context.suites.add(gx.ExpectationSuite(name="user_data_suite"))
+
+# Column existence — does the data have the columns we expect?
+suite.add_expectation(gxe.ExpectColumnToExist(column="user_id"))
+suite.add_expectation(gxe.ExpectColumnToExist(column="age"))
+suite.add_expectation(gxe.ExpectColumnToExist(column="email"))
+
+# Data types — are values the right type?
+suite.add_expectation(gxe.ExpectColumnValuesToBeOfType(column="user_id", type_="int64"))
+suite.add_expectation(gxe.ExpectColumnValuesToBeOfType(column="age", type_="int64"))
+suite.add_expectation(gxe.ExpectColumnValuesToBeOfType(column="email", type_="str"))
+
+# Null checks — are required fields populated?
+suite.add_expectation(gxe.ExpectColumnValuesToNotBeNull(column="user_id"))
+suite.add_expectation(gxe.ExpectColumnValuesToNotBeNull(column="email"))
+
+# Value ranges — are values within reasonable bounds?
+suite.add_expectation(gxe.ExpectColumnValuesToBeBetween(column="age", min_value=0, max_value=120))
+suite.add_expectation(gxe.ExpectColumnValuesToBeBetween(column="purchase_amount", min_value=0))
+
+# Uniqueness — are IDs actually unique?
+suite.add_expectation(gxe.ExpectColumnValuesToBeUnique(column="user_id"))
+suite.add_expectation(gxe.ExpectColumnValuesToBeUnique(column="email"))
+
+# Patterns — do strings match expected formats?
+suite.add_expectation(
+    gxe.ExpectColumnValuesToMatchRegex(
+        column="email",
+        regex=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$",
+    )
 )
 
-# Distribution checks - has the data distribution shifted?
-validator.expect_column_mean_to_be_between("age", min_value=25, max_value=45)
-validator.expect_column_stdev_to_be_between("purchase_amount", min_value=10, max_value=100)
+# Categorical values — are categories from expected set?
+suite.add_expectation(
+    gxe.ExpectColumnValuesToBeInSet(column="country", value_set=["US", "UK", "CA", "DE", "FR"])
+)
 
-# Row count - do we have expected data volume?
-validator.expect_table_row_count_to_be_between(min_value=1000, max_value=1000000)
+# Distribution checks — has the data distribution shifted?
+suite.add_expectation(gxe.ExpectColumnMeanToBeBetween(column="age", min_value=25, max_value=45))
+suite.add_expectation(
+    gxe.ExpectColumnStdevToBeBetween(column="purchase_amount", min_value=10, max_value=100)
+)
 
-# Column count - has the schema changed?
-validator.expect_table_column_count_to_equal(15)
+# Row count — do we have expected data volume?
+suite.add_expectation(gxe.ExpectTableRowCountToBeBetween(min_value=1000, max_value=1000000))
+
+# Column count — has the schema changed?
+suite.add_expectation(gxe.ExpectTableColumnCountToEqual(value=15))
 ```
 
 ### Automated Validation in Pipelines
 
-The real power of Great Expectations emerges when you embed it in your pipelines. Instead of manually running validation, [you configure "checkpoints" that run automatically before critical operations](https://github.com/great-expectations/great_expectations_action)—before training, before deployment, before any step that assumes data quality.
+The real power of Great Expectations emerges when you embed checkpoints in orchestrated pipelines rather than running validation manually before each train. Configure a named checkpoint once, then invoke it after ingestion, after transformation, and immediately before model training so bad batches fail fast:
 
-This is the difference between reactive and proactive data quality. Reactive means discovering bad data after it's caused problems. Proactive means catching bad data before it enters your pipeline. The latter is usually cheaper.
-
-Here's how to set up automated validation:
+Here is a minimal pattern for wiring that gate:
 
 ```python
-# Create checkpoint for automated validation
-checkpoint = context.add_checkpoint(
-    name="user_data_checkpoint",
-    validations=[
-        {
-            "batch_request": {
-                "datasource_name": "my_datasource",
-                "data_asset_name": "user_data",
-            },
-            "expectation_suite_name": "user_data_suite",
-        }
-    ]
+from great_expectations import Checkpoint, ValidationDefinition
+
+# GX 1.x: link batch definition + suite, then group in a checkpoint
+validation_definition = context.validation_definitions.add(
+    ValidationDefinition(
+        name="user_data_validation",
+        data=batch_definition,
+        suite=suite,
+    )
 )
 
-# Run checkpoint (e.g., in CI/CD or before training)
-results = checkpoint.run()
+checkpoint = context.checkpoints.add(
+    Checkpoint(
+        name="user_data_checkpoint",
+        validation_definitions=[validation_definition],
+    )
+)
+
+# Run checkpoint against the ingestion DataFrame (in-memory batches pass data at run time)
+result = checkpoint.run(batch_parameters={"dataframe": df})
 
 # Check if validation passed
-if not results.success:
-    print(" Data validation failed!")
-    for result in results.run_results.values():
-        for validation_result in result.validation_result.results:
-            if not validation_result.success:
-                print(f"   {validation_result.expectation_config.expectation_type}")
+if not result.success:
+    print("Data validation failed!")
+    for validation_result in result.results:
+        # validation_result is an ExpectationSuiteValidationResult
+        for exp_result in validation_result.results:
+            if not exp_result.success:
+                print(f"  - {exp_result.expectation_config.type}")
     raise ValueError("Cannot proceed with invalid data")
 else:
-    print(" Data validation passed!")
+    print("Data validation passed!")
 ```
 
 ### Did You Know? The Great Expectations Origin
 
-Great Expectations was created by **Abe Gong** and **James Campbell** in 2017 at Superconductive, a data reliability startup. The name comes from the Charles Dickens novel, symbolizing the "expectations" we have for our data—and the drama when those expectations are violated.
 
-The founders had a memorable pitch:
-
-> "We realized that data teams spent 80% of their time on data quality issues, but had zero tools to catch problems before they became disasters. It's like doing surgery without X-rays—you don't see the problem until you're already cutting."
-> — Abe Gong, Great Expectations co-founder
-
-The project has a large open-source community. It's become the de facto standard for data validation in ML pipelines.
+The project has a large open-source community and is widely used for data validation in ML pipelines — see the [Great Expectations documentation](https://docs.greatexpectations.io/docs/) for current integration patterns.
 
 ---
 
@@ -732,13 +726,15 @@ Data lineage tracks where data comes from and where it goes—like a family tree
 
 Think of it like supply chain tracking. When a product is recalled, manufacturers can trace every component back to its source. Data lineage provides the same capability for ML: when a model fails, you can trace exactly which data, transformations, and code were involved.
 
-Here's why lineage matters in practice. Your fraud detection model suddenly starts flagging 50% more legitimate transactions as fraudulent. Users are angry. Revenue is dropping. You need to figure out what changed.
+**Hypothetical scenario:** Your fraud detection model suddenly starts flagging noticeably more legitimate transactions as fraudulent. Users are angry. Revenue is dropping. You need to figure out what changed.
 
 Without lineage, you're blind. Did the model change? Did the features change? Did the training data change? Did some upstream ETL job modify the data schema? You have no way to know without manually checking dozens of systems.
 
 With lineage, you can trace the problem systematically. You look at the model's lineage and see it was retrained yesterday. The lineage shows it used features from the `fraud_features_v3` table. You trace `fraud_features_v3` and find it depends on a transformation that was updated two days ago. You examine that transformation and find a bug—someone changed a timezone calculation that shifted all timestamps by 8 hours. Bug found in minutes, not days.
 
-Lineage isn't just about debugging—it's about confidence. When a regulator asks "what data was used to make this decision about this customer?" you can answer precisely. When GDPR requires you to trace a user's data through your system, you have a map. When an audit asks about model decisions, you have receipts.
+Lineage isn't just about debugging — it's about confidence. When a regulator asks "what data was used to make this decision about this customer?" you can answer precisely. When GDPR requires you to trace a user's data through your system, you have a map. When an audit asks about model decisions, you have receipts.
+
+In practice, lineage collectors hook into orchestrators and transformation frameworks to emit OpenLineage events: which job ran, which input datasets it read, which output datasets it wrote, and which Git commit or container image defined the logic. Catalogs such as DataHub ingest those events into a searchable graph. The ML-specific win is connecting that graph to experiment tracking — so model `v2.3.1` links not only to metrics but to exact feature table snapshots and validation results.
 
 ```
 DATA LINEAGE
@@ -767,11 +763,7 @@ Questions Lineage Answers:
 
 ### Data Governance Best Practices
 
-Governance is the set of policies and practices that ensure data is managed responsibly. It's like corporate governance for data—defining who can access what, how changes are tracked, and how compliance is maintained.
-
-In traditional software, governance often means "red tape that slows us down." In ML, governance means "guardrails that prevent expensive disasters." The difference is that ML failures are often invisible, gradual, and expensive. A governance failure in traditional software usually causes an obvious crash. A governance failure in ML causes models to slowly drift into wrongness.
-
-Effective data governance answers six key questions:
+Governance is the set of policies and practices that ensure data is managed responsibly — who may read it, how changes are audited, and how incidents escalate. In traditional software, governance is often treated as bureaucracy; in ML it is how you prevent invisible degradation. Effective data governance answers six recurring questions that auditors, regulators, and on-call engineers all ask eventually:
 
 **1. Where did this data come from?** (Provenance)
 Every dataset should have a birth certificate. Where was it collected? Who processed it? What transformations were applied? This matters when you discover a bug—you need to trace it back to the source.
@@ -780,7 +772,7 @@ Every dataset should have a birth certificate. Where was it collected? Who proce
 Not all data should be available to all teams. PII requires special handling. Financial data has compliance requirements. Healthcare data has HIPAA restrictions. Governance defines who can see what.
 
 **3. How is this data being used?** (Usage Tracking)
-Knowing that 47 models depend on a particular table changes how carefully you modify it. Usage tracking reveals these dependencies before you accidentally break downstream consumers.
+When many downstream models and dashboards depend on a particular table, even a small schema change can break consumers you did not know existed. Usage tracking and lineage metadata reveal those dependencies before you modify or deprecate a dataset.
 
 **4. How long should we keep this data?** (Retention)
 Data storage isn't free. More importantly, old data creates liability. GDPR's "right to be forgotten" means you must be able to delete user data on request. Retention policies define when data should be archived or deleted.
@@ -835,7 +827,7 @@ Here's the key insight: **you don't need all these tools, and you definitely don
 
 ### When to Use What
 
-Different tools solve different problems. Here's a decision matrix:
+Different tools solve different problems along the data lifecycle, and the decision matrix below is a durable map — not a shopping list. Use it to match pain points to capabilities before adopting another component you must operate:
 
 ```
 TOOL SELECTION MATRIX
@@ -868,7 +860,7 @@ TOOL SELECTION MATRIX
 
 ### Complexity vs Value
 
-Start simple and add complexity as needed:
+Start simple and add complexity when a specific failure mode appears — the complexity/value curve is not linear, and most incidents trace to missing basics rather than missing exotic tooling:
 
 ```
 TOOL COMPLEXITY VS VALUE
@@ -895,40 +887,92 @@ Low  └────────────────────────
 
 ### The 80/20 Rule of Data Management
 
-For most teams, especially those early in their ML journey, here's the pragmatic approach:
+Most teams early in their ML journey get disproportionate value from a small set of practices before they need a full enterprise platform. **Start with DVC and Git** so every dataset and model artifact has a content hash you can tie to training runs — that alone eliminates a large class of "which CSV was it?" incidents, lets you share data through remotes instead of USB drives, and makes rollbacks a checkout rather than a panic. **Add Great Expectations** once data quality issues have cost you real time: unexpected nulls after an upstream schema change, silent drift in categorical distributions, or days lost debugging a model that trained successfully on garbage rows. **Add Feast** when feature consistency becomes organizational: two teams compute the same feature differently, training-serving skew shows up in production metrics, or inference requires sub-second feature lookups you cannot recompute on the fly. **Invest in a full data platform** when self-service feature access, compliance-driven lineage, and cross-team SLAs justify the operational overhead of cataloging, access control, and dedicated data engineering.
 
-**Start with DVC + Git.** This solves 80% of data management pain:
-- You can track datasets and models
-- You can reproduce experiments
-- You can share data across your team
-- You can roll back to previous versions
-
-**Add Great Expectations when...** you've been burned by data quality issues:
-- A model failed because of unexpected nulls
-- A schema change broke your pipeline
-- You spent days debugging a data drift issue
-
-**Add Feast when...** multiple teams share features OR you're building real-time ML:
-- Two teams computed the same feature differently
-- Training-serving skew caused production issues
-- You need sub-second feature lookups for inference
-
-**Add a full data platform when...** you have 50+ data scientists and need enterprise features:
-- Multiple teams need self-service access to features
-- Compliance requirements mandate comprehensive lineage
-- Cost of data quality issues justifies the investment
-
-Don't let tool FOMO drive your decisions. Every tool you add is a tool you need to maintain, monitor, and train people on. Start simple and add complexity only when it solves real problems.
+Do not let tool FOMO drive the roadmap. Every component you adopt is a component you must upgrade, monitor, and teach. Add complexity when a concrete incident or SLA gap proves you need it — not because a vendor slide says your stack is incomplete.
 
 ---
 
-##  Hands-On Exercises
+## Common Mistakes
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Treating shared-drive CSV folders as "version control" | Nobody can reproduce which file trained which model; validation and production diverge silently | Track datasets with DVC (or equivalent) and reference `.dvc` hashes in training configs and pipeline parameters |
+| Running transforms differently in batch training versus online serving | Training-serving skew degrades accuracy without obvious errors | Centralize feature definitions in a feature store and orchestrate one materialization path for offline and online stores |
+| Skipping validation before expensive training jobs | Bad upstream data wastes GPU hours and can promote corrupt models | Embed Great Expectations checkpoints as hard gates in orchestrated pipelines; fail fast when expectations break |
+| Non-idempotent pipeline tasks combined with automatic retries | Retries duplicate rows, double-charge aggregations, or corrupt partitions | Design tasks to upsert or replace partitions by run date; make backfills safe to re-run |
+| Hard-coded absolute paths and schedules in scripts | Pipelines break when environments change or upstream data arrives late | Parameterize paths and dates; use orchestrator sensors or asset checks for upstream readiness |
+| Passing large DataFrames through orchestrator metadata (e.g., Airflow XCom) | Workers and metadata databases exhaust memory serializing multi-gigabyte objects | Write artifacts to object storage; pass URIs and schema hashes between tasks |
+| Ignoring lineage until production incidents | Debugging takes days because teams cannot trace which transform or dataset version changed | Adopt OpenLineage or catalog tools; record dataset versions in experiment and model metadata |
+| Backfilling without isolating downstream consumers | Rebuilt tables change statistics mid-flight while models still read old snapshots | Coordinate backfills with partition markers, feature store TTLs, and training schedule blackouts |
+
+---
+
+## Knowledge Check
+
+<details>
+<summary>1. What problem does DVC solve that Git alone cannot handle well for ML datasets?</summary>
+
+**Answer:** Git stores full file blobs in history, which becomes impractical for large binary datasets and model artifacts. [DVC](https://dvc.org/doc) tracks lightweight `.dvc` pointer files in Git while storing actual bytes in remote object storage and a local cache keyed by content hash. That gives you Git-like versioning, sharing, and reproducibility without bloating the repository or re-uploading unchanged data on every commit.
+</details>
+
+<details>
+<summary>2. What is training-serving skew, and how does a feature store like Feast reduce it?</summary>
+
+**Answer:** Training-serving skew happens when features are computed differently offline (batch Spark jobs, historical snapshots) versus online (real-time API code), so the model sees a different feature distribution in production. [Feast](https://docs.feast.dev/) stores feature definitions once and serves the same transformations through offline historical retrieval and low-latency online lookups, aligning training and inference on one implementation.
+</details>
+
+<details>
+<summary>3. Name five categories of checks you should encode as Great Expectations on an ML training table.</summary>
+
+**Answer:** Typical suites cover column existence and schema stability; null constraints on required fields; numeric ranges (for example age between 0 and 120); uniqueness on identifiers; categorical value sets; regex patterns for emails; row-count bands; and distribution statistics (mean or standard deviation windows) to catch drift. The point is to treat these as automated pipeline gates, not ad-hoc notebook checks.
+</details>
+
+<details>
+<summary>4. When would you choose Feast in addition to DVC rather than DVC alone?</summary>
+
+**Answer:** DVC excels at versioning datasets, models, and reproducible pipeline stages for experiments. Feast addresses a different problem: shared, discoverable feature definitions with online serving and point-in-time correct joins for training. Add Feast when multiple teams reuse features, when you need sub-second inference lookups, or when training-serving consistency becomes a recurring incident category.
+</details>
+
+<details>
+<summary>5. What is data lineage, and why does it matter for governance and debugging?</summary>
+
+**Answer:** Data lineage records how datasets flow from sources through transformations to models and predictions. When accuracy drops or regulators ask what data influenced a decision, lineage lets you identify the exact upstream export, transformation version, and feature snapshot involved. Tools such as [OpenLineage](https://openlineage.io/) and [DataHub](https://datahubproject.io/docs/) standardize capturing that graph from orchestrated jobs.
+</details>
+
+<details>
+<summary>6. How do ETL and ELT differ, and why does the choice affect ML pipeline backfills?</summary>
+
+**Answer:** ETL transforms before load, producing curated tables early and failing when transforms break on schema drift. ELT loads raw data first and transforms inside the warehouse or lakehouse, preserving raw history for recomputation. ELT simplifies backfills when you fix feature logic—you re-run transforms on stored raw partitions—while ETL may require re-extracting from sources if staging data was not retained.
+</details>
+
+<details>
+<summary>7. Why must orchestrated data pipeline tasks be idempotent before you enable automatic retries or historical backfills?</summary>
+
+**Answer:** Orchestrators retry failed tasks and replay date partitions during backfills. If a task blindly appends rows or increments counters, a retry duplicates data and corrupts aggregates. Idempotent tasks replace or upsert a deterministic partition for each run key, so the same logical date can be processed multiple times without changing the final table state.
+</details>
+
+<details>
+<summary>8. How do DVC pipelines help you build reproducible ML data workflows with versioned dependencies?</summary>
+
+**Answer:** A `dvc.yaml` pipeline declares stages, commands, dependencies, parameters, and outputs. DVC builds a DAG and reruns only stages whose inputs changed, caching intermediate artifacts by hash. Combined with Git for code and `.dvc` files for data, you can reproduce exactly which preprocessing, training, and evaluation steps produced a given model metric.
+</details>
+
+---
+
+## Hands-On Exercises
+
+Work through these in order. Each exercise reinforces one layer of the data pipeline stack: versioning, orchestrated stages, features, and validation.
 
 ### Exercise 1: Set Up DVC
 
+- [ ] Initialize a Git repository and run `dvc init` in a clean project directory
+- [ ] Track a sample CSV with `dvc add` and commit the generated `.dvc` pointer file
+- [ ] Configure a remote (local path or cloud bucket) and verify `dvc push` / `dvc pull` round-trip the artifact
+
 ```bash
-# Initialize
-pip install dvc dvc-s3
+# Initialize (S3 remotes: install the s3 extra — see DVC docs for remote setup)
+pip install "dvc[s3]"
 git init
 dvc init
 
@@ -944,6 +988,10 @@ dvc push
 
 ### Exercise 2: Create a DVC Pipeline
 
+- [ ] Author a `dvc.yaml` with at least preprocess and train stages and explicit `deps` / `outs`
+- [ ] Change only a hyperparameter in `params.yaml` and confirm DVC reruns downstream stages only
+- [ ] Inspect `dvc dag` to verify the dependency graph matches your mental model
+
 ```yaml
 # dvc.yaml
 stages:
@@ -958,30 +1006,34 @@ stages:
 
 ### Exercise 3: Define Feast Features
 
+- [ ] Define an `Entity` and a `FeatureView` with at least three features and a TTL
+- [ ] Materialize features and retrieve historical rows with `get_historical_features` for a fixed timestamp
+- [ ] Fetch the same feature names with `get_online_features` and compare values for one entity
+
 ```python
-from feast import Entity, Feature, FeatureView, ValueType
+from datetime import timedelta
+from feast import Entity, FeatureView, Field, FileSource
+from feast.types import Float32, Int64, String
 
-# Define entity
-user = Entity(name="user_id", value_type=ValueType.INT64)
-
-# Define feature view
-# ... complete the implementation
+# Define entity and data source, then build a FeatureView — see Feast Feature Definitions above
+user = Entity(name="user", join_keys=["user_id"])
+# ... complete FileSource, schema=[Field(...)], and run `feast apply`
 ```
 
-### Exercise 4: Create Great Expectations Suite
+### Exercise 4: Create a Great Expectations Suite
+
+- [ ] Create an expectation suite with at least ten expectations spanning schema, nulls, ranges, and row counts
+- [ ] Run a checkpoint against a sample batch and confirm failures surface clearly
+- [ ] Document the suite in Data Docs and wire the checkpoint as a pre-training gate in your pipeline sketch
 
 ```python
 import great_expectations as gx
+import great_expectations.expectations as gxe
 
 context = gx.get_context()
-suite = context.add_expectation_suite("my_suite")
+suite = context.suites.add(gx.ExpectationSuite(name="my_suite"))
 
-# Add at least 10 expectations covering:
-# - Column existence
-# - Data types
-# - Value ranges
-# - Null checks
-# - Distribution properties
+# Add at least 10 expectations — see Common Expectations above, then wire ValidationDefinition + Checkpoint
 ```
 
 ---
@@ -998,7 +1050,7 @@ If you remember nothing else from this module, remember these eight principles t
 
 4. **Lineage enables debugging.** When a model fails in production, lineage lets you trace back to the root cause—whether it's bad data, broken code, or shifted distributions.
 
-5. **Start simple, add complexity as needed.** DVC alone solves 80% of data management pain. Add Feast and Great Expectations when their specific problems become acute.
+5. **Start simple, add complexity as needed.** DVC alone addresses most early reproducibility pain before you need a full platform. Add Feast and Great Expectations when their specific problems become acute.
 
 6. **Data quality > model complexity.** Andrew Ng's Data-Centric AI movement has it right: a simple model on good data beats a complex model on messy data.
 
@@ -1006,70 +1058,29 @@ If you remember nothing else from this module, remember these eight principles t
 
 8. **Automation is key.** Manual data validation doesn't scale. Embed Great Expectations checkpoints into your CI/CD pipelines.
 
-The journey from "data chaos" to "data maturity" doesn't happen overnight. It's an iterative process of identifying pain points, implementing solutions, and building habits. The tools in this module—DVC, Feast, Great Expectations—are battle-tested solutions to problems that have cost real companies real money.
+The journey from ad-hoc CSV folders to orchestrated, validated, versioned data pipelines is incremental. Teams usually feel the pain in a predictable order: first they cannot reproduce experiments, then they get burned by schema drift, then feature inconsistencies appear across services, and finally compliance asks for lineage they cannot produce. The tooling in this module maps cleanly onto that maturity curve — DVC when reproducibility breaks, Great Expectations when silent data bugs slip through, Feast when features become a shared product, orchestrators when cron scripts sprawl, and lineage when audits or incidents demand traceability.
 
-Start with DVC. When that's second nature, add Great Expectations. When feature consistency becomes a problem, consider Feast. Each tool earns its place by solving a real problem you've experienced. That's the path to a data infrastructure you can trust.
-
----
-
-##  Further Reading
-
-### Documentation
-- [DVC Documentation](https://dvc.org/doc)
-- [Feast Documentation](https://docs.feast.dev/)
-- [Great Expectations](https://docs.greatexpectations.io/)
-
-### Papers & Articles
-- "Hidden Technical Debt in Machine Learning Systems" (Google, 2015)
-- "Data Management Challenges in Production ML" (Polyzotis et al., 2018)
-- "Feast: Feature Store for Machine Learning" (Gojek, 2020)
+Start with DVC plus explicit pipeline stages in `dvc.yaml`. Wire Great Expectations checkpoints into those stages before GPU-heavy training. Introduce Feast when the same features feed multiple models or online inference. Layer Airflow, Dagster, or Prefect when schedules, sensors, and cross-team dependencies outgrow manual runs. Each addition should close a failure mode you have already experienced — that discipline keeps operational load proportional to real risk.
 
 ---
 
-## Interview Preparation
+## Next Module
 
-**Q: Why can't you just use Git for machine learning data?**
-
-Git stores complete file copies for every version. A 10GB dataset with 100 versions would need 1TB of storage. Git also has no concept of cloud storage backends or large file handling. DVC solves this by storing pointers in Git while keeping actual data in S3, GCS, or Azure Blob Storage. It's designed from the ground up for large binary files common in ML.
-
-**Q: How would you handle training-serving skew in production?**
-
-Training-serving skew occurs when features computed during training differ from production. The solution is a feature store like Feast that provides a single source of truth. Features are computed once, stored centrally, and served consistently to both training pipelines and online serving. This eliminates the "recompute features differently" anti-pattern.
-
-**Q: What's your approach to data validation in ML pipelines?**
-
-Use Great Expectations to define explicit contracts about your data. Run validation at every pipeline stage: after ingestion, after transformation, and before model training. Critical validations include: no null values in required columns, values within expected ranges, distributions matching historical data, and schema matching expectations. Integrate these as gates in CI/CD — failing validation stops the pipeline.
+Continue to [Module 1.8: ML Pipelines](./module-1.8-ml-pipelines/) for workflow orchestration patterns that wire validated, versioned data into training, evaluation, and deployment DAGs.
 
 ---
-
-##  Knowledge Check
-
-1. **What problem does DVC solve that Git doesn't?**
-
-2. **What is training-serving skew and how do feature stores prevent it?**
-
-3. **Name 5 common Great Expectations validators.**
-
-4. **When would you choose Feast over just using DVC?**
-
-5. **What is data lineage and why is it important?**
-
----
-
-## ⏭️ Next Steps
-
-You now understand data versioning and feature stores! These are critical for reproducible ML.
-
-**Up Next**: Module 50 - ML Pipeline & Workflow Orchestration
-
----
-
-_Module 49 Complete! You now understand DVC, Feast, and Great Expectations!_
-_"Bad data = bad models. Version your data like you version your code."_
-_Remember Jennifer Chen's $50 million bug—don't let it happen to you._
 
 ## Sources
 
-- [DVC Official Repository](https://github.com/iterative/dvc) — Primary source for DVC's data versioning, pipelines, remotes, and experiment-tracking behavior.
-- [Feast Official Repository](https://github.com/feast-dev/feast) — Primary source for Feast's offline/online store model and feature-store workflow.
-- [Great Expectations Official Repository](https://github.com/great-expectations/great_expectations) — Primary source for expectations-based data validation and generated documentation concepts.
+- [DVC Documentation](https://dvc.org/doc) — Data and model versioning, pipelines, remotes, and experiment tracking.
+- [DVC GitHub Repository](https://github.com/treeverse/dvc) — Source reference for pipeline DAG behavior and cache semantics.
+- [Feast Documentation](https://docs.feast.dev/) — Offline/online stores, feature views, and point-in-time retrieval.
+- [Feast GitHub Repository](https://github.com/feast-dev/feast) — Reference implementation for feature-store architecture.
+- [Great Expectations Documentation](https://docs.greatexpectations.io/docs/) — Expectations, checkpoints, and Data Docs.
+- [Great Expectations GitHub Repository](https://github.com/great-expectations/great_expectations) — Core validation APIs and integration patterns.
+- [Apache Airflow Documentation](https://airflow.apache.org/docs/apache-airflow/stable/) — Task-based DAG orchestration, scheduling, and sensors.
+- [Dagster Documentation](https://docs.dagster.io/) — Asset-based orchestration and data-aware pipelines.
+- [Prefect Documentation](https://docs.prefect.io/) — Python-native flow orchestration and deployment models.
+- [OpenLineage](https://openlineage.io/) — Open standard for capturing job and dataset lineage events.
+- [DataHub Documentation](https://datahubproject.io/docs/) — Metadata catalog and lineage graph for data platforms.
+- [Data Mesh Principles (Martin Fowler)](https://martinfowler.com/articles/data-mesh-principles.html) — Durable framing for decentralized data ownership and pipeline contracts.
