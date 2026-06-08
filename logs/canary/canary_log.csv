@@ -1,0 +1,9 @@
+context_tokens,model,k,correct,score,verdict
+542209,claude-opus-4-8,10,10,1.000,PASS
+564164,claude-opus-4-8,10,10,1.000,PASS
+578525,claude-opus-4-8,10,10,1.000,PASS
+597154,claude-opus-4-8,10,10,1.000,PASS
+603198,claude-opus-4-8,10,10,1.000,PASS
+633344,claude-opus-4-8,10,10,1.000,PASS
+641392,claude-opus-4-8,10,10,1.000,PASS
+653989,claude-opus-4-8,10,10,1.000,PASS

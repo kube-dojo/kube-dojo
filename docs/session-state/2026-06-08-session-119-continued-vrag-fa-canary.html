@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 119 (continued) — vector-rag + frameworks-agents + brain-rot canary</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.win { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 119 (continued) — vector-rag 6/6 + frameworks-agents 6/10 + the brain-rot canary</h1>
+<p class="meta">2026-06-08 · standalone orchestrator session · continuation of the morning's generative-ai work (see <code>2026-06-08-session-119-ai-ml-engineering-generative-ai.html</code>, PR #1844). Drove two more #1842 sub-tracks, retuned the handoff thresholds, and ran a live brain-rot experiment that pushed this session to 654K tokens with zero measured recall degradation.</p>
+
+<h2>TL;DR</h2>
+<p>Continued the <code>ai-ml-engineering</code> shipped_unreviewed campaign (#1842): <strong>vector-rag 6/6 done</strong> (incl. a user-locked 1.3↔1.4 content re-scope) and <strong>frameworks-agents 6/10 done</strong> (1.2, 1.5, 1.3, 1.4; 1.7/1.8 in-flight). Board <strong>599→609 done (+10 this session)</strong>. Mid-session the user asked to (1) raise the handoff threshold toward 700K and (2) port learn-ukrainian's <strong>context canary</strong> to measure brain rot deterministically. Did both: retuned the statusline hook to a tiered 500/600/700K, ported <code>scripts/quality/context_canary.py</code>, and ran <strong>8 canary checkpoints from 542K→654K — every one 10/10 (1.00) PASS.</strong> opus-4.8 shows no measurable recall rot at 65% of the 1M window on our session shape.</p>
+
+<h2>PRs merged this session</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>What</th></tr>
+<tr><td>#1843</td><td><span class="pill merged">MERGED</span></td><td>generative-ai 1.5, 1.6 → T0 (expand+de-fab+durable snapshot) — <em>morning, see first handoff</em></td></tr>
+<tr><td>#1844</td><td><span class="pill merged">MERGED</span></td><td>session-119 handoff (generative-ai)</td></tr>
+<tr><td>#1845</td><td><span class="pill merged">MERGED</span> <code>51a9278e</code></td><td>vector-rag 1.2 (Air Canada cited; RRF/retrieve contract fixed) + 1.5 (cost-model warmup fix)</td></tr>
+<tr><td>#1846</td><td><span class="pill merged">MERGED</span> <code>0a74e95b</code></td><td>vector-rag <strong>1.3↔1.4 re-scope</strong> (content now matches titles; BM25 IDF bug; version-pin FP rejected)</td></tr>
+<tr><td>#1847</td><td><span class="pill merged">MERGED</span> <code>f4c016bb</code></td><td>frameworks-agents 1.2 (de-padded) + 1.5 (Rosetta spine)</td></tr>
+<tr><td>#1848</td><td><span class="pill merged">MERGED</span> <code>ea25a4a8</code></td><td>frameworks-agents 1.3 (de-fab ROI; 2 reviewer FPs rejected) + 1.4 (durable LlamaIndex snapshot)</td></tr>
+</table>
+
+<h2>The brain-rot canary experiment (the session's headline)</h2>
+<p>User wanted to push context toward 700K and verify the "Opus 4.8 has no brain rot" claim empirically rather than trust it. Ported learn-ukrainian's deterministic canary to <code>scripts/quality/context_canary.py</code>. Protocol: <code>mint</code> K <strong>immutable</strong> anchors (merged SHAs, PR/issue #s, locked decisions) with ground truth captured deterministically; at each checkpoint, answer the same anchors <em>from memory</em> (no scrolling back) into a JSON; the SCRIPT diffs vs frozen truth (difflib ≥0.75 per anchor, ≥0.85 pass-ratio). The model cannot grade itself into a pass.</p>
+<table>
+<tr><th>Checkpoint (measured ctx)</th><th>Score</th></tr>
+<tr><td>542K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td>564K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td>578K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td>597K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td>603K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td>633K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td>641K</td><td>10/10 (1.00) PASS</td></tr>
+<tr><td><strong>654K</strong></td><td><strong>10/10 (1.00) PASS</strong></td></tr>
+</table>
+<p>Log: <code>logs/canary/canary_log.csv</code> (probe <code>logs/canary/probe.json</code>). <strong>Finding:</strong> zero measured recall degradation through 654K (65% of the 1M window) on clean immutable anchors — directly against the strong "rot bites at 300-400K" reading. The qualitative signal agreed: at 633K the orchestrator ran a rigorous web-verify that <em>rejected 2 reviewer false positives and caught 1 real fabrication</em> (see below), so reasoning quality, not just recall, held. Token count was always <em>measured</em> from the transcript (self-estimate runs ~1.8× high, per learn-ukrainian). Caveat: this measures clean factual recall on a dense-work session; it is not a guarantee against instruction-drift on adversarial content, and the canary is the gate (drift &lt;0.85 → hand off regardless of tokens).</p>
+
+<h2>Policy moves locked this session</h2>
+<h3>1. Tiered handoff thresholds (raised)</h3>
+<p>Retuned <code>~/.claude/context-check.sh</code> (the live Stop-hook) and <code>~/.claude/statusline.sh</code> from <code>300/400/450K</code> to <strong><code>500/600/700K</code></strong> (cap 750K). 500K = early signal; 600K = "run a context-integrity self-check before continuing" (the canary <em>is</em> that check); 700K = hard handoff. Rationale: handing off late fails silently (rot isn't self-reported), but the canary makes "push higher" safe to measure. Project <code>.claude/statusline/statusline.sh</code> (percentage-based, red at 80%≈600K) left as shared default.</p>
+<h3>2. Context canary ported + formalized</h3>
+<p><code>scripts/quality/context_canary.py</code> (mint/score/log) committed. The standing policy: monitor rot DETERMINISTICALLY across long sessions; answer from memory; the script grades; drift below pass-ratio → hand off NOW regardless of token count. Mint ONLY immutable anchors (a fact that changes mid-session reads as drift, not rot).</p>
+
+<h2>Notable findings (the multi-agent + ground-check layer earning its keep)</h2>
+<ul>
+<li><strong>Air Canada incident reused across ~5 modules.</strong> The Moffatt v. Air Canada (2024 BCCRT 149) chatbot incident appeared as the opener in vector-rag 1.2/1.4 and frameworks-agents 1.3/1.4/1.7. The incident-dedup gate allows it once → assigned to vector-rag 1.2 (cited), de-fabbed/replaced everywhere else. Standing pattern in this campaign's modules.</li>
+<li><strong>Padding-by-duplication (FA 1.2).</strong> cursor hit the 5,000-word floor by inserting 7 "Deep dive" subsections that <em>verbatim-duplicated</em> main-body paragraphs. The deterministic word-count gate counted the dups (passed); only the independent cross-family review caught it. Fixed (0 dup paragraphs, genuine depth added). The exact "self-verify gate is gameable; independent verification isn't" point.</li>
+<li><strong>Reviewer training-cutoff FPs rejected via web-verify (FA 1.3).</strong> deepseek flagged "LangGraph v1.x is fabricated" and "positional StateGraph is deprecated" as P1/P2 — both FALSE: PyPI shows LangGraph 1.2.4 (2026-06-02) and the current <code>StateGraph(state_schema, ...)</code> signature takes the schema positionally. Rejected both; applied only the one real fix (invented $180K/year ROI figures de-fabbed). Letting the FPs through would have edited correct content into wrong.</li>
+<li><strong>Version-pin FP (vrag 1.4).</strong> deepseek's "version pins are forward-dated" was its cutoff lag — fastapi 0.115.6 / uvicorn 0.34.0 / pydantic 2.10.4 are real Dec-2024 PyPI releases. Pins kept.</li>
+</ul>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>frameworks-agents 1.7 + 1.8 are IN-FLIGHT</strong> — authoring dispatched (cursor→1.7 on branch <code>ai-ml/fa-1.7-expand</code>; codex→1.8 on <code>ai-ml/fa-1.8-expand</code>), <strong>not yet committed/reviewed/merged</strong> when this handoff was written. Next session: check the worktrees (<code>.worktrees/fa-1-7</code>, <code>fa-1-8</code>), ground-check, cross-family review, fix, PR, flip. 1.7 brief: de-fab the Air Canada opener (dedup), fix duplicate sections, expand. 1.8: remove the stub marker, expand the MCP open-standard spine + dated SDK snapshot.</li>
+<li><strong>Then frameworks-agents 1.9 (computer-use-agents) + 1.10 (next-gen-agentic-frameworks)</strong> (both T3) → completes frameworks-agents.</li>
+<li><strong>Then in #1842 curriculum order:</strong> mlops (8) → ai-infrastructure (3) → advanced-genai (8) → multimodal-ai (3) → history (1) + stray deep-learning/1.2.</li>
+<li><strong>Per-module bar unchanged:</strong> T0 + durable-content (dated snapshot, no leadership claims) + cross-family review (ground-check every claim, <strong>web-verify version/API facts both directions</strong> — reviewers' cutoffs lag June 2026) + build in PRIMARY + <code>## Learner check</code> in PR body + flip after merge.</li>
+<li><strong>Follow-up:</strong> formalize the canary as standing practice (a memory was added); consider building <code>scripts/quality/self_verify.py</code> (the bundled deterministic author self-check discussed this session — verify + source-reachability + arXiv-title-match + anti-fab greps, "run-and-paste then orchestrator re-runs"). Standing: #1823 mermaid, #1827 reviewer tool-access, #1829 corpus re-review, CI full-build gate.</li>
+</ul>
+
+<h2>Roster / process notes</h2>
+<ul>
+<li>All dispatch non-Claude (s105). cursor (author/fixer), codex gpt-5.5 (durable-content author, draft-class +3600s), deepseek (reviewer — strong but ground-check its version/API claims HARD; it produced the most FPs from cutoff lag). Every reviewer finding ground-checked; ~4 reviewer FPs rejected this session.</li>
+<li>Learner-check hook: content PRs need a <code>## Learner check</code> blockquote in the body, and the body-edit + <code>gh pr merge</code> cannot be in one bash command (the hook reads the body when it sees <code>gh pr merge</code>).</li>
+<li>Board flip for already-T0 shipped_unreviewed: review-record + <code>reset-stage … COMMITTED</code>; a content fix (when review finds issues) needs a PR.</li>
+</ul>
+
+</body></html>
