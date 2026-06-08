@@ -597,7 +597,7 @@ The true power emerges when node operations are powered by LLMs. Each node can u
 The factory function below creates specialized LLM nodes from a system prompt. The researcher, writer, and editor can each have different instructions, but all of them return the same kind of state patch. That uniformity matters because the surrounding graph should not need to know the details of each prompt in order to route the workflow.
 
 ```python
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 class LLMAgentState(TypedDict):
@@ -607,7 +607,7 @@ class LLMAgentState(TypedDict):
 
 def create_llm_node(system_prompt: str):
     """Factory function to create LLM nodes with different personas."""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+    llm = init_chat_model("your-provider:your-model")  # substitute your chat model
 
     def node(state: LLMAgentState) -> dict:
         # Build message history
@@ -1013,28 +1013,16 @@ graph TD
 
 The pattern choice should follow the failure mode. Use a research-write-review cycle when critique can improve one artifact. Use multi-stage validation when different gates enforce different policies. Use hierarchical agents when large work needs summarized delegation. Use MapReduce when many independent inputs or perspectives must be processed before one synthesis step. A graph is most maintainable when the topology explains the work rather than impressing the reader.
 
-### ROI Calculation
-Why invest in the steeper learning curve of LangGraph over rudimentary orchestration scripts? The economic value comes from removing custom state-management code, reducing restart waste, and giving operators a replayable record of how an agent reached its state. The numbers below are an illustrative planning model, not an industry benchmark; replace them with measurements from your own team before making a purchasing or architecture decision.
+### Cost and Benefit Categories
+Why invest in the steeper learning curve of LangGraph over rudimentary orchestration scripts? The economic value comes from removing custom state-management code, reducing restart waste, and giving operators a replayable record of how an agent reached its state. You will not find dollar figures here — every team's mix of workflow volume, model cost, and on-call burden differs. Instead, compare the cost categories below using your own measurements before making an architecture decision.
 
-```text
-Without LangGraph (ad-hoc solution):
-- Development time: 3 months (senior engineer)
-- Crash-related rework: 15% of runs need manual intervention
-- Human review integration: Additional 2 weeks
-- Debugging production issues: 10 hours/week
+**Engineering time** is usually the first category to move. Ad-hoc orchestration scripts tend to accumulate bespoke persistence, retry, and routing logic that a graph framework already provides. LangGraph does not eliminate design work, but it shifts effort from reinventing state machines toward defining nodes, edges, and checkpoints.
 
-With LangGraph:
-- Development time: 1 month (same engineer)
-- Crash-related rework: <1% (auto-resume handles most)
-- Human review: Built-in interrupts
-- Debugging: State replay eliminates most investigation
+**Operational overhead** covers the human time spent babysitting runs: restarting failed workflows, stitching together logs, and building one-off review tooling. Built-in interrupts, checkpointing, and state replay reduce the custom glue code operators maintain when agents run in production.
 
-Annual savings for a team running 10K workflows/month:
-- Engineering time: ~$100K
-- Operational overhead: ~$50K
-- Reduced failures: ~$30K (API costs from restarts)
-Total: ~$180K/year
-```
+**Failure and restart cost** captures wasted model tokens, duplicated tool calls, and downstream rework when a crash forces a full rerun from scratch. Durable checkpoints and automatic resume narrow that blast radius — fewer runs restart from zero, and fewer incidents require manual triage.
+
+The direction of the tradeoff is consistent: you pay upfront in framework learning and graph design, and you recover value as workflow count, failure rate, and review requirements grow. Map each category to your team's actual numbers — development hours, on-call minutes, and API spend from restarts — before treating LangGraph as a net win.
 
 | Component | Without LangGraph | With LangGraph |
 |-----------|-------------------|----------------|

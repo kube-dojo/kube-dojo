@@ -17,19 +17,23 @@ sidebar:
 
 - **Design** a LlamaIndex RAG architecture by separating ingestion, indexing, retrieval, synthesis, and orchestration responsibilities.
 - **Compare** Documents, Nodes, index types, query engines, and chat engines when choosing the right data interface for an LLM application.
-- **Implement** current LlamaIndex Python imports using `llama_index.core` plus integration packages instead of pre-0.10 monolithic imports.
+- **Implement** the runnable mock-based examples in this module, then plan the dependency and import changes needed for a provider-backed version.
 - **Diagnose** retrieval failures caused by weak chunking, missing metadata, stale storage, or a mismatch between query intent and index structure.
 - **Evaluate** whether a LlamaIndex system is production-ready across persistence, observability, evaluation, privacy, and agent integration boundaries.
 
 ## Why This Module Matters
 
-At the end of a release week, a support lead watches a new assistant answer a policy question with total confidence and total wrongness. The model is not lazy, the prompt is not obviously broken, and the engineering team can reproduce the failure only when the question depends on a narrow paragraph buried in a private handbook. The raw model knows how to write, but it does not know which internal document should be trusted.
+Hypothetical scenario: At the end of a release week, a support lead watches a new assistant answer a policy question with total confidence and total wrongness. The model is not lazy, the prompt is not obviously broken, and the engineering team can reproduce the failure only when the question depends on a narrow paragraph buried in a private handbook. The raw model knows how to write, but it does not know which internal document should be trusted.
 
 That is the moment when "use RAG" stops being a slogan and becomes an engineering problem. The team needs reliable ingestion, careful chunking, traceable metadata, an index that matches the question style, a query path that can filter and rerank evidence, and storage that survives deployment restarts. Without those pieces, retrieval becomes a decorative prelude to hallucination rather than a control mechanism for factual answers.
 
 LlamaIndex exists for that exact layer of the stack. It is not merely a wrapper around an LLM call, and it is not only a vector database client. It is a data framework for LLM applications: a set of abstractions for turning messy source material into queryable context, then feeding that context into a model in a controlled way. LangGraph, and much of LangChain's agent layer, answers "what happens next in this workflow?"; LlamaIndex answers "what evidence should the model see, and why this context?"
 
 This module teaches LlamaIndex as an architectural tool, not as a five-line demo. You will learn the vocabulary that makes LlamaIndex systems debuggable: Documents, Nodes, node parsers, indexes, retrievers, node postprocessors, response synthesizers, query engines, chat engines, storage contexts, and evaluation loops. The goal is not to memorize every class. The goal is to know where evidence enters the system, how it changes shape, and where a bad answer can be traced back to a bad data decision.
+
+> **LlamaIndex landscape snapshot — as of 2026-06. LlamaIndex reorganizes its package layout periodically; verify import paths and package names against the current docs before relying on them.**
+>
+> As of this snapshot, the upstream installation guide documents two common Python install paths: `pip install llama-index` for a starter bundle, and selective installs such as `pip install llama-index-core` when you want only the framework core plus chosen integrations. The starter bundle includes `llama-index-core`, `llama-index-llms-openai`, `llama-index-embeddings-openai`, and `llama-index-readers-file`; provider, reader, vector-store, reranker, and other integrations are packaged separately and installed as needed. LlamaIndex's v0.10 packaging refactor introduced `llama-index-core` and separate integration packages, so older pre-0.10 tutorials may show monolithic import assumptions that no longer match the current docs.
 
 ## The Boundary: Data Framework, Not Magic Orchestrator
 
@@ -39,7 +43,7 @@ Think of the application as a newsroom. The orchestrator is the editor assigning
 
 That boundary matters because RAG failures are rarely solved by adding more agent steps. If the assistant cannot find the refund exception paragraph, a better loop will only loop around missing evidence. If a summarization index is used for precise legal lookup, the model may receive a fluent overview when it needs exact wording. If all chunks lose their source metadata, the answer may sound correct but become impossible to audit. LlamaIndex gives names and extension points to those data-layer decisions.
 
-In the current Python package layout, LlamaIndex is also intentionally split across namespaced packages. Core framework objects come from `llama_index.core`, while model, embedding, reader, vector store, and reranker integrations live in separate packages such as `llama-index-llms-openai`, `llama-index-embeddings-openai`, or `llama-index-readers-file`. That package boundary is a useful mental model: core abstractions are stable enough to design around, while integrations are chosen to match your model provider, storage backend, and data sources.
+LlamaIndex's dependency boundary is also a useful mental model. The framework gives you a set of core abstractions to design around, while integrations are chosen to match your model provider, storage backend, and data sources. Keep that distinction in the architecture even when the exact package names change: the durable question is which part of your system is framework logic, and which part is provider or storage integration.
 
 The first design question is therefore not "Should we use LlamaIndex or LangChain?" The better question is "Which part of the application is primarily about data access, and which part is primarily about control flow?" A documentation assistant that answers questions over a private handbook can be mostly LlamaIndex with a thin web service around it. A procurement agent that reads policy, calls vendor APIs, requests human approval, and opens tickets might use LlamaIndex for the policy retrieval layer and a workflow framework for the approval process.
 
@@ -101,9 +105,9 @@ The ingestion flow below is deliberately plain. It is the part of the system man
 └────────────────────┘
 ```
 
-Here is a complete, runnable Python example that builds Documents manually, parses them into Nodes, and then creates a vector index using mock models. The mock LLM and mock embedding model are useful for learning because the code exercises current LlamaIndex APIs without requiring an API key or network call. In a production application, you would replace those mocks with provider integrations such as OpenAI, Ollama, Hugging Face, or another supported backend.
+Here is a complete, runnable Python example that builds Documents manually, parses them into Nodes, and then creates a vector index using mock models. The mock LLM and mock embedding model are useful for learning because the code exercises the LlamaIndex data path without requiring an API key or network call. In a production application, you would replace those mocks with provider integrations such as OpenAI, Ollama, Hugging Face, or another supported backend.
 
-> **Setup:** Run `pip install llama-index-core` before trying the Python examples. The `MockLLM` and `MockEmbedding` classes used here need no provider API keys.
+> **Setup:** Use the install path from the snapshot that matches your environment before trying the Python examples. The mock-based examples here need only the framework core and no provider API keys.
 
 ```python
 from llama_index.core import Document, MockEmbedding, Settings, VectorStoreIndex
@@ -145,7 +149,7 @@ for result in results:
 
 Notice the sequence in that example. The `Document` objects carry metadata before splitting begins. The `SentenceSplitter` then creates nodes from those documents, and each node inherits the metadata needed for later filtering and citation. The `VectorStoreIndex` receives nodes rather than raw strings, which means retrieval can return content and provenance together. That provenance is how a serious application explains itself during review.
 
-The same shape works when files come from disk. `SimpleDirectoryReader` is the beginner-friendly file reader in the current package layout, and it is imported from `llama_index.core`. The next example creates a tiny directory, writes two source files, reads them as Documents, and prints file metadata. It is intentionally small, but it shows the ingestion contract that remains true when the directory contains many files.
+The same ingestion shape works when files come from disk. The next example creates a tiny directory, writes two source files, reads them as Documents, and prints file metadata. It is intentionally small, but it shows the ingestion contract that remains true when the directory contains many files.
 
 ```python
 from pathlib import Path
@@ -203,7 +207,7 @@ The practical choice is less about which class looks modern and more about what 
 | `TreeIndex` | Hierarchical corpora and broad questions that benefit from summary layers | Provides an organized path through nested summaries | Summary errors can become retrieval errors at higher levels of the tree |
 | `KeywordTableIndex` | Exact terms, named concepts, controlled vocabularies, codes | Makes lexical matches explicit and inspectable | Misses paraphrases and may depend on keyword extraction quality |
 
-Here is a compact example showing the current import style for several index types. The code uses the same small document set so you can focus on what changes: the index class, not the source data. In real applications, you should not build every index blindly; you would build the one or two that match the query patterns your product actually supports.
+Here is a compact example comparing several index types. The code uses the same small document set so you can focus on what changes: the index class, not the source data. In real applications, you should not build every index blindly; you would build the one or two that match the query patterns your product actually supports.
 
 ```python
 from llama_index.core import (
@@ -400,7 +404,7 @@ The durable mental model is simple: LlamaIndex is the evidence preparation and r
 
 ## Did You Know?
 
-- **LlamaIndex uses namespaced Python packages**: The current ecosystem separates core abstractions from integrations, so modern examples import framework objects from `llama_index.core` and install provider-specific packages as needed.
+- **Package boundaries are design boundaries**: The framework separates core abstractions from provider and data-source integrations, so dependency choices should stay tied to the model, reader, storage, and reranking components they actually support.
 - **Nodes are first-class retrieval units**: A Node can store text, metadata, relationships, and identifiers, which makes it more than a plain string chunk.
 - **Response synthesis is configurable**: Query engines can use different synthesis modes, which changes how retrieved nodes are combined into an answer.
 - **Directory readers filter hidden path segments by default**: `SimpleDirectoryReader` can treat dot-prefixed directories in the absolute path as hidden, so explicit file lists are safer in generated examples and worktree checkouts.
@@ -410,7 +414,7 @@ The durable mental model is simple: LlamaIndex is the evidence preparation and r
 | Mistake | Why It Hurts | Better Approach |
 |---|---|---|
 | Treating LlamaIndex as only a vector database wrapper | The team misses node parsing, metadata, postprocessing, synthesis, storage, and evaluation extension points | Model the full ingestion-to-answer pipeline and decide which component owns each decision |
-| Using old top-level `llama_index` imports | Pre-0.10 examples can fail or hide the current package boundary between core and integrations | Use `from llama_index.core import ...` for core objects and install integration packages explicitly |
+| Copying old framework examples without checking docs | Import paths, dependency bundles, and integration packages change over time, so an old snippet can fail or teach the wrong architecture | Treat the dated snapshot as a starting point, then verify package names and import paths against current upstream docs before porting code |
 | Chunking before understanding user questions | The correct answer may be split away from headings, dates, tables, or nearby caveats | Design chunking against representative questions and inspect whether expected source nodes survive |
 | Dropping metadata during ingestion | Retrieval may work in a demo but answers cannot be filtered, cited, audited, or debugged | Attach source, version, date, tenant, product, and access metadata before nodes are created |
 | Choosing `VectorStoreIndex` for every query style | Semantic search can be weak for exact identifiers, broad summaries, or hierarchical exploration | Match index type and retrieval strategy to semantic lookup, summarization, exact terms, or routing needs |
@@ -435,9 +439,9 @@ Inspect the retrieved nodes, their metadata, similarity scores if available, and
 </details>
 
 <details>
-<summary>3. A developer copied an old tutorial that imports `VectorStoreIndex` from the top-level `llama_index` package. Why is that risky in a current codebase?</summary>
+<summary>3. A developer copied an old tutorial whose imports do not match the package layout described in the snapshot. Why is that risky in a maintained codebase?</summary>
 
-Current LlamaIndex examples use the namespaced package layout, with core objects imported from `llama_index.core` and optional integrations installed separately. Old monolithic imports may fail, pull in unexpected dependencies, or teach the wrong architecture. The safer current style is `from llama_index.core import VectorStoreIndex, SimpleDirectoryReader` plus explicit provider packages for LLMs, embeddings, readers, vector stores, and rerankers.
+Framework package layouts can change faster than the architecture concepts. An old snippet may fail, pull in unexpected dependencies, or teach the wrong boundary between core framework code and provider integrations. The safer habit is to preserve the architectural separation, then verify the exact import paths and install commands against the current docs before updating a maintained codebase.
 
 </details>
 
@@ -475,9 +479,11 @@ This is a design-and-reading exercise rather than a cluster lab. Choose a realis
 
 Start from five representative user questions before choosing components. Include at least one narrow lookup question, one broad summary question, one exact identifier question, and one question that should be refused or escalated because the evidence is weak. Then sketch the ingestion path, metadata fields, index choice, query pipeline, persistence strategy, and evaluation checks. The result should be specific enough that another engineer could implement a first prototype without guessing your retrieval intent.
 
+Treat the import plan as the bridge from this design note back to the runnable mock-based code blocks earlier in the module: first run the mock examples, then document which provider, reader, and storage integrations would replace the mocks in your real prototype.
+
 - [ ] **Design** a LlamaIndex RAG architecture that separates ingestion, indexing, retrieval, synthesis, and orchestration responsibilities.
 - [ ] **Compare** Documents, Nodes, index types, query engines, and chat engines for the chosen assistant.
-- [ ] **Implement** a small import plan using current `llama_index.core` imports plus any needed integration packages.
+- [ ] **Implement** the runnable mock examples first, then write a snapshot-checked import and dependency plan for the real prototype.
 - [ ] **Diagnose** two likely retrieval failures caused by chunking, metadata, stale storage, or mismatched index structure.
 - [ ] **Evaluate** production readiness with persistence, observability, retrieval evaluation, privacy, and agent-tool boundaries.
 
@@ -495,6 +501,7 @@ Start from five representative user questions before choosing components. Includ
 - [LlamaIndex Response Synthesizer Guide](https://developers.llamaindex.ai/python/framework/module_guides/querying/response_synthesizers/)
 - [LlamaIndex Persisting and Loading Data](https://developers.llamaindex.ai/python/framework/module_guides/storing/save_load/)
 - [LlamaIndex Settings Guide](https://developers.llamaindex.ai/python/framework/module_guides/supporting_modules/settings/)
+- [LlamaIndex v0.10 Packaging Refactor](https://medium.com/llamaindex-blog/llamaindex-v0-10-838e735948f8)
 
 ## Next Module
 
