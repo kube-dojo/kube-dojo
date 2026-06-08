@@ -7,530 +7,576 @@ sidebar:
 
 ## Learning Outcomes
 
-Upon completing this module, you will be able to:
-- **Compare** the architectural differences, latency profiles, and cost structures between traditional Vector RAG architectures and long-context LLM approaches.
-- **Design** application architectures that leverage prefix caching to minimize cost and maximize Time To First Token (TTFT) performance.
-- **Diagnose** attention degradation and needle-in-a-haystack retrieval failures within contexts exceeding one million tokens.
-- **Implement** cost-optimization patterns for massive context windows using the latest API features of state-of-the-art models.
-- **Evaluate** the financial and computational trade-offs between dynamic retrieval augmented generation and static bulk-context loading, determining the exact break-even point for your workloads.
+By the end of this module, you will be able to:
+
+- **Compare** long-context, Vector RAG, and hybrid architectures using latency, precision, corpus size, privacy, and cost tradeoffs rather than vendor marketing claims.
+- **Diagnose** lost-in-the-middle, context rot, and prompt-cache miss failures by inspecting prompt position, prompt shape, usage metadata, and evaluation evidence.
+- **Design** prompt-cache hit architecture using stable prefix ordering, immutable prompt artifacts, tenant-aware cache keys, and dynamic suffix discipline.
+- **Calculate** prompt-cache break-even economics with symbolic unit costs, cache-write penalties, TTL assumptions, retrieval costs, and workload reuse rates.
+- **Operate** a hybrid long-context and RAG system with cache-hit monitoring, retrieval-quality evals, source traceability, and regression tests.
 
 ## Why This Module Matters
 
-In late 2025, a major fintech analytics firm, QuantStream Solutions, attempted to replace their complex, multi-stage RAG pipeline with a single, massive-context LLM call. They fed ten years of quarterly earnings reports—roughly 1.8 million tokens—directly into the model for every user query, assuming the model would perfectly synthesize the data without the need for semantic search. For the first two days, the system seemed miraculous, eliminating the need for vector databases, embedding models, and complex chunking strategies. The developers celebrated the simplification of their architecture and the immediate reduction in moving parts.
+Hypothetical scenario: a product team owns a large set of policy manuals, support transcripts, and design notes. Their first RAG system uses embeddings, a vector database, chunk metadata, and a reranker. The system is not elegant, but it usually finds the right fragments. When long-context models become easier to access, the team wonders whether they can remove the whole retrieval layer and paste the full corpus into every request. The prototype feels wonderful on the first demo because the model can refer to documents that retrieval previously missed.
 
-However, the architectural naivety quickly surfaced. Because they dynamically injected the user's short query at the *beginning* of the prompt before the massive block of historical data, they effectively invalidated the prompt cache on nearly every request. Instead of paying fraction-of-a-cent caching rates, they were billed for processing 1.8 million tokens from scratch for every query. Within seventy-two hours, their API usage bill exceeded $120,000, wiping out their entire quarterly infrastructure budget. Furthermore, users began reporting that the model was hallucinating financial metrics from 2018 when asked about 2024, a classic symptom of attention degradation in unoptimized massive contexts.
+The second week is less pleasant. Some answers cite old text from the beginning of the prompt even when newer corrections appear in the middle. Other answers ignore a clause that is present but buried deep inside the combined document. The team also discovers that their prompt starts with a timestamp and a trace identifier, so the large shared corpus is not a stable prefix. Instead of reusing cached attention state, the system recomputes most of the prompt on each call. Nobody did anything malicious. They simply treated a long context window as if it were a bigger string buffer.
 
-This incident highlights the critical inflection point modern AI engineering has reached. We now possess models capable of ingesting entire codebases, libraries of documentation, and years of transactional history in a single prompt. But raw capacity does not equal architectural efficiency. Understanding how to structure prompts to exploit KV cache reuse, how to measure prefix caching cost models, and when to hybridize long-context with traditional RAG is the difference between a highly profitable, lightning-fast application and a catastrophic financial liability. This module provides the practitioner-level insights required to navigate this new paradigm safely and effectively, ensuring you can harness the power of millions of tokens without falling into the traps of latency and exponential cost.
+That mistake is common because the phrase "context window" sounds like capacity is the only issue. If the text fits, the application should work. In practice, capacity is only the outer boundary. Attention has compute cost, position matters, irrelevant text dilutes useful signals, and cache systems reward exact prefix discipline. Long-context models change what is possible, but they do not remove the need for retrieval design, evaluation, observability, and cost modeling.
 
-## 1. The Physics of Massive Context Windows
+This module teaches the durable spine behind the current product cycle. You will learn why long context gets expensive, why information in the middle can be harder to use, what prompt caching actually reuses, how prefix ordering affects cache hits, how to compute break-even economics without trusting stale pricing tables, and how to choose between long context, Vector RAG, and hybrid designs. Vendor names and model limits move quickly, so current specifics live in one dated snapshot. The engineering judgment should survive the next wave of models.
 
-To understand prompt caching, we must first understand the computational physics of what happens when you send one million tokens to an LLM.
+## 1. The Physics of Large Context Windows
 
-### The Quadratic Bottleneck of Attention
+A transformer does not read a long prompt the way a person scrolls a document. During the prefill phase, the model turns each input token into internal representations and computes attention relationships that let later layers use earlier text. In standard self-attention, each token can attend to every other token in the sequence. The important practical consequence is that longer prompts do not merely add more text to transmit over the network. They increase the amount of attention work and memory traffic required before the model can generate the first output token.
 
-In a standard transformer architecture, the core mechanism is Self-Attention. For a sequence of length $N$, the attention mechanism must compute the relationship between every single token and every other token. This results in a computational complexity of $O(N^2)$ for both time and memory.
+The original Transformer architecture made this tradeoff explicit: attention is powerful because it connects positions directly, but the straightforward form has quadratic cost in sequence length. Modern serving stacks use tiling, optimized memory movement, paged KV caches, distributed attention, and other improvements, so real systems do not behave like a classroom matrix multiplication benchmark. Even with those improvements, the direction of pressure remains the same. A very long prefill consumes scarce accelerator time, memory bandwidth, and cache capacity before the first generated token appears.
 
-When context windows were limited to 4k or 8k tokens, this quadratic scaling was manageable. However, as we scale to 1M or 2M tokens, $N^2$ becomes an astronomical figure.
-
-If computing attention for 8,000 tokens takes $X$ amount of memory, computing it for 1,000,000 tokens does not take $125X$; it theoretically requires $15,625X$ memory due to the quadratic curve. The infrastructure required to process this in a single pass without crashing is immense.
-
-### Overcoming the Limits: RingAttention and Sparse Attention
-
-The leap to massive context models was not achieved merely by adding more GPUs. It required deep algorithmic breakthroughs in how attention is physically calculated across hardware clusters:
-
-1. **RingAttention**: Instead of forcing a single GPU cluster to hold the entire $N \times N$ attention matrix, RingAttention distributes the sequence across a ring of interconnected devices. Each device computes attention for a block of tokens and passes the keys and values to the next device in the ring, overlapping computation with communication.
-2. **KV Caching**: During generation, the model caches the Key (K) and Value (V) tensors for all previous tokens. This prevents the model from recomputing the attention representations for the entire prompt every time it generates a new single word.
-3. **RoPE Scaling (Rotary Position Embeddings)**: Techniques like YaRN (Yet another RoPE extensioN method) dynamically adjust the frequency of positional embeddings, allowing models trained on shorter contexts to extrapolate their understanding of token positions out to millions of tokens without catastrophic degradation.
+Think of the context window as a conference room. A bigger room lets more people attend the meeting, but it does not guarantee that every person will be heard, that the agenda will stay focused, or that the room can be reset instantly for the next meeting. Long-context engineering is the discipline of deciding who needs to be in the room, where the important people sit, what notes are pinned near the chair, and which parts of the meeting setup can be reused.
 
 ```mermaid
 graph TD
-    A[Input Tokens: 1,000,000] --> B(Embedding Layer)
-    B --> C{Distributed Attention Mechanism}
-    C -->|Block 1| D[GPU Node 1]
-    C -->|Block 2| E[GPU Node 2]
-    C -->|Block n| F[GPU Node N]
-    D --> G(Ring Communication Network)
+    A[Input Tokens: large prompt] --> B(Embedding Layer)
+    B --> C{Attention and Feed-Forward Layers}
+    C -->|Block 1| D[Accelerator Shard 1]
+    C -->|Block 2| E[Accelerator Shard 2]
+    C -->|Block n| F[Accelerator Shard N]
+    D --> G(KV State and Memory Traffic)
     E --> G
     F --> G
-    G --> H[Aggregated Context Representation]
-    H --> I(Feed Forward Layers)
-    I --> J[Next Token Prediction]
+    G --> H[Context Representation]
+    H --> I(Next Token Generation)
     
     style A fill:#f9f,stroke:#333,stroke-width:2px
     style C fill:#bbf,stroke:#333,stroke-width:2px
     style G fill:#dfd,stroke:#333,stroke-width:2px
 ```
 
-## 2. The Needle-in-a-Haystack Problem
+The diagram keeps the original module's core idea: long context is an infrastructure problem, not just a prompt-writing trick. The model server must prefill the prompt, retain key/value state for generation, and manage memory so that useful prefixes can be reused later. Optimizations such as FlashAttention reduce memory reads and writes; distributed techniques such as Ring Attention spread work across devices; positional schemes such as RoPE help the model represent token order. None of these make irrelevant text free, and none of them prove that every position in a long prompt is equally useful.
 
-Just because a model *can* ingest two million tokens does not mean it pays equal attention to all of them. The "Needle in a Haystack" evaluation is the standard industry test for long-context models: a specific, obscure fact (the needle) is hidden deep within hundreds of thousands of words of irrelevant text (the haystack). The model is then asked a question that can only be answered by finding that needle.
+It helps to separate two phases. Prefill is the expensive phase that processes the input prompt and builds the attention state. Decode is the repeated phase that generates output tokens using the already-built state. Prompt caching targets the prefill cost of repeated prefixes. It does not precompute the answer, and it does not make output generation free. If two requests share a large stable prefix, the provider may reuse the already-computed state for that prefix, then process only the new suffix and generation work.
 
-### The U-Shaped Attention Curve
+This distinction explains a surprising latency pattern. A cached long prompt can feel dramatically faster than an uncached long prompt, yet still slower than a tiny RAG prompt. The cached path can avoid much of the prefill compute, but it still has to route the request, load or reference cached state, process the dynamic suffix, and generate output. Caching changes the economics of repeated long prompts. It does not erase the physics of moving and using a large state.
 
-Empirical testing across almost all massive-context models reveals a U-shaped performance curve regarding information retrieval:
+The application-level lesson is that long-context systems need workload shape before model selection. A prompt that contains a complete handbook, a stable tool schema, and many follow-up questions from the same session has a natural reuse pattern. A prompt that contains a different uploaded file for every request may have almost no reusable prefix, even if the model can accept the file. A prompt that includes a repository snapshot may benefit from long context during a focused refactor, but the same repository may be better served by RAG for ordinary "where is this function defined?" questions. Context length is only useful when it matches the evidence shape and the reuse pattern.
 
-*   **Beginning of Prompt (Primacy Effect)**: High retrieval accuracy. The model pays strong attention to the system instructions and the first few documents.
-*   **Middle of Prompt (The "Lost in the Middle" Zone)**: Severe degradation. Needles placed here are frequently ignored or hallucinated over.
-*   **End of Prompt (Recency Effect)**: High retrieval accuracy. The model strongly weighs the most recent tokens right before the generation phase.
+There is also a concurrency cost that is easy to miss. A single very long prefill can occupy serving resources that could have handled many shorter prompts, so providers and self-hosted teams both care about admission control, batching, memory pressure, and cache eviction. In a private deployment, the same issue appears as accelerator memory exhaustion or queueing delay. In a managed API, it appears as higher latency, rate-limit pressure, or volatile billing. This is why prompt caching, retrieval, and prompt length budgeting belong in the architecture document, not only in an optimization ticket after launch.
 
-### Diagnosing Retrieval Failures
+## 2. Why Long Context Degrades: Lost-in-the-Middle and Context Rot
 
-When a long-context application fails, developers often assume the model isn't smart enough. In reality, it's usually a structural issue. Symptoms of needle-in-a-haystack failures include:
-- The model answers based on pre-training knowledge instead of the provided context.
-- The model summarizes the beginning and end of the document but ignores the core.
-- The model hallucinates a plausible-sounding answer that contradicts a specific clause buried at token index 800,000.
+Long context has a quality failure mode that is separate from cost. A model may accept a large prompt and still fail to use the right evidence inside it. The "Lost in the Middle" work showed that models can perform better when relevant information appears near the beginning or end of a long input, while performance can degrade when the same information appears in the middle. RULER, LongBench, and other long-context benchmarks extend this lesson: advertised context length and effective context use are not identical measurements.
 
-> **Pause and predict**: If you are feeding a massive codebase to an LLM to find a specific security vulnerability, and the vulnerability is located in a file that happens to be concatenated in the exact middle of the 1.5 million token prompt, what mitigation strategy could you employ without removing code?
+The practical term many engineers use is context rot. As the prompt grows, each useful fact competes with more irrelevant or weakly relevant text, conflicting instructions, stale examples, duplicated chunks, and formatting noise. The model is not doing exact database lookup over a clean index. It is compressing and attending over a sequence. If the sequence mixes current policies with obsolete policies, critical clauses with casual notes, and source text with old chat history, the answer can drift toward the most salient or recent pattern rather than the most correct evidence.
 
-*Mitigation strategies for this include duplicating the most critical files at the end of the prompt, or forcing the LLM to output a chain of thought that pulls from the codebase before delivering a final verdict.*
+Needle-in-a-haystack tests are useful because they isolate one question: can the model retrieve a known hidden fact from a long body of distractor text? They are not enough for production acceptance. Real RAG and long-context systems often require multi-hop reasoning, conflict resolution, citation discipline, date awareness, and source filtering. A model that finds a synthetic needle can still fail a realistic policy question if the prompt contains near-duplicate clauses, ambiguous section headings, or a newer correction placed far away from an older rule.
 
-## 3. Prompt Caching: The Economic Engine of Long Context
+Position is therefore an architectural variable. If the most important instruction is buried after a large document dump, recency will not help it. If the most relevant document is always concatenated in the middle of a giant corpus, a lost-in-the-middle effect may appear even when the model has enough nominal context. If the prompt includes a final instruction asking the model to cite exact evidence before answering, that instruction benefits from being close to generation time, but it does not magically repair a noisy corpus.
 
-Processing 1 million tokens costs significant compute. If a user asks five questions about a 1-million-token document, computing the attention matrix for the document five separate times is economically unviable.
+You can diagnose these failures with controlled perturbations. Move the target evidence to the beginning, middle, and end of an otherwise identical prompt. Ask for exact citations before the answer. Remove distractor documents and compare behavior. Use a small gold set where the expected source is known. If the answer changes sharply when position changes, you are seeing a context-use problem rather than a missing-data problem. If the model cites a source that was not present, you are seeing a grounding failure. If the answer is correct only when retrieval prefilters the prompt, you have evidence that RAG is improving signal-to-noise rather than merely saving tokens.
 
-Enter **Prompt Caching** (specifically, Prefix Caching).
+The durable lesson is not "long context is bad." The lesson is that a large window is a capacity tool, while retrieval and prompt structure are signal-management tools. You should use long context when the task truly needs broad, simultaneous evidence. You should use RAG when the task needs precise, sparse evidence from a larger corpus. You should combine them when retrieval can pick the right regions and long context can preserve enough surrounding structure for reasoning.
 
-### How Prefix Caching Works
+A useful mitigation is to give the model landmarks before asking for synthesis. Landmarks can be stable document identifiers, section headings, source dates, explicit conflict markers, or a manifest that lists which sources appear in the prompt. They do not guarantee correctness, but they make the evidence easier to navigate and easier to evaluate. If the final answer cites `policy-2026-03` when the expected source is `policy-2026-05`, the evaluator can classify the failure as a source-selection issue instead of a generic hallucination.
 
-When you send a prompt to an API that supports caching, the provider's infrastructure calculates the exact tokens. As the model processes the prompt layer by layer, it generates Key (K) and Value (V) tensors.
+Another mitigation is to make the model surface evidence before it reasons over that evidence. A final instruction such as "first list the cited sections you will rely on, then answer" can improve debuggability because it turns a hidden context-use failure into an observable intermediate artifact. This is not a request for private chain of thought. It is a request for externally verifiable evidence. The application can reject an answer that lacks citations, cites missing sources, or cites stale documents when newer documents are present.
 
-Instead of discarding these massive multi-gigabyte tensors when the request finishes, the provider stores them in a high-speed memory layer (often NVMe or specialized RAM clusters), keyed by the exact hash of the token sequence.
+Document order should also be treated as a design choice. Chronological order helps tasks that reason over time. Authority order helps policy tasks where newer or higher-level documents should dominate. Dependency order helps code tasks where public interfaces should appear before implementations and callers. Random filesystem order is rarely defensible. If order changes from run to run, both cache hits and answer quality become harder to reason about. Deterministic ordering is therefore a quality control and an economics control at the same time.
 
-When a subsequent request arrives, the infrastructure hashes the incoming prompt. If the first $M$ tokens perfectly match a stored hash, the system completely skips the computational phase for those $M$ tokens and loads the KV states directly from memory.
+## 3. Prompt Caching Mechanics
 
-### The Strict Rules of Prefix Matching
+Prompt caching is often described as "the provider remembers your prompt," but that wording hides the important mechanics. In transformer inference, the reusable object is not the final answer. It is the model's internal attention state for a repeated prefix, often discussed as key/value state. If a later request begins with the exact same token sequence, the server may reuse the already-computed state for that prefix and continue from the new suffix.
 
-Prefix caching is brutally literal. It requires an **exact, left-to-right token match**.
+Prefix is the important word. Exact-prefix caching is left-to-right. Static content belongs at the beginning: system instructions, tool schemas, durable examples, static documents, tenant handbook text, or other large repeated material. Dynamic content belongs at the end: current user message, timestamp, trace identifier, request-specific transcript, temporary retrieval result, or current experiment flag. If dynamic text appears before the large static block, the prefix changes and the cache cannot match the expensive part.
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant API Gateway
     participant Cache Store
-    participant GPU Cluster
+    participant Model Server
 
-    Client->>API Gateway: Send Prompt [System + Book + Query A]
-    API Gateway->>Cache Store: Check Hash(System + Book)
-    Cache Store-->>API Gateway: Cache Miss
-    API Gateway->>GPU Cluster: Compute KV for [System + Book + Query A]
-    GPU Cluster-->>Cache Store: Save KV for Prefix [System + Book]
-    GPU Cluster-->>Client: Return Answer A (High Latency, High Cost)
+    Client->>API Gateway: Send Prompt [System + Handbook + Query A]
+    API Gateway->>Cache Store: Check stable prefix
+    Cache Store-->>API Gateway: Cache miss
+    API Gateway->>Model Server: Compute state for [System + Handbook + Query A]
+    Model Server-->>Cache Store: Store reusable state for [System + Handbook]
+    Model Server-->>Client: Return Answer A
     
-    Client->>API Gateway: Send Prompt [System + Book + Query B]
-    API Gateway->>Cache Store: Check Hash(System + Book)
-    Cache Store-->>API Gateway: Cache Hit!
-    API Gateway->>GPU Cluster: Load KV for [System + Book], Compute only [Query B]
-    GPU Cluster-->>Client: Return Answer B (Low Latency, Low Cost)
+    Client->>API Gateway: Send Prompt [System + Handbook + Query B]
+    API Gateway->>Cache Store: Check stable prefix
+    Cache Store-->>API Gateway: Cache hit
+    API Gateway->>Model Server: Reuse [System + Handbook], process [Query B]
+    Model Server-->>Client: Return Answer B
 ```
 
-If you change a single space, a single punctuation mark, or inject a dynamic timestamp at the beginning of your prompt, the hash changes, and the entire cache is invalidated for that request. The physical realities of storing massive tensors dictate this: a single differing token alters the relational attention mechanics for all subsequent tokens, making partial prefix matching generally impossible in standard exact-prefix cache schemes without recalculation.
+This sequence diagram preserves the useful structure from the original module while removing the false implication that a single hash of the whole prompt is always the whole implementation. Providers differ in how they route requests, where they place cache breakpoints, whether the cache is automatic or explicit, how TTL works, and how usage metadata is reported. The common engineering contract is simpler: repeated prefixes are eligible for reuse, variable text at the front destroys reuse, and your application must measure cached tokens instead of assuming the cache worked.
 
-## 4. Architecting for Maximum Cache Hits
+TTL matters because cache state is expensive to retain. A provider may evict cached prefixes after inactivity, offer explicit retention choices, or provide no guarantee beyond opportunistic reuse. That means prompt caching is not a storage system and should not be treated as one. If a workflow depends on a warm prefix, you need a plan for cold starts, warmup cost, cache-miss latency, and user experience during rebuilds. A sparse workload with one request per day may not benefit from caching even if the prompt is perfectly structured.
 
-To achieve optimal economics, you must structure your payloads so the static, heavy information is front-loaded, and the dynamic, user-specific information is appended at the very end.
+The other subtle rule is tokenization stability. "Same text" to a person is not always the same token sequence to a model API. Different line endings, whitespace normalization, tool schemas in a different order, JSON keys emitted in non-deterministic order, a formatter that rewrites indentation, or a library upgrade that changes message serialization can alter the prefix. Cache-aware systems treat the prompt compiler as production infrastructure. They snapshot prompt artifacts, test deterministic serialization, and alert on cache-hit regressions.
 
-### Anti-Pattern: The Dynamic Header
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Provider surface | Prompt-caching facts to verify before use | Design implication |
+> |---|---|---|
+> | [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching) | Official docs describe automatic caching for prompts at or above a documented token threshold, cached-token reporting in usage metadata, cache-routing guidance, and retention policies that may vary by model and organization policy. | Keep shared content at the front, log `cached_tokens`, and treat retention and eligible model lists as live vendor configuration rather than curriculum truth. |
+> | [Anthropic Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) | Official docs describe explicit `cache_control` breakpoints, a default short-lived cache, an optional longer duration at additional cost, and cache read/write pricing expressed as multipliers of base input price. | Place breakpoints after large stable blocks, calculate whether cache writes are repaid by later reads, and verify TTL and pricing for the specific deployment path. |
+> | [Gemini Context Caching](https://ai.google.dev/gemini-api/docs/caching) | Official docs describe implicit caching on newer Gemini models, explicit cached-content objects with configurable TTL, cached-token reporting in `usage_metadata`, and model-specific minimum input sizes. | Use explicit caches when guaranteed reuse matters, keep cached content immutable, and check current model-specific limits instead of copying stale examples. |
+> | [Mistral Prompt Caching](https://docs.mistral.ai/studio-api/conversations/advanced/prompt-caching) | Official docs describe `prompt_cache_key`, cached-token accounting, a reduced cached-token billing path, and the warning that a cache key increases hit likelihood without guaranteeing a hit. | Use stable application-level cache keys, never place secrets in cache keys, and still measure actual cached tokens per request. |
+>
+> This snapshot intentionally does not rank models or reproduce complete context-window and price tables. Those values are volatile. Use the linked vendor docs as the current source of truth, then apply the stable design rules in this module.
 
-This is the most common mistake engineers make when transitioning from simple chatbots to massive-context systems. In standard web applications, prepending context is normal. In LLM API calls, it is financially devastating.
+## 4. Design Prompt-Cache Hit Architecture
+
+The safest prompt-cache architecture is boring. It builds a deterministic prefix from versioned artifacts, appends dynamic data only after the stable portion, and logs enough metadata to prove whether the cache is being used. Treat the prefix like an API contract. If a team member changes the prefix, that change should pass review, tests, and rollout monitoring just like a database migration or schema change. Dynamic-last ordering is the safe default for automatic prefix caching; providers with explicit cache breakpoints can also support multiple cached blocks separated by dynamic segments when each boundary is declared and measured.
+
+The main anti-pattern is the dynamic header. Web developers often put request metadata first because it is readable in logs. That habit is costly for prompt caching. A trace ID, timestamp, user name, feature flag, or current ticket number at the first line means every later token shifts behind a new prefix. The prompt still looks mostly identical to a person, but it no longer begins with the same token sequence.
 
 ```python
-# BAD ARCHITECTURE: Invalidates cache on every single call
-def generate_bad_prompt(user_name, user_query, massive_document):
-    # The dynamic data is at the FRONT. 
-    # The prefix changes every time the user name changes!
-    prompt = f"""
-    Current Time: {datetime.now()}
-    User: {user_name}
-    
-    Analyze the following 1-million word document based on the user's query:
-    {user_query}
-    
-    DOCUMENT:
-    {massive_document}
-    """
-    return prompt
+from datetime import datetime, timezone
+
+
+def generate_bad_prompt(user_name: str, user_query: str, massive_document: str) -> str:
+    current_time = datetime.now(timezone.utc).isoformat()
+    return f"""
+Current Time: {current_time}
+User: {user_name}
+
+Analyze the following document based on the user's query:
+{user_query}
+
+DOCUMENT:
+{massive_document}
+"""
 ```
 
-### Best Practice: The Static Prefix Block
-
-You must isolate the unchanging data and place it unconditionally at the beginning of the prompt sequence. Treat your static text like immutable infrastructure.
+That function is not unsafe because timestamps are evil. It is unsafe because the timestamp and user name come before the stable document. The expensive part of the prompt is no longer an exact repeated prefix. Worse, the structure hides the problem because most of the string is still the same. Cache misses caused by prefix jitter often look like a provider problem until you log prompt hashes and cached-token counts.
 
 ```python
-# GOOD ARCHITECTURE: Maximizes Cache Hits
-def generate_optimized_prompt(user_name, user_query, massive_document):
-    # 1. System Instructions (Static)
-    system_prompt = "You are an expert financial analyst. Rely strictly on the provided documents."
-    
-    # 2. Massive Knowledge Base (Static across many queries)
-    knowledge_base = f"DOCUMENT:\n{massive_document}"
-    
-    # 3. Dynamic context and query (Appended at the end)
-    dynamic_query = f"\nUser: {user_name}\nTime: {datetime.now()}\nQuery: {user_query}"
-    
-    # The prefix (system_prompt + knowledge_base) remains identical across requests.
-    # The provider will cache this massive chunk.
-    return system_prompt + knowledge_base + dynamic_query
+from datetime import datetime, timezone
+
+
+SYSTEM_PROMPT = (
+    "You are an expert analyst. Rely strictly on the provided documents. "
+    "When evidence conflicts, cite the newer source and explain the conflict."
+)
+
+
+def generate_optimized_prompt(user_name: str, user_query: str, massive_document: str) -> str:
+    static_prefix = (
+        f"{SYSTEM_PROMPT}\n\n"
+        "<document_set name=\"tenant-handbook\">\n"
+        f"{massive_document}\n"
+        "</document_set>\n\n"
+    )
+
+    current_time = datetime.now(timezone.utc).isoformat()
+    dynamic_suffix = (
+        "<request>\n"
+        f"user: {user_name}\n"
+        f"time: {current_time}\n"
+        f"query: {user_query}\n"
+        "</request>\n"
+    )
+
+    return static_prefix + dynamic_suffix
 ```
 
-### Multi-Tiered Caching
+The optimized function still includes dynamic values, but only after the stable prefix. It also wraps the large document in simple structural tags. Tags are not magic, yet they give the model landmarks and give your tests something stable to validate. If you later add a second document set, you can enforce deterministic ordering by sorting document identifiers, rendering a manifest, and snapshotting the final prefix text.
 
-Modern architectures often employ multi-tiered prefixes to serve different user segments efficiently. For example, in a B2B SaaS application:
+Multi-tenant systems need one more layer of discipline. A global prefix might include system instructions, response rules, common product documentation, and tool schemas. A tenant prefix might include that tenant's handbook, allowed products, and support policy. A user suffix might include the current transcript, permission-filtered notes, and the immediate question. The sequence should be global, then tenant, then user, then request. That ordering maximizes reuse without mixing private data across tenants.
 
-*   **Tier 1 Prefix (Global):** Core system instructions and global product documentation. (Shared across all customers).
-*   **Tier 2 Prefix (Tenant):** The specific tenant's organizational data and historical logs. (Shared across all users within a company).
-*   **Tier 3 Prefix (User):** The specific user's current session context.
-*   **Suffix:** The immediate query.
+```text
++-------------------+-------------------+-------------------+-------------------+
+| Global Prefix     | Tenant Prefix     | User Context      | Current Request   |
++-------------------+-------------------+-------------------+-------------------+
+| system rules      | tenant handbook   | allowed user data | question          |
+| tool schemas      | tenant glossary   | session facts     | trace id          |
+| shared docs       | tenant examples   | preferences       | timestamp         |
++-------------------+-------------------+-------------------+-------------------+
+```
 
-By structuring the prompt exactly in this order: `[Global] + [Tenant] + [User] + [Query]`, the API can reuse the `[Global] + [Tenant]` KV cache for every employee in that company, resulting in massive cost savings.
+The table is also a privacy boundary. Shared global content can be reused across many requests. Tenant content should not be shared across tenants unless the provider's cache isolation, account structure, and your own data policy make that safe. User context usually belongs near the suffix because it changes more often. Current request metadata belongs last because it changes every time and should never determine whether a large prefix can be reused.
 
-> **Stop and think**: If Tenant A has 100 users and Tenant B has 5 users, and the Global prefix is 500k tokens, does Tenant B benefit from the Global prefix cache established by Tenant A's queries?
+Two safeguards make this architecture practical. First, generate a prefix fingerprint in your application and log it with each request. The fingerprint should be computed over the static prefix before dynamic suffixes are appended. Second, run a serialization test in CI that renders the prefix twice from the same inputs and asserts byte-for-byte equality. If a formatter, JSON encoder, document ordering change, or template library upgrade introduces jitter, the test catches it before your bill does.
 
-*Yes, assuming the API provider supports shared sub-prefix caching across different tenant streams. The first 500k tokens hash identically, regardless of what follows.*
+Prefix fingerprints should be descriptive enough for operations but not sensitive enough to leak data. A good log record might contain the prompt template version, corpus version, tenant identifier hash, prefix byte length, prefix token estimate, and prefix fingerprint. It should not contain the raw handbook text or a user-visible secret. The goal is to correlate cache behavior with deploys and corpus changes. When a cache-hit ratio drops, you want to know whether the prompt version changed, the corpus version changed, or the traffic pattern changed.
 
-## 5. Evaluating the Break-Even Point: Math & Economics
+Cache-aware design also needs rollout discipline. If you deploy a new prompt prefix to every tenant at once, every tenant experiences a cold prefix at the same time. A staged rollout can warm the new prefix gradually, compare old and new answer quality, and detect cache-bust bugs before they affect the full workload. This resembles index migration in RAG: the prompt prefix is a compiled artifact with cost and quality consequences, so it deserves a migration plan rather than an invisible string edit.
 
-The binary quality gate for production readiness demands that you mathematically prove why you are using Long-Context caching over traditional Vector RAG. You must determine the exact break-even point for your workloads.
+## 5. Calculate Prompt-Cache Break-Even Economics
 
-### The Cost Equations
+Prompt caching does not automatically make long context cheaper than RAG. It changes the variables. RAG pays for ingestion, embeddings, retrieval infrastructure, reranking, and a smaller generation prompt. Cached long context pays for cold prefill or cache write events, cached-prefix reads, dynamic suffix input, output tokens, and sometimes cache storage or retention. The right architecture depends on corpus size, question shape, reuse rate, latency target, and quality requirement.
 
-To calculate the break-even point, you must evaluate the total cost of processing a user query using both paradigms over a specific time horizon (e.g., one month).
+Use symbols first so the model survives pricing churn. Let `Q` be the number of repeated requests in a period after a cacheable prefix has been created. Let `P` be the static prefix size in million tokens. Let `S` be the dynamic suffix size in million tokens. Let `R` be the retrieved context size in million tokens for a RAG request. Let `C_input` be the current base input unit cost. Let `C_cached_read` be the current cached-read unit cost. Let `C_cache_write` be the effective unit cost of creating or refreshing the cache. Let `C_index` be the fixed cost of embedding, storage, and retrieval operations for the same period.
 
-**Equation 1: Total Cost of Vector RAG**
-$$Cost_{RAG} = C_{DB} + \sum \left( \left(\frac{Q_{tokens}}{10^6} \times C_{embed}\right) + \left(\frac{R_{tokens}}{10^6} \times C_{input}\right) \right)$$
+```text
+Cost_RAG =
+  C_index
+  + Q * ((R + S) * C_input)
 
-Where:
-- $C_{DB}$ = Fixed monthly cost of hosting the Vector Database (compute and storage).
-- $Q_{tokens}$ = Size of the user query.
-- $C_{embed}$ = Cost per 1M tokens for the embedding model.
-- $R_{tokens}$ = Retrieved tokens injected into the prompt (e.g., 2,000 tokens).
-- $C_{input}$ = Base LLM input cost per 1M tokens.
+Cost_cached_long_context =
+  cache_write_events * (P * C_cache_write)
+  + Q * ((P * C_cached_read) + (S * C_input))
+```
 
-**Equation 2: Total Cost of Cached Long-Context**
-$$Cost_{LC} = \sum \left( \left(\frac{P_{tokens}}{10^6} \times C_{cache}\right) + \left(\frac{Q_{tokens}}{10^6} \times C_{input}\right) \right) + Cost_{Warmup}$$
+In the cached-long-context row, `Q` counts cache-hit requests; the `cache_write_events` term already accounts for cold or refresh requests that pay the write/full-input cost for `P`, so those warm-up calls are not counted again as cached reads.
 
-Where:
-- $P_{tokens}$ = Size of the massive static prefix (e.g., 1,000,000 tokens).
-- $C_{cache}$ = Discounted cache read cost per 1M tokens.
-- $Cost_{Warmup}$ = Cost of periodic dummy requests to keep the cache alive (calculated as $P_{tokens} \times C_{input}$ upon eviction).
+This simplified model omits output tokens because they are usually similar between designs for the same answer length. Add them back when output length differs, especially for summarization or report-generation workloads. Also add reranker cost, embedding refresh cost, explicit cache storage cost, and cold-start user-experience cost if those are material. The point is not to build a universal equation. The point is to prevent an architecture decision from being made by vibes.
 
-### Scenario Calculation
+Hypothetical cost model: suppose your current provider documentation says cached reads are a reduced fraction of base input cost, and your workload repeats the same large prefix across many questions. If each question only needs a few retrieved passages, RAG may still be cheaper because it sends a tiny high-signal prompt instead of paying even the discounted read cost for the whole prefix. If each question requires comparing evidence across most of the corpus, RAG may need to retrieve so much context that it loses both quality and simplicity. The break-even point moves with reuse rate, prefix size, cache TTL, and the amount of evidence the task truly needs.
 
-Let's assume a corpus of 1,000,000 tokens. You expect 10,000 queries per month.
+The fastest sanity check is to compute marginal cost per request after warmup. For cached long context, the marginal input cost is approximately `P * C_cached_read + S * C_input`. For RAG, it is approximately `(R + S) * C_input` plus small retrieval and embedding-query costs. If `P * C_cached_read` is still much larger than `R * C_input`, RAG is usually the cheaper narrow-QA path. If `R` must approach `P` for acceptable answers, long context or macro-RAG becomes more attractive.
 
-*   **Pricing**: Base input ($C_{input}$) is $3.00 / 1M tokens. Cache read ($C_{cache}$) is $0.30 / 1M tokens. Embedding cost ($C_{embed}$) is $0.02 / 1M tokens.
-*   **Vector RAG**: Managed Vector DB costs $100/mo. Query length is 500 tokens. Retrieved context is 2,000 tokens.
-    *   $Cost_{RAG} = 100 + 10,000 \times [ (500 / 1M \times 0.02) + (2,500 / 1M \times 3.00) ]$
-    *   $Cost_{RAG} = 100 + 10,000 \times [ 0.00001 + 0.0075 ] = 100 + 75.10 = $175.10 / month.
+TTL changes the answer because cache write events are not evenly distributed. A busy support assistant may keep a tenant handbook warm all day. A monthly audit workflow may pay cold-start cost on almost every run. A batch job may intentionally warm a cache once, issue many related questions, then let it expire. You should model real arrival patterns rather than assuming a perfect cache hit rate. Plot cost against cold-cache, partial-hit, high-hit, and highest-observed scenarios. If the architecture only works at a perfect hit rate, it is fragile.
 
-*   **Cached Long-Context**: Prefix is 1,000,000 tokens. Query is 500 tokens. Assume cache stays hot (minimal warmup penalties).
-    *   $Cost_{LC} = 10,000 \times [ (1M / 1M \times 0.30) + (500 / 1M \times 3.00) ]$
-    *   $Cost_{LC} = 10,000 \times [ 0.30 + 0.0015 ] = $3,015.00 / month.
+Latency uses a similar model. RAG adds retrieval latency and often reranking latency, but it sends a smaller prompt. Cached long context avoids much of the repeated prefill, but it still uses a large cached state and longer prompt accounting. The user experience also differs. A cold cache might produce a slow first answer followed by faster follow-up answers. A RAG system might produce steadier latency but fail when retrieval misses. Good product design makes those tradeoffs visible instead of pretending one architecture dominates every workload.
 
-**The Verdict**: In high-frequency, narrow-retrieval scenarios, Vector RAG is overwhelmingly cheaper ($175 vs $3,015). However, if the workload involves analyzing the *entire* corpus to synthesize a report (e.g., "Summarize all 1,000,000 tokens into a compliance dashboard"), basic RAG is often a poor fit for the task, making Long-Context the most straightforward option despite the cost. The break-even point heavily favors RAG for needle-in-haystack search, but flips entirely when holistic synthesis is required.
+To calculate a practical break-even point, start with the current vendor snapshot and replace every price with a variable in a spreadsheet or small script. Then run the same workload through three rows: RAG with the expected retrieved context, cached long context with the observed cache-hit rate, and hybrid macro-RAG with the expected macro-chunk size. Record both money and latency. A route that is cheap but misses citations is not a win, and a route that is accurate but only works when the cache is warm may still need a product fallback.
 
-## 6. Long-Context vs. Traditional RAG: The Hybrid Future
+The quality term belongs in the break-even worksheet because some tasks cannot be reduced to narrow retrieval without losing the point of the task. A legal-summary workflow may need to compare clauses across a full agreement family. A code-review workflow may need enough neighboring files to see call relationships. A research workflow may need to compare tone, omissions, and contradictions across many notes. In those cases, the "cost" of RAG is not only token price. It includes missed relationships, shallow synthesis, and the engineering effort of reconstructing broader context from fragments.
 
-With 2-million token windows, is traditional Vector RAG dead? Absolutely not. Massive context and RAG are complementary, not mutually exclusive.
+The opposite failure is also common. A team proves that cached long context is acceptable for one bursty workload and then routes every question through the same giant prefix. The cost model should include a routing decision, not just an average. Ask whether the question is sparse lookup, broad synthesis, conflict resolution, code navigation, or session follow-up. A router that sends sparse lookup to RAG and broad synthesis to long context can be cheaper and more accurate than either architecture alone.
 
-### The Case for Traditional RAG
-- **Infinite Corpus**: If your data is 50 gigabytes (billions of tokens), no context window can hold it. Vector RAG is required to filter the universe of data down to a manageable size.
-- **Latency**: Even with a 100% cache hit, loading 2 million tokens of KV state from memory into the GPU SRAM takes time. A 2-million token cache hit might have a TTFT of 400ms-800ms. A 2000-token RAG context might have a TTFT of 15ms. If you are building a real-time voice assistant, 800ms is unacceptable.
-- **Precision**: Smaller, highly relevant contexts suffer less from the "Lost in the Middle" attention degradation.
+## 6. Compare Long-Context, Vector RAG, and Hybrid Patterns
 
-### The Case for Massive Context
-- **Holistic Synthesis**: If a user asks, "Summarize the changing tone of the CEO across all 50 earnings calls from 2015 to 2025," traditional RAG will fail. Vector search retrieves isolated chunks based on semantic similarity. It cannot piece together a decade-long narrative arc. Massive context can read the entire history simultaneously.
-- **Codebase Refactoring**: Changing a function signature in a core library requires understanding how every other file in the repository uses that function. RAG misses edge cases. Passing the entire codebase in a single prompt allows the LLM to perform accurate, repository-wide reasoning.
+Long context is strongest when the task requires broad simultaneous evidence. Examples include reading a complete design document before proposing a migration plan, comparing a sequence of meeting notes for changing commitments, reviewing a medium-sized repository for a cross-file refactor, or synthesizing a report where the answer depends on narrative arc rather than one paragraph. In those cases, chunk-level retrieval can fragment the evidence and hide the relationships that matter.
 
-### The Hybrid Architecture: "Pre-filtered Bulk Context"
+Vector RAG is strongest when the corpus is larger than any practical prompt, when the answer usually depends on a small number of relevant passages, when citations and source filtering matter, or when latency has to stay predictable for many unrelated queries. A well-designed RAG system improves signal-to-noise before the model sees the prompt. It can also enforce metadata filters such as tenant, freshness, document type, access level, or jurisdiction before any text reaches the generator.
 
-The state-of-the-art approach combines both. Instead of chunking documents into tiny 512-token paragraphs, architectures now use "Macro-RAG."
-
-1.  **Macro-Chunking**: Break a massive library into logical blocks of 100,000 tokens (e.g., "All 2023 financial reports", "The entire frontend repository").
-2.  **Semantic Routing**: Use a fast, cheap model or traditional vector search to determine *which* macro-chunks are relevant.
-3.  **Bulk Injection**: Inject 3 or 4 of these 100,000-token macro-chunks into the long-context LLM.
-
-This guarantees that the LLM has all necessary surrounding context (avoiding the fragmentation of traditional RAG) while keeping the total token count under the threshold of severe attention degradation and controlling costs.
+Hybrid systems combine the two. Retrieval narrows the universe, but the long-context model receives larger macro-chunks with enough surrounding structure to reason. Instead of retrieving ten tiny snippets, the system might retrieve three complete sections, a full runbook, a small package from a repository, or a document family. This pattern keeps RAG's filtering power while using long context to avoid over-fragmenting the evidence.
 
 ```mermaid
 graph TD
-    A[User Query] --> B(Embedding Model)
-    B --> C[(Vector DB)]
-    C -->|Retrieve Top 3 Macro-Chunks| D[Chunk 1: 150k tokens]
-    C -->|Retrieve Top 3 Macro-Chunks| E[Chunk 2: 120k tokens]
-    C -->|Retrieve Top 3 Macro-Chunks| F[Chunk 3: 180k tokens]
+    A[User Query] --> B(Embedding or Router)
+    B --> C[(Vector Index and Metadata Filters)]
+    C -->|Retrieve macro-chunk A| D[Full Section or Document Family]
+    C -->|Retrieve macro-chunk B| E[Related Runbook or Code Package]
+    C -->|Retrieve macro-chunk C| F[Recent Policy or Transcript Set]
     A --> G{Prompt Compiler}
     D --> G
     E --> G
     F --> G
-    G --> H[Constructed Prompt: 450k tokens]
+    G --> H[Long-Context Prompt with Stable Prefix]
     H --> I(Long-Context LLM)
-    I --> J[Holistic Synthesis Answer]
+    I --> J[Cited Synthesis Answer]
     
     style C fill:#f96,stroke:#333,stroke-width:2px
     style I fill:#69f,stroke:#333,stroke-width:2px
 ```
 
-## 7. Operationalizing the Cache: A Practitioner's Guide
+The hybrid prompt compiler has two jobs that often conflict. It wants stable prefixes for cache hits, and it wants query-specific evidence for quality. The usual compromise is to cache durable layers such as system rules, tool schemas, evaluation rubric, and tenant corpus summaries, then append retrieved macro-chunks and the user query as the dynamic suffix. For workloads where the same macro-chunks are reused across a session, the compiler can also group requests by corpus region or cache key so that repeated sessions benefit from the same prefix order.
 
-To truly benefit from prompt caching, you must operationalize it in your backend infrastructure. This requires rigorous monitoring and proactive state management.
+Use this decision table as a starting point, not as a universal rule:
 
-### Cache Warm-up Strategies
-If you have a global prefix (e.g., your company's master documentation) that takes 15 seconds to process uncached, you do not want your first user of the day to experience a 15-second TTFT.
+| Workload signal | Prefer RAG | Prefer long context | Prefer hybrid |
+|---|---|---|---|
+| Corpus is much larger than the context window | Retrieval is required to reduce the search space before generation. | Full loading is impossible or wasteful for ordinary requests. | Retrieve document families, then pass larger high-signal chunks. |
+| Question needs one or two facts with citations | Small retrieved prompts are cheaper, faster, and easier to audit. | A full corpus prompt dilutes the evidence and raises cost. | Use long context only for disambiguation after retrieval finds candidates. |
+| Question needs broad synthesis across many sources | Small chunks may hide relationships and produce shallow summaries. | Full or near-full context can preserve narrative and cross-document links. | Retrieve macro-chunks and ask the model to compare across them. |
+| Data changes constantly | Fresh retrieval and metadata filters are easier to update incrementally. | Cached prefixes may expire or become stale before they pay off. | Cache durable instructions while retrieving fresh evidence dynamically. |
+| Prompt prefix is reused heavily in bursts | RAG still helps if evidence is sparse and precise. | Cached long context can amortize prefill cost over repeated questions. | Cache shared layers and retrieve query-specific evidence into suffixes. |
+| Privacy rules vary by tenant or user | Metadata filters can enforce access before text enters the prompt. | Long static prefixes must be isolated carefully by tenant and account. | Combine access-controlled retrieval with tenant-specific cache boundaries. |
 
-Implement a CRON job that sends a "dummy" request using the exact global prefix every hour (or whatever the provider's Cache TTL is). This ensures the KV cache remains hot in the provider's memory, guaranteeing low latency for all actual users. For a Kubernetes-native organization running clusters on v1.35+, this is a simple `CronJob` resource mapping to a Python script that pings the LLM API.
+The important word in the table is "signal." A single application may use all three patterns. A support assistant might use RAG for ordinary policy lookup, long context for reviewing an entire escalated case history, and hybrid macro-RAG for comparing a customer's transcript family against the tenant handbook. The mature design is not loyal to a technique. It routes by evidence shape.
 
-### Measuring and Monitoring
-You cannot optimize what you do not measure. You must log the exact token counts for Cache Read and Cache Write on every request.
+## 7. Operate a Hybrid Long-Context and RAG System
+
+Production systems need cache observability, retrieval observability, and answer-quality evals. Cache observability tells you whether the prompt is economically shaped. Retrieval observability tells you whether the right evidence entered the prompt. Answer evals tell you whether the model used that evidence correctly. Any one of the three can look healthy while the others fail.
+
+At minimum, log prompt token count, cached token count, cache hit ratio, prefix fingerprint, prompt template version, tenant or corpus identifier, retrieval query, retrieved source identifiers, source freshness, time to first token, total latency, output token count, and final citation set. Do not log raw sensitive prompt text unless your privacy policy allows it. The point is to create enough structured data to debug "why was this expensive?" and "why did this answer cite the wrong source?" without reconstructing the incident from memory.
 
 ```python
-# Example pseudo-code for tracking API usage economics
-def execute_llm_call(prompt):
-    response = llm_api.generate(prompt)
-    
-    # Extract metadata provided by modern APIs
-    uncached_tokens = response.usage.prompt_tokens - response.usage.cached_tokens
-    cached_tokens = response.usage.cached_tokens
-    
-    cost_uncached = (uncached_tokens / 1_000_000) * 3.00 # Example base price
-    cost_cached = (cached_tokens / 1_000_000) * 0.30     # Example cache read price
-    
+def record_llm_usage(response, *, prefix_fingerprint: str, prompt_version: str) -> None:
+    usage = response.usage
+    prompt_tokens = usage.prompt_tokens
+    # Field names are provider-specific; Anthropic, Gemini, and others expose cache hits differently.
+    cached_tokens = usage.prompt_tokens_details.cached_tokens
+    uncached_tokens = prompt_tokens - cached_tokens
+    cache_hit_ratio = cached_tokens / prompt_tokens if prompt_tokens else 0.0
+
     log_metrics(
-        total_cost=cost_uncached + cost_cached,
-        cache_hit_ratio=cached_tokens / response.usage.prompt_tokens,
-        ttft=response.metrics.time_to_first_token
+        prompt_version=prompt_version,
+        prefix_fingerprint=prefix_fingerprint,
+        prompt_tokens=prompt_tokens,
+        cached_tokens=cached_tokens,
+        uncached_tokens=uncached_tokens,
+        cache_hit_ratio=cache_hit_ratio,
+        time_to_first_token=response.metrics.time_to_first_token,
     )
-    
-    return response.text
 ```
 
-If your cache hit ratio drops below 80% on a system designed for massive static context, it usually signals a regression in how your application concatenates strings.
+The code is intentionally provider-shaped rather than provider-specific. Most APIs expose usage metadata, but field names differ. Your adapter should normalize those fields into an internal metric contract. If one provider reports cached tokens and another reports cached content tokens, the rest of your application should not care. If a provider does not report the metric you need, you can still log prefix fingerprints and observed latency, but you should be honest about the lower confidence of your cache diagnosis.
 
-## War Stories from the Edge of Context
+Eval design should include position sensitivity. Build a small test set where the answer is known and the supporting evidence can be placed near the beginning, middle, and end of a prompt. Run the same question with and without distractors. Run it through RAG, long context, and hybrid routes. Require cited evidence before final answers. Track whether the model cites the expected source, whether it ignores newer corrections, and whether it changes answer when document order changes.
 
-**The "Innocent" Timestamp**: A healthcare startup loaded 500 patient histories into a massive context window to look for cross-patient epidemiological trends. Their system prompt started with: `Report generated on: {current_date_time}. Analyze the following records...` Because the time changed down to the second on every execution, the prefix hash changed. They paid full price for 800,000 tokens on 5,000 consecutive queries before noticing the billing spike. Moving the timestamp to the bottom of the prompt reduced their daily API cost from $1,200 to $18.
+You also need cache regression tests. Render the stable prefix twice from the same inputs and assert exact equality. Render it after sorting source documents and assert the order is deterministic. Add a test that prepends a fake timestamp and proves the prefix fingerprint changes, so new engineers understand why dynamic headers are banned. Add a budget test that estimates cost at observed hit rates rather than assumed hit rates. These tests turn prompt caching from tribal knowledge into an enforceable contract.
 
-**The Formatter's Folly**: A data engineering team used an automated code formatter (like `black` or `prettier`) on their backend pipeline. The formatter silently converted tabs to spaces in the string literal that held their massive system prompt. Because the API gateway hashes the exact bytes of the string, the change from `\t` to `    ` invalidated the cache for their entire global user base, causing an immediate 800% latency spike during peak hours. Immutable prefixes must be loaded from locked files, never dynamically formatted in application code.
+Operational runbooks should distinguish cold-cache and warm-cache incidents. A cold-cache incident means the prefix is structurally correct but expired, evicted, or routed away from an available cache. A cache-bust incident means the prefix changed unexpectedly. A retrieval incident means the wrong evidence entered the suffix. A context-use incident means the right evidence entered the prompt but the model ignored or misused it. The fixes are different, so the dashboard should help classify the failure quickly.
+
+A good rollout dashboard separates those incident classes into different panels. Cache panels show cached-token ratio by prompt version and tenant. Retrieval panels show expected-source recall, reranker score distribution, and metadata-filter use. Generation panels show citation validity, answer acceptance, refusal behavior, and latency. When a new prompt version ships, you compare all three panels. A higher cache-hit ratio is not enough if source recall drops, and higher source recall is not enough if the model ignores the middle of the constructed prompt.
+
+Finally, write post-incident notes in terms of mechanism. "The model was bad" is not actionable. "The retrieved evidence was correct, but the relevant clause appeared between two large unrelated sections and the answer cited an older clause from the prompt beginning" is actionable. That diagnosis points to document ordering, citation-first prompting, macro-chunk boundaries, or a route back to RAG. Mechanism-level notes also make the curriculum durable: today's vendor behavior may change, but prompt shape, evidence position, cache observability, and eval design remain the controls you can operate.
 
 ## Did You Know?
 
-- **Fact 1:** The jump from 128k to 1M token context windows required a fundamental shift in memory management, moving from standard flash attention to distributed RingAttention algorithms across multiple GPU clusters to handle the quadratic memory explosion.
-- **Fact 2:** Processing 1 million tokens without caching requires approximately 3000 PetaFLOPs of compute, whereas a 99 percent cache hit reduces the required compute on the provider side by over two orders of magnitude, which is why they pass the savings to you.
-- **Fact 3:** The theoretical limit of Rotary Position Embedding (RoPE) scaling currently tested in lab environments exceeds 10 million tokens, though empirical testing shows retrieval accuracy degrades significantly past 2 million without highly specialized, domain-specific fine-tuning.
-- **Fact 4:** In benchmark testing, accessing a fully cached 2-million token prefix can yield a Time To First Token (TTFT) of under 400 milliseconds, compared to over 25 seconds for an uncached processing run of the exact same size.
+- **Capacity and usability are different promises:** a model can accept a long prompt while still showing position-sensitive behavior, so long-context acceptance tests should measure evidence use rather than only checking whether the API call succeeds.
+- **RoPE is a positional encoding idea, not a quality guarantee:** rotary position embeddings help represent order inside attention, but any context-extension method still needs task-specific evaluation for retrieval, reasoning, and citation accuracy.
+- **Prompt caching usually reuses internal attention state for repeated prefixes:** it can reduce repeated prefill cost and latency, but it does not store final answers or remove the need to process new suffixes and output tokens.
+- **RAG and long context solve different constraints:** RAG manages corpus scale and signal-to-noise, while long context preserves surrounding structure for synthesis when the relevant evidence is broader than a few chunks.
 
 ## Common Mistakes
 
-| Mistake | Why it happens | Fix |
-| :--- | :--- | :--- |
-| **Dynamic Headers** | Developers naturally put timestamps, user IDs, or current session states at the top of the prompt for readability. | Force all dynamic variables to the absolute end of the prompt string. The static payload must form the unbroken prefix. |
-| **Assuming Linear Attention** | Believing a model pays equal attention to token 500,000 as it does to token 10. | Assume the "Lost in the Middle" phenomenon is real. Use "Chain of Density" prompting to force the model to resurface middle-data before answering. |
-| **Ignoring Cache TTL** | Providers evict caches after a period of inactivity (e.g., 5-15 minutes). If requests are sparse, you pay full price every time. | Implement a CRON job to send a dummy request with your static prefix to keep the KV cache warm in the provider's memory. |
-| **Over-relying on Long Context** | Using a 1M token window for a simple QA task that a vector database could filter to 2k tokens in milliseconds. | Use massive context for synthesis and cross-document reasoning. Use Vector RAG for needle-in-haystack fact retrieval. |
-| **String Formatting Jitter** | Minor whitespace changes, differing line endings (CRLF vs LF), or trailing spaces in the constructed prompt. | Treat your static prefix as an immutable artifact. Load it from a locked file, do not construct it dynamically with string interpolation. |
-| **Ignoring Sub-Document Structure** | Dumping raw text without XML tags or markdown headers. The model loses its semantic bearings in a sea of raw characters. | Wrap massive documents in clear XML tags (e.g., `<financial_report_2023> ... </financial_report_2023>`) to provide structural landmarks. |
+| Mistake | Why it happens | Better approach |
+|---|---|---|
+| **Hypothetical scenario: putting a timestamp at the first line** | Request metadata feels natural at the top of a log-like prompt, but it changes before the expensive static corpus and destroys prefix reuse. | Put trace IDs, timestamps, user names, and current request metadata at the end of the prompt or outside the prompt in application logs. |
+| **Hypothetical scenario: allowing a formatter to rewrite the prefix** | Whitespace, JSON key order, line endings, and template rendering can change tokenization even when the prompt looks equivalent in review. | Store static prefixes as versioned artifacts, render them deterministically, and snapshot-test byte-for-byte equality in CI. |
+| **Assuming long context means reliable retrieval** | Teams confuse context capacity with evidence use and stop running retrieval-quality or position-sensitivity tests. | Keep a gold evaluation set with evidence at different prompt positions and require citations before accepting a long-context route. |
+| **Using a million-token prompt for sparse lookup** | A large window is exciting, so simple QA workloads get routed through an expensive full-corpus prompt. | Use Vector RAG when the answer depends on a few high-signal passages from a larger corpus. |
+| **Ignoring cache TTL and cold-start behavior** | The demo runs in a burst, but real traffic is sparse enough that cached prefixes expire between user sessions. | Model arrival patterns, measure real cached-token counts, and design a cold-cache user experience instead of assuming perfect warmth. |
+| **Mixing tenant data in a shared prefix** | Cache-hit pressure tempts teams to maximize reuse without re-checking privacy and access-control boundaries. | Isolate tenant prefixes according to policy, verify provider cache isolation, and enforce access filtering before prompt compilation. |
+| **Dumping unstructured documents into the middle** | Raw concatenation is easy, especially when the model accepts the full input without API errors. | Add stable document manifests, section tags, source identifiers, and deterministic ordering so the model and evaluator can navigate the evidence. |
+
+## Knowledge Check
+
+1. **Compare long-context, Vector RAG, and hybrid architectures for a support assistant that answers ordinary policy questions and occasionally reviews entire escalated case histories. Which route should handle each workload, and why?**
+
+   <details>
+   <summary>Answer</summary>
+
+   Ordinary policy lookup should usually use Vector RAG because the answer depends on a small number of cited passages and benefits from metadata filtering. Entire escalated case review can justify long context because the answer may depend on the full sequence of transcripts, notes, and prior decisions. A hybrid route is appropriate when retrieval can select the relevant case family or policy family, then a long-context model can synthesize across those larger macro-chunks without losing surrounding structure.
+
+   </details>
+
+2. **Diagnose a lost-in-the-middle failure: the correct clause is present in a long prompt, but the model answers from an older clause near the beginning. What experiment would prove whether position is part of the problem?**
+
+   <details>
+   <summary>Answer</summary>
+
+   Create controlled variants of the same prompt with the target clause near the beginning, middle, and end while holding the rest of the evidence constant. Ask for exact citations before the final answer and compare whether the cited source changes. If the model succeeds when the clause is near the ends but fails when it is in the middle, the failure is position-sensitive context use rather than missing data.
+
+   </details>
+
+3. **Design a prompt-cache hit architecture for a multi-tenant handbook assistant. Where should global rules, tenant documents, user session facts, and the current question appear?**
+
+   <details>
+   <summary>Answer</summary>
+
+   Global rules and shared tool schemas should come first because they are stable across many requests. Tenant documents should come next because they are stable for that tenant but must not leak across tenants. User session facts should follow because they change more often and may have narrower privacy scope. The current question, timestamp, trace identifier, and request-specific transcript should appear last so they do not break reuse of the expensive stable prefix.
+
+   </details>
+
+4. **Calculate prompt-cache break-even economics conceptually: if a one-million-token cached prefix is reused for many narrow fact questions, why might Vector RAG still be cheaper?**
+
+   <details>
+   <summary>Answer</summary>
+
+   Cached long context still pays a cached-read cost for the whole large prefix on each request, plus the dynamic suffix and output. Vector RAG pays retrieval and generation over a much smaller context when each answer needs only a few passages. If `P * C_cached_read` is larger than `R * C_input` for the workload, RAG is cheaper even after caching. This is the prompt-cache break-even economics calculation: use symbolic unit costs, cache-write penalties, TTL assumptions, retrieval costs, and workload reuse rates before deciding. Long context becomes more attractive when the task truly needs evidence spanning much of the prefix.
+
+   </details>
+
+5. **Operate a cache-aware system: your dashboard shows cached tokens dropping sharply after a template library upgrade, while retrieval quality and output length are unchanged. What should you inspect first?**
+
+   <details>
+   <summary>Answer</summary>
+
+   Inspect deterministic prefix rendering first. The upgrade may have changed whitespace, JSON key ordering, message serialization, tool schema ordering, or line endings before the dynamic suffix. Compare prefix fingerprints before and after the upgrade, render the same prefix twice, and diff the static artifact. This is more likely to be a cache-bust regression than a retrieval issue because retrieval quality stayed stable while cached-token counts dropped.
+
+   </details>
+
+6. **A model finds synthetic needles in a benchmark but fails production questions that involve conflicting policy versions. What does this say about your eval design?**
+
+   <details>
+   <summary>Answer</summary>
+
+   The eval is too narrow. Needle tests measure whether the model can retrieve a known fact from distractors, but production questions also require freshness, conflict handling, citation discipline, and reasoning over source metadata. Add tests with obsolete and current clauses, required citation of the newer source, document-order perturbations, and comparison across RAG, long-context, and hybrid routes.
+
+   </details>
 
 ## Hands-On Exercise
 
-In this comprehensive exercise, you will debug a high-cost LLM pipeline, restructure it to utilize prefix caching effectively, and run it in a simulated local environment to verify cache hit outcomes. 
-
-**Scenario:**
-You inherited a Python script that analyzes customer support transcripts. It loads a massive employee handbook, appends a specific customer transcript, and asks for an analysis. The script is currently experiencing high TTFT and massive costs.
+In this exercise, you will debug a high-cost LLM pipeline, restructure it for prefix caching, and run a local simulator that makes cache hits and misses visible. The simulator uses artificial delays to teach the shape of the problem. It is not a vendor latency benchmark and should not be used as evidence for real TTFT claims.
 
 ### Prerequisites and Environment Setup
 
-You need to establish a local mock environment that simulates an API provider's hashing logic. This will allow you to see exactly when a prompt cache hits or misses.
+Create a small working directory and initialize a local virtual environment so the simulator stays separate from the KubeDojo repository and can be removed after the lab:
 
-Create a working directory and initialize a virtual environment:
 ```bash
-mkdir prompt-cache-lab && cd prompt-cache-lab
+mkdir prompt-cache-lab
+cd prompt-cache-lab
 python3 -m venv .venv
-source .venv/bin/activate
-pip install tiktoken colorama
 ```
 
-Create a file named `mock_llm.py` and paste the following simulator code:
+Create a file named `mock_llm.py` and paste the following simulator code, which hashes only the static prefix to make cache-hit and cache-miss behavior visible:
+
 ```python
 import hashlib
 import time
 
+
 class MockProviderAPI:
     def __init__(self):
         self.server_cache = set()
-    
-    def generate(self, prompt, max_tokens=100):
-        # The API provider hashes the string to identify prefix caching
-        # Real providers do this layer-by-layer; we simulate via SHA-256
-        hashed_prompt = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
-        
-        # Simulate prefix scanning (simplified to exact match for lab purposes)
-        if hashed_prompt in self.server_cache:
-            print("[SIMULATOR] CACHE HIT! Loading KV states...")
-            time.sleep(0.4) # 400ms cached TTFT
-            return {"status": "success", "cached": True, "ttft": 0.4}
-        else:
-            print("[SIMULATOR] CACHE MISS. Computing attention matrices...")
-            time.sleep(4.5) # 4.5s uncached TTFT for massive payload
-            self.server_cache.add(hashed_prompt)
-            return {"status": "success", "cached": False, "ttft": 4.5}
 
-def call_api(prompt, max_tokens=100):
-    global api_instance
-    if 'api_instance' not in globals():
-        api_instance = MockProviderAPI()
-    return api_instance.generate(prompt, max_tokens)
+    def generate(self, static_prefix, dynamic_suffix="", max_tokens=100):
+        prefix_hash = hashlib.sha256(static_prefix.encode("utf-8")).hexdigest()
+        prompt = static_prefix + dynamic_suffix
+
+        if prefix_hash in self.server_cache:
+            print("[SIMULATOR] CACHE HIT: reused static prefix state")
+            time.sleep(0.2)
+            cached = True
+        else:
+            print("[SIMULATOR] CACHE MISS: computed static prefix state")
+            time.sleep(1.0)
+            self.server_cache.add(prefix_hash)
+            cached = False
+
+        return {
+            "status": "success",
+            "cached": cached,
+            "prompt_chars": len(prompt),
+            "max_tokens": max_tokens,
+        }
+
+
+api_instance = MockProviderAPI()
+
+
+def call_api(static_prefix, dynamic_suffix="", max_tokens=100):
+    return api_instance.generate(static_prefix, dynamic_suffix, max_tokens)
 ```
 
-Create your entry point `main.py` where you will perform the following tasks. Include this at the top of `main.py`:
+Create your entry point `main.py` with the following starter code, then leave the bad function in place so you can compare it with the optimized version:
+
 ```python
+from datetime import datetime, timezone
 from mock_llm import call_api
-import time
+
 
 def load_file(filename):
-    # Mocking massive document loading
     return f"[MASSIVE CONTENT OF {filename} ...]"
+
+
+def analyze_transcript_bad(ticket_id, transcript, handbook_text):
+    dynamic_header = f"Ticket: {ticket_id}\nTime: {datetime.now(timezone.utc).isoformat()}\n"
+    static_body = f"HANDBOOK:\n{handbook_text}\n\n"
+    suffix = f"TRANSCRIPT:\n{transcript}\n\nDid the agent follow the handbook?"
+    return call_api(dynamic_header + static_body, suffix)
 ```
 
-### Tasks:
+Complete the lab tasks below in order, because each task isolates a different production failure mode that a cache-aware prompt compiler must handle:
 
-1.  **Analyze the existing code structure.** Look at the `analyze_transcript` function below and identify exactly where the caching mechanism is being broken.
-2.  **Refactor the prompt construction.** Separate the payload into a `STATIC_PREFIX` and a `DYNAMIC_SUFFIX` to guarantee cache hits.
-3.  **Implement multi-tenant caching.** Assume you now have two handbooks (Company A and Company B). Structure the code so that requests for Company A reuse Company A's cache, without mixing up the data.
-4.  **Implement a Cache Warm-up function.** Write a simple function that can be called on a schedule to prevent the API provider from evicting your massive handbook from their KV cache.
+- [ ] Analyze `analyze_transcript_bad` and identify the dynamic values that appear before the expensive handbook prefix.
+- [ ] Refactor prompt construction into a deterministic `STATIC_PREFIX` and a request-specific `DYNAMIC_SUFFIX`.
+- [ ] Implement multi-tenant prefix construction so Company A and Company B handbooks produce separate stable prefix fingerprints.
+- [ ] Add a cache warmup function that sends a cheap suffix after a stable tenant prefix and prints which tenant was warmed.
+- [ ] Run repeated calls for the same tenant and verify that the second call reports a simulator cache hit.
+- [ ] Add one intentional cache-bust experiment by changing whitespace in the static prefix, then explain why the hit disappeared.
 
-<details>
-<summary><strong>Task 1 & 2 Solution: Refactoring for the Cache</strong></summary>
+### Suggested Solution
 
-**Original Bad Code:**
-```python
-def analyze_transcript(ticket_id, transcript, handbook_text):
-    prompt = f"Ticket: {ticket_id}\n\nHANDBOOK:\n{handbook_text}\n\nTRANSCRIPT:\n{transcript}\n\nDid the agent follow the handbook?"
-    return call_api(prompt)
-```
-*Why it fails:* `ticket_id` is unique per call and is at the very beginning. The prefix changes every time.
-
-**Refactored Good Code:**
-```python
-def analyze_transcript(ticket_id, transcript, handbook_text):
-    # The massive, unchanging data is at the very front.
-    static_prefix = f"HANDBOOK:\n{handbook_text}\n\n"
-    
-    # The unique data is appended at the end.
-    dynamic_suffix = f"Ticket: {ticket_id}\nTRANSCRIPT:\n{transcript}\n\nDid the agent follow the handbook?"
-    
-    prompt = static_prefix + dynamic_suffix
-    return call_api(prompt)
-```
-</details>
-
-<details>
-<summary><strong>Task 3 Solution: Multi-Tenant Structuring</strong></summary>
+Use this implementation if you want to compare your answer with a working reference after you have tried the refactor yourself:
 
 ```python
-# Load these once at startup, not per request
-GLOBAL_SYSTEM_PROMPT = "You are an QA auditor. Follow instructions strictly.\n"
+from datetime import datetime, timezone
+from mock_llm import call_api
+
+
+def load_file(filename):
+    return f"[MASSIVE CONTENT OF {filename} ...]"
+
+
+def analyze_transcript_bad(ticket_id, transcript, handbook_text):
+    dynamic_header = f"Ticket: {ticket_id}\nTime: {datetime.now(timezone.utc).isoformat()}\n"
+    static_body = f"HANDBOOK:\n{handbook_text}\n\n"
+    suffix = f"TRANSCRIPT:\n{transcript}\n\nDid the agent follow the handbook?"
+    return call_api(dynamic_header + static_body, suffix)
+
+
+GLOBAL_SYSTEM_PROMPT = "You are a QA auditor. Follow the handbook and cite evidence.\n"
 TENANT_HANDBOOKS = {
-    "tenant_a": load_file("handbook_a.txt"),
-    "tenant_b": load_file("handbook_b.txt")
+    "company_a": "[MASSIVE CONTENT OF handbook_a.txt ...]",
+    "company_b": "[MASSIVE CONTENT OF handbook_b.txt ...]",
 }
 
+
+def tenant_static_prefix(tenant_id):
+    handbook = TENANT_HANDBOOKS[tenant_id]
+    return (
+        GLOBAL_SYSTEM_PROMPT
+        + f"<tenant id=\"{tenant_id}\">\n"
+        + f"<handbook>\n{handbook}\n</handbook>\n"
+        + "</tenant>\n"
+    )
+
+
 def analyze_tenant_transcript(tenant_id, ticket_id, transcript):
-    # This prefix will uniquely cache for Tenant A or Tenant B
-    # Global prompt is shared, maximizing efficiency if the provider supports sub-prefix caching
-    tenant_prefix = GLOBAL_SYSTEM_PROMPT + f"HANDBOOK:\n{TENANT_HANDBOOKS[tenant_id]}\n\n"
-    
-    dynamic_suffix = f"Ticket: {ticket_id}\nTRANSCRIPT:\n{transcript}\nAnalyze agent compliance."
-    
-    return call_api(tenant_prefix + dynamic_suffix)
-```
-</details>
+    static_prefix = tenant_static_prefix(tenant_id)
+    dynamic_suffix = (
+        "<request>\n"
+        f"ticket_id: {ticket_id}\n"
+        f"time: {datetime.now(timezone.utc).isoformat()}\n"
+        f"transcript: {transcript}\n"
+        "question: Did the agent follow the handbook?\n"
+        "</request>\n"
+    )
+    return call_api(static_prefix, dynamic_suffix)
 
-<details>
-<summary><strong>Task 4 Solution: Cache Warm-up</strong></summary>
 
-```python
 def warmup_cache(tenant_id):
-    """Call this every 5 minutes via CRON to keep KV cache alive."""
-    tenant_prefix = GLOBAL_SYSTEM_PROMPT + f"HANDBOOK:\n{TENANT_HANDBOOKS[tenant_id]}\n\n"
-    
-    # Append a very cheap, fast-to-evaluate dynamic suffix
-    dummy_suffix = "SYSTEM WARMUP. Reply with 'OK'."
-    
-    # This call costs almost nothing if cached, but resets the eviction timer on the provider side
-    call_api(tenant_prefix + dummy_suffix, max_tokens=2)
-    print(f"Cache warmed for {tenant_id}")
-```
-</details>
+    static_prefix = tenant_static_prefix(tenant_id)
+    return call_api(static_prefix, "SYSTEM WARMUP. Reply OK.", max_tokens=2)
 
-### Task 5: Execution and Verification
 
-Add execution logic to the bottom of your `main.py` script to run your refactored functions.
-
-```python
 if __name__ == "__main__":
-    print("--- Running Unoptimized Code ---")
-    analyze_transcript("TCK-001", "Hello, I need help.", load_file("handbook_a.txt"))
-    analyze_transcript("TCK-002", "My password is lost.", load_file("handbook_a.txt"))
-    # Notice how both result in a CACHE MISS because the ticket ID changes the hash.
-    
-    print("\n--- Running Optimized Multi-Tenant Code ---")
-    analyze_tenant_transcript("tenant_a", "TCK-100", "Hello there.")
-    # Notice this results in a CACHE MISS (initial load)
-    analyze_tenant_transcript("tenant_a", "TCK-101", "Help me.")
-    # Notice this results in a CACHE HIT! The static prefix was matched.
+    print("--- Unoptimized shape ---")
+    analyze_transcript_bad("TCK-001", "Hello, I need help.", load_file("handbook_a.txt"))
+    analyze_transcript_bad("TCK-002", "My password is lost.", load_file("handbook_a.txt"))
+
+    print("\n--- Optimized multi-tenant shape ---")
+    analyze_tenant_transcript("company_a", "TCK-100", "Hello there.")
+    analyze_tenant_transcript("company_a", "TCK-101", "Help me.")
+    analyze_tenant_transcript("company_b", "TCK-200", "Different handbook.")
+
+    print("\n--- Warmup shape ---")
+    warmup_cache("company_a")
+
+    print("\n--- Intentional cache bust ---")
+    static_prefix = tenant_static_prefix("company_a")
+    prefix_v2 = static_prefix + " "  # one trailing space -> different token sequence -> cache miss
+    call_api(prefix_v2, "SYSTEM WARMUP. Reply OK.", max_tokens=2)
 ```
 
-Run the script in your terminal:
+The cache-bust call should report zero `cached_tokens` for `prefix_v2`; that is a prefix-fingerprint change, not a lost-in-the-middle failure or a retrieval miss.
+
+Run the script through the lab virtual environment so the command uses the dependencies and interpreter created for this exercise:
+
 ```bash
-python main.py
+.venv/bin/python main.py
 ```
 
-### Success Checklist
-- [ ] You have successfully executed the local simulation and observed the cache hit logs.
-- [ ] You have verified that dynamic variables (time, IDs) are entirely removed from the top 90% of your prompt.
-- [ ] You have wrapped your static documents in clear structural tags (Markdown or XML).
-- [ ] You have implemented a mechanism to track the `cached_tokens` metric returned by the API to ensure your hit rate remains above 90%.
+Success criteria should be checked against the simulator output and your own explanation, not just against whether the Python process exits successfully:
 
-## Quiz
-
-<details>
-<summary><strong>1. You are building a system to analyze daily financial news against a static 1.5M token database of company history. You want to minimize costs. Which prompt structure is most efficient?</strong></summary>
-**Answer:** The prompt must begin with the static 1.5M token company history, followed by the daily financial news, and end with the specific user query. WHY: Prefix caching requires an exact left-to-right token match. By placing the massive, unchanging database at the very beginning, the API provider can cache its KV states. If you put the daily news at the top, the prefix changes every day, invalidating the cache and forcing you to pay base compute costs for the entire 1.5M tokens.
-</details>
-
-<details>
-<summary><strong>2. Your long-context model is failing to extract a specific clause from page 400 of a 1000-page legal contract, even though the contract fits well within the 2-million token window. What is the most likely architectural cause?</strong></summary>
-**Answer:** The model is suffering from the "Lost in the Middle" attention degradation phenomenon. WHY: Long-context models exhibit a U-shaped attention curve. They pay strong attention to the beginning (primacy) and the end (recency) of a prompt, but attention heavily dilutes in the middle. The clause on page 400 is buried in this low-attention zone.
-</details>
-
-<details>
-<summary><strong>3. A developer decides to add a UUID to the very first line of a system prompt for tracing purposes: `Trace-ID: 8f7e... \n You are a helpful assistant...`. The system passes a 500k token context block after this line. What is the financial impact of this decision?</strong></summary>
-**Answer:** The system will experience a 0% cache hit rate and incur massive, exponential cost increases. WHY: Prefix caching relies on cryptographic hashing of the token sequence. Because the UUID changes on every single request, the hash of the prompt's beginning changes instantly. The API provider will never find a matching KV cache and will recompute the 500k token block from scratch for every query.
-</details>
-
-<details>
-<summary><strong>4. You need to build a customer support bot that can answer questions based on a 50-gigabyte library of technical manuals. Should you use a 2-million token massive context model or traditional Vector RAG?</strong></summary>
-**Answer:** You must use traditional Vector RAG (or a hybrid Macro-RAG approach). WHY: 50 gigabytes of text is roughly 15 to 20 billion tokens. This exceeds even the largest available context windows by orders of magnitude. You mathematically cannot fit the data into the context window, so you must use vector search to retrieve only the semantically relevant chunks before passing them to the LLM.
-</details>
-
-<details>
-<summary><strong>5. Your application successfully achieves a 95% cache hit rate on a 1-million token prefix. However, users are complaining that the Time To First Token (TTFT) is still around 600 milliseconds, which feels sluggish for a chat interface. Why isn't the response instantaneous if it's cached?</strong></summary>
-**Answer:** Loading cached KV states from memory to GPU SRAM is incredibly fast, but it is not governed by zero-latency magic. WHY: A 1-million token KV cache represents gigabytes of raw tensor data. Even with high-bandwidth interconnects, physically moving this data from the provider's storage tier into the GPU's active memory takes hundreds of milliseconds. While 600ms is vastly superior to the 20+ seconds it would take to compute from scratch, it is the physical floor for massive context retrieval.
-</details>
-
-<details>
-<summary><strong>6. To combat attention degradation, you implement a "Chain of Density" prompting strategy. You instruct the model to first extract and quote relevant sections before answering. Where in the prompt should this instruction be placed for maximum effect?</strong></summary>
-**Answer:** The instruction should be placed at the very end of the prompt, immediately following the massive context payload and right before the generation begins. WHY: Placing the instruction at the end leverages the recency effect of the attention mechanism. It forces the model to actively scan back through the context and pull the relevant information into the high-attention zone right before it begins synthesizing the final response.
-</details>
+- [ ] The first optimized call for `company_a` reports a simulator cache miss and the second optimized call reports a cache hit.
+- [ ] The first call for `company_b` reports a separate cache miss because the tenant prefix is intentionally different.
+- [ ] The dynamic timestamp appears only in the suffix, never before the stable handbook prefix.
+- [ ] Your explanation distinguishes cache-bust failures from lost-in-the-middle failures and retrieval misses.
 
 ## Next Module
 
-Now that you have mastered the economics and architecture of massive context windows, you are ready to explore how to build resilient systems when the LLM inevitably fails to follow instructions.
-
-Continue to [Module 3.6: Fallbacks, Retries, and Defensive Engineering](/ai-ml-engineering/vector-rag/module-1.5-long-context-prompt-caching/), where we will cover exponential backoff strategies, semantic validation loops, and how to gracefully degrade your application's UX when the API provider experiences a catastrophic outage.
----
+Continue to [Module 1.6: Home-Scale RAG Systems](/ai-ml-engineering/vector-rag/module-1.6-home-scale-rag-systems/), where you will apply retrieval and evaluation discipline to a private, local-first RAG system.
 
 ## Sources
 
-- [OpenAI Prompt Caching Guide](https://developers.openai.com/api/docs/guides/prompt-caching) — Primary documentation for exact-prefix matching, cache retention, and prompt-structuring guidance.
-- [Lost in the Middle: How Language Models Use Long Contexts](https://arxiv.org/abs/2307.03172) — Primary paper on beginning-versus-middle-versus-end retrieval behavior in long contexts.
-- [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889) — Primary source for one of the distributed-attention techniques referenced in the module.
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762) - Introduces the Transformer architecture and the attention mechanism that makes long-context cost and memory behavior central to modern LLM systems.
+- [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864) - Primary RoPE paper for understanding rotary position embeddings before treating context-extension methods as quality guarantees.
+- [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135) - Explains why memory movement matters for attention performance and why long prompts are an infrastructure concern.
+- [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889) - Presents a distributed blockwise attention approach that helps explain how very long sequences become feasible in practice.
+- [Lost in the Middle: How Language Models Use Long Contexts](https://arxiv.org/abs/2307.03172) - Core evidence that relevant information position can affect long-context retrieval behavior even when the input fits the window.
+- [RULER: What's the Real Context Size of Your Long-Context Language Models?](https://arxiv.org/abs/2404.06654) - Benchmark reference for separating nominal context length from effective context use across retrieval and reasoning tasks.
+- [LongBench: A Bilingual, Multitask Benchmark for Long Context Understanding](https://arxiv.org/abs/2308.14508) - Long-context evaluation suite covering question answering, summarization, few-shot learning, synthetic tasks, and code completion.
+- [Prompt Cache: Modular Attention Reuse for Low-Latency Inference](https://arxiv.org/abs/2311.04934) - Research paper explaining reusable prompt modules and attention-state reuse for lower latency inference; this is a research technique (modular attention reuse), distinct from the vendor prompt-caching APIs taught in this module.
+- [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching) - Official vendor documentation for prompt-cache structuring, cached-token reporting, retention behavior, and current OpenAI-specific limits.
+- [Anthropic Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) - Official vendor documentation for cache breakpoints, TTL options, and cache read/write pricing multipliers.
+- [Gemini Context Caching](https://ai.google.dev/gemini-api/docs/caching) - Official vendor documentation for implicit and explicit context caching, TTL configuration, and cached-token usage metadata.
+- [Mistral Prompt Caching](https://docs.mistral.ai/studio-api/conversations/advanced/prompt-caching) - Official vendor documentation for prompt cache keys, cache-hit accounting, and current cached-token billing behavior.
