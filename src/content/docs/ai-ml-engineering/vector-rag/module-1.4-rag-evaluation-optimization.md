@@ -575,6 +575,7 @@ def ndcg_at_k(retrieved: list[str], grades: dict[str, int], k: int) -> float:
 
 def groundedness(case: dict, candidate: CandidateRun) -> float:
     cites_relevant_source = any(doc_id in case["relevant"] for doc_id in candidate.cited_doc_ids)
+    # Teaching simplification: real systems use claim-level faithfulness (see faithfulness_prompt above), not substring matching
     answer_mentions_required_fact = case["required_phrase"].lower() in candidate.answer.lower()
     return (float(cites_relevant_source) + float(answer_mentions_required_fact)) / 2
 
@@ -768,7 +769,7 @@ kind delete cluster --name rag-eval-cluster
 - [BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models](https://arxiv.org/abs/2104.08663) - Retrieval benchmark reference for evaluating search systems across diverse tasks.
 - [MTEB: Massive Text Embedding Benchmark](https://arxiv.org/abs/2210.07316) - Embedding evaluation reference useful when choosing or comparing embedding models.
 - [Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) - Ranking-fusion reference relevant when combining lexical and semantic retrieval signals.
-- [RAGAS Documentation](https://docs.ragas.io/en/stable/) - Tooling reference for implementing RAG evaluation metrics while keeping concepts portable.
-- [TruLens Documentation](https://www.trulens.org/getting_started/) - Tooling reference for feedback functions and RAG evaluation instrumentation.
-- [DeepEval Documentation](https://docs.confident-ai.com/) - Tooling reference for test-style LLM application evaluation.
-- [promptfoo Documentation](https://www.promptfoo.dev/docs/intro/) - Tooling reference for prompt and model regression tests in development workflows.
+- [RAGAS Documentation](https://docs.ragas.io/en/stable/) - Tooling reference for implementing RAG evaluation metrics while keeping concepts portable (accessed 2026-06).
+- [TruLens Documentation](https://www.trulens.org/getting_started/) - Tooling reference for feedback functions and RAG evaluation instrumentation (accessed 2026-06).
+- [DeepEval Documentation](https://docs.confident-ai.com/) - Tooling reference for test-style LLM application evaluation (accessed 2026-06).
+- [promptfoo Documentation](https://www.promptfoo.dev/docs/intro/) - Tooling reference for prompt and model regression tests in development workflows (accessed 2026-06).
