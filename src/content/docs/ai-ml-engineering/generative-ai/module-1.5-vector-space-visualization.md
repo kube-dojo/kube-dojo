@@ -5,14 +5,6 @@ sidebar:
   order: 306
 ---
 
-## Why This Module Matters
-
-In November 2018, a leading global fashion retailer deployed a highly anticipated feature for the holiday shopping season: an updated search engine for their catalog. Historically, the retailer relied strictly on exact keyword matching, utilizing traditional inverted indices and TF-IDF scoring. If a user searched for "crimson winter coat," the system would strictly scan the relational database for the exact strings "crimson," "winter," and "coat." While highly predictable and easily debuggable, this rigid approach entirely ignored the implicit semantic intent of the user's query. When users began searching for "burgundy cold weather jacket," the keyword-based system returned zero results, despite the warehouse being fully stocked with thousands of perfectly matching items that happened to use slightly different product descriptions.
-
-The financial impact was immediate and devastating. Internal monitoring dashboards triggered critical alerts as the "null search result" rate spiked by twenty-two percent globally within a matter of hours. Customers, assuming the items were simply out of stock or unavailable, often abandoned their shopping carts and migrated to competitor websites. Over a grueling three-day holiday weekend period, the retailer estimated a direct, unrecoverable revenue loss of twelve million dollars. The root cause was not a catastrophic software bug, a network switch failure, or a database outage, but a fundamental, architectural limitation of the core search mechanism itself. The legacy system did not understand meaning; it only understood strict, mechanical character arrays.
-
-This failure forced the engineering team to overhaul their approach and implement true semantic search using continuous vector spaces. By converting both their product catalog and user queries into high-dimensional embeddings, they enabled mathematical comparisons of meaning that transcend basic vocabulary. The system could now mathematically prove that "burgundy" and "crimson" occupied the exact same coordinate region in semantic space, automatically returning relevant results regardless of exact wording. This module explores the exact mathematical techniques that engineering teams use to visualize, manipulate, and query meaning through sophisticated mathematics. You will learn to treat abstract concepts as geometric coordinates, allowing you to perform arithmetic on ideas and build scalable search systems that genuinely understand human intent.
-
 ## Learning Outcomes
 
 By the end of this intensive module, you will be capable of the following advanced engineering tasks:
@@ -22,9 +14,15 @@ By the end of this intensive module, you will be capable of the following advanc
 - **Diagnose** critical memory and latency bottlenecks in high-throughput production search pipelines and apply scalar and product quantization strategies to optimize throughput.
 - **Implement** fault-tolerant, horizontally scalable vector databases within a modern Kubernetes v1.35 environment, utilizing advanced Approximate Nearest Neighbor (ANN) index structures.
 
+## Why This Module Matters
+
+Hypothetical scenario: an e-commerce team launches a catalog search feature built on exact keyword matching with inverted indices and TF-IDF scoring. A shopper searches for "crimson winter coat," and the system returns products whose descriptions contain those exact tokens. Another shopper searches for "burgundy cold weather jacket" — synonymous intent, different vocabulary — and receives empty results even though matching inventory exists under alternate product copy. Monitoring shows elevated null-result rates; shoppers assume items are unavailable and leave. The root cause is not a crashed database or a misconfigured load balancer, but an architectural limitation: the retrieval layer matches character strings, not meaning.
+
+A semantic search redesign converts both catalog entries and queries into dense embeddings and compares them in vector space. The model places "burgundy" and "crimson" in nearby regions, so paraphrased queries retrieve relevant products without hand-maintained synonym tables. This module teaches the mathematics behind that shift: how to visualize embedding geometry, validate analogies with vector arithmetic, and build production retrieval pipelines with approximate nearest-neighbor indexes. You will treat language as coordinates, not categories — and engineer systems that reason about similarity the way humans do when they recognize that two phrases mean the same thing even when they share no words.
+
 ## The Geometry of Meaning
 
-The conceptual leap required to master modern generative artificial intelligence is recognizing that human language can be robustly represented as coordinates in a vast, continuous geometric space. Prior to this mathematical innovation, software engineers treated text primarily as categorical variables, sparse one-hot encoded arrays, or simple hashed integers. These legacy methods completely discarded the rich, contextual relationships between words.
+The conceptual leap required to master modern generative artificial intelligence is recognizing that human language can be robustly represented as coordinates in a vast, continuous geometric space. Prior to this mathematical innovation, software engineers treated text primarily as categorical variables, sparse one-hot encoded arrays, or simple hashed integers. These legacy methods completely discarded the rich, contextual relationships between words. One-hot encoding assigns every token an orthogonal axis, so every pair of distinct words is equidistant — "dog" and "cat" are no closer than "dog" and "bankruptcy." Hashing tricks compress vocabulary but still treat collisions as semantic equivalence by accident. Embeddings instead learn a low-dimensional manifold where neighborhood structure is the training objective, which is why they enable both fuzzy retrieval and the visualization workflows you will build in the hands-on exercise.
 
 Before studying the deeper theory in this module, you might have generated a standard embedding vector using an open-source library and wondered about its practical utility when returning a seemingly random array of floating-point numbers:
 
@@ -83,7 +81,7 @@ quadrantChart
     "terrible": [0.4, 0.1]
 ```
 
-Distance in this multi-dimensional mathematical space serves as an incredibly reliable metric for semantic similarity. We can measure the absolute Euclidean distance or cosine similarity mathematically to empirically verify topical relevance across disparate data points.
+Distance in this multi-dimensional mathematical space serves as an incredibly reliable metric for semantic similarity when you pick the right function for your embedding model. We can measure Euclidean distance or cosine similarity mathematically to empirically verify topical relevance across disparate data points, then choose the same metric at index time so offline evaluations match online retrieval behavior.
 
 ```python
 # Words about food cluster together
@@ -145,9 +143,43 @@ Cluster 3 (Animals):
 
 > **Pause and predict**: If you generated an embedding for the word "Java", where exactly would it land in the clusters above? Would it sit strictly in Cluster 1 due to code, or might it sit halfway between Cluster 1 and Cluster 2 because of the coffee association? Consider how the underlying embedding model's specific training data distribution directly influences the final geometric coordinates.
 
+## How Embeddings Are Produced
+
+The geometric structure of an embedding space is not arbitrary magic — it is the output of a training objective that rewards certain vector arrangements and penalizes others. Classical word embeddings such as Word2Vec and GloVe learn coordinates by predicting context: a word's vector should help predict surrounding words in a sliding window over a large corpus. Skip-gram and continuous-bag-of-words variants differ in whether you predict context from a center word or the center from context, but both push co-occurring tokens into similar regions because that arrangement lowers prediction loss.
+
+Modern sentence and document embeddings extend the same principle with contrastive learning. During training, the model sees pairs of texts labeled similar (two paraphrases, a query and its answer, an anchor and a positive example) and pairs labeled dissimilar (random negatives or hard negatives mined from the batch). The loss function pulls similar pairs closer in cosine distance and pushes dissimilar pairs apart, often with a temperature-scaled softmax over in-batch negatives. Sentence-transformer models wrap a transformer encoder with a pooling layer (mean pooling, CLS token, or attention pooling) and fine-tune the entire stack on these contrastive objectives. The result is a fixed-length vector per input string whose geometry reflects semantic relationships the training data emphasized.
+
+Understanding the training recipe matters when you debug retrieval quality in production. If your domain vocabulary (medical codes, internal acronyms, product SKUs) was underrepresented during pre-training, vectors for those tokens may sit in noisy regions of space. Fine-tuning on domain-specific contrastive pairs — query–document clicks, support-ticket resolutions, approved FAQ matches — reshapes local geometry without retraining the entire foundation model from scratch. The embedding dimension (384, 768, 1536) is an architectural choice: higher dimensions can encode more nuance but increase memory and distance-computation cost linearly in the dimension count.
+
+## Comparing Similarity Metrics
+
+Once texts are embedded, retrieval reduces to comparing vectors. Three metrics appear constantly in vector search systems, and choosing the wrong one silently degrades ranking quality even when the embedding model itself is excellent.
+
+**Cosine similarity** measures the angle between two vectors, ignoring magnitude. For vectors $\mathbf{a}$ and $\mathbf{b}$, $\text{cosine}(\mathbf{a}, \mathbf{b}) = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\| \|\mathbf{b}\|}$, ranging from $-1$ to $1$. Cosine is the default for text embeddings because transformer outputs are often L2-normalized during training, and semantic similarity is treated as directional alignment rather than raw proximity from the origin. Two documents about the same topic with different lengths should score highly even if one vector has larger magnitude.
+
+**Dot product** computes $\mathbf{a} \cdot \mathbf{b} = \sum_i a_i b_i$ without dividing by magnitudes. When all vectors are unit-normalized, dot product and cosine are equivalent. When they are not, dot product favors longer vectors — which can accidentally boost verbose documents that happen to have larger activation norms. Some production systems deliberately use dot product on unnormalized vectors when magnitude encodes confidence or importance, but that is an explicit design choice, not an accident.
+
+**Euclidean distance** measures straight-line separation: $\|\mathbf{a} - \mathbf{b}\|_2$. For unit vectors, Euclidean distance and cosine similarity are monotonically related ($\|\mathbf{a}-\mathbf{b}\|^2 = 2 - 2\cos\theta$), so ranking by ascending distance matches ranking by descending cosine. For unnormalized vectors, Euclidean distance mixes angle and magnitude effects. FAISS `IndexFlatL2` and `IndexHNSWFlat` with L2 metric use squared Euclidean distance; many text pipelines instead normalize vectors once at index time and search with inner product (`IndexFlatIP`) to recover cosine semantics efficiently.
+
+| Metric | Normalization required? | Sensitive to vector length? | Typical index type |
+|--------|-------------------------|----------------------------|-------------------|
+| Cosine | Recommended | No (after normalization) | Inner product on L2-normalized vectors |
+| Dot product | Optional | Yes | `IndexFlatIP` |
+| Euclidean (L2) | Optional | Yes | `IndexFlatL2`, `IndexHNSWFlat` |
+
+**Practical rule**: L2-normalize all embeddings at ingestion and query time, then use inner-product search — mathematically equivalent to cosine, well supported by ANN libraries, and immune to document-length artifacts unless you intentionally encode length in the vector norm.
+
+## The Curse of Dimensionality
+
+High-dimensional spaces behave counterintuitively, and those behaviors directly affect both visualization and nearest-neighbor search. In low dimensions, intuitive notions of "near" and "far" hold: if two points are close in 2D, they are genuinely similar along most axes. As dimensionality grows, volume concentrates in the shell of the hypersphere rather than near the center — most random points become almost equidistant from each other. The ratio of the distance to the nearest neighbor versus the farthest neighbor approaches 1 as dimension increases, which means brute-force distance rankings become unstable noise unless the data manifold has strong low-dimensional structure.
+
+This phenomenon explains why you cannot trust a 2D scatter plot as a literal map of production geometry. Dimensionality reduction for visualization necessarily distorts relationships: PCA preserves global variance but may squash local clusters; t-SNE preserves local neighborhoods but separates clusters artificially; neither plot is a faithful coordinate system for retrieval decisions. It also explains why ANN indexes are necessary at scale: exact linear scan not only costs $O(N)$ per query but also fights numerical noise in high dimensions where marginally closer neighbors may not be semantically better matches.
+
+Engineering mitigations include: (1) using models trained with cosine-style objectives so meaningful signal lives in direction, not radial distance from the origin; (2) applying product quantization or scalar quantization to compress vectors while preserving relative ordering well enough for first-stage retrieval; (3) combining dense retrieval with metadata filters or BM25 reranking so semantic neighbors must also satisfy hard constraints; and (4) monitoring recall@k on a labeled evaluation set whenever you change dimensionality, quantization, or index parameters — plots alone will not catch a recall collapse.
+
 ## Visualizing Embeddings in 2D and 3D Space
 
-Real-world production embeddings often contain 384, 768, or even up to 1536 distinct spatial dimensions. Because human visual perception and cognition are strictly limited to three physical dimensions, engineering teams must rely heavily on highly sophisticated dimensionality reduction techniques to explore the topological data visually and detect hidden biases.
+Real-world production embeddings often contain 384, 768, or even up to 1536 distinct spatial dimensions. Because human visual perception and cognition are strictly limited to three physical dimensions, engineering teams must rely heavily on highly sophisticated dimensionality reduction techniques to explore the topological data visually and detect hidden biases. Before plotting, sample strategically: visualizing ten thousand random document embeddings in t-SNE may take minutes and produce unreadable overplots, while stratified sampling (equal draws per product category, language, or user segment) reveals whether clusters are driven by true semantics or confounding metadata like author team or publication date. Color points by metadata fields in the scatter plot — if every color separates cleanly, your embedding may be encoding superficial facets you intended to filter downstream rather than deep topical content. Document the random seed and hyperparameters (`perplexity` for t-SNE, `n_neighbors` and `min_dist` for UMAP) alongside the figure so teammates can reproduce the visualization when the embedding model version changes.
 
 ### Technique 1: PCA (Principal Component Analysis)
 
@@ -229,6 +261,27 @@ embeddings_2d = tsne.fit_transform(embeddings)
 
 # Plot (same as above)
 ```
+
+### Technique 3: UMAP (Uniform Manifold Approximation and Projection)
+
+UMAP is another non-linear reduction method, often chosen when you need a visualization that preserves more global structure than t-SNE while still revealing tight local clusters. UMAP constructs a fuzzy topological representation of the high-dimensional data and optimizes a low-dimensional layout to match it. In practice, UMAP plots frequently show continuous gradations between related topics (for example, a smooth path from "kubernetes" through "containers" to "docker") where t-SNE may fracture the same region into disconnected islands.
+
+```python
+import umap
+
+reducer = umap.UMAP(n_components=2, random_state=42, n_neighbors=15, min_dist=0.1)
+embeddings_2d = reducer.fit_transform(embeddings)
+```
+
+### Choosing PCA, t-SNE, or UMAP
+
+| Method | What it preserves | What it distorts | When to use |
+|--------|-------------------|------------------|-------------|
+| **PCA** | Global variance along principal axes | Local neighborhood structure | Quick exploratory plots; preprocessing before other methods |
+| **t-SNE** | Local pairwise neighborhoods | Global distances between clusters | Presentations focused on cluster separation |
+| **UMAP** | Local structure plus more global topology | Fine-grained distances | Publication-quality exploratory maps; larger datasets |
+
+None of these outputs should drive production retrieval thresholds. Use them to inspect bias, discover duplicate clusters, or communicate qualitative structure to stakeholders — then validate any architectural decision with offline recall metrics and online click-through data.
 
 ## Vector Arithmetic: Math on Meaning
 
@@ -343,9 +396,11 @@ king - man + woman ≈
 
 > **Stop and think**: If you perform the mathematical operation `programmer - coffee + tea`, what do you realistically expect the resulting vector coordinate to represent? Will it be a literal "tea-drinking programmer", or will the model find the closest existing professional stereotype in its underlying training data? Always consider the implicit cultural bias inherent in the massive training corpus.
 
+Vector arithmetic is a diagnostic tool, not a guaranteed API. Analogies like `king - man + woman ≈ queen` work because gender and royalty axes were strongly represented in historical training corpora; they may fail for rare entities, multilingual inputs, or domain jargon the model saw infrequently. In production, never expose raw arithmetic as user-facing search syntax unless you validate outputs on your vocabulary. Instead, use arithmetic to probe whether a fine-tuned model encodes a business relationship you care about — for example, subtracting a generic product embedding from a specific SKU embedding to see whether the residual vector aligns with brand or category neighbors. If arithmetic consistently fails for your domain, invest in contrastive fine-tuning on labeled pairs rather than forcing users to trust brittle analogy tricks.
+
 ## Building Production Semantic Search
 
-Deeply understanding advanced vector math in a conceptual vacuum is strictly only the first critical step. Engineering a highly robust, fault-tolerant semantic search system that reliably serves millions of concurrent global users requires incredibly strict architectural rigor, extensive profiling, and continuous performance tuning at the database level.
+Deeply understanding advanced vector math in a conceptual vacuum is strictly only the first critical step. Engineering a highly robust, fault-tolerant semantic search system that reliably serves millions of concurrent global users requires incredibly strict architectural rigor, extensive profiling, and continuous performance tuning at the database level. The offline path ingests raw documents, normalizes text (Unicode normalization, language detection, PII redaction where required), chunks or whole-doc encodes them, L2-normalizes vectors, and writes to an ANN index with durable storage. The online path embeds the query once, executes ANN search with configured `efSearch` or `nprobe`, optionally applies metadata filters before or after the graph walk depending on your database's pre-filtering support, reranks with auxiliary signals, and returns identifiers that map to object storage for full text snippets. Keeping these paths separate prevents a traffic spike on search from starving batch reindex jobs — and prevents an accidental full re-embed from blocking live queries when you run both on the same GPU pool without queue isolation.
 
 ```text
 Query → Embedding → Compare to all docs → Top-K results
@@ -382,7 +437,7 @@ def naive_search(query: str, embeddings: dict, top_k: int = 5):
     return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
 ```
 
-To achieve millisecond query latency, we must willingly abandon mathematical exactness and employ Approximate Nearest Neighbor (ANN) algorithms. The Hierarchical Navigable Small World (HNSW) algorithm is currently the undisputed industry standard for balancing extreme retrieval speed and high operational recall within vector topology.
+To achieve millisecond query latency, we must willingly abandon mathematical exactness and employ Approximate Nearest Neighbor (ANN) algorithms. Hierarchical Navigable Small World (HNSW) graphs are widely used in production vector search because they balance retrieval speed and recall across a range of dataset sizes and hardware profiles.
 
 ```text
 Layer 2: •────────────────────────────•  (sparse, long jumps)
@@ -420,15 +475,35 @@ results = [
 ]
 ```
 
-When building modern cloud-native infrastructure, deploying a dedicated vector database provides durable persistent storage layers, dynamic horizontal scaling mechanisms, and highly tuned built-in ANN indexing strategies right out of the box without manual engineering overhead.
+### HNSW Internals: Layers, Parameters, and Recall Tradeoffs
 
-| Database | Open Source | Cloud | Best For |
-|----------|-------------|-------|----------|
-| **Qdrant** | Yes | Yes | General purpose, Rust performance |
-| **Weaviate** | Yes | Yes | GraphQL API, multi-modal |
-| **Milvus** | Yes | Yes | Scale (billions of vectors) |
-| **Pinecone** | No | Yes | Managed, easy to use |
-| **Chroma** | Yes | No | Lightweight, embeddings |
+HNSW builds a multi-layer navigable small-world graph. The bottom layer (layer 0) contains every vector and dense local edges to approximate $M$ nearest neighbors per node. Upper layers are subsamples of the dataset with progressively sparser long-range edges. Search starts at an entry point in the top layer, greedily walks toward the query vector, then drops to the next layer until it reaches layer 0 for fine-grained refinement. Long jumps at high layers locate the correct region quickly; dense connectivity at layer 0 improves final ranking accuracy.
+
+Two parameters dominate tuning:
+
+- **`M`** (neighbors per node): Higher $M$ increases graph connectivity, memory footprint, and build time, but typically improves recall because the greedy walk has more paths to the true nearest neighbors.
+- **`efConstruction`** (build-time beam width): Larger values produce higher-quality graphs during indexing at the cost of slower ingestion. This is a one-time cost per index build.
+- **`efSearch`** (query-time beam width): Larger values explore more candidates per query, improving recall and latency together — this is the primary runtime knob for the recall–latency tradeoff.
+
+Suppose you index one million 384-dimensional vectors. With `M=32` and `efConstruction=200`, build time may take minutes on a single node but yields a graph that reaches 95%+ recall@10 when `efSearch=128`. Dropping `efSearch` to 32 might cut query latency by half while recall@10 falls into the high eighties — acceptable for a first-stage candidate generator paired with a cross-encoder reranker, unacceptable for a single-stage legal search product. Always measure recall@k on a labeled holdout set when you change these values; the correct setting is workload-specific, not universal.
+
+### IVF and Product Quantization: Worked Memory Example
+
+**Inverted File (IVF)** indexes partition the vector space into `nlist` clusters (centroids). At query time, only the nearest centroids — controlled by `nprobe` — are searched, reducing comparisons from $N$ to roughly $(N/\text{nlist}) \times \text{nprobe}$. Increasing `nprobe` improves recall at higher latency.
+
+**Product Quantization (PQ)** splits each $D$-dimensional vector into $m$ subvectors of dimension $D/m$, replaces each subvector with the ID of its nearest codebook centroid, and stores only the IDs. A 768-dimensional `float32` vector normally occupies $768 \times 4 = 3072$ bytes. With PQ using $m=48$ subvectors and 8-bit codes per subvector, storage drops to 48 bytes per vector — a 64× compression ratio — at the cost of approximate distances computed via asymmetric distance computation (ADC) lookup tables.
+
+Numeric illustration: one million vectors at 768 dimensions in `float32` require roughly 3 GB of raw vector data. PQ-compressed storage for the same set is on the order of 48 MB for the codes plus modest codebook overhead. Query-time distance is approximate; reranking the top 100 PQ candidates with exact cosine on full-precision vectors is a common hybrid pattern that recovers most accuracy while keeping the index resident in RAM.
+
+When building modern cloud-native infrastructure, deploying a dedicated vector database provides durable persistent storage layers, dynamic horizontal scaling mechanisms, and built-in ANN indexing strategies without hand-rolling FAISS configuration for every service.
+
+| Database | Open Source | Cloud | Typical use case |
+|----------|-------------|-------|------------------|
+| **Qdrant** | Yes | Yes | Low-latency filtering with payload metadata |
+| **Weaviate** | Yes | Yes | GraphQL-native APIs and multi-modal vectors |
+| **Milvus** | Yes | Yes | Very large collections with distributed sharding |
+| **Pinecone** | No | Yes | Fully managed hosted vector index |
+| **Chroma** | Yes | No | Lightweight local prototyping and notebooks |
 
 Using the high-level Qdrant Python client, we can interface directly with a deployed, production-grade distributed database cluster to securely upsert and immediately query exceptionally large continuous vector payloads.
 
@@ -469,7 +544,9 @@ for result in results:
 
 ## Scaling Semantic Search
 
-When carefully transitioning a localized, proof-of-concept prototype to a live, global production environment, severe computational and memory bottlenecks will consistently emerge. The very first and arguably most critical architectural optimization you must apply is enforcing massive batching during the initial embedding generation process.
+When carefully transitioning a localized, proof-of-concept prototype to a live, global production environment, severe computational and memory bottlenecks will consistently emerge. The very first and arguably most critical architectural optimization you must apply is enforcing massive batching during the initial embedding generation process. Embedding models are throughput engines: a transformer forward pass amortizes fixed overhead across the batch dimension, so encoding one string at a time leaves GPU tensor cores idle while Python loop overhead dominates wall-clock time. Start with batch sizes that fill GPU memory without triggering out-of-memory kills — often 32 to 128 for sentence encoders on a single consumer GPU — and measure documents per second before optimizing index parameters. Ingestion pipelines should separate **encode**, **normalize**, **quantize**, and **index** stages so you can replay indexing from a parquet cache of embeddings without re-running the neural network when you only change HNSW settings.
+
+Sharding becomes necessary when a single node's RAM cannot hold the full HNSW graph plus metadata payloads. Consistent hashing on document ID routes each vector to a fixed shard, keeping updates localized. At query time, a coordinator broadcasts the query embedding to every shard (or to a routing layer that narrows candidates via coarse centroids), collects each shard's top-k results, and performs a final merge-sort to produce global top-k. The merge step is cheap relative to ANN search because k is small (10–100), but network fan-out grows with shard count — cap shards per query using IVF-style routing when you have hundreds of partitions. Replication adds read throughput: read-only replicas serve query traffic while the primary accepts writes, though eventual consistency means a freshly upserted document may lag milliseconds to seconds behind on replicas depending on your replication protocol.
 
 ```python
 # DON'T: Sequential encoding
@@ -543,7 +620,9 @@ flowchart TD
 
 ## Production Best Practices
 
-Deploying a truly robust and immensely scalable architecture necessitates implementing deeply aggressive edge caching strategies. You must never recompute massive static document embeddings dynamically on the fly during a live user query.
+Deploying a truly robust and immensely scalable architecture necessitates implementing deeply aggressive edge caching strategies. You must never recompute massive static document embeddings dynamically on the fly during a live user query. Treat the embedding of a document as a build artifact versioned alongside the model name and tokenizer revision: when you upgrade from `all-MiniLM-L6-v2` to `all-mpnet-base-v2`, plan a full re-embed migration rather than mixing incompatible vector spaces in one index. Cache query embeddings only when queries repeat exactly — autocomplete prefixes and templated support macros hit cache often; long-tail natural language questions rarely do. For repeated internal analytics queries, a short-TTL Redis cache keyed by normalized query text can shave tens of milliseconds without staleness risk.
+
+Evaluation discipline separates prototypes from products. Maintain a golden set of query–document relevance judgments (even a few hundred hand-labeled pairs beats flying blind). Report recall@k, mean reciprocal rank, and nDCG on that set whenever you change embedding model, index type, `efSearch`, or quantization level. Online, log click-through rate at rank position and null-result rate segmented by query category. A rising null-result rate with flat offline recall usually means traffic shifted to out-of-domain vocabulary — a signal to fine-tune or add hybrid BM25 rather than crank `efSearch` indefinitely.
 
 ```python
 # DON'T: Embed on every query
@@ -644,9 +723,9 @@ def robust_search(query):
 
 ## Real-World Applications
 
-### Application 1: kaizen RAG Enhancement
+### RAG Context Retrieval
 
-Providing accurate context to language models is paramount. Upgrading traditional keyword matching systems to utilize semantic search drastically enhances the contextual richness passed into Generation pipelines.
+Providing accurate context to language models is paramount. Upgrading traditional keyword matching systems to utilize semantic search drastically enhances the contextual richness passed into Generation pipelines. In retrieval-augmented generation, the retriever's job is to surface chunks whose embeddings lie close to the question embedding before the generator ever sees a token. Poor retrieval cannot be corrected by a larger LLM: if the top-five chunks discuss an outdated API version, the model will confidently synthesize wrong instructions. Chunking strategy interacts directly with embedding geometry — oversized chunks dilute semantic focus and push vectors toward generic topic centroids; undersized chunks lose cross-sentence context. A common pattern embeds overlapping windows (for example 512 tokens with 64-token stride), stores chunk metadata `{source, heading, timestamp}`, and reranks semantic hits with a cross-encoder that scores query–passage pairs with a slower but sharper interaction model.
 
 ```python
 # Before: Keyword matching
@@ -665,9 +744,9 @@ def retrieve_context(query):
 # Result: Better context → better answers!
 ```
 
-### Application 2: vibe Content Discovery
+### Content Recommendation and Discovery
 
-Platforms with massive educational catalogs rely on automated semantic discovery routines to seamlessly recommend structurally related courses to engaging users without manual tagging overhead.
+Platforms with massive educational catalogs rely on automated semantic discovery routines to seamlessly recommend structurally related courses to engaging users without manual tagging overhead. Item-to-item recommendation via embeddings avoids maintaining hand-curated prerequisite graphs: when a learner finishes a module on Kubernetes networking, nearest-neighbor search over course descriptions surfaces policy, service mesh, and CNI deep dives even if editors never linked them manually. Cold-start items with few interactions still receive vectors from their syllabus text, so new courses participate in recommendations on launch day rather than waiting for collaborative-filtering signal to accumulate. Combine embedding similarity with popularity decay and completion-rate boosts so niche but high-quality modules do not lose to generic intro content that merely sits closer to the centroid of all course vectors.
 
 ```python
 def explore_similar_lessons(lesson_id):
@@ -684,9 +763,9 @@ def explore_similar_lessons(lesson_id):
     return sorted(similarities, key=lambda x: x[1], reverse=True)[:5]
 ```
 
-### Application 3: contrarian News Clustering
+### News Topic Clustering
 
-Financial intelligence systems rapidly consume enormous streams of daily news. Vector clustering algorithms allow these systems to automatically aggregate volatile reports into unified, coherent economic themes.
+Financial intelligence systems rapidly consume enormous streams of daily news. Vector clustering algorithms allow these systems to automatically aggregate volatile reports into unified, coherent economic themes. K-means or hierarchical clustering on headline-plus-summary embeddings groups articles about the same earnings event even when headlines use different ticker symbols or euphemisms ("workforce optimization" versus "layoffs"). Visualization with t-SNE or UMAP on a daily batch helps analysts sanity-check whether clusters align with human judgment before alerts fire. Drift monitoring matters: when a central bank policy shift redefines vocabulary across the corpus, yesterday's centroids may mis-cluster today's articles — schedule periodic re-clustering or use streaming clustering algorithms that incrementally update centroids rather than assuming static topic geometry.
 
 ```python
 from sklearn.cluster import KMeans
@@ -712,9 +791,9 @@ def cluster_daily_news(articles):
     return clusters
 ```
 
-### Application 4: Work Infrastructure Docs
+### Internal Runbook and Documentation Search
 
-Internal site reliability engineering (SRE) teams frequently lose vital time searching through heavily nested Markdown documentation. Semantic indexing drastically streamlines incident runbook discovery during severe outages.
+Internal site reliability engineering (SRE) teams frequently lose vital time searching through heavily nested Markdown documentation. Semantic indexing drastically streamlines incident runbook discovery during severe outages. During an incident, engineers phrase queries as symptoms ("Redis connection pool exhausted on checkout") while runbooks are titled by component ("Tuning `maxclients` for cache-tier Redis"). Keyword search fails across that vocabulary gap; embedding search maps symptom language to procedural content when both were encoded by the same domain-aware model. Pair semantic retrieval with ownership metadata (`team=payments`, `tier=critical`) so results respect organizational boundaries, and boost recently updated documents to surface runbooks that match the current architecture rather than deprecated playbooks that still mention decommissioned services.
 
 ```python
 # Index all documentation
@@ -737,6 +816,72 @@ for path, score in results:
     print(f"{score:.3f} - {path}")
 ```
 
+## Deploying Vector Search on Kubernetes
+
+Production vector databases are stateful workloads: they hold gigabytes to terabytes of index data that must survive pod restarts. A `Deployment` with ephemeral container storage loses the index on every reschedule; for serious workloads, use a `StatefulSet` with persistent volumes and stable network identities.
+
+Resource sizing starts from your index footprint. Estimate raw vector storage as `num_vectors × dimension × bytes_per_component`, then add 30–50% overhead for HNSW graph edges, metadata payloads, and write-ahead logs. A collection of five million 384-dimensional `float32` vectors needs roughly 7.5 GB for vectors alone; with HNSW at `M=16`, plan for 12–16 GB RAM on the indexing node before OS and sidecar overhead. CPU scales with query QPS and `efSearch`; GPU acceleration helps batch embedding generation, not usually single-query ANN lookup unless you use GPU-native FAISS builds.
+
+Below is a minimal Kubernetes v1.35–compatible `StatefulSet` for Qdrant with persistent storage and resource limits. Adjust `storageClassName` and capacity to match your cluster.
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant
+spec:
+  serviceName: qdrant-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.12.5
+        ports:
+        - containerPort: 6333
+          name: http
+        - containerPort: 6334
+          name: grpc
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "500m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - port: 6333
+    targetPort: 6333
+    name: http
+```
+
+Operational checklist for cluster deployment: pin image tags instead of `:latest`; configure liveness and readiness probes on the HTTP health endpoint; back up persistent volume snapshots before major version upgrades; run embedding workers as separate `Deployment` objects so GPU batch jobs do not contend with latency-sensitive search pods; and expose the service inside the cluster with a `ClusterIP` or service mesh, terminating TLS at the ingress. For multi-replica Qdrant or Milvus clusters, consult each project's consensus and sharding requirements before scaling `replicas` blindly — some configurations expect a single writable coordinator while others support Raft-based leader election across nodes. Network policies should allow only the retrieval service account to reach port 6333, preventing arbitrary pods from dumping the entire vector index. Capacity planning reviews should revisit PVC size quarterly: HNSW graphs grow superlinearly with `M`, and payload fields attached to each point consume disk independent of vector dimension.
+
 ## Module Summary
 
 To solidify the core concepts, recall the fundamental mathematical transformations that power these vast, multi-dimensional semantic retrieval systems at scale:
@@ -751,14 +896,23 @@ Distance in space ∝ Semantic distance
 
 ## The Surprising Economics of Vector Search
 
-The complex engineering decision between relying on exhaustive brute force scanning and implementing advanced HNSW graph indexing is purely an operational economic one, driven intensely by hardware latency targets and specific enterprise budget constraints.
+The engineering decision between exhaustive brute-force scanning and HNSW graph indexing is an operational tradeoff driven by latency targets, memory budgets, and acceptable recall loss — not by which algorithm looks more sophisticated on a slide. Order-of-magnitude comparisons illustrate why ANN indexes become mandatory as collections grow:
 
-| System | Documents | Latency | Hardware Cost |
-|--------|-----------|---------|---------------|
-| Brute Force (1M docs) | 1M | 1,000ms | $0 |
-| FAISS HNSW (1M docs) | 1M | 1ms | $0 |
-| Brute Force (1B docs) | 1B | 1,000,000ms | $0 |
-| FAISS HNSW (1B docs) | 1B | 10ms | ~$50K/year |
+| Approach | Collection size | Query pattern | Typical outcome |
+|----------|-----------------|---------------|-----------------|
+| Brute force | ~1M vectors | Full linear scan per query | Latency grows linearly with corpus size; fine for offline batch jobs |
+| HNSW (FAISS or DB-native) | ~1M vectors | Greedy graph walk | Sub-10 ms queries on modest hardware when tuned |
+| Brute force | ~1B vectors | Full linear scan per query | Impractical for interactive search without massive parallel hardware |
+| HNSW + sharding | ~1B vectors | Per-shard ANN then merge top-k | Feasible with distributed vector databases and horizontal scale-out |
+
+The "hardware cost" column disappears from real planning spreadsheets because the dominant costs are RAM for the index, embedding compute during ingestion, and engineering time to tune `efSearch`, `M`, and sharding strategy against a labeled evaluation set.
+
+## Did You Know?
+
+- **Word2Vec (2013)**: Tomas Mikolov and colleagues introduced efficient neural word embeddings in [Efficient Estimation of Word Representations in Vector Space](https://arxiv.org/abs/1301.3781), popularizing the idea that arithmetic on word vectors captures linguistic regularities.
+- **HNSW graphs (2016)**: Malkov and Yashunin's [HNSW paper](https://arxiv.org/abs/1603.09320) describes the layered small-world graph structure that FAISS, hnswlib, and many vector databases implement for approximate nearest-neighbor search.
+- **FAISS at billion scale**: Meta's [FAISS library](https://github.com/facebookresearch/faiss) documents GPU- and CPU-backed indexes designed for datasets far too large for naive linear scan, including IVF and product-quantization variants.
+- **UMAP for visualization**: McInnes, Healy, and Melville's [UMAP](https://umap-learn.readthedocs.io/en/latest/) method is widely used alongside t-SNE when teams want exploratory plots that preserve more global topology between clusters.
 
 ## Common Mistakes
 
@@ -771,16 +925,51 @@ The complex engineering decision between relying on exhaustive brute force scann
 | Computing embeddings sequentially | Processing documents individually underutilizes hardware accelerators and drastically increases overall batch time. | Utilize batch encoding with appropriate sizes to maximize GPU memory bandwidth and system throughput. |
 | Deploying to end-of-life Kubernetes | Running vector databases on deprecated orchestrators risks severe stability failures and security flaws. | Ensure all cluster deployments explicitly target K8s version v1.35 or higher to maintain strict compatibility and support. |
 
-## Did You Know?
+## Knowledge Check
 
-1. On January 16, 2013, researcher Tomas Mikolov and his team published the foundational Word2Vec paper, fundamentally shifting how modern researchers approached NLP representation.
-2. In October 2019, Google search integrated massive BERT embeddings into their primary algorithm, helping improve query comprehension and semantic matching for over 10 percent of all global searches.
-3. The Pinecone managed vector database startup achieved a staggering enterprise valuation of 750 million dollars in April 2023, signaling a massive corporate shift toward dedicated semantic infrastructure.
-4. An unoptimized exact brute force search over 1 billion 768-dimensional vectors requires the hardware to stream approximately 3 terabytes of physical memory bandwidth per single user query.
+Please carefully test your architectural understanding of continuous vector spaces and highly scalable semantic indexing using the scenarios below.
+
+<details>
+<summary>Question 1: You are tasked with analyzing the visual semantic drift of user queries over a 12-month period. The embeddings have 1536 dimensions. You need to create a dense, localized map to show deep clusters. Which algorithm is most appropriate?</summary>
+t-SNE is the most appropriate choice for this specific visualization task. It is a highly specialized non-linear technique specifically engineered for visualization and clustering in two or three dimensions. It preserves local structure exceptionally well, making it strictly ideal for identifying distinct groupings of user queries, whereas PCA focuses mostly on broad global variance.
+</details>
+
+<details>
+<summary>Question 2: A production database containing 50 million text documents is experiencing query latency spikes exceeding 2000ms. The system currently executes a raw dot product against every row. What core architectural change is required?</summary>
+The system desperately requires an Approximate Nearest Neighbor (ANN) index. Transitioning from brute force exact search to a graph algorithm like HNSW or IVF will dramatically shift the query time complexity from linear to logarithmic. This necessary trade-off of marginal accuracy loss will rapidly drop the latency into the sub-10ms range.
+</details>
+
+<details>
+<summary>Question 3: Your infrastructure team must immediately reduce the memory footprint of the active vector cluster by at least 60 percent without fundamentally altering the embedding generation model. How can this be reliably achieved?</summary>
+The infrastructure team should implement strict vector quantization, specifically converting the default Float32 precision embeddings down to Int8 (8-bit precision) representation. This straightforward conversion natively reduces the physical storage RAM requirements by 75 percent. The minor accuracy loss in semantic search is typically negligible and entirely acceptable for enterprise retrieval tasks.
+</details>
+
+<details>
+<summary>Question 4: You calculate `Rome - Italy + Japan` using mathematical vector arithmetic. Assuming the model has strong geographical training data, what exactly should the resulting coordinates approximate?</summary>
+The resulting multi-dimensional coordinates will mathematically approximate the vector for the concept "Tokyo". The mathematical subtraction effectively extracts the geopolitical relationship "capital city of" by subtracting the country identity and then adding that latent semantic relationship back to the target country, proving that spatial direction encodes real-world properties.
+</details>
+
+<details>
+<summary>Question 5: A client complains that broadly searching for "Apple" returns detailed fruit recipes rather than large tech company articles. How can a hybrid search architecture resolve this complaint?</summary>
+Hybrid search structurally resolves this by smartly combining semantic similarity with deterministic metadata filters. By allowing the client to append a strict metadata filter (e.g., `category="technology"` or `date > 2024`), the system reranks the semantic results more precisely. It cleanly blends the continuous vector proximity score with the strict boolean constraint to guarantee absolute relevance.
+</details>
+
+<details>
+<summary>Question 6: When scaling a massive semantic search application across a clustered Kubernetes environment, why is it absolutely critical to use batch processing during the initial massive document ingestion phase?</summary>
+Generating high-dimensional embeddings sequentially vastly underutilizes the massive parallel processing capabilities of modern hardware accelerators and GPUs. Batch encoding successfully passes large chunks of documents through the transformer model simultaneously in a single pass. This massively optimizes memory bandwidth and can easily accelerate the entire indexing pipeline by 10x to 50x compared to simple iterative loop processing.
+</details>
 
 ## Hands-On Exercise: Vector Search from Scratch
 
-This highly structured laboratory exercise requires an active Python virtual environment and a running Kubernetes cluster. Note: ensure your cluster and terminal environment and a running Kubernetes v1.35 cluster if deploying the Qdrant component natively. We will systematically construct a vector arithmetic search pipeline locally and then cleanly migrate it to a fast local FAISS index before tackling cluster deployment.
+This laboratory exercise requires a Python virtual environment and, for Task 5, a Kubernetes v1.35 cluster. You will build a vector arithmetic pipeline locally, index it with FAISS HNSW, and deploy a persistent vector database with a StatefulSet manifest.
+
+**Success criteria** (check off as you complete each item):
+
+- [ ] Virtual environment created with `sentence-transformers`, `scikit-learn`, `numpy`, `faiss-cpu`, and `matplotlib` installed
+- [ ] `vector_lab.py` generates embeddings and returns sensible results for `king - man + woman`
+- [ ] FAISS HNSW index returns nearest neighbors for a paraphrase query such as "royal"
+- [ ] Kubernetes StatefulSet manifest applied and Qdrant pod reaches Ready state
+- [ ] You can articulate when to use cosine similarity versus L2 distance after L2 normalization
 
 ### Task 1: Initialize the Environment
 
@@ -943,66 +1132,24 @@ spec:
       targetPort: 6333
 ```
 
-Apply it using `kubectl apply -f qdrant-deployment.yaml` to spin up the stateful database instance inside your cluster. We assert that this manifest passes static validation for v1.35 and deploys smoothly.
+Apply it using `kubectl apply -f qdrant-deployment.yaml` to spin up the stateful database instance inside your cluster. For production persistence, prefer the StatefulSet pattern documented earlier in this module over a bare `Deployment` with ephemeral storage.
 </details>
 
-## Knowledge Check
+## Next Module
 
-Please carefully test your architectural understanding of continuous vector spaces and highly scalable semantic indexing using the scenarios below.
-
-<details>
-<summary>Question 1: You are tasked with analyzing the visual semantic drift of user queries over a 12-month period. The embeddings have 1536 dimensions. You need to create a dense, localized map to show deep clusters. Which algorithm is most appropriate?</summary>
-t-SNE is the most appropriate choice for this specific visualization task. It is a highly specialized non-linear technique specifically engineered for visualization and clustering in two or three dimensions. It preserves local structure exceptionally well, making it strictly ideal for identifying distinct groupings of user queries, whereas PCA focuses mostly on broad global variance.
-</details>
-
-<details>
-<summary>Question 2: A production database containing 50 million text documents is experiencing query latency spikes exceeding 2000ms. The system currently executes a raw dot product against every row. What core architectural change is required?</summary>
-The system desperately requires an Approximate Nearest Neighbor (ANN) index. Transitioning from brute force exact search to a graph algorithm like HNSW or IVF will dramatically shift the query time complexity from linear to logarithmic. This necessary trade-off of marginal accuracy loss will rapidly drop the latency into the sub-10ms range.
-</details>
-
-<details>
-<summary>Question 3: Your infrastructure team must immediately reduce the memory footprint of the active vector cluster by at least 60 percent without fundamentally altering the embedding generation model. How can this be reliably achieved?</summary>
-The infrastructure team should implement strict vector quantization, specifically converting the default Float32 precision embeddings down to Int8 (8-bit precision) representation. This straightforward conversion natively reduces the physical storage RAM requirements by 75 percent. The minor accuracy loss in semantic search is typically negligible and entirely acceptable for enterprise retrieval tasks.
-</details>
-
-<details>
-<summary>Question 4: You calculate `Rome - Italy + Japan` using mathematical vector arithmetic. Assuming the model has strong geographical training data, what exactly should the resulting coordinates approximate?</summary>
-The resulting multi-dimensional coordinates will mathematically approximate the vector for the concept "Tokyo". The mathematical subtraction effectively extracts the geopolitical relationship "capital city of" by subtracting the country identity and then adding that latent semantic relationship back to the target country, proving that spatial direction encodes real-world properties.
-</details>
-
-<details>
-<summary>Question 5: A client complains that broadly searching for "Apple" returns detailed fruit recipes rather than large tech company articles. How can a hybrid search architecture resolve this complaint?</summary>
-Hybrid search structurally resolves this by smartly combining semantic similarity with deterministic metadata filters. By allowing the client to append a strict metadata filter (e.g., `category="technology"` or `date > 2024`), the system reranks the semantic results more precisely. It cleanly blends the continuous vector proximity score with the strict boolean constraint to guarantee absolute relevance.
-</details>
-
-<details>
-<summary>Question 6: When scaling a massive semantic search application across a clustered Kubernetes environment, why is it absolutely critical to use batch processing during the initial massive document ingestion phase?</summary>
-Generating high-dimensional embeddings sequentially vastly underutilizes the massive parallel processing capabilities of modern hardware accelerators and GPUs. Batch encoding successfully passes large chunks of documents through the transformer model simultaneously in a single pass. This massively optimizes memory bandwidth and can easily accelerate the entire indexing pipeline by 10x to 50x compared to simple iterative loop processing.
-</details>
-
-## Key Links
-
-- Vector Arithmetic: `module_10/01_vector_arithmetic.py`
-- Production Semantic Search: `module_10/02_production_search.py`
-- `module_10/01_vector_arithmetic.py`
-- `module_10/02_production_search.py`
-- [Paper](https://arxiv.org/abs/1301.3781)
-- [Paper](https://nlp.stanford.edu/pubs/glove.pdf)
-- [Paper](https://arxiv.org/abs/1603.09320)
-- [Paper](https://arxiv.org/abs/1810.04805)
-- [GitHub](https://github.com/facebookresearch/faiss)
-- [GitHub](https://github.com/spotify/annoy)
-- [GitHub](https://github.com/nmslib/hnswlib)
-- [Website](https://qdrant.tech/)
-
-## Next Steps
-
-**Next module**: [Module 1.6: Reasoning Models](./module-1.6-reasoning-models)
-
-You have successfully mastered the complex mathematical principles of deep semantic meaning and high-dimensional coordinate visualization. In the upcoming module, you will thoroughly examine how highly modern, reasoning-focused architectures meticulously plan extensive multi-step solutions, identify exactly when they massively outperform standard generative models, and analyze exactly how to deploy them effectively and securely in mission-critical production systems.
+Continue to [Module 1.6 — Reasoning Models](/ai-ml-engineering/generative-ai/module-1.6-reasoning-models/) to study how modern reasoning-focused architectures spend additional test-time compute on internal deliberation before producing answers. You will also learn how to route queries between fast standard models and slower reasoning models in production pipelines without blowing latency budgets on simple extraction tasks or lookups.
 
 ## Sources
 
-- [Efficient Estimation of Word Representations in Vector Space](https://arxiv.org/abs/1301.3781) — Foundational word-embedding paper that underpins the module's discussion of vector-space semantics.
-- [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320) — Primary source for HNSW, the ANN indexing approach referenced in the production search sections.
-- [FAISS](https://github.com/facebookresearch/faiss) — Practical upstream implementation of dense-vector similarity search and ANN indexing used throughout the module.
+- [Efficient Estimation of Word Representations in Vector Space](https://arxiv.org/abs/1301.3781) — Mikolov et al.; foundational Word2Vec paper underpinning vector-space semantics and analogies.
+- [GloVe: Global Vectors for Word Representation](https://nlp.stanford.edu/pubs/glove.pdf) — Pennington, Socher, and Manning; co-occurrence matrix factorization approach to word embeddings.
+- [BERT: Pre-training of Deep Bidirectional Transformers](https://arxiv.org/abs/1810.04805) — Devlin et al.; contextual embeddings that supersede static word vectors in many pipelines.
+- [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320) — Malkov and Yashunin; primary reference for HNSW graph indexing.
+- [FAISS: A library for efficient similarity search](https://github.com/facebookresearch/faiss) — Meta's CPU/GPU ANN library used for HNSW, IVF, and product quantization examples.
+- [Product Quantization for Nearest Neighbor Search](https://arxiv.org/abs/1011.3029) — Jégou et al.; foundational PQ paper behind FAISS compression and ADC distance tables.
+- [Sentence-BERT (SBERT)](https://arxiv.org/abs/1902.05667) — Reimers and Gurevych; contrastive sentence embeddings that power many `sentence-transformers` retrieval models.
+- [scikit-learn PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html) — Documentation for linear dimensionality reduction used in visualization examples.
+- [scikit-learn t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html) — Documentation for non-linear neighborhood-preserving visualization.
+- [UMAP documentation](https://umap-learn.readthedocs.io/en/latest/) — McInnes et al.; non-linear reduction alternative with stronger global structure preservation.
+- [Qdrant documentation](https://qdrant.tech/documentation/) — Vector database deployment, filtering, and HNSW configuration for production clusters.
+- [Visualizing Data using t-SNE](https://www.jmlr.org/papers/volume9/vandermaaten08a.html) — van der Maaten and Hinton; original t-SNE paper explaining perplexity and neighborhood preservation.
