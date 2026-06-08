@@ -41,6 +41,8 @@ Paris - France + Italy ≈ Rome
 good - bad + terrible ≈ excellent
 ```
 
+Sentiment-reversal analogies like `good - bad + terrible ≈ excellent` depend on the model having a consistent sentiment axis and are less reliable than the canonical king−man+woman example.
+
 When we systematically map and plot these distinct coordinates in a simplified two-dimensional visualization plane, a profound geometric property emerges. When we plot these coordinates in a simplified two-dimensional visualization, the proximity of the points corresponds directly to the similarity of their underlying meaning. Concepts representing positive sentiment organically pull toward one coordinate direction, while negative sentiment concepts naturally pull in the exact opposite mathematical direction.
 
 ```text
@@ -466,7 +468,7 @@ index.add(embeddings_matrix)
 
 # Search
 query_emb = model.encode(query).astype('float32').reshape(1, -1)
-distances, indices = index.search(query_emb, k=5)
+distances, indices = index.search(query_emb, k=5)  # returns squared-L2 distances (monotonic; fine for ranking)
 
 # Get results
 results = [
@@ -483,7 +485,7 @@ Two parameters dominate tuning:
 
 - **`M`** (neighbors per node): Higher $M$ increases graph connectivity, memory footprint, and build time, but typically improves recall because the greedy walk has more paths to the true nearest neighbors.
 - **`efConstruction`** (build-time beam width): Larger values produce higher-quality graphs during indexing at the cost of slower ingestion. This is a one-time cost per index build.
-- **`efSearch`** (query-time beam width): Larger values explore more candidates per query, improving recall and latency together — this is the primary runtime knob for the recall–latency tradeoff.
+- **`efSearch`** (query-time beam width): Larger values explore more candidates per query, improving recall at the cost of higher latency — this is the primary runtime knob for the recall–latency tradeoff.
 
 Suppose you index one million 384-dimensional vectors. With `M=32` and `efConstruction=200`, build time may take minutes on a single node but yields a graph that reaches 95%+ recall@10 when `efSearch=128`. Dropping `efSearch` to 32 might cut query latency by half while recall@10 falls into the high eighties — acceptable for a first-stage candidate generator paired with a cross-encoder reranker, unacceptable for a single-stage legal search product. Always measure recall@k on a labeled holdout set when you change these values; the correct setting is workload-specific, not universal.
 
@@ -568,8 +570,8 @@ pca = PCA(n_components=128)
 reduced_embeddings = pca.fit_transform(embeddings)
 
 # Storage: 66% reduction
-# Speed: 3x faster
-# Accuracy: ~5% loss (acceptable for many use cases)
+# Fewer dimensions → cheaper distance math; real speedup depends on index type and k
+# Accuracy impact depends on how much variance the kept components capture — measure on a labeled holdout set
 ```
 
 Alternatively, hardware quantization offers massive system memory savings with truly negligible accuracy degradation by aggressively compressing the floating-point precision of the stored topological coordinates inside the memory buffer.
@@ -582,10 +584,11 @@ embeddings_f32 = embeddings.astype('float32')
 embeddings_f16 = embeddings.astype('float16')
 
 # Int8 (8-bit): 1 byte per dimension
-embeddings_i8 = (embeddings * 127).astype('int8')
+scale = np.abs(embeddings).max()
+embeddings_i8 = (embeddings / scale * 127).astype('int8')
 
 # Storage: 75% reduction (float32 → int8)
-# Accuracy: <1% loss
+# Accuracy impact is usually small but data-dependent — measure recall@k on your eval set
 ```
 
 At extreme planetary scales involving hundreds of millions of unique enterprise documents, heavy search requests must be dynamically partitioned and intelligently sharded across a widely distributed cluster of independent compute nodes.
@@ -1074,7 +1077,7 @@ index.add(emb_matrix)
 
 # Query for "royal"
 query_vec = model.encode("royal").astype('float32').reshape(1, -1)
-distances, indices = index.search(query_vec, k=3)
+distances, indices = index.search(query_vec, k=3)  # returns squared-L2 distances (monotonic; fine for ranking)
 
 words_list = list(vocab_embeddings.keys())
 print("Closest to 'royal':")
@@ -1090,16 +1093,15 @@ Finally, write a robust Kubernetes manifest file to deploy a high-performance Qd
 <details>
 <summary>View Solution</summary>
 
-Create a file named `qdrant-deployment.yaml`:
+Create a file named `qdrant-statefulset.yaml`:
 
 ```text
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: qdrant
-  labels:
-    app: qdrant
 spec:
+  serviceName: qdrant-headless
   replicas: 1
   selector:
     matchLabels:
@@ -1111,28 +1113,44 @@ spec:
     spec:
       containers:
       - name: qdrant
-        image: qdrant/qdrant:latest
+        image: qdrant/qdrant:v1.12.5
         ports:
         - containerPort: 6333
+          name: http
         resources:
-          limits:
+          requests:
             memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
             cpu: "1000m"
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: qdrant-svc
+  name: qdrant-headless
 spec:
+  clusterIP: None
   selector:
     app: qdrant
   ports:
-    - protocol: TCP
-      port: 6333
-      targetPort: 6333
+  - port: 6333
+    targetPort: 6333
+    name: http
 ```
 
-Apply it using `kubectl apply -f qdrant-deployment.yaml` to spin up the stateful database instance inside your cluster. For production persistence, prefer the StatefulSet pattern documented earlier in this module over a bare `Deployment` with ephemeral storage.
+Apply it using `kubectl apply -f qdrant-statefulset.yaml` to spin up the persistent vector database inside your cluster.
 </details>
 
 ## Next Module
@@ -1147,9 +1165,9 @@ Continue to [Module 1.6 — Reasoning Models](/ai-ml-engineering/generative-ai/m
 - [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320) — Malkov and Yashunin; primary reference for HNSW graph indexing.
 - [FAISS: A library for efficient similarity search](https://github.com/facebookresearch/faiss) — Meta's CPU/GPU ANN library used for HNSW, IVF, and product quantization examples.
 - [Product Quantization for Nearest Neighbor Search](https://arxiv.org/abs/1011.3029) — Jégou et al.; foundational PQ paper behind FAISS compression and ADC distance tables.
-- [Sentence-BERT (SBERT)](https://arxiv.org/abs/1902.05667) — Reimers and Gurevych; contrastive sentence embeddings that power many `sentence-transformers` retrieval models.
+- [Sentence-BERT (SBERT)](https://arxiv.org/abs/1908.10084) — Reimers and Gurevych; contrastive sentence embeddings that power many `sentence-transformers` retrieval models.
 - [scikit-learn PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html) — Documentation for linear dimensionality reduction used in visualization examples.
 - [scikit-learn t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html) — Documentation for non-linear neighborhood-preserving visualization.
 - [UMAP documentation](https://umap-learn.readthedocs.io/en/latest/) — McInnes et al.; non-linear reduction alternative with stronger global structure preservation.
 - [Qdrant documentation](https://qdrant.tech/documentation/) — Vector database deployment, filtering, and HNSW configuration for production clusters.
-- [Visualizing Data using t-SNE](https://www.jmlr.org/papers/volume9/vandermaaten08a.html) — van der Maaten and Hinton; original t-SNE paper explaining perplexity and neighborhood preservation.
+- [Visualizing Data using t-SNE](https://www.jmlr.org/papers/v9/vandermaaten08a.html) — van der Maaten and Hinton; original t-SNE paper explaining perplexity and neighborhood preservation.
