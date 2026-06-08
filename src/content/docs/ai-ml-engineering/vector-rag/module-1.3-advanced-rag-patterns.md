@@ -310,11 +310,12 @@ Semantic strength: connects "slow loops" to optimization guides
 BM25 scores documents using term frequency and inverse document frequency with length normalization—keywords that are rare in the corpus but present in a document score highly; stuffing keywords into a long document is penalized.
 
 ```python
+import math
+
 # Conceptual BM25 term scoring — use rank_bm25.BM25Okapi in practice
-def bm25_term_score(tf: int, df: int, doc_len: int, avg_doc_len: float,
+def bm25_term_score(tf: int, df: int, n_docs: int, doc_len: int, avg_doc_len: float,
                     k1: float = 1.5, b: float = 0.75) -> float:
-  import math
-  idf = math.log((1 + 1) / (df + 1)) + 1  # smoothed idf sketch
+  idf = math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
   numerator = tf * (k1 + 1)
   denominator = tf + k1 * (1 - b + b * doc_len / avg_doc_len)
   return idf * numerator / denominator
@@ -368,6 +369,7 @@ from sentence_transformers import CrossEncoder
 
 class TwoStageRetriever:
   def __init__(self, bi_encoder, cross_encoder_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+    # bi_encoder must expose .search(query, k) -> list[str] (index wrapper), not bare SentenceTransformer.encode()
     self.bi_encoder = bi_encoder
     self.cross_encoder = CrossEncoder(cross_encoder_name)
 
@@ -682,6 +684,7 @@ Continue to [Module 1.4: RAG Evaluation & Optimization](./module-1.4-rag-evaluat
 - [Microsoft GraphRAG documentation](https://microsoft.github.io/graphrag/) — Operational guide to graph-based RAG indexing workflows.
 - [Okapi BM25 (Wikipedia)](https://en.wikipedia.org/wiki/Okapi_BM25) — Lexical ranking baseline used in hybrid retrieval.
 - [Reciprocal rank fusion (Elasticsearch reference)](https://www.elastic.co/guide/en/elasticsearch/reference/current/rrf.html) — Rank-based fusion without score normalization.
+- [Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods (Cormack, Clarke & Buettcher, SIGIR 2009)](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) — Original RRF paper introducing rank-based fusion.
 - [Sentence-Transformers cross-encoder documentation](https://www.sbert.net/examples/applications/cross-encoder/README.html) — Bi-encoder versus cross-encoder tradeoffs and usage patterns.
 - [cross-encoder/ms-marco-MiniLM-L-6-v2 (Hugging Face)](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) — Widely used reranking model checkpoint for second-stage retrieval.
 - [LangChain Parent Document Retriever](https://python.langchain.com/docs/how_to/parent_document_retriever/) — Small-to-big chunking pattern for search precision with parent context.
