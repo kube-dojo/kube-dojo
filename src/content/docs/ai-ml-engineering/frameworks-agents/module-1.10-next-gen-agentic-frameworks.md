@@ -419,6 +419,16 @@ spec:
             command: ["cat", "/tmp/agent_heartbeat"]
           initialDelaySeconds: 30
           periodSeconds: 10
+        # Separate readiness from liveness: liveness answers "is the process
+        # wedged?"; readiness answers "can this pod accept new work?" An agent
+        # mid-turn may be unready for new requests but still alive — don't
+        # conflate them, or you will restart healthy workers during long calls.
+        # readinessProbe:
+        #   httpGet:
+        #     path: /ready
+        #     port: 8080
+        #   initialDelaySeconds: 10
+        #   periodSeconds: 5
 ```
 
 This manifest illustrates how Kubernetes provides a system-level safety net beneath application-level framework guardrails: if an agent deadlocks and stops updating its heartbeat file, the kubelet can restart the pod per the [liveness probe documentation](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
@@ -502,6 +512,8 @@ mkdir -p ~/kubedojo/agents-lab
 cd ~/kubedojo/agents-lab
 python3 -m venv .venv
 source .venv/bin/activate
+# Lab uses flexible ranges so learners install the latest; in production, pin
+# exact versions from the dated landscape snapshot above before deploying.
 pip install "autogen-agentchat>=0.4.0" "crewai>=0.22.0" pydantic
 ```
 
@@ -538,10 +550,15 @@ import time
 
 def simulate_agent_execution():
     # Illustrative mock — replace with AgentChat/Crew calls in production.
+    # These are framework-neutral guardrail names so the termination logic stays
+    # the lesson, not any one SDK: `max_consecutive_auto_reply` is AutoGen's reply
+    # cap (in CrewAI you'd cap with a task-level `max_iter` or the manager's prompt);
+    # `allow_delegation` is CrewAI's delegation switch.
     security_agent_config = {
         "max_consecutive_auto_reply": 3,
         "allow_delegation": False,
     }
+    print(f"Enforcing guardrails: {security_agent_config}")
 
     # Heartbeat for Kubernetes liveness illustration
     with open("/tmp/agent_heartbeat", "w") as heartbeat:
@@ -609,7 +626,7 @@ To compress context, introduce an intermediary "Summarizer Agent" or instruct ea
 ```
 
 **Solution 5:**
-Set `max_consecutive_auto_reply=3` on the Security Analyst. Furthermore, add to the Security Analyst's system prompt: "Identify only critical and high-severity vulnerabilities. If a vulnerability cannot be definitively proven within two analytical steps, log it as a 'warning' and complete your task. Do not attempt to iteratively rewrite the code yourself."
+Cap the Security Analyst's reply budget — in AutoGen this is `max_consecutive_auto_reply=3`; in the role-based CrewAI framing recommended in Solution 1, you enforce the same limit with a task-level `max_iter` or through the manager's delegation prompt. Furthermore, add to the Security Analyst's system prompt: "Identify only critical and high-severity vulnerabilities. If a vulnerability cannot be definitively proven within two analytical steps, log it as a 'warning' and complete your task. Do not attempt to iteratively rewrite the code yourself."
 </details>
 
 **Success Checklist:**
@@ -623,7 +640,7 @@ Set `max_consecutive_auto_reply=3` on the Security Analyst. Furthermore, add to 
 
 Now that you understand how to orchestrate multiple agents, manage persistent state, and prevent catastrophic context exhaustion, it is time to deploy these complex systems into production environments. Operating agents locally is one thing; running them at scale is another. In the next module, we will explore the cloud infrastructure required to host multi-agent systems, dealing with asynchronous task queues, system observability, and managing the financial costs of autonomous API usage.
 
-**Continue to:** [AI Infrastructure Discipline](/platform/disciplines/data-ai/ai-infrastructure/) — Explore the infrastructure, observability, and cost controls required to run complex agent systems in production.
+**Continue to:** [AI Infrastructure](/ai-ml-engineering/ai-infrastructure/) — Explore the inference stacks, observability, and cost controls required to run complex agent systems in production.
 
 ## Sources
 
