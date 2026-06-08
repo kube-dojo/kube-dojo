@@ -89,9 +89,9 @@ Choosing among these patterns is an exercise in constraints, not aesthetics. Lat
 
 When teams mix patterns, name the hybrid explicitly in runbooks. A common production shape is sequential retrieval-to-draft inside a supervisor shell, with a blackboard recording citations and approval flags. Operators debugging a failed workflow need vocabulary to say “stage two sequential pipeline failed review” rather than “the agent felt confused.” Clear pattern names also help security reviewers map trust boundaries to diagram boxes instead of debating abstract “AI behavior.”
 
-### Framework landscape snapshot (2025–2026)
+### Framework landscape snapshot — as of 2026-06; verify before standardizing
 
-The table below lists orchestration frameworks as peers. Capabilities change quickly; treat this as a orientation snapshot and consult Module 1.5 for a fuller Rosetta comparison before you standardize on any one stack.
+The table below lists orchestration frameworks as peers. Capabilities and rosters change quickly; treat this as an orientation snapshot — verify against each project's docs before you standardize — and consult Module 1.5 for a fuller Rosetta comparison.
 
 | Framework | Orchestration emphasis | Typical production fit |
 |-----------|------------------------|-------------------------|
@@ -225,21 +225,21 @@ tracer = trace.get_tracer("multi-agent-fleet")
 
 async def run_supervisor_workflow(workflow_id: str, message: str):
     with tracer.start_as_current_span("supervisor.workflow", attributes={"workflow_id": workflow_id}) as root:
-        with tracer.start_span("guardrails.input"):
+        with tracer.start_as_current_span("guardrails.input"):
             safe_message = validate_input(message)
 
-        with tracer.start_span("specialist.retrieval") as retrieval_span:
+        with tracer.start_as_current_span("specialist.retrieval") as retrieval_span:
             docs = await call_specialist("retrieval", safe_message)
             retrieval_span.set_attribute("doc_count", len(docs))
 
-        with tracer.start_span("specialist.review"):
+        with tracer.start_as_current_span("specialist.review"):
             review = await call_specialist("reviewer", docs)
 
         root.set_attribute("total_tokens", review.get("tokens", 0))
         return review["answer"]
 ```
 
-Alerting rules should distinguish user-visible degradation from internal retry storms. A elevated error rate on the tool-executor role may warrant paging infrastructure owners even when the user still receives a polite fallback message. Combine trace exemplars with metrics dashboards so investigators can jump from a cost spike to the exact workflow instances that triggered it.
+Alerting rules should distinguish user-visible degradation from internal retry storms. An elevated error rate on the tool-executor role may warrant paging infrastructure owners even when the user still receives a polite fallback message. Combine trace exemplars with metrics dashboards so investigators can jump from a cost spike to the exact workflow instances that triggered it.
 
 Sampling strategy deserves explicit thought. Tracing every hop of every workflow at full prompt payload fidelity is expensive and may violate data-retention policies. Many teams store hashed prompts with redacted spans by default and enable full capture only for sampled workflows or flagged incidents. The sampling decision should be consistent across agents; if only the coordinator samples while specialists always log verbatim, you will still leak sensitive content into log sinks that compliance assumed were low risk.
 
@@ -600,6 +600,7 @@ metadata:
   name: guardrail-check
   namespace: multi-agent-lab
 spec:
+  backoffLimit: 0
   template:
     spec:
       restartPolicy: Never
@@ -728,6 +729,7 @@ Continue to [Module 1.8: Model Context Protocol (MCP) for Agents](/ai-ml-enginee
 - [LangGraph documentation](https://langchain-ai.github.io/langgraph/) — Reference for graph-based supervisor routes and persisted workflow state as a peer orchestration option.
 - [CrewAI documentation](https://docs.crewai.com/) — Reference for role-based crew delegation patterns discussed alongside other frameworks.
 - [Microsoft AutoGen documentation](https://microsoft.github.io/autogen/) — Official docs for conversable agents and group-chat style coordination mentioned as a peer framework snapshot.
+- [Microsoft Agent Framework overview](https://learn.microsoft.com/en-us/agent-framework/overview/) — Official docs for the Agent Framework (the direct successor to Semantic Kernel and AutoGen, with .NET and Python support and graph-based workflows) listed as a peer in the framework snapshot.
 - [Model Context Protocol](https://modelcontextprotocol.io/) — Standardized tool and context integration surface that complements multi-agent fleets; expanded in the next module.
 - [OWASP LLM01: Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Primary risk reference for injection via user input, retrieved content, and inter-agent handoffs.
 - [OpenTelemetry Python documentation](https://opentelemetry.io/docs/languages/python/) — Instrumentation guidance for distributed traces spanning multiple agent services.
