@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 119 — ai-ml-engineering campaign start: generative-ai 6/6</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.decision { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 119 — ai-ml-engineering campaign START: generative-ai 6/6</h1>
+<p class="meta">2026-06-08 · standalone orchestrator session · "load curriculum orchestrator, orient, continue from last handoff" → opened the <code>ai-ml-engineering</code> shipped_unreviewed campaign (#1842), drove the first sub-track (generative-ai) through the full expand+de-fab+review loop to <span class="pill merged">MERGED</span> (PR #1843), flipped generative-ai to 6/6 <code>done</code>. All dispatch non-Claude (s105 honored). One structural decision locked by the user for the next batch.</p>
+
+<h2>TL;DR</h2>
+<p>The s118 handoff's RESUME pointer (<code>ai-ml-engineering</code>, "verify_module.py sweep FIRST — most needs_rewrite are stale T0 → review+flip") was <strong>materially wrong for this track</strong>. A ground-truth sweep of the 38 <code>shipped_unreviewed</code> ai-ml-engineering modules showed <strong>34 of 38 are genuine T3</strong> (thin: ~1,500–2,266 body words vs the 5,000 floor; 3 sources vs the 10 minimum; missing structure sections) <strong>plus a systemic shipped-fabrication problem</strong> — every sampled module opens its "Why This Module Matters" with an <em>unlabeled, fabricated dated-incident presented as fact</em>. This is a multi-session <strong>expand + de-fabricate + durable-content</strong> campaign, not a flip-fest. Filed #1842 with per-sub-track ACs; the user chose the full per-module campaign; completed generative-ai (the first sub-track) this session.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1843</td><td><span class="pill merged">MERGED</span> <code>b5939fa4</code></td><td>generative-ai 1.5 &amp; 1.6 → T0 (expand + de-fab, cross-family reviewed)</td><td>2 authors (cursor/codex) → deepseek R1 ×2 → 1 fix-pass → build green → CI green → squash-merge → flip 6/6</td></tr>
+</table>
+
+<h2>The scope finding (the session's main pivot)</h2>
+<p><code>verify_module.py --tier-only</code> across all 38 <code>shipped_unreviewed</code> ai-ml-engineering modules:</p>
+<table>
+<tr><th>Verifier</th><th>Count</th><th>Reality</th></tr>
+<tr><td>T0 (review+flip)</td><td>4</td><td>frameworks-agents 1.3/1.4, mlops 1.4, deep-learning 1.2 — already dense, just need a review record.</td></tr>
+<tr><td>T3 (genuine expand)</td><td>34</td><td>body ~1,500–2,266w vs 5,000 floor; 3 sources vs 10; structure gaps. <strong>Not</strong> stale flags.</td></tr>
+</table>
+<p><strong>Systemic shipped fabrication.</strong> Sampled openers were all unlabeled fabricated dated-incidents: 1.5 <em>"Nov 2018 fashion retailer, $12M loss, null-search rate +22%"</em>; 1.6 <em>"late-2024 quant trading firm, $14M loss, 22-min outage"</em>; vector-rag 1.2/1.4 reuse the <strong>real</strong> Air Canada incident (uncited, and across two modules → incident-dedup allows it once). The exact <code>feedback_cloud_expand_authoring_failure_modes</code> expand-to-floor pattern, live on the public site. These are volatile sub-tracks (RAG, agents, reasoning, fine-tuning) → <code>.claude/rules/durable-vendor-content.md</code> applies.</p>
+
+<h2>What shipped — generative-ai (PR #1843)</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>R1 (deepseek)</th><th>Result</th></tr>
+<tr><td>1.5-vector-space-visualization</td><td>cursor</td><td>NEEDS_CHANGES (3 P1, all real)</td><td><span class="pill merged">done</span> 2,266→5,026w, 3→12 src</td></tr>
+<tr><td>1.6-reasoning-models</td><td>codex gpt-5.5</td><td>APPROVE_WITH_NITS</td><td><span class="pill merged">done</span> 1,780→5,050w, 3→17 src</td></tr>
+</table>
+<h3>1.5 — cursor authored, deepseek R1, all findings ground-checked real + fixed</h3>
+<ul>
+<li>De-fab: fabricated "$12M fashion retailer" opener → labeled <code>Hypothetical scenario:</code> (no invented figures). Renamed generator-placeholder app titles (kaizen/vibe/contrarian/Work). Fixed 4 section-order defects to canonical order.</li>
+<li>deepseek R1 P1s (all confirmed against live file): efSearch "improving recall and latency together" was backwards (higher efSearch worsens latency); PCA "3x faster/~5% loss" universal claims; Hands-On Task 5 manifest was <code>Deployment</code>+<code>:latest</code>+no-PVC, contradicting the body's StatefulSet → rewrote to <code>StatefulSet</code>+<code>:v1.12.5</code>+volumeClaimTemplates+headless Service+requests/limits. Plus int8 calibrated scale, FAISS squared-L2 note, sentiment-analogy caveat.</li>
+<li><strong>Orchestrator source ground-check caught 2 cursor citation defects:</strong> the SBERT source pointed to arXiv <code>1902.05667</code> = an unrelated <em>vaccination Twitter experiment</em> paper (→ correct SBERT <code>1908.10084</code>); the t-SNE JMLR URL 404'd (<code>volume9</code> → <code>v9</code>). Both corrected URLs re-checked 200.</li>
+</ul>
+<h3>1.6 — codex authored (exemplary durable-content), deepseek R1 APPROVE_WITH_NITS</h3>
+<ul>
+<li>De-fab: fabricated "$14M trading firm" opener → labeled <code>Hypothetical scenario:</code>. (deepseek cross-referenced the citation-seed file: the original C001–C003 fabrication was catalogued <code>cannot_be_salvaged</code> and is correctly removed.)</li>
+<li><strong>Durable-content rule applied correctly:</strong> all model-family specifics quarantined into ONE dated <code>Landscape snapshot — as of 2026-06</code> peer table ("not a leaderboard, an endorsement, or a permanent roster"); zero leadership/ranking claims; cost model in abstract cost-units, not fake pricing. 17 real sources (arXiv IDs all verified).</li>
+<li>deepseek verified the cost-model arithmetic, train-vs-inference distinction, router code, prompting guidance — all correct. The two arXiv IDs it couldn't web-verify (Qwen3 <code>2505.09388</code>, RouteLLM <code>2406.18665</code>) confirmed correct by orchestrator. Source URLs 16/17 → 200 (the lone openai.com 403 is a Cloudflare bot-block on a live page). One non-blocking P3 (cost-unit granularity note) left as-is.</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>1.5 expand</td><td>cursor --model auto</td><td>edit</td><td>T0/5026w/12src; ground-checked clean (2 source defects caught by orchestrator)</td></tr>
+<tr><td>1.6 expand</td><td>codex gpt-5.5</td><td>draft +3600s</td><td>T0/5050w/17src; exemplary durable-content, 0 leadership claims</td></tr>
+<tr><td>1.5 R1 review</td><td>deepseek-v4-pro</td><td>review (ws-write+worktree)</td><td>NEEDS_CHANGES, 3 P1+2 P2+2 P3 — every line-ref ground-checked REAL (no hallucination)</td></tr>
+<tr><td>1.5 fix-pass</td><td>cursor --model auto</td><td>edit</td><td>all 8 fixes landed, re-verified T0</td></tr>
+<tr><td>1.6 R1 review</td><td>deepseek-v4-pro</td><td>review (ws-write+worktree)</td><td>APPROVE_WITH_NITS; verified cost-model/router/sources</td></tr>
+</table>
+<p>Orchestrator did the source reachability + arXiv-title ground-checks itself (deepseek's sandbox had no live web). All non-Claude per s105.</p>
+
+<h2>Decision locked this session</h2>
+<h3><span class="pill decision">USER DECISION</span> vector-rag 1.3/1.4 — re-scope content to match titles</h3>
+<p>Pre-staging the next batch found a <strong>title↔content mismatch</strong>: <code>1.3 advanced-rag-patterns</code> actually teaches RAG-vs-fine-tuning <em>decision-making</em>, while <code>1.4 rag-evaluation-optimization</code> actually teaches the advanced RAG <em>patterns</em> (GraphRAG, HyDE, Self-RAG, reranking, parent-doc retrieval). User chose <strong>re-scope content to match the existing titles/slugs</strong> (URLs stay stable) over rename-modules or expand-in-place. Full execution plan recorded as a comment on #1842 (and below). Per <code>fresh-session-after-interview</code>, best executed in a fresh session with that brief.</p>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>vector-rag (4) — next batch, execute the locked re-scope:</strong>
+  <ul>
+  <li><code>1.2 building-rag-systems</code> — expand+de-fab in place; keep the <strong>Air Canada</strong> incident HERE with a citation; war-story section → source-or-remove.</li>
+  <li><code>1.3 advanced-rag-patterns</code> — re-scope: content becomes the advanced RAG patterns currently mis-filed in 1.4; trim its fine-tuning material (overlaps advanced-genai) to a cross-link; fix 'Heureka'(sic) + outcomes_aligned.</li>
+  <li><code>1.4 rag-evaluation-optimization</code> — author genuine RAG eval/optimization content (RAGAS, context precision/recall, faithfulness, retrieval metrics, latency/cost). New opener must NOT reuse Air Canada (lives in 1.2 now).</li>
+  <li><code>1.5 long-context-prompt-caching</code> — expand+de-fab in place; war-story → source-or-remove; fix outcomes_aligned.</li>
+  </ul></li>
+<li><strong>Then in curriculum order:</strong> frameworks-agents (8: 6 T3 expand + 1.3/1.4 T0 flip) → mlops (8) → ai-infrastructure (3) → advanced-genai (8) → multimodal-ai (3) → history (1) + stray deep-learning/1.2 T0 flip. All tracked in #1842 ACs.</li>
+<li><strong>Per-module bar (unchanged):</strong> T0 (≥5000w, ≥10 sources, density+structure gates), opener de-fabbed (labeled <code>Hypothetical scenario:</code> or real web-verified cited incident), durable-content rule on volatile facts (dated snapshot, no leadership claims), cross-family review mixed non-Claude pools (agy never sole), <strong>ground-check every reviewer claim against the live file</strong>, build green in PRIMARY before PR, flip after merge.</li>
+<li><strong>Roster notes (held):</strong> deepseek review = <code>--mode workspace-write --worktree</code> (read-only has no file tool); deepseek's R1 this session was high-quality with zero hallucinated line numbers — a good fixer+reviewer lane. codex = exemplary durable-content author. All non-Claude per s105.</li>
+<li><strong>Standing follow-ups unchanged:</strong> #1823 mermaid campaign, #1827 reviewer tool-access, #1829 corpus re-review, CI-gaming guard, full-astro-build CI gate.</li>
+</ul>
+
+<h2>Files / artifacts</h2>
+<ul>
+<li><code>src/content/docs/ai-ml-engineering/generative-ai/module-1.5-vector-space-visualization.md</code> — expanded + de-fabbed + fixed (PR #1843)</li>
+<li><code>src/content/docs/ai-ml-engineering/generative-ai/module-1.6-reasoning-models.md</code> — expanded + de-fabbed + durable-snapshot (PR #1843)</li>
+<li><code>.pipeline/reviews/ai-ml-engineering__generative-ai__module-1.5-*.md</code>, <code>...1.6-*.md</code> — APPROVE review records (gitignored, local)</li>
+<li>Issue <strong>#1842</strong> — campaign tracker (generative-ai AC checked; vector-rag re-scope decision recorded as a comment)</li>
+</ul>
+
+</body></html>
