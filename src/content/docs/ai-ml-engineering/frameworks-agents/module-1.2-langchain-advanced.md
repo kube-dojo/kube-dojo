@@ -45,7 +45,9 @@ from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableP
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-# Fake model returns deterministic text for tests
+# Fake model returns deterministic text for tests.
+# The iter() wrapper yields one queued message per invoke; after the queue
+# exhausts, the next call raises StopIteration—rebuild the iterator for multi-turn tests.
 fake_llm = GenericFakeChatModel(messages=iter([
     AIMessage(content="Intent: billing"),
     AIMessage(content="Summary: user asked about invoice timing."),
@@ -66,7 +68,6 @@ summarize_chain = summarize_prompt | fake_llm | StrOutputParser()
 router = RunnableParallel(
     intent=classify_chain,
     summary=summarize_chain,
-    raw=RunnablePassthrough(),
 )
 enrich = router | RunnableLambda(lambda d: {**d, "route": "billing" if "billing" in d["intent"].lower() else "general"})
 
@@ -78,6 +79,8 @@ Testing LCEL chains without live models is a production habit, not a classroom t
 Assign runnables (`RunnablePassthrough.assign`) are the idiomatic way to enrich inputs mid-pipeline. You might attach a session identifier, redact sensitive fields, or compute a cache key before the prompt renders. Because assign returns a new runnable, you keep side effects localized and observable rather than hiding mutations inside prompt templates.
 
 Fallback runnables wrap primary and secondary models or parsers. If the primary model times out, the fallback can be a smaller local model or a deterministic template response. Document fallback behavior in runbooks so on-call engineers know which quality bar applies during partial outages.
+
+**LCEL version gotchas.** Between langchain-core 0.1 and 0.3 releases, `RunnableBranch` condition signatures and streaming event shapes changed subtly—code that relied on `stream_log` event keys may need updates when upgrading. The pipe operator itself is stable, but helper imports (`RunnablePassthrough`, `RunnableParallel`) occasionally move from `langchain` to `langchain_core.runnables`. Pin `langchain-core` in `requirements.txt` and diff golden outputs per Runnable stage after every bump; a green import does not guarantee identical stream chunk boundaries. Async `ainvoke` on chains that mix sync tools and async models requires explicit `asyncio` bridges—calling sync tools inside async runnables without `asyncio.to_thread` blocks the event loop under load.
 
 ## Tools and Tool-Calling
 
@@ -247,11 +250,15 @@ def search_code(pattern: str, directory: str = ".") -> str:
         return f"Error searching: {str(e)}"
 ```
 
+**Warning:** The `run_shell_command` example above passes LLM-chosen strings to `subprocess.run(..., shell=True)` with no validation—it exists to show tool wiring, not production safety. Real deployments must whitelist commands, reject shell metacharacters, and sandbox execution; see the `SafeCommandInput` pattern later in this module for a hardened approach.
+
 Tool categories help you reason about blast radius. Data retrieval tools should be read-only by default. Communication tools need rate limits. System operation tools require authentication context passed from your app layer, not inferred from chat text alone.
 
 Hierarchical tool organization consolidates related actions under a meta-tool with an action parameter. Instead of twenty flat functions, present one developer_tools meta-tool whose docstring enumerates allowed actions. This reduces schema tokens in the prompt and gives the model a clearer decision tree.
 
 Provider wire formats differ—OpenAI nests parameters under function objects, Anthropic uses input_schema, Google uses its own variant. LangChain normalizes these differences when you use first-class tool abstractions. Manual JSON dictionaries reintroduce the protocol mismatch bugs you thought you eliminated.
+
+**Tool performance and cost.** Every tool bound to a chat model inflates the system prompt with full JSON schemas—fifteen tools can add thousands of definition tokens per request even when the model picks one. Measure definition-token overhead separately from conversation history when debating flat catalogs versus meta-tools. Parallel tool calls (supported by OpenAI and Anthropic on recent models) cut wall-clock latency for independent reads but burst downstream API quotas; coordinate per-vendor concurrency limits. Cache idempotent tool results with TTL keys derived from normalized arguments, not raw model strings that vary cosmetically.
 
 ## Memory
 
@@ -310,6 +317,8 @@ Session identifiers should come from your authentication layer, never from model
 
 Summarization memory introduces an extra model call. Monitor summarization drift: if summaries omit negation or numeric constraints, downstream answers inherit the mistake. Periodic full-history refresh for high-stakes workflows reduces silent summary corruption.
 
+**Memory migration notes.** LangChain 0.2+ moved many memory classes from `langchain.memory` to `langchain_community` and deprecated several chain-centric memory wrappers in favor of explicit message-history stores plus LCEL. `ConversationBufferMemory` still works but LangGraph checkpointing is now the recommended path for durable multi-turn agent state. If you upgrade mid-project, audit every `MessagesPlaceholder` binding—history key names (`chat_history` vs. `history`) differ across templates and cause empty-context bugs that look like model amnesia.
+
 ## Retrieval Integration
 
 Retrieval-augmented generation belongs inside agent systems as a first-class tool, not only as a static prefix prompt. When the model can decide whether to search documentation, it fetches context on demand instead of stuffing every prompt with irrelevant chunks. LangChain retrievers implement Runnable: you pass a query string and receive documents with metadata.
@@ -345,6 +354,8 @@ def answer_from_docs(question: str) -> str:
 Chunk metadata powers citation in agent answers. Return source filenames, section headings, and last-updated timestamps alongside snippets so the model can quote responsibly. Users trust answers more when the agent cites retriever metadata instead of speaking ex cathedra.
 
 Re-ranking retrieved chunks before they enter the tool result often improves answer quality more than enlarging k. Keep re-rankers behind the same Runnable interface so you can A/B them in staging without rewriting agent prompts.
+
+**Retrieval edge cases.** Empty vector-store results should return an explicit "no documents found" string, not an empty tool payload—the model may hallucinate when given blank context. Stale embeddings after document updates cause confident wrong answers; version your index and include `last_updated` in chunk metadata so agents can warn users about outdated policies. Hybrid search (dense + BM25) reduces misses on exact SKU or error-code queries that pure embedding search mishandles.
 
 ## Agents and the Agent Loop
 
@@ -409,6 +420,8 @@ Scratchpad pollution happens when tools return verbose payloads that accumulate 
 
 Human-in-the-loop approvals belong outside the model's direct tool access. Expose a pending_action field in application state and require an authenticated API call to confirm destructive operations. Prompts asking the model to be careful are not a substitute for authorization checks.
 
+**Agent loop retries and limits.** `max_iterations` on AgentExecutor stops infinite loops but does not retry failed tools—add retry logic inside idempotent tools or wrap the executor with application-level re-invocation. `handle_parsing_errors=True` masks malformed tool JSON by feeding the error back to the model; log raw model messages before parsing so you can distinguish prompt issues from provider schema drift. LangChain 0.3 documentation increasingly steers new projects toward LangGraph for cyclic graphs; AgentExecutor remains valid for linear tool loops but checkpointing and human approval require graph-level state.
+
 ## Streaming and Callbacks
 
 Streaming improves perceived latency by emitting partial tokens or events before the full completion finishes. In LCEL, any Runnable that implements `stream` can participate in a streaming chain; events bubble from inner components outward. For chat UIs, stream model tokens; for agent dashboards, stream tool-start and tool-end events so operators see progress while long-running tools execute.
@@ -452,6 +465,8 @@ for chunk in chain.stream("hello", config={"callbacks": [DebugCallback()]}):
 Structured logging beats println debugging at scale. Serialize callback events as JSON lines with trace identifiers, latency, and token estimates. Correlate those logs with user session identifiers to reconstruct failure timelines without replaying full prompts in production.
 
 Back-pressure matters when consumers process streams slower than models emit tokens. Use async iterators and bounded queues in your API layer so slow clients do not force the model side to buffer unbounded text.
+
+**Streaming and observability pitfalls.** `stream()` on agent executors emits heterogeneous event types—distinguish `on_chat_model_stream` token chunks from `on_tool_start` status in your UI so users know the agent is waiting on external systems. Callback handlers attached via config propagate to child runnables; forgetting to pass `config={"callbacks": [...]}` on nested `.invoke()` calls creates blind spots in traces. High-cardinality tags (per-user IDs in callback metadata) can explode tracing backend costs—aggregate at session level in production.
 
 ## Production Patterns
 
@@ -497,14 +512,15 @@ def another_risky_tool(x: int) -> str:
 ```
 
 ```python
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 import subprocess
 
 class SafeCommandInput(BaseModel):
     """Validated input for shell commands."""
     command: str = Field(description="Command to run")
 
-    @validator("command")
+    @field_validator("command")
+    @classmethod
     def validate_command(cls, v):
         allowed_prefixes = ["git ", "npm ", "pytest ", "python -m"]
         if not any(v.startswith(p) for p in allowed_prefixes):
@@ -564,7 +580,7 @@ for step in result["intermediate_steps"]:
 for tool in tools:
     print(f"Name: {tool.name}")
     print(f"Description: {tool.description}")
-    print(f"Schema: {tool.args_schema.schema()}")
+    print(f"Schema: {tool.args_schema.model_json_schema()}")
     print("---")
 ```
 
@@ -572,51 +588,21 @@ Rate limiting at the tool layer protects downstream SaaS APIs from agent bursts.
 
 Prompt injection via tool results is an integration security topic. Wrap untrusted tool output in clear delimiters and instruct the model to treat delimited content as data, not instructions. See OWASP guidance on prompt injection when designing retrieval and browser tools.
 
-### Deep dive: LCEL and Runnables
+## Advanced Gotchas and Cross-Cutting Concerns
 
-Testing LCEL chains without live models is a production habit, not a classroom trick. Fake chat models, stub retrievers, and RunnableLambda stand-ins let you assert on output shape, routing decisions, and parser behavior in ordinary unit tests. When a provider bumps a SDK version, those tests tell you whether your composition still honors contracts even before you spend tokens on integration runs.
+Production LangChain systems fail at integration boundaries more often than at model quality. The patterns below span multiple sections and deserve explicit treatment because they do not fit neatly into a single Runnable or tool.
 
-Assign runnables (`RunnablePassthrough.assign`) are the idiomatic way to enrich inputs mid-pipeline. You might attach a session identifier, redact sensitive fields, or compute a cache key before the prompt renders. Because assign returns a new runnable, you keep side effects localized and observable rather than hiding mutations inside prompt templates.
+**Error propagation in composed graphs.** When a RunnableParallel branch raises an exception, the entire parallel invoke fails unless you wrap optional branches in RunnableLambda try/except blocks or use newer `exceptions="return"` merge semantics where your langchain-core version supports them. Mark branches as critical vs. best-effort in design docs so on-call engineers know whether partial dictionaries are acceptable. Chain-level `with_fallbacks` on the outer runnable catches model timeouts but not arbitrary Python exceptions inside custom tools—those need `handle_tool_error` or explicit catches at the tool boundary.
 
-Fallback runnables wrap primary and secondary models or parsers. If the primary model times out, the fallback can be a smaller local model or a deterministic template response. Document fallback behavior in runbooks so on-call engineers know which quality bar applies during partial outages.
+**Retry policy belongs per tool category.** Chat models retry rate-limited API calls automatically when configured; Python tools do not. Use libraries like `tenacity` inside idempotent read tools, never inside payment or email-sending tools without idempotency keys. Document retry safety in each tool description so orchestrators and future maintainers inherit the contract. AgentExecutor `max_iterations` is not a retry mechanism—it caps loop count, not transient HTTP failures.
 
-### Deep dive: Tools and Tool-Calling
+**Observability without cardinality explosions.** Pass consistent `config={"tags": ["billing-agent"], "metadata": {"route": "v2"}}` on every invoke, batch, and stream call so distributed traces remain readable. Deep graphs with many RunnableLambda steps can emit hundreds of callback events per request; aggregate token counts at chain boundaries and sample full verbose traces behind feature flags. LangSmith and OpenTelemetry exporters hook the same BaseCallbackHandler interface—choose one primary sink to avoid duplicate billing on high-volume streams.
 
-Tool categories help you reason about blast radius. Data retrieval tools should be read-only by default. Communication tools need rate limits. System operation tools require authentication context passed from your app layer, not inferred from chat text alone.
+**Testing fakes across multi-turn flows.** GenericFakeChatModel queues one AIMessage per `invoke`; agent tests that expect three tool rounds need three queued messages or a factory that rebuilds `iter([...])` before each test case. Tool-calling fakes must include well-formed `tool_calls` dicts with `name`, `args`, and `id` keys—malformed shapes produce parsing errors indistinguishable from production provider drift in verbose logs.
 
-Hierarchical tool organization consolidates related actions under a meta-tool with an action parameter. Instead of twenty flat functions, present one developer_tools meta-tool whose docstring enumerates allowed actions. This reduces schema tokens in the prompt and gives the model a clearer decision tree.
+**StructuredTool and Pydantic v2.** LangChain 0.2+ expects Pydantic v2 models for `args_schema`; use `field_validator` with `@classmethod`, not v1 `@validator`, and introspect schemas with `model_json_schema()` instead of `.schema()`. Validation runs before any side effect—keep validators fast and free of network I/O. Optional fields need explicit `Field(default=...)` or `Optional` typing; models sometimes omit keys entirely, and missing vs. null behaves differently across providers.
 
-Provider wire formats differ—OpenAI nests parameters under function objects, Anthropic uses input_schema, Google uses its own variant. LangChain normalizes these differences when you use first-class tool abstractions. Manual JSON dictionaries reintroduce the protocol mismatch bugs you thought you eliminated.
-
-### Deep dive: Memory
-
-Session identifiers should come from your authentication layer, never from model-generated text. If the model can choose its own session key, attackers can read another user's history by guessing identifiers. Treat memory stores like databases with access control lists and encryption at rest.
-
-Summarization memory introduces an extra model call. Monitor summarization drift: if summaries omit negation or numeric constraints, downstream answers inherit the mistake. Periodic full-history refresh for high-stakes workflows reduces silent summary corruption.
-
-### Deep dive: Retrieval Integration
-
-Chunk metadata powers citation in agent answers. Return source filenames, section headings, and last-updated timestamps alongside snippets so the model can quote responsibly. Users trust answers more when the agent cites retriever metadata instead of speaking ex cathedra.
-
-Re-ranking retrieved chunks before they enter the tool result often improves answer quality more than enlarging k. Keep re-rankers behind the same Runnable interface so you can A/B them in staging without rewriting agent prompts.
-
-### Deep dive: Agents and the Agent Loop
-
-Scratchpad pollution happens when tools return verbose payloads that accumulate in agent history. Truncate or summarize tool outputs at the boundary before the next model turn. Your future self debugging a routing failure will thank you for concise intermediate observations.
-
-Human-in-the-loop approvals belong outside the model's direct tool access. Expose a pending_action field in application state and require an authenticated API call to confirm destructive operations. Prompts asking the model to be careful are not a substitute for authorization checks.
-
-### Deep dive: Streaming and Callbacks
-
-Structured logging beats println debugging at scale. Serialize callback events as JSON lines with trace identifiers, latency, and token estimates. Correlate those logs with user session identifiers to reconstruct failure timelines without replaying full prompts in production.
-
-Back-pressure matters when consumers process streams slower than models emit tokens. Use async iterators and bounded queues in your API layer so slow clients do not force the model side to buffer unbounded text.
-
-### Deep dive: Production Patterns
-
-Rate limiting at the tool layer protects downstream SaaS APIs from agent bursts. Combine token buckets per user with global circuit breakers when a provider returns repeated 429 responses. Agents should surface degraded-mode answers instead of retry-storming a failing dependency.
-
-Prompt injection via tool results is an integration security topic. Wrap untrusted tool output in clear delimiters and instruct the model to treat delimited content as data, not instructions. See OWASP guidance on prompt injection when designing retrieval and browser tools.
+**Cost guards that survive prompt changes.** Track tokens per successful task (answer delivered, ticket resolved), not per attempt—agents that retry failed tools inflate per-attempt metrics without reflecting user value. Session-level tool-call budgets complement per-executor `max_iterations` when users open multiple tabs or replay conversations. Alert on category spikes (market-data tools, browser automation) separately from aggregate LLM spend so finance and engineering see the same regression at different granularities.
 
 ### Operational notes
 
