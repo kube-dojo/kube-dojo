@@ -17,7 +17,7 @@ When you finish this module, you will be able to design, implement, evaluate, an
 
 ## Why This Module Matters
 
-In February 2024, the British Columbia Civil Resolution Tribunal held Air Canada liable after its customer-service chatbot fabricated a bereavement-fare policy that did not exist in the airline's official rules. A passenger named Jake Moffatt booked flights following a family death, relied on the chatbot's explicit promise that bereavement discounts could be applied retroactively within 90 days, and later discovered that human agents would not honor that policy. The tribunal rejected Air Canada's argument that the chatbot was a separate legal entity and ordered the airline to pay damages, establishing that organizations remain responsible for every factual claim their automated systems produce on public-facing channels. The full decision is indexed as *Moffatt v. Air Canada, 2024 BCCRT 149*.
+In February 2024, the British Columbia Civil Resolution Tribunal held Air Canada liable after its customer-service chatbot fabricated a bereavement-fare policy that did not exist in the airline's official rules. A passenger named Jake Moffatt booked flights following a family death, relied on the chatbot's explicit promise that bereavement discounts could be applied retroactively within 90 days, and later discovered that human agents would not honor that policy. The tribunal rejected Air Canada's argument that the chatbot was a separate legal entity and ordered the airline to pay damages, establishing that organizations can be held liable for the factual claims their automated systems make on public-facing channels. The full decision is indexed as *Moffatt v. Air Canada, 2024 BCCRT 149*.
 
 This incident is the canonical cautionary tale for enterprise generative AI. Large language models excel at fluent language but have no built-in guarantee of factual accuracy, especially for policies, pricing, or procedures that change after training or that never appeared in training data at all. When a model answers from parametric memory alone, it predicts plausible text rather than looking up authoritative records. For customer support, internal knowledge bases, compliance workflows, or any domain where wrong answers carry legal or financial consequences, that behavior is unacceptable.
 
@@ -55,11 +55,11 @@ The RAG pipeline operates as an orchestration bridge between the user's query an
 
 ```mermaid
 flowchart TD
-    User[User Query: "How do I configure authentication in kaizen?"] --> Embed[Embed: Convert query to vector]
+    User[User Query: "How do I configure authentication in our app?"] --> Embed[Embed: Convert query to vector]
     Embed --> Search[Search: Vector Database]
-    Search -- "176K docs" --> Retrieved[Retrieved Context: <br>- auth.md: Configure JWT tokens...<br>- security.md: Best practices for...<br>- api.md: Authentication endpoints...]
+    Search -->|176K docs| Retrieved[Retrieved Context: <br>- auth.md: Configure JWT tokens...<br>- security.md: Best practices for...<br>- api.md: Authentication endpoints...]
     Retrieved --> Generate[Generate: LLM creates answer from context]
-    Generate --> Answer[Answer: "To configure authentication in kaizen:<br>1. Set JWT_SECRET in .env<br>2. Configure auth middleware in app.py<br>3. See auth.md for complete guide..."]
+    Generate --> Answer[Answer: "To configure authentication:<br>1. Set JWT_SECRET in .env<br>2. Configure auth middleware in app.py<br>3. See auth.md for complete guide..."]
 ```
 
 > **Stop and think**: If the embedding model used during retrieval is different from the embedding model used during indexing, what will happen to the search results?
@@ -139,6 +139,7 @@ def retrieve(query: str, vector_db: QdrantClient, k: int = 5) -> list[dict]:
     # 3. Return chunks with metadata
     return [
         {
+            "id": r.id,
             "text": r.payload["text"],
             "source": r.payload["source"],
             "score": r.score
@@ -202,13 +203,13 @@ Your chunker should expose tunable parameters—size, overlap, separator hierarc
 
 ```text
 Original document:
-"Authentication in kaizen uses JWT tokens. To configure authentication,
+"Authentication in our platform uses JWT tokens. To configure authentication,
 set the JWT_SECRET environment variable. The token expires after 24 hours
 by default. You can customize this in config.py. For production, always
 use HTTPS to protect tokens in transit."
 
 Chunk too small (50 chars):
-- "Authentication in kaizen uses JWT tokens. To conf"
+- "Authentication in our platform uses JWT tokens. To conf"
 - "igure authentication, set the JWT_SECRET environ"
 → Query "How to configure auth?" might not match!
 
@@ -217,7 +218,7 @@ Chunk too large (entire doc):
 → LLM must parse through irrelevant info
 
 Chunk just right (~200 chars, semantic):
-- "Authentication in kaizen uses JWT tokens. To configure authentication, set the JWT_SECRET environment variable."
+- "Authentication in our platform uses JWT tokens. To configure authentication, set the JWT_SECRET environment variable."
 - "The token expires after 24 hours by default. You can customize this in config.py."
 - "For production, always use HTTPS to protect tokens in transit."
 → Each chunk answers a specific question type!
@@ -384,20 +385,22 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
 
     return combined[:k]
 
-def reciprocal_rank_fusion(result_lists: list[list], k: int = 60) -> list:
+def reciprocal_rank_fusion(result_lists: list[list[dict]], k: int = 60) -> list[dict]:
     """Combine multiple result lists using RRF."""
-    scores = {}
+    scores: dict = {}
+    docs: dict = {}  # id -> full document dict
 
     for results in result_lists:
         for rank, doc in enumerate(results):
             doc_id = doc["id"]
+            docs[doc_id] = doc
             if doc_id not in scores:
                 scores[doc_id] = 0
             scores[doc_id] += 1 / (k + rank + 1)
 
-    # Sort by combined score
+    # Sort by combined score and return deduplicated document dicts
     sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [doc_id for doc_id, score in sorted_docs]
+    return [docs[doc_id] for doc_id, _score in sorted_docs]
 ```
 
 ### 2. Query Expansion
@@ -536,7 +539,13 @@ Answer: {answer}
 
 Score (just the number):"""
 
-    score = float(llm.generate(prompt).strip())
+    out = llm.generate(prompt).strip()
+    try:
+        score = float(out)
+    except ValueError:
+        import re
+        match = re.search(r"[01]?\.\d+|\d+", out)
+        score = float(match.group()) if match else 0.0
     return score
 ```
 
@@ -576,8 +585,8 @@ Latency budgets interact with quality knobs. Hybrid search plus cross-encoder re
 RAG architecture stays constant while data sources and chunk parameters change. Documentation assistants emphasize recursive chunking and version metadata so v1 and v2 instructions never merge. Educational assistants preserve code blocks intact. Financial research assistants use larger semantic chunks plus fiscal-period filters.
 
 ```python
-# Kaizen RAG Configuration
-kaizen_rag = RAGPipeline(
+# Customer-Support RAG Configuration
+support_rag = RAGPipeline(
     knowledge_sources=[
         "docs/*.md",           # Documentation
         "src/**/*.py",         # Code (with docstrings)
@@ -589,7 +598,7 @@ kaizen_rag = RAGPipeline(
     embedding_model="all-MiniLM-L6-v2",
     vector_db="qdrant",
     llm="claude-4.6-sonnet",
-    reranker="cross-encoder/ms-marco"
+    reranker="cross-encoder/ms-marco-MiniLM-L-6-v2"
 )
 
 # Example queries:
@@ -599,8 +608,8 @@ kaizen_rag = RAGPipeline(
 ```
 
 ```python
-# Vibe RAG for student Q&A
-vibe_rag = RAGPipeline(
+# Student Q&A RAG
+student_qa_rag = RAGPipeline(
     knowledge_sources=[
         "courses/**/*.md",     # Course content
         "videos/*.json",       # Video transcripts
@@ -623,8 +632,8 @@ vibe_rag = RAGPipeline(
 ```
 
 ```python
-# Contrarian RAG for financial analysis
-contrarian_rag = RAGPipeline(
+# Financial-Analysis RAG
+financial_rag = RAGPipeline(
     knowledge_sources=[
         "sec_filings/*.pdf",   # 10-K, 10-Q filings
         "earnings/*.json",     # Earnings call transcripts
