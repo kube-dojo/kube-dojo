@@ -63,7 +63,7 @@ There is also a concurrency cost that is easy to miss. A single very long prefil
 
 ## 2. Why Long Context Degrades: Lost-in-the-Middle and Context Rot
 
-Long context has a quality failure mode that is separate from cost. A model may accept a large prompt and still fail to use the right evidence inside it. The "Lost in the Middle" work showed that models can perform better when relevant information appears near the beginning or end of a long input, while performance can degrade when the same information appears in the middle. RULER and other long-context benchmarks extend this lesson: advertised context length and effective context use are not identical measurements.
+Long context has a quality failure mode that is separate from cost. A model may accept a large prompt and still fail to use the right evidence inside it. The "Lost in the Middle" work showed that models can perform better when relevant information appears near the beginning or end of a long input, while performance can degrade when the same information appears in the middle. RULER, LongBench, and other long-context benchmarks extend this lesson: advertised context length and effective context use are not identical measurements.
 
 The practical term many engineers use is context rot. As the prompt grows, each useful fact competes with more irrelevant or weakly relevant text, conflicting instructions, stale examples, duplicated chunks, and formatting noise. The model is not doing exact database lookup over a clean index. It is compressing and attending over a sequence. If the sequence mixes current policies with obsolete policies, critical clauses with casual notes, and source text with old chat history, the answer can drift toward the most salient or recent pattern rather than the most correct evidence.
 
@@ -127,7 +127,7 @@ The other subtle rule is tokenization stability. "Same text" to a person is not 
 
 ## 4. Design Prompt-Cache Hit Architecture
 
-The safest prompt-cache architecture is boring. It builds a deterministic prefix from versioned artifacts, appends dynamic data only after the stable portion, and logs enough metadata to prove whether the cache is being used. Treat the prefix like an API contract. If a team member changes the prefix, that change should pass review, tests, and rollout monitoring just like a database migration or schema change.
+The safest prompt-cache architecture is boring. It builds a deterministic prefix from versioned artifacts, appends dynamic data only after the stable portion, and logs enough metadata to prove whether the cache is being used. Treat the prefix like an API contract. If a team member changes the prefix, that change should pass review, tests, and rollout monitoring just like a database migration or schema change. Dynamic-last ordering is the safe default for automatic prefix caching; providers with explicit cache breakpoints can also support multiple cached blocks separated by dynamic segments when each boundary is declared and measured.
 
 The main anti-pattern is the dynamic header. Web developers often put request metadata first because it is readable in logs. That habit is costly for prompt caching. A trace ID, timestamp, user name, feature flag, or current ticket number at the first line means every later token shifts behind a new prefix. The prompt still looks mostly identical to a person, but it no longer begins with the same token sequence.
 
@@ -207,7 +207,7 @@ Cache-aware design also needs rollout discipline. If you deploy a new prompt pre
 
 Prompt caching does not automatically make long context cheaper than RAG. It changes the variables. RAG pays for ingestion, embeddings, retrieval infrastructure, reranking, and a smaller generation prompt. Cached long context pays for cold prefill or cache write events, cached-prefix reads, dynamic suffix input, output tokens, and sometimes cache storage or retention. The right architecture depends on corpus size, question shape, reuse rate, latency target, and quality requirement.
 
-Use symbols first so the model survives pricing churn. Let `Q` be the number of requests in a period. Let `P` be the static prefix size in million tokens. Let `S` be the dynamic suffix size in million tokens. Let `R` be the retrieved context size in million tokens for a RAG request. Let `C_input` be the current base input unit cost. Let `C_cached_read` be the current cached-read unit cost. Let `C_cache_write` be the effective unit cost of creating or refreshing the cache. Let `C_index` be the fixed cost of embedding, storage, and retrieval operations for the same period.
+Use symbols first so the model survives pricing churn. Let `Q` be the number of repeated requests in a period after a cacheable prefix has been created. Let `P` be the static prefix size in million tokens. Let `S` be the dynamic suffix size in million tokens. Let `R` be the retrieved context size in million tokens for a RAG request. Let `C_input` be the current base input unit cost. Let `C_cached_read` be the current cached-read unit cost. Let `C_cache_write` be the effective unit cost of creating or refreshing the cache. Let `C_index` be the fixed cost of embedding, storage, and retrieval operations for the same period.
 
 ```text
 Cost_RAG =
@@ -218,6 +218,8 @@ Cost_cached_long_context =
   cache_write_events * (P * C_cache_write)
   + Q * ((P * C_cached_read) + (S * C_input))
 ```
+
+In the cached-long-context row, `Q` counts cache-hit requests; the `cache_write_events` term already accounts for cold or refresh requests that pay the write/full-input cost for `P`, so those warm-up calls are not counted again as cached reads.
 
 This simplified model omits output tokens because they are usually similar between designs for the same answer length. Add them back when output length differs, especially for summarization or report-generation workloads. Also add reranker cost, embedding refresh cost, explicit cache storage cost, and cold-start user-experience cost if those are material. The point is not to build a universal equation. The point is to prevent an architecture decision from being made by vibes.
 
@@ -287,6 +289,7 @@ At minimum, log prompt token count, cached token count, cache hit ratio, prefix 
 def record_llm_usage(response, *, prefix_fingerprint: str, prompt_version: str) -> None:
     usage = response.usage
     prompt_tokens = usage.prompt_tokens
+    # Field names are provider-specific; Anthropic, Gemini, and others expose cache hits differently.
     cached_tokens = usage.prompt_tokens_details.cached_tokens
     uncached_tokens = prompt_tokens - cached_tokens
     cache_hit_ratio = cached_tokens / prompt_tokens if prompt_tokens else 0.0
@@ -537,7 +540,14 @@ if __name__ == "__main__":
 
     print("\n--- Warmup shape ---")
     warmup_cache("company_a")
+
+    print("\n--- Intentional cache bust ---")
+    static_prefix = tenant_static_prefix("company_a")
+    prefix_v2 = static_prefix + " "  # one trailing space -> different token sequence -> cache miss
+    call_api(prefix_v2, "SYSTEM WARMUP. Reply OK.", max_tokens=2)
 ```
+
+The cache-bust call should report zero `cached_tokens` for `prefix_v2`; that is a prefix-fingerprint change, not a lost-in-the-middle failure or a retrieval miss.
 
 Run the script through the lab virtual environment so the command uses the dependencies and interpreter created for this exercise:
 
@@ -565,7 +575,7 @@ Continue to [Module 1.6: Home-Scale RAG Systems](/ai-ml-engineering/vector-rag/m
 - [Lost in the Middle: How Language Models Use Long Contexts](https://arxiv.org/abs/2307.03172) - Core evidence that relevant information position can affect long-context retrieval behavior even when the input fits the window.
 - [RULER: What's the Real Context Size of Your Long-Context Language Models?](https://arxiv.org/abs/2404.06654) - Benchmark reference for separating nominal context length from effective context use across retrieval and reasoning tasks.
 - [LongBench: A Bilingual, Multitask Benchmark for Long Context Understanding](https://arxiv.org/abs/2308.14508) - Long-context evaluation suite covering question answering, summarization, few-shot learning, synthetic tasks, and code completion.
-- [Prompt Cache: Modular Attention Reuse for Low-Latency Inference](https://arxiv.org/abs/2311.04934) - Research paper explaining reusable prompt modules and attention-state reuse for lower latency inference.
+- [Prompt Cache: Modular Attention Reuse for Low-Latency Inference](https://arxiv.org/abs/2311.04934) - Research paper explaining reusable prompt modules and attention-state reuse for lower latency inference; this is a research technique (modular attention reuse), distinct from the vendor prompt-caching APIs taught in this module.
 - [OpenAI Prompt Caching](https://developers.openai.com/api/docs/guides/prompt-caching) - Official vendor documentation for prompt-cache structuring, cached-token reporting, retention behavior, and current OpenAI-specific limits.
 - [Anthropic Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) - Official vendor documentation for cache breakpoints, TTL options, and cache read/write pricing multipliers.
 - [Gemini Context Caching](https://ai.google.dev/gemini-api/docs/caching) - Official vendor documentation for implicit and explicit context caching, TTL configuration, and cached-token usage metadata.
