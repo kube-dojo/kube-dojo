@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 121 — ai-ml-engineering/mlops sub-track COMPLETE (#1842)</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1080px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.6rem;border-bottom:3px solid #2563eb;padding-bottom:.4rem}
+  h2{font-size:1.2rem;margin-top:2rem;color:#1e3a8a;border-bottom:1px solid #e5e7eb;padding-bottom:.2rem}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d1d5db;padding:.4rem .6rem;text-align:left;vertical-align:top}
+  th{background:#eff6ff}
+  code{background:#f3f4f6;padding:.1rem .3rem;border-radius:3px;font-size:.86em}
+  .tldr{background:#eff6ff;border-left:4px solid #2563eb;padding:.8rem 1rem;margin:1rem 0}
+  .win{background:#ecfdf5;border-left:4px solid #10b981;padding:.6rem 1rem;margin:.8rem 0}
+  ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 121 — ai-ml-engineering/mlops sub-track COMPLETE (#1842)</h1>
+<p class="tldr"><strong>2026-06-09 · standalone orchestrator · all dispatch non-Claude (s105 conserve directive) · continued from session 120.</strong></p>
+
+<h2>One-line</h2>
+<p>Took the <code>mlops</code> sub-track of the #1842 ai-ml-engineering campaign from 8 thin <code>shipped_unreviewed</code> stubs to <strong>12/12 board <code>done</code></strong> — 7 genuine T3→T0 expansions + 1 review-only T0, each cross-family reviewed (mixed pool, every claim + source web-ground-checked), fixed from the verdicts, merged in two paired PRs (<a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1854">#1854</a>, <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1855">#1855</a>), and board-flipped UNAUDITED→COMMITTED.</p>
+
+<h2>Modules merged (mlops board now 12/12 done)</h2>
+<table>
+<tr><th>Module</th><th>Before → After (body_words)</th><th>Author → Reviewer(s)</th><th>Path</th><th>PR</th></tr>
+<tr><td>1.3 CI/CD for ML</td><td>1092 → 6979 / 15 src</td><td>codex → deepseek (APPROVE+nits)</td><td>cicd-for-ml</td><td>#1854</td></tr>
+<tr><td>1.4 Kubernetes for ML</td><td>review-only T0 (5513)</td><td>cursor R1 NEEDS_CHANGES → deepseek R2 APPROVE</td><td>kubernetes-for-ml</td><td>#1854</td></tr>
+<tr><td>1.5 Advanced Kubernetes</td><td>4635 → 5069 / 15 src</td><td>cursor → deepseek (APPROVE+nits)</td><td>advanced-kubernetes</td><td>#1854</td></tr>
+<tr><td>1.6 Experiment Tracking</td><td>2799 → 5550 / 16 src</td><td>deepseek → codex NEEDS_CHANGES → cursor R2 APPROVE</td><td>experiment-tracking</td><td>#1854</td></tr>
+<tr><td>1.7 Data Pipelines</td><td>4176 → 5031 / 12 src</td><td>cursor → deepseek R1 + codex R2 (2 fix rounds)</td><td>data-pipelines</td><td>#1855</td></tr>
+<tr><td>1.8 ML Pipelines</td><td>2002 → 5490 / 13 src</td><td>cursor → deepseek (APPROVE+nits)</td><td>ml-pipelines</td><td>#1855</td></tr>
+<tr><td>1.9 Model Serving</td><td>1511 → 5103 / 13 src</td><td>cursor → codex (deepseek R1 discarded, see below)</td><td>model-serving</td><td>#1855</td></tr>
+<tr><td>1.10 ML Monitoring</td><td>1163 → 5023 / 20 src</td><td>cursor → deepseek R1 + codex R2</td><td>ml-monitoring</td><td>#1855</td></tr>
+</table>
+<p>Merge commits: #1854 → <code>4bc06774</code>, #1855 → <code>743dbdfd</code>. Review records in <code>.pipeline/reviews/</code> (gitignored, local board state). 1.1 + 1.2 + 1.11 + 1.12 were already board-<code>done</code> (never in the 8 shipped_unreviewed set).</p>
+
+<h2>Cross-family review caught real verifier-blind defects (every one web-verified before acting)</h2>
+<ul>
+<li><strong>1.3 (codex author, exemplary anti-fab):</strong> instead of fabricating a "Benchmarks: What Teams Actually Spend" dollar table, codex turned the section into an honest "a generic dollar table would be fabricated precision" teaching point. Fabricated opener quote removed.</li>
+<li><strong>1.5:</strong> CIFAR-10 <code>Normalize((0.5,),(0.5,))</code> wrong channel count (3-channel RGB) → runtime shape mismatch; deprecated <code>resnet18(pretrained=False)</code> → <code>weights=None</code> (torchvision 0.15+). <em>Rejected deepseek FP</em>: KServe <code>scaleTarget</code>/<code>scaleMetric</code> ARE valid v1beta1 predictor fields (web-verified).</li>
+<li><strong>1.6 (codex web-verified deepseek's hallucinations):</strong> MLflow "latest is 2.x / joined LF 2025" → 3.13.0 (2026-05-29) / LF-join 2020-06-25; Registry <code>transition_model_version_stage</code> taught as current → aliases <code>models:/Name@champion</code> (stages deprecated since MLflow 2.9); "widely cited 2021 survey, majority at No-MLOps" → real Comet-2021 finding (58% manual tracking, scoped + cited); Google Rules-of-ML "Rule 22 = track everything" → real Rule 22 "clean up unused features".</li>
+<li><strong>1.7 (2 rounds):</strong> Feast <code>FeatureView(features=[Feature])</code> → <code>schema=[Field]</code>; Great Expectations <code>add_checkpoint</code> → 1.x <code>validation_definitions.add</code>/<code>checkpoints.add</code> + runtime <code>checkpoint.run(batch_parameters={"dataframe":df})</code>; unlabeled invented stats → <code>Hypothetical scenario:</code>; <em>cursor's own first fix introduced a FALSE "dvc-s3 deprecated" claim that codex caught</em> (dvc-s3 active on PyPI 2026-01).</li>
+<li><strong>1.8:</strong> KFP <code>set_gpu_limit</code> → <code>set_accelerator_type('nvidia.com/gpu').set_accelerator_limit()</code>; removed an off-topic n8n LangChain block (not an ML-pipeline tool); Airflow <code>schedule_interval</code> → <code>schedule</code> (×4); duplicate comparison table removed (padding-by-duplication).</li>
+<li><strong>1.9 (codex, line-accurate):</strong> Zillow opener over-attributed the failure to "serving/observability/rollout controls" the PRNewswire source doesn't support → reframed to the sourced business failure + explicit "this serving-control lesson is our analytical framing, not a claim from Zillow's filing" disclaimer; readiness drill hung (<code>kubectl wait</code> on a selector matching old-ready + new-unready pods) → target new <code>pod-template-hash</code> + <code>rollout undo</code>; canary lab broken (<code>GET</code> vs <code>@app.post</code>, identical v2 image, no version in response) → POST + distinct v2 + <code>model_version</code>; <strong>TorchServe flagged no-longer-maintained</strong> (web-verified) → snapshot + legacy framing.</li>
+<li><strong>1.10 (codex):</strong> PromQL <code>histogram_quantile</code> missing <code>rate()</code> (silently-wrong query — the exact failure the module teaches); PSI binning silently dropped out-of-range production values + compared histograms with mismatched bin edges → open-ended <code>[-inf,inf]</code> bins + shared <code>bin_edges</code> + defined <code>calculate_psi_from_histograms</code>; Prometheus exporter published nothing (<code>run_monitoring_check</code> didn't return <code>feature_psi</code>) → wired. Zillow opener AVOIDED (1.9 owns it) → real 2020-COVID/MIT-Tech-Review distribution-shift opener.</li>
+</ul>
+
+<div class="win"><strong>Reviewer-reliability data point:</strong> deepseek's 1.9 R1 was <em>discarded as unreliable</em> — its most severe "P1: serving frameworks absent" was a hallucination (KServe/Seldon/Triton/TorchServe/vLLM all present 5–16×, grep-confirmed), it invented a "cost tables" finding that doesn't exist, and its line numbers were consistently wrong. Re-ran through codex for a clean, web-verified verdict. Reinforces <code>feedback_agy_gemini_3_5_flash_viable_reviewer</code> / deepseek-never-sole + ground-check every claim.</div>
+
+<h2>Mechanics reused</h2>
+<ul>
+<li><strong>Ground-truth first:</strong> ran <code>verify_module.py</code> per module before dispatching — confirmed 7 genuine T3 (thin/code-padded, real body_words 1092–4635) + 1 already-T0 (1.4), not "stale flags". Read <code>tier_reasons</code> to route density-vs-structure work correctly.</li>
+<li><strong>Bound the re-review cycle:</strong> for NEEDS_CHANGES with specific, web-verified findings, after the fix-pass I verified each item <em>deterministically</em> (grep/verifier) against the reviewer's exact prescription rather than dispatching infinite R3 rounds. 1.7 and 1.9 closed this way.</li>
+<li><strong>Inline-fix small findings</strong> (1.5 code bugs, 1.8 doc-link nits, 1.10 PromQL/DYK) instead of reloading ~2–3M tokens to re-dispatch — per code-editing-safety §7.</li>
+<li><strong>Paired PRs, file-pull assembly:</strong> integration branch off <code>origin/main</code> in a dedicated worktree (never branch in primary), <code>git checkout &lt;module-branch&gt; -- &lt;file&gt;</code> to pull each final file, one squashed commit. Build-verify via file-swap in primary (worktree builds break on Homepage.astro's node_modules; PR CI has no astro build): copy files in → <code>npm run build</code> → grep schema errors → <code>git checkout --</code> restore.</li>
+<li><strong>Board-flip:</strong> write <code>.pipeline/reviews/&lt;track&gt;__&lt;section&gt;__&lt;module&gt;.md</code> (APPROVE record) + <code>python3 -m scripts.quality.pipeline reset-stage &lt;hyphenated-slug&gt; COMMITTED</code>.</li>
+</ul>
+
+<h2>NEXT (campaign #1842, curriculum order)</h2>
+<p><strong>ai-infrastructure (3) → advanced-genai (8) → multimodal-ai (3) → ai-history (1) + stray deep-learning/1.2</strong> → then on-premises → platform. Same proven loop: <code>verify_module.py</code> sweep FIRST per sub-track (T3 = genuine expand here, not stale); ≤3 concurrent authors (cursor/codex/deepseek); mixed-pool cross-family review (codex is the most reliable web-verifier this wave; <strong>deepseek never sole + ground-check every claim incl. line numbers + framework presence</strong>); web-verify volatile facts both directions; inline or dispatched fix from the verdict (never ahead of it); pair 2 modules/PR; build in PRIMARY via file-swap; flip after merge. Watch: padding-by-duplication, incident reuse (dedup gate; Zillow now owned by frameworks-agents/1.10 + mlops/1.9), durable-content snapshot dating, war-story labeling, churned AI/ML SDK APIs (Feast/GX/KFP/MLflow/TensorRT all moved).</p>
+
+<h2>Roster notes (unchanged from s120)</h2>
+<p>All dispatch non-Claude per the s105 conserve directive (interactive orchestrator runs on Claude as required). codex review = danger + <code>--worktree</code>, never pass <code>--mode</code>; strongest code/web-verify reviewer this wave. deepseek review needs <code>--mode workspace-write --worktree</code>; cheap + fast but HALLUCINATES (full-review fabrication on 1.9) → never sole, ground-check every claim. cursor <code>--model auto</code> = strongest off-Claude author + fixer (authored 6 of 8, all fix-passes). agy not used this wave.</p>
+</body>
+</html>
