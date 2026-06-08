@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 120 — frameworks-agents sub-track COMPLETE (#1842)</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1.2rem; color: #1a1a1a; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #1e40af; }
+  code { background: #f1f5f9; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .92em; }
+  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #eff6ff; }
+  .done { color: #15803d; font-weight: 600; }
+  .note { background: #fffbeb; border-left: 3px solid #f59e0b; padding: .5rem .8rem; margin: .8rem 0; }
+  ul { margin: .4rem 0; }
+  .meta { color: #64748b; font-size: .9em; }
+</style>
+</head>
+<body>
+<h1>Session 120 — <code>ai-ml-engineering/frameworks-agents</code> sub-track COMPLETE (#1842)</h1>
+<p class="meta">2026-06-08 · standalone orchestrator · all dispatch non-Claude (s105 conserve directive) · continued from session 119+.</p>
+
+<h2>One-line</h2>
+<p>Finished the last 4 <code>shipped_unreviewed</code> modules in frameworks-agents (1.7, 1.8, 1.9, 1.10) — expanded thin/code-padded T3 stubs to <strong class="done">T0</strong>, cross-family reviewed (mixed pool, ground-checked every claim), fixed inline, merged in two PRs, board-flipped to <code>done</code>. <strong>Board now shows frameworks-agents 10/10 done.</strong> Also merged the <code>.gemini/</code> gitignore (user request, #1851) and cleaned 5 stale worktrees.</p>
+
+<h2>Modules merged</h2>
+<table>
+<tr><th>Module</th><th>Before → After</th><th>Author → Reviewer (cross-family)</th><th>Verdict</th><th>PR</th></tr>
+<tr><td>1.7 Multi-Agent Systems</td><td>1185w/53 code blocks/3 src → <b>5004w/13 src T0</b></td><td>cursor → <b>codex</b></td><td>8/10 NEEDS CHANGES → 4 findings fixed</td><td>#1850</td></tr>
+<tr><td>1.8 Model Context Protocol</td><td>1461w/4 src → <b>5516w/15 src T0</b></td><td>codex → <b>deepseek</b></td><td>APPROVE (no blockers)</td><td>#1850</td></tr>
+<tr><td>1.9 Computer Use & Browser Automation</td><td>2183w/4 src → <b>5901w/16 src T0</b></td><td>codex → <b>cursor</b></td><td>NEEDS_CHANGES → 2 P1 + 4 P2 + 2 nits fixed</td><td>#1852</td></tr>
+<tr><td>1.10 Next-Gen Agentic Frameworks</td><td>1992w/6 src → <b>5000w/12 src T0</b></td><td>cursor → <b>deepseek</b></td><td>APPROVE_WITH_NITS → 2 P2 + 3 nits fixed</td><td>#1852</td></tr>
+</table>
+<p>Merge commits: #1850 → <code>283d9f6f</code>, #1851 (gitignore) → <code>84e0f7cc</code>, #1852 → <code>967b837d</code>. All four board-flipped <code>UNAUDITED → COMMITTED</code>; review records in <code>.pipeline/reviews/</code> (gitignored, local board state).</p>
+
+<h2>Cross-family review caught real defects (verifier-blind, code-heavy)</h2>
+<ul>
+<li><b>1.7 (codex):</b> OTel <code>tracer.start_span</code> → <code>start_as_current_span</code> (3 nested spans weren't attaching); guardrail K8s Job needed <code>backoffLimit: 0</code> (intended <code>exit 1</code> was retried 6×); snapshot date format; unsourced Microsoft Agent Framework table row (added web-verified source).</li>
+<li><b>1.9 (cursor):</b> <b>P1</b> Dockerfile missing PyAutoGUI Linux deps (<code>python-xlib</code> + libX11/libXtst/libXext + python3-tk) → <code>import pyautogui</code> would fail; <b>P1</b> scripts bind-mounted into <code>/app</code> (documented); controller now returns a fresh screenshot after every action (enforces the screenshot-loop invariant the checklist claimed); durable-content leaks (Operator/v1.36 outside snapshot) fixed.</li>
+<li><b>1.10 (deepseek):</b> war-story converted to labeled <code>## Hypothetical Scenario:</code>; dead lab config consumed + cross-framework guardrail-name mapping; Next-Module link retargeted within-track.</li>
+</ul>
+
+<div class="note">
+<b>Web-verify both directions (worked again):</b> OpenAI Operator → ChatGPT-agent rebrand (Jan/Jul 2025) handled accurately; <b>Kubernetes user namespaces GA in v1.36</b> — codex <i>corrected</i> the brief's "v1.35 native sandboxing" assumption and taught why that shorthand is unsafe; LangGraph v1.x is real (v1.2.4 PyPI 2026-06) — same deepseek training-cutoff FP that session 119 rejected on 1.3 surfaced again and was rejected again. martinfowler CircuitBreaker URL was a sandbox-network false-negative on the verifier (confirmed live via WebFetch). Every reviewer claim + source URL ground-checked against the live file.
+</div>
+
+<h2>Scope correction (important for the board reading)</h2>
+<p>The handoff's "1.9+1.10 → frameworks-agents done" was correct. The campaign's frameworks-agents work was exactly the 8 <code>shipped_unreviewed</code> modules (1.2–1.5, 1.7–1.10). <b>1.1 and 1.6 show T3 on the verifier (axis 1, thin) but are <code>done</code> on the board (axis 3)</b> — they were never in the 38 <code>shipped_unreviewed</code> set (board <code>done</code> = score≥4 + stage None/COMMITTED + no review pending). Their thinness is a separate axis-1 follow-up, <b>not</b> #1842 scope. (See <code>feedback_three_quality_axes</code>.)</p>
+
+<h2>Mechanics learned / reused</h2>
+<ul>
+<li>Inline fix-passes for the small, fully-specified reviewer findings (single file, ≤8 edits) rather than re-dispatching an author — dispatching reloads ~2–3M tokens of context for a few one-line edits (<code>code-editing-safety §7</code> sub-agent rule).</li>
+<li>Combined-PR assembly: cherry-pick both modules' commits onto a fresh integration branch off <code>origin/main</code> in a dedicated worktree (never branch in primary), build-verify via a <b>branch-safe file-swap in primary</b> (copy worktree files in → <code>npm run build</code> → grep schema errors → <code>git checkout --</code> restore), since worktree builds break on Homepage.astro's node_modules path and PR CI has no astro build.</li>
+<li>Board flip: write <code>.pipeline/reviews/&lt;key&gt;.md</code> (APPROVE record) + <code>python3 -m scripts.quality.pipeline reset-stage &lt;HYPHENATED-slug&gt; COMMITTED</code>. The slug uses <b>hyphens</b> (<code>ai-ml-engineering-frameworks-agents-module-1.7-multi-agent-systems</code>), not slashes — slashes make a bad nested lock path and the reset fails.</li>
+</ul>
+
+<h2>NEXT (campaign #1842, curriculum order)</h2>
+<p><code>mlops</code> (8 modules) → <code>ai-infrastructure</code> (3) → <code>advanced-genai</code> (8) → <code>multimodal-ai</code> (3) → <code>ai-history</code> (1) + stray <code>deep-learning/1.2</code> → then <code>on-premises</code> → <code>platform</code>.</p>
+<p><b>Loop (proven this wave):</b> <code>verify_module.py</code> sweep FIRST per sub-track (T3 here = genuine expand, not stale); ≤3 concurrent authors (cursor/codex/deepseek); mixed-pool cross-family review (deepseek strong this wave; agy never sole); ground-check EVERY reviewer claim + source URL/arXiv-ID vs the live file; web-verify volatile facts both ways; inline or dispatched fix-pass from the verdict (never ahead of it); pair 2 modules/PR; build in PRIMARY via file-swap; flip after merge. Watch: padding-by-duplication (verifier counts dup paragraphs), Air Canada/Zillow incident reuse (dedup gate), durable-content snapshot dating, war-story labeling.</p>
+
+<h2>Roster notes (unchanged from s119)</h2>
+<p>All dispatch non-Claude per the s105 conserve directive (interactive orchestrator runs on Claude as required). deepseek review needs <code>--mode workspace-write --worktree</code> (read-only has no file-read tool); its responses truncate to a summary in the wrapper (full review in the task output). codex review = danger + <code>--worktree</code>, never pass <code>--mode</code>; strong code/web-verify reviewer. cursor <code>--model auto</code> = strongest off-Claude code reviewer/fixer. agy never sole reviewer.</p>
+</body>
+</html>
