@@ -9,8 +9,8 @@ sidebar:
 
 By the end of this module, you will be able to connect the durable agent concepts to concrete framework choices without turning one vendor's current API into the lesson. Each outcome maps to a teaching section, a knowledge-check question, and the hands-on exercise so that you can practice the reasoning instead of memorizing a product tour.
 
-- **Explain the perceive→plan→act→observe loop and agent primitives**: grounding, tools or function calling, memory, planning, orchestration, human-in-the-loop control, streaming, observability, and state.
-- **Compare supervisor, sequential, and group-chat orchestration patterns** for single-agent and multi-agent systems without treating multi-agent design as a default upgrade.
+- **Explain the perceive→plan→act→observe→verify loop and agent primitives**: grounding, tools or function calling, memory, planning, orchestration, human-in-the-loop control, streaming, observability, and state.
+- **Compare supervisor, sequential, router, and group-chat orchestration patterns** for single-agent and multi-agent systems without treating multi-agent design as a default upgrade.
 - **Use the Rosetta table to evaluate framework capabilities** across LangChain/LangGraph, LlamaIndex, CrewAI, AutoGen, Microsoft Agent Framework, and Haystack.
 - **Design production guardrails for cost, latency, failure modes, and safety** so an agent has explicit budgets, rollback paths, audit trails, and escalation points.
 - **Build and verify a dependency-free multi-agent RAG pipeline** that demonstrates retrieval, routing, tool execution, observation handling, and synthesis.
@@ -25,7 +25,7 @@ This module is the overview for building agents and selecting an agent framework
 
 Hypothetical scenario: a platform team builds an incident-response assistant that can search runbooks, inspect alerts, open tickets, and draft remediation commands. The team initially thinks the problem is "which framework should we use?" but the more useful question is "what loop are we permitting, which tools are side-effecting, what state can persist, and where must a human approve?" Once those boundaries are explicit, framework selection becomes an implementation choice rather than a belief system.
 
-The durable idea is simple enough to draw but hard to operate. An agent is a software system that uses a model inside a controlled loop: it receives an observation, decides what to do next, acts through a tool or response, observes the result, and repeats until it reaches a stop condition. Frameworks differ in syntax, ergonomics, and current feature sets, but reliable agents keep returning to that loop.
+The durable idea is simple enough to draw but hard to operate. An agent is a software system that uses a model inside a controlled loop: it receives an observation, decides what to do next, acts through a tool or response, observes the result, verifies progress and risk, and repeats until it reaches a stop condition. Frameworks differ in syntax, ergonomics, and current feature sets, but reliable agents keep returning to that loop.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ flowchart LR
     Verify -->|unsafe or exhausted| Human[Escalate to human]
 ```
 
-## The Agent Loop: Perceive, Plan, Act, Observe
+## The Agent Loop: Perceive, Plan, Act, Observe, Verify
 
 The perceive step gathers the context the model will use for the next decision. That context might include the user request, conversation history, retrieved documents, tool schemas, policy instructions, prior tool observations, and system state. Perception is not passive because the framework chooses which facts enter the model's context window and which facts stay outside. A weak context builder can make a capable model look unreliable.
 
@@ -95,7 +95,7 @@ Planning is the primitive that determines how much work the model decomposes bef
 
 Orchestration is the primitive that controls how one or more agents move through work. In a single-agent system, orchestration might be a chain, graph, or workflow around one model. In a multi-agent system, orchestration controls roles, routing, handoffs, shared context, and termination. A multi-agent design is not automatically more capable; it trades simplicity for specialization, isolation, parallelism, or governance.
 
-Human-in-the-loop control is the primitive that pauses an agent before a sensitive step or invites a human to supply missing judgment. A human checkpoint should not be a vague "approve everything" button. The system should show the proposed action, relevant context, expected side effects, alternatives considered, and the exact decision choices available: approve, edit, reject, respond, or escalate.
+Human-in-the-loop control is the primitive that pauses an agent before a sensitive step or invites a human to supply missing judgment. A human checkpoint should not be a vague "approve everything" button. The system should show the proposed action, relevant context, expected side effects, alternatives considered, and the decision options the harness supports.
 
 Streaming is the primitive that exposes intermediate progress. It can stream model tokens, tool-call events, structured state transitions, logs, or final outputs. Streaming matters because agents can run longer than normal chat completions, and users need to see whether work is progressing or stuck. The important design choice is not merely "can it stream?" but "what events are visible and useful?"
 
@@ -158,7 +158,7 @@ A group-chat system is easiest to control when each role has a narrow reason to 
 
 The table below is a Rosetta view: rows are durable capabilities and columns are framework families. The cells are intentionally concise because they are the volatile skin of the module. Refresh the cells when framework docs change, but preserve the row structure because these capabilities outlast current APIs.
 
-| Durable capability | LangChain / LangGraph | LlamaIndex | CrewAI | AutoGen | Microsoft Agent Framework / Semantic Kernel | Haystack |
+| Durable capability | LangChain / LangGraph | LlamaIndex | CrewAI | AutoGen | Microsoft Agent Framework | Haystack |
 |---|---|---|---|---|---|---|
 | Tool calling | Tools and callable functions are core agent components; LangGraph workflows can wrap tools as nodes. | Agents can use query engines, tools, and workflow steps over data sources. | Agents can receive tools, including external integrations and MCP-backed tools. | Agents and teams can use tools within conversation-driven workflows. | Agents can call tools and MCP servers through framework integrations. | Pipelines can combine retrievers, generators, routers, and tool-like components. |
 | Memory | Short-term memory, long-term memory, and checkpoints are documented as agent concerns. | Data indexes, chat engines, workflows, and agent state support context augmentation. | Memory, knowledge, planning, and checkpointing are documented concepts. | Team state and conversation history can persist until reset or resume. | Agent sessions, context providers, and workflow state support persistence. | State is often expressed through explicit pipeline inputs, stores, and components. |
@@ -170,7 +170,7 @@ The table below is a Rosetta view: rows are durable capabilities and columns are
 
 Notice that the table does not ask which framework is universally superior. It asks which capability is central to your project and how each framework family expresses that capability. A team building a document-heavy assistant will care deeply about ingestion, indexing, retrieval, reranking, and citation control. A team building a long-running deployment workflow will care more about state, checkpointing, interrupts, and deterministic routing.
 
-Tool-as-worked-example: if we use LangGraph to make human approval concrete, the concept is not "LangGraph is the lesson." The concept is interruptible execution. In LangGraph-flavored terms, a side-effecting tool call can pause at an interrupt, persist graph state, wait for approve/edit/reject/respond, and resume. In the Rosetta table, the equivalent question for every other framework is the same: where can execution pause, what state is saved, what choices can a human make, and how is the decision recorded?
+Tool-as-worked-example: if we use LangGraph to make human approval concrete, the concept is not "LangGraph is the lesson." The concept is interruptible execution. Frameworks expose interrupt and resume controls for human-in-the-loop workflows in different ways; see [Module 1.3: LangGraph for Agents](/ai-ml-engineering/frameworks-agents/module-1.3-langgraph-for-agents/) and the Rosetta table's human-in-the-loop row for specific API vocabulary. The durable question for every framework is the same: where can execution pause, what state is saved, what choices can a human make, and how is the decision recorded?
 
 The same translation applies to retrieval. If we use LlamaIndex to make context augmentation concrete, the concept is not "all agents should be built around LlamaIndex." The concept is that private data needs ingestion, indexing, retrieval, and synthesis boundaries. A LangChain agent might call a retriever tool, a Haystack pipeline might route through retrievers and generators, and a CrewAI process might assign retrieval to a specialist role. The durable capability is retrieval grounding.
 
@@ -249,20 +249,20 @@ The final production question is ownership. Someone must own prompt policy, tool
 
 | Mistake | Why It Happens | How to Fix It |
 |---|---|---|
-| Treating an agent as a prompt | The demo starts with natural language, so teams miss the loop, state, and side effects underneath. | Draw the perceive→plan→act→observe loop and assign policies to every step before choosing framework syntax. |
+| Treating an agent as a prompt | The demo starts with natural language, so teams miss the loop, state, and side effects underneath. | Draw the perceive→plan→act→observe→verify loop and assign policies to every step before choosing framework syntax. |
 | Adding multi-agent orchestration too early | Role names make a prototype feel organized even when one agent with two tools would be clearer. | Start with one agent, then add supervisor, sequential, router, or group-chat patterns only when the task shape justifies them. |
 | Giving every tool the same trust level | Framework examples often register tools as a flat list with descriptions. | Classify tools by side effect, require approval for risky classes, validate arguments, and record every tool call. |
 | Using memory as a dumping ground | Teams persist every message because storage is cheap and retrieval feels magical. | Separate short-term, long-term, episodic, and summary memory with retention, conflict, privacy, and deletion rules. |
 | Evaluating frameworks by current hype | Fast-moving ecosystems make social proof stale and biased. | Evaluate durable capabilities: state, tool policy, HITL, streaming, observability, migration pressure, and task fit. |
 | Ignoring stop conditions | The agent appears helpful while looping, retrying, or asking other agents for more work. | Enforce maximum steps, token budget, tool-call budget, wall-clock timeout, and repeated-failure circuit breakers. |
-| Treating human review as a checkbox | The human sees a vague approval prompt and cannot judge the proposed action. | Show evidence, proposed action, side effects, rollback path, and approve/edit/reject/respond choices in the review UI. |
+| Treating human review as a checkbox | The human sees a vague approval prompt and cannot judge the proposed action. | Show evidence, proposed action, side effects, rollback path, and clear decision options in the review UI. |
 
 ## Knowledge Check
 
 <details>
-<summary>Question 1: What makes the perceive→plan→act→observe loop more durable than any current framework API?</summary>
+<summary>Question 1: What makes the perceive→plan→act→observe→verify loop more durable than any current framework API?</summary>
 
-The loop describes the control problem that every agent system must solve: gather context, choose a next step, execute through a tool or response, interpret the result, and decide whether to continue or stop. A framework API may rename these pieces, but it cannot remove the need for context selection, action policy, observation handling, verification, and termination.
+The loop describes the control problem that every agent system must solve: gather context, choose a next step, execute through a tool or response, interpret the result, and verify whether the system should continue, stop, retry, or escalate. A framework API may rename these pieces, but it cannot remove the need for context selection, action policy, observation handling, verification, and termination.
 </details>
 
 <details>
@@ -272,9 +272,9 @@ Framework defaults usually describe how to register and invoke a tool, but they 
 </details>
 
 <details>
-<summary>Question 3: When does a supervisor pattern fit better than a group-chat pattern?</summary>
+<summary>Question 3: When does a supervisor or router pattern fit better than a group-chat pattern?</summary>
 
-A supervisor pattern fits when centralized control, auditable routing, and context isolation matter more than open debate among agents. The supervisor decides which specialist to call, receives structured results, and synthesizes the outcome. A group-chat pattern fits critique or collaborative exploration, but it needs stricter termination and context controls because messages can grow and roles can blur.
+A supervisor pattern fits when centralized control, auditable routing, and context isolation matter more than open debate among agents. A router pattern fits when the main decision is classifying the request and sending it to the right specialist or workflow. A group-chat pattern fits critique or collaborative exploration, but it needs stricter termination and context controls because messages can grow and roles can blur.
 </details>
 
 <details>
@@ -310,13 +310,16 @@ The scenario is a policy assistant for a platform team. One worker plans the que
 - [ ] Create `agent_rag_sim.py` and paste the complete script below.
 - [ ] Run the script with `.venv/bin/python agent_rag_sim.py` from the repository root or another environment where `.venv/bin/python` exists.
 - [ ] Confirm the output includes a `plan`, a `retrieved` list, a `tool_observation`, and a final answer with a policy citation.
-- [ ] Modify the user question to ask for an unsupported policy and confirm the verifier refuses to pretend it has evidence.
+- [ ] Modify the user question to ask `What is the parental-leave policy?` and confirm the verifier refuses to pretend it has evidence.
 - [ ] Add one new policy document and confirm the retriever can ground an answer in the new source.
-- [ ] Write down which parts of the script correspond to tool calling, memory, planning, orchestration, human-in-the-loop review, streaming, observability, and state.
+- [ ] Write down which parts of the script correspond to planning, retrieval, tool execution, tool observation, synthesis, and citation verification.
+
+Several primitives (human-in-the-loop, streaming, observability, persistent memory) are intentionally absent here; note where you would add each in a production harness.
 
 ```python
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -346,6 +349,20 @@ DOCUMENTS = [
 ]
 
 
+STOPWORDS = {
+    "about",
+    "available",
+    "does",
+    "from",
+    "have",
+    "policy",
+    "what",
+    "when",
+    "where",
+    "which",
+}
+
+
 def plan_agent(question: str) -> dict[str, str]:
     lowered = question.lower()
     if "refund" in lowered:
@@ -358,13 +375,24 @@ def plan_agent(question: str) -> dict[str, str]:
 
 
 def retrieve_agent(query: str, limit: int = 2) -> list[Document]:
-    query_terms = {term.strip(".,").lower() for term in query.split() if len(term) > 3}
+    query_terms = {
+        term
+        for term in re.findall(r"[a-z0-9-]+", query.lower())
+        if len(term) > 3 and term not in STOPWORDS
+    }
+    if not query_terms:
+        return []
+
     scored = []
     for document in DOCUMENTS:
         haystack = f"{document.title} {document.text}".lower()
-        score = sum(1 for term in query_terms if term in haystack)
-        if score:
-            scored.append((score, document))
+        matches = [
+            term
+            for term in query_terms
+            if re.search(rf"(?<!\w){re.escape(term)}(?!\w)", haystack)
+        ]
+        if len(matches) == len(query_terms):
+            scored.append((len(matches), document))
     scored.sort(key=lambda item: item[0], reverse=True)
     return [document for _, document in scored[:limit]]
 
