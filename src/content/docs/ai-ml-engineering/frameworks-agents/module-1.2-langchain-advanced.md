@@ -5,110 +5,91 @@ sidebar:
   order: 503
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
 
-**Reading Time**: 6-7 hours
-**Prerequisites**: Module 15
+## What You'll Be Able To Do
 
-> **Go deeper:** For retrieval and tool boundaries and production guardrails around tool-calling agents, see [Retrieval, Tools, and Memory Boundaries](/ai/ai-engineering-foundations/module-2.3-retrieval-tools-and-memory-boundaries/) and [Guardrails, Gates, and Agent-Legible Apps](/ai/ai-engineering-foundations/module-3.2-guardrails-gates-and-agent-legible-apps/).
+- **Compose** multi-step LCEL pipelines from prompts, models, parsers, and routers using Runnable composition patterns you can test without live API keys.
+- **Design** distinct tool schemas with Pydantic validation that guide models toward accurate tool selection, safe execution, and minimal token overhead.
+- **Integrate** memory policies, retrieval tools, and agent executors into cohesive workflows that ground answers in verified external data instead of model weights.
+- **Debug** agent execution loops using streaming events, callback handlers, verbose traces, and intermediate-step inspection when routing fails in production.
+- **Apply** production patterns including least-privilege tools, structured error handling, caching layers, recursion limits, and cost-aware payload shaping.
 
----
-
-## What You'll Be Able to Do
-
-By the end of this comprehensive module, you will have mastered the architectural patterns required to build autonomous, reliable systems. Specifically, you will be able to:
-
-1. **Implement** function calling architectures using LangChain to bridge the gap between text generation and external system execution.
-2. **Design** robust tool schemas that effectively guide language models toward accurate tool selection while minimizing token consumption and preventing catastrophic hallucination.
-3. **Debug** agent execution loops by inspecting intermediate steps, trace logs, and analyzing tool routing decisions to ensure consistent deterministic outputs.
-4. **Evaluate** the cost and performance trade-offs of multi-step reasoning models against single-pass prompt strategies to build highly optimized cognitive architectures.
-5. **Diagnose** security vulnerabilities in tool-calling implementations, applying the principle of least privilege to restrict shell executions and prevent malicious database queries.
-6. **Compare** synchronous and parallel tool execution strategies to significantly optimize agent response latencies and improve concurrent task processing.
-
----
 
 ## Why This Module Matters
 
-In early 2024, Air Canada was ordered by a civil tribunal to honor a hallucinated refund policy invented by its customer service chatbot. The bot, functioning as a generic conversational agent rather than a tightly constrained tool-caller, generated a plausible-sounding but entirely fictitious bereavement fare policy. Because the system relied on the model's internal weights rather than deterministic API calls to a strict policy database, the airline suffered substantial reputational damage and financial loss. The underlying failure was structural: the engineers permitted the LLM to act as a database rather than a reasoning engine orchestrating external tools.
+Hypothetical scenario: A customer-support chatbot answers refund questions by generating policy text from model weights instead of calling a deterministic policy service. When the generated answer disagrees with the real policy, the business absorbs reputational damage and manual remediation cost. The failure mode is structural: the system treated the language model as a database rather than a reasoning engine that should orchestrate verified tools.
 
-A financial analysis agent can behave well in staging yet still generate excessive external API traffic in production if it lacks caching, recursion limits, and tight tool constraints.
+Hypothetical scenario: A financial analysis agent works in staging but generates excessive external API traffic in production because follow-up questions trigger fresh market-data calls without caching, recursion limits, or tight tool constraints. The model is not malicious; the architecture simply never encoded cost boundaries at the tool layer. Advanced LangChain work is therefore about composable primitives—runnables, tools, memory, retrievers, agents, callbacks, and streaming—wired together with explicit contracts that survive framework churn.
 
-These incidents highlight the core thesis of this module: large language models are exceptional reasoning engines but dangerous, unpredictable data stores. To build reliable, production-grade artificial intelligence systems, you must decouple reasoning from direct action. By designing robust tool-calling frameworks, you constrain the model to use verified external functions for data retrieval and state mutations. This module transitions you from building conversational novelties to architecting deterministic, secure, and cost-effective AI agents that safely manipulate external environments.
+This module teaches the durable spine of LangChain orchestration: how to compose pipelines with LCEL, how to expose safe tools, how to ground agents with retrieval and memory, how to observe execution with callbacks and streaming, and how to harden deployments for security and cost. You already saw fundamentals in the sibling module [LangChain Fundamentals](/ai-ml-engineering/frameworks-agents/module-1.1-langchain-fundamentals/); here we go deeper into the patterns production teams reuse even when import paths change quarterly. When agent state and routing grow beyond a linear chain, the next step is [LangGraph for Agents](/ai-ml-engineering/frameworks-agents/module-1.3-langgraph-for-agents/).
 
----
+> **LangChain landscape snapshot — as of 2026-06.** LangChain reorganizes APIs frequently; verify against current docs before relying on import paths or class names. Package layout at authoring time: `langchain-core` (Runnable/LCEL primitives), provider packages (`langchain-openai`, etc.), `langchain-community` (integrations), higher-level `langchain` (agents/chains). Agent executors increasingly delegate to LangGraph for durable state.
 
-## Theory
 
-### Introduction: When LLMs Need Hands
+## LCEL and Runnables
 
-You have learned that Large Language Models are incredibly capable at understanding semantics, extracting intent, and generating highly contextual text. However, there is a fundamental limitation inherent to the transformer architecture: **LLMs can only produce text outputs**. They are isolated computational brains floating in a void. On their own, they cannot natively:
+LangChain Expression Language (LCEL) is the composable spine of modern LangChain. Every serious component implements the Runnable interface: you can invoke it synchronously, await it asynchronously, batch inputs, and stream partial outputs with the same surface area. That uniformity matters because LLM applications are not one HTTP call—they are pipelines of prompts, models, parsers, routers, retrievers, and validators. When each step shares Runnable semantics, you can test, trace, and swap steps without rewriting the orchestration layer every time a provider changes its SDK.
 
-- Check the current real-time weather conditions in a specific geographical location.
-- Query a relational database to extract proprietary customer metrics.
-- Send an email or SMS text message to alert an administrator.
-- Execute a Python script to perform heavy numerical computations.
-- Access the live internet to retrieve breaking news headlines.
-- Read files from a local disk or interact with a file system.
+The pipe operator is syntactic sugar for sequential composition. Conceptually, `prompt | model | parser` means: render the prompt from input variables, pass the rendered messages to the model, then parse the model text into application data. Under the hood each stage calls `invoke` on the previous stage's output. This is the same mental model as a Unix pipeline or a data-engineering DAG, except the transformations are probabilistic at the model boundary and deterministic everywhere else.
 
-This is exactly where **function calling** (also frequently referred to as **tool use**) comes into play. It is the architectural breakthrough that transformed LLMs from advanced autocomplete engines into autonomous **AI agents** capable of taking physical and digital actions in the real world. 
+Parallel composition appears when multiple branches consume the same input without depending on each other. RunnableParallel lets you fan out work—summarize, classify, and extract metadata from the same document—then merge results into one dictionary for a downstream step. That pattern reduces latency compared with three serial model calls and keeps each branch's contract explicit. When one branch fails, you can catch the failure at the merge point instead of losing the entire request.
 
-If a language model is a brilliant brain in a jar, function calling acts as the robotic hands it needs to interface with its surrounding environment. The model decides what needs to be done, and the tools perform the labor.
+Branching and routing extend LCEL beyond straight lines. A router inspects input—intent label, keyword, or classifier output—and selects which sub-chain should run. This is how teams keep tool catalogs manageable: instead of presenting fifty tools to one agent, a lightweight router chooses a focused subset. Routing is a durable pattern whether you implement it with RunnableBranch, a custom function, or an outer orchestrator like LangGraph.
 
-```mermaid
-flowchart TD
-    subgraph Evolution of LLMs
-        A["2020: 'Write me a poem'"] --> B["[Poem text]<br/>(Text in, text out)"]
-        C["2023: 'What's the weather?'"] --> D["[Call weather_api()]<br/>(Text in, ACTION out!)"]
-        D --> E["[Return: '72F, sunny']"]
-        F["2024: 'Book me a flight'"] --> G["[search_flights()]<br/>(Complex multi-step)"]
-        G --> H["[compare_prices()]"]
-        H --> I["[book_flight()]"]
-        I --> J["[send_confirmation()]"]
-    end
+The following example uses `langchain_core` fakes so you can run it locally without API keys. It demonstrates sequential composition, parallel fan-out, and a simple passthrough merge—patterns you will reuse in retrieval and agent pipelines throughout this module.
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnablePassthrough
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+
+# Fake model returns deterministic text for tests
+fake_llm = GenericFakeChatModel(messages=iter([
+    AIMessage(content="Intent: billing"),
+    AIMessage(content="Summary: user asked about invoice timing."),
+]))
+
+classify_prompt = ChatPromptTemplate.from_messages([
+    ("system", "Classify intent in one short phrase."),
+    ("human", "{question}"),
+])
+summarize_prompt = ChatPromptTemplate.from_messages([
+    ("system", "Summarize the user question in one sentence."),
+    ("human", "{question}"),
+])
+
+classify_chain = classify_prompt | fake_llm | StrOutputParser()
+summarize_chain = summarize_prompt | fake_llm | StrOutputParser()
+
+router = RunnableParallel(
+    intent=classify_chain,
+    summary=summarize_chain,
+    raw=RunnablePassthrough(),
+)
+enrich = router | RunnableLambda(lambda d: {**d, "route": "billing" if "billing" in d["intent"].lower() else "general"})
+
+print(enrich.invoke({"question": "Where is my invoice for March?"}))
 ```
 
----
+Testing LCEL chains without live models is a production habit, not a classroom trick. Fake chat models, stub retrievers, and RunnableLambda stand-ins let you assert on output shape, routing decisions, and parser behavior in ordinary unit tests. When a provider bumps a SDK version, those tests tell you whether your composition still honors contracts even before you spend tokens on integration runs.
 
-### The Function Calling Revolution
+Assign runnables (`RunnablePassthrough.assign`) are the idiomatic way to enrich inputs mid-pipeline. You might attach a session identifier, redact sensitive fields, or compute a cache key before the prompt renders. Because assign returns a new runnable, you keep side effects localized and observable rather than hiding mutations inside prompt templates.
 
-Think of function calling like teaching a highly intelligent assistant to use a telephone. The assistant is brilliant at understanding user requests, summarizing meetings, and formulating conversational responses, but they cannot physically dial the numbers or browse a complex website themselves. Function calling gives the assistant a detailed phone book (the available software tools) and teaches them exactly how to place requests (invoking specific programmatic functions). You still handle the underlying mechanical execution of the phone call via your local server; the assistant merely tells you when to call, who to call, and what specific arguments to provide.
+Fallback runnables wrap primary and secondary models or parsers. If the primary model times out, the fallback can be a smaller local model or a deterministic template response. Document fallback behavior in runbooks so on-call engineers know which quality bar applies during partial outages.
 
-#### How It Works Architecturally
+## Tools and Tool-Calling
 
-Function calling is elegantly simple in its core concept, yet complex in its execution. The standard flow operates as follows:
+Large language models generate text; they do not natively check live weather, query your database, or send email. Tool calling (also called function calling) closes that gap: the model emits a structured request, your application executes the function, and the model incorporates the result into its next turn. LangChain's tool abstractions generate JSON schemas from Python functions so you do not hand-maintain provider-specific wire formats for OpenAI, Anthropic, and Google.
 
-1. **You define tools**: You programmatically tell the LLM what functions are available in your system and precisely what they do.
-2. **LLM decides**: Based on the user's natural language prompt, the LLM analyzes the context and chooses which tool to call.
-3. **You execute**: The LLM outputs a structured JSON request, and your application code intercepts this JSON to run the actual function locally on your server.
-4. **LLM interprets**: The LLM receives the physical results of your local function execution and uses those facts to formulate a final conversational response to the user.
+The tool description is the routing signal. Models rarely read your implementation; they read the name, description, and parameter docs you expose. Vague descriptions cause wrong-tool selection; overlapping descriptions cause random guessing. Production teams invest more time in docstrings and schema examples than in clever prompt hacks because schema quality is the cheapest lever for reliability.
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant LLM
-    participant Tool as get_weather
-    User->>LLM: "What's the weather in Tokyo?"
-    Note over LLM: "I should call get_weather()<br/>with location='Tokyo'"
-    LLM->>Tool: get_weather(location="Tokyo")
-    Note over Tool: API call to weather service
-    Tool-->>LLM: {"temp": 18, "condition": "partly cloudy"}
-    Note over LLM: "The weather in Tokyo is 18C<br/>with partly cloudy skies."
-    LLM-->>User: Natural language response
-```
+LangChain offers three common authoring paths: the `@tool` decorator for simple functions, StructuredTool with Pydantic args_schema for validation, and BaseTool subclasses when you need dependency injection or custom async behavior. All three compile down to the same tool contract the model sees. Pick the path that matches how strictly you must validate inputs before side effects occur.
 
-> **Stop and think**: If you provide a language model with ten different tools for fetching weather data (e.g., `get_current_weather`, `get_hourly_forecast`, `get_weekend_forecast`), how might this affect the model's reliability compared to providing a single, flexible `get_weather` tool?
+Before a language model can effectively use a software tool, it must comprehend the tool's mechanics through metadata: name, description, parameters, and return shape. This critical information is transmitted via a tool schema, traditionally structured in JSON. The schema acts as the interface contract between the LLM's generative text capabilities and your deterministic backend system.
 
----
-
-### Tool Schema: Teaching LLMs About Your Tools
-
-Before a language model can effectively use a software tool, it must completely comprehend the tool's mechanics and limitations. The model does not read your source code; it relies entirely on metadata. It needs to know:
-- **Name**: What is the strict, unique identifier for the tool?
-- **Description**: What exactly does the tool do, and under what specific edge-case circumstances should it be invoked?
-- **Parameters**: What input arguments are required, what data types are expected, and are there any constraints?
-- **Return type**: What specific format will the returned data take upon successful execution?
-
-This critical information is transmitted to the model via a **tool schema**, traditionally structured in a rigid JSON format. This schema acts as the interface contract between the LLM's generative text capabilities and your deterministic backend system.
+Writing pure JSON schemas by hand is tedious and prone to syntactic errors. Maintaining synchronization between a manual JSON schema and the underlying Python function signature is a recipe for drift. LangChain's decorator and StructuredTool paths auto-generate schemas at runtime from type hints and docstrings.
 
 ```python
 # A tool schema tells the LLM everything it needs to know
@@ -133,51 +114,6 @@ weather_tool_schema = {
 }
 ```
 
-#### The Description Is Everything
-
-A fundamental secret that separates mediocre tool implementations from exceptional, production-grade architectures: **the description parameter is the absolute most critical component**. The language model relies almost entirely on semantic comprehension of the description string to make routing decisions. It uses this text to decide:
-
-1. Whether the tool is functionally appropriate for the user's current request.
-2. How to extract and map entities from the user's messy natural language prompt into the tool's strict required parameters.
-
-If the description is ambiguous, the model will hallucinate parameters or invoke the tool incorrectly.
-
-```python
-# BAD description - vague, unhelpful
-{
-    "name": "search",
-    "description": "Searches for things"  # What things? How? When to use?
-}
-
-# GOOD description - specific, actionable
-{
-    "name": "search_products",
-    "description": "Search the product catalog by name, category, or keywords. Use this when the user wants to find products, browse inventory, or look up items by name. Returns up to 10 matching products with prices and availability."
-}
-
-# EXCELLENT description - includes examples and edge cases
-{
-    "name": "search_products",
-    "description": """Search the product catalog. Use when users want to:
-    - Find specific products ("show me laptops")
-    - Browse categories ("what electronics do you have")
-    - Check availability ("do you have the iPhone 15")
-
-    Returns: List of products with name, price, stock status.
-    Note: For price comparisons, use compare_prices tool instead."""
-}
-```
-
----
-
-### LangChain Tools: The Elegant Abstraction
-
-Writing pure JSON schemas by hand is excruciatingly tedious and highly prone to syntactic errors. Maintaining synchronization between a manual JSON schema and the underlying Python function signature is a recipe for disaster. LangChain offers an elegant, pythonic abstraction layer for creating tools. You can use built-in decorators and base classes to auto-generate the underlying JSON schemas dynamically at runtime.
-
-#### Method 1: The Decorator (Simplest)
-
-The simplest method is utilizing LangChain's decorator directly on a standard Python function. This is the recommended approach for the vast majority of simple utility functions.
-
 ```python
 from langchain_core.tools import tool
 
@@ -195,19 +131,8 @@ def get_weather(location: str, units: str = "celsius") -> str:
     Returns:
         A string describing the current weather conditions.
     """
-    # Your implementation here
     return f"Weather in {location}: 22 {units[0].upper()}, sunny"
 ```
-
-LangChain automatically inspects the function at runtime and performs the heavy lifting:
-- It extracts the Python function name to use as the JSON tool name.
-- It parses the Python docstring to populate the detailed tool description.
-- It thoroughly analyzes Python type hints to generate the strict parameter schema.
-- It transparently handles all serialization and deserialization formatting during execution.
-
-#### Method 2: StructuredTool (More Control)
-
-When you need granular validation of incoming arguments before they reach your function logic, Pydantic integration is essential.
 
 ```python
 from langchain_core.tools import StructuredTool
@@ -227,95 +152,9 @@ weather_tool = StructuredTool.from_function(
     name="get_weather",
     description="Get current weather for a location",
     args_schema=WeatherInput,
-    return_direct=False  # LLM will process the result
+    return_direct=False,
 )
 ```
-
-#### Method 3: BaseTool Subclass (Maximum Flexibility)
-
-For complex tools that require dependency injection, dynamic state, or custom initialization logic, subclassing `BaseTool` provides the ultimate architectural flexibility.
-
-```python
-from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type, Optional
-from langchain_core.callbacks import CallbackManagerForToolRun
-
-class CalculatorInput(BaseModel):
-    expression: str = Field(description="Mathematical expression to evaluate")
-
-class CalculatorTool(BaseTool):
-    name: str = "calculator"
-    description: str = "Evaluates mathematical expressions. Use for any math calculations."
-    args_schema: Type[BaseModel] = CalculatorInput
-
-    def _run(
-        self,
-        expression: str,
-        run_manager: Optional[CallbackManagerForToolRun] = None
-    ) -> str:
-        """Execute the calculation."""
-        try:
-            # WARNING: eval is dangerous! Use a safe parser in production
-            result = eval(expression)
-            return f"Result: {result}"
-        except Exception as e:
-            return f"Error: {str(e)}"
-
-    async def _arun(
-        self,
-        expression: str,
-        run_manager: Optional[CallbackManagerForToolRun] = None
-    ) -> str:
-        """Async version (required for async agents)."""
-        return self._run(expression, run_manager)
-```
-
----
-
-### Tool Categories: Building Your Toolkit
-
-Real-world agents require highly diverse sets of technical capabilities to act as autonomous assistants. When designing your architecture, you should conceptually group tools into broad operational taxonomies to maintain clean separation of concerns and avoid namespace collisions.
-
-```mermaid
-flowchart LR
-    A[Tool Taxonomy] --> B[Data Retrieval]
-    A --> C[Computation]
-    A --> D[Communication]
-    A --> E[System Operations]
-    A --> F[AI/ML Operations]
-
-    B --> B1[Database queries]
-    B --> B2[API calls]
-    B --> B3[Web search]
-    B --> B4[File system access]
-
-    C --> C1[Calculator]
-    C --> C2[Code execution]
-    C --> C3[Data transformation]
-    C --> C4[Format conversion]
-
-    D --> D1[Send email]
-    D --> D2[Post to Slack]
-    D --> D3[Create tickets]
-    D --> D4[Send notifications]
-
-    E --> E1[Authentication]
-    E --> E2[File management]
-    E --> E3[Process execution]
-    E --> E4[Configuration changes]
-
-    F --> F1[Embeddings generation]
-    F --> F2[Vector search]
-    F --> F3[Image analysis]
-    F --> F4[Document processing]
-```
-
----
-
-### Building Real Tools: A Practical Example
-
-Let us assemble a practical, functioning tool system designed specifically for a developer assistant agent. This agent will need to interact with the local operating system, read files, and execute shell commands to diagnose code issues. Pay close attention to how the docstrings are meticulously constructed to guide the LLM's decision-making process.
 
 ```python
 from langchain_core.tools import tool
@@ -338,10 +177,6 @@ def run_shell_command(command: str) -> str:
 
     Returns:
         Command output (stdout + stderr) or error message
-
-    Warning:
-        Be careful with destructive commands. Always confirm
-        with the user before running commands that modify files.
     """
     try:
         result = subprocess.run(
@@ -349,7 +184,7 @@ def run_shell_command(command: str) -> str:
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
         output = result.stdout + result.stderr
         return output if output else "Command completed with no output"
@@ -362,11 +197,7 @@ def run_shell_command(command: str) -> str:
 def read_file(file_path: str, max_lines: Optional[int] = 100) -> str:
     """Read the contents of a file.
 
-    Use this to:
-    - Examine source code
-    - Read configuration files
-    - Check log files
-    - Review documentation
+    Use this to examine source code, configuration files, log files, or documentation.
 
     Args:
         file_path: Path to the file (relative or absolute)
@@ -376,9 +207,9 @@ def read_file(file_path: str, max_lines: Optional[int] = 100) -> str:
         File contents or error message
     """
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             lines = f.readlines()[:max_lines]
-            content = ''.join(lines)
+            content = "".join(lines)
             if len(lines) == max_lines:
                 content += f"\n... (truncated, showing first {max_lines} lines)"
             return content
@@ -391,11 +222,7 @@ def read_file(file_path: str, max_lines: Optional[int] = 100) -> str:
 def search_code(pattern: str, directory: str = ".") -> str:
     """Search for a pattern in code files using grep.
 
-    Use this to:
-    - Find function definitions
-    - Locate imports
-    - Search for TODOs
-    - Find usage of specific variables/functions
+    Use this to find function definitions, locate imports, or find usage of variables.
 
     Args:
         pattern: Regex pattern to search for
@@ -410,7 +237,7 @@ def search_code(pattern: str, directory: str = ".") -> str:
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
         output = result.stdout
         if not output:
@@ -420,46 +247,134 @@ def search_code(pattern: str, directory: str = ".") -> str:
         return f"Error searching: {str(e)}"
 ```
 
----
+Tool categories help you reason about blast radius. Data retrieval tools should be read-only by default. Communication tools need rate limits. System operation tools require authentication context passed from your app layer, not inferred from chat text alone.
 
-### Tool-Calling Agents: Putting It Together
+Hierarchical tool organization consolidates related actions under a meta-tool with an action parameter. Instead of twenty flat functions, present one developer_tools meta-tool whose docstring enumerates allowed actions. This reduces schema tokens in the prompt and gives the model a clearer decision tree.
 
-The true operational power of function calling is unlocked when creating an agent that autonomously sequences these discrete tools intelligently over multiple execution turns to solve complex, ambiguous problems.
+Provider wire formats differ—OpenAI nests parameters under function objects, Anthropic uses input_schema, Google uses its own variant. LangChain normalizes these differences when you use first-class tool abstractions. Manual JSON dictionaries reintroduce the protocol mismatch bugs you thought you eliminated.
 
-#### The Agent Loop
+## Memory
 
-A tool-calling agent operates in an iterative reasoning cycle. It does not just act once; it enters a ReAct (Reasoning and Acting) loop, deciding at each execution step whether to call an additional tool to gather more context, or to finally conclude the conversation and generate an answer.
+Models are stateless unless you resend prior context. Memory in LangChain is not magic persistence—it is a policy for what conversation history, summaries, or entity facts get injected into the next prompt. The design question is always the same: what should the model see next, and what should never be copied forward for privacy, cost, or correctness reasons?
 
-```mermaid
-flowchart TD
-    A["1. RECEIVE USER INPUT<br/>'Find all TODO comments in the src directory'"] --> B
-    B["2. LLM THINKS + SELECTS TOOL<br/>'I should use search_code with pattern=TODO'"] --> C
-    C["3. EXECUTE TOOL<br/>search_code(pattern='TODO', directory='src/')"] --> D
-    D["4. LLM PROCESSES RESULT"]
-    D -->|Need more tools?| B
-    D -->|Done?| E
-    E["5. RESPOND TO USER<br/>'I found 12 TODO comments in src/...'"]
-```
+ConversationBufferMemory keeps recent turns verbatim, which maximizes fidelity but grows tokens linearly. ConversationSummaryMemory compresses older turns through a summarization call, trading exact wording for headroom. ConversationSummaryBufferMemory combines both: keep the last k turns exact, summarize everything older. For agents, memory must coexist with tool results—if you store huge tool payloads in history, you will blow context limits even when the user's question was small.
 
-#### Creating an Agent with LangChain
+Entity memory tracks facts about named entities across turns—customer identifiers, project codenames, regions. Token-buffer memory enforces a hard cap by dropping oldest messages. Regardless of flavor, treat memory as untrusted input on the next turn: users can steer what gets remembered, and tool outputs can contain injection payloads. Sanitize, cap, and audit what memory writes just as you would audit retrieval chunks.
 
-The actual implementation of the agent executor binds the large language model tightly to the tools via a well-crafted system prompt. The prompt governs the agent's behavior during the loop.
+When you integrate memory with LCEL, wrap the memory load and save steps as RunnableLambdas or use built-in history-aware runnables. The durable pattern is explicit: load variables from a session store, render the prompt with history placeholders, invoke the model, then persist only the new turn plus any structured facts you truly need. Avoid storing raw tool JSON in long-term memory unless your compliance review explicitly allows it.
+
+The example below simulates a sliding window buffer without external databases. It shows how to trim history before each invoke—a technique you will combine with agents in the next sections.
 
 ```python
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
+
+MAX_TURNS = 6
+session_store: dict[str, list] = {}
+
+def load_history(inputs: dict) -> dict:
+    sid = inputs["session_id"]
+    history = session_store.get(sid, [])
+    return {**inputs, "history": history[-MAX_TURNS:]}
+
+def save_turn(inputs: dict) -> dict:
+    sid = inputs["session_id"]
+    session_store.setdefault(sid, []).extend([
+        HumanMessage(content=inputs["question"]),
+        AIMessage(content=inputs["answer"]),
+    ])
+    return inputs
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a concise assistant."),
+    MessagesPlaceholder("history"),
+    ("human", "{question}"),
+])
+
+# Fake answer step for offline demo
+answer = RunnableLambda(lambda d: {**d, "answer": f"Echo: {d['question']}"})
+
+chain = (
+    RunnablePassthrough.assign(**{"history": RunnableLambda(load_history) | (lambda d: d["history"])})
+    | prompt
+    | answer
+    | RunnableLambda(save_turn)
+)
+
+chain.invoke({"session_id": "demo", "question": "Hello"})
+print(session_store["demo"])
+```
+
+Session identifiers should come from your authentication layer, never from model-generated text. If the model can choose its own session key, attackers can read another user's history by guessing identifiers. Treat memory stores like databases with access control lists and encryption at rest.
+
+Summarization memory introduces an extra model call. Monitor summarization drift: if summaries omit negation or numeric constraints, downstream answers inherit the mistake. Periodic full-history refresh for high-stakes workflows reduces silent summary corruption.
+
+## Retrieval Integration
+
+Retrieval-augmented generation belongs inside agent systems as a first-class tool, not only as a static prefix prompt. When the model can decide whether to search documentation, it fetches context on demand instead of stuffing every prompt with irrelevant chunks. LangChain retrievers implement Runnable: you pass a query string and receive documents with metadata.
+
+A typical retrieval tool wraps embed-query, vector search, and formatting steps. Keep returned text concise—titles, snippets, and source URLs—not entire PDFs. Agents chain retrieval with synthesis: search, read top matches, maybe call a detail tool, then answer. This mirrors how human analysts work and keeps token usage closer to the minimum needed for grounding.
+
+Hybrid patterns combine retrieval with structured database tools. Use retrieval for unstructured knowledge such as policies and runbooks, and SQL or API tools for authoritative transactional data such as order status or account balance. The durable lesson is separation of concerns: never let the model invent numbers that a tool could fetch, and never let a retrieval chunk override a tool result without explicit reasoning in the trace.
+
+The retrieval-augmented tool pattern below mirrors production architectures where the agent explicitly queries a vector store when it detects a knowledge gap. Replace the in-memory list with your vector database in real deployments.
+
+```python
+from langchain_core.tools import tool
+
+MOCK_DOCS = [
+    {"source": "runbook.md", "text": "Restart the indexer pod if lag exceeds five minutes."},
+    {"source": "policy.md", "text": "Refunds require manager approval above five hundred dollars."},
+]
+
+@tool
+def answer_from_docs(question: str) -> str:
+    """Answer questions using our documentation.
+
+    This tool searches our vector database of documentation
+    and returns relevant information to answer the question.
+    """
+    hits = [d for d in MOCK_DOCS if any(w in d["text"].lower() for w in question.lower().split())]
+    if not hits:
+        hits = MOCK_DOCS[:2]
+    context = "\n\n".join(f"From {r['source']}:\n{r['text']}" for r in hits)
+    return f"Relevant documentation:\n\n{context}"
+```
+
+Chunk metadata powers citation in agent answers. Return source filenames, section headings, and last-updated timestamps alongside snippets so the model can quote responsibly. Users trust answers more when the agent cites retriever metadata instead of speaking ex cathedra.
+
+Re-ranking retrieved chunks before they enter the tool result often improves answer quality more than enlarging k. Keep re-rankers behind the same Runnable interface so you can A/B them in staging without rewriting agent prompts.
+
+## Agents and the Agent Loop
+
+An agent is a loop, not a single completion. The model receives tools, chooses an action, observes the tool result, and repeats until it produces a final answer or hits a guardrail. The ReAct pattern—reasoning interleaved with acting—formalizes this loop and remains the mental model even when frameworks rename their executor classes.
+
+AgentExecutor binds the model, tools, and prompt template with scratchpad space for intermediate steps. Key knobs include max_iterations to prevent runaway loops, handle_parsing_errors to recover from malformed tool JSON, and return_intermediate_steps for debugging. Temperature near zero is common for tool routing because creativity in JSON tool selection is usually a liability.
+
+Tool-calling agents differ from text-only ReAct agents: modern chat models emit native tool_call objects instead of parsing Thought/Action/Observation strings from free text. LangChain normalizes both styles, but you should match the agent factory to what your model supports. Mismatch manifests as parsing errors, silent ignored tools, or infinite retries.
+
+When durable multi-step state, human approval, or checkpointing enters the picture, teams increasingly move orchestration to LangGraph while keeping LangChain tools and retrievers. The executor pattern taught here remains the conceptual foundation even if your deployment graph lives in LangGraph nodes.
+
+```python
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 
-# 1. Define your tools
 tools = [run_shell_command, read_file, search_code]
 
-# 2. Create the LLM
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
-    temperature=0  # Lower temperature for more consistent tool use
-)
+# In production swap GenericFakeChatModel for your provider LLM
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
-# 3. Create the prompt template
+llm = GenericFakeChatModel(messages=iter([
+    AIMessage(content="", tool_calls=[{
+        "name": "search_code",
+        "args": {"pattern": "import requests", "directory": "."},
+        "id": "call_1",
+    }]),
+    AIMessage(content="Found files importing requests in the src directory."),
+]))
+
 prompt = ChatPromptTemplate.from_messages([
     ("system", """You are a helpful developer assistant with access to tools.
 
@@ -474,37 +389,81 @@ Available tools: {tool_names}"""),
     MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
 
-# 4. Create the agent
 agent = create_tool_calling_agent(llm, tools, prompt)
-
-# 5. Create the executor (runs the agent loop)
 agent_executor = AgentExecutor(
     agent=agent,
     tools=tools,
-    verbose=True,  # See what's happening
-    max_iterations=10,  # Prevent infinite loops
-    handle_parsing_errors=True
+    verbose=True,
+    max_iterations=10,
+    handle_parsing_errors=True,
 )
 
-# 6. Run!
 result = agent_executor.invoke({
     "input": "Find all Python files that import requests",
-    "tool_names": ", ".join([t.name for t in tools])
+    "tool_names": ", ".join(t.name for t in tools),
 })
 print(result["output"])
 ```
 
-> **Pause and predict**: Why is setting the `temperature=0` highly recommended when configuring language models designed specifically for tool-calling pipelines?
+Scratchpad pollution happens when tools return verbose payloads that accumulate in agent history. Truncate or summarize tool outputs at the boundary before the next model turn. Your future self debugging a routing failure will thank you for concise intermediate observations.
 
----
+Human-in-the-loop approvals belong outside the model's direct tool access. Expose a pending_action field in application state and require an authenticated API call to confirm destructive operations. Prompts asking the model to be careful are not a substitute for authorization checks.
 
-### Error Handling: When Tools Fail
+## Streaming and Callbacks
 
-Tools are standard software components; they will inevitably fail. Network APIs time out, requested files do not exist, and databases routinely drop active connections. A robust, production-grade agent must anticipate and handle these failures gracefully to maintain user trust and avoid catastrophic runtime crashes.
+Streaming improves perceived latency by emitting partial tokens or events before the full completion finishes. In LCEL, any Runnable that implements `stream` can participate in a streaming chain; events bubble from inner components outward. For chat UIs, stream model tokens; for agent dashboards, stream tool-start and tool-end events so operators see progress while long-running tools execute.
 
-#### Error Handling Strategies
+Callbacks are the observability hook surface. BaseCallbackHandler implementations receive events—chain start, LLM start, tool end, errors—and forward them to logs, metrics, or tracing products. Even without a commercial tracer, a lightweight callback that prints tool names and latencies pays for itself the first time you debug a mis-selected tool in production.
 
-If an exception propagates unhandled, the entire LangChain executor loop will violently terminate. By explicitly handling errors, we allow the LLM to read the error message as context and attempt a self-correction strategy.
+Combine streaming with callbacks carefully: streaming handlers may fire hundreds of times per request, so aggregate before writing to expensive sinks. For agents, log the structured tool call and summarized result, not every token of the scratchpad, unless you are actively diagnosing a single failure.
+
+The handler below demonstrates debug-friendly logging using only langchain_core. Pair it with `chain.stream()` or `agent_executor.stream()` to watch events arrive incrementally during development.
+
+```python
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.runnables import RunnableLambda
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+import time
+
+class DebugCallback(BaseCallbackHandler):
+    def on_chain_start(self, serialized, inputs, **kwargs):
+        print(f"[chain start] keys={list(inputs.keys())}")
+
+    def on_tool_end(self, output, **kwargs):
+        preview = str(output)[:120]
+        print(f"[tool end] {preview}")
+
+    def on_llm_end(self, response, **kwargs):
+        print("[llm end] completion received")
+
+fake = GenericFakeChatModel(messages=iter([AIMessage(content="streamed chunk")]))
+
+def slow_tool(x: str) -> str:
+    time.sleep(0.1)
+    return x.upper()
+
+chain = RunnableLambda(slow_tool) | fake
+
+for chunk in chain.stream("hello", config={"callbacks": [DebugCallback()]}):
+    print("chunk:", chunk)
+```
+
+Structured logging beats println debugging at scale. Serialize callback events as JSON lines with trace identifiers, latency, and token estimates. Correlate those logs with user session identifiers to reconstruct failure timelines without replaying full prompts in production.
+
+Back-pressure matters when consumers process streams slower than models emit tokens. Use async iterators and bounded queues in your API layer so slow clients do not force the model side to buffer unbounded text.
+
+## Production Patterns
+
+Production patterns start with failure as the default case. Tools time out, APIs rate-limit, and models emit invalid JSON. Use handle_tool_error, try/except inside tools, and graceful degradation paths that return actionable error strings the model can read on the next turn. Crashes should be reserved for programmer errors, not for expected external dependency failures.
+
+Security for tool-calling systems applies the principle of least privilege at the tool boundary, not in the prompt. Parameterize SQL, whitelist shell prefixes, require confirmation flags for destructive operations, and validate inputs with Pydantic before any side effect. Diagnose vulnerabilities by threat-modeling each tool as if the model were adversarial—because prompt injection can make it behave that way.
+
+Cost control is part of architecture: cache idempotent reads, cap tool result size, limit parallel tool fan-out, and measure tokens per successful task—not per attempt. Multi-step agents trade extra model round-trips for targeted context; single-pass RAG trades one large prompt for simplicity. Choose based on workload shape, not framework defaults.
+
+Hypothetical scenario: A market-data agent without caching answers every follow-up with fresh API calls, inflating bills during a single curious user session. Hypothetical scenario: A legal-research agent follows related-case links recursively until it hits provider limits. Fixes—TTL caches, call budgets, truncated tool payloads—are boring engineering that keeps agent demos from becoming production incidents.
+
+When debugging agents, enable verbose executor logs and inspect intermediate_steps to see tool inputs and outputs in order. Dump compiled tool schemas to verify docstrings became descriptions. Compare synchronous versus parallel tool execution when latency matters: independent reads should run concurrently when your runtime and provider support parallel tool calls.
 
 ```python
 from langchain_core.tools import tool, ToolException
@@ -520,7 +479,6 @@ def risky_operation(param: str) -> str:
         raise ToolException("Parameter cannot be empty!")
     return f"Success with {param}"
 
-# Custom error handler
 def handle_tool_error(error: ToolException) -> str:
     """Convert tool errors into helpful messages."""
     return f"""Tool Error: {str(error)}
@@ -528,9 +486,7 @@ def handle_tool_error(error: ToolException) -> str:
 Suggestions:
 - Check if all required parameters are provided
 - Verify the input format is correct
-- Try a simpler query first
-
-Please try again with corrected input."""
+- Try a simpler query first"""
 
 @tool(handle_tool_error=handle_tool_error)
 def another_risky_tool(x: int) -> str:
@@ -540,374 +496,71 @@ def another_risky_tool(x: int) -> str:
     return str(x * 2)
 ```
 
-#### Graceful Degradation Pattern
-
-If a primary critical data source fails during execution, the tool should ideally fall back to a secondary alternative source or an integrated cache layer rather than immediately returning a systemic failure to the user.
-
 ```python
-@tool
-def get_stock_price(symbol: str) -> str:
-    """Get current stock price with fallback sources."""
+from pydantic import BaseModel, Field, validator
+import subprocess
 
-    # Try primary source
-    try:
-        price = primary_api.get_price(symbol)
-        return f"${price:.2f} (source: primary)"
-    except Exception as e:
-        pass  # Try fallback
+class SafeCommandInput(BaseModel):
+    """Validated input for shell commands."""
+    command: str = Field(description="Command to run")
 
-    # Try fallback source
-    try:
-        price = fallback_api.get_price(symbol)
-        return f"${price:.2f} (source: fallback, primary unavailable)"
-    except Exception as e:
-        pass  # Try cache
+    @validator("command")
+    def validate_command(cls, v):
+        allowed_prefixes = ["git ", "npm ", "pytest ", "python -m"]
+        if not any(v.startswith(p) for p in allowed_prefixes):
+            raise ValueError(f"Command not allowed: {v}")
+        dangerous = ["rm -rf", "sudo", "> /dev", "curl | sh"]
+        if any(d in v for d in dangerous):
+            raise ValueError(f"Dangerous command blocked: {v}")
+        return v
 
-    # Try cached value
-    cached = cache.get(f"price:{symbol}")
-    if cached:
-        return f"${cached['price']:.2f} (cached from {cached['timestamp']}, live data unavailable)"
-
-    # All sources failed
-    return f"Unable to get price for {symbol}. All data sources are currently unavailable. Please try again later."
+@tool(args_schema=SafeCommandInput)
+def safe_shell_command(command: str) -> str:
+    """Run a safe, whitelisted shell command."""
+    return subprocess.run(command, shell=True, capture_output=True, text=True).stdout
 ```
-
----
-
-### Tool Selection Strategies
-
-As your overall application architecture expands and your agent's toolkit necessarily grows, the language model will increasingly struggle to reliably choose the correct function. Implement the following specialized strategies to dramatically optimize tool selection accuracy.
-
-#### 1. Clear, Distinct Descriptions
-
-Descriptions must not overlap semantically. If two tools sound identical, the model will randomly guess. Ensure the model has a definitive, unambiguous path for every logical request type.
-
-```python
-# BAD: Overlapping, confusing
-search_tool = "Searches for information"
-lookup_tool = "Looks up data"
-find_tool = "Finds things"
-
-# GOOD: Clear, distinct purposes
-search_web = "Search the internet for current information. Use for news, general knowledge, or anything not in our database."
-search_database = "Search our internal product database. Use for inventory, pricing, or customer information."
-search_docs = "Search our documentation. Use for how-to guides, API references, or troubleshooting."
-```
-
-#### 2. Hierarchical Tool Organization
-
-Rather than presenting twenty flat functions to a single agent (which demonstrably degrades selection accuracy), consolidate related tasks under a single "meta-tool" that takes an actionable argument. This condenses the prompt context.
-
-```python
-# Instead of 20 flat tools, organize hierarchically
-@tool
-def developer_tools(action: str, params: dict) -> str:
-    """Meta-tool for developer operations.
-
-    Actions:
-    - 'run_tests': Run pytest on specified files
-    - 'lint_code': Run linter on code
-    - 'format_code': Auto-format code
-    - 'check_types': Run type checker
-
-    Args:
-        action: One of the above actions
-        params: Parameters specific to the action
-    """
-    if action == "run_tests":
-        return run_pytest(params.get("path", "tests/"))
-    elif action == "lint_code":
-        return run_linter(params.get("path", "."))
-    # ... etc
-```
-
-#### 3. Tool Routing (Advanced)
-
-For highly complex enterprise systems that require hundreds of tools, employ a separate, specialized routing model whose sole architectural job is to deduce the proper restricted toolset before invoking the primary reasoning model.
-
-```python
-from langchain.agents import initialize_agent, Tool
-
-# Create a "router" that picks the right toolset
-def route_to_toolset(query: str) -> list:
-    """Dynamically select relevant tools based on query."""
-
-    query_lower = query.lower()
-
-    if any(w in query_lower for w in ['code', 'file', 'debug', 'error']):
-        return developer_tools
-    elif any(w in query_lower for w in ['email', 'schedule', 'meeting']):
-        return productivity_tools
-    elif any(w in query_lower for w in ['data', 'chart', 'analyze']):
-        return data_tools
-    else:
-        return general_tools
-```
-
----
-
-### Parallel Tool Execution
-
-If an autonomous agent needs multiple discrete pieces of external information to satisfy a user's prompt, waiting for synchronous execution creates massive latency. Modern language models are fully capable of outputting multiple tool calls simultaneously in a single conversation turn.
 
 ```python
 from langchain_core.tools import tool
-from langchain.agents import AgentExecutor
 import asyncio
 
 @tool
 async def get_weather_async(location: str) -> str:
     """Get weather (async version)."""
-    await asyncio.sleep(1)  # Simulate API call
+    await asyncio.sleep(1)
     return f"Weather in {location}: Sunny, 72F"
 
 @tool
 async def get_time_async(timezone: str) -> str:
     """Get current time in timezone (async version)."""
-    await asyncio.sleep(1)  # Simulate API call
+    await asyncio.sleep(1)
     from datetime import datetime
     return f"Time in {timezone}: {datetime.now().strftime('%H:%M')}"
 
 @tool
 async def get_news_async(topic: str) -> str:
     """Get latest news on topic (async version)."""
-    await asyncio.sleep(1)  # Simulate API call
+    await asyncio.sleep(1)
     return f"Latest news on {topic}: [Headlines would go here]"
-
-# With async tools, the agent can run multiple in parallel
-# User: "What's the weather, time, and news in Tokyo?"
-# Agent can call all three tools simultaneously!
 ```
-
-The underlying transformer model might generate a structured JSON payload resembling:
-```json
-{
-  "tool_calls": [
-    {"name": "get_weather_async", "args": {"location": "Tokyo"}},
-    {"name": "get_time_async", "args": {"timezone": "Asia/Tokyo"}},
-    {"name": "get_news_async", "args": {"topic": "Tokyo"}}
-  ]
-}
-```
-
-Because the asynchronous tools yield execution control to the event loop, they can execute concurrently when scheduled together. This parallel execution mechanism drastically optimizes the agent, reducing total execution time from approximately three sequential seconds to just one single second of latency.
-
----
-
-### Security Considerations
-
-Providing an LLM with live, operational tools is fundamentally granting untrusted external input direct programmatic access to your backend systems. Severe security is paramount to prevent catastrophic breaches.
-
-#### The Principle of Least Privilege
-
-Limit database scopes and operational access directly inside the Python tools. Never blindly assume the LLM will "behave itself" and omit dangerous system queries just because you prompted it nicely.
-
-```python
-# BAD: Overly permissive
-@tool
-def run_any_sql(query: str) -> str:
-    """Run any SQL query."""
-    return database.execute(query)  # SQL injection, data deletion
-
-# GOOD: Restricted, parameterized
-@tool
-def search_users(name: str, limit: int = 10) -> str:
-    """Search for users by name (read-only, max 100 results)."""
-    limit = min(limit, 100)  # Enforce limit
-    # Parameterized query prevents injection
-    results = database.execute(
-        "SELECT id, name, email FROM users WHERE name LIKE ? LIMIT ?",
-        (f"%{name}%", limit)
-    )
-    return str(results)
-```
-
-#### Input Validation
-
-Leverage Pydantic strongly-typed schemas to forcefully whitelist acceptable commands before execution. If the command does not match the whitelist, raise a validation error instantly.
-
-```python
-from pydantic import BaseModel, Field, validator
-
-class SafeCommandInput(BaseModel):
-    """Validated input for shell commands."""
-
-    command: str = Field(description="Command to run")
-
-    @validator('command')
-    def validate_command(cls, v):
-        # Whitelist allowed commands
-        allowed_prefixes = ['git ', 'npm ', 'pytest ', 'python -m']
-        if not any(v.startswith(p) for p in allowed_prefixes):
-            raise ValueError(f"Command not allowed: {v}")
-
-        # Block dangerous patterns
-        dangerous = ['rm -rf', 'sudo', '> /dev', 'curl | sh']
-        if any(d in v for d in dangerous):
-            raise ValueError(f"Dangerous command blocked: {v}")
-
-        return v
-
-@tool(args_schema=SafeCommandInput)
-def safe_shell_command(command: str) -> str:
-    """Run a safe, whitelisted shell command."""
-    # Command has already been validated by Pydantic
-    return subprocess.run(command, shell=True, capture_output=True, text=True).stdout
-```
-
-#### Confirmation for Destructive Actions
-
-Destructive, mutating tools must strictly enforce a safety switch logic at the application layer.
-
-```python
-@tool
-def delete_file(file_path: str, confirm: bool = False) -> str:
-    """Delete a file (requires explicit confirmation).
-
-    Args:
-        file_path: Path to file to delete
-        confirm: Must be True to actually delete
-    """
-    if not confirm:
-        return f"WARNING: This will DELETE {file_path}. To proceed, call with confirm=True"
-
-    os.remove(file_path)
-    return f"Deleted {file_path}"
-```
-
----
-
-### Real-World Tool Patterns
-
-#### Pattern 1: The Swiss Army Knife
-
-A powerful, singular meta-tool that efficiently encapsulates multiple closely related operations to minimize token overhead on prompt schemas. This is highly effective for tightly coupled operational domains like Git version control.
-
-```python
-@tool
-def git_operations(
-    operation: str,
-    args: Optional[dict] = None
-) -> str:
-    """Perform git operations.
-
-    Operations:
-    - status: Show working tree status
-    - log: Show recent commits (args: count)
-    - diff: Show changes (args: file)
-    - branch: List or create branches (args: name, create)
-    - commit: Create commit (args: message)
-    - pull: Pull from remote
-    - push: Push to remote
-    """
-    args = args or {}
-
-    commands = {
-        "status": "git status",
-        "log": f"git log -n {args.get('count', 5)} --oneline",
-        "diff": f"git diff {args.get('file', '')}",
-        "branch": "git branch" if not args.get('create') else f"git checkout -b {args['name']}",
-        "commit": f"git commit -m \"{args.get('message', 'Update')}\"",
-        "pull": "git pull",
-        "push": "git push"
-    }
-
-    cmd = commands.get(operation)
-    if not cmd:
-        return f"Unknown operation: {operation}"
-
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    return result.stdout or result.stderr
-```
-
-#### Pattern 2: The Specialist Team
-
-Multiple highly focused tools that operate synergistically to complete exhaustive analysis workflows. By splitting them up, the model can iteratively explore a large problem space.
-
-```python
-@tool
-def analyze_code(file_path: str) -> str:
-    """Analyze code quality and complexity."""
-    # Returns metrics, complexity scores, etc.
-
-@tool
-def suggest_refactoring(file_path: str) -> str:
-    """Suggest refactoring improvements."""
-    # Returns specific refactoring suggestions
-
-@tool
-def apply_refactoring(file_path: str, refactoring_id: str) -> str:
-    """Apply a suggested refactoring."""
-    # Actually modifies the code
-
-@tool
-def run_tests(test_path: str = "tests/") -> str:
-    """Run tests to verify changes."""
-    # Runs pytest and returns results
-```
-
-#### Pattern 3: The Retrieval-Augmented Tool
-
-Combining traditional RAG with dynamic tool schemas so an autonomous agent can explicitly query the integrated vector database whenever it identifies a knowledge gap.
-
-```python
-@tool
-def answer_from_docs(question: str) -> str:
-    """Answer questions using our documentation.
-
-    This tool searches our vector database of documentation
-    and returns relevant information to answer the question.
-    """
-    # 1. Generate embedding for question
-    embedding = embed_model.embed(question)
-
-    # 2. Search vector database
-    results = vector_db.search(embedding, k=5)
-
-    # 3. Format context
-    context = "\n\n".join([
-        f"From {r.metadata['source']}:\n{r.text}"
-        for r in results
-    ])
-
-    return f"Relevant documentation:\n\n{context}"
-```
-
----
-
-### Debugging Tool-Calling Agents
-
-When complex multi-step architectures fail, tracing the discrete execution steps is paramount to diagnosing the structural fault. You must peer inside the black box.
-
-#### 1. Enable Verbose Mode
-
-LangChain allows you to expose the underlying cognitive mechanics by enforcing verbose execution. This prints the exact reasoning chains and physical tool inputs to your standard output console.
 
 ```python
 agent_executor = AgentExecutor(
     agent=agent,
     tools=tools,
-    verbose=True,  # See every step
-    return_intermediate_steps=True  # Get all tool calls and results
+    verbose=True,
+    return_intermediate_steps=True,
 )
 
 result = agent_executor.invoke({"input": "test query"})
 
-# Examine what happened
 for step in result["intermediate_steps"]:
     action, output = step
     print(f"Tool: {action.tool}")
     print(f"Input: {action.tool_input}")
     print(f"Output: {output}")
     print("---")
-```
 
-#### 2. Check Tool Schemas
-
-Always dump the generated Pydantic schemas to ensure LangChain actually compiled your Python type hints successfully. Errors here will completely break the interaction.
-
-```python
-# Inspect what the LLM sees
 for tool in tools:
     print(f"Name: {tool.name}")
     print(f"Description: {tool.description}")
@@ -915,669 +568,294 @@ for tool in tools:
     print("---")
 ```
 
-#### 3. Common Issues
+Rate limiting at the tool layer protects downstream SaaS APIs from agent bursts. Combine token buckets per user with global circuit breakers when a provider returns repeated 429 responses. Agents should surface degraded-mode answers instead of retry-storming a failing dependency.
 
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| Wrong tool selected | Description overlap | Make descriptions more distinct |
-| Missing parameters | Unclear param descriptions | Add examples to descriptions |
-| Tool not called at all | Description doesn't match query | Reword description to match user language |
-| Infinite loop | Tool returns unclear results | Return clearer success/failure messages |
-| Parsing errors | Malformed tool output | Return valid JSON or simple strings |
+Prompt injection via tool results is an integration security topic. Wrap untrusted tool output in clear delimiters and instruct the model to treat delimited content as data, not instructions. See OWASP guidance on prompt injection when designing retrieval and browser tools.
 
----
+### Deep dive: LCEL and Runnables
 
-### The Function Calling Protocol Deep Dive
+Testing LCEL chains without live models is a production habit, not a classroom trick. Fake chat models, stub retrievers, and RunnableLambda stand-ins let you assert on output shape, routing decisions, and parser behavior in ordinary unit tests. When a provider bumps a SDK version, those tests tell you whether your composition still honors contracts even before you spend tokens on integration runs.
 
-Different proprietary language models utilize slightly different wire protocols under the hood. Understanding these underlying differences emphasizes the massive value of utilizing an abstraction layer like LangChain.
+Assign runnables (`RunnablePassthrough.assign`) are the idiomatic way to enrich inputs mid-pipeline. You might attach a session identifier, redact sensitive fields, or compute a cache key before the prompt renders. Because assign returns a new runnable, you keep side effects localized and observable rather than hiding mutations inside prompt templates.
 
-#### OpenAI Format
-```json
-{
-  "type": "function",
-  "function": {
-    "name": "get_weather",
-    "description": "Get weather for a location",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "location": {"type": "string"}
-      },
-      "required": ["location"]
-    }
-  }
-}
-```
+Fallback runnables wrap primary and secondary models or parsers. If the primary model times out, the fallback can be a smaller local model or a deterministic template response. Document fallback behavior in runbooks so on-call engineers know which quality bar applies during partial outages.
 
-#### Anthropic (Claude) Format
-```json
-{
-  "name": "get_weather",
-  "description": "Get weather for a location",
-  "input_schema": {
-    "type": "object",
-    "properties": {
-      "location": {"type": "string"}
-    },
-    "required": ["location"]
-  }
-}
-```
+### Deep dive: Tools and Tool-Calling
 
-#### Google (Gemini) Format
-```json
-{
-  "name": "get_weather",
-  "description": "Get weather for a location",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "location": {"type": "string"}
-    },
-    "required": ["location"]
-  }
-}
-```
+Tool categories help you reason about blast radius. Data retrieval tools should be read-only by default. Communication tools need rate limits. System operation tools require authentication context passed from your app layer, not inferred from chat text alone.
 
----
+Hierarchical tool organization consolidates related actions under a meta-tool with an action parameter. Instead of twenty flat functions, present one developer_tools meta-tool whose docstring enumerates allowed actions. This reduces schema tokens in the prompt and gives the model a clearer decision tree.
 
-### Production War Stories: Tool Calling Gone Wrong
+Provider wire formats differ—OpenAI nests parameters under function objects, Anthropic uses input_schema, Google uses its own variant. LangChain normalizes these differences when you use first-class tool abstractions. Manual JSON dictionaries reintroduce the protocol mismatch bugs you thought you eliminated.
 
-#### The $23,800 API Call
+### Deep dive: Memory
 
-**An AI financial advisor deployment with insufficient safeguards.**
+Session identifiers should come from your authentication layer, never from model-generated text. If the model can choose its own session key, attackers can read another user's history by guessing identifiers. Treat memory stores like databases with access control lists and encryption at rest.
 
-The engineering team built a beautiful tool-calling agent. Users could ask "What's happening with NVIDIA stock?" and the agent would call their market data API, analyze trends, and provide insights. In testing, it worked flawlessly.
+Summarization memory introduces an extra model call. Monitor summarization drift: if summaries omit negation or numeric constraints, downstream answers inherit the mistake. Periodic full-history refresh for high-stakes workflows reduces silent summary corruption.
 
-Then they deployed to production and discovered that repeated follow-up questions could generate a large unexpected bill from their market data provider.
+### Deep dive: Retrieval Integration
 
-The problem was a missing caching layer. When users asked follow-up questions like "What about their earnings?" or "How does it compare to AMD?", the agent did not realize it already had relevant data. Each question triggered fresh API calls. One curious user asking questions about tech stocks generated massive volume in a single session.
+Chunk metadata powers citation in agent answers. Return source filenames, section headings, and last-updated timestamps alongside snippets so the model can quote responsibly. Users trust answers more when the agent cites retriever metadata instead of speaking ex cathedra.
 
-**The fix:**
+Re-ranking retrieved chunks before they enter the tool result often improves answer quality more than enlarging k. Keep re-rankers behind the same Runnable interface so you can A/B them in staging without rewriting agent prompts.
 
-```python
-from functools import lru_cache
-from datetime import datetime, timedelta
+### Deep dive: Agents and the Agent Loop
 
-# Cache market data for 5 minutes
-@lru_cache(maxsize=1000)
-def _cached_fetch(symbol: str, cache_key: str) -> dict:
-    """Internal cached fetcher."""
-    return market_data_api.get_quote(symbol)
+Scratchpad pollution happens when tools return verbose payloads that accumulate in agent history. Truncate or summarize tool outputs at the boundary before the next model turn. Your future self debugging a routing failure will thank you for concise intermediate observations.
 
-@tool
-def get_stock_price(symbol: str) -> str:
-    """Get current stock price for a symbol like AAPL, GOOGL, NVDA."""
-    # Cache key includes 5-minute bucket
-    cache_key = datetime.now().strftime("%Y%m%d%H") + str(datetime.now().minute // 5)
-    data = _cached_fetch(symbol.upper(), cache_key)
-    return f"{symbol}: ${data['price']:.2f} ({data['change']:+.2f}%)"
-```
+Human-in-the-loop approvals belong outside the model's direct tool access. Expose a pending_action field in application state and require an authenticated API call to confirm destructive operations. Prompts asking the model to be careful are not a substitute for authorization checks.
 
-#### The Tool Description Disaster
+### Deep dive: Streaming and Callbacks
 
-**A customer service agent deployment with poorly differentiated tools.**
+Structured logging beats println debugging at scale. Serialize callback events as JSON lines with trace identifiers, latency, and token estimates. Correlate those logs with user session identifiers to reconstruct failure timelines without replaying full prompts in production.
 
-The team deployed an agent with these tools:
-- `search_orders` - Search customer order history
-- `check_inventory` - Check product availability
-- `process_return` - Process a return request
+Back-pressure matters when consumers process streams slower than models emit tokens. Use async iterators and bounded queues in your API layer so slow clients do not force the model side to buffer unbounded text.
 
-Teams often discover that vague, overlapping tool descriptions cause agents to route common customer-service questions to the wrong tool.
+### Deep dive: Production Patterns
 
-```python
-# BAD - Vague descriptions
-@tool
-def search_orders(customer_id: str):
-    """Search for orders."""  # Too vague!
+Rate limiting at the tool layer protects downstream SaaS APIs from agent bursts. Combine token buckets per user with global circuit breakers when a provider returns repeated 429 responses. Agents should surface degraded-mode answers instead of retry-storming a failing dependency.
 
-@tool
-def check_inventory(product_id: str):
-    """Check availability."""  # Ambiguous!
-```
+Prompt injection via tool results is an integration security topic. Wrap untrusted tool output in clear delimiters and instruct the model to treat delimited content as data, not instructions. See OWASP guidance on prompt injection when designing retrieval and browser tools.
 
-After rewriting descriptions to include exhaustive detail:
+### Operational notes
 
-```python
-# GOOD - Specific, detailed descriptions
-@tool
-def search_orders(customer_id: str):
-    """Search for a customer's past orders including status, tracking info, and delivery dates.
-    Use this when customers ask about order status, shipping updates, or delivery times.
-    Returns: List of orders with order_id, status, items, and tracking URL."""
+Runnable configuration travels through `.invoke()`, `.batch()`, and `.stream()` via the config dict. Pass tags, metadata, callbacks, and run names there instead of hard-coding observability inside each step. Consistent run naming makes distributed traces readable when multiple chains serve the same HTTP route.
 
-@tool
-def check_inventory(product_id: str):
-    """Check if a product is currently in stock and available for purchase.
-    Use this when customers ask if they can buy a product or when it will be available.
-    Returns: Stock count and next restock date if out of stock."""
-```
+LangChain fundamentals covered installation and first chains; this module assumes you can read a Runnable graph. When imports move between packages, the graph shape—prompt, model, parser, tool—should remain stable. Pin integration tests to behavior, not to deprecated class names noted in the snapshot callout.
 
-#### The Infinite Loop Incident
+Agents that call retrieval tools should log which sources were used for compliance review. Store citation metadata alongside user messages in your application database, not only in ephemeral scratchpads. Auditors care about provenance more than eloquence when answers influence billing or safety decisions.
 
-An AI legal research assistant was designed to search case law, summarize findings, and provide citations. A user asked: "Find precedents for software patent disputes in Texas." The search returned fifty results, so the agent decided to get more details via `get_case_details`. Those details mentioned related cases. The agent tried to fetch those too. Then those cases referenced more cases.
+Parallel tool calls reduce wall-clock time but increase burst load on downstream APIs. Coordinate concurrency limits across tools sharing the same vendor quota. Otherwise parallel execution becomes a faster way to exhaust rate limits.
 
-The system generated a runaway cascade of API calls before crashing.
+Structured output parsers pair naturally with LCEL when tools are unavailable. Use them when you need JSON fields for UI rendering but not external side effects. Mixing parsers and tools in one chain is valid: parse plan steps, then execute approved tools sequentially.
 
-```python
-# BAD - No recursion protection
-@tool
-def get_case_details(case_id: str):
-    """Get full details including related cases."""
-    details = legal_api.get(case_id)
-    return details  # Includes "related_cases" field that agent will try to explore
+Callback handlers can redact secrets before logs persist. Implement on_llm_start and on_tool_end hooks that strip API keys or PII patterns from serialized inputs. Redaction belongs in observability plumbing, not in hopeful system prompts.
 
-# GOOD - With call limits and depth tracking
-class LegalResearchTools:
-    def __init__(self, max_calls: int = 20):
-        self.call_count = 0
-        self.max_calls = max_calls
-        self.explored_cases = set()
+Memory summarization should preserve open questions explicitly. If the user asked for a follow-up on invoice March, the summary must retain that identifier. Generic summaries that drop entities cause agents to re-ask already answered clarifications.
 
-    @tool
-    def get_case_details(self, case_id: str):
-        """Get case details. Limited to 20 calls per session to prevent runaway research."""
-        if self.call_count >= self.max_calls:
-            return "Research limit reached. Please refine your query."
-        if case_id in self.explored_cases:
-            return f"Already retrieved case {case_id}."
+Tool routing classifiers can be small models or embedding similarity over description vectors. Either approach beats dumping every schema into one prompt when catalogs exceed a dozen entries. Measure routing precision in staging before enabling automatic subset selection in production.
 
-        self.call_count += 1
-        self.explored_cases.add(case_id)
-        details = legal_api.get(case_id)
-        # Don't include related cases in response to prevent exploration
-        del details['related_cases']
-        return details
-```
+Streaming partial JSON from models is fragile compared with native tool-call messages. Prefer provider tool-call APIs when available; fall back to text parsers only for legacy models. LangChain's tool-calling agents assume structured tool_call objects when using create_tool_calling_agent.
 
----
+Production deployments should version tool schemas alongside API deployments. Breaking parameter renames without versioning confuse models mid-conversation. Expose schema version identifiers in tool descriptions during migration windows.
 
-### The Economics of Tool Calling
+Graceful degradation returns partial answers when non-critical tools fail. If news retrieval fails but weather succeeds, answer with weather and disclose the news outage. Users prefer honest partial results over hallucinated completeness.
 
-Understanding the true token consumption overhead is essential to writing cost-effective architectures. You must actively evaluate the cost and performance trade-offs of multi-step reasoning models against more primitive single-pass prompt strategies. 
+Integrate retrieval confidence scores into tool results when your vector store provides them. Low-confidence hits should trigger clarification questions instead of authoritative statements. Confidence metadata is cheap to append and saves reputation on edge-case queries.
 
-To evaluate these trade-offs effectively, you must analyze token consumption and latency metrics. A single-pass prompt strategy involves injecting all potentially necessary contextual data directly into the initial user prompt. For example, if a user asks a question about a company's financial report, a single-pass approach would retrieve the entire 50-page PDF document beforehand, embed it completely into the prompt window, and ask the LLM to generate an answer in one go. This approach is operationally simpler: it uses a single model round-trip and avoids tool-selection failures, though actual latency depends on model, prompt size, and provider conditions.
+Debug sessions should capture intermediate_steps only for opted-in users or internal staff. Full scratchpads may contain sensitive tool output. Gate verbose traces behind feature flags and retention policies aligned with privacy review.
 
-However, a multi-step reasoning model dynamically selects and executes tools to retrieve only the specific targeted data required. If the context window is large, a single-pass strategy can consume a great many input tokens per query. A multi-step agent can instead fetch a smaller relevant excerpt, but it adds extra model round-trips and can increase latency and failure modes. You must rigorously evaluate your specific workload: employ single-pass prompt strategies for low-latency applications with static, predictably sized context windows, and deploy expensive multi-step reasoning agents only for complex, exploratory problem domains where the required context is vast or entirely unknown at the initiation of the interaction.
+Apply circuit breakers on tools that call legacy mainframes or batch systems. One slow tool should not block the entire agent thread pool. Return timeout messages the model can quote while your status page explains the outage.
 
-```text
-TOOL CALLING COST ANATOMY
-=========================
+Compose test fixtures that snapshot expected Runnable outputs per stage. When upgrading langchain-core, diff stage outputs before running end-to-end agent evaluations. Stage-level regressions are easier to fix than mysterious end-user answer drift.
 
-Single Tool Call Request:
-- System prompt:           ~200 tokens
-- Tool definitions:        ~100 tokens per tool (5 tools = 500 tokens)
-- Conversation history:    ~500 tokens average
-- User message:            ~50 tokens
-- Total INPUT:            ~1,250 tokens
+Design tool descriptions for multilingual users when your product serves global markets. Include English canonical names but describe intents using phrases non-English prompts might use. Routing quality improves when descriptions mention common synonyms and abbreviations.
 
-Response (with tool call):
-- Tool call JSON:          ~100 tokens
-- Reasoning (if any):      ~50 tokens
-- Total OUTPUT:           ~150 tokens
+Memory encryption and retrieval ACLs belong in platform engineering checklists. Agents amplify any data leak because they combine memory, retrieval, and tools in one transcript. Treat agent sessions as sensitive composite records, not ephemeral chat logs.
 
-Tool Result Turn:
-- Previous context:        ~1,400 tokens (cumulative)
-- Tool result:            ~200 tokens average
-- Final response:         ~200 tokens OUTPUT
+Streaming UX should distinguish model tokens from tool status messages. Show tool-start indicators separately so users know the agent is waiting on external systems. Perceived reliability improves when the interface explains pauses instead of freezing silently.
 
-TOTAL for single tool interaction:
-- Input tokens:           ~1,800
-- Output tokens:          ~350
-- Cost (gpt-5):           ~$0.012
-- Cost (Claude Sonnet):   ~$0.009
-```
+Apply budget alerts on token usage per tool category. Finance teams notice category spikes faster than aggregate LLM bills alone. Tag callbacks with tool names to feed those dashboards automatically.
 
-| Agent Type | Avg. Tool Calls | Input Tokens | Output Tokens | Cost/Request |
-|-----------|-----------------|--------------|---------------|--------------|
-| Single-tool (weather) | varies | varies | varies | pricing-dependent |
-| Customer service | varies | varies | varies | pricing-dependent |
-| Research assistant | varies | varies | varies | pricing-dependent |
-| Complex workflow | varies | varies | varies | pricing-dependent |
+Integrate LangGraph when AgentExecutor loops need checkpointing after human approval. LangChain tools and retrievers still plug into LangGraph nodes. This module's executor mental model maps directly to graph nodes and conditional edges.
 
-| Task | Manual Time | Manual Cost | Agent Cost | Savings |
-|------|-------------|-------------|------------|---------|
-| Order lookup | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
-| Flight search | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
-| Data extraction | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
-| Research synthesis | workload-dependent | labor-rate-dependent | model-and-tool-dependent | often substantial |
+Compose retriever and formatter steps as separate runnables so you can unit test formatting without vector infrastructure. Mock retriever outputs as lists of Document objects with metadata. When formatting changes, tests fail fast instead of silently altering agent answers in production.
 
-To minimize the impact of intermediate tool results on your accumulating context window, you must format your database returns cleanly.
+Design idempotent tools whenever possible so retries after timeouts do not double-charge or duplicate records. Document which tools are safe to retry in the tool description itself. Agents and orchestrators use that hint when deciding whether to re-invoke after transient failures.
 
-```python
-# BAD - Returns massive objects
-@tool
-def search_products(query: str):
-    results = catalog.search(query, limit=100)  # 100 full product objects
-    return results  # Could be 50,000+ tokens!
+Debug malformed tool JSON by logging the raw model message before parsing. Often the fix is a clearer parameter description or a smaller tool set rather than a new prompt essay. Keep a corpus of failed parses from staging to regression-test parser upgrades.
 
-# GOOD - Return only what's needed
-@tool
-def search_products(query: str, limit: int = 5):
-    """Search products. Returns top 5 matches with name, price, and ID."""
-    results = catalog.search(query, limit=limit)
-    return [
-        {"id": p["id"], "name": p["name"], "price": p["price"]}
-        for p in results
-    ]  # ~500 tokens max
-```
+Apply request-level budgets that cap total tool calls across an entire user session. Per-executor max_iterations is necessary but not sufficient when users open multiple tabs. Session stores should track cumulative tool usage and refuse new calls when budgets exhaust.
 
----
+Integrate feature flags to disable risky tools instantly without redeploying model weights. Operations teams need a kill switch when a vendor API behaves unexpectedly during an incident. Tool registries loaded at startup make flag-gated subsets straightforward to implement.
 
-### Interview Preparation
+Streaming token events to mobile clients may require coalescing chunks to reduce UI flicker. Batch tokens every fifty milliseconds unless the product demands character-by-character rendering. Measure battery and data impact on mobile when enabling full token streaming.
 
-**Q: How do you prevent prompt injection through tool results?**
+Memory backends range from in-process dicts to Redis, Postgres, and dedicated session services. Pick storage based on retention policy, encryption requirements, and horizontal scale. Agents replicated across pods need shared memory stores; in-process dicts break with load balancing.
 
-A malicious user can embed dangerous payloads in an otherwise innocuous database field. If the agent retrieves that field and incorporates it directly into the prompt context, [the payload could hijack the agent's logic](https://owasp.org/www-community/attacks/PromptInjection).
+Retrieval tools should tag results with ACL scopes derived from the authenticated user. Never return documents the user could not fetch through normal application APIs. Vector stores must index permission metadata alongside embeddings for filter enforcement.
 
-```xml
-<tool_result source="database">
-User's bio: {potentially malicious content}
-</tool_result>
-```
-To mitigate this risk, you isolate external data in specific XML tags and provide explicit system prompts instructing the model never to interpret the contents of the `tool_result` tag as execution instructions.
+Compose validation runnables after the model and before tools execute when business rules are deterministic. Let the model propose structured intent, then validate with code before any side effect. This pattern reduces catastrophic tool calls compared with trusting free-form JSON alone.
 
----
+Design observability dashboards around tool success rate, p95 latency, and tokens per successful task. Leaders ask for ROI narratives; engineers need the same metrics to spot regressions after prompt changes. Export callback events to your metrics stack with consistent label cardinality limits.
+
+Apply red-team exercises that attempt prompt injection through retrieved snippets and tool outputs. Schedule exercises after major tool additions or retrieval index refreshes. Document mitigations in runbooks linked from on-call playbooks.
+
+Debug parallel tool failures by recording which branch failed in RunnableParallel merges. Partial success dictionaries should mark failed keys explicitly instead of omitting them silently. Downstream prompts can acknowledge partial data when one branch times out.
+
+Integrate circuit breaker state into tool descriptions during incidents. When a dependency is degraded, update dynamic descriptions to steer the model away from broken tools. Static schemas cannot express outage mode; application-layer registries can.
+
+Streaming agent UIs should show cancellation controls that abort in-flight tool calls. Users who cancel must not leave orphaned writes in external systems. Use idempotency keys on mutating tools to make cancellation safe.
+
+LCEL batch APIs help offline evaluation: pass hundreds of inputs through the same chain with shared callbacks. Collect latency distributions per stage to find bottlenecks before launch. Batch mode reveals parser edge cases that single manual invokes miss.
+
+Tool schema examples in docstrings should mirror real user phrasing collected from support tickets. Product managers can supply anonymized phrases during tool design reviews. Grounding descriptions in actual language beats inventing synthetic scenarios alone.
+
+Memory eviction policies should consider regulatory retention separately from model context limits. Legal hold may require keeping transcripts models no longer see. Separate compliance archives from active prompt history to satisfy both constraints.
+
+Production agents benefit from golden-path integration tests that mock only external HTTP, not LangChain internals. Use recorded fixtures for vendor APIs and real Runnable graphs for everything else. Tests then catch composition regressions and vendor schema changes independently.
+
+Apply structured audit logs whenever tools mutate customer records. Include actor, tool name, arguments hash, and outcome status. Forensics teams need deterministic traces more than conversational politeness after incidents.
+
+RunnableLambda steps are the escape hatch when you need plain Python between model calls. Keep lambdas small and pure; push heavy IO into tools with explicit schemas instead of hidden side effects. Named functions improve stack traces when callbacks report errors mid-chain.
+
+Cross-linking fundamentals and LangGraph modules helps teams choose the right orchestration layer. Stay on LCEL and AgentExecutor until you need checkpoints; graduate to LangGraph when cycles and approvals dominate. Mixing both in one product is normal—shared tools and retrievers reduce duplication.
+
+Token accounting should attribute tool definition overhead separately from conversation history. Large tool catalogs inflate every request even when the model picks one tool. Measure definition tokens when debating meta-tool consolidation versus flat schemas.
+
+Warm-start agent sessions with retrieved policy snippets only when the user's intent classifies as policy-related. Eager retrieval on every message wastes tokens and increases injection surface. Intent classifiers implemented as lightweight LCEL branches keep costs predictable.
+
+Vendor SDK upgrades should run through staging chains that record parity diffs on golden inputs. Behavioral drift often appears in tool-call formatting before user-visible answer quality shifts. Automate those diffs in CI tied to langchain-core version bumps.
+
+Closing the loop: compose runnables, design tool contracts, integrate memory and retrieval, debug with callbacks, and apply production guardrails. These skills transfer even when class names change—verify against the snapshot callout and official docs each release. The framework is volatile; the orchestration discipline is durable.
 
 ## Did You Know?
 
-- [In June 2023, OpenAI officially introduced function calling](https://openai.com/index/function-calling-and-other-api-updates/) to their API, fundamentally shifting the paradigm from text generation to agentic workflows.
-- Tool selection accuracy often degrades as the number of overlapping tools grows, so large toolsets usually need routing or hierarchical organization.
-- Tool execution loops can reduce manual effort for some workflows, but the actual savings depend heavily on labor rates, model choice, and tool costs.
-- Recursive agents can generate runaway volumes of API calls very quickly if you do not enforce depth limits and call budgets.
+- [OpenAI introduced function calling in June 2023](https://openai.com/index/function-calling-and-other-api-updates/), shifting many applications from pure text generation toward agentic workflows that call external APIs.
+- [Anthropic's tool-use announcement](https://www.anthropic.com/news/tool-use-ga) describes how external tools improve accuracy on tasks models cannot complete from weights alone.
+- Tool selection accuracy often degrades as overlapping tools accumulate; large catalogs typically need routing layers or hierarchical meta-tools rather than flat schema dumps.
+- [ReAct (Reason + Act)](https://arxiv.org/abs/2210.03629) formalized interleaved reasoning and tool use—the same loop LangChain agent executors implement with modern native tool-call messages.
 
----
 
 ## Common Mistakes
 
-| Mistake | Why | Fix |
+| Mistake | Why it hurts | Fix |
 |---|---|---|
-| Overpowered Tools | Models may hallucinate destructive commands if given broad access. | Apply the principle of least privilege; parameterize queries and restrict scopes. |
-| Missing Error Context | Returning a generic error causes the model to guess or hallucinate next steps. | Catch exceptions and return actionable, clear error strings detailing the exact issue. |
-| Tool Overload | Providing dozens of overlapping tools confuses the model's selection logic. | Consolidate related functionality into single tools with clear, distinct responsibilities. |
-| Synchronous External Calls | Blocking calls halt the entire response generation, leading to poor user experience. | Use asynchronous functions (`_arun`) to allow parallel tool execution. |
-| Ignoring Tool Call Costs | Returning massive JSON objects consumes massive amounts of tokens. | Filter tool responses to return only the specific fields required by the prompt. |
-| Poor Descriptions | The model uses the description to determine if and how to use the tool. | Write exhaustive docstrings detailing inputs, edge cases, and exactly when to invoke the tool. |
+| Overpowered tools | Models may invoke destructive commands when scopes are too broad. | Apply least privilege; parameterize queries and restrict filesystem or SQL access. |
+| Missing error context | Generic failures force the model to guess the next step. | Return actionable error strings; use `handle_tool_error` and try/except inside tools. |
+| Tool overload | Dozens of overlapping tools confuse routing. | Consolidate related actions into meta-tools or route to focused subsets first. |
+| Ignoring memory growth | Storing full tool payloads in history blows context limits. | Trim or summarize tool results before persisting memory; cap turn count. |
+| Synchronous fan-out | Sequential independent reads inflate latency. | Use async tools and parallel tool calls when the provider supports them. |
+| Bloated tool responses | Huge JSON objects consume tokens and obscure answers. | Return only fields the model needs; paginate large result sets. |
+| Weak descriptions | The model routes primarily on docstrings, not code. | Write specific descriptions with examples, edge cases, and when-not-to-use notes. |
+| Skipping observability | Failures look like model bugs when tools misbehave silently. | Add callbacks, verbose traces, and structured logs at Runnable boundaries. |
 
----
 
-## Quiz
+## Knowledge Check
 
-1. **Scenario: You are managing a LangChain agent that integrates with a proprietary CRM database. The agent keeps returning a massive JSON payload causing token limit exceptions. How do you resolve this?**
+1. **How do you compose an LCEL pipeline that classifies intent and summarizes a question in parallel before routing?**
    <details>
-   <summary>Reveal Answer</summary>
-   The database tool is returning the entire customer record object back to the agent's context window. You must refactor the tool function to extract and return only the specific fields requested (e.g., name and active status), reducing the token payload drastically.
+   <summary>Compose parallel LCEL branches with RunnableParallel before a routing merge step</summary>
+   Build two chains (classify and summarize) that share the same input dict, merge with RunnableParallel, then apply a RunnableLambda or RunnableBranch to pick the next chain. Test with GenericFakeChatModel so compose logic is verified without API keys.
    </details>
 
-2. **Scenario: Your agent has twenty-five different tools to manage cloud resources. It consistently selects the wrong tool. What strategy improves tool selection?**
+2. **Your agent selects the wrong tool among fifteen similar database utilities. What design change improves schema clarity?**
    <details>
-   <summary>Reveal Answer</summary>
-   Tool overload confuses the model classification logic. Implement a hierarchical tool routing pattern where a primary agent determines the category (e.g., networking, compute), and passes the query to a specialized sub-agent with a much smaller, focused set of tools.
+   <summary>Design distinct tool descriptions and hierarchical meta-tools instead of flat duplicates</summary>
+   Rewrite descriptions so each tool states when to use it and when not to. Consolidate related SQL helpers into one meta-tool with an action parameter, or route to a focused subset before invoking the main agent executor.
    </details>
 
-3. **Scenario: A developer implements an agent tool `delete_user_record`. It deletes records without prompting the user. How should you restructure the tool to be secure?**
+3. **How should you integrate memory with agents so tool results do not exhaust the context window?**
    <details>
-   <summary>Reveal Answer</summary>
-   You must implement a confirmation boolean parameter in the tool schema. If the parameter is missing or false, the tool should safely return a warning message requesting explicit confirmation before proceeding to mutate state.
+   <summary>Integrate memory policies that trim tool payloads and cap stored turns</summary>
+   Load only recent turns into MessagesPlaceholder, summarize older history, and never persist raw megabyte JSON from tools. Save structured facts separately when long-term recall is required.
    </details>
 
-4. **Scenario: A weather agent correctly calls the `get_weather` tool, but the API endpoint times out. The agent crashes. What should you change in the tool definition?**
+4. **Operators cannot see why an agent stalled during a long tool call. Which debug hooks help?**
    <details>
-   <summary>Reveal Answer</summary>
-   The tool is missing internal error handling. In LangChain, you should pass `handle_tool_error=True` to the decorator or wrap the external API call in a `try/except` block, returning a clean, textual explanation of the failure so the model can degrade gracefully.
+   <summary>Debug with streaming events, callbacks, and return_intermediate_steps on the executor</summary>
+   Attach a BaseCallbackHandler that logs tool start/end timestamps, enable verbose mode, and inspect intermediate_steps after the run. Stream partial events to the UI so latency is visible while tools execute.
    </details>
 
-5. **Scenario: You are migrating an agent from OpenAI to Anthropic Claude. The agent previously relied on nested `parameters` keys within a `function` object to pass schemas. When executing the Anthropic agent, it fails to recognize the tools. How do you diagnose and resolve this protocol mismatch?**
+5. **A retrieval tool returns entire PDFs and answers become slow and expensive. What production pattern fixes this?**
    <details>
-   <summary>Reveal Answer</summary>
-   While conceptually identical, OpenAI nests parameters under a `parameters` key within a `function` object. Anthropic utilizes a flattened `input_schema` key. LangChain abstracts these wire-level formatting differences away from the developer. By utilizing LangChain's built-in tool abstractions instead of constructing raw JSON dictionaries manually, the framework will dynamically serialize the payload to match whichever LLM provider is currently active in the pipeline.
+   <summary>Apply production payload shaping—snippets, citations, and hard size caps on retrieval tool output</summary>
+   Return titles, short excerpts, and source metadata instead of full documents. Combine with re-ranking and a synthesis step so the model sees only the minimum grounded context.
    </details>
 
-6. **Scenario: Your financial analysis agent requires stock prices, recent news, and quarterly earnings to generate a comprehensive report. Currently, it calls three separate tools sequentially, resulting in high latency and occasional reasoning failures between steps. How can you redesign the tool architecture to optimize this specific workflow?**
+6. **Users trigger repeated market-data fetches with follow-up questions. Which apply-layer control limits cost?**
    <details>
-   <summary>Reveal Answer</summary>
-   A composite tool is a wrapper function that internally executes multiple sequential or related actions (like fetching a stock price, grabbing news headlines, and reading financials) and returns a synthesized block of text, preventing the agent from having to navigate complex multi-step logic on its own. Implementing this "Specialist Team" pattern condenses three LLM reasoning cycles into a single strategic execution call, drastically reducing total latency and token cost.
+   <summary>Apply TTL caching, recursion limits, and call budgets at the tool boundary</summary>
+   Cache idempotent reads with time-bucket keys, enforce max_iterations on the executor, and track per-session tool call counts. Surface degraded answers when limits are reached instead of silent retry storms.
    </details>
 
-7. **Scenario: A junior developer manually writes extensive JSON schemas for every new tool, leading to frequent syntax errors, mismatched property names, and type mismatches that crash the agent executor. How can you implement a more robust and automated schema generation strategy using LangChain?**
-   <details>
-   <summary>Reveal Answer</summary>
-   The developer should leverage LangChain's programmatic decorators instead of writing raw JSON. The `@tool` decorator dynamically extracts the function name, parses the python docstring into the tool description, and converts the python type hints into the required JSON schema parameters automatically. This prevents structural drift between the actual python execution logic and the schema definition provided to the LLM.
-   </details>
 
----
+## Hands-On Exercise
 
-## Hands-On Exercises
+Build a small offline agent lab using `langchain_core` fakes—no API keys required. Complete every checkbox before moving to LangGraph in the next module.
 
-### Environment Setup
-
-Before starting the rigorous exercises, open your terminal and firmly establish your virtual environment to ensure all required framework packages are isolated cleanly from your global environment.
-
-```bash
-# Create and activate a fresh virtual environment
-python -m venv langchain-env
-source langchain-env/bin/activate
-
-# Install required packages
-pip install langchain langchain-core langchain-openai pydantic
-
-# Export your API key for the LLM client
-export OPENAI_API_KEY="sk-..."
-```
-
-Verify your environment by launching the python REPL and running:
-```python
-import langchain
-print(langchain.__version__)
-```
-If this prints a version number without throwing import errors, proceed immediately to the exercises.
-
-### Exercise 1: Build a Weather + News Agent
-
-Create an autonomous agent that can check weather AND get news headlines for a specific city. This exercise trains you on fundamental multi-tool coordination.
-
-**Requirements:**
-- Tool 1: `get_weather(city: str)` - Returns temperature and conditions
-- Tool 2: `get_headlines(city: str)` - Returns top 3 news headlines
-- The agent should definitively answer: "What's happening in Tokyo today?"
-
-**Starter Code:**
+- [ ] **Compose** an LCEL chain with RunnableParallel that extracts keywords and counts words from the same input string, then merges both results.
+- [ ] **Design** a `@tool` with a Pydantic schema that rejects empty location strings and returns simulated weather JSON.
+- [ ] **Integrate** Conversation-style memory by loading the last two turns into a ChatPromptTemplate MessagesPlaceholder before invoking a fake chat model.
+- [ ] **Debug** the run with a custom BaseCallbackHandler that prints chain start and LLM end events.
+- [ ] **Apply** `handle_tool_error=True` on a tool that raises ToolException when input is invalid.
 
 ```python
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain_openai import ChatOpenAI
-from langchain import hub
-from langchain_core.tools import tool
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.tools import tool, ToolException
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.runnables import RunnableParallel, RunnableLambda, RunnablePassthrough
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import BaseModel, Field
 
-# Tool 1: Weather (simulated for exercise)
-@tool
-def get_weather(city: str) -> str:
-    """Get current weather for a city. Use when user asks about weather conditions."""
-    # In production, you'd call a real API
-    weather_data = {
-        "tokyo": "72F (22C), partly cloudy, humidity 65%",
-        "london": "55F (13C), rainy, humidity 85%",
-        "new york": "68F (20C), sunny, humidity 50%",
-    }
-    city_lower = city.lower()
-    return weather_data.get(city_lower, f"Weather data not available for {city}")
+class Loc(BaseModel):
+    location: str = Field(min_length=1, description="City name")
 
-# Tool 2: News (simulated for exercise)
-@tool
-def get_headlines(city: str) -> str:
-    """Get top news headlines for a city. Use when user asks about news or events."""
-    headlines = {
-        "tokyo": [
-            "Tokyo Stock Exchange hits record high",
-            "Cherry blossom season starts early this year",
-            "New bullet train route announced"
-        ],
-        "london": [
-            "Parliament debates new climate bill",
-            "Underground expansion project approved",
-            "West End theater attendance up 20%"
-        ],
-    }
-    city_lower = city.lower()
-    news = headlines.get(city_lower, [f"No headlines available for {city}"])
-    return "\n".join(f"- {h}" for h in news)
+@tool(args_schema=Loc)
+def get_weather(location: str) -> str:
+    '''Return simulated weather for a city.'''
+    return f'{{"city": "{location}", "temp_c": 21, "conditions": "clear"}}'
 
-# Your task: Create the agent
-tools = [get_weather, get_headlines]
-llm = ChatOpenAI(model="gpt-5", temperature=0)
+@tool(handle_tool_error=True)
+def strict_echo(text: str) -> str:
+    '''Echo text or fail clearly.'''
+    if not text.strip():
+        raise ToolException("text must be non-empty")
+    return text
 
-# Get the ReAct prompt template
-prompt = hub.pull("hwchase17/react")
+class Trace(BaseCallbackHandler):
+    def on_chain_start(self, serialized, inputs, **kwargs):
+        print("[debug] chain start", list(inputs.keys()))
 
-# Create the agent
-agent = create_react_agent(llm, tools, prompt)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+fake = GenericFakeChatModel(messages=iter([
+    AIMessage(content="Memory-aware answer."),
+]))
 
-# Test it!
-response = agent_executor.invoke({
-    "input": "What's happening in Tokyo today? Include weather and news."
-})
-print(response["output"])
+history = [HumanMessage(content="Hi"), AIMessage(content="Hello!")]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Answer briefly."),
+    MessagesPlaceholder("history"),
+    ("human", "{question}"),
+])
+
+analysis = RunnableParallel(
+    keywords=RunnableLambda(lambda d: " ".join(w for w in d["text"].split() if len(w) > 4)),
+    words=RunnableLambda(lambda d: str(len(d["text"].split()))),
+)
+
+composed = (
+    RunnablePassthrough.assign(analysis=analysis)
+    | prompt
+    | fake
+)
+
+print(composed.invoke({"text": "compose integrate debug apply", "history": history, "question": "Summarize our chat"}))
+print(get_weather.invoke({"location": "Oslo"}))
+print(strict_echo.invoke({"text": ""}))
 ```
 
-<details>
-<summary>Solution & Verification</summary>
-The starter code provided above represents the complete solution. Simply execute the script. The agent executor loop will identify the two available tools, break the prompt down into a sequence, and run the tools iteratively. Verify the output terminal displays the verbose trace log output outlining the agent's Thought, Action, and Observation cycles.
-</details>
 
----
+## Next Module
 
-### Exercise 2: Build a Calculator with Error Handling
+Continue to [Module 1.3: LangGraph for Agents](/ai-ml-engineering/frameworks-agents/module-1.3-langgraph-for-agents/) to model durable agent state, cyclic workflows, and human-in-the-loop checkpoints beyond linear AgentExecutor loops.
 
-Create a robust computational calculator tool that aggressively handles execution errors gracefully without exposing dangerous `eval` privileges unconditionally to the LLM.
-
-**Requirements:**
-- Handle fatal division by zero scenarios.
-- Handle invalid expressions syntactically.
-- Return highly helpful textual error messages to guide the model.
-
-**Implementation:**
-
-```python
-from langchain_core.tools import tool
-
-@tool
-def calculate(expression: str) -> str:
-    """Evaluate a mathematical expression. Supports +, -, *, /, and parentheses.
-
-    Examples: "2 + 2", "10 / 3", "(5 + 3) * 2"
-
-    Use this when the user asks for any mathematical calculation.
-    """
-    # Whitelist allowed characters for security
-    allowed_chars = set("0123456789+-*/().eE ")
-    if not all(c in allowed_chars for c in expression):
-        return f"Invalid characters in expression. Only numbers and +-*/() allowed."
-
-    try:
-        # Use eval with restricted globals for safety
-        result = eval(expression, {"__builtins__": {}}, {})
-
-        # Handle floating point display
-        if isinstance(result, float):
-            if result == int(result):
-                return f"{expression} = {int(result)}"
-            return f"{expression} = {result:.6f}".rstrip('0').rstrip('.')
-        return f"{expression} = {result}"
-
-    except ZeroDivisionError:
-        return "Cannot divide by zero. Please check your expression."
-    except SyntaxError:
-        return "Invalid expression syntax. Example valid expressions: '2+2', '10/3', '(5+3)*2'"
-    except Exception as e:
-        return f"Calculation error: {str(e)}"
-
-# Test cases to verify:
-print(calculate.invoke("2 + 2"))           # Should work
-print(calculate.invoke("10 / 0"))          # Should handle gracefully
-print(calculate.invoke("import os"))       # Should reject
-print(calculate.invoke("(5 + 3) * 2"))     # Should work
-```
-
-<details>
-<summary>Solution & Verification</summary>
-When executed locally, verify the output terminal safely catches the division by zero and rejects the arbitrary `import os` string, confirming your string filtering prevents remote execution vulnerabilities.
-</details>
-
----
-
-### Exercise 3: Build a Multi-Step Research Agent
-
-Create an agent that strategically answers questions by searching for relevant information, pulling granular detail schemas, and finally summarizing the results.
-
-**Starter Code:**
-
-```python
-from langchain_core.tools import tool
-
-# Your task: Implement these tools and create an agent
-
-@tool
-def search_database(query: str) -> str:
-    """Search for items matching a query. Returns list of item IDs and names.
-    Use as the first step to find relevant items."""
-    # Simulated database
-    pass
-
-@tool
-def get_item_details(item_id: str) -> str:
-    """Get detailed information about a specific item by ID.
-    Use after search to get more details."""
-    pass
-
-@tool
-def summarize_findings(items: str) -> str:
-    """Summarize a list of findings into a concise report.
-    Use as the final step to compile research."""
-    pass
-
-# Create an agent that can answer:
-# "Find me information about machine learning frameworks and summarize the top 3"
-```
-
-<details>
-<summary>Solution</summary>
-
-```python
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain_openai import ChatOpenAI
-from langchain import hub
-from langchain_core.tools import tool
-
-MOCK_DB = {
-    "frameworks": [
-        {"id": "1", "name": "TensorFlow", "desc": "Google's deep learning suite."},
-        {"id": "2", "name": "PyTorch", "desc": "Meta's dynamic neural network framework."}
-    ]
-}
-
-@tool
-def search_database(query: str) -> str:
-    """Search for items matching a query. Returns list of item IDs and names.
-    Use as the first step to find relevant items."""
-    results = MOCK_DB.get(query.lower(), [])
-    if not results:
-        return "No results found."
-    return ", ".join([f"ID: {item['id']} Name: {item['name']}" for item in results])
-
-@tool
-def get_item_details(item_id: str) -> str:
-    """Get detailed information about a specific item by ID.
-    Use after search to get more details."""
-    for category in MOCK_DB.values():
-        for item in category:
-            if item["id"] == item_id:
-                return f"{item['name']}: {item['desc']}"
-    return "Item not found."
-
-@tool
-def summarize_findings(items: str) -> str:
-    """Summarize a list of findings into a concise report.
-    Use as the final step to compile research."""
-    return f"Here is the executive summary based on the details: {items}"
-
-tools = [search_database, get_item_details, summarize_findings]
-llm = ChatOpenAI(model="gpt-5", temperature=0)
-prompt = hub.pull("hwchase17/react")
-agent = create_react_agent(llm, tools, prompt)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
-
-response = agent_executor.invoke({"input": "Find frameworks and grab details for ID 1."})
-print(response["output"])
-```
-</details>
-
----
-
-### Exercise 4: Tool Composition Challenge
-
-Build a sophisticated wrapper tool that strictly aggregates multiple discrete actions to optimize latency and bypass context limits.
-
-**Starter Code:**
-
-```python
-from typing import List
-from langchain_core.tools import tool
-
-@tool
-def analyze_company(ticker: str) -> str:
-    """Comprehensive company analysis combining stock price, news, and financials.
-
-    This is a composite tool that gathers multiple data points automatically.
-    Use when user wants a complete picture of a company.
-    """
-    # Gather data from multiple sources
-    results = []
-
-    # Get stock price
-    price_data = get_stock_price.invoke(ticker)
-    results.append(f"Stock: {price_data}")
-
-    # Get news
-    news_data = get_company_news.invoke(ticker)
-    results.append(f"News: {news_data}")
-
-    # Get financials
-    financial_data = get_financials.invoke(ticker)
-    results.append(f"Financials: {financial_data}")
-
-    return "\n\n".join(results)
-```
-
-<details>
-<summary>Solution</summary>
-
-```python
-from langchain_core.tools import tool
-
-@tool
-def get_stock_price(ticker: str) -> str:
-    """Gets the stock price."""
-    return "$150.00"
-
-@tool
-def get_company_news(ticker: str) -> str:
-    """Gets the company news."""
-    return "Company announces new product line."
-
-@tool
-def get_financials(ticker: str) -> str:
-    """Gets the financials."""
-    return "Q3 revenue up 12%."
-
-@tool
-def analyze_company(ticker: str) -> str:
-    """Comprehensive company analysis combining stock price, news, and financials."""
-    results = []
-    
-    # Internal tool invocations must pass exact strings
-    results.append(f"Stock: {get_stock_price.invoke(ticker)}")
-    results.append(f"News: {get_company_news.invoke(ticker)}")
-    results.append(f"Financials: {get_financials.invoke(ticker)}")
-
-    return "\n\n".join(results)
-
-# Test execution:
-print(analyze_company.invoke("AAPL"))
-```
-</details>
-
----
-
-## Next Steps
-
-Now that you have successfully given your agent the foundational ability to interact with external tools deterministically, you are completely ready to study the underlying reasoning loops that govern complex strategic decision making. Proceed directly to:
-
-[Module 1.3: Chain-of-Thought & Reasoning](/ai-ml-engineering/frameworks-agents/module-1.3-cot-reasoning) — Learn how to make agents "think out loud" using the advanced ReAct pattern to logically navigate deeply nested problems without catastrophic divergence.
 
 ## Sources
 
-- [Function calling and other API updates](https://openai.com/index/function-calling-and-other-api-updates/) — Primary vendor announcement for OpenAI's function-calling rollout and agentic workflow framing.
-- [Claude can now use tools](https://www.anthropic.com/news/tool-use-ga) — Anthropic overview of tool use and why external tools improve accuracy and task completion.
-- [Function calling reference](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/function-calling) — Official Google Cloud reference for function-calling schemas and execution behavior.
-- [Prompt Injection](https://owasp.org/www-community/attacks/PromptInjection) — Security reference covering prompt-injection risks, including indirect attacks via retrieved content.
+- [LangChain LCEL concepts](https://python.langchain.com/docs/concepts/lcel/) — Official overview of Runnable composition, piping, and streaming semantics in LangChain Expression Language.
+- [LangChain tools concepts](https://python.langchain.com/docs/concepts/tools/) — How tools expose schemas to models and integrate with agents and chains.
+- [LangChain agents concepts](https://python.langchain.com/docs/concepts/agents/) — Agent loop architecture, executors, and relationship to LangGraph for durable workflows.
+- [LangChain memory concepts](https://python.langchain.com/docs/concepts/memory/) — Memory types, buffer policies, and how history feeds prompts across turns.
+- [LangChain streaming concepts](https://python.langchain.com/docs/concepts/streaming/) — Streaming modes for tokens and events through Runnable pipelines.
+- [LangChain callbacks concepts](https://python.langchain.com/docs/concepts/callbacks/) — Callback handler lifecycle hooks for tracing and custom logging.
+- [Tool calling how-to](https://python.langchain.com/docs/how_to/tool_calling/) — Practical guide to binding tools to chat models and executing tool calls.
+- [Streaming how-to](https://python.langchain.com/docs/how_to/streaming/) — Step-by-step patterns for streaming LCEL chains and chat models.
+- [ReAct paper](https://arxiv.org/abs/2210.03629) — Yao et al.; foundational interleaved reasoning and acting pattern underlying modern agents.
+- [OpenAI function calling guide](https://platform.openai.com/docs/guides/function-calling) — Provider reference for tool schemas, parallel calls, and structured outputs.
+- [Anthropic tool use GA](https://www.anthropic.com/news/tool-use-ga) — Announcement and design notes for Claude tool-use integrations.
+- [Google Vertex function calling](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/function-calling) — Google Cloud reference for function-calling request and response shapes.
+- [OWASP Prompt Injection](https://owasp.org/www-community/attacks/PromptInjection) — Security reference for direct and indirect prompt injection, including via tool and retrieval content.
+
