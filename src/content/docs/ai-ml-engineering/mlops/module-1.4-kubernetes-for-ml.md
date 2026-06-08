@@ -29,7 +29,13 @@ Kubernetes is not a magic machine learning platform. It is a reconciliation syst
 
 The ML-specific challenge is that model workloads put unusual stress on ordinary Kubernetes assumptions. Large model artifacts make startup slow, GPUs are scarce and expensive, training jobs can run for hours, inference traffic can spike quickly, and bad rollout behavior can create customer-visible errors even when the container process stays alive. The right design therefore starts from the workload question: is this stateless online inference, scheduled batch scoring, distributed training, feature generation, or asynchronous embedding work? The answer determines which Kubernetes objects are appropriate and which controls are dangerous distractions.
 
-This module treats Kubernetes as an engineering substrate for ML, not as a collection of YAML recipes. You will learn how to reason from workload behavior to objects, requests, probes, autoscaling metrics, rollout policy, and debugging commands. The examples assume Kubernetes 1.35 or newer. Before using short commands, define the standard alias with `alias k=kubectl`; all `k` examples in this module assume that alias exists.
+This module treats Kubernetes as an engineering substrate for ML, not as a collection of YAML recipes. You will learn how to reason from workload behavior to objects, requests, probes, autoscaling metrics, rollout policy, and debugging commands. Before using short commands, define the standard alias with `alias k=kubectl`; all `k` examples in this module assume that alias exists.
+
+> **Landscape snapshot — as of 2026-06. Verify against vendor docs before relying on specifics.**
+>
+> - **Kubernetes target**: 1.35 or newer (EndpointSlices are the current Service backend API; the legacy Endpoints object is deprecated).
+> - **Lab image pins**: `nginx:1.27-alpine` (mock inference server), `curlimages/curl:8.10.1` (in-cluster request test).
+> - **Add-on assumptions**: metrics-server (required for CPU-based HPA), NVIDIA device plugin or equivalent (required for `nvidia.com/gpu` scheduling).
 
 ## Did You Know
 
@@ -232,11 +238,13 @@ spec:
           averageUtilization: 65
 ```
 
+HPA is core Kubernetes — the `HorizontalPodAutoscaler` API ships with the control plane. What HPA does *not* include is a metrics pipeline. CPU and memory utilization metrics come from **metrics-server**, a separately installed cluster add-on. Without metrics-server (or another metrics adapter), an HPA that targets CPU will sit idle with `FailedGetResourceMetric` events. The **Vertical Pod Autoscaler** is also an add-on: it runs as a separate operator that recommends or applies Pod resource changes. The **Cluster Autoscaler** is a separate component that talks to your cloud provider or bare-metal provisioning layer to add or remove nodes. **KEDA** (Kubernetes Event-driven Autoscaling) is a third-party CNCF project that scales workloads from external signals such as queue depth, Prometheus metrics, or cloud event sources — it is not part of the default Kubernetes distribution. Treat each layer as an explicit install-and-configure decision rather than something the cluster provides automatically.
+
 The Vertical Pod Autoscaler changes resource recommendations, and in some modes updates Pod requests. It is useful when teams do not know the right CPU or memory requests for a workload, or when a long-running service has stable traffic but poorly tuned resource settings. VPA is not a substitute for horizontal scaling of stateless inference under traffic spikes. If a service needs twice as much capacity during a promotion, adding replicas may be safer than trying to resize each existing Pod. VPA is best viewed as a right-sizing tool and HPA as a replica-count tool.
 
 The Cluster Autoscaler changes the number of nodes when Pods cannot be scheduled because the cluster lacks capacity. This is a different layer from HPA. HPA may request more Pods, but those Pods still need somewhere to run. If the cluster autoscaler is not configured for the relevant node pool, additional inference replicas can remain Pending. For GPU workloads, the relationship is even more important because node provisioning may be slow and cloud providers may not have accelerator capacity available. Autoscaling policy should account for the time it takes to add nodes, pull images, and load models.
 
-Queue-based scaling is often better for asynchronous ML workloads than CPU-based scaling. Embedding generation, offline scoring, document processing, and feature computation frequently receive work through a queue. In those systems, queue length, oldest message age, or work completion rate can describe demand more directly than CPU. Kubernetes Event-driven Autoscaling and similar controllers can scale consumers from queue metrics, including scaling to zero when no work exists. The tradeoff is cold-start delay, which may be unacceptable for interactive inference but useful for batch and background jobs.
+Queue-based scaling is often better for asynchronous ML workloads than CPU-based scaling. Embedding generation, offline scoring, document processing, and feature computation frequently receive work through a queue. In those systems, queue length, oldest message age, or work completion rate can describe demand more directly than CPU. **KEDA** can scale consumer Deployments from queue metrics — including scaling to zero when no work exists — but it must be installed separately like metrics-server or the VPA operator. The tradeoff is cold-start delay, which may be unacceptable for interactive inference but useful for batch and background jobs.
 
 ## 6. Manage Model Artifacts and Storage
 
@@ -255,13 +263,19 @@ spec:
       storage: 50Gi
 ```
 
+> **ReadOnlyMany and local clusters**
+>
+> `ReadOnlyMany` lets multiple Pods mount the same volume read-only — useful when many inference replicas share one model artifact on disk. Default kind and minikube storage classes (`local-path`, `standard`, and most block CSI drivers) support only `ReadWriteOnce`. A `ReadOnlyMany` PVC against those provisioners stays `Pending` because no StorageClass can satisfy the access mode. For local labs, use `ReadWriteOnce` with a single replica, or install a shared filesystem provisioner (NFS, CephFS, or a cloud file service) that advertises `ReadOnlyMany` support before relying on this pattern in production.
+
 Access modes are especially important in ML because teams often confuse "many replicas need the model" with "many replicas need to write the same files." Inference replicas usually need read access to the same artifact, not concurrent write access. Training jobs may need write access for checkpoints, but a single-writer checkpoint volume is safer than a shared writable directory unless the framework is designed for it. If multiple Pods write arbitrary files to the same path without coordination, the storage system can become the hidden source of corruption, latency, or inconsistent results.
 
 Large artifacts also affect rollout behavior. If every new Pod downloads a model from remote storage at the same time, a rollout can overload the storage service or hit rate limits. Init containers, local node caches, image pre-pulling, and staggered rollouts can reduce that risk. Readiness probes should stay false until the artifact is present and validated. A common production mistake is treating a successful container start as proof that the model exists; a better server validates checksum, schema compatibility, and load success before reporting readiness.
 
 ## 7. Debug Kubernetes Evidence for ML Failures
 
-Kubernetes debugging starts with state, events, and logs. A failing model service may produce Python stack traces, but Kubernetes tells you whether the Pod was scheduled, whether containers started, whether probes failed, whether the container was killed, and whether the Service has endpoints. Start broad, then narrow. Check the Deployment rollout, list Pods, describe the suspicious Pod, inspect events, inspect previous container logs after restarts, and then inspect metrics. This workflow prevents the common mistake of staring at application logs when the scheduler already explained the problem.
+Kubernetes debugging starts with state, events, and logs. A failing model service may produce Python stack traces, but Kubernetes tells you whether the Pod was scheduled, whether containers started, whether probes failed, whether the container was killed, and whether the Service has ready backends. Start broad, then narrow. Check the Deployment rollout, list Pods, describe the suspicious Pod, inspect events, inspect previous container logs after restarts, and then inspect metrics. This workflow prevents the common mistake of staring at application logs when the scheduler already explained the problem.
+
+As of Kubernetes 1.33, the legacy Endpoints API is deprecated in favor of **EndpointSlices**, which are the objects kube-proxy and most ingress controllers actually consume. When you need to see which Pod IPs a Service is routing to, query EndpointSlices instead of the older Endpoints object.
 
 ```bash
 alias k=kubectl
@@ -271,7 +285,7 @@ k rollout status deploy/sentiment-inference
 k get pods -l app=sentiment-inference -o wide
 k describe pod <pod-name>
 k logs <pod-name> --previous
-k get endpoints sentiment-inference
+k get endpointslices -l kubernetes.io/service-name=sentiment-inference
 ```
 
 A Pending Pod is usually a scheduling problem rather than an application problem. `k describe pod` will often show events such as insufficient CPU, insufficient memory, untolerated taint, unmatched node selector, or unavailable GPU resources. For ML teams, this evidence is more useful than rerunning the training script. If the Pod requests `nvidia.com/gpu: 4` and every node has only one free GPU, the application cannot fix placement. The choices are to lower the request, change the node pool, wait for capacity, or redesign the distributed job.
@@ -412,7 +426,7 @@ Use a mock or lightweight model server locally, apply manifests in a disposable 
 <details>
 <summary>7. Explain why a Service can have no endpoints even when Pods exist in the namespace.</summary>
 
-A Service routes only to Pods matching its selector and only to Pods considered ready. Label drift, selector mistakes, readiness failures, or Pods in a different namespace can all produce an empty endpoint list. The debugging path is to compare `k get pods --show-labels`, `k describe service`, and `k get endpoints` before changing application code.
+A Service routes only to Pods matching its selector and only to Pods considered ready. Label drift, selector mistakes, readiness failures, or Pods in a different namespace can all leave the Service with no ready backends. The debugging path is to compare `k get pods --show-labels`, `k describe service`, and `k get endpointslices -l kubernetes.io/service-name=<service-name>` before changing application code.
 </details>
 
 ## Hands-On Exercise: Deploy a Local Inference Mock
@@ -420,8 +434,8 @@ A Service routes only to Pods matching its selector and only to Pods considered 
 This exercise uses a lightweight HTTP container so you can practice Kubernetes operations without downloading a large model. The mock server returns static JSON, but the Kubernetes contract is the same one used by real inference services: a Deployment creates replicas, probes protect traffic, a Service exposes the replicas, and commands verify rollout behavior. Use a local cluster such as kind, minikube, Docker Desktop, or another disposable Kubernetes environment before applying similar manifests to shared infrastructure.
 
 - [ ] Create a namespace and define `alias k=kubectl` for the remaining commands.
-- [ ] Apply the ConfigMap, Deployment, Service, and optional HPA manifest.
-- [ ] Verify Pods, readiness, Service endpoints, and rollout status from Kubernetes evidence.
+- [ ] Apply the ConfigMap, Deployment, Service, and HPA manifest (requires metrics-server in the cluster).
+- [ ] Verify Pods, readiness, EndpointSlices for the Service, HPA status, and rollout status from Kubernetes evidence.
 - [ ] Send a request from inside the cluster and confirm the mock prediction response.
 - [ ] Delete the namespace so no local resources remain after the exercise.
 
@@ -509,13 +523,36 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mock-inference
+  namespace: ml-k8s-lab
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mock-inference
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
 ```
+
+The HPA above scales on CPU utilization. That metric is only available when **metrics-server** is installed in the cluster (see the Landscape snapshot). On kind or minikube, enable it with `minikube addons enable metrics-server` or the equivalent for your local distribution before applying the HPA. Without metrics-server, the HPA object will exist but report `FailedGetResourceMetric` and will not change replica counts.
 
 ```bash
 k apply -f mock-inference.yaml
 k rollout status deployment/mock-inference -n ml-k8s-lab
 k get pods -n ml-k8s-lab -l app=mock-inference -o wide
-k get endpoints mock-inference -n ml-k8s-lab
+k get endpointslices -n ml-k8s-lab -l kubernetes.io/service-name=mock-inference
+k get hpa mock-inference -n ml-k8s-lab
 ```
 
 ```bash
@@ -527,7 +564,7 @@ k run curl-test \
   -- http://mock-inference/predict
 ```
 
-If the request fails, debug from the Kubernetes layer before changing the mock server. Check whether Pods are Ready, whether the Service has endpoints, whether the selector matches Pod labels, and whether the container logs show NGINX configuration errors. That habit transfers directly to real model-serving failures because many incidents are caused by rollout, readiness, routing, and resource contracts rather than by model code.
+If the request fails, debug from the Kubernetes layer before changing the mock server. Check whether Pods are Ready, whether EndpointSlices list ready addresses for the Service, whether the selector matches Pod labels, and whether the container logs show NGINX configuration errors. That habit transfers directly to real model-serving failures because many incidents are caused by rollout, readiness, routing, and resource contracts rather than by model code.
 
 ```bash
 k describe pod -n ml-k8s-lab -l app=mock-inference

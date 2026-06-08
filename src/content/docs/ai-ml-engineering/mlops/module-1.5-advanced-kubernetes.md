@@ -4,43 +4,60 @@ slug: ai-ml-engineering/mlops/module-1.5-advanced-kubernetes
 sidebar:
   order: 606
 ---
-> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 6-8
-## The Night Spotify's Recommendations Went Silent
-
-**Stockholm, Sweden. December 2019. 2:37 AM.**
-
-An alert showing zero predictions served can signal a severe outage in a production recommendation system.
-
-Emma Björklund, the on-call engineer, pulled up the Kubernetes dashboard from her laptop while her coffee went cold. Everything looked green. Pods were running. Health checks were passing. CPU usage was normal. But somehow, no predictions were flowing.
-
-A Kubernetes or runtime change can break model-serving workloads in ways that look healthy at the orchestration layer while inference keeps failing underneath. Each pod would start, attempt to load the model, fail, and restart. An infinite loop of failure that looked healthy from the outside.
-
-A common lesson from production ML incidents is that strong models and solid Kubernetes fundamentals still do not replace a purpose-built ML platform layer.
-
-The broader lesson is that a dedicated ML platform layer can make production incidents easier to detect, diagnose, and recover from than plain container orchestration alone.
-
-This module teaches you the tools that bridge that chasm: Kubeflow, KServe, Ray, and Triton. These tools reflect patterns that emerged as teams learned that production ML needs more than containers and deployments alone.
-
-Think of it like this: Kubernetes is the operating system for your cluster. But you wouldn't write applications directly against syscalls—you'd use frameworks, libraries, and runtimes that handle the complexity for you. The tools in this module are those frameworks for ML. They handle the orchestration, serving, distributed computing, and optimization that would otherwise require thousands of lines of custom code.
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 6-8 hours
+>
+> **Prerequisites**: [Module 1.4: Kubernetes for ML](./module-1.4-kubernetes-for-ml/) — Deployments, Services, GPU requests, probes, and autoscaling fundamentals.
 
 ---
 
-## What You'll Be Able to Do
+## Hypothetical Scenario: When Kubernetes Looks Healthy but Inference Is Silent
+
+An alert showing zero predictions served can signal a severe outage in a production recommendation system, even when the Kubernetes dashboard looks entirely green. Pods are running, health checks are passing, and CPU usage appears normal, yet no predictions reach downstream consumers. Each pod starts, attempts to load the model, fails at the application layer, and restarts in a loop that looks healthy from the orchestration layer alone.
+
+This pattern is common enough that teams treat it as a category of incident, not a one-off mystery. The container runtime succeeded; the ML runtime did not. Readiness probes may pass because an HTTP server bound a port before model weights finished loading. Liveness probes may pass because the process is alive even though inference requests time out. The gap between "Pod is Ready" and "model can serve predictions" is where many production ML outages hide.
+
+---
+
+## What You'll Be Able To Do
 
 By the end of this module, you will:
-- Master Kubeflow for end-to-end ML workflows and large-scale experimentation
-- Implement [KServe for serverless model serving with automatic scaling and canary deployments](https://github.com/kserve/kserve)
-- Deploy Ray clusters on Kubernetes for distributed training across many GPUs
-- Use NVIDIA Triton Inference Server for high-performance, multi-model inference with significantly better throughput in the right workloads
-- Understand the decision matrix for choosing between tools based on your specific requirements
+
+- **Master Kubeflow** for end-to-end ML workflows, pipeline orchestration, and large-scale experimentation
+- **Implement KServe** for serverless model serving with automatic scaling, scale-to-zero, and canary deployments
+- **Deploy Ray clusters** on Kubernetes for distributed training and hyperparameter search across many GPUs
+- **Use NVIDIA Triton Inference Server** for high-performance, multi-model inference with dynamic batching
+- **Understand the decision matrix** for choosing between Kubeflow, KServe, Ray, and Triton based on workload requirements
 
 ---
 
-##  The ML Platform Stack on Kubernetes
+## Why This Module Matters
 
-> **Pause and predict**: Before reading further, think about what Kubernetes provides out of the box. What specific concerns of an ML workload—training, serving, experimentation—do you think Kubernetes *cannot* address natively?
+In [Module 1.4: Kubernetes for ML](./module-1.4-kubernetes-for-ml/), you learned how Deployments, Services, Jobs, GPU extended resources, taints, tolerations, and autoscaling controllers fit ML workloads. Those primitives are necessary but not sufficient for most production ML systems. A training pipeline is not a single Job—it is a directed graph of steps with artifact lineage. Serving a model is not a Deployment with a Flask wrapper—it is batching, versioning, traffic splitting, and cold-start behavior tuned for inference latency rather than CPU utilization.
 
-In Module 46, you learned Kubernetes fundamentals—Pods, Deployments, Services, and the resource model that makes container orchestration possible. But if you've tried to run actual ML workloads on Kubernetes, you've probably discovered an uncomfortable truth: the primitives don't fit.
+Advanced Kubernetes for ML therefore spans two layers. The **infrastructure layer** still depends on correct scheduling: GPU node pools with taints, queue-aware batch schedulers such as Kueue, cluster autoscalers that add accelerator nodes when jobs queue, and the NVIDIA GPU Operator that advertises `nvidia.com/gpu` consistently across nodes. The **platform layer** adds ML-native abstractions—Kubeflow Pipelines for workflow DAGs, KServe for InferenceService resources, Ray for distributed Python execution, and Triton for GPU-efficient batch inference. You need both layers to reason about incidents like the hypothetical scenario above: Kubernetes may report success while the platform layer exposes model-load failures, missing artifacts, or misconfigured serving routes.
+
+Think of Kubernetes as the operating system for your cluster. You would not write a web application directly against raw syscalls; you would use frameworks that handle HTTP, concurrency, and persistence. The tools in this module are those frameworks for ML. They handle orchestration, serving, distributed computing, and inference optimization that would otherwise require thousands of lines of custom glue code, fragile shell scripts, and tribal knowledge that walks out the door when engineers leave.
+
+Work on ML technical debt helped popularize the idea that production ML systems require substantial supporting infrastructure beyond model code alone. The ML platform layer tracks artifacts such as datasets, model checkpoints, and evaluation metrics. It coordinates distributed training across multiple machines. It manages model versioning and A/B testing. It optimizes GPU inference through batching and compiled runtimes. This creates a three-layer architecture: cloud infrastructure (VMs, GPUs, storage), Kubernetes (container orchestration and scheduling), and ML platform tools (Kubeflow, KServe, Ray, Triton). Each layer handles its own concerns, and each builds on the layer below.
+
+> **Landscape snapshot — as of 2026-06. Verify against vendor docs before relying on specifics.** KServe install manifests reference release tags such as `v0.12.0`; Ray examples in this module use the `2.9.0` image family; Kubeflow component versions vary by distribution. GPU driver versions, cloud accelerator SKUs, and managed Kubeflow offerings change frequently—treat version pins in YAML as illustrations, not guarantees.
+
+---
+
+## Did You Know?
+
+- **Katib traces to Google Vizier**: Kubeflow Katib implements hyperparameter tuning patterns described in Google's Vizier black-box optimization service ([Golovin et al., 2017](https://research.google/pubs/pub46180/)). The core insight is that hyperparameter search has no gradient—you can only evaluate the objective at sampled points, which makes Bayesian optimization and successive-halving schedulers more sample-efficient than manual grid search.
+- **KServe was formerly KFServing**: The project renamed in 2021 to reflect its growth beyond the Kubeflow umbrella. Many organizations run KServe independently of Kubeflow Pipelines because serverless inference is often the first ML platform capability teams need on Kubernetes.
+- **Ray's object store enables peer-to-peer ML communication**: Unlike MapReduce-style data frameworks, Ray workers exchange tensors and gradients through a distributed object store with minimal head-node bottlenecks—a design choice documented in the Ray OSDI paper ([Moritz et al., 2018](https://www.usenix.org/conference/osdi18/presentation/moritz)).
+- **Triton dynamic batching trades latency for throughput**: NVIDIA Triton can wait microseconds to milliseconds to assemble a batch before running GPU inference. High-traffic services often accept slightly higher tail latency in exchange for materially better GPU utilization; low-traffic services tune shorter queue delays to avoid starving sparse requests.
+
+---
+
+## The ML Platform Stack on Kubernetes
+
+> **Pause and predict**: Before reading further, think about what Kubernetes provides out of the box. What specific concerns of an ML workload—training, serving, experimentation—do you think Kubernetes cannot address natively?
+
+In [Module 1.4](./module-1.4-kubernetes-for-ml/), you learned Kubernetes fundamentals—Pods, Deployments, Services, and the resource model that makes container orchestration possible. But if you have tried to run actual ML workloads on Kubernetes, you have probably discovered an uncomfortable truth: the primitives alone do not express ML workflows cleanly.
 
 Consider what a typical ML workflow needs:
 
@@ -54,13 +71,15 @@ Consider what a typical ML workflow needs:
 
 **AutoML and hyperparameter optimization**: Running thousands of experiments with different configurations, tracking which ones succeed, pruning unpromising ones early—this is a specialized orchestration problem that standard Kubernetes schedulers can't handle.
 
-These concerns don't fit neatly into Kubernetes primitives. That's why the ML community built a platform layer that sits on top of Kubernetes and speaks the language of ML engineering.
+These concerns do not fit neatly into Kubernetes primitives alone. That is why the ML community built a platform layer that sits on top of Kubernetes and speaks the language of ML engineering. Before reaching for Kubeflow or KServe, however, the **scheduling layer** must be correct: GPU workloads need `nvidia.com/gpu` requests and often dedicated node pools with taints; batch training queues benefit from [Kueue](https://kueue.sigs.k8s.io/docs/) admission control so teams do not oversubscribe finite accelerator capacity; cluster autoscalers and node provisioners such as Cluster Autoscaler or Karpenter add nodes when pending workloads accumulate; the [NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/) standardizes driver and device-plugin installation so every node advertises GPUs consistently. Platform tools assume this foundation—if Pods stay Pending because GPUs are misconfigured, no InferenceService or RayCluster will save you.
 
-Work on ML technical debt helped popularize the idea that production ML systems require substantial supporting infrastructure beyond model code alone.
+### Batch training, queues, and gang scheduling
 
-The ML platform layer handles concerns specific to machine learning that Kubernetes alone can't address. It tracks artifacts like datasets, model checkpoints, and evaluation metrics. It coordinates distributed training across multiple machines. It manages model versioning and A/B testing. It optimizes GPU inference through techniques like batching and TensorRT compilation.
+Training jobs differ from long-running Deployments in ways that matter to schedulers. A distributed training Job may need four GPU Pods to start **together**—if three start and one waits, the running three idle while waiting for the straggler, wasting expensive accelerators. Batch schedulers such as [Volcano](https://volcano.sh/en/docs/) implement **gang scheduling**: the scheduler admits the whole group or none of it. Queue systems such as Kueue sit above the default scheduler and enforce **quota and priority** per team or project, which prevents a hyperparameter sweep from starving production retraining jobs.
 
-This creates a three-layer architecture: Infrastructure (VMs, GPUs, storage), Kubernetes (container orchestration), and ML Platform (Kubeflow, KServe, Ray, Triton). Each layer handles its own concerns, and each builds on the layer below.
+Autoscaling for ML is also workload-specific. Cluster Autoscaler adds nodes when Pods are unschedulable due to insufficient CPU, memory, or extended resources. That helps Ray or Kubeflow training operators scale out, but it reacts only after Pending Pods appear—it does not understand experiment priority. Karpenter-style provisioners can launch node types matched to Pod requests (for example, GPU instance families) with faster turnaround than static node groups, at the cost of more moving parts in your infrastructure code. For **serving**, Horizontal Pod Autoscaler on CPU alone often misleads you; concurrency-based autoscaling (as KServe exposes) or custom metrics from queue depth align better with user-visible latency.
+
+When you design a platform stack, map each workload type to scheduling primitives first, then choose ML platform components. Online inference: Deployment or InferenceService, probes that validate model load, Service or ingress, HPA or Knative concurrency scaling. Weekly batch retrain: Job or Pipeline run with Kueue quota, GPU node pool, checkpoint storage on PVC or object storage. Mass tuning: Ray Tune or Katib with gang-aware batch scheduling and early stopping. High-QPS GPU inference: Triton behind a Service, dynamic batching tuned to SLA, optional KServe for revision management. Skipping this mapping and installing full Kubeflow because it is "the ML platform" is one of the most common platform-engineering mistakes in the field.
 
 ---
 
@@ -286,9 +305,7 @@ The caching feature deserves special mention. If you run this pipeline twice wit
 
 Hyperparameter tuning is one of ML's most frustrating aspects. Your model's performance can vary dramatically based on learning rate, batch size, hidden layer dimensions, and dozens of other parameters. Manual tuning is tedious, error-prone, and often misses the optimal configuration because humans are bad at searching high-dimensional spaces.
 
-Katib automates this process. You define a search space (the ranges of hyperparameters to try) and an objective (the metric to optimize), and Katib handles everything else: running experiments, tracking results, and using sophisticated algorithms to find good configurations faster than random search.
-
-**Did You Know?** Katib was inspired by Google Vizier, Google's internal hyperparameter tuning system described in a famous 2017 paper. **Daniel Golovin**, the lead researcher, noted that Vizier had tuned over 10 million experiments at Google by 2017. The key insight from Vizier's development was that hyperparameter tuning is fundamentally a black-box optimization problem. You don't know the gradient of your objective function with respect to hyperparameters—you can only evaluate it at specific points. This insight led to the use of Bayesian optimization and other gradient-free methods. *"The difference between a mediocre model and a great model is often just hyperparameter tuning,"* Golovin explained. *"But humans are terrible at exploring high-dimensional spaces systematically. Computers are much better."*
+Katib automates this process. You define a search space (the ranges of hyperparameters to try) and an objective (the metric to optimize), and Katib handles experiment execution, result tracking, and search algorithms such as Bayesian optimization and Hyperband. Katib's design draws on Google's Vizier service, which treats hyperparameter tuning as a black-box optimization problem where the objective has no usable gradient with respect to hyperparameter values.
 
 Here's what a Katib experiment looks like in practice. This example uses Bayesian optimization to tune a neural network:
 
@@ -343,7 +360,7 @@ spec:
           spec:
             containers:
               - name: training
-                image: myregistry/katib-trainer:latest
+                image: myregistry/katib-trainer:latest  # placeholder — replace with your real training image, or this pulls ImagePullBackOff
                 command:
                   - python
                   - train.py
@@ -383,9 +400,9 @@ Imagine you've trained a fraud detection model. It performs beautifully on your 
 
 Each step has subtle complexities. Your autoscaler might scale based on CPU, but inference latency is what matters. Your health check might pass because the HTTP server started, but the model hasn't loaded yet. Your canary deployment works, but you have no way to automatically roll back if the new model performs worse.
 
-KServe does all of this with a single YAML file. It's the inference equivalent of Kubernetes for containers—it abstracts away the complexity and lets you focus on the model itself.
+KServe does all of this with a single YAML file. It is the inference equivalent of declaring intent rather than wiring Deployments, Services, and autoscalers by hand—it abstracts away much of the complexity and lets you focus on the model itself.
 
-**Did You Know?** KServe was originally called KFServing (Kubeflow Serving), reflecting its origins as part of the Kubeflow project. It was renamed in 2021 to reflect its independence. KServe grew into a standalone serving project that organizations can adopt independently of the rest of Kubeflow. The renaming also reflected a broader truth about the ML ecosystem: while the tools can work together, they're also valuable independently.
+KServe was originally called KFServing (Kubeflow Serving), reflecting its origins as part of the Kubeflow project. It was renamed in 2021 to reflect its independence. KServe grew into a standalone serving project that organizations can adopt independently of the rest of Kubeflow.
 
 ### How KServe Works: The InferenceService
 
@@ -586,13 +603,13 @@ def train_loop_per_worker():
     rank = context.get_world_rank()
 
     # Model (ResNet18 for demonstration)
-    model = models.resnet18(pretrained=False, num_classes=10)
+    model = models.resnet18(weights=None, num_classes=10)
     model = train.torch.prepare_model(model)  # DDP wrapping
 
     # Data - Ray automatically shards across workers
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # CIFAR-10 is 3-channel RGB
     ])
     train_dataset = datasets.CIFAR10(
         root="/data", train=True, download=True, transform=transform
@@ -707,7 +724,7 @@ This is catastrophically inefficient. GPUs are designed for parallel processing�
 
 The solution is batching: collecting multiple requests, processing them together, and returning the results. Matrix multiplication scales beautifully with batch size. Processing 32 requests takes almost the same time as processing 1 request, because the GPU can parallelize across the batch dimension.
 
-A common inference bottleneck is not raw GPU compute but how efficiently requests are batched and fed into the accelerator. That insight led to Triton's dynamic batching feature. Instead of processing requests immediately, Triton waits a configurable amount of time (microseconds to milliseconds) to collect a batch, then processes them together. With dynamic batching, Triton can achieve 10x higher throughput than naive serving. For high-traffic production systems, this is the difference between needing 10 GPUs and needing 100.
+A common inference bottleneck is not raw GPU compute but how efficiently requests are batched and fed into the accelerator. That insight led to Triton's dynamic batching feature. Instead of processing requests immediately, Triton waits a configurable amount of time (microseconds to milliseconds) to collect a batch, then processes them together. Matrix multiplication scales efficiently with batch size on GPUs; processing one request at a time leaves most of the device idle. Dynamic batching increases throughput when you accept a bounded increase in tail latency—exact tradeoffs depend on traffic shape and must be validated against your SLA, not copied from blog benchmarks.
 
 ### How Triton Works
 
@@ -822,7 +839,9 @@ Clients see a single endpoint that takes raw text and returns sentiment plus con
 
 > **Stop and think**: You've now seen four tools—Kubeflow, KServe, Ray, and Triton. Before reading the decision matrix, sketch out your own mental model. What is each tool's core strength? When would you reach for each one?
 
-Choosing between these tools isn't always obvious. Here's a framework for thinking about it:
+Choosing between these tools is not always obvious because teams often conflate **orchestration**, **serving**, **distributed compute**, and **inference efficiency**—four different problems that share Kubernetes as a substrate. The decision matrix below is ordered by adoption path: solve the pain you have today, measure whether the tool removed it, then add the next layer. Jumping to full Kubeflow because a conference talk showed a polished demo duplicates operational load without addressing your actual bottleneck (Pending GPUs, missing lineage, or saturated inference).
+
+Here's a framework for thinking about it:
 
 **Start with vanilla Kubernetes** if you have fewer than 3 models, simple serving requirements, and a team already comfortable with Kubernetes. Sometimes the overhead of ML-specific tooling isn't worth it.
 
@@ -836,18 +855,107 @@ Choosing between these tools isn't always obvious. Here's a framework for thinki
 
 **Use Kubeflow full-stack** when you need notebooks, pipelines, serving, and AutoML all integrated. The learning curve is steep, but the integration is unmatched.
 
-An analogy: Kubernetes is like having a commercial kitchen. KServe is like having dedicated servers who handle orders efficiently. Triton is like having high-efficiency equipment that can cook 10 dishes in the time a home kitchen cooks 1. Kubeflow Pipelines is like having a head chef who orchestrates complex multi-course meals. Ray is like having a kitchen team that can work in perfect coordination. Full Kubeflow is like having a complete restaurant operation—front of house, back of house, and management all integrated.
+An analogy: Kubernetes is like having a commercial kitchen. KServe is like having dedicated servers who handle orders efficiently. Triton is like having high-efficiency equipment that can cook many dishes in parallel on industrial burners. Kubeflow Pipelines is like having a head chef who orchestrates complex multi-course meals. Ray is like having a kitchen team that can work in perfect coordination. Full Kubeflow is like having a complete restaurant operation—front of house, back of house, and management all integrated.
 
 ---
 
-##  Hands-On Exercises
+## Key Takeaways
+
+1. **Kubeflow is the full ML platform** — Use it when you need pipelines, experiment tracking, notebooks, and serving all integrated. The learning curve is steep, but the payoff is comprehensive reproducibility.
+
+2. **KServe is serverless ML serving** — Automatic scaling (including to zero), canary deployments, and multi-framework support with minimal configuration. Think of models as functions, not Deployments wired by hand.
+
+3. **Ray excels at distributed computing** — When your training does not fit on one GPU, or you need massive hyperparameter search, Ray makes distribution feel like writing single-machine code.
+
+4. **Triton optimizes inference throughput** — Dynamic batching and multi-model serving can materially reduce GPU count for high-traffic endpoints when latency budgets allow short queue delays.
+
+5. **Start simple, add complexity as needed** — Begin with vanilla Kubernetes from Module 1.4. Add KServe when you need autoscaling. Add Triton when throughput matters. Add Kubeflow when you need pipelines. Add Ray when you need distribution.
+
+6. **The platform layer separates experiments from systems** — Reliable prediction serving at scale depends on orchestration, artifact lineage, and serving semantics—not just the model weights inside a container image.
+
+---
+
+## Common Mistakes
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Deploying Kubeflow before fixing GPU scheduling | Pipelines and training operators submit Pods that stay Pending because nodes lack `nvidia.com/gpu` or drivers. | Install the GPU Operator, taint accelerator node pools, verify extended resources with `kubectl describe node` before adopting platform tools. |
+| Treating KServe readiness as model readiness | HTTP servers start before large artifacts finish downloading from object storage. | Use framework-specific readiness hooks, preload models in init containers, or validate inference in smoke tests—not only TCP health checks. |
+| Scaling KServe on CPU for GPU-bound models | HPA sees low CPU while request queues grow and latency spikes. | Configure `scaleMetric: concurrency` or custom metrics that reflect queue depth, GPU utilization, or p95 latency. |
+| Running Ray workers without resource requests | Workers oversubscribe nodes, causing OOM kills that look like training bugs. | Set CPU, memory, and GPU requests on Ray worker Pod templates; align `num-gpus` rayStartParams with container limits. |
+| Skipping Triton batching configuration | GPUs stay idle processing one request at a time. | Define `dynamic_batching` with realistic `preferred_batch_size` and `max_queue_delay_microseconds` tuned to your SLA. |
+| Adopting full Kubeflow for a single model | Operational burden (Istio, cert-manager, multiple controllers) exceeds team capacity. | Start with KServe or a single Kubeflow component; expand when workflow complexity justifies the integration tax. |
+| Ignoring artifact lineage in pipelines | You cannot reproduce which data and code produced the production model after an incident. | Log datasets, metrics, and model outputs as typed pipeline artifacts; treat lineage as a production requirement, not a nice-to-have. |
+| Using vanilla Deployments for canary model rollouts | Manual traffic splitting breaks under pressure; rollback requires redeploying multiple objects. | Use KServe `canaryTrafficPercent` or a service mesh with explicit revision weights and monitored business KPIs. |
+
+---
+
+## Quiz
+
+1. **A team needs an end-to-end Kubeflow pipeline that validates data, preprocesses features, trains a model, and records metrics with artifact lineage between steps. Which Kubeflow component is the orchestration engine, and why is it more appropriate than a chain of Kubernetes Jobs?**
+   <details>
+   <summary>Answer</summary>
+   Kubeflow Pipelines is the orchestration engine. A chain of Jobs can run containers sequentially, but it does not natively pass typed artifacts, cache unchanged steps, visualize DAG dependencies, or store run metadata for reproducibility. Pipelines expresses each step as a component with declared inputs and outputs, so downstream steps consume upstream artifacts automatically and every run retains lineage you can audit after an incident.
+   </details>
+
+2. **A team is deploying a new recommendation model but is concerned about a sudden drop in performance affecting users. They want to route 5% of traffic to the new model and monitor it before a full rollout. Which tool and feature best solves this?**
+   <details>
+   <summary>Answer</summary>
+   KServe with canary deployments is the right tool here, using `canaryTrafficPercent: 5` in the InferenceService spec. KServe natively handles fractional traffic routing because it uses Knative Serving under the hood, which has traffic-splitting built into its revision model. This is fundamentally different from vanilla Kubernetes, where you would have to manually deploy two separate Deployments and a Service with weighted backends—a fragile setup that requires custom logic to adjust the split. With KServe, increasing from 5% to 50% is a single field update, and rolling back to 0% is equally instant. The blast radius of a bad model is bounded to exactly 5% of users until you have confidence to proceed.
+   </details>
+
+3. **Your team must train a PyTorch model across four GPUs on Kubernetes without rewriting the training loop for manual gradient synchronization. Which tool and API abstraction should you use?**
+   <details>
+   <summary>Answer</summary>
+   Use Ray Train with `TorchTrainer` and `ScalingConfig`. Ray Train wraps the model in DistributedDataParallel via `train.torch.prepare_model`, shards data with `prepare_data_loader`, and handles worker placement on GPU nodes. You keep a single-machine training function shape while Ray distributes execution across the RayCluster workers you defined with the KubeRay operator.
+   </details>
+
+4. **Your machine learning team has a text classification pipeline: Tokenizer → BERT Encoder → Postprocessor. The tokenizer runs efficiently on CPU, but BERT needs GPU. How can you optimize inference without writing a custom microservice for each stage?**
+   <details>
+   <summary>Answer</summary>
+   Use NVIDIA Triton Inference Server's Model Ensembles. Triton lets you declare a pipeline of models as a single ensemble endpoint, where each stage has its own `instance_group` configuration—tokenizer routed to CPU, BERT to GPU. Clients send raw text to one endpoint and receive predictions back; Triton handles all inter-stage routing internally. Triton applies dynamic batching across the entire pipeline: requests accumulate at each stage until a preferred batch size is reached, increasing GPU utilization compared with three separate microservices you would batch by hand.
+   </details>
+
+5. **You are executing a hyperparameter optimization job across 100 different configurations. Many configurations perform poorly after just a few epochs. Which component should you use to efficiently kill poor performers and allocate compute to promising ones?**
+   <details>
+   <summary>Answer</summary>
+   Use either Ray Tune with the ASHA scheduler or Kubeflow Katib with Hyperband—both implement successive halving. You do not need to run all 100 configurations to completion: poor performers after a small epoch budget rarely become the best after full training. ASHA/Hyperband runs a small budget for all trials, eliminates the bottom fraction, doubles budget for survivors, and repeats. Ray Tune fits Python-native workflows; Katib fits declarative Kubernetes Experiment resources.
+   </details>
+
+6. **You operate three models with low traffic, two batch retraining pipelines per week, and one high-QPS inference API. Using the decision matrix in this module, which tools would you adopt first and which would you defer?**
+   <details>
+   <summary>Answer</summary>
+   Start with vanilla Kubernetes plus KServe for the high-QPS API if you need concurrency-based autoscaling and optional scale-to-zero on the low-traffic models. Add Kubeflow Pipelines when retraining workflows need artifact lineage beyond CronJobs. Add Triton when the high-QPS endpoint is GPU-bound and batching improves utilization. Add Ray when training or tuning outgrows single-node GPUs. Defer full-stack Kubeflow until integration benefits exceed operational cost—tooling should follow demonstrated workflow pain, not the reverse.
+   </details>
+
+7. **GPU training Jobs queue indefinitely even though cluster CPU capacity is available. Which Kubernetes-layer controls should you verify before blaming Kubeflow or Ray?**
+   <details>
+   <summary>Answer</summary>
+   Verify that nodes advertise `nvidia.com/gpu`, the GPU Operator/device plugin is healthy, accelerator node pools have matching taints and Pod tolerations, resource requests include GPU limits, and queue systems such as Kueue admit workloads within quota. Pending Pods with `Insufficient nvidia.com/gpu` events point to scheduling capacity, not platform orchestration bugs.
+   </details>
+
+8. **A production InferenceService passes Kubernetes readiness probes but returns errors on real predict requests. What is the most likely class of failure, and what verification step catches it early?**
+   <details>
+   <summary>Answer</summary>
+   The process is ready at the HTTP layer before the model artifact finished loading or the predictor backend initialized. Run an end-to-end predict smoke test against representative payloads after rollout, not only probe endpoints. Compare container logs for model download failures, mismatched framework versions, and storage permission errors—the same class of failure described in the hypothetical silent-inference scenario at the start of this module.
+   </details>
+
+---
+
+## Hands-On Exercises
+
+Complete these exercises in a disposable cluster (kind, minikube, or a dedicated lab namespace). Do not run install manifests against production shared infrastructure without change review.
+
+- [ ] **Exercise 1 — KServe:** Install KServe, deploy the sklearn iris InferenceService, wait for Ready status, and send a predict request that returns a class label.
+- [ ] **Exercise 2 — Kubeflow Pipelines SDK:** Compile the two-step math pipeline to `pipeline.yaml` and inspect the generated DAG structure without uploading to a cluster.
+- [ ] **Exercise 3 — Ray on Kubernetes:** Install the KubeRay operator, deploy the CPU RayCluster manifest, exec into the head pod, and print output from four remote `hello` tasks.
 
 ### Exercise 1: Deploy a Model with KServe
 
 Install KServe and deploy a scikit-learn iris classifier. Test it with a sample request.
 
 ```bash
-# Install KServe
+# Install KServe (verify release tag against KServe docs before production use)
 kubectl apply -f https://github.com/kserve/kserve/releases/download/v0.12.0/kserve.yaml
 
 # Deploy sklearn model
@@ -977,94 +1085,30 @@ print('Ray cluster verified successfully.')
 "
 ```
 
-The `kubectl exec` approach connects directly to the Ray head pod without requiring a port-forward. For GPU-accelerated training (as shown in the architecture section), you would add the `nodeSelector` and GPU resource limits from the full cluster spec above.
+The `kubectl exec` approach connects directly to the Ray head pod without requiring a port-forward. For GPU-accelerated training (as shown in the architecture section), add the `nodeSelector` and GPU resource limits from the full cluster spec above.
 
 ---
 
-##  Quiz
+## Next Module
 
-1. **A team is deploying a new recommendation model but is concerned about a sudden drop in performance affecting users. They want to route 5% of traffic to the new model and monitor it before a full rollout. Which tool and feature best solves this?**
-   <details>
-   <summary>Answer</summary>
-   KServe with canary deployments is the right tool here, using `canaryTrafficPercent: 5` in the InferenceService spec. KServe natively handles fractional traffic routing because it uses Knative Serving under the hood, which has traffic-splitting built into its revision model. This is fundamentally different from vanilla Kubernetes, where you would have to manually deploy two separate Deployments and a Service with weighted backends—a fragile setup that requires custom logic to adjust the split. With KServe, increasing from 5% to 50% is a single field update, and rolling back to 0% is equally instant. The blast radius of a bad model is bounded to exactly 5% of users until you have confidence to proceed.
-   </details>
-
-2. **Your machine learning team has a text classification pipeline: Tokenizer -> BERT Encoder -> Postprocessor. The tokenizer runs efficiently on CPU, but BERT needs GPU. How can you optimize inference without writing a custom microservice for each?**
-   <details>
-   <summary>Answer</summary>
-   Use NVIDIA Triton Inference Server's Model Ensembles. Triton lets you declare a pipeline of models as a single ensemble endpoint, where each stage has its own `instance_group` configuration—tokenizer routed to CPU, BERT to GPU. Clients send raw text to one endpoint and receive predictions back; Triton handles all inter-stage routing internally. This is far better than building a custom microservice chain because Triton applies dynamic batching across the entire pipeline: requests accumulate at each stage until a preferred batch size is reached, dramatically increasing GPU utilization. Writing three separate FastAPI services would require you to implement batching, retry logic, and request routing yourself—Triton makes this declarative configuration.
-   </details>
-
-3. **You are executing a hyperparameter optimization job across 100 different configurations. Many configurations perform poorly after just a few epochs. Which component should you use to efficiently kill poor performers and allocate compute to promising ones?**
-   <details>
-   <summary>Answer</summary>
-   Use either Ray Tune with the ASHA scheduler or Kubeflow's Katib configured with the Hyperband algorithm—both implement the same core idea of successive halving. The key insight is that you do not need to run all 100 configurations to completion to identify the best ones: a model that is performing in the bottom quartile after 5 epochs almost never recovers to be the top performer after 100 epochs. ASHA/Hyperband exploits this by running all configurations with a tiny budget (e.g., 5 epochs), eliminating the bottom half, doubling the budget for survivors, and repeating. This early-stopping strategy finds configurations competitive with an exhaustive search while using a fraction of the compute—often 10-50x fewer GPU-hours. The choice between Ray Tune and Katib depends on your existing stack: Ray Tune is Python-native and easier to integrate into existing training scripts, while Katib is Kubernetes-native and better for teams already on Kubeflow.
-   </details>
-
-##  Further Reading
-
-### Documentation
-- [Kubeflow Documentation](https://www.kubeflow.org/docs/) - Complete platform guide
-- [KServe User Guide](https://kserve.github.io/website/) - Model serving deep dive
-- [Ray on Kubernetes](https://docs.ray.io/en/latest/cluster/kubernetes.html) - Distributed computing
-- [Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/) - High-performance serving
-
-### Research Papers
-- "Hidden Technical Debt in Machine Learning Systems" (Google, 2015) - The seminal MLOps paper by **D. Sculley** and colleagues
-- "Ray: A Distributed Framework for Emerging AI Applications" (UC Berkeley, 2018) - **Robert Nishihara** and **Philipp Moritz**
-- "Google Vizier: A Service for Black-Box Optimization" (Google, 2017) - **Daniel Golovin** et al.
+Continue to [Module 1.6: Experiment Tracking](./module-1.6-experiment-tracking/) to learn MLflow and Weights & Biases—the tooling that records run history, model lineage, and reproducibility metadata so you never lose track of which artifact reached production.
 
 ---
-
-##  Key Takeaways
-
-1. **Kubeflow is the full ML platform** - Use it when you need pipelines, experiment tracking, notebooks, and serving all integrated. The learning curve is steep, but the payoff is comprehensive reproducibility.
-
-2. **KServe is serverless ML serving** - Automatic scaling (including to zero), canary deployments, and multi-framework support with minimal configuration. Think of models as functions, not deployments.
-
-3. **Ray excels at distributed computing** - When your training doesn't fit on one GPU, or you need massive hyperparameter search, Ray makes distribution feel like writing single-machine code.
-
-4. **Triton is the throughput king** - Dynamic batching can give you 10x throughput improvement. For production systems with real SLAs and thousands of requests per second, Triton is the answer.
-
-5. **Start simple, add complexity as needed** - Begin with vanilla Kubernetes. Add KServe when you need autoscaling. Add Triton when throughput matters. Add Kubeflow when you need pipelines. Add Ray when you need distribution.
-
-6. **The platform is what separates experiments from systems** - The tools in this module are what Spotify, Netflix, Bloomberg, and Google use to run ML at scale. The difference between "running a model" and "running ML in production" is the platform layer.
-
----
-
-##  Did You Know?
-
-A large share of production ML work goes into data, infrastructure, deployment, and monitoring rather than model code alone.
-
-Kubernetes predates today's ML-on-Kubernetes stack, and many ML-specific needs such as artifact handling, distributed training workflows, and specialized serving layers are addressed by tools built on top of it.
-
-**The $440 Million Lesson**: In *Infrastructure as Code*, the Knight Capital 2012 case is the canonical reference for why deployment consistency and gradual rollouts matter before any model reaches production. <!-- incident-xref: knight-capital-2012 --> The parallel is clear: canary deployments and staged rollouts are risk management, not process theater.
-
----
-
-## ⏭️ Next Steps
-
-You now understand the advanced Kubernetes tools for ML at scale! These platforms are what transform experimental notebooks into production systems serving millions of users.
-
-**Up Next**: Module 48 - MLOps & Experiment Tracking (MLflow, Weights & Biases, managing the experiment-to-production lifecycle)
-
----
-
-*Module 47 Complete! You now understand Kubeflow, KServe, Ray, and Triton—the tools that power ML at scale at companies like Spotify, Bloomberg, and Netflix.*
-
-*Remember Spotify's silent recommendations: the gap between "running a container" and "running ML at scale" is a platform, not just more containers. The platform is what makes the difference between 4 hours to diagnose an incident and 4 seconds.*
-
-Reliable prediction serving at scale depends on the surrounding platform, not just the model itself.
 
 ## Sources
 
-- [github.com: pipelines](https://github.com/kubeflow/pipelines) — General lesson point for an illustrative rewrite.
-- [github.com: kserve](https://github.com/kserve/kserve) — The KServe project README directly describes autoscaling, scale-to-zero, and canary rollouts.
-- [github.com: kuberay](https://github.com/ray-project/kuberay) — General lesson point for an illustrative rewrite.
-- [github.com: README.md](https://github.com/triton-inference-server/server/blob/main/docs/README.md) — General lesson point for an illustrative rewrite.
-- [github.com: kubeflow](https://github.com/kubeflow/kubeflow) — General lesson point for an illustrative rewrite.
-- [github.com: notebooks](https://github.com/kubeflow/notebooks) — The Kubeflow Notebooks repository README directly documents these capabilities.
-- [github.com: katib](https://github.com/kubeflow/katib) — The Katib repository README states that Katib provides hyperparameter tuning and AutoML capabilities.
-- [github.com: trainer](https://github.com/kubeflow/trainer) — Kubeflow's trainer project explicitly describes distributed AI model training on Kubernetes.
-- [github.com: dashboard](https://github.com/kubeflow/dashboard) — The Dashboard repository README identifies it as Kubeflow's web-based hub.
-- [Ray: A Distributed Framework for Emerging AI Applications](https://www.usenix.org/conference/osdi18/presentation/moritz) — Primary architectural source for Ray's distributed scheduler and object-store design.
+- [Kubernetes: Schedule GPUs](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Official extended-resource model for requesting `nvidia.com/gpu` in Pod specs.
+- [Kueue Documentation](https://kueue.sigs.k8s.io/docs/) — Queue-aware admission control and fair sharing for batch ML workloads on Kubernetes.
+- [NVIDIA GPU Operator Documentation](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/) — Automates GPU driver, device plugin, and related node components for consistent accelerator scheduling.
+- [Cluster Autoscaler](https://github.com/kubernetes/autoscaler) — Adds or removes nodes when Pods cannot be scheduled due to resource shortages.
+- [Karpenter Documentation](https://karpenter.sh/docs/) — Node provisioning patterns that complement queue- and scheduler-aware ML batch systems.
+- [Volcano Scheduler Documentation](https://volcano.sh/en/docs/) — Batch and gang scheduling for HPC-style ML training jobs on Kubernetes.
+- [Kubeflow Documentation](https://www.kubeflow.org/docs/) — Platform overview covering Pipelines, Notebooks, Katib, and related components.
+- [Kubeflow Pipelines](https://github.com/kubeflow/pipelines) — DAG-based ML workflow orchestration with artifact passing and run metadata.
+- [KServe](https://github.com/kserve/kserve) — InferenceService CRD for serverless model serving, autoscaling, and canary rollouts.
+- [KubeRay](https://ray-project.github.io/kuberay/) — Kubernetes operator for deploying and autoscaling Ray clusters.
+- [Ray on Kubernetes](https://docs.ray.io/en/latest/cluster/kubernetes/index.html) — Ray cluster configuration, KubeRay integration, and distributed job patterns.
+- [NVIDIA Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html) — Dynamic batching, multi-framework backends, and ensemble pipelines.
+- [Ray OSDI 2018 Paper](https://www.usenix.org/conference/osdi18/presentation/moritz) — Architectural foundation for Ray's distributed scheduler and object store.
+- [Google Vizier (2017)](https://research.google/pubs/pub46180/) — Black-box optimization patterns underlying Katib-style hyperparameter search.
+- [Random Search for Hyper-Parameter Optimization (Bergstra & Bengio, JMLR 2012)](https://www.jmlr.org/papers/v13/bergstra12a.html) — Foundational result that random search often beats grid search by sampling the most important hyperparameters more densely.
