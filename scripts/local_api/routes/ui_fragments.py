@@ -3,10 +3,33 @@ from __future__ import annotations
 
 DESIGN_SYSTEM_LINK = '<link rel="stylesheet" href="/static/design-system.css">'
 
+# Common theme tokens + minimal reset used across the operator dashboards.
+# Individual pages still add page-specific rules, but pulling the basics
+# here reduces drift and makes future skin changes cheaper.
+COMMON_THEME_CSS = """
+:root {
+  --bg:#101112; --panel:#17191b; --panel-2:#202326; --line:#30343a;
+  --text:#f3f4f2; --muted:#9ca3a3; --teal:#3dd6c6; --green:#55d17f;
+  --amber:#f59e0b; --red:#fb7185; --topnav-h:45px;
+}
+* { box-sizing: border-box; }
+body {
+  margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--bg); color:var(--text); line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+"""
+
 POLL_STALE_CSS = """
     .poll-stale { opacity: 0.72; }
     .poll-stale[data-poll-ts]::after { content: " · stale"; color: var(--amber, #f59e0b); font-size: 0.85em; font-weight: 700; }
 """
+
+def render_common_theme() -> str:
+    """Return the shared :root + body reset. Pages can include this
+    (or rely on DESIGN_SYSTEM_LINK for the external sheet) before their
+    specific <style> blocks."""
+    return COMMON_THEME_CSS
 
 
 def render_poll_stale_script() -> str:

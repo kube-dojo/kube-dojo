@@ -20,6 +20,7 @@ try:
         AFK_NOTIFY_CSS,
         DESIGN_SYSTEM_LINK,
         render_afk_notify_markup,
+        render_common_theme,
         render_search_widget,
     )
 except ModuleNotFoundError:
@@ -28,6 +29,7 @@ except ModuleNotFoundError:
         AFK_NOTIFY_CSS,
         DESIGN_SYSTEM_LINK,
         render_afk_notify_markup,
+        render_common_theme,
         render_search_widget,
     )
 
@@ -495,9 +497,7 @@ def render_decisions_index_html(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Decisions - KubeDojo Local Monitor</title>
   <style>
-    :root{{--bg:#101112;--panel:#17191b;--panel-2:#202326;--line:#30343a;--text:#f3f4f2;--muted:#9ca3a3;--teal:#3dd6c6;--green:#55d17f;--amber:#f59e0b;--red:#fb7185;--topnav-h:45px}}
-    *{{box-sizing:border-box}}
-    body{{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.45;-webkit-font-smoothing:antialiased}}
+{render_common_theme()}
 {top_nav_css}
     main{{max-width:1120px;margin:0 auto;padding:28px 24px 44px}}
     .page-head{{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:18px}}

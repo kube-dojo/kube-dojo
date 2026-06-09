@@ -56,7 +56,25 @@ def inspect_repo_root(repo_root: Path) -> dict[str, object]:
             "artifact routes may 404 if this process outlives a worktree removal."
         )
     if cwd is not None and ".worktrees" in cwd.parts:
-        warnings.append(f"process cwd {cwd} is inside a git worktree; prefer primary repo root.")
+        warnings.append(f"process cwd {cwd} is inside a git worktree; prefer primary repo root for the long-lived service.")
+
+    # Detect when the *source being executed* lives under a worktree even if
+    # the resolved repo_root points at primary. This is common when a dev
+    # follows the "always work in .worktrees/..." rule and runs
+    #   python .worktrees/<name>/scripts/local_api.py --port 18768
+    # to test changes without disturbing the pid-managed service on :8768.
+    try:
+        # __file__ here is the repo_guard.py we are currently executing.
+        here = Path(__file__).resolve()
+        if ".worktrees" in here.parts:
+            warnings.append(
+                "API source (repo_guard) is being loaded from inside a worktree checkout. "
+                "Start the persistent monitor via services-up (primary checkout) or "
+                "use an alternate --port when exercising worktree edits."
+            )
+    except Exception:
+        pass
+
     api_pid_path = resolved / ".pids" / "api.pid"
     if api_pid_path.exists():
         try:

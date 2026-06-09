@@ -25,79 +25,49 @@ from urllib.parse import parse_qs, unquote, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
-def _load_channel_routes_module() -> Any:
-    module_name = "_local_api_routes_channels"
+def _load_local_api_submodule(short_name: str, filename: str) -> Any:
+    """Generic loader for local_api/ submodules (routes + repo_guard).
+
+    Uses a stable sys.modules key so repeated imports are cheap and
+    the module is executed only once per process. The dance supports
+    both "python -m" / package import and direct script execution.
+    """
+    module_name = f"_local_api_{short_name}"
     loaded = sys.modules.get(module_name)
     if loaded is not None:
         return loaded
-    module_path = Path(__file__).resolve().with_name("local_api") / "routes" / "channels.py"
+    module_path = Path(__file__).resolve().with_name("local_api") / filename
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load channel routes from {module_path}")
+        # Produce a readable error like the original per-loader messages
+        # (e.g. "cannot load channels from ..." or "cannot load guard from ...")
+        # instead of the ugly "cannot load routes_channels from ...".
+        display = short_name.replace("routes_", "").replace("repo_", "").replace("_", " ")
+        raise ImportError(f"cannot load {display} from {module_path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _load_channel_routes_module() -> Any:
+    return _load_local_api_submodule("routes_channels", "routes/channels.py")
 
 
 def _load_decision_routes_module() -> Any:
-    module_name = "_local_api_routes_decisions"
-    loaded = sys.modules.get(module_name)
-    if loaded is not None:
-        return loaded
-    module_path = Path(__file__).resolve().with_name("local_api") / "routes" / "decisions.py"
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load decision routes from {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+    return _load_local_api_submodule("routes_decisions", "routes/decisions.py")
 
 
 def _load_search_routes_module() -> Any:
-    module_name = "_local_api_routes_search"
-    loaded = sys.modules.get(module_name)
-    if loaded is not None:
-        return loaded
-    module_path = Path(__file__).resolve().with_name("local_api") / "routes" / "search.py"
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load search routes from {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+    return _load_local_api_submodule("routes_search", "routes/search.py")
 
 
 def _load_ui_fragments_module() -> Any:
-    module_name = "_local_api_routes_ui_fragments"
-    loaded = sys.modules.get(module_name)
-    if loaded is not None:
-        return loaded
-    module_path = Path(__file__).resolve().with_name("local_api") / "routes" / "ui_fragments.py"
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load ui fragments from {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+    return _load_local_api_submodule("routes_ui_fragments", "routes/ui_fragments.py")
 
 
 def _load_repo_guard_module() -> Any:
-    module_name = "_local_api_repo_guard"
-    loaded = sys.modules.get(module_name)
-    if loaded is not None:
-        return loaded
-    module_path = Path(__file__).resolve().with_name("local_api") / "repo_guard.py"
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load repo guard from {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+    return _load_local_api_submodule("repo_guard", "repo_guard.py")
 
 
 def _ui_fragments_module() -> Any:
