@@ -208,7 +208,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
         default_mode="read-only",
         default_timeout_s=1800,
         description="cross-family review of authored work (judgment)",
-        codex_search=False,
+        codex_search=True,  # reviewers MUST be able to web-verify volatile facts (#1827)
     ),
     "architect": TaskClassConfig(
         models={
