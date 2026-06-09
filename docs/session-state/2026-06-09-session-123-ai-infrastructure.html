@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 123 — ai-infrastructure sub-track complete (#1842)</title>
+<style>
+  body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.6rem;border-bottom:3px solid #2b6cb0;padding-bottom:.3rem}
+  h2{font-size:1.2rem;margin-top:1.8rem;color:#2b6cb0;border-bottom:1px solid #e2e8f0;padding-bottom:.2rem}
+  code{background:#f1f5f9;padding:.1rem .3rem;border-radius:3px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.92em}
+  th,td{border:1px solid #cbd5e0;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#edf2f7}
+  .ok{color:#22863a;font-weight:600}.warn{color:#b7791f;font-weight:600}
+  .meta{color:#64748b;font-size:.9em}
+  blockquote{border-left:3px solid #2b6cb0;margin:.6rem 0;padding:.2rem .9rem;background:#f7fafc}
+  li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<h1>Session 123 — <code>ai-infrastructure</code> sub-track COMPLETE (#1842)</h1>
+<p class="meta">2026-06-09 · standalone orchestrator session · continues the <code>ai-ml-engineering</code> shipped_unreviewed campaign (#1842) · PR <strong>#1866</strong> merged → main <code>79b61a74</code></p>
+
+<h2>TL;DR</h2>
+<p>Drained the next <code>ai-ml-engineering/ai-infrastructure</code> sub-track: the 3 <code>shipped_unreviewed</code> modules (1.1 Cloud AI Services, 1.2 AIOps, 1.3 High-Performance LLM Inference) — all genuine T3 (~1,700 prose words) — expanded to <strong>T0</strong>, de-fabricated, durable-content-snapshotted, cross-family reviewed, and merged in one consolidated PR. Board: <strong>624 done</strong> (+3). All <code>ai-infrastructure</code> shipped_unreviewed now <code>done</code>.</p>
+
+<h2>What shipped (PR #1866)</h2>
+<table>
+<tr><th>Module</th><th>Author → Reviewer</th><th>T3→T0</th><th>Key work + notable verifier-blind catches</th></tr>
+<tr><td><strong>1.1 Cloud AI Services</strong></td><td>cursor → <strong>opus</strong> (APPROVE_WITH_NITS)</td><td>1734→5006w</td><td><strong>De-duped</strong> the ~60% AIOps tutorial that duplicated 1.2 → cross-ref to <code>../module-1.2-aiops/</code> + deepened the actual Cloud-AI-Services spine; durable <em>Landscape snapshot</em> + <strong>Cloud AI Services Rosetta</strong> (every vendor cell web-verified incl. OCI <code>OC19</code> EU-Sovereign realm); <strong>de-fab</strong> the "Seattle/Sarah Martinez/$2.3M" fabricated opener → <code>Hypothetical scenario:</code>; fixed wrong Next link. opus P2s fixed: 404 Azure source URL, <code>retry_budget</code> naming-vs-math.</td></tr>
+<tr><td><strong>1.2 AIOps</strong></td><td>deepseek (partial) + codex (finish) → <strong>opus</strong> (NEEDS_CHANGES→fixed)</td><td>1708→5229w</td><td><strong>P1 (opus):</strong> Task-4 KRR image <code>ghcr.io/robusta-dev/krr</code> <em>does not exist</em> → <code>robustadev/krr</code> (Docker Hub) — bitnami-class valid-link-but-wrong-artifact trap. De-fab: removed unverifiable "New Relic 80%" stat; CrowdStrike <code>$5.4B</code> attributed to Parametrix + 3 cited sources; all 8 dated claims web-verified clean. Also: spike-detector flat-baseline <code>std=0</code> bug, in-cluster Prometheus URL unreachable from <code>docker run</code>, OTel trace-stability year 2022→2021, opener canary framing (CrowdStrike had <em>no</em> staged rollout), dangling prereq/nav. sources 3→17.</td></tr>
+<tr><td><strong>1.3 vLLM &amp; sglang</strong></td><td>codex → <strong>cursor</strong> (APPROVE_WITH_NITS)</td><td>1776→5271w</td><td>Removed <strong>fabricated Llama-4 model IDs</strong> (<code>Llama-4-70B/8B-Instruct</code> don't exist; Llama 4 is MoE-only) → real <code>Qwen2.5-7B/1.5B-Instruct</code>; pinned <strong>vLLM v0.22.1</strong> (web-verified real tag <code>vllm/vllm-openai:v0.22.1-ubuntu2404</code>) + modern <code>--speculative-config '{"method":"draft_model",…}'</code> syntax; durable dated snapshot. sources 4→18. P2s fixed: sglang-validate outcome, method key, prefix-cache lab methodology, prompt size.</td></tr>
+</table>
+
+<h2>Verification</h2>
+<ul>
+<li><span class="ok">Build green in PRIMARY</span> via file-swap — 2171 pages, 0 schema errors (PR CI has no full astro build).</li>
+<li><span class="ok">site-health 0 errors</span>; <span class="ok">all CI green</span> incl. <strong>Incident dedup gate</strong> (CrowdStrike is dedup-clean — only this module tells the 2024 outage; the 2 zero-trust modules name CrowdStrike as an EDR vendor only).</li>
+<li>All 3 <code>verify_module.py</code> <strong>T0, reasons: []</strong>. Board-flipped via <code>reset-stage … COMMITTED</code> + local review records.</li>
+</ul>
+
+<h2>Process notes / lessons</h2>
+<ul>
+<li><strong>Routing held:</strong> cursor (restructure/de-dup), codex (code-heavy + web-verify), deepseek (content expand). opus took the 2 hardest reviews (1.1, 1.2); cursor reviewed 1.3. Every reviewer finding ground-checked + web-verified by the orchestrator before applying.</li>
+<li><strong>deepseek dropped its API before commit (again)</strong> on 1.2 — left an uncommitted under-floor partial (good de-fab work, but sources untouched). Recovered: committed the partial, dispatched codex to finish to T0. Matches the known deepseek failure mode.</li>
+<li><strong>Orchestrator web-verify front-loading paid off</strong> — pre-verified the Llama-4 IDs + vLLM version before codex's draft landed, so the 1.3 ground-check was instant. cursor independently re-confirmed.</li>
+<li><strong>"Fix the layer, not the symptom":</strong> 1.1's AIOps duplication with 1.2 was resolved by re-centering on the Cloud-AI-Services spine + cross-ref, not by padding the duplicate.</li>
+<li><strong>Telemetry annotated</strong> for all 7 dispatches (#1860): deepseek 1.2 = <code>partial</code>; codex/cursor authors = <code>clean</code>; opus/cursor reviews = <code>clean</code> (each caught real defects, 0 FP).</li>
+<li>Review records are <strong>local-only untracked</strong> files (matching every prior wave); the board flip is the functional outcome; PRIMARY main == origin.</li>
+</ul>
+
+<h2>Next (per #1842 curriculum order)</h2>
+<p><strong>advanced-genai (8)</strong> → multimodal-ai (3) → ai-history (1) + stray deep-learning/1.2 → on-premises → platform. Same loop: <code>verify_module.py</code> sweep first (T3 = genuine expand here), ≤3 concurrent authors, mixed-pool cross-family review (opus for 1–2 hardest), ground-check every claim + source, consolidated PR, build in PRIMARY, board-flip after merge. <strong>advanced-genai is 8 modules → run as ≥2 waves (parallel-rewrite cap is 3).</strong></p>
+<p class="meta">Reusables: <code>logs/remediation/briefs/session123/</code> (_shared-rules, per-module briefs, review briefs, GROUND-TRUTH.md, finalize.sh).</p>
+</body>
+</html>
