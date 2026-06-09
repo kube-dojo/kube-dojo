@@ -4322,6 +4322,7 @@ def _render_top_nav(active: str) -> str:
         ("pipeline", "/pipeline", "Pipeline"),
         ("activity", "/activity", "Activity"),
         ("benchmarks", "/benchmarks", "Benchmarks"),
+        ("agents", "/agents", "Agents"),
         ("channels", "/channels", "Channels"),
         ("decisions", "/decisions", "Decisions"),
         ("health", "/health", "Health"),
@@ -8820,6 +8821,23 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, render_activity_page_html(), "text/html; charset=utf-8"
     if path == "/health":
         return 200, render_health_page_html(), "text/html; charset=utf-8"
+    if path == "/agents":
+        from agent_telemetry_page import render_agents_page_html
+        return 200, render_agents_page_html(
+            top_nav=_render_top_nav("agents"),
+            nav_css=_TOP_NAV_CSS,
+            ds_link=_design_system_link(),
+        ), "text/html; charset=utf-8"
+    if path == "/api/telemetry/agents":
+        from agent_telemetry import build_agent_telemetry
+        since_raw = query.get("since", [None])[0]
+        since_val = None
+        if since_raw:
+            try:
+                since_val = int(since_raw)
+            except (TypeError, ValueError):
+                since_val = None
+        return 200, build_agent_telemetry(repo_root, since=since_val), "application/json; charset=utf-8"
     decision_page = _DECISION_ROUTES.route_decision_page_request(
         repo_root,
         path,
