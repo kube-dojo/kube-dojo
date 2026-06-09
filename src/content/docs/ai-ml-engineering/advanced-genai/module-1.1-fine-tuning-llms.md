@@ -5,946 +5,434 @@ sidebar:
   order: 802
 ---
 
-## Why This Module Matters
-
-In 2014, Amazon initiated a secretive engineering project to build an artificial intelligence recruiting tool. The primary objective was to review job applicants' resumes and rate them mechanically from one to five stars, aiming to automate the initial screening process. To achieve this, engineers fine-tuned their natural language processing models on a massive dataset of resumes submitted to the company over the previous ten years. By 2015, the company realized their system was fundamentally flawed. Because the historical data reflected a male-dominated technology industry, the fine-tuned model explicitly taught itself that male candidates were mathematically preferable. It actively penalized resumes that included the word "women's" (such as "women's chess club captain") and structurally downgraded graduates of two specific all-women's colleges.
-
-Despite frantic efforts to artificially edit the software to make it neutral to these particular terms, the engineering teams could not guarantee the model would not find other subtle proxy metrics for gender. The project was ultimately scrapped in 2018. The project was eventually abandoned after significant engineering effort and public scrutiny. This incident powerfully illustrates a core, immutable truth about model fine-tuning: it permanently and irrevocably alters the fundamental behavior and decision-making pathways of a neural network. When you update the weights via backpropagation, you are structurally changing the model's identity.
-
-Unlike Retrieval-Augmented Generation (RAG), which provides external, mutable facts for a model to reference temporarily at runtime, fine-tuning ingrains patterns directly into the neural network's fixed weights. When you fine-tune a large language model, you are not merely teaching it a new vocabulary set; you are encoding institutional biases, stylistic preferences, and specific, unyielding logical pathways. Understanding how to execute this process correctly, how to navigate the complex constraints of proprietary platforms, and how to rigorously evaluate the resulting behavioral changes is one of the most critical skills for an AI/ML engineer managing production systems. It requires a profound respect for dataset curation, an advanced mathematical understanding of low-rank adaptations, and the operational maturity to orchestrate these heavy workloads efficiently on modern Kubernetes v1.35 clusters.
+> **Prerequisites**: generative AI fundamentals, tokenization, the PyTorch training loop, basic model evaluation, and comfort reading small Python data pipelines.
 
 ## Learning Outcomes
 
-By the end of this module, you will be able to:
+- **Diagnose** whether prompt engineering, RAG, full fine-tuning, or PEFT best fits a request that changes model behavior, domain language, response format, or factual access.
+- **Design** an SFT dataset and loss-masking plan using chat templates, completion-only labels, validation splits, and data-quality review before running a training job.
+- **Configure** LoRA or full fine-tuning tradeoffs by reasoning about trainable parameters, optimizer state, mixed precision, gradient checkpointing, packing, and sequence length.
+- **Evaluate** fine-tuned models with loss curves, holdout prompts, overfitting checks, and regression tests for catastrophic forgetting against baseline capabilities.
+- **Operate** a reproducible training job with pinned libraries, adapter checkpoints, container boundaries, and a Kubernetes handoff path suitable for later home-lab modules.
 
-- **Diagnose** model performance and contextual limits to determine whether parameter-efficient fine-tuning, retrieval-augmented generation, or advanced prompt engineering is the optimal strategy for a given enterprise requirement.
-- **Design** a parameter-efficient fine-tuning architecture utilizing the Hugging Face PEFT library and QLoRA quantization to minimize memory overhead while perfectly preserving base model capabilities.
-- **Implement** a supervised fine-tuning pipeline for causal language models utilizing programmatic data curation, chat templates, and deterministic artifact generation.
-- **Evaluate** the quality of customized neural networks using quantitative validation metrics such as perplexity calculations alongside task-specific qualitative evaluation frameworks.
-- **Compare** varied hyperparameter configurations including low-rank dimensions and alpha scaling factors to optimize adapter performance for proprietary datasets and varied computational budgets.
-- **Deploy** state-of-the-art training jobs on Kubernetes v1.35 environments using modern GPU scheduling paradigms and fault-tolerant containerized machine learning workloads.
+## Why This Module Matters
 
-## The Big Picture: Why Fine-tune?
+Amazon's experimental recruiting tool is a useful warning because it was not a science-fiction failure mode. The AI Incident Database catalogues reports that Amazon started building an internal resume-ranking system in 2014, trained it on a decade of historical hiring data, and later abandoned it after the system showed gender-biased behavior such as penalizing resumes containing the word "women's" and downgrading graduates of all-women's colleges. The lesson for fine-tuning is not "never train models"; the lesson is that training data becomes behavior. If the examples encode yesterday's unfair pattern, the model can learn that pattern with more confidence than any prompt reviewer intended.
 
-Imagine you have just hired a brilliant new software engineer. They graduated at the top of their class, speak eloquently, and have read millions of technical books. However, they know absolutely nothing about your specific company. They do not know your internal products, your proprietary jargon, or how you prefer your documentation formatted. They entirely lack the institutional context that makes an employee truly productive in a corporate environment.
+Fine-tuning is powerful because it changes the model's learned behavior instead of merely adding context around one request. A retrieval system can show a policy document to a model at runtime, and a prompt can remind the model to answer in a particular tone, but fine-tuning adjusts parameters or adapters so the desired pattern is easier for the model to produce by default. That permanence is exactly why fine-tuning deserves more care than prompt editing. You are not attaching a sticky note to the model; you are changing the training signal that shapes future token probabilities.
 
-You generally have three architectural options to solve this systemic knowledge gap. The first option is to provide a massive reference manual for them to consult on every single query, which mirrors Retrieval-Augmented Generation (RAG). They look things up as needed from an external database. This is phenomenal for ever-changing facts, but reading the manual for every single task drastically slows down their execution speed and raises context token costs exponentially across millions of requests.
+The practical problem is that many teams reach for fine-tuning for the wrong reason. They want the model to know yesterday's support article, calculate a current price, or follow a policy that will change next month. Those are usually retrieval, tool, or prompt-management problems. Fine-tuning becomes the right tool when the desired change is durable: a schema that must be emitted reliably, a domain dialect the model must internalize, a narrow task family with many high-quality examples, or a smaller serving model that needs to imitate a stable behavior from a larger teacher.
 
-The second option is to continuously coach them with verbose examples immediately before every task, which represents few-shot prompt engineering. You show them exactly what you want each time you issue a task. This consumes valuable context window space and significantly increases per-token inference costs across thousands of repeated invocations, while limiting the depth of complex structural formatting you can reliably enforce.
+Think of an LLM as a skilled translator joining a specialized operations team. Prompting is a briefing before each shift. RAG is a binder of current procedures the translator can consult while working. Fine-tuning is an apprenticeship in the team's actual style, edge cases, and habits. Apprenticeship is worth the investment when the work pattern repeats every day. It is dangerous when the apprentice learns from sloppy notes, outdated rules, or examples that quietly reward the wrong outcome.
 
-The third and most permanent option is to train them extensively on the job, which is fine-tuning. They internalize your company's way of thinking. The knowledge, formatting, and stylistic preferences become inherent to their daily operation, requiring no extra instructions. Fine-tuning represents this third option. It mathematically modifies the model's weights so the knowledge and behavioral syntax become an inseparable part of the model itself.
+## Choosing the Right Adaptation Strategy
 
-| Use Case | Best Approach |
-|----------|---------------|
-| Custom knowledge (docs, FAQs) | RAG |
-| New tasks with few examples | Few-shot prompting |
-| Consistent style/format | Fine-tuning |
-| Domain-specific language | Fine-tuning |
-| New behaviors/capabilities | Fine-tuning |
-| Cost optimization (repeated tasks) | Fine-tuning |
-| Speed optimization | Fine-tuning |
+The first decision is whether you need to change knowledge access, response behavior, or model capacity. Prompt engineering is the lightest option when the base model can already perform the task and only needs clearer instructions, examples, or output constraints. RAG is the right default when the missing ingredient is external knowledge that is large, private, frequently updated, or auditable. Fine-tuning is appropriate when repeated examples should make the model respond differently even without long prompts or retrieved context.
 
-> **Did You Know?** In March 2023, Stanford's Alpaca project helped popularize the idea that instruction tuning a small open model could be reproduced cheaply with synthetic instruction data.
+This distinction matters because model weights are a poor database. A fine-tuned model cannot cite which training example made it answer a question, cannot forget one bad paragraph without another training run, and cannot reliably distinguish "the policy changed yesterday" from "the old pattern is still statistically likely." RAG keeps facts outside the model so they can be updated, deleted, access-controlled, and traced. Fine-tuning should shape how the model uses language and structure, not serve as the primary store for volatile facts.
 
-When you should not fine-tune is equally important. If your goal is simply to teach the model a new, highly volatile fact, fine-tuning is a disastrously inefficient choice. The static weights of a neural network constitute a terrible database for mutable facts. RAG is the architecture of choice for volatile knowledge. Fine-tuning is the architecture of choice for behavioral adaptation, formatting consistency, and structural reasoning pathways.
+There is also a middle ground called parameter-efficient fine-tuning, or PEFT. Full fine-tuning updates every trainable weight in the base model. PEFT methods freeze the base model and train smaller adapter components, soft prompts, or low-rank matrices that steer the model while leaving most learned representations untouched. LoRA and QLoRA are the PEFT variants you will study next, while DoRA and PiSSA appear later in this sub-track as newer refinements to the same general idea.
 
-## The Fine-tuning Spectrum
+For a production architecture review, ask four questions before writing any training code. First, does the desired behavior need to survive without retrieved context? Second, can the team produce enough high-quality examples that show the target behavior and its boundaries? Third, will the adapted behavior remain stable long enough to justify a retraining and evaluation cycle? Fourth, can the organization evaluate regressions against the base model, especially safety, reasoning, and general-language tasks that were not the direct tuning objective?
 
-Not all fine-tuning is created equal. There is a vast, mathematically complex spectrum ranging from full parameter fine-tuning, where every single isolated weight inside a massive neural network is directly updated via backpropagation, to minimal contextual adaptation where only the input prompt sequences are creatively modified.
-
-```mermaid
-flowchart TD
-    A[Full fine-tuning] -->|All params| B[LoRA]
-    B -->|4-bit| C[QLoRA]
-    C -->|Soft prompts| D[Prompt Tuning]
-    D -->|In-context| E[Few-shot Learning]
-    E --> F[No Fine-tuning]
-```
-
-Full fine-tuning of a modern 70-billion parameter network intrinsically requires massive hardware clusters composed of interconnected A100 GPUs. It necessitates highly complex distributed training orchestrations, utilizing libraries like DeepSpeed or Fully Sharded Data Parallel (FSDP) to partition the optimizer states across multiple nodes. It is incredibly brittle, excessively expensive, and highly prone to an issue known as catastrophic forgetting, where the model rapidly overwrites its foundational generalized knowledge to master the new narrow dataset. This is exactly where Parameter-Efficient Fine-Tuning steps into the architecture.
-
-```mermaid
-flowchart TD
-    subgraph Approaches [Adaptation Paradigms]
-        direction LR
-        FFT[Full Fine-tuning] <--> NFT[No Fine-tuning]
-    end
-    
-    FFT --> L[LoRA]
-    L --> P1[All params]
-    
-    L --> Q[QLoRA]
-    Q --> P2[4-bit]
-    
-    L --> PT[Prompt Tuning]
-    PT --> P3[Soft prompts]
-    
-    L --> FS[Few-shot Learning]
-    FS --> P4[In-context]
-```
-
-## LoRA: The Game-Changer
-
-Before the breakthrough of parameter-efficient training architectures, fine-tuning a frontier neural network was an exercise in extreme financial expenditure. In early 2021, software engineers faced an insurmountable hardware barrier when attempting to customize models. Because full fine-tuning fundamentally requires updating every single parameter across the entire network architecture, the optimizer state alone demanded terabytes of Video RAM. A single training run required dedicated server clusters containing hundreds of premium GPUs, making independent research and localized domain adaptation prohibitively difficult for standard enterprise teams.
-
-> **Did You Know?** In June 2021, Edward Hu and his team at Microsoft Research published the LoRA paper, demonstrating that an immense 175-billion parameter model could be adapted using only 1.2 million trainable parameters, representing a ten-thousand-fold reduction in checkpoint size.
-
-Instead of computing and applying a massive update matrix directly to the original weights:
+Prompting wins when the answer to the first question is no. RAG wins when the behavior is already present but the facts are missing or changing. PEFT often wins when the behavior is stable, examples are good, and the team needs a cheap, reversible adaptation. Full fine-tuning is reserved for cases where adapter capacity is not enough, the team controls the training infrastructure, and the cost of changing all weights is justified by a durable business or research requirement.
 
 ```text
-W_new = W + ΔW
+Need current private facts?       -> RAG or tools
+Need clearer instruction only?    -> prompt engineering
+Need stable format or tone?       -> SFT or PEFT
+Need new domain dialect?          -> SFT, often PEFT first
+Need broad capability shift?      -> full fine-tuning or continued training
+Need preference between outputs?  -> DPO/RLHF family, covered later
 ```
 
-LoRA mathematically decomposes the massive theoretical update matrix into two significantly smaller matrices. This relies entirely on the proven mathematical hypothesis that the intrinsic dimensionality of the fine-tuning adaptation is actually very small. We do not need an enormous parameter matrix to securely represent the newly acquired behavior; we simply need a low-rank approximation to guide the specific output tokens.
-
-```text
-W_new = W + B × A
-
-Where:
-- W is frozen (original weights): d × d
-- A is trainable: r × d  (r << d)
-- B is trainable: d × r
-- ΔW = B × A: d × d (reconstructed)
-```
-
-Visually, this elegant hardware-aware architecture forces the training gradients into a narrow mathematical bottleneck controlled by the rank `r`. This radically reduces the optimizer state size required in Video RAM during the backward pass:
-
-```mermaid
-flowchart LR
-    subgraph Original
-        W1[W matrix<br>d × d]
-    end
-    
-    subgraph With_LoRA
-        direction TB
-        W2[W matrix<br>frozen] --> Add((+))
-        BA[B × A matrix<br>trainable<br>d×r×r×d] --> Add
-    end
-    
-    Original --> With_LoRA
-```
-
-Or mapped logically within the exact computational graph structure:
-
-```mermaid
-flowchart TD
-    subgraph Original_Architecture
-        W[W matrix<br>d × d]
-    end
-    
-    subgraph LoRA_Architecture
-        W_frozen[W matrix<br>frozen]
-        Addition((+))
-        BA[B × A matrix<br>trainable<br>d×r×r×d]
-        
-        W_frozen --> Addition
-        BA --> Addition
-    end
-```
-
-> **Pause and predict**: Given the mathematical formulation of LoRA where `ΔW = B × A`, if the rank `r` is set to equal the original hidden dimension `d`, what happens to the number of trainable parameters? Will it be more, less, or the same as full fine-tuning?
-
-## QLoRA: Fine-tuning for Everyone
-
-QLoRA (Quantized LoRA) effectively combines the established standard of LoRA with extreme numeric quantization compression algorithms to make complex fine-tuning entirely accessible on standard consumer-grade hardware. [By forcefully loading the massive, computationally frozen base model entirely in 4-bit precision, QLoRA decimates the baseline VRAM requirement while remarkably preserving total model accuracy through highly specialized memory paging mechanisms.](https://arxiv.org/abs/2305.14314)
+The durable habit is to start with the least permanent intervention that can meet the requirement. This does not mean prompt everything forever. It means you should earn the right to fine-tune by proving that prompting and retrieval cannot reliably produce the behavior, then use a training method whose blast radius matches the desired change. Fine-tuning is not an upgrade badge; it is an architectural commitment.
 
-```text
-FP32: 3.14159265... (full precision)
-FP16: 3.1416      (half precision)
-INT8: 3           (8-bit integer + scale)
-INT4: ~3          (4-bit, extreme compression)
-```
+The wrong question is "Can we fine-tune this?" because the answer is usually yes if you have access to weights or a managed tuning API. The better question is "What failure becomes easier to prevent after fine-tuning, and what failure becomes easier to create?" A support model that must always emit a strict JSON schema may benefit because schema-following becomes the default continuation. A compliance model that needs last week's regulatory update will suffer because the update belongs in an auditable source system, not in a parameter update that cannot explain itself.
 
-By compressing the baseline weights, previously unimaginable tasks become financially and logistically feasible. Consider the hardware requirements mapped to expected cloud expenditures.
-
-| GPU | VRAM | Cost/hour | Can Train |
-|-----|------|-----------|-----------|
-| T4 | 16GB | $0.50 | 7B with QLoRA |
-| A10G | 24GB | $1 | 7B with QLoRA |
-| A100 40GB | 40GB | $4 | 13B with QLoRA |
-| A100 80GB | 80GB | $8 | 70B with QLoRA |
+You should also separate "the model does not know our words" from "the model does not know our facts." Domain language can be a legitimate tuning target when the model repeatedly misuses internal terms, confuses role names, or writes in a tone that breaks workflow expectations. Domain facts are different. A model can learn that "Sev2" means a particular escalation class, but the current owner, escalation room, or mitigation checklist should still come from retrieval or tools because those details change and need traceability.
 
-Different hardware topologies provide drastically different time-to-completion metrics.
-
-| Setup | Time | Cost |
-|-------|------|------|
-| 1x A10G | ~4 hours | $4 |
-| 1x A100 | ~90 minutes | $6 |
-| 4x A100 | ~25 min | $13 |
-
-### Hugging Face Integration
-
-When orchestrating these pipelines within the Python Hugging Face ecosystem, the PEFT (Parameter-Efficient Fine-Tuning) library handles these complex low-rank math adaptations completely seamlessly. [Transformers PEFT integration supports non-prompt-learning methods LoRA, IA3, and AdaLoRA, and requires `peft >= 0.18.0`.](https://huggingface.co/docs/transformers/main/peft) It is fundamentally vital to securely maintain this minimum version constraint within your dependency files to actively prevent unexpected matrix broadcasting errors during distributed training runs.
-
-Furthermore, Hugging Face PEFT training updates adapter weights only because the base model is frozen, and [trainer checkpoints contain adapter-only artifacts (e.g., `adapter_model.safetensors` and `adapter_config.json`)](https://huggingface.co/docs/transformers/v5.4.0/peft). This precise isolation usually keeps artifacts far smaller than full-model checkpoints, reducing storage and transfer overhead.
-
-```python
-# QLoRA configuration
-from peft import LoraConfig
-from transformers import BitsAndBytesConfig
-
-# 4-bit quantization config
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",           # NormalFloat4
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,       # Double quantization
-)
-
-# LoRA config
-lora_config = LoraConfig(
-    r=16,                    # Rank
-    lora_alpha=32,           # Scaling factor
-    lora_dropout=0.1,
-    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
-    bias="none",
-    task_type="CAUSAL_LM",
-)
-```
+The adaptation choice also affects product latency and cost, but treat those as design constraints rather than universal promises. A shorter prompt can reduce request size, and a tuned smaller model can sometimes replace a larger general model for a narrow task. Those outcomes depend on traffic, serving stack, model size, and evaluation tolerance. Do not sell fine-tuning as guaranteed cost reduction. Sell it as a way to move stable behavior from repeated prompt context into a trained behavior, then measure whether that trade actually helps the workload.
 
-Adjusting these configuration variables directly controls the expressive capacity of your new adapters.
+Finally, fine-tuning should have an exit strategy. If the tuned model fails evaluation, can you unload the adapter and return to the base model? If a customer-specific adapter becomes stale, can you retire it without rebuilding the serving stack? If the dataset contains a policy error, can you identify which runs used that dataset snapshot? These operational questions are part of the adaptation strategy, not paperwork after the interesting ML work is done.
 
-| Config | Rank (r) | Alpha | Target Modules | Expected Effect |
-|--------|----------|-------|----------------|-----------------|
-| A | 4 | 8 | q_proj, v_proj | Fast, limited capacity |
-| B | 16 | 32 | q_proj, k_proj, v_proj, o_proj | Balanced |
-| C | 64 | 128 | All linear layers | Slow, high capacity |
+## Full Fine-Tuning and PEFT
 
-## Proprietary Fine-Tuning: The OpenAI Ecosystem
+Full fine-tuning exposes every model weight to gradient updates. For a small transformer, that can be perfectly reasonable. For a multi-billion-parameter LLM, it changes the operational shape of the project because the optimizer must track additional state for every trainable parameter, activations must be kept or recomputed for backpropagation, and checkpoints can become large enough to slow iteration. The upside is maximum flexibility. The downside is cost, fragility, and a larger chance of damaging capabilities the base model already had.
 
-While open-source architectures offer absolute control, managing custom infrastructure is complex. It is crucial to thoroughly understand managed fine-tuning environments before deploying localized Kubernetes v1.35 training manifests. [OpenAI currently documents four supported fine-tuning methods: supervised, vision, direct preference optimization (DPO), and reinforcement fine-tuning (RFT).](https://platform.openai.com/docs/guides/fine-tuning) Each of these distinct methods serves a highly specialized structural purpose within the modern AI lifecycle.
+PEFT changes the training surface. Instead of asking the optimizer to move the entire network, LoRA inserts trainable low-rank matrices beside selected linear layers while keeping the original weights frozen. During inference, the adapter contribution is added to the frozen layer output. During training, the gradients update the adapter matrices, not the base model. This sharply reduces the number of trainable parameters and makes adapter artifacts easier to store, review, roll back, and swap.
 
-Supervised fine-tuning is documented as suitable for standard conversational adaptations. This method relies on explicit input-output pairs to rigorously alter the stylistic output and formatting constraints of the model. Similarly, Direct Preference Optimization allows engineers to utilize contrastive pairs, definitively showing the model which outputs are preferred and which are rejected, thereby aligning the model without requiring a separate reward model architecture.
+The low-rank idea rests on a practical observation: many task adaptations do not need a full-rank update to every large matrix. If the base model already knows language, code, or customer-support style, the fine-tuning job often needs to nudge existing representations rather than relearn them. LoRA constrains the update through a rank `r`, which is a capacity knob. Too low and the adapter may underfit. Too high and the adapter becomes more expensive and easier to overfit.
 
-Reinforcement Fine-Tuning represents an advanced frontier, utilizing specialized logical validation chains rather than simple stylistic formatting to force the network to construct mathematically sound deductions. For multimodal workflows requiring optical analysis, Vision fine-tuning allows the injection of domain-specific image datasets into the processing pipeline for complex diagram interpretation.
+QLoRA adds quantization to the picture. The base model is loaded in a lower-precision representation, while the trainable adapter path keeps enough precision for optimization. This is a memory strategy, not a magic accuracy guarantee. Quantization reduces the memory footprint of frozen weights, but the training job still needs room for activations, gradients for trainable parameters, temporary buffers, tokenizer batches, and evaluation. The mental model is "fit the frozen base more cheaply, train the adapter carefully."
 
-### API Constraints and Data Formatting
+Full fine-tuning, LoRA, and QLoRA are not moral categories. They are tools with different failure modes. Full fine-tuning can learn larger behavior changes but can forget broad abilities faster and requires heavier checkpoint discipline. LoRA is easier to experiment with and roll back, but adapter capacity and target-module choices matter. QLoRA extends LoRA to tighter memory budgets, but it adds quantization assumptions and backend dependencies that must be verified in the exact environment.
 
-To automate these pipelines, fine-tuning jobs are created programmatically and require both a model identifier and a training file identifier. To ensure your expensive experiments can be evaluated objectively against historical baselines, utilizing a deterministic seed parameter is intended to improve reproducibility: using the same seed and identical job parameters is expected to yield the same results in most cases.
+The next module goes deep on LoRA math, so this module keeps the strategic view. You should be able to explain why freezing the base model reduces trainable state, why adapter artifacts are operationally attractive, and why "parameter-efficient" does not mean "evaluation-optional." A tiny adapter can still encode a harmful shortcut if the dataset rewards that shortcut, and a cheap run can still produce an expensive incident if it ships without regression tests.
 
-When preparing your ingestion pipelines, remember that fine-tuning input data must be uploaded as JSONL. [Supervised training data must be JSONL with complete JSON per line, use chat completions format, and have at least 10 lines. However, while 10 is the absolute technical floor, it is recommended to start with 50 well-crafted examples to see meaningful behavioral shifts across the network.](https://platform.openai.com/docs/guides/supervised-fine-tuning) OpenAI saves only a limited set of recent supervised fine-tuning checkpoints, so inspect and evaluate them while the job context is still fresh.
+Full fine-tuning is most defensible when the target behavior is broad enough that adapters cannot express it cleanly, when the team has a mature distributed training stack, and when the release process can absorb a full model artifact. Examples might include research on a new base model checkpoint, continued training on a large domain corpus before instruction tuning, or an internal foundation model program where the organization owns the complete lifecycle. Even then, the team needs baseline comparisons because a full-weight update can improve the target benchmark while weakening unrelated abilities.
 
-For multimodal integration workflows, [Vision fine-tuning input constraints include: up to 50,000 image examples, up to 10 images per example, and max 10 MB per image. Ensure your preprocessing layer respects these limitations. Vision fine-tuning permits JPEG/PNG/WEBP images in RGB or RGBA mode, and image messages from assistant-role outputs are disallowed. Additionally, datasets containing people, faces, children, or CAPTCHAs may be rejected.](https://platform.openai.com/docs/guides/vision-fine-tuning)
+PEFT is most defensible when the target behavior is narrow, reversible, or customer-specific. An adapter can represent a support style, a compliance drafting pattern, or a domain-specific extraction schema without forcing every deployment to carry a separate full model. This reversibility changes how you operate experiments. You can keep the base model constant, compare multiple adapters against the same prompt suite, and archive or unload an adapter whose behavior is no longer approved. That is a major governance advantage, not only a memory advantage.
 
-> **Did You Know?** OpenAI later added vision fine-tuning for `gpt-4o-2024-08-06`, allowing developers to train on image-and-text examples for domain-specific visual tasks.
+The adapter boundary also clarifies responsibility between model training and model serving. If the base model is a shared platform dependency, product teams can own adapters that encode their workflow-specific behavior while the platform team owns base-model updates, safety gates, and serving infrastructure. This split is not free because adapter compatibility can still break when the base model changes. It is easier to manage than a world where every team creates an untracked full-model fork with different weights, tokenizer assumptions, and release notes.
 
-**Critical Storage Warning**: Official vendor documentation currently contains conflicting information regarding file storage limits. One part of the reference states there is an organization-wide limit of 1 TB, while another variant explicitly claims there is a 2.5 TB limit per project with absolutely no organization-wide cap. You should explicitly hedge your capacity planning and monitor usage closely until this discrepancy is definitively resolved by upstream engineering support.
+Rank, target modules, and dropout are not decorations on a LoRA config. Rank controls the size of the low-rank update. Target modules decide where the adapter can influence the network, such as attention projections or feed-forward layers. Dropout can reduce overfitting on small datasets but can also slow learning if the target behavior is already subtle. Treat the first adapter run as a measurement instrument. It tells you whether the task has enough signal, whether the chosen modules are plausible, and whether the dataset produces the expected gradients.
 
-## Practical Fine-tuning: Step by Step
+When QLoRA enters the design, separate storage precision from training behavior. Loading frozen weights in 4-bit form can make a model fit in memory that would otherwise be inaccessible, but the optimizer still needs a numerically stable path for the trainable adapter weights. Backend support, GPU architecture, driver versions, and library versions become part of the experiment. That is why durable curriculum should teach quantization as a memory-management concept and quarantine exact support claims in a dated snapshot.
 
-### Step 1: Choose Your Base Model
+## How SFT Changes Behavior
 
-Selecting the exact correct baseline foundation model is the absolute most critical decision of your entire pipeline. A massive parameter model is not inherently superior if your final deployment target environment is highly constrained, or if token inference speed is a non-negotiable requirement for your specific service level agreements. Always match the model size to the strict mathematical complexity of your designated task.
+Supervised fine-tuning, or SFT, trains the model on examples of the behavior you want. In a causal language model, the core objective is next-token prediction over formatted sequences. If the example contains a user request and an assistant answer, the trainer tokenizes the sequence, shifts labels by one token, and computes cross-entropy on the target tokens. The model is rewarded for assigning higher probability to the desired continuation.
 
-| Model | Size | Good For |
-|-------|------|----------|
-| **Llama 4.1 8B** | 8B | General tasks, instruction following |
-| **Mistral 7B** | 7B | Fast inference, general tasks |
-| **Phi-3** | 3.8B | Limited resources, mobile |
-| **Qwen 2** | 7B | Multilingual, coding |
-| **Gemma 2** | 9B | Google ecosystem |
+The subtle part is deciding which tokens should contribute to the loss. If the model is trained on the entire chat transcript, it can spend capacity learning to reproduce user prompts and system messages. For many assistant-tuning jobs, you want loss on assistant messages only or on completion tokens only. That masking choice tells the optimizer, "learn to answer like this," rather than "learn to imitate every token in the whole conversation." This is one of the easiest places to silently train the wrong behavior.
 
-### Step 2: Prepare Your Dataset
+Chat templates are the second common trap. Chat models are not trained on abstract JSON roles; they see a serialized token sequence with role markers, separators, end-of-turn tokens, and sometimes generation markers. A dataset with `messages` fields must be converted through the tokenizer's chat template so the sequence matches what the model expects. Handwritten templates can work, but a one-token mismatch at the turn boundary can cause expensive confusion during training and strange generations afterward.
 
-Raw data quality is exponentially more critical than bulk data quantity in modern LLM fine-tuning loops. A rigorously specialized dataset of 1,000 highly curated, grammatically flawless examples will massively and consistently outperform 50,000 haphazardly scraped, noisy internet examples. Quality dictates the ultimate artificial intelligence output.
+Instruction tuning, domain adaptation, and continued pretraining are related but distinct. Instruction tuning teaches the model to follow task instructions and produce helpful responses. Domain adaptation teaches a model the language, conventions, and examples of a specialized area, such as legal drafting or incident response. Continued pretraining keeps training on raw or lightly structured text to shift the base distribution before later supervised tuning. These approaches can be combined, but they answer different questions and require different evaluation sets.
 
-Most supervised fine-tuning initially utilizes a strict standard instruction JSON format:
+Data quality matters more than raw example count because every example is a training vote. A thousand carefully reviewed examples that show the desired behavior, edge cases, refusal boundaries, and formatting constraints can be more useful than a much larger scrape of inconsistent outputs. Duplicate prompts, contradictory labels, hidden personally identifiable information, unreviewed synthetic data, and stale policy examples all teach the model that sloppy behavior is acceptable. The optimizer has no concept of "this row was a draft."
 
-```json
-{
-  "instruction": "Summarize the following article",
-  "input": "The article text here...",
-  "output": "The summary here..."
-}
-```
+Good SFT datasets usually contain three layers. The happy path teaches the normal behavior. The boundary path teaches what to refuse, escalate, ask for, or retrieve instead of answering. The regression path protects base abilities that the adapted model must not lose, such as arithmetic, harmless small talk, multilingual behavior, or safety rules. Without the third layer, you can celebrate a falling training loss while quietly making the model worse at everything outside the tuning set.
 
-Alternatively, and often preferably for modern conversational interfaces, you can utilize the explicit conversation message format, which maps perfectly to the standard chat completions APIs downstream:
+Packing, epochs, learning rate, and sequence length are not independent knobs. Packing combines shorter examples into fixed-length sequences to reduce padding waste, but it can complicate loss masks and example boundaries if the data pipeline is not built for it. More epochs give the adapter more chances to fit the dataset, but they also increase overfitting risk. Longer sequences preserve multi-turn context, but they raise activation memory. Higher learning rates can help adapters learn quickly, but they can destabilize small, repetitive datasets.
 
-```json
-{
-  "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "What is machine learning?"},
-    {"role": "assistant", "content": "Machine learning is..."}
-  ]
-}
-```
+Overfitting signals are rarely subtle if you look for them early. Training loss keeps falling while validation loss flattens or rises. The model repeats exact training answers when asked paraphrased prompts. The model becomes overconfident in the fine-tuned domain and starts forcing unrelated questions into that domain. Evaluation prompts outside the target task degrade. These symptoms are not solved by declaring the benchmark too hard; they are evidence that the training distribution, run length, or regularization needs work.
 
-Understanding how many examples you need requires identifying your specific goal.
+Catastrophic forgetting is the broader version of this problem. Continual fine-tuning research has documented that language models can lose earlier knowledge or capabilities while adapting to new tasks. PEFT reduces the blast radius by freezing the base model, but it does not erase the need to test the composed model plus adapter. If the adapter strongly steers outputs toward a narrow pattern, the deployed behavior can still look like forgetting even though the frozen base weights remain intact.
 
-| Task Type | Minimum Samples | Recommended |
-|-----------|-----------------|-------------|
-| Style transfer | 100-500 | 1,000+ |
-| Domain adaptation | 1,000 | 5,000+ |
-| New task learning | 5,000 | 10,000+ |
-| Behavior modification | 500-2,000 | 5,000+ |
+The SFT loop begins before training with schema design. A conversational dataset should make the role boundaries explicit, and a prompt-completion dataset should make the prompt and target continuation separable. Mixing these formats casually is a common source of broken loss masking. If your examples are originally stored as tickets, email threads, or documents, convert them into the training format with a deterministic script and keep the original record identifier. That makes it possible to audit a suspicious output back to the source example.
 
-### Dataset Preparation Pipelines
+Loss masking deserves the same level of review as labels in a supervised classifier. In a classifier, nobody would accept a dataset where the positive and negative labels were accidentally shifted by one row. In SFT, the equivalent error can be less visible because the script still runs and loss still decreases. A quick inspection should show input IDs, decoded text, and label positions where ignored tokens are marked. If the user prompt contributes to the loss when you intended assistant-only training, stop the run and fix preprocessing.
 
-Production-grade machine learning datasets are rarely pristine upon initial acquisition. You must proactively construct highly deterministic programmatic preprocessing pipelines to aggressively sanitize textual inputs, systematically normalize irregular structural whitespace, and strictly enforce the base model's specific token chat templates. An improperly implemented chat template syntax will completely and irreparably ruin a massive fine-tuning run.
+Learning rate and epochs should be interpreted through data diversity. A high-quality dataset with many varied examples can tolerate more training than a tiny dataset of near-duplicates. A small adapter on a narrow schema may learn quickly, which means extra epochs can move from useful adaptation to memorization. Instead of copying a learning rate from a tutorial, run short probes and compare validation behavior. The probe run is not wasted; it tells you whether the loss curve is smooth, whether outputs move in the expected direction, and whether the dataset contains enough signal.
 
-```python
-import json
-from typing import List, Dict
+Packing is another place where efficiency can fight clarity. When many short examples are packed into one sequence, GPU utilization can improve because less computation is spent on padding. The price is that example boundaries and loss masks must remain correct after packing. For early debugging, leave packing off until you trust the formatting. After the labels are verified, enable packing deliberately and compare a small batch before and after. If the packed examples blend conversations in a way your trainer does not handle correctly, the throughput gain is not worth it.
 
-def clean_dataset(examples: List[Dict]) -> List[Dict]:
-    """Clean and validate training examples."""
-    cleaned = []
+Continued pretraining should not be disguised as SFT. If you have a large corpus of domain documents and no explicit input-output behavior, you are shifting the language-model distribution, not teaching the model a task response. That can be useful before SFT, especially when the base model lacks domain vocabulary, but it raises different risks. The model may absorb stale or biased prose, and the evaluation should include domain-language fluency as well as downstream task behavior. A raw document corpus is not a substitute for reviewed instruction examples.
 
-    for ex in examples:
-        # Skip empty examples
-        if not ex.get("instruction") or not ex.get("output"):
-            continue
+Instruction tuning and preference tuning also solve different problems. SFT shows the model target answers. Preference optimization methods, covered later, show relative judgments between outputs or optimize against reward signals. If you only have correct examples, SFT is the natural starting point. If you have chosen and rejected answers for the same prompt, preference optimization may become relevant. For this module, the important boundary is that every training method encodes a data contract; using a fancier loss cannot rescue a dataset that lacks the fields the method requires.
 
-        # Skip very short outputs (likely low quality)
-        if len(ex["output"]) < 50:
-            continue
+The safest SFT projects create a small evaluation harness before the first expensive run. The harness should ask the base model and the tuned model the same prompts, store responses, and summarize differences. Include target prompts where the tuned model should improve, near-miss prompts where it should ask a clarifying question, and unrelated prompts where it should behave like the base model. This makes quality review concrete. Reviewers can argue about outputs instead of arguing about whether a loss number "feels good."
 
-        # Skip duplicates (check instruction similarity)
-        if is_duplicate(ex, cleaned):
-            continue
+## Data, Memory, and Evaluation Discipline
 
-        # Normalize whitespace
-        ex["instruction"] = " ".join(ex["instruction"].split())
-        ex["output"] = " ".join(ex["output"].split())
+A training job fails in two ways: it can fail mechanically, or it can succeed mechanically while producing a model you should not deploy. Mechanical failure is easier to notice. The process runs out of memory, gradients become `NaN`, the tokenizer has no pad token, the trainer rejects a dataset schema, or the checkpoint directory contains the wrong artifacts. Behavioral failure is harder because the logs can look normal while the model learns a brittle shortcut.
 
-        cleaned.append(ex)
+Memory math begins with the distinction between frozen weights, trainable weights, optimizer state, gradients, and activations. In full fine-tuning, optimizer state and gradients scale with every trainable parameter. With Adam-style optimizers, the optimizer maintains moment estimates in addition to the parameter values, so the training footprint is far larger than the raw model weights. In PEFT, frozen base weights still consume memory, but optimizer state is concentrated in the adapter parameters, which is why adapter training is so much lighter.
 
-    return cleaned
+Activations often surprise new fine-tuning teams. During the forward pass, the model stores intermediate tensors needed for the backward pass. Sequence length, batch size, hidden dimension, layer count, and attention implementation all affect this footprint. Gradient checkpointing trades extra compute for lower activation memory by recomputing some intermediates during backpropagation instead of storing them all. Mixed precision reduces memory and bandwidth for many tensors, but it must be matched to hardware support and numerical stability.
 
+The effective batch size is the product of per-device batch size, gradient accumulation steps, and data-parallel workers. If you can fit only one or two examples per GPU, gradient accumulation can still give the optimizer a larger effective batch over several micro-steps. This does not make the run free. It changes wall-clock time, logging cadence, and how quickly the optimizer sees enough examples to make a stable update. Treat it as a deliberate scheduling decision, not a hidden default.
 
-def format_for_training(example: Dict) -> str:
-    """Format example as chat template."""
-    return f"""<|im_start|>system
-You are a helpful assistant.<|im_end|>
-<|im_start|>user
-{example['instruction']}<|im_end|>
-<|im_start|>assistant
-{example['output']}<|im_end|>"""
-```
+Evaluation should be designed before training. Keep a holdout split that represents the same task family, and keep a separate regression set that represents capabilities you do not want to damage. Track loss, but also inspect outputs. Use deterministic decoding for some regression checks so comparisons are stable, then use realistic decoding for product-like review. Store prompts, model IDs, adapter hashes, library versions, and data snapshots together so a surprising result can be reproduced.
 
-> **Stop and think**: If you use DPO (Direct Preference Optimization) to align a model, you must provide a chosen response and a rejected response for each prompt. Why might an organization struggle to curate a dataset of 10,000 "rejected" responses compared to just gathering 10,000 "good" responses for standard supervised fine-tuning?
+A useful fine-tuning review has at least four artifacts. The data card explains where examples came from, what was removed, and which known gaps remain. The run card records versions, hyperparameters, hardware, and random seeds. The eval card compares base and tuned behavior on target prompts, adversarial prompts, and regression prompts. The release card states whether the adapter is loaded dynamically, merged into a model artifact, or held for more review.
 
-### Step 3: Configure Training
+Kubernetes does not make a bad training plan good, but it can make the workload reproducible and observable. A `Job` gives the run a named lifecycle, resource limits, restart policy, logs, and a place to attach GPU scheduling constraints. For early experiments, a local script is enough. For repeated team workflows, a containerized training job with explicit input and output mounts is easier to audit than a long-lived shell session on a shared GPU host.
 
-The `TrainingArguments` object programmatically dictates the entire optimization logic and intricate memory offloading strategy. Notice meticulously below that we purposefully configure `paged_adamw_8bit`—a uniquely quantized, memory-aware optimizer that aggressively pages hidden memory states directly to the host CPU if the GPU VRAM runs critically low. This feature effectively saves the entire active process from catastrophic Out Of Memory failures during peak attention processing.
+Data review should be staged like code review. The first pass removes unsafe or out-of-scope records, the second pass checks whether examples actually demonstrate the desired behavior, and the final pass samples tokenized records to verify the training representation. Synthetic data can be useful when human-written examples are scarce, but it should be treated as generated draft material. Reviewers need to ask whether the synthetic answer is correct, whether it is diverse enough, and whether it leaks the style or mistakes of the teacher model.
 
-```python
-from transformers import TrainingArguments
+Deduplication is not only about saving tokens. Duplicate examples overstate the importance of a pattern and can make validation look better than it is if near-identical rows appear in both splits. For text data, exact hashing catches only the easiest duplicates. Teams often need normalized text, approximate matching, and reviewer judgment for paraphrases. The practical rule is simple: if a human would say two examples teach the same behavior with the same wording, do not let them dominate both training and evaluation.
 
-training_args = TrainingArguments(
-    output_dir="./results",
+Privacy and licensing belong in the fine-tuning plan because training can preserve sensitive patterns even when no obvious secret appears in the final checkpoint. Customer tickets may contain names, account identifiers, health details, or contractual terms. Internal documents may be licensed for reading but not for creating derivative model artifacts. A data card should state what categories were excluded, how redaction was performed, and who approved the source. That record is boring only until someone asks why the model produced a phrase that looks like a real customer note.
 
-    # Core training settings
-    num_train_epochs=3,               # 3-5 epochs typically
-    per_device_train_batch_size=4,    # Depends on GPU memory
-    gradient_accumulation_steps=4,    # Effective batch = 4 * 4 = 16
+The memory plan should start with a budget table in your run card, even if the numbers are rough. List the base model loading precision, adapter rank, sequence length, per-device batch size, gradient accumulation, checkpointing choice, and expected output artifact. Then run a small batch and record actual memory use. This habit makes scaling less mysterious. When a later run fails, you can see whether the change was sequence length, batch size, target modules, precision, or a library upgrade.
 
-    # Learning rate
-    learning_rate=2e-4,               # LoRA can use higher LR
-    lr_scheduler_type="cosine",       # Gradual decay
-    warmup_ratio=0.03,                # Warm up for 3% of steps
+Gradient checkpointing is best understood as controlled forgetfulness during training. The forward pass keeps fewer intermediate activations, and the backward pass recomputes some of them when needed. This lowers memory pressure at the cost of extra compute. It is often a good trade for long-sequence SFT on constrained GPUs, but it changes wall-clock expectations. If a team enables checkpointing without updating job timeouts and progress monitoring, a healthy run can look stalled simply because each step takes longer.
 
-    # Optimization
-    optim="paged_adamw_8bit",         # Memory-efficient optimizer
-    max_grad_norm=0.3,                # Gradient clipping
+Mixed precision is similarly practical rather than fashionable. Lower precision can reduce memory and improve throughput on supported hardware, but unsupported or unstable combinations can create underflow, overflow, or backend errors. The right setting depends on the GPU, framework, and model. Record the precision mode, test a short run, and watch for `NaN` loss or abnormal gradient norms. If stability is uncertain, a slower stable run is more useful than a faster run whose numeric behavior you cannot trust.
 
-    # Logging
-    logging_steps=10,
-    save_strategy="epoch",
-    evaluation_strategy="epoch",
+Evaluation should include negative space: prompts where the model should not use the tuned behavior. A legal-drafting adapter should not turn a request for a poem into a contract clause. A support-summary adapter should not force every general question into incident format. These tests catch overgeneralization, which is often the product symptom users notice first. The model may not have forgotten the base skill in a strict weight-space sense; the adapter may simply steer too aggressively for the deployment context.
 
-    # Memory optimization
-    fp16=True,                        # Mixed precision
-    gradient_checkpointing=True,       # Trade compute for memory
-)
-```
+Release review should name the loading path. Adapter-only release means the serving layer loads the base model plus adapter and can often disable that adapter quickly. Merged release means the adapter contribution is folded into model weights, which may simplify inference but makes rollback and provenance different. Neither is always right. The important point is that the release artifact must match the operational expectation, and the evaluation report should test the same composition that production will serve.
 
-> **Version note**: Training argument names and aliases can differ across library versions, so verify the exact field names in the versions of `transformers`, `trl`, and `peft` you actually run. If you pin older or heavily patched training stacks, verify the exact argument names across `transformers`, `trl`, and `peft` before copying snippets into production code.
-
-### The Psychology of Learning Rate Selection
-
-The learning rate is widely considered the most challenging hyperparameter in the entire machine learning stack. If an engineer sets the learning rate too low, such as `1e-6`, the model simply will not learn. It will slowly crawl across the loss landscape, burning thousands of dollars of GPU time while practically remaining identical to its baseline state. Conversely, if an engineer sets the learning rate aggressively high, such as `5e-3`, the optimizer gradients can explode, producing `NaN` values and quickly derailing the fine-tuning run.
-
-When utilizing full fine-tuning, learning rates must be kept infinitesimally small because the original model weights are highly fragile; you are actively altering the fundamental fabric of a network trained on trillions of tokens. However, the psychology shifts dramatically when deploying parameter-efficient methods. Because LoRA adapter matrices are purposefully initialized either with zeros or highly specific gaussian noise, they require significantly more aggressive momentum to learn their designated tasks. Engineers routinely deploy learning rates of `2e-4` for LoRA adapters—a magnitude that would usually destabilize a full fine-tuning run.
-
-To securely manage this momentum, professional practitioners utilize cosine decay scheduling coupled with an introductory warmup ratio. A warmup ratio of 0.03 strictly forces the learning rate to incrementally ramp up from zero during the initial 3 percent of the training steps. This structural grace period prevents the freshly initialized LoRA matrices from dispatching massive, destabilizing gradient shocks through the computational graph. Once the warmup completes, the cosine decay scheduler smoothly and continuously decelerates the learning rate, allowing the optimizer to securely settle into the optimal local minima without bouncing violently around the loss landscape.
-
-### Step 4: Fine-tune
-
-We must systematically and programmatically instantiate our designated target model, rigorously apply the specific quantization hardware configuration, carefully prepare the frozen weights for K-bit distributed training, and surgically inject the low-rank LoRA adapters into the computational graph. The profoundly powerful `SFTTrainer` (Supervised Fine-Tuning Trainer) from the highly specialized `trl` library elegantly abstracts away the overwhelmingly complex internal matrix formatting loops.
-
-```python
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer
-
-# Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B")
-tokenizer.pad_token = tokenizer.eos_token
-
-# Load model with quantization
-model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Llama-3.1-8B",
-    quantization_config=bnb_config,
-    device_map="auto",
-)
-
-# Prepare for k-bit training
-model = prepare_model_for_kbit_training(model)
-
-# Apply LoRA
-model = get_peft_model(model, lora_config)
-
-# Print trainable parameters
-def print_trainable_parameters(model):
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    total = sum(p.numel() for p in model.parameters())
-    print(f"Trainable: {trainable:,} ({100 * trainable / total:.2f}%)")
-
-print_trainable_parameters(model)
-# Trainable: 6,553,600 (0.08%) <- Only 0.08% of parameters!
-
-# Train
-trainer = SFTTrainer(
-    model=model,
-    train_dataset=train_dataset,
-    eval_dataset=eval_dataset,
-    tokenizer=tokenizer,
-    args=training_args,
-    max_seq_length=512,
-)
-
-trainer.train()
-```
-
-### Step 5: Save and Merge
-
-After the extensive training loops sequentially complete with success, you logically have two distinct operational deployment options. You can explicitly save just the tiny, lightweight adapter weights to local disk. This powerfully allows you to dynamically hot-swap them at runtime inference for massive multi-tenant architectures, efficiently serving hundreds of customers from a single GPU memory allocation. Alternatively, you can irreversibly merge those adapter weights permanently into the base model weights to completely avoid the minor computational latency overhead of dynamically computing the matrix addition during every single token generation.
-
-```python
-# Save just the LoRA adapters (small, ~50MB)
-model.save_pretrained("./lora-adapters")
-```
-
-```python
-# Merge LoRA weights into base model
-merged_model = model.merge_and_unload()
-merged_model.save_pretrained("./merged-model")
-```
-
-## Evaluation and Production Realities
-
-Evaluation inherently forms the most scientifically rigorous, unforgiving, and operationally demanding phase of the foundational model lifecycle. You must precisely measure the model's internal statistical confidence quantitatively, while simultaneously measuring its actual behavioral, real-world outputs qualitatively against strict, adversarial human rubrics.
-
-### Quantitative Metrics
-
-Perplexity quantitatively and rigidly measures exactly how "surprised" a specific model framework is by the holdout evaluation validation dataset. Lower perplexity technically indicates that the model is highly confident in its subsequent token predictions and that its internal mathematical weights have successfully aligned with the target distribution syntax. However, it does not guarantee factual correctness.
-
-```python
-import math
-
-def compute_perplexity(model, eval_dataset, tokenizer):
-    model.eval()
-    total_loss = 0
-    total_tokens = 0
-
-    for batch in eval_dataset:
-        with torch.no_grad():
-            outputs = model(**batch)
-            total_loss += outputs.loss.item() * batch["input_ids"].numel()
-            total_tokens += batch["input_ids"].numel()
-
-    perplexity = math.exp(total_loss / total_tokens)
-    return perplexity
-```
-
-### Qualitative Evaluation
-
-Raw mathematical quantitative metrics can be deeply deceiving in enterprise practice. A neural network with stunningly low validation perplexity might merely be blindly regurgitating the training data verbatim while failing completely at advanced generalized intelligence tasks. Qualitative evaluation relentlessly enforces a grounded reality check on the underlying conversational tone, formatting adherence, and actual operational utility of the model against adversarial human-in-the-loop prompts.
-
-```python
-test_prompts = [
-    "Explain quantum computing to a 5-year-old",
-    "Write a formal email declining a meeting",
-    "Debug this Python code: [code here]",
-    # Add domain-specific prompts
-]
-
-for prompt in test_prompts:
-    response = generate(model, prompt)
-    print(f"Prompt: {prompt}")
-    print(f"Response: {response}")
-    print("-" * 50)
-```
-
-### Production War Stories
-
-Theoretical knowledge frequently collides violently with messy production realities. Engineering teams across the industry have documented catastrophic failures when improperly deploying specialized fine-tuning workflows into high-stakes environments.
-
-**Medical Hallucination at Scale**
-Mixing authoritative medical sources with unvetted internet content can cause a fine-tuned model to produce dangerously overconfident outputs, so high-risk domains need strict dataset provenance and expert review.
-
-**Bloomberg's Custom GPT Architecture**
-Domain-specific language models can outperform general-purpose models on specialized financial tasks when they are trained on large, well-curated finance corpora, but the exact advantage depends on the data, model design, and evaluation setup.
-
-## Common Mistakes
-
-Engineering teams consistently and repeatedly encounter severe, project-ending regressions when aggressively attempting their first massive model fine-tuning runs. Study this specific troubleshooting diagnostic table deeply to actively avoid burning thousands of corporate dollars in utterly wasted computational overhead.
-
-| Mistake | Why | Fix |
-|---------|-----|-----|
-| Catastrophic Forgetting | The model over-specialized on the new task and completely lost its general knowledge representation. | Use LoRA instead of full fine-tuning; mix in 10-20% general instruction data to retain broader capabilities. |
-| Overfitting | The training data is too uniform or the training loops ran for too many epochs without early stopping. | Add dropout (0.15), implement strict early stopping, and significantly increase dataset diversity. |
-| OOM (Out of Memory) | The batch size is too large for the GPU VRAM, preventing backpropagation from storing activations. | Enable gradient checkpointing and drastically reduce `per_device_train_batch_size`. |
-| Wrong Chat Template | Model inputs do not match the tokenizer's expected prompt structure, causing hallucinated outputs. | Verify `tokenizer.chat_template` and strictly use `apply_chat_template` during data preparation. |
-| Conflicting PEFT versions | Using an outdated PEFT library lacking modern adapter support or updated scaling logic. | Ensure `peft >= 0.18.0` for full AdaLoRA, IA3, and stable LoRA support. |
-| Exceeding OpenAI Limits | Vision training data exceeds the strict API payload boundaries, leading to instant 400 rejection errors. | Compress all training images to <10MB and limit inputs to a maximum of 10 images per example. |
-| Missing Checkpoints | The base model was accidentally unfrozen, creating massive multi-gigabyte checkpoints instead of adapters. | Verify PEFT configuration; expect your artifact to only be an `adapter_model.safetensors` file. |
-
-**Example of Fixing the Critical Chat Template:**
-
-```python
-# Check the model's expected format
-print(tokenizer.chat_template)
-
-# Apply it correctly
-formatted = tokenizer.apply_chat_template(
-    messages,
-    tokenize=False,
-    add_generation_prompt=True
-)
-```
-
-## Cost Analysis and Kubernetes Orchestration
-
-Deeply understanding the financial implications and underlying operational mechanics of your distributed training jobs is arguably just as critical as understanding the foundational calculus. Without a crystal-clear operational view of hourly infrastructure costs, an engineering team can inadvertently bankrupt a project within a single chaotic week of experimentation.
-
-| Approach | Setup Cost | Per-Query Cost | Monthly Cost |
-|----------|------------|----------------|--------------|
-| **Fine-tuned local** | $5-50 | ~$0 | ~$20 (hosting) |
-| **RAG with API** | $0 | $0.01-0.05 | $100-500 |
-| **API few-shot** | $0 | $0.02-0.10 | $200-1000 |
-
-### Deploying Training Jobs on Kubernetes
-
-When systematically executing these incredibly intense algorithmic workloads in stable production environments, you must rely exclusively on Kubernetes `Job` specifications to strictly guarantee fault-tolerant execution and proper resource scheduling. As of Kubernetes v1.35, [actively scheduling high-density distributed GPU workloads is a deeply integrated, highly standardized practice utilizing modern NVIDIA device scheduling plugins](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/). Never, under any specific circumstances, run a long multi-hour training job directly on a naked virtual machine shell session where a minor transient network disconnect could fatally terminate the entire background process.
-
-```yaml
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: qlora-finetune-job
-  namespace: ml-workloads
-spec:
-  backoffLimit: 0
-  template:
-    spec:
-      containers:
-      - name: sft-trainer
-        image: huggingface/transformers-pytorch-gpu:latest
-        command: ["python", "/app/train.py"]
-        resources:
-          limits:
-            nvidia.com/gpu: "1"
-      restartPolicy: Never
-```
-
-The `backoffLimit: 0` and `restartPolicy: Never` settings are deliberate production choices, not copy-paste defaults. GPU training jobs fail for environmental reasons: node preemption, a single outlier batch that causes Out of Memory errors, or a transient network mount error. [Setting `backoffLimit: 0` means Kubernetes will not automatically re-queue the job after a failure. Combined with `restartPolicy: Never`, the pod remains in an Error state rather than restarting in place.](https://kubernetes.io/docs/concepts/workloads/controllers/job/) This forces the human operator to inspect logs, diagnose the root cause, and re-submit intentionally. On a job that costs substantial hourly fees per run, a blind automatic retry that hits the same root-cause failure doubles the cloud bill with zero diagnostic value. Reserve `backoffLimit > 0` only for jobs that implement idempotent checkpointing.
-
-> **Did You Know?** Pretraining frontier-scale foundation models historically required enormous compute budgets, while LoRA-style adaptation can cut trainable parameters dramatically and make much smaller adaptation runs far cheaper.
-
-## Deployment Options
-
-Once your massive parameter model is robustly trained, successfully evaluated, and permanently merged, the final architectural step is efficiently exposing it for real-time customer inference via robust networking endpoints.
-
-### Option 1: Hugging Face Inference Endpoints
-
-One of the fastest routes to production for prototype workloads is fully managed hub execution.
-
-```python
-# Push to Hub
-model.push_to_hub("your-username/my-finetuned-model")
-
-# Deploy as endpoint (click in HF UI or use API)
-```
-
-### Option 2: Self-hosted with vLLM
-
-For extreme high-concurrency environments, vLLM provides truly exceptional inference throughput via specialized PagedAttention memory management, radically optimizing key-value cache memory allocation directly on the GPU during heavy concurrent token decoding phases.
-
-```bash
-# Install vLLM
-pip install vllm
-
-# Run server
-python -m vllm.entrypoints.openai.api_server \
-    --model your-model-path \
-    --tensor-parallel-size 1
-```
-
-### Option 3: Ollama for Local Deployment
-
-For rapid edge application development, isolated deployments, and immediate localized architectural testing, quickly compiling the neural model into an Ollama Modelfile is highly effective, entirely secure, and operationally simple.
-
-```bash
-# Create Modelfile
-cat > Modelfile << 'EOF'
-FROM ./merged-model
-PARAMETER temperature 0.7
-SYSTEM "You are a helpful assistant fine-tuned for..."
-EOF
-
-# Create and run
-ollama create my-model -f Modelfile
-ollama run my-model "Translate Hello to French"
-```
-
-## Hands-On Exercise: Your First PEFT Pipeline
-
-### Objective
-
-Flawlessly bridge localized scripting with cloud-native orchestration by creating a complete parameter-efficient fine-tuning pipeline, containerizing the workload, verifying all adapter artifacts, and deploying the execution Job within a secure Kubernetes v1.35 ecosystem.
-
-### Task 1: Environment Setup & Base Model Initialization
-
-Start by carefully creating your primary training script file locally. Name this file exactly `train.py`. This strictly sets the foundation, actively quantizes the base architecture, and establishes the critical initial LoRA hyperparameters.
-
-```python
-# Step 1: Install dependencies (Run this in your terminal, not in the script!)
-# pip install transformers peft datasets accelerate bitsandbytes trl
-
-# Step 2: Load a small model (TinyLlama 1.1B)
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import LoraConfig, get_peft_model
-
-model_name = "TinyLlama/TinyLlama-1.1B-Chat"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-tokenizer.pad_token = tokenizer.eos_token
-model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    torch_dtype=torch.float16,
-    device_map="auto"
-)
-
-# Step 3: Apply LoRA
-lora_config = LoraConfig(
-    r=8,  # Start small
-    lora_alpha=16,
-    target_modules=["q_proj", "v_proj"],
-    lora_dropout=0.1,
-    task_type="CAUSAL_LM"
-)
-model = get_peft_model(model, lora_config)
-
-# Step 4: Create a tiny dataset (just 10 examples to start)
-train_data = [
-    {"instruction": "Translate to French", "input": "Hello", "output": "Bonjour"},
-    {"instruction": "Translate to French", "input": "Goodbye", "output": "Au revoir"},
-    # Add 8 more examples...
-]
-
-# Step 5: Train for just 100 steps (proof of concept)
-# ... (full training code in deliverable)
-```
-
-### Task 2: Define the complete SFTTrainer Script
-
-<details>
-<summary>View Solution</summary>
-
-Append the following code to complete the training loop inside your local `train.py` script:
+## Landscape Snapshot: Current HF Training Stack
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Surface | Verified snapshot |
+> |---|---|
+> | Package versions visible from PyPI in this environment | `transformers==5.10.2`, `trl==1.5.1`, and `peft==0.19.1` are current downloadable releases. |
+> | TRL SFT API | `SFTTrainer` accepts `args=SFTConfig(...)`, `processing_class=...`, `train_dataset=...`, `eval_dataset=...`, `peft_config=...`, and `formatting_func=...`; older snippets using `tokenizer=` and trainer-level `max_seq_length=` should be rechecked before copying. |
+> | SFT data formats | TRL documents language-modeling and prompt-completion datasets in both standard and conversational forms, including `messages`, `prompt`, and `completion` fields. |
+> | Loss masking knobs | `SFTConfig` includes `assistant_only_loss`, `completion_only_loss`, `packing`, `max_length`, and `loss_type`, with defaults that can differ from plain `TrainingArguments`. |
+> | Example model IDs verified on the Hub | `Qwen/Qwen3-0.6B`, `Qwen/Qwen2.5-0.5B-Instruct`, `HuggingFaceTB/SmolLM2-135M-Instruct`, and `TinyLlama/TinyLlama-1.1B-Chat-v1.0` are real Hugging Face model repositories. |
+>
+> This table is illustrative, not a leaderboard or endorsement. Pin your own stack, record exact versions in the run card, and reread upstream docs before reusing any model ID or trainer argument.
+
+The snapshot is intentionally small because library details age faster than the concept. The durable lesson is that trainer APIs are part of your experiment state. A model card, dataset hash, and adapter checkpoint are not enough if the preprocessing code changed between runs. In modern Hugging Face stacks, the difference between `tokenizer`, `processing_class`, automatic chat-template application, and assistant-only masking can determine whether a run trains the intended behavior or a subtly different one.
+
+The following minimal script follows the 2026-06 TRL shape. It is intentionally a toy run: tiny data, a small public model ID, a short sequence length, and a few steps. Its purpose is to make the pipeline structure concrete, not to produce a deployable adapter.
 
 ```python
 from datasets import Dataset
-from trl import SFTTrainer
-from transformers import TrainingArguments
+from peft import LoraConfig
+from transformers import AutoTokenizer
+from trl import SFTConfig, SFTTrainer
 
-# Convert dict to Hugging Face Dataset
-dataset = Dataset.from_list(train_data)
 
-training_args = TrainingArguments(
-    output_dir="./lora-results",
-    max_steps=100,
-    per_device_train_batch_size=2,
-    learning_rate=2e-4,
-    save_steps=50,
+MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
+
+records = [
+    {
+        "prompt": [
+            {"role": "system", "content": "You write concise incident handoff notes."},
+            {"role": "user", "content": "Summarize: API errors rose after the cache deploy."},
+        ],
+        "completion": [
+            {"role": "assistant", "content": "Impact: API errors increased after the cache deploy. Next: roll back the cache change, compare error rates, and preserve logs."},
+        ],
+    },
+    {
+        "prompt": [
+            {"role": "system", "content": "You write concise incident handoff notes."},
+            {"role": "user", "content": "Summarize: queue latency is high and workers are CPU-bound."},
+        ],
+        "completion": [
+            {"role": "assistant", "content": "Impact: queue latency is elevated because workers are CPU-bound. Next: scale workers, profile hot paths, and watch backlog drain time."},
+        ],
+    },
+    {
+        "prompt": [
+            {"role": "system", "content": "You write concise incident handoff notes."},
+            {"role": "user", "content": "Summarize: checkout recovered after database failover."},
+        ],
+        "completion": [
+            {"role": "assistant", "content": "Impact: checkout recovered after database failover. Next: confirm write latency, check replica health, and document the failover timeline."},
+        ],
+    },
+    {
+        "prompt": [
+            {"role": "system", "content": "You write concise incident handoff notes."},
+            {"role": "user", "content": "Summarize: no customer impact, but alert noise doubled."},
+        ],
+        "completion": [
+            {"role": "assistant", "content": "Impact: no customer impact was observed, but alert noise doubled. Next: tune alert thresholds and review noisy labels."},
+        ],
+    },
+]
+
+dataset = Dataset.from_list(records)
+split = dataset.train_test_split(test_size=0.25, seed=7)
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+peft_config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    lora_dropout=0.05,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+
+args = SFTConfig(
+    output_dir="out/qwen-incident-adapter",
+    max_steps=20,
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=4,
+    learning_rate=1e-4,
+    max_length=256,
+    packing=False,
+    completion_only_loss=True,
+    eval_strategy="steps",
+    eval_steps=10,
+    save_steps=20,
+    logging_steps=5,
+    report_to=[],
+    fp16=False,
+    bf16=False,
 )
 
 trainer = SFTTrainer(
-    model=model,
-    train_dataset=dataset,
-    tokenizer=tokenizer,
-    dataset_text_field="instruction",
-    max_seq_length=128,
-    args=training_args,
+    model=MODEL_ID,
+    args=args,
+    processing_class=tokenizer,
+    train_dataset=split["train"],
+    eval_dataset=split["test"],
+    peft_config=peft_config,
 )
 
 trainer.train()
-trainer.model.save_pretrained("./final-adapters")
+trainer.save_model("out/qwen-incident-adapter/final")
 ```
+
+If you adapt this script, make the first production change about data rather than hyperparameters. Replace the toy examples with reviewed examples, preserve the prompt-completion boundary, add a validation split that contains realistic paraphrases, and inspect tokenized samples before spending GPU time. The highest-leverage debugging command is often not a profiler; it is printing five formatted examples and confirming that the assistant answer, not the user prompt, is what contributes to the loss.
+
+## Did You Know?
+
+- **LoRA freezes the base model during adapter training**: the original paper framed low-rank adapters as a way to train a small set of added parameters while preserving the pretrained weights, which is why adapter-only artifacts are easier to review and roll back.
+- **TRL can mask assistant messages directly**: current `SFTConfig` exposes `assistant_only_loss=True`, but that behavior depends on compatible conversational data and chat-template support, so inspect the processed labels before trusting the setting.
+- **Chat templates are model-specific contracts**: Hugging Face Transformers documents `apply_chat_template` because two chat models can use the same JSON roles while requiring different serialized control tokens.
+- **Catastrophic forgetting is measurable, not mystical**: continual fine-tuning studies evaluate whether a model loses prior knowledge or reasoning performance after adapting to new tasks, so every tuned model needs regression prompts outside the target domain.
+
+## Common Mistakes
+
+| Mistake | Why it happens | How to fix |
+|---|---|---|
+| Fine-tuning for volatile facts | The team treats weights like a searchable knowledge base because the first demo answers a few memorized questions correctly. | Put changing facts in RAG or tools, and reserve fine-tuning for durable behavior, format, tone, and domain language. |
+| Training on the whole transcript | A dataset is serialized without masking, so user, system, and assistant tokens all contribute to the same loss. | Use prompt-completion or conversational masking, then inspect labels and confirm ignored tokens are marked correctly. |
+| Trusting example count over example quality | A large scrape feels statistically impressive but contains duplicates, contradictions, stale policies, and unreviewed synthetic answers. | Build a data review loop, deduplicate aggressively, keep source metadata, and prefer fewer examples with clear target behavior. |
+| Copying stale trainer snippets | Hugging Face APIs change, and older tutorials may use argument names that no longer match the pinned stack. | Pin `transformers`, `trl`, and `peft`, record versions in the run card, and check the live docs or source before launch. |
+| Hiding overfitting behind low loss | Training loss keeps improving because the model is memorizing a narrow dataset rather than learning a reusable pattern. | Watch validation loss, test paraphrases, reduce epochs, increase diversity, and keep exact-match leakage out of the eval set. |
+| Ignoring base-model regressions | The target task improves, so reviewers skip arithmetic, safety, multilingual, or general-helpfulness prompts. | Compare base and tuned outputs on a regression suite before release, and block deployment on unacceptable degradation. |
+| Saving the wrong artifact | The script merges or saves the full model when the release process expected adapter-only output. | Decide adapter-only versus merged release up front, verify `adapter_config.json` and adapter weights, and document the load path. |
+
+## Knowledge Check
+
+1. Scenario: A product manager asks you to fine-tune a model so it can answer questions from a policy handbook that changes every week. How do you **diagnose** whether prompt engineering, RAG, full fine-tuning, or PEFT is the right choice?
+
+<details>
+<summary>Answer</summary>
+
+Use RAG or a tool-backed retrieval path for the changing handbook, not fine-tuning. The missing capability is current knowledge access, and the source needs deletion, replacement, permissions, and citations. Prompt engineering can improve how the model uses retrieved passages, while PEFT or full fine-tuning would only make sense if the stable requirement were a durable response style or schema that should apply across many handbook questions.
 
 </details>
 
-### Task 3: Containerize the Training Script
-
-To effectively transition from a localized environment to scalable infrastructure, you must natively package your execution script into a Docker container image. This securely bridges the gap between your local workstation and the isolated cloud cluster.
-
-Create a `Dockerfile` in the exact same directory as your `train.py`:
-
-```dockerfile
-FROM huggingface/transformers-pytorch-gpu:latest
-WORKDIR /app
-COPY train.py .
-RUN pip install peft datasets bitsandbytes trl
-```
-
-Execute the build and seamlessly push it to your private registry:
-
-```bash
-# We use ttl.sh for an ephemeral, anonymous container registry
-export REGISTRY="ttl.sh/sft-trainer-${RANDOM}:1h"
-docker build -t $REGISTRY .
-docker push $REGISTRY
-echo "Update your job.yaml image field to: $REGISTRY"
-```
-
-### Task 4: Execute Training via Kubernetes (v1.35+)
+2. Scenario: Your SFT dataset uses `messages` with system, user, and assistant roles. The first run learns to echo user prompts before answering. How should you **design** the dataset and loss-masking plan differently?
 
 <details>
-<summary>View Solution</summary>
+<summary>Answer</summary>
 
-Draft a `job.yaml` manifest. Notice how the specification below structurally matches the template we analyzed earlier, but you must replace the default `image` field with your newly packaged `your-registry.local/sft-trainer:v1` container URL.
+Keep the conversational structure, but verify that the tokenizer's chat template serializes the roles correctly and that the loss is applied only to the assistant response when that is the intended behavior. In TRL, that means reviewing whether `assistant_only_loss` or completion-only training matches the dataset format, then printing tokenized examples and labels to confirm prompt tokens are ignored rather than trained as targets.
+
+</details>
+
+3. Scenario: A team wants full fine-tuning because "adapters are too small to matter," but they have one GPU and a narrow formatting task. How do you **configure** the LoRA versus full fine-tuning tradeoff?
+
+<details>
+<summary>Answer</summary>
+
+Start with LoRA or QLoRA because the task is narrow and the hardware budget is constrained. Full fine-tuning would require optimizer state and gradients for every trainable base parameter, while LoRA concentrates trainable state in adapter matrices. Configure a modest rank, target the relevant projection modules, use a validation set for format adherence, and escalate only if adapter capacity demonstrably underfits.
+
+</details>
+
+4. Scenario: Training loss keeps dropping, validation loss has flattened, and the tuned model repeats exact examples when prompts are paraphrased. How do you **evaluate** the overfitting risk before release?
+
+<details>
+<summary>Answer</summary>
+
+Treat this as overfitting until proven otherwise. Compare base and tuned outputs on held-out paraphrases, exact-leakage checks, and realistic prompts that were not in the training set. Shorten the run, reduce epochs or steps, improve data diversity, and keep a separate regression suite so the model cannot pass merely by memorizing the training distribution.
+
+</details>
+
+5. Scenario: After domain adaptation, the model handles internal incident summaries well but performs worse on basic general questions. How should you **evaluate** catastrophic forgetting and decide whether the adapter is safe?
+
+<details>
+<summary>Answer</summary>
+
+Evaluate the tuned model against the base model on a regression suite outside the incident-summary domain. Include general reasoning, harmless factual questions, safety refusals, and representative user tasks that must remain intact. If regressions are unacceptable, reduce adapter strength, improve mixed-domain training data, shorten training, or keep the adapter scoped to workflows where the narrowed behavior is acceptable.
+
+</details>
+
+6. Scenario: A training job runs out of memory after you double sequence length and batch size at the same time. How do you reason about trainable parameters, optimizer state, mixed precision, gradient checkpointing, and packing?
+
+<details>
+<summary>Answer</summary>
+
+Separate parameter memory from activation memory. With PEFT, trainable parameters and optimizer state may be small, but longer sequences and larger batches increase activations sharply. Reduce per-device batch size, use gradient accumulation for effective batch size, enable gradient checkpointing if wall-clock cost is acceptable, choose mixed precision that your hardware supports, and use packing only after verifying masks and boundaries.
+
+</details>
+
+7. Scenario: You need to hand a successful local SFT experiment to the platform team for repeated runs. What should the **operate** checklist include for pinned libraries, adapter checkpoints, containers, and Kubernetes?
+
+<details>
+<summary>Answer</summary>
+
+Record package versions, model ID, dataset snapshot, seed, hyperparameters, and evaluation results in a run card. Save adapter-only artifacts unless the release explicitly requires a merged model. Build a container with the same pinned training stack, mount inputs and outputs explicitly, and run it as a Kubernetes `Job` with GPU resource limits, logs, and a restart policy that matches the checkpointing strategy.
+
+</details>
+
+## Hands-On Exercise
+
+This exercise is a pipeline audit, not a race to produce a high-quality model. You will create a toy SFT script, run a short adapter training job in an environment where you have accepted the model license and installed the ML stack, then inspect the artifacts and evaluation notes. The goal is to prove that you can keep data, masking, versions, and checkpoints visible before scaling the experiment.
+
+Create an isolated environment outside this documentation repository or inside a disposable lab directory. The exact dependency stack changes quickly, so pin versions for your run and record them in a `RUN_CARD.md` file before training. The commands below use a local virtual environment and avoid relying on the KubeDojo site venv.
+
+```bash
+mkdir sft-lab
+cd sft-lab
+python -m venv .venv
+.venv/bin/python -m pip install \
+  "transformers==5.10.2" \
+  "trl==1.5.1" \
+  "peft==0.19.1" \
+  "datasets" \
+  "accelerate" \
+  "torch"
+```
+
+Copy the minimal script from the landscape section into `train_sft.py`, then add a short `RUN_CARD.md` that names the model, package versions, dataset source, masking choice, and expected artifact path. If your environment does not have enough memory for the example model, switch to another verified small model from the snapshot and record that substitution explicitly.
+
+```bash
+.venv/bin/python train_sft.py
+find out/qwen-incident-adapter -maxdepth 3 -type f | sort
+```
+
+If you later hand this to a Kubernetes cluster, keep the manifest boring. Use a container image built from the same pinned stack, mount the dataset read-only, mount an output volume for adapters, request the GPU resource explicitly, and choose retries based on checkpointing. Blindly retrying a non-checkpointed job that always fails on the same batch wastes hardware time and hides the root cause.
 
 ```yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: qlora-finetune-job
+  name: sft-incident-adapter
   namespace: ml-workloads
 spec:
   backoffLimit: 0
   template:
     spec:
-      containers:
-      - name: sft-trainer
-        image: your-registry.local/sft-trainer:v1 # Replace with the ttl.sh image URL echoed above
-        command: ["/bin/sh", "-c", "python /app/train.py && ls -lh ./final-adapters/"]
-        resources:
-          limits:
-            nvidia.com/gpu: "1"
       restartPolicy: Never
+      containers:
+        - name: trainer
+          image: registry.example.com/ml/sft-trainer:2026-06
+          command: ["/bin/sh", "-c", "python /workspace/train_sft.py && find /outputs -maxdepth 3 -type f | sort"]
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: dataset
+              mountPath: /data
+              readOnly: true
+            - name: outputs
+              mountPath: /outputs
+      volumes:
+        - name: dataset
+          persistentVolumeClaim:
+            claimName: incident-sft-dataset
+        - name: outputs
+          persistentVolumeClaim:
+            claimName: incident-sft-outputs
 ```
 
-Deploy the workload using the standard Kubernetes Job manifest. Monitor the logs interactively using `kubectl`:
+**Success Checklist**
 
-```bash
-kubectl create namespace ml-workloads --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f job.yaml
-kubectl get pods -n ml-workloads
-sleep 5
-kubectl logs -f job/qlora-finetune-job -n ml-workloads
-```
+- [ ] Your `RUN_CARD.md` lists the model ID, exact package versions, masking setting, sequence length, learning rate, steps, and dataset snapshot.
+- [ ] You inspected at least three tokenized training examples and confirmed the assistant answer is the intended loss target.
+- [ ] The output directory contains adapter-oriented artifacts rather than an accidental full-model dump, or your run card explains why you intentionally saved a merged model.
+- [ ] Your evaluation notes compare base and tuned outputs on at least three target prompts and three unrelated regression prompts.
+- [ ] If you drafted the Kubernetes handoff, the `Job` has explicit GPU limits, input/output mounts, and a retry policy that matches the checkpointing design.
 
-</details>
+## Next Module
 
-### Task 5: Verify Checkpoint Artifacts
-
-<details>
-<summary>View Solution</summary>
-
-Once the job completes successfully, inspect the bottom of the pod logs to verify that the PEFT library successfully generated adapter-only artifacts instead of wildly dumping the full, massive model weights. Our updated job command automatically lists this directory for you.
-
-```bash
-kubectl logs job/qlora-finetune-job -n ml-workloads | tail -n 10
-```
-
-**Success Checklist**:
-
-- [ ] You see `adapter_config.json`
-- [ ] You see `adapter_model.safetensors`
-- [ ] The safetensors file size is < 50MB.
-
-</details>
-
-### Task 6: Hyperparameter Matrix Comparison
-
-<details>
-<summary>View Solution</summary>
-
-Compare different rank configurations to evaluate performance impacts systematically across architectural scales:
-
-| Config | Rank (r) | Alpha | Target Modules | Expected Effect |
-|--------|----------|-------|----------------|-----------------|
-| A | 4 | 8 | q_proj, v_proj | Fast, limited capacity |
-| B | 16 | 32 | q_proj, k_proj, v_proj, o_proj | Balanced |
-| C | 64 | 128 | All linear layers | Slow, high capacity |
-
-Modify `r` and `lora_alpha` directly in your script to mathematically test Config B, re-containerize the workload, and intensely observe the `trainable_parameters` printout during the ensuing execution run.
-
-</details>
-
-## Quiz: Test Your Understanding
-
-**Question 1:** Scenario: You are the lead architect for a hospital's patient portal. The stakeholders ask: "When should you use fine-tuning instead of RAG?" How do you justify the architectural choice based on their specific needs?
-
-<details>
-<summary>Answer</summary>
-
-Use fine-tuning when you need to change the model's **behavior** or **style**, not its knowledge:
-
-- Consistent output format
-- Domain-specific language/jargon
-- New task types
-- Speed optimization (no retrieval latency)
-- Cost optimization at high volume
-
-Use RAG when you need to add **knowledge** that changes frequently or is very large.
-
-</details>
-
-**Question 2:** Scenario: Your CFO is auditing cloud spend and aggressively questions your use of LoRA adapters instead of retraining from scratch. They ask: "Why does LoRA work with such low rank (r=8 or r=16)?" How do you mathematically justify this approach?
-
-<details>
-<summary>Answer</summary>
-
-The weight updates during fine-tuning lie in a low-dimensional subspace. The model doesn't need to learn entirely new representations — it just needs to **adapt** existing ones. This adaptation is intrinsically low-rank because:
-
-1. The base model already has rich representations
-2. Fine-tuning tasks share structure with pretraining
-3. The manifold of "useful adaptations" is low-dimensional
-
-Empirically, r=8-16 captures 99%+ of the fine-tuning benefit for most tasks.
-
-</details>
-
-**Question 3:** Scenario: You are provisioning hardware for a new data science team. They complain that their 7B model won't fit on their assigned 8GB consumer GPUs. A 7B model has parameters stored in FP16. You apply QLoRA with 4-bit quantization. How much memory is realistically saved, and can they proceed?
-
-<details>
-<summary>Answer</summary>
-
-**Original (FP16)**: 7B × 2 bytes = 14 GB
-
-**QLoRA (4-bit)**: 7B × 0.5 bytes = 3.5 GB (for base model)
-Plus LoRA adapters in FP16: ~50-100 MB
-
-**Total**: ~3.6 GB vs 14 GB
-
-**Savings**: 14 - 3.6 = **10.4 GB (~75% reduction)**
-
-This is what makes QLoRA trainable on consumer GPUs!
-
-</details>
-
-**Question 4:** Scenario: After deploying an updated legal compliance bot, you notice your fine-tuned model achieves incredibly low training loss, but it outputs training examples verbatim during inference. What architectural phenomenon is occurring and how do you fix it?
-
-<details>
-<summary>Answer</summary>
-
-This is **overfitting** — the model memorized training data instead of learning the underlying patterns.
-
-Fixes:
-
-1. **More diverse training data**: Add variations, paraphrases
-2. **Fewer epochs**: Stop earlier (use validation loss)
-3. **Higher dropout**: Increase `lora_dropout` to 0.15-0.2
-4. **Weight decay**: Add `weight_decay=0.01` to training args
-5. **Early stopping**: Stop when eval loss starts increasing
-6. **Regularization**: Consider adding KL divergence from base model
-
-</details>
-
-**Question 5:** Scenario: You are fine-tuning a base Llama model for a specialized customer service chatbot. Two weeks after deployment, engineers note that the model keeps forgetting general knowledge (like basic math). What went wrong during the training process?
-
-<details>
-<summary>Answer</summary>
-
-This is **catastrophic forgetting** — the model lost general capabilities while learning the new task.
-
-Solutions:
-
-1. **Use LoRA instead of full fine-tuning**: Keeps base weights frozen
-2. **Mix in general data**: Add 10-20% general instruction data to your training set
-3. **Lower learning rate**: Reduces how much weights change
-4. **Fewer epochs**: Less time to forget
-5. **Larger model**: Bigger models are more resistant to forgetting
-
-LoRA naturally prevents most forgetting since only the small adapter weights are modified.
-
-</details>
-
-**Question 6:** Scenario: You are building an automated quality assurance pipeline for a manufacturing plant and want to fine-tune an OpenAI model on photos of defective parts. You have 60,000 images, some up to 15MB in size. Based on OpenAI's official vision fine-tuning constraints for GPT-4o-2024-08-06, what specific modifications must you make to your dataset before uploading?
-
-<details>
-<summary>Answer</summary>
-
-You must reduce your dataset to a maximum of 50,000 image examples, and compress or resize the images so that no single image exceeds the strict 10 MB limit. Additionally, you must ensure the images are in JPEG, PNG, or WEBP format (RGB or RGBA mode) and are accessible via public URLs, while ensuring no assistant-role outputs contain image messages.
-
-</details>
-
-**Question 7:** Scenario: Your enterprise architecture team wants to train a model to output highly structured internal YAML configurations. They plan to use Direct Preference Optimization (DPO) because it's newer, but they only have a database of "correct" YAML files generated by senior engineers. Why will DPO fail for this specific dataset, and what method should they use instead?
-
-<details>
-<summary>Answer</summary>
-
-DPO fundamentally requires contrastive pairs (a chosen/preferred response and a rejected response) for every prompt to teach the model what *not* to do. Since the team only has a database of "correct" examples, they lack the rejected examples needed for DPO. They should use Supervised Fine-Tuning (SFT) instead, which only requires the positive input-output pairs.
-
-</details>
-
-**Question 8:** Scenario: You are tasked with implementing AdaLoRA for a highly specialized domain adaptation task. After a successful training run, your CI/CD pipeline fails because the artifact upload step times out attempting to push a 15GB file to the model registry. Based on how PEFT functions, what structural configuration error likely occurred during your pipeline setup?
-
-<details>
-<summary>Answer</summary>
-
-The base model was likely unfrozen during training. When configured correctly, PEFT keeps the base model weights frozen and only trains the low-rank adapters, resulting in checkpoints that are typically under 100MB (containing only `adapter_model.safetensors` and `adapter_config.json`). Producing a 15GB artifact implies the script performed a full fine-tuning or saved the entire merged model instead of just the adapter artifacts.
-
-</details>
-
-**Question 9:** Scenario: Your enterprise architecture team is setting up a centralized OpenAI project for fine-tuning across 10 different business units. They ask you to calculate the absolute maximum file storage capacity for training data to provision internal chargebacks. Based on the current API documentation, why must you hedge your capacity planning instead of providing a single definitive terabyte limit?
-
-<details>
-<summary>Answer</summary>
-
-OpenAI's official documentation currently contains conflicting information regarding file storage limits. One part of the API reference states there is an organization-wide limit of 1 TB, while another variant explicitly claims there is a 2.5 TB limit per project with absolutely no organization-wide cap. You should explicitly hedge your capacity planning and monitor usage closely until this discrepancy is definitively resolved.
-
-</details>
-
-**Question 10:** Scenario: You are tasked with implementing AdaLoRA for a highly specialized domain adaptation task using Hugging Face Transformers. During the initialization of the `SFTTrainer`, your pipeline immediately throws an `ImportError`. A junior developer suggests the base model is incompatible. Why is the error actually a framework versioning issue, and what artifacts confirm the correct library integration upon success?
-
-<details>
-<summary>Answer</summary>
-
-The integration of non-prompt-learning methods like LoRA, IA3, and AdaLoRA in Hugging Face rigidly requires `peft >= 0.18.0`. You must upgrade your PEFT library dependency rather than change the model. Once training succeeds, the trainer will only update the adapter weights (since the base model is frozen) and the checkpoint directory will contain adapter-only artifacts, specifically `adapter_model.safetensors` and `adapter_config.json`.
-
-</details>
-
-## Summary
-
-Modifying the internal intelligence parameters of a massive language model is arguably the most powerful mechanism currently available to machine learning engineers. Parameter-Efficient Fine-Tuning frameworks, specifically the robust combination of QLoRA paired directly with the Hugging Face PEFT architecture, have fundamentally reshaped exactly how modern enterprise organizations aggressively deploy localized AI capabilities. By elegantly bridging highly advanced mathematical matrix decomposition theories with accessible, containerized Kubernetes operational paradigms, organizations can securely build incredibly robust, highly custom generative models utilizing merely a fraction of the historical financial overhead previously demanded by foundational pre-training operations.
-
-Throughout this comprehensive module, we explored the deeply intricate mechanics separating full parameter backpropagation from low-rank adapter updates. We demystified the stringent, highly specific platform constraints required by modern proprietary endpoints, explored nuanced optimization scheduling techniques like cosine decay coupled with warmup mechanisms, and established resilient data preparation pipelines capable of generating impeccably structured datasets. Finally, we elevated our architectural operations from isolated scripts to scalable Kubernetes v1.35 deployments utilizing fault-tolerant containerized execution environments.
-
-## Next Steps
-
-Move on to **Module 1.2: Advanced Alignment Architectures** where you will deeply explore and master:
-
-- How Direct Preference Optimization dynamically works under the hood
-- Core mathematical scheduling architectures for reinforcement learning frameworks
-- Applying alignment models directly and efficiently for massive compliance rulesets
-- End-to-end alignment pipeline construction and orchestration from scratch
+Continue with [Module 1.2: LoRA & Parameter-Efficient Fine-tuning](../module-1.2-lora-parameter-efficient-fine-tuning/) to study the adapter math, rank choices, initialization options, and PEFT implementation details that this module only introduced at the decision-framework level.
 
 ## Sources
 
-- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — Primary source for 4-bit fine-tuning, NF4, double quantization, paged optimizers, and realistic single-GPU fine-tuning claims under constrained VRAM.
-- [Transformers bitsandbytes Quantization Guide](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — Official source for practical 8-bit and 4-bit quantization, QLoRA-related setup, device mapping, nested quantization, and hardware compatibility constraints relevant to local tuning.
-- [huggingface.co: peft](https://huggingface.co/docs/transformers/main/peft) — Current Transformers PEFT docs explicitly list the supported methods and the minimum PEFT version.
-- [huggingface.co: peft](https://huggingface.co/docs/transformers/v5.4.0/peft) — The Transformers PEFT docs explicitly describe adapter-only checkpoints and name these files.
-- [platform.openai.com: fine tuning](https://platform.openai.com/docs/guides/fine-tuning) — OpenAI's current fine-tuning guide enumerates these four methods.
-- [platform.openai.com: supervised fine tuning](https://platform.openai.com/docs/guides/supervised-fine-tuning) — The supervised fine-tuning guide gives these exact formatting and minimum-example requirements.
-- [platform.openai.com: vision fine tuning](https://platform.openai.com/docs/guides/vision-fine-tuning) — The vision fine-tuning guide enumerates these exact limits, formats, and moderation exclusions.
-- [Kubernetes Schedule GPUs](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Official Kubernetes documentation for GPU device plugins, GPU resource requests/limits, node labeling, and scheduling behavior relevant to running training workloads on Kubernetes clusters.
-- [kubernetes.io: job](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — The Kubernetes Job docs describe backoff behavior and note that `restartPolicy: Never` means the kubelet does not restart the failed container in that Pod.
-- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Primary paper for frozen-base low-rank adapters and the trainable-parameter reduction claims used throughout the module.
-- [TRL SFTTrainer](https://huggingface.co/docs/trl/sft_trainer) — Best practical reference for modern supervised fine-tuning workflows, PEFT integration, and trainer behavior in Hugging Face stacks.
-- [en.wikipedia.org: Algorithmic bias](https://en.wikipedia.org/wiki/Algorithmic_bias#Gender_bias) — In 2014, Amazon initiated a secretive engineering project to build an artificial intelligence recruiting tool.
+- [AI Incident Database Report 603](https://incidentdatabase.ai/reports/603/) — Catalogues reporting on Amazon's experimental recruiting tool and the gender-bias behavior used as the module's opening cautionary example.
+- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Primary paper for frozen-base low-rank adapters and the parameter-efficient adaptation framing used throughout the module.
+- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — Primary source for 4-bit adapter fine-tuning concepts, NF4, double quantization, and paged optimizer motivation.
+- [TRL SFTTrainer Documentation](https://huggingface.co/docs/trl/en/sft_trainer) — Official source for the current `SFTTrainer`, `SFTConfig`, dataset formats, masking options, packing, and PEFT integration.
+- [Transformers Chat Templates](https://huggingface.co/docs/transformers/en/chat_templating) — Official source for model-specific chat serialization and `apply_chat_template` behavior.
+- [PEFT LoRA Developer Guide](https://huggingface.co/docs/peft/en/developer_guides/lora) — Official implementation guide for LoRA configuration, target modules, adapter behavior, and PEFT-specific tradeoffs.
+- [Transformers bitsandbytes Quantization Guide](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — Official source for 8-bit and 4-bit quantization concepts relevant to QLoRA-style memory planning.
+- [Transformers Trainer and TrainingArguments](https://huggingface.co/docs/transformers/main_classes/trainer) — Official reference for Trainer infrastructure, evaluation strategy, checkpointing, mixed precision, and distributed training arguments.
+- [Qwen/Qwen2.5-0.5B-Instruct Model Card](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) — Verifies the small public model ID used in the toy SFT script.
+- [Qwen/Qwen3-0.6B Model Card](https://huggingface.co/Qwen/Qwen3-0.6B) — Verifies a current small Qwen model ID used in the examples.
+- [HuggingFaceTB/SmolLM2-135M-Instruct Model Card](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) — Verifies another small model repository suitable for learners comparing example IDs.
+- [An Empirical Study of Catastrophic Forgetting in Large Language Models During Continual Fine-tuning](https://arxiv.org/abs/2308.08747) — Supports the discussion of forgetting and the need for regression evaluation after adaptation.
+- [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155) — Canonical source for instruction tuning as part of the broader alignment pipeline, including supervised fine-tuning before preference optimization.
+- [OpenAI Model Optimization Guide](https://developers.openai.com/api/docs/guides/model-optimization) — Official managed-model customization guide used as a reminder that provider capabilities and terminology change over time.
+- [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Official reference for using `Job` resources, restart policy, and backoff behavior for bounded training workloads.
+- [Kubernetes GPU Scheduling](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Official reference for requesting GPU resources in Kubernetes workloads.
