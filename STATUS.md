@@ -96,7 +96,7 @@
 **Session 122 — infra workstream DONE; follow-ups:**
 
 - [ ] **Annotate EVERY ground-check** (telemetry #1860): `python3 -m scripts.agent_telemetry annotate <task_id> --activity <author|review|fix> --outcome <clean|partial|fabrication|overturned|rejected_fp> [--module K --note ...]` so `miss%` grows meaningful. View at `/agents` or `/api/telemetry/agents`. Wire this reminder into the curriculum-orchestrator skill.
-- [ ] **`grok login`** (owner) — only parked roster item; then run a 3-module grok-build code-review trial (xAI cross-family lane, web-grounded).
+- [x] ~~**`grok login`**~~ — DONE (s122): login works; **grok-build shipped+merged PR #1864** (local_api DRY refactor, cross-family clean, ruff+140 tests green). grok-build = VALIDATED xAI code review/refactor lane (web-grounded, disciplined). Use it.
 - [ ] Telemetry phase 3 (optional): task_class drill-down + time filter on the `/agents` page.
 - [x] ~~Tool access for all lanes~~ — deepseek/grok browser web (#1857), codex review web (#1857), agy `--add-dir` repo access (#1858), agy headless web grounding verified. opus re-enabled (#1859).
 
