@@ -5,496 +5,246 @@ sidebar:
   order: 702
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 5-6 hours
 **Prerequisites**: Phase 10 complete (DevOps & MLOps)
 
-## The 3 AM Page That Broke the Generative AI Launch
+## Learning Outcomes
 
-**Seattle, Washington. November 27, 2025. 3:17 AM.**
+By the end of this module, you will be able to:
 
-Sarah Martinez was dreaming about her upcoming vacation when her phone started buzzing. Three alerts, then ten, then forty-seven in the span of two minutes. Her company's highly anticipated Generative AI shopping assistant had just gone live for Black Friday, and the system was completely buckling.
+- **Explain** what managed Cloud AI services abstract away and which capacity dimensions remain your responsibility as a consumer.
+- **Compare** regional, geographic cross-region, and global routing models across major cloud AI platforms using a vendor-agnostic taxonomy.
+- **Design** quota-aware client architectures that prevent 429 retry cascades through backpressure, circuit breakers, and asymmetric scaling.
+- **Analyze** token-metered cost structures—including input versus output tokens, caching, and batch versus real-time pricing—to balance over- and under-provisioning.
+- **Evaluate** any managed AI offering against a structured requirements framework using the Cloud AI Services Rosetta Stone as a cross-vendor reference.
 
-Half-asleep, she logged into their observability platform to find a wall of red. User-facing latency for the chat interface had spiked from 800ms to 12 seconds. Error rates had jumped from 0.1% to 42%. The underlying Kubernetes clusters (running v1.35) were perfectly healthy. CPU was low. Memory was stable. The problem wasn't their infrastructure—it was their consumption of managed Cloud AI services.
+## Why This Module Matters
 
-Four hours later, after escalating to their cloud provider's enterprise support, they found the cascading failure. The team had relied on a global endpoint for their foundation models without realizing the regional rate limits. A sudden spike in complex user queries exhausted their on-demand token quota. Retries amplified the traffic, triggering API throttling, which caused upstream services to queue requests until memory exhausted. The total revenue impact? $2.3 million in abandoned shopping carts. The fix? Purchasing provisioned throughput and implementing cross-region inference profiles—a change that took minutes to apply but hours to diagnose.
+**Hypothetical scenario:** Your team launches a customer-facing chat assistant backed entirely by a managed foundation-model API. Kubernetes clusters are healthy—CPU and memory look fine—but user-facing latency climbs from under a second to ten seconds or more. Error rates spike. Support tickets flood in. The root cause is not a pod crash or a misconfigured Deployment; it is exhaustion of on-demand token quotas on a regional endpoint, amplified by aggressive client retries that trigger cascading HTTP 429 responses. The fix involves purchasing provisioned throughput, routing through a cross-region inference profile, and redesigning retry policy—but only after hours of confusion because traditional infrastructure dashboards showed green.
 
-Sarah realized that while managed AI services (like Amazon Bedrock or Azure Foundry) abstract away the GPUs, they do *not* abstract away the need for rigorous capacity planning and proactive operations. What if an AIOps system had seen the token consumption velocity building before the 429 Too Many Requests errors fired? What if they had predicted the throughput requirements instead of reacting to failures? This module bridges these two worlds: mastering the landscape of Cloud AI Services, and applying AIOps to keep them running flawlessly.
+This pattern is increasingly common because managed Cloud AI services shift the hard problem. You no longer provision GPU nodes, patch CUDA drivers, or schedule model weights across a cluster. Instead, you provision *capacity contracts*—quotas, throughput commitments, endpoint geography, and routing profiles—that behave like invisible infrastructure. Teams that treat a managed foundation-model endpoint as "just another REST call" discover that abstraction has boundaries. The GPUs are gone from your runbook, but capacity engineering remains.
 
-## What You'll Be Able to Do
-
-By the end of this module, you will:
-- **Compare** regional and global deployment architectures across Amazon Bedrock, OCI, Azure Foundry, and Google Vertex AI.
-- **Design** capacity plans for provisioned throughput and dedicated AI clusters to avoid rate-limiting cascades.
-- **Implement** predictive autoscaling and time-series forecasting for LLM token consumption.
-- **Diagnose** complex API latency and anomaly events using statistical and machine learning AIOps methods.
-- **Evaluate** the asymmetric costs of over-provisioning versus under-provisioning in the context of expensive managed AI APIs.
+This module teaches the durable spine of consuming hosted foundation-model services: deployment models, quota mechanics, token economics, and a cross-vendor mental model you can apply to any new entrant. For the broader discipline of AI-powered operations—anomaly detection algorithms, causal RCA graphs, automated runbooks—see [AIOps](../module-1.2-aiops/), which owns that operational depth. Here we focus on what you must understand *before* you can operate managed AI APIs reliably at production scale.
 
 ---
 
-## The Landscape of Managed Cloud AI Services
+## Why "Serverless AI" Still Needs Capacity Engineering
 
-Before we can monitor and scale our AI usage, we must understand the strict boundaries and deployment models of the top-tier Cloud AI platforms. Because you don't manage the underlying hardware, your "infrastructure" becomes your configuration of endpoints, regions, and throughput commitments.
+The phrase "serverless AI" captures a genuine shift in operational burden. When you invoke a foundation model through a managed API, the provider owns model loading, GPU scheduling, weight updates, and hardware failure recovery. Your application sends a request; the service returns tokens. From a developer's perspective, this feels like infinite scale—until it does not. Every managed AI platform enforces limits: requests per minute, tokens per minute, concurrent connections, and sometimes separate burst versus sustained quotas. These limits exist because inference is compute-intensive and providers must protect multi-tenant fairness.
 
-### Amazon Bedrock: Provisioned Throughput and Cross-Region Routing
+Understanding the abstraction boundary is the first engineering skill this module builds. Above the boundary, you manage application logic, prompt design, and user experience. Below the boundary—inside the provider's data center—the service manages hardware. *At* the boundary, you negotiate capacity through configuration choices that are easy to overlook during a prototype phase but become critical at launch. Choosing on-demand versus provisioned throughput, picking a regional endpoint versus a cross-region inference profile, and deciding whether data may leave a geographic boundary are all capacity decisions even though none of them involve SSH access to a GPU node.
 
-Amazon Bedrock presents foundation models for text, image, and embedding workloads, actively supporting inference, evaluation, knowledge-base creation, and agent use cases. As of our latest evaluations, Bedrock's model catalog includes Anthropic Claude 4.x entries (including Claude Opus 4.6 and Claude Sonnet 4.6), DeepSeek 3.x family entries, and Meta Llama 4 models.
+The mental model that helps most teams is to treat a managed AI endpoint like a load-balanced microservice with opaque autoscaling rules. You cannot see queue depth directly, but you observe it through latency percentiles, time-to-first-token, and throttle response codes. You cannot scale GPU count yourself, but you can purchase dedicated throughput, switch routing profiles, or shard traffic across multiple endpoints. Capacity engineering for Cloud AI services is therefore a discipline of *observing proxy metrics* and *adjusting contractual knobs* rather than resizing instance types.
 
-When deploying globally, you must understand Bedrock's regional strategy. Bedrock publishes per-model region availability with separate columns for single-region support and cross-region inference profile support. If you rely on a single region, a localized spike can throttle your application. Cross-region inference profiles dynamically route requests across multiple AWS regions to absorb spikes, but they introduce variable latency that your upstream microservices must be configured to handle gracefully.
+Self-hosted inference—covered in later modules in this track—reintroduces GPU visibility but trades away managed elasticity. Many production architectures hybridize: managed APIs for fast-moving foundation models and self-hosted endpoints for stable, high-volume, or privacy-sensitive workloads. The Rosetta Stone's self-hosted column exists to remind you that "Cloud AI Services" is a consumption choice, not a permanent architectural destiny. Teams often start managed, measure unit economics at scale, and selectively repatriate workloads when the math and operational maturity justify running their own inference stack.
 
-For production workloads, relying on on-demand pricing is dangerous. Bedrock model customization uses *provisioned throughput*. Once purchased, custom model inference uses dedicated model IDs and ARNs, guaranteeing your capacity regardless of noisy neighbors.
+Multi-tenant capacity adds another layer. On-demand endpoints share provider infrastructure with other customers. During provider-wide demand spikes—or during your own traffic surges—you may encounter noisy-neighbor throttling even when your application's Kubernetes layer looks idle. Dedicated or provisioned capacity isolates you from some of this contention at the cost of committed spend. The tradeoff between flexibility and guaranteed headroom is central to every production architecture decision in this space.
 
-### OCI Generative AI: Enterprise Agents and Dedicated Clusters
+Finally, capacity engineering extends to the clients that call these APIs. An inference gateway, a batch enrichment pipeline, and an interactive chat UI have different latency and burst profiles. If all three share one endpoint with one quota, a batch job can starve interactive users without any single component appearing "broken" in isolation. Partitioning endpoints, quotas, and retry budgets by workload class is as important as partitioning Kubernetes namespaces—perhaps more so, because the throttle happens outside your cluster.
 
-Oracle Cloud Infrastructure (OCI) Generative AI is positioned as a fully managed service for chat, embeddings, and rerank, notably featuring OpenAI-compatible API support. OCI is documented as available across commercial (OC1), government (OC4), and sovereign (OC19) region families.
+Platform engineers should document the abstraction boundary explicitly in architecture diagrams. Draw a line between "our cluster" and "provider inference plane," listing every knob your team controls: endpoint ID, routing profile, API key scope, retry policy, max output tokens, and provisioned commitment IDs. Anything not on your side of the line is a vendor ticket, a purchase order, or a configuration change in the cloud console—not a `kubectl scale` command. That single diagram prevents more launch-day incidents than any amount of autoscaling tuning.
 
-Model availability in OCI Generative AI is strictly region-dependent and tracked with on-demand, dedicated, and (in some cases) interconnect-only availability markers. While OCI allows the use of pretrained hosted models via console, CLI, and API, enterprise scale requires custom model import, fine-tuning, and hosting on **dedicated AI clusters**. These clusters provide isolated compute resources that protect your workloads from multi-tenant throttling.
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
 
-OCI enterprise AI features have rapidly expanded to support complex agentic workflows, including an Responses-compatible API plus tool hooks (including MCP), memory APIs, vector stores, and NL2SQL capabilities.
+| Capability | Amazon Bedrock | Google Vertex AI | Azure AI Foundry | OCI Generative AI |
+|---|---|---|---|---|
+| On-demand inference | Per-model regional quotas (RPM/TPM) | Per-model regional quotas | Standard deployment type | On-demand hosted models |
+| Provisioned / dedicated throughput | Provisioned Throughput (Model Units) | Provisioned Throughput (where supported) | Provisioned Throughput units | Dedicated AI clusters |
+| Cross-region routing | Geographic and global inference profiles | Regional endpoints; limited global endpoint | Global, data-zone, and regional deployments | Region-specific model availability |
+| OpenAI-compatible API | Converse API (native); some third-party compat layers | OpenAI-compatible endpoints (select models) | Azure OpenAI-compatible endpoints | Documented OpenAI-compatible API |
+| Fine-tuning / customization | Custom models require Provisioned Throughput | Regional endpoints required for tuning | Model deployment per project | Custom model import and fine-tuning |
+| Agent / tool protocols | Agents, knowledge bases, tool use | Vertex AI Agent Builder ecosystem | Agent frameworks via Foundry | Responses API, tool hooks, MCP support documented |
 
-### Azure Foundry & Google Vertex AI: The Global Endpoint Dilemma
-
-Microsoft Azure Foundry's "sold-directly" models page states that these include all Azure OpenAI models plus selected third-party providers, billed directly through your Azure subscription backed by a Microsoft SLA. The catalog currently includes the advanced GPT-5.4 series (e.g., gpt-5.4, gpt-5.4-mini, gpt-5.4-nano, gpt-5.4-pro). Azure documents both standard and provisioned deployment styles, including global routing options to distribute traffic automatically.
-
-Conversely, Google Cloud's Vertex AI takes a different approach. Vertex AI does *not* offer a global location for standard operations; users must choose a supported region for most dataset and model tasks. For Generative AI specifically, a global endpoint exists at `locations/global`, but it comes with severe caveats: the global endpoint does not guarantee data residency and omits critical capabilities like model tuning and specific batch prediction paths. Despite this, the Vertex generative model endpoint tables boast massive models, including Gemini 2.5 and 3.1 preview model IDs.
-
-> **Stop and think**: If your compliance team mandates strict data residency within the European Union, how does this requirement change your architectural choice between Azure Foundry's global routing and Vertex AI's regional endpoints?
-
-### 4 Facts You Should Know
-
-1. **Deprecation Horizons:** Azure's classic Foundry Agent Service docs were officially marked as deprecated as of 2027-03-31, migrating users to newer hub-based project limitations and strict GPT-5 registration requirements.
-2. **Agent Maturation:** OCI Generative AI Enterprise AI Agents reached General Availability on 2026-03-31, signaling enterprise readiness for complex multi-step reasoning.
-3. **Security Enhancements:** API keys for OCI Generative AI models were added on 2026-01-21, and OCI Generative AI added AI guardrails for on-demand mode shortly after on 2026-02-09.
-4. **Historical Efficiency:** Google's Borg system (predecessor to Kubernetes) has used ML for resource prediction since 2013, achieving just 23% resource slack compared to 46-60% slack for manually-managed jobs.
+*This table is illustrative, not a leaderboard or endorsement. Capabilities vary by model and region; confirm against current vendor documentation before designing production architecture.*
 
 ---
 
-## From Firefighting to Prevention: AIOps for AI APIs
+## Deployment and Routing Models
 
-### Why Traditional Operations Can't Scale
+Managed AI platforms expose several durable routing patterns. Learning the taxonomy—not memorizing product marketing names—lets you map any new vendor announcement into a familiar slot within minutes.
 
-Think of traditional cloud operations like a fire department that can only respond after a building is engulfed. Even when consuming managed Cloud AI APIs, reacting to rate limits is too slow. Every incident follows a painful timeline:
+**Single-region endpoints** bind inference to one cloud region. Requests stay local, latency is predictable, and data residency is straightforward to reason about because both storage and compute remain in the chosen region. The tradeoff is a hard ceiling: when that region's quota is exhausted, every client receives throttling responses until demand subsides or you reconfigure routing. Single-region endpoints suit workloads with strict compliance boundaries, predictable traffic, and tolerance for manual failover during regional incidents.
 
-```text
-REACTIVE OPS TIMELINE
-=====================
+**Geographic cross-region inference profiles** route requests across multiple regions *within* a geography—such as US, EU, or APAC—while keeping data processing inside that geography's boundary. Providers typically expose these as unified model identifiers that abstract away the underlying regional ARNs. Throughput can exceed single-region quotas because traffic spreads across the profile's member regions. Latency becomes less predictable because a request may land in any member region, and some capabilities (notably provisioned throughput on some platforms) may not attach to inference profiles at all. Geographic profiles suit production workloads that need higher burst capacity without abandoning data-residency requirements.
 
-00:00  Problem begins (CPU spike, memory leak)
-00:15  Threshold exceeded
-00:16  Alert fires
-00:20  Engineer acknowledges
-00:35  Investigation begins
-00:50  Root cause identified
-01:10  Fix deployed
-01:15  Service recovered
+**Global routing endpoints** extend cross-region logic across commercial regions worldwide, prioritizing available capacity and sometimes offering cost advantages over strictly geographic routing. The tradeoff is explicit: global endpoints may process data outside your preferred jurisdiction and often omit features tied to regional data stores—custom tuning, certain batch pipelines, or residency-sensitive logging. Global routing belongs in workloads where maximum throughput and cost efficiency outweigh strict residency, not in regulated environments where audit trails must prove geographic containment.
 
-Total downtime: 1+ hour
-User impact: Significant
-```
+**Dedicated versus multi-tenant capacity** forms an orthogonal axis. Multi-tenant on-demand endpoints charge per token with no upfront commitment; you share capacity with other customers and accept throttle risk during peaks. Dedicated or provisioned throughput reserves model capacity measured in provider-specific units—Model Units, provisioned tokens per minute, or isolated AI clusters—delivering predictable performance at committed cost. Custom fine-tuned models on several platforms *require* provisioned capacity because the provider must host your weights on reserved hardware.
 
-By the time a human receives an alert that Bedrock is returning `429 Throttled` errors, the damage is done. Your LLM-powered application is already failing customer requests, and retries are only making the queue depth worse.
+Understanding when to move from on-demand to provisioned capacity is one of the highest-value decisions in this module. Stay on on-demand while traffic is unpredictable, quotas are far from exhaustion, and the cost of occasional throttling is acceptable—typical for internal tools and early prototypes. Move to provisioned throughput when you have measured sustained utilization above roughly seventy percent of on-demand limits for multiple weeks, when marketing or compliance events create known spikes, or when SLA commitments to customers make any 429 unacceptable. The transition is usually a configuration and billing change, not an application rewrite, provided you already route through a gateway that can swap model identifiers.
 
-### The Proactive Alternative
+Data residency deserves explicit architectural treatment because it intersects with every routing choice. A compliance policy that mandates EU-only processing rules out global endpoints entirely and may rule out geographic profiles whose member regions extend beyond the EU. Conversely, a latency-sensitive US consumer application might accept global routing to survive Black-Friday-scale bursts. Document the residency decision alongside the routing decision in your architecture records; auditors ask about data location, not about which model identifier string you passed to the SDK.
 
-AIOps (Artificial Intelligence for IT Operations) flips the script. Instead of reacting, it predicts.
+Cross-region failover at the application layer remains your responsibility even when the provider offers inference profiles. Profiles handle *within-vendor* routing; they do not replace a multi-vendor fallback strategy when an entire cloud has an outage. Mature architectures maintain secondary endpoints—often in a different vendor or a self-hosted stack covered in later modules—and switch through gateway-level circuit breakers when primary endpoints degrade.
+
+Latency SLOs should be defined differently for managed AI than for traditional microservices. Time-to-first-token and tokens-per-second during generation often dominate user-perceived latency more than network round-trip to the gateway. Capacity planning therefore tracks not only RPM and TPM but also output length distributions—a shift toward longer answers increases TPM consumption even when request rate stays flat. Instrument both request rate and average output tokens per request as first-class metrics in your gateway.
 
 ```text
-PROACTIVE AI OPS TIMELINE
-=========================
+ROUTING DECISION TREE (DURABLE TAXONOMY)
+=========================================
 
--02:00  AI detects anomalous pattern
--01:45  Prediction: "CPU will exceed threshold in ~2 hours"
--01:30  Automated scaling triggered
--01:00  Additional capacity online
-00:00   Would-be incident prevented
-
-Total downtime: 0
-User impact: None
+Start: Do compliance rules require data in a specific geography?
+  |
+  +-- YES --> Use regional or geographic-cross-region endpoints ONLY
+  |           (verify profile member regions match policy)
+  |
+  +-- NO  --> Is predictable latency more important than burst headroom?
+              |
+              +-- YES --> Single-region + provisioned throughput
+              |
+              +-- NO  --> Geographic or global inference profile
+                          + monitor p99 latency variance
 ```
 
-What does an AIOps platform actually do? It observes, engages, and acts.
+When you deploy an inference gateway in Kubernetes—as many teams do to centralize authentication, logging, and routing—the gateway becomes the enforcement point for these decisions. It selects endpoint identifiers, attaches quota-aware retry policies, and exposes metrics your autoscaler consumes. The gateway does not eliminate capacity planning; it concentrates it in one place where platform engineers can reason about traffic holistically.
 
-```mermaid
-flowchart TD
-    Platform[AIOps Platform] --> Observe
-    Platform --> Engage
-    Platform --> Act
+Consider how three common workload classes map to routing choices. A low-latency customer chatbot benefits from geographic cross-region profiles within the compliance boundary, strict output token caps, and provisioned headroom during known peak hours. An internal document summarization batch job tolerates minutes of latency and should use batch APIs where available, with scheduling that pauses when interactive utilization crosses warning thresholds. A developer sandbox can remain on cheap on-demand endpoints with hard daily spend caps, isolated from production quota pools so experiments never starve paying users. These are not product features—they are architectural patterns you implement through endpoint partitioning and gateway policy.
 
-    subgraph Observe
-    O1[Collect]
-    O2[Ingest]
-    O3[Store]
-    end
-
-    subgraph Engage
-    E1[Correlate]
-    E2[Analyze]
-    E3[Prioritize]
-    end
-
-    subgraph Act
-    A1[Automate]
-    A2[Remediate]
-    A3[Optimize]
-    end
-```
-
-Without AIOps, operators suffer from **Alert Fatigue**. A sudden spike in API latency might trigger 500 alerts across different microservices. AIOps uses ML correlation to group those into a single, actionable root cause.
-
-```text
-ALERT NOISE REDUCTION
-=====================
-
-Before AIOps:
-  500 alerts/day → 480 false positives → Alert fatigue!
-
-After AIOps:
-  500 alerts/day → ML correlation → 20 actionable incidents
-
-Techniques:
-  • Alert deduplication
-  • Correlation (related alerts grouped)
-  • Suppression (known patterns)
-  • Dynamic thresholds
-```
-
-With AIOps, Root Cause Analysis happens at machine speed:
-
-```text
-RCA WITH AI
-===========
-
-Incident: API latency spike
-
-Traditional approach:
-  1. Check API servers
-  2. Check database
-  3. Check network
-  4. Check dependencies... (hours later)
-  5. Found: Redis memory pressure
-
-AI approach:
-  1. Correlate all metrics at incident time
-  2. Identify: Redis memory spike precedes API latency
-  3. Causal analysis: Redis evictions → cache misses → DB load → API latency
-  4. Root cause: Redis memory (confidence: 94%)
-
-Time: Minutes vs Hours
-```
-
-To build this capability, you need a proactive architecture that ingests everything from Kubernetes custom metrics to CloudWatch data from your Bedrock endpoints.
-
-```mermaid
-flowchart TD
-    subgraph Data Collection
-    P[Prometheus] & CW[CloudWatch] & CM[Custom Metrics] & L[Logs]
-    end
-
-    subgraph Data Processing
-    TSDB[Time Series DB] & FE[Feature Engineering] & AGG[Aggregation]
-    end
-
-    subgraph AI/ML Engine
-    AD[Anomaly Detection] & FM[Forecasting Models] & CP[Capacity Planning] & IP[Incident Prediction]
-    end
-
-    subgraph Action Engine
-    AS[Auto-scaling] & AL[Alerting] & RB[Runbooks] & REC[Recommendations]
-    end
-
-    Data Collection --> Data Processing
-    Data Processing --> AI/ML Engine
-    AI/ML Engine --> Action Engine
-```
-
-The market has exploded with tools to implement this architecture:
-
-```text
-AIOPS TOOLS (2024)
-==================
-
-Full Platforms:
-  • Datadog AI       - Watchdog for anomaly detection
-  • Dynatrace Davis  - AI-powered root cause analysis
-  • Splunk ITSI      - ML-powered IT service intelligence
-  • New Relic AI     - Applied Intelligence
-  • Moogsoft         - AI incident management
-
-Open Source:
-  • Prometheus + ML  - Custom anomaly detection
-  • Grafana ML       - Machine learning for observability
-  • OpenTelemetry    - Observability data collection
-  • Skywalking       - APM with ML capabilities
-
-Cloud Native:
-  • AWS DevOps Guru  - ML-powered insights
-  • Azure Monitor    - Smart detection
-  • GCP Operations   - Anomaly detection
-```
+Failover testing belongs in the same category as regional DR drills. Quarterly, deliberately misconfigure a staging endpoint to return sustained 429 responses and verify that your gateway circuit breaker routes to the secondary profile within the expected time bound. Measure whether fallback endpoints preserve data residency and whether degraded responses meet product requirements when the primary model tier is unavailable.
 
 ---
 
-## Anomaly Detection: Finding Trouble in Token Streams
+## Quotas, Rate Limits, and the 429 Cascade
 
-### Understanding What Makes Infrastructure Metrics Unique
+HTTP 429 Too Many Requests is the defining failure mode of managed AI consumption. Unlike a 500-series error that suggests provider instability, a 429 often means *your architecture is working correctly from the provider's perspective*—you simply exceeded a contracted or default limit. Treating 429 as a transient glitch and retrying immediately is one of the most expensive mistakes teams make.
 
-Token consumption and API latency are highly seasonal. A spike at 9 AM on Monday is normal; a spike at 3 AM on Sunday is an anomaly. The challenge is decomposing a raw metric signal:
+Quotas on managed AI platforms typically decompose into requests per minute (RPM) and tokens per minute (TPM), sometimes with separate input and output token buckets. Burst allowances may permit short spikes above sustained limits, but sustained traffic above the sustained threshold triggers throttling even when burst capacity remains. Understanding which bucket your workload exhausts first matters for remediation: a chat application with long outputs may hit output TPM while RPM looks healthy, whereas a high-frequency classification service may exhaust RPM with modest token counts.
 
-```text
-METRIC DECOMPOSITION
-====================
+The 429 cascade follows a predictable mechanical sequence. An initial traffic spike—or a sudden increase in output length because users ask harder questions—consumes quota headroom. Some requests receive 429 responses. Naive client libraries retry with exponential backoff, but many application frameworks retry aggressively by default, *multiplying* effective request rate. Each retry consumes additional quota—or queue slots—without delivering user value. Latency rises because requests wait in client-side queues. Upstream services time out waiting for LLM responses, triggering their own retries. Within minutes, a modest quota overrun becomes a full service degradation that no amount of Kubernetes pod scaling can fix, because the bottleneck lives outside the cluster.
 
-Raw Signal = Trend + Seasonality + Residual + Anomaly
+Preventing cascades requires defense in depth at the client and gateway layers. **Backpressure** means slowing or rejecting new work when quota utilization crosses a threshold—typically 70–80% of sustained limits—rather than waiting for hard 429s. **Retry budgets** cap the total retry attempts per time window across all clients sharing an endpoint. **Jittered exponential backoff** spreads retry timing so thundering herds do not synchronize. **Circuit breakers** stop forwarding traffic to an endpoint that returns sustained 429s, failing fast to a secondary route or a degraded response mode rather than amplifying load.
 
-         ┌─────────────────────────────────────────┐
-Raw:     │  ∿∿∿∿∿╱∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿  │
-         └─────────────────────────────────────────┘
-                    ↓ Decompose
-         ┌─────────────────────────────────────────┐
-Trend:   │  ────────────╱─────────────────────────  │  (gradual growth)
-         └─────────────────────────────────────────┘
-         ┌─────────────────────────────────────────┐
-Season:  │  ∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿  │  (daily pattern)
-         └─────────────────────────────────────────┘
-         ┌─────────────────────────────────────────┐
-Residual:│  ─────────────────────────────────────── │  (noise)
-         └─────────────────────────────────────────┘
-         ┌─────────────────────────────────────────┐
-Anomaly: │  ────────────────█─────────────────────  │  (true anomaly!)
-         └─────────────────────────────────────────┘
-```
+Design backpressure with explicit user experience tradeoffs. A chat application might show "high demand, please wait" with estimated queue position when utilization crosses the warning threshold, rather than accepting new sessions that will timeout sixty seconds later. An API might return HTTP 503 with a `Retry-After` header sourced from your quota monitor rather than forwarding to the provider and burning remaining headroom. These product decisions require collaboration between platform and application teams; the gateway implements the policy, but product defines acceptable degradation modes.
 
-For clarity in modern visualization, this decomposition pipeline can also be represented structurally:
+Asymmetric scaling complements quota awareness on the gateway itself. When predictive metrics—token consumption velocity, queue depth proxies, or forecasted RPM—indicate an approaching limit, scale gateway replicas up aggressively to parallelize and shed load through caching or request shaping. Scale down conservatively after demand subsides, because quota limits reset on provider schedules that may not align with your traffic decay. The HorizontalPodAutoscaler `behavior` block in Kubernetes expresses this pattern natively by separating `scaleUp` and `scaleDown` policies.
 
-```mermaid
-flowchart TD
-    Raw[Raw Infrastructure Signal] --> Decompose[Decomposition Engine]
-    Decompose --> T[Trend Component: Gradual Growth]
-    Decompose --> S[Seasonality Component: Daily Patterns]
-    Decompose --> R[Residual Component: Background Noise]
-    R --> Check{Threshold Analysis}
-    Check -->|Exceeds Limits| Anomaly[True Anomaly Detected]
-```
+Observability for quota management differs from traditional CPU monitoring. Export provider-side metrics where available—CloudWatch for Bedrock, Cloud Monitoring for Vertex, Azure Monitor for Foundry, OCI Monitoring for Generative AI—and correlate them with application-side counters for tokens sent, tokens received, retry counts, and 429 rates. A dashboard that shows green Kubernetes health alongside climbing 429 rates is the canonical early-warning signal for managed AI incidents.
 
-### Statistical Methods
-
-The simplest approaches use statistics. **Z-Score Detection** compares values to the mean, but it struggles with seasonality:
-
-```python
-def zscore_anomaly(value, mean, std, threshold=3.0):
-    """
-    Simple but effective for normally distributed data.
-    Assumes: Data follows Gaussian distribution
-    """
-    z = abs(value - mean) / std
-    return z > threshold
-
-# Problem: Doesn't handle seasonality or trends
-```
-
-A **Modified Z-Score** using Median Absolute Deviation (MAD) is far more robust against outliers corrupting your baseline. Because it uses the median rather than the mean, a sudden extreme spike will not drag the entire baseline up, allowing the algorithm to correctly identify the spike as an anomaly rather than establishing a new normal:
-
-```python
-def mad_anomaly(value, median, mad, threshold=3.5):
-    """
-    More robust to outliers than standard Z-score.
-    MAD = Median Absolute Deviation
-    """
-    modified_z = 0.6745 * (value - median) / mad
-    return abs(modified_z) > threshold
-```
-
-### Machine Learning Methods
-
-For multi-dimensional metrics (e.g., token count *and* response length *and* latency), we need ML. **Isolation Forests** work on the principle that anomalies are rare and distinct, making them easy to "isolate" with random splits in the data.
-
-```mermaid
-graph TD
-    A[Root Data] --> B[Split 1]
-    B --> C[Split 2]
-    C --> D[Split 3]
-    D --> E((Normal Point<br>Many Splits Needed))
-
-    A --> F[Split 1]
-    F --> G((Anomaly<br>One Split Isolates!))
-```
-
-Anomalies have short isolation paths.
-
-Autoencoders take a completely different approach. They learn to compress and reconstruct normal data. When fed an anomaly, the reconstruction fails dramatically.
+For deep treatment of time-series forecasting, anomaly detection algorithms, and automated incident correlation applied to these metrics, see [AIOps](../module-1.2-aiops/). This module establishes *what to measure and why*; Module 1.2 teaches *how to build the ML pipelines* that forecast token consumption and detect pre-throttle anomalies.
 
 ```text
-AUTOENCODER ANOMALY DETECTION
-=============================
+429 CASCADE TIMELINE (SIMPLIFIED)
+=================================
 
-Normal data:
-  Input: [0.5, 0.6, 0.4, 0.5]
-  Reconstructed: [0.51, 0.59, 0.41, 0.49]
-  Error: 0.02  Low = Normal
+T+0    Traffic spike consumes 90% of TPM quota
+T+30s  First 429 responses; clients begin retries
+T+60s  Effective request rate doubles due to retries
+T+90s  Quota fully exhausted; most requests fail or queue
+T+5m   Upstream timeouts propagate; user-visible outage
+T+30m  Quota window resets OR ops purchases provisioned capacity
 
-Anomalous data:
-  Input: [0.5, 0.6, 9.9, 0.5]  ← Anomaly!
-  Reconstructed: [0.52, 0.58, 0.45, 0.51]
-  Error: 8.95  High = Anomaly!
+Prevention: backpressure at 70%, retry budget, circuit breaker to fallback
 ```
 
-### Time Series Specific Methods
+Token consumption forecasting—predicting when you will hit limits before 429s fire—is the specific AIOps intersection this module endorses. The forecast inputs include historical TPM by hour-of-day, campaign calendars, rolling output-token averages, and deployment events that change prompt templates. The output is a capacity action: purchase provisioned throughput, enable a cross-region profile, or throttle non-critical batch workloads. General-purpose anomaly detection on CPU metrics will not catch this failure mode; quota-aware forecasting will.
 
-Infrastructure metrics are sequential. **ARIMA** explicitly models temporal dependencies, capturing autoregression and moving averages to predict what the next point *should* be:
-
-```python
-# Fit ARIMA model to capture normal patterns
-# Anomalies = points where residuals exceed threshold
-
-from statsmodels.tsa.arima.model import ARIMA
-
-model = ARIMA(data, order=(1, 1, 1))
-fitted = model.fit()
-residuals = fitted.resid
-
-# Points where |residual| > 3 * std(residuals) are anomalies
-threshold = 3 * residuals.std()
-anomalies = abs(residuals) > threshold
-```
-
-Alternatively, Facebook's **Prophet** was built specifically to handle complex daily, weekly, and yearly seasonality, making it exceptionally powerful for long-term capacity planning:
-
-```python
-from prophet import Prophet
-
-model = Prophet(interval_width=0.99)
-model.fit(df)
-forecast = model.predict(df)
-
-# Anomalies fall outside prediction interval
-anomalies = (df['y'] < forecast['yhat_lower']) | \
-            (df['y'] > forecast['yhat_upper'])
-```
+Client-side architecture deserves equal attention. SDK defaults often retry on any error, including 429, without respecting `Retry-After` headers when present. Wrap provider SDKs in a gateway layer that centralizes retry policy, enforces per-tenant budgets, and converts hard throttles into queue delays with user-visible status rather than opaque timeouts. Implement token counting before dispatch—estimate input tokens from prompt length and cap requested max output—so you can reject oversize requests locally without consuming provider quota. These patterns cost engineering time upfront but prevent the exponential failure mode that makes managed AI incidents so confusing to debug.
 
 ---
 
-## Predictive Autoscaling & Capacity Planning
+## Cost Model of Token-Metered Services
 
-If your anomaly detection works, you can predict load *before* it hits.
+Managed AI economics invert the familiar cloud compute model. Instead of paying for vCPU-hours whether or not you use them, you pay per token processed—with separate meters often applied to input and output tokens. Output tokens frequently cost more per unit because generation consumes more compute than prompt ingestion. A prompt that elicits a verbose answer therefore costs disproportionately more than the same prompt engineered for concision, making prompt design a direct cost lever.
 
-### Why Reactive Scaling Loses
+**Input versus output asymmetry** shapes architecture. Retrieval-augmented generation pipelines that inject large context windows consume input tokens on every request even when the answer is short. Caching strategies—provider-side prompt caching where available, or application-side semantic caches—reduce repeated input token charges for stable context. Teams that ignore input token volume while optimizing output length often discover that their bill scales with document corpus size rather than user count.
 
-If you wait for token queues to fill up, your users suffer.
+Agentic workflows compound both sides of the meter. Each tool call may inject additional context into the prompt—tool results, memory retrieval, MCP resource payloads—inflating input tokens on every reasoning step. Multi-step agents therefore consume quota faster than single-shot completion APIs for equivalent user-facing tasks. When evaluating agent platforms in the Rosetta Stone, budget capacity for the full loop, not just the first model call. Capacity planning for agents is an emerging discipline; start with measured traces of real agent sessions rather than extrapolating from simple chat benchmarks.
 
-```text
-REACTIVE SCALING PROBLEM
-========================
+**Context and prompt caching** (where platforms support it) trades memory residency for discounted re-processing of identical prompt prefixes. The durable concept is straightforward: if thousands of requests share a static system prompt or a fixed knowledge-base preamble, caching that prefix avoids re-billing full input tokens on each call. Cache hit rates become a financial KPI alongside latency. Verify current caching availability and pricing in the landscape snapshot; implementations differ by vendor and model.
 
-Time     Load    Replicas    Status
-─────────────────────────────────────
-09:00    100     2           OK
-09:15    200     2           Overloaded!
-09:16    200     2           Alert fires
-09:18    200     3           Scaling...
-09:20    200     4           Still catching up
-09:22    200     5           Finally stable
-09:25    150     5           Over-provisioned
-09:30    100     5           Wasting money
+**Batch versus real-time pricing** introduces a second axis. Batch inference APIs accept jobs with higher latency tolerance—minutes to hours—in exchange for lower per-token cost. Real-time endpoints prioritize responsiveness at standard or premium rates. Architectures that can defer non-interactive work—nightly summarization, bulk classification, embedding backfills—should route through batch channels when available, reserving real-time quota for user-facing paths.
 
-Problem: Always chasing the load, never ahead of it
-```
+**Over-provisioning versus under-provisioning** carries asymmetric business risk in token-metered services, analogous to but sharper than traditional cloud sizing. Under-provisioning on-demand quota produces 429 errors and lost user sessions—often far costlier than the tokens you failed to purchase. Over-provisioning dedicated throughput produces idle committed spend—annoying on a finance review but rarely catastrophic in a single incident. Production policies therefore bias toward early provisioned capacity for launch events and conservative scale-down afterward.
 
-Predictive scaling forecasts the future and scales in advance.
+Abstract cost reasoning helps before you look up any price table. Define a **cost unit** as one million input tokens and one million output tokens at on-demand rates, then express workloads as multiples of that unit. A support chat averaging 2,000 input and 500 output tokens per session at 10,000 sessions per day consumes predictable unit multiples that finance can budget. Ratios matter more than absolute dollars: if output tokens cost three times input tokens, shortening average response length by twenty percent may dominate savings compared to negotiating a ten percent input discount.
 
-```mermaid
-flowchart TD
-    HM[Historical Metrics] --> ML[ML Model<br>Time Series]
-    ML --> PL[Predicted Load]
-    PL --> SD[Scaler Decision]
-    SD --> SU[Scale Up Now<br>Proactive]
-    SD --> SDL[Scale Down Later<br>Conservative]
-```
+Committed-use discounts and provisioned throughput contracts introduce time horizon decisions. Hourly provisioned units suit spiky but predictable campaigns; monthly commitments suit steady production baselines. Breaking commitments early may forfeit savings, so align purchase duration with traffic forecasts validated against historical token metrics—not against engineering optimism at launch time.
 
-To forecast the future, you can use simple methods like **Exponential Smoothing**:
+Walk through a qualitative cost comparison without attaching dollar figures to volatile price tables. Imagine a support assistant handling ten thousand sessions daily, each averaging two thousand input tokens and five hundred output tokens. If output tokens carry triple the unit cost of input tokens in your provider's meter, output represents a larger share of spend than raw token counts suggest—shortening responses through prompt engineering may dominate savings compared to chasing marginal input discounts. If thirty percent of requests repeat an identical system prompt, prompt caching—where the platform supports it—can remove a substantial fraction of input charges for cache hits. If half the workload is overnight batch summarization deferrable by six hours, batch pricing tiers may cut that half's cost independently of interactive rates. These ratio-based thought experiments survive pricing changes; look up current unit prices in the landscape snapshot when you need numbers for a budget proposal.
 
-```python
-def exponential_smoothing(data, alpha=0.3):
-    """
-    alpha: smoothing factor (0-1)
-    Higher alpha = more weight on recent observations
-    """
-    result = [data[0]]
-    for i in range(1, len(data)):
-        result.append(alpha * data[i] + (1 - alpha) * result[-1])
-    return result
-```
+---
 
-Or you can use **Holt-Winters** to factor in trend and seasonality:
+## Cloud AI Services Rosetta Stone
 
-```text
-HOLT-WINTERS COMPONENTS
-=======================
+The Cloud track teaches infrastructure through Rosetta Stone tables that map durable capabilities across AWS, GCP, and Azure. Managed AI services benefit from the same pattern because vendor marketing names change while underlying capabilities persist. The table below maps **durable capabilities** (rows) to **current vendor offerings** (columns). Use it to translate a requirement document written for one cloud into equivalent configurations on another, or to slot a new entrant into your evaluation framework.
 
-Level (L):      Base value, updated each period
-Trend (T):      Rate of change
-Seasonality (S): Repeating pattern
+| Durable capability | Amazon Bedrock | Google Vertex AI | Azure AI Foundry | OCI Generative AI | Self-hosted (see Module 1.3+) |
+|---|---|---|---|---|---|
+| On-demand foundation-model API | InvokeModel / Converse | Generative AI API | Foundry model deployments | Generative AI API | vLLM / SGLang endpoints |
+| Provisioned / dedicated throughput | Provisioned Throughput (MUs) | Provisioned Throughput | Provisioned Throughput units | Dedicated AI clusters | GPU node pools + model replicas |
+| Geographic cross-region routing | Inference profiles (US/EU/APAC) | Limited; check regional tables | Data-zone and global deployments | Region-bound model lists | Multi-cluster + DNS failover |
+| Global routing (max throughput) | Global inference profiles | `locations/global` (feature gaps) | Global deployment type | Not equivalent; regional | Anycast / multi-region gateway |
+| Data residency guarantees | Regional and geographic profiles | Regional endpoints; global caveats | Regional and data-zone options | OC1/OC4/OC19 realms | Full control; you operate residency |
+| OpenAI-compatible API surface | Via Converse; ecosystem compat | OpenAI-compatible endpoints | Azure OpenAI API shape | Documented compat API | OpenAI API compat layers |
+| Fine-tuning / custom weights | Custom models + provisioned | Regional tuning endpoints | Foundry fine-tuning | Import + fine-tune on dedicated | Full training stack ownership |
+| Embeddings / rerank APIs | Titan Embeddings et al. | Vertex embedding models | Foundry embedding deployments | Embedding and rerank endpoints | Sentence-transformers / custom |
+| Knowledge / RAG integration | Knowledge Bases for Bedrock | Vertex AI Search / RAG Engine | Foundry + Azure AI Search | Vector stores documented | Own vector DB + pipeline |
+| Agent / tool / MCP support | Agents, action groups | Agent Builder | Agent frameworks | Responses API, MCP hooks | LangChain / custom MCP servers |
+| Guardrails / safety filters | Guardrails for Bedrock | Safety filters / Model Garden policies | Content filters | AI guardrails (on-demand) | Prompt rules + own moderation |
+| Batch inference | Batch inference jobs | Batch prediction endpoints | Batch deployments | Check current batch APIs | Offline job queues |
+| Audit / enterprise logging | CloudTrail, CloudWatch | Cloud Audit Logs | Azure Monitor / Diagnostic | OCI Audit / Logging | Your observability stack |
 
-Forecast = (Level + k * Trend) * Seasonality[k]
+Reading the Rosetta Stone effectively means focusing on rows, not columns. When a product manager asks for "global routing with EU residency," translate that into two row requirements—cross-region routing *and* data residency—and discover immediately that global endpoints and strict EU residency conflict on several platforms. When a security reviewer asks for "OpenAI-compatible API with private networking," locate the compat API row and verify whether private endpoints exist for that vendor's deployment type.
 
-Where k = periods ahead to forecast
-```
+No column is universally superior. Each vendor optimizes for different enterprise anchors: existing cloud commitments, compliance certifications, model catalog breadth, or OpenAI API compatibility. Present them as peers with capability tradeoffs, not as a ranked leaderboard that will stale within weeks.
 
-For massive scale, Deep Learning architectures like **LSTMs** (Long Short-Term Memory networks) capture non-linear patterns over time:
+When onboarding a new platform engineer, walk the Rosetta row-by-row with your organization's actual ADRs rather than column-by-column through vendor marketing. Ask which rows are hard requirements—EU residency, custom model hosting, MCP tool support—and mark columns that fail any hard row as disqualified before comparing soft preferences like catalog breadth. This inversion prevents the common anti-pattern of choosing a cloud because "we already use it for compute" without verifying that the specific model and routing capabilities you need exist in your target region.
 
-```python
-# Sequence-to-sequence prediction
-# Input: Last 24 hours of metrics (hourly)
-# Output: Next 4 hours prediction
+---
 
-model = Sequential([
-    LSTM(64, input_shape=(24, n_features), return_sequences=True),
-    LSTM(32),
-    Dense(16, activation='relu'),
-    Dense(4)  # Predict next 4 hours
-])
-```
+## Evaluating Any Managed AI Service
 
-### The Scaling Decision: Asymmetric Costs
+New managed AI offerings launch frequently. A durable evaluation framework protects you from re-architecting on every press release. The following checklist applies to any vendor—hyperscaler, sovereign cloud, or specialized inference provider—and maps directly to Rosetta Stone rows.
 
-If you are purchasing OCI Dedicated AI Clusters or Bedrock Provisioned Throughput, you must understand that the cost of being wrong is asymmetric. Wasting $100 on an unused node is annoying. Losing 10,000 user sessions to timeout errors is disastrous.
+**Step 1: Classify workload requirements.** Document latency class (interactive, near-real-time, batch), data sensitivity (public, internal, regulated), expected token volume ranges, and model customization needs (base model only, fine-tuned, or fully custom). These inputs determine which routing and capacity rows in the Rosetta Stone matter for your decision. Be explicit about peak multipliers—Black Friday traffic is not average traffic times two; measure historical peaks or accept that you are guessing.
 
-```python
-def calculate_desired_replicas(
-    predicted_load: float,
-    current_replicas: int,
-    target_utilization: float = 0.7,
-    capacity_per_replica: float = 100,
-    min_replicas: int = 2,
-    max_replicas: int = 100
-) -> int:
-    """
-    Calculate optimal replica count based on predicted load.
+**Step 2: Verify residency and compliance.** Match regulatory obligations to endpoint geography options. Ask whether prompts, outputs, and logs remain in jurisdiction, whether global routing can override regional selection, and whether fine-tuning data storage locations differ from inference locations. If the vendor cannot answer with documentation citations, treat residency as unverified. Involve legal and security stakeholders before production—not after a regulator asks where prompts were processed.
 
-    Key insight: Scale for PREDICTED load, not current load.
-    """
-    # Required capacity with headroom
-    required_capacity = predicted_load / target_utilization
+**Step 3: Map quota and throughput mechanics.** Obtain default and increasable RPM/TPM limits for your target models and regions. Identify whether provisioned throughput is mandatory for your use case—custom models, guaranteed SLAs, or high sustained load usually require it. Model the 429 cascade risk for your peak traffic multiplier by running load tests that include realistic retry behavior, not idealized clients that fail fast.
 
-    # Calculate replicas needed
-    desired = math.ceil(required_capacity / capacity_per_replica)
+**Step 4: Model total cost of ownership.** Compute token costs using input/output split, caching discounts, and batch eligibility. Add provisioned commitment costs, data egress, logging, and gateway infrastructure. Compare ratio scenarios (±30% traffic) rather than single-point estimates. Present finance with a range, not a single monthly number, because token workloads are inherently variable.
 
-    # Apply constraints
-    desired = max(min_replicas, min(max_replicas, desired))
+**Step 5: Assess integration surface.** Evaluate SDK quality, OpenAI compatibility if migrating existing clients, authentication model (API keys, IAM, workload identity), and private connectivity options (VPC endpoints, Private Link, service gateways). Integration cost often dominates engineering time compared to per-token price differences. A two-percent unit price advantage loses to a six-week migration if SDK gaps force custom HTTP clients.
 
-    # Scale up aggressively, scale down conservatively
-    if desired > current_replicas:
-        return desired  # Scale up immediately
-    elif desired < current_replicas:
-        # Only scale down if consistently lower for N periods
-        return current_replicas  # Hold for now
+**Step 6: Test failure behavior.** In a staging environment, deliberately exhaust quotas and observe 429 response bodies, retry-after headers, and recovery time after quota reset. Failover to secondary endpoints and measure circuit-breaker effectiveness. Providers differ sharply in error payload helpfulness—some return actionable error codes; others return opaque messages that complicate automated remediation.
 
-    return current_replicas
-```
+**Step 7: Plan operational ownership.** Assign owners for quota monitoring, provisioned capacity renewals, model version upgrades, and deprecation migrations. Managed services shift hardware toil but create contract toil—renewals, limit increase tickets, and model ID changes still land on your platform team.
 
-To implement this practically in a modern cluster, you would utilize the Kubernetes Custom Metrics API. Here is how you configure a Kubernetes v1.35 HorizontalPodAutoscaler to consume a predictive metric and execute the asymmetric scaling behavior defined above:
+**Authentication and network path.** Beyond model capabilities, evaluate how workloads authenticate—API keys, cloud IAM roles, workload identity federation—and whether private connectivity (VPC endpoints, Private Link, service gateways) is required so inference traffic never traverses the public internet. These requirements rarely appear in model catalog comparisons but dominate enterprise security reviews. A model that meets every Rosetta row for capability still fails evaluation if it cannot be reached from your network zone without violating policy.
+
+**Observability contract.** Before signing a production commitment, confirm which metrics the vendor exports natively—TPM/RPM utilization, throttle counts, latency percentiles, error codes—and which you must derive from application-side instrumentation. Gaps in provider metrics force you to build token counters in your gateway, which is feasible but should be planned effort, not a launch-week surprise.
+
+Document evaluations in an architecture decision record (ADR) that references Rosetta Stone row IDs rather than vendor slogans. When a vendor ships a new feature, ask which row it affects; if none, the feature may be marketing noise relative to your requirements.
+
+Revisit ADRs on a quarterly cadence even when nothing is broken. Managed AI platforms change model availability, deprecate endpoints, and adjust default quotas without fanfare comparable to a major Kubernetes version release. A lightweight quarterly review—compare your ADR assumptions against the current landscape snapshot, re-run staging quota drills, and confirm provisioned commitments still match traffic growth—catches drift before it becomes an incident. Treat this review like certificate expiry checks: boring, scheduled, and invaluable.
+
+---
+
+## Operating Managed AI Services
+
+Operating managed AI APIs combines the capacity concepts above with day-two practices: monitoring, incident response, and continuous capacity adjustment. This section covers operations *specific to Cloud AI consumption*—not the general AIOps curriculum.
+
+**Monitoring stack.** At minimum, instrument four metric groups: provider quota utilization (RPM/TPM percentages where exposed), application token counters (input/output per service), error taxonomy (429 versus 5xx versus timeout), and latency (time-to-first-token and total generation time). Correlate provider metrics with gateway metrics to distinguish external throttling from internal bottlenecks. Dashboards should visualize quota headroom on the same page as Kubernetes pod counts so on-call engineers never misdiagnose a quota incident as a cluster problem.
+
+Build alert thresholds on quota utilization, not just error rates. By the time 429 rates trigger a page, users have already suffered. Warning alerts at seventy percent sustained utilization give time to enable cross-region routing or pause batch workloads before hard throttling begins. Pair these alerts with runbook links that distinguish provider-side actions from cluster-side actions so responders do not waste minutes scaling Deployments.
+
+**Runbook priorities for 429 incidents.** First, stop retry amplification—disable or tighten client retry policies at the gateway. Second, shed non-critical traffic (pause batch jobs, reduce max output tokens temporarily). Third, activate secondary routing (cross-region profile, alternate model tier, fallback vendor). Fourth, initiate provisioned throughput purchase or quota increase request with provider support. Fifth, post-incident, reconcile forecast models if you maintain them per [AIOps](../module-1.2-aiops/) guidance.
+
+During the incident, preserve evidence for the postmortem: snapshot provider quota graphs, export gateway retry counters, and record which routing profile was active. Quota incidents often look like mysterious latency in aggregate dashboards; the evidence bundle proves whether the root cause was exhaustion, retry storms, or an unrelated application regression. This discipline also builds the historical dataset that forecasting pipelines in Module 1.2 require.
+
+**Capacity planning cadence.** Review token consumption weekly during growth phases, monthly at steady state. Before marketing events or product launches, pre-purchase provisioned capacity or pre-approve quota increase tickets. Align planning horizons: hours-ahead for autoscaling gateway replicas, days-ahead for quota increases, weeks-ahead for provisioned commitments, quarters-ahead for contract negotiations.
+
+**Model lifecycle management.** Providers deprecate model IDs, release new versions, and change default endpoints. Maintain an inventory mapping application configuration to model identifiers and routing profiles. Test new model versions in shadow traffic before cutover. Deprecation notices require the same rigor as any upstream API breaking change.
+
+**Security operations.** Rotate API keys and workload credentials on schedule; prefer short-lived tokens and IAM roles over long-lived secrets. Scope keys to minimum models and operations required. Audit prompt logging policies—full prompt capture aids debugging but creates data-governance surface area.
+
+**Incident communication.** When a quota incident occurs, status pages should describe user impact and remediation in business terms—"elevated response latency for AI features"—while internal runbooks track TPM utilization, active routing profile, and provisioned capacity headroom. Correlating external user reports with internal provider metrics quickly distinguishes quota throttling from application bugs, preventing wasted hours debugging Kubernetes when the fix is a capacity contract change.
+
+Predictive autoscaling for an inference gateway—scaling Kubernetes replicas based on forecasted token demand rather than CPU—closes the loop between quota awareness and infrastructure action. The HPA example below demonstrates asymmetric behavior: aggressive scale-up when a custom metric predicts token pressure, conservative scale-down to avoid thrashing.
 
 ```yaml
-# Example Kubernetes v1.35+ HorizontalPodAutoscaler
-# Demonstrating asymmetric predictive scaling
+# Kubernetes v1.35+ HorizontalPodAutoscaler for an AI inference gateway
+# Scales on a custom metric exported by your gateway (predicted token load)
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -534,448 +284,189 @@ spec:
         periodSeconds: 300
 ```
 
-### Feature Engineering: The Secret Sauce
+The gateway deployment must export `predicted_token_usage_15m` through the custom metrics API—typically via Prometheus adapter or a metrics pipeline fed by token consumption forecasts. For methodology on building those forecasts (ARIMA, Prophet, isolation-based anomaly detection on token streams), defer to [AIOps](../module-1.2-aiops/).
 
-None of these ML models work well on raw metrics alone. **Feature Engineering** transforms raw data into signals that ML algorithms can easily digest.
+---
 
-```python
-def engineer_features(metrics_df, window_sizes=[5, 15, 60]):
-    """
-    Create features for infrastructure ML models.
+## Did You Know?
 
-    Key insight: Raw metrics alone are not enough.
-    ML models need derived features that capture patterns.
-    """
-    features = {}
-
-    for metric in metrics_df.columns:
-        for window in window_sizes:
-            # Rolling statistics
-            features[f'{metric}_mean_{window}m'] = \
-                metrics_df[metric].rolling(window).mean()
-            features[f'{metric}_std_{window}m'] = \
-                metrics_df[metric].rolling(window).std()
-            features[f'{metric}_min_{window}m'] = \
-                metrics_df[metric].rolling(window).min()
-            features[f'{metric}_max_{window}m'] = \
-                metrics_df[metric].rolling(window).max()
-
-            # Rate of change
-            features[f'{metric}_delta_{window}m'] = \
-                metrics_df[metric].diff(window)
-
-            # Percentiles
-            features[f'{metric}_p95_{window}m'] = \
-                metrics_df[metric].rolling(window).quantile(0.95)
-
-    # Time-based features (for seasonality)
-    features['hour_of_day'] = metrics_df.index.hour
-    features['day_of_week'] = metrics_df.index.dayofweek
-    features['is_weekend'] = features['day_of_week'] >= 5
-    features['is_business_hours'] = \
-        (features['hour_of_day'] >= 9) & (features['hour_of_day'] <= 17)
-
-    return pd.DataFrame(features)
-```
-
-> **Pause and predict**: If you only fed raw CPU utilization into a model, without extracting the `hour_of_day` or `is_weekend` features, what kind of false positives would your model generate?
-
-### Strategic Capacity Planning
-
-Finally, AIOps isn't just for tomorrow; it's for next year. Capacity planning answers specific business questions across different horizons:
-
-```text
-CAPACITY PLANNING QUESTIONS
-===========================
-
-Short-term (days-weeks):
-  "Will we have enough capacity for Black Friday?"
-  "Can we handle the marketing campaign traffic?"
-
-Medium-term (months):
-  "When will we need to add more database nodes?"
-  "How much should we budget for Q3 compute?"
-
-Long-term (years):
-  "When will we outgrow our current architecture?"
-  "What's our 3-year infrastructure cost projection?"
-```
-
-To answer these, you apply mathematical growth models to your long-term metrics:
-
-1. **Linear Growth:** Adds a constant amount.
-   ```text
-   Capacity = Initial + (Growth_Rate × Time)
-   Example: 100 users + (10 users/day × 30 days) = 400 users
-   ```
-2. **Exponential Growth:** Growth compounds.
-   ```text
-   Capacity = Initial × (1 + Growth_Rate)^Time
-   Example: 100 users × 1.10^30 = 1,745 users (10% daily growth)
-   ```
-3. **Logistic Growth:** The S-Curve. Growth accelerates, then hits market saturation and slows down.
-   ```text
-   Capacity = Carrying_Capacity / (1 + e^(-k(t-t0)))
-   More realistic: Growth slows as market saturates
-   ```
-
-You pair these growth models with strict utilization analysis to decide *when* to buy more provisioned throughput.
-
-```mermaid
-graph LR
-    U[Utilization Analysis] --> O[Over-provisioned < 40%]
-    O --> O1[Wasting money]
-    O --> O2[Right-size instances]
-    O --> O3[Consider spot/preemptible]
-
-    U --> OP[Optimal 40-70%]
-    OP --> OP1[Headroom for spikes]
-    OP --> OP2[Cost-efficient]
-    OP --> OP3[Maintain current sizing]
-
-    U --> AR[At Risk 70-85%]
-    AR --> AR1[Plan scaling soon]
-    AR --> AR2[Monitor closely]
-    AR --> AR3[Prepare capacity]
-
-    U --> C[Critical > 85%]
-    C --> C1[Scale immediately]
-    C --> C2[Risk of outages]
-    C --> C3[Emergency action needed]
-```
+- **Cross-region inference profiles and provisioned throughput are often separate product paths.** On Amazon Bedrock, inference profiles increase on-demand throughput via geographic or global routing, but provisioned throughput requires invoking dedicated model ARNs—a design constraint that catches teams expecting one knob to solve both burst and guaranteed capacity.
+- **Global endpoints frequently trade features for reach.** Google Cloud documents that Vertex AI's global endpoint does not guarantee data residency and omits capabilities such as model tuning available on regional endpoints—making "global" a throughput tool, not a compliance shortcut.
+- **Azure Foundry deployment types encode residency and routing policy.** Microsoft documents distinct global, data-zone, and regional deployment types with different data processing boundaries—choosing a deployment type is equivalent to choosing a compliance and latency class.
+- **Open standards for agent tooling outlast individual vendor agent products.** The Model Context Protocol (MCP) provides a cross-vendor interface for tools and context, while AGENTS.md conventions document agent behavior across harnesses—both change far slower than any single cloud agent SKU.
 
 ---
 
 ## Common Mistakes
 
-| Mistake | Why it Happens | How to Fix It |
-| :--- | :--- | :--- |
-| **Using Global Endpoints for Tuning** | Teams assume Vertex AI's `locations/global` supports everything. | Read the docs: `locations/global` omits capabilities like batch tuning and provides no data residency guarantees. Choose a specific region. |
-| **Trusting Z-Scores for Traffic Spikes** | Z-scores assume a Gaussian distribution, but web traffic is highly seasonal. | Use Seasonal Decomposition (like Prophet or ARIMA) to subtract the daily/weekly pattern before looking for anomalies. |
-| **Symmetric Autoscaling** | Engineers configure scale-down rules to be just as fast as scale-up rules. | Implement asymmetric scaling: scale up aggressively on predicted load, but scale down slowly (wait for N periods) to avoid thrashing. |
-| **Ignoring API Key Security** | Teams hardcode credentials when connecting to OCI Generative AI. | OCI introduced dedicated API keys for generative models in early 2026. Use robust secret management (like HashiCorp Vault or K8s External Secrets). |
-| **On-Demand for Production** | Betting that on-demand Bedrock limits won't be hit during a launch. | Purchase Provisioned Throughput for custom models. Use the dedicated Model ID/ARN to ensure guaranteed capacity. |
-| **Feeding Raw Data to ML** | Throwing raw `token_count` metrics into an LSTM without preprocessing. | Implement a Feature Engineering pipeline (rolling means, standard deviations, deltas) before the model layer. |
-
----
-
-## Hands-On Exercise: Implementing Proactive ML Scripts
-
-In this lab, you will complete the foundational Python classes required to build an AIOps pipeline. We will build a fully executable environment where you will set up your virtual environment, generate synthetic test data to simulate an infrastructure load, and validate your anomaly detection, autoscaling, and capacity planning code against this data.
-
-### Task 0: Environment Setup and Data Generation
-
-Before writing our AIOps logic, we must establish a clean execution environment. We will use standard data science libraries. Follow these steps on your workstation to prepare your workspace.
-
-1. **Create and activate a virtual environment:**
-   ```bash
-   python3 -m venv aiops-lab
-   source aiops-lab/bin/activate
-   ```
-
-2. **Install the required dependencies:**
-   ```bash
-   pip install numpy pandas scikit-learn prophet statsmodels
-   ```
-
-3. **Generate Synthetic Infrastructure Data:**
-   Create a file named `generate_data.py` and run it to create our test dataset. This script generates 30 days of synthetic token usage data, injecting trends, seasonality, and a distinct anomaly that our models will need to catch.
-
-   ```python
-   import pandas as pd
-   import numpy as np
-   from datetime import datetime
-
-   print("Generating synthetic infrastructure metrics...")
-   dates = pd.date_range(start='2026-03-01', periods=720, freq='h')
-   base_load = 100
-   trend = np.linspace(0, 50, 720)
-   seasonality = np.sin(np.arange(720) * (2 * np.pi / 24)) * 30
-   noise = np.random.normal(0, 5, 720)
-
-   data = base_load + trend + seasonality + noise
-   # Inject an artificial anomaly at hour 500
-   data[500] += 200
-
-   df = pd.DataFrame({'timestamp': dates, 'token_usage': data})
-   df.to_csv('synthetic_metrics.csv', index=False)
-   print("Test data created successfully: synthetic_metrics.csv")
-   ```
-   Execute this script from your terminal: `python generate_data.py`.
-
-### Task 1: Build an Anomaly Detector
-
-You are given the following class stub. Create a file named `detector.py` and implement the logic to combine Statistical Methods (MAD) and Machine Learning (Isolation Forest).
-
-```python
-# TODO: Implement multi-method anomaly detection
-class InfrastructureAnomalyDetector:
-    """
-    Detect anomalies in infrastructure metrics using:
-    1. Statistical methods (Z-score, MAD)
-    2. Isolation Forest
-    3. Seasonal decomposition
-
-    Combine results with voting for robust detection.
-    """
-    pass
-```
-
-<details>
-<summary><strong>View Solution: Task 1</strong></summary>
-
-```python
-import numpy as np
-from sklearn.ensemble import IsolationForest
-
-class InfrastructureAnomalyDetector:
-    """
-    Detect anomalies in infrastructure metrics using:
-    1. Statistical methods (Z-score, MAD)
-    2. Isolation Forest
-    3. Seasonal decomposition
-
-    Combine results with voting for robust detection.
-    """
-    def __init__(self):
-        self.iso_forest = IsolationForest(contamination=0.05, random_state=42)
-
-    def fit_predict(self, data):
-        # Method 1: MAD
-        median = np.median(data)
-        mad = np.median(np.abs(data - median))
-        modified_z = 0.6745 * (data - median) / mad
-        mad_anomalies = np.abs(modified_z) > 3.5
-
-        # Method 2: Isolation Forest
-        data_reshaped = data.reshape(-1, 1)
-        self.iso_forest.fit(data_reshaped)
-        iso_preds = self.iso_forest.predict(data_reshaped)
-        iso_anomalies = iso_preds == -1
-
-        # Voting: Anomaly if both agree
-        final_anomalies = mad_anomalies & iso_anomalies
-        return final_anomalies
-```
-</details>
-
-**Checkpoint Verification:**
-To test your detector against the data we generated, append the following execution block to `detector.py` and run it:
-```python
-import pandas as pd
-
-if __name__ == "__main__":
-    df = pd.read_csv('synthetic_metrics.csv')
-    detector = InfrastructureAnomalyDetector()
-    anomalies = detector.fit_predict(df['token_usage'].values)
-    anomaly_indices = np.where(anomalies)[0]
-    print(f"Detected {len(anomaly_indices)} anomalies at indices: {anomaly_indices}")
-    if 500 in anomaly_indices:
-        print("SUCCESS: The injected anomaly at index 500 was successfully detected!")
-    else:
-        print("FAILURE: The injected anomaly was missed.")
-```
-
-### Task 2: Implement Predictive Autoscaler
-
-You are given the following class stub for scaling decisions. Create a file named `autoscaler.py` and implement the exponential smoothing forecast and the asymmetric scaling decision logic.
-
-```python
-# TODO: Build a predictive autoscaler
-class PredictiveAutoscaler:
-    """
-    1. Collect historical load data
-    2. Train forecasting model
-    3. Predict load N minutes ahead
-    4. Calculate optimal replica count
-    5. Make scaling decision
-    """
-    pass
-```
-
-<details>
-<summary><strong>View Solution: Task 2</strong></summary>
-
-```python
-import math
-
-class PredictiveAutoscaler:
-    """
-    1. Collect historical load data
-    2. Train forecasting model
-    3. Predict load N minutes ahead
-    4. Calculate optimal replica count
-    5. Make scaling decision
-    """
-    def __init__(self, target_utilization=0.7, capacity_per_replica=100):
-        self.target_utilization = target_utilization
-        self.capacity_per_replica = capacity_per_replica
-
-    def predict_next_load(self, historical_data, alpha=0.3):
-        # Simple Exponential Smoothing
-        result = [historical_data[0]]
-        for i in range(1, len(historical_data)):
-            result.append(alpha * historical_data[i] + (1 - alpha) * result[-1])
-        return result[-1]
-
-    def make_decision(self, predicted_load, current_replicas, min_rep=2, max_rep=50):
-        req_capacity = predicted_load / self.target_utilization
-        desired = math.ceil(req_capacity / self.capacity_per_replica)
-        desired = max(min_rep, min(max_rep, desired))
-
-        if desired > current_replicas:
-            return desired # Scale up aggressively
-        return current_replicas # Hold steady / scale down conservatively
-```
-</details>
-
-**Checkpoint Verification:**
-To test your autoscaler, append this execution block to `autoscaler.py` and run it:
-```python
-if __name__ == "__main__":
-    scaler = PredictiveAutoscaler(target_utilization=0.7, capacity_per_replica=100)
-    # Simulate a sudden historical load spike
-    recent_history = [100, 110, 105, 150, 250, 400]
-    predicted = scaler.predict_next_load(recent_history, alpha=0.5)
-    decision = scaler.make_decision(predicted, current_replicas=3)
-
-    print(f"Predicted next load: {predicted:.2f} tokens/sec")
-    print(f"Scaling decision: Update replicas to {decision}")
-    if decision > 3:
-        print("SUCCESS: Autoscaler aggressively scaled up in response to the predicted spike.")
-```
-
-### Task 3: Capacity Planning Model
-
-You are given the final stub to project future long-term growth. Create a file named `planner.py` and implement the exponential growth calculation and the utilization recommendation engine.
-
-```python
-# TODO: Create capacity provision planner
-class CapacityPlanner:
-    """
-    1. Analyze historical growth
-    2. Fit growth model (linear, exponential, logistic)
-    3. Forecast future capacity needs
-    4. Generate recommendations
-    """
-    pass
-```
-
-<details>
-<summary><strong>View Solution: Task 3</strong></summary>
-
-```python
-import numpy as np
-
-class CapacityPlanner:
-    """
-    1. Analyze historical growth
-    2. Fit growth model (linear, exponential, logistic)
-    3. Forecast future capacity needs
-    4. Generate recommendations
-    """
-    def __init__(self, initial_users, growth_rate):
-        self.initial = initial_users
-        self.growth_rate = growth_rate
-
-    def forecast_exponential(self, days_ahead):
-        # Capacity = Initial × (1 + Growth_Rate)^Time
-        capacity = self.initial * (1 + self.growth_rate)**days_ahead
-        return int(capacity)
-
-    def generate_recommendation(self, current_utilization):
-        if current_utilization < 0.40:
-            return "Over-provisioned: Right-size instances to save costs."
-        elif current_utilization <= 0.70:
-            return "Optimal: Maintain current sizing."
-        elif current_utilization <= 0.85:
-            return "At Risk: Plan scaling soon. Monitor closely."
-        else:
-            return "Critical: Scale immediately to prevent outages."
-```
-</details>
-
-**Checkpoint Verification:**
-Test your capacity planner by appending this execution block to `planner.py` and running it:
-```python
-if __name__ == "__main__":
-    planner = CapacityPlanner(initial_users=1000, growth_rate=0.05)
-    forecast_30_days = planner.forecast_exponential(30)
-    print(f"30-day capacity forecast: {forecast_30_days} users")
-
-    recommendation = planner.generate_recommendation(current_utilization=0.88)
-    print(f"System Recommendation: {recommendation}")
-    if "Critical" in recommendation:
-        print("SUCCESS: High utilization correctly flagged as Critical.")
-```
-
-### End-to-End Success Checklist
-- [ ] Virtual environment created and dependencies installed without errors.
-- [ ] Synthetic data script `generate_data.py` executed successfully and produced a CSV.
-- [ ] Anomaly detector catches the strictly injected anomaly at index 500.
-- [ ] Predictive autoscaler calculates a required replica count greater than the current count during simulated spikes.
-- [ ] Capacity planner successfully evaluates a 0.88 utilization threshold as a critical systemic risk.
+| Mistake | Why it happens | How to fix |
+|---|---|---|
+| **Treating 429 as a transient error** | Retry defaults assume server-side flakiness, not quota exhaustion. | Implement retry budgets, backpressure at 70–80% quota utilization, and circuit breakers; purchase headroom before launch. |
+| **Using global endpoints for regulated data** | Global routing simplifies SDK configuration and improves burst throughput. | Match endpoint geography to residency policy; use regional or geographic profiles and verify member regions in documentation. |
+| **Sharing one endpoint across batch and interactive workloads** | Simplicity during prototyping carries into production. | Partition endpoints or quotas by workload class; shed batch traffic first during pressure. |
+| **Scaling Kubernetes pods during quota incidents** | On-call playbooks default to HPA/KEDA without checking provider metrics. | Add provider quota dashboards; scale routing and capacity contracts before replica counts. |
+| **Ignoring output token cost** | Prompt engineering focuses on input context size. | Track input/output split; cap max output tokens per route; measure cost per successful user task. |
+| **Symmetric gateway scale-down** | Symmetric policies are the HPA default and look "balanced." | Configure asymmetric `behavior`: fast scale-up on predicted token load, slow scale-down with stabilization windows. |
+| **Skipping quota exhaustion drills** | Staging environments use tiny traffic and never hit limits. | Deliberately exhaust staging quotas quarterly; validate runbooks and fallback routes under real 429 responses. |
 
 ---
 
 ## Knowledge Check
 
 <details>
-<summary><strong>Scenario 1: You are deploying an application to Google Cloud that requires strict EU data residency and the ability to run custom fine-tuning jobs on Gemini 2.5. An engineer suggests using the `locations/global` endpoint to simplify routing. Is this a sound architectural decision?</strong></summary>
-No, this is a dangerous decision. The `locations/global` endpoint in Vertex AI explicitly does not guarantee data residency, violating the EU compliance requirement. Furthermore, global endpoints omit critical capabilities, specifically preventing custom batch model tuning. You must explicitly choose a supported regional endpoint in the EU.
+<summary><strong>Scenario 1: Your EU-regulated healthcare application must keep patient prompts within the EU. An engineer proposes using a global inference endpoint to handle launch-day traffic spikes. What is wrong with this approach?</strong></summary>
+
+Global inference endpoints route requests to available commercial regions worldwide and typically do not guarantee data residency within the EU. Even if average latency improves, compliance requirements fail. The correct approach is a geographic cross-region profile confined to EU member regions—or a single EU regional endpoint with provisioned throughput for headroom—verified against current vendor documentation for data processing locations.
 </details>
 
 <details>
-<summary><strong>Scenario 2: Your system experiences a massive, unexpected surge in token consumption at 2:00 PM on a Tuesday. Your monitoring system uses a standard Z-score anomaly detector. Why might the Z-score fail to flag the beginning of this spike?</strong></summary>
-Standard Z-scores are highly susceptible to outliers. If the spike builds rapidly, the extreme values heavily inflate the standard deviation calculation of the recent window. As the standard deviation grows, the Z-score (which divides by the standard deviation) shrinks, effectively masking the anomaly. A Modified Z-score using Median Absolute Deviation (MAD) would be far more robust in this scenario.
+<summary><strong>Scenario 2: Kubernetes shows all gateway pods at 30% CPU, but users report timeouts. CloudWatch/Bedrock metrics show TPM at 98%. What is the likely root cause and first action?</strong></summary>
+
+The bottleneck is provider-side token quota exhaustion, not compute inside the cluster. Scaling pods will not increase available TPM. First action: stop retry amplification at the gateway, shed non-critical batch traffic, and either enable a cross-region inference profile or initiate provisioned throughput purchase while quota resets or support processes an increase.
 </details>
 
 <details>
-<summary><strong>Scenario 3: Your team's Amazon Bedrock usage triggers an alert: you have hit 86% of your on-demand token limits during a marketing push. Your manager wants to know what action to take according to standard utilization analysis.</strong></summary>
-At >85% utilization, the system is in a "Critical" state with a high risk of application outages due to 429 rate-limiting. The immediate action is to scale up by purchasing Provisioned Throughput for your custom models. This allocates dedicated model IDs and ARNs, ensuring you have the required headroom to survive the traffic spike.
+<summary><strong>Scenario 3: You need guaranteed capacity for a fine-tuned custom model on a platform where custom models require dedicated hosting. Which Rosetta Stone row guides your decision?</strong></summary>
+
+The **Provisioned / dedicated throughput** row. Custom weights require reserved model capacity on most hyperscaler platforms—not on-demand shared endpoints. You must purchase provisioned units or dedicated cluster capacity and invoke the provisioned model identifier rather than the default on-demand ID.
 </details>
 
 <details>
-<summary><strong>Scenario 4: You are building an AIOps predictive autoscaler. Your historical load indicates an incoming traffic spike, so the ML model predicts you need 15 replicas instead of the current 5. The traffic spike ends after 10 minutes, and the model predicts you only need 3 replicas. How should your autoscaler react at these two distinct moments?</strong></summary>
-The autoscaler must handle the asymmetric cost of failure. When predicting 15 replicas, it must scale up *immediately* and aggressively to prevent user outages. When predicting 3 replicas after the spike, it must scale down *conservatively* (e.g., waiting for N consecutive periods of low predictions) to avoid thrashing and being caught off-guard if the traffic returns.
+<summary><strong>Scenario 4: A batch embedding job and a live chat API share one endpoint. Overnight, embedding traffic spikes and chat error rates climb. What architectural change prevents recurrence?</strong></summary>
+
+Partition workloads by endpoint or quota allocation. Batch embedding should use a separate endpoint—ideally batch-priced if available—with its own retry and throttle policy. Interactive chat retains dedicated RPM/TPM headroom. Optionally schedule batch jobs off-peak with explicit backpressure when interactive utilization exceeds thresholds.
 </details>
 
 <details>
-<summary><strong>Scenario 5: Your team wants to integrate an LLM agent that executes database queries natively (NL2SQL) while maintaining long-term conversation memory. Which OCI Generative AI capability directly supports this architecture?</strong></summary>
-OCI Generative AI's Enterprise AI features include built-in agentic workflows. This includes an OpenAI-compatible Responses API, memory APIs, vector stores, and explicit tool hooks (including MCP) that support NL2SQL capabilities natively within the platform.
+<summary><strong>Scenario 5: Finance asks whether shortening average model responses by 25% is worth more than switching to a cheaper input-token rate. Output tokens cost 3× input tokens, and output represents 40% of total token spend. How do you reason about this?</strong></summary>
+
+Output is 40% of spend at 3× input cost, so output reduction disproportionately affects the bill. A 25% output length reduction saves roughly 10% of total token cost (0.25 × 0.40), often exceeding marginal input-rate negotiations. Run the calculation with your actual input/output ratio before committing; ratios vary by workload.
 </details>
 
 <details>
-<summary><strong>Scenario 6: A team implements an Autoencoder for anomaly detection on their API gateway metrics. Over a period of three months, the model's false positive rate slowly increases until it is alerting constantly on normal traffic. What phenomenon is occurring, and how should the team address it?</strong></summary>
-The model is experiencing data drift. As the baseline behavior of the system naturally evolves over months (due to feature releases, user growth, or natural pattern shifts), the static Autoencoder's reconstruction error for newly "normal" traffic increases. The team must implement a continuous training pipeline to periodically retrain the Autoencoder on recent healthy data to update its understanding of normal behavior.
+<summary><strong>Scenario 6: Your HPA scales gateway pods on CPU utilization, but 429 rates spike during predictable daily peaks. What metric should replace or supplement CPU in the HPA?</strong></summary>
+
+A custom metric reflecting token demand or predicted token usage—such as `predicted_token_usage_15m` exported from your gateway's forecasting pipeline. CPU poorly correlates with LLM API quota pressure because inference compute happens on the provider side; token velocity correlates directly with TPM exhaustion.
 </details>
 
 <details>
-<summary><strong>Scenario 7: You are configuring a Kubernetes v1.35 HorizontalPodAutoscaler to consume a custom metric generated by your predictive ML model. You want the HPA to scale up rapidly when the ML model predicts a spike, but scale down very slowly to prevent thrashing. How do you configure this natively in the HPA?</strong></summary>
-You should utilize the HPA's `behavior` field, which allows independent configuration of `scaleUp` and `scaleDown` policies. By setting the `scaleDown.stabilizationWindowSeconds` to a high value (like 1800 seconds) and defining conservative scaling policies, while keeping `scaleUp` aggressive, you achieve the required asymmetric scaling.
+<summary><strong>Scenario 7: A vendor announces a new "global agent" product. Your evaluation framework requires assessing agent support. Which rows and steps apply before adoption?</strong></summary>
+
+Map the announcement to Rosetta Stone rows: **Agent / tool / MCP support**, **Data residency**, and **Quota / throughput mechanics**. Follow evaluation Steps 2–6: verify residency claims, test quota behavior under load, model cost including tool-call token overhead, and failure behavior when tool endpoints throttle independently of the main model.
 </details>
 
 ---
 
-## ⏭️ Next Steps
+## Hands-On Exercise
 
-You now understand the architecture of Cloud AI Services and how to wrap them in an AIOps framework to prevent rate-limit disasters and capacity bottlenecks!
+**Task:** Build quota-aware monitoring and asymmetric gateway scaling for a managed AI inference gateway. You will simulate token consumption metrics, implement backpressure logic, and validate an HPA manifest for Kubernetes 1.35.
 
-**Up Next**: Module 1.2 - LLM Gateways and Traffic Management
+### Part 1: Token Quota Monitor
 
-In Module 1.2, we'll dive deeper into:
-- Implementing an API Gateway over multiple Bedrock and Azure endpoints.
-- Semantic caching to reduce token consumption costs.
-- Circuit breakers and fallback routing when a Cloud AI region fails.
+Create `quota_monitor.py` that tracks utilization against configurable RPM and TPM limits and recommends actions before hard throttling.
+
+```python
+#!/usr/bin/env python3
+"""Quota utilization monitor for managed AI endpoints."""
+from dataclasses import dataclass
+
+@dataclass
+class QuotaLimits:
+    rpm: int
+    tpm: int
+    burst_rpm: int | None = None
+
+@dataclass
+class QuotaSnapshot:
+    requests_last_minute: int
+    tokens_last_minute: int
+
+def utilization(snapshot: QuotaSnapshot, limits: QuotaLimits) -> dict[str, float]:
+    """Return RPM and TPM utilization as fractions (0.0–1.0+)."""
+    rpm_limit = limits.burst_rpm or limits.rpm
+    return {
+        "rpm": snapshot.requests_last_minute / rpm_limit,
+        "tpm": snapshot.tokens_last_minute / limits.tpm,
+    }
+
+def recommend_action(util: dict[str, float], warn: float = 0.7, critical: float = 0.9) -> str:
+    """Recommend backpressure or capacity action based on utilization."""
+    peak = max(util["rpm"], util["tpm"])
+    if peak >= critical:
+        return "CRITICAL: Enable backpressure, shed batch traffic, consider provisioned throughput"
+    if peak >= warn:
+        return "WARN: Reduce retry rates, activate cross-region profile if available"
+    return "OK: Continue monitoring"
+```
+
+Append a `__main__` block that simulates rising utilization and prints recommendations, then run a quick validation. Expect `WARN` above 0.7 and `CRITICAL` above 0.9.
+
+```bash
+python3 quota_monitor.py
+```
+
+### Part 2: Retry Budget Calculator
+
+Create `retry_budget.py` that computes maximum safe retries without exceeding a retry amplification factor.
+
+```python
+def max_safe_retries(base_rps: float, quota_rpm: int, headroom_factor: float = 1.5) -> int:
+    """
+    Given base requests per second and an RPM quota, return the max retries
+    per request that keep the total effective rate (original requests plus
+    retries) at or below the quota divided by a safety headroom_factor.
+    A headroom_factor of 1.5 reserves ~33% of the quota as burst headroom.
+    """
+    base_rpm = base_rps * 60
+    safe_ceiling = quota_rpm / headroom_factor
+    if safe_ceiling <= base_rpm:
+        return 0
+    # Total RPM if each request retries n times: base_rpm * (1 + n) <= safe_ceiling
+    max_n = int((safe_ceiling - base_rpm) / base_rpm)
+    return max(0, max_n)
+```
+
+Verify: at 100 RPS against a 10,000 RPM quota, safe retries should be bounded well below naive unlimited retry policies.
+
+### Part 3: Validate HPA Manifest
+
+Save the HPA YAML from the **Operating Managed AI Services** section as `hpa-ai-gateway.yaml`. Validate syntax:
+
+```bash
+kubectl apply --dry-run=client -f hpa-ai-gateway.yaml
+```
+
+Confirm the manifest uses `autoscaling/v2`, defines separate `scaleUp` and `scaleDown` behavior blocks, and references a custom metric name suitable for token forecasting.
+
+### Success Checklist
+
+- [ ] `quota_monitor.py` reports `OK`, `WARN`, and `CRITICAL` at appropriate utilization thresholds.
+- [ ] `retry_budget.py` demonstrates that unlimited retries can exceed quota at modest base traffic.
+- [ ] `hpa-ai-gateway.yaml` passes `kubectl apply --dry-run=client` without errors.
+- [ ] You can articulate which actions belong in *this* module (quota, routing, provisioning) versus [AIOps](../module-1.2-aiops/) (forecasting algorithms, RCA).
 
 ---
 
-_Module 1.1 Complete!_
-_"The best incident is the one that never happens."_
+## Next Module
+
+You now understand the durable architecture of Cloud AI Services—routing models, quota mechanics, token economics, and cross-vendor evaluation—and how to operate them without mistaking provider throttling for cluster failure.
+
+**Up Next:** [AIOps](../module-1.2-aiops/)
+
+In Module 1.2, you will build the operational depth this module intentionally deferred: statistical and ML-based anomaly detection on infrastructure telemetry, AI-powered causal graphs for root cause analysis, hybrid log parsing pipelines, and the forecasting methods that feed token consumption predictions referenced here.
+
+---
 
 ## Sources
 
-- [Amazon Bedrock Cross-Region Inference](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html) — Best primary source for Bedrock geography, global routing, burst handling, and Provisioned Throughput tradeoffs.
-- [Microsoft Foundry Deployment Types](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types) — Explains Azure global, data-zone, and regional deployment behavior, including routing, data processing location, and latency tradeoffs.
-- [Vertex AI Deployments and Endpoints](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) — Covers the global endpoint, data residency caveats, supported models, and feature limitations that drive architecture decisions.
-- [OCI Generative AI Overview](https://docs.oracle.com/en-us/iaas/Content/generative-ai/overview.htm) — Summarizes OCI model access, dedicated AI clusters, Responses API, tools, memory, and NL2SQL in one place.
+- [Amazon Bedrock Cross-Region Inference](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html) — Geographic and global inference profiles, throughput tradeoffs, and the separation from Provisioned Throughput.
+- [Amazon Bedrock Provisioned Throughput](https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput.html) — Model Units, dedicated capacity for base and custom models, and hourly commitment mechanics.
+- [Google Vertex AI Locations and Endpoints](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations) — Regional versus global endpoint behavior, data residency caveats, and feature availability by location.
+- [Microsoft Foundry Deployment Types](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types) — Global, data-zone, and regional deployment models with data processing and routing implications.
+- [Azure AI Foundry Provisioned Throughput](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/concepts/provisioned-throughput) — Provisioned capacity units (PTUs) and when dedicated throughput replaces standard deployments.
+- [OCI Generative AI Overview](https://docs.oracle.com/en-us/iaas/Content/generative-ai/overview.htm) — Hosted models, dedicated AI clusters, and OpenAI-compatible API entry points.
+- [OCI Generative AI Dedicated AI Clusters](https://docs.oracle.com/en-us/iaas/Content/generative-ai/ai-cluster.htm) — Isolated compute for fine-tuning and hosting custom models away from multi-tenant throttling.
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/specification/2025-03-26) — Open standard for tool and context integration across AI platforms and agent harnesses.
+- [AGENTS.md Convention](https://agents.md/) — Cross-tool documentation convention for agent behavior, complementary to vendor-specific rule files.
+- [Large-scale cluster management at Google with Borg](https://research.google/pubs/large-scale-cluster-management-at-google-with-borg/) — Verma et al., EuroSys 2015; foundational reading on cluster resource management, slack resources, and over-commitment that informs capacity thinking even when GPUs are provider-managed.
+- [Kubernetes Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) — Official documentation for HPA v2 behavior configuration including asymmetric scale-up and scale-down policies.
