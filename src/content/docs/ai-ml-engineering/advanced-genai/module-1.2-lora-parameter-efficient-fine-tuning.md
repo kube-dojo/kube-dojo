@@ -5,1366 +5,537 @@ sidebar:
   order: 803
 ---
 
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 3-4 hours
+
+**Prerequisites**: [Fine-tuning LLMs](/ai-ml-engineering/advanced-genai/module-1.1-fine-tuning-llms/), transformer attention basics, PyTorch tensor operations, and a working Python virtual environment. The QLoRA (4-bit) hands-on requires a CUDA GPU; the plain-LoRA path and the conceptual exercises run on CPU.
+
+---
+
+## Learning Outcomes
+
+By the end of this module, you will be able to:
+
+- **Explain** the low-rank decomposition mathematics behind LoRA and why intrinsic dimensionality makes rank-limited adaptation effective for large language models.
+- **Configure** Hugging Face PEFT `LoraConfig` together with bitsandbytes 4-bit loading to run QLoRA fine-tuning on constrained hardware.
+- **Calculate** adapter parameter counts and memory trade-offs from rank, hidden dimension, and target-module choices before starting a training run.
+- **Compare** merge-at-inference versus multi-adapter serving strategies when deploying customized models in production pipelines.
+- **Diagnose** common LoRA training failures including rank mis-selection, alpha scaling mistakes, and incorrect target-module coverage.
+
+---
+
 ## Why This Module Matters
 
-Generative artificial intelligence fundamentally redefines how software systems synthesize novel data, but the computational reality of modern neural architectures presents severe operational bottlenecks. Full-parameter fine-tuning on large generative models can become extremely expensive and can still fail if the training setup, data quality, and regularization strategy are poor. The operational lesson is that adaptation strategy matters as much as raw compute budget.
+Full-parameter fine-tuning remains the right tool when you have abundant GPU memory, a large curated dataset, and a task that genuinely requires updating representations across the entire network. Research-oriented teams exploring novel architectures or continuing pretraining on massive corpora still default to updating all weights. Applied platform teams operating on single-GPU workstations or cost-constrained inference fleets rarely occupy that regime. For them, the question is how to obtain most of the behavioral benefit at a fraction of the storage and optimizer cost, which is the niche LoRA and QLoRA fill without pretending to replace every training paradigm.
 
-Contrast this with early low-cost instruction-tuning efforts such as Stanford Alpaca, which showed that adapting a 7B-scale language model could be done for hundreds of dollars, though that specific project was not a LoRA-based PEFT example. The stark difference between these two scenarios highlights the modern reality of generative AI: full-parameter fine-tuning is no longer the standard for applied enterprise engineering. Attempting to update billions of parameters simultaneously leads to catastrophic forgetting, severe hardware exhaustion, and ultimately, project abandonment.
+**Hypothetical scenario:** A platform team inherits a request to adapt a 7-billion-parameter instruction model so it consistently follows an internal JSON schema for incident reports. Full-parameter fine-tuning would require optimizer states for every weight matrix, which quickly exceeds the memory budget of a single workstation GPU. The team also needs to ship multiple behavioral variants—formal tone for executives, terse tone for on-call engineers—without maintaining separate full-model checkpoints for each variant. Parameter-efficient fine-tuning is not a shortcut around data quality or evaluation discipline; it is the engineering pattern that makes narrow adaptation economically feasible when the base model already encodes broad language competence.
 
-Instead, techniques like Low-Rank Adaptation (LoRA) have democratized model adaptation, allowing engineers to [freeze the vast majority of foundation weights and only train a tiny fraction of carefully injected matrix parameters](https://arxiv.org/abs/2106.09685). In this module, we will explore the foundational mathematics of diffusion models and the economic imperatives of PEFT. You will learn how to design, debug, and implement robust diffusion pipelines that leverage classifier-free guidance, efficient schedulers, and highly optimized LoRA adapters. By mastering these techniques, you will possess the ability to deliver custom, enterprise-grade generative AI models at a fraction of the computational cost, ensuring both financial viability and technical excellence in production environments.
+Low-Rank Adaptation (LoRA) changed the default mental model for adaptation. Instead of updating every weight in a transformer block, you freeze the pretrained matrices and learn a small correction that lives in a low-dimensional subspace. The original LoRA paper demonstrated that this approach can match full fine-tuning quality on several NLP benchmarks while training far fewer parameters and achieving higher throughput during optimization. The practical consequence for AI/ML engineers is architectural: adapters become versioned artifacts you can swap, merge, stack, and audit independently from the foundation checkpoint.
 
-## What You'll Be Able to Do
+The shift from full fine-tuning to adapter-first workflows also changes how teams govern model behavior. When every customization required a multi-gigabyte checkpoint fork, experimentation was slow and rollback meant restoring enormous artifacts from cold storage. Adapter-first workflows encourage hypothesis-driven iteration: train a small artifact on a narrow dataset slice, evaluate against a fixed rubric, promote or discard the adapter, and keep the foundation model immutable. That immutability is valuable for security reviews because the trusted base checkpoint can remain on a read-only mount while adapters flow through the same CI/CD promotion stages as application code.
 
-By the end of this module, you will:
+Parameter-efficient methods sit on a spectrum. Prompt tuning and prefix tuning modify inputs rather than weight matrices. Classical adapter bottlenecks insert extra MLP modules between existing layers, which can add inference latency because every forward pass routes through additional compute paths. LoRA stays attractive because it can be merged into the base weights for deployment, erasing runtime overhead when you no longer need hot-swapping. The engineering question is therefore not "Is LoRA always optimal?" but "Does this workload need hot-swappable behaviors, merged single-tenant latency, or the expressivity of full fine-tuning given our data volume and evaluation budget?"
 
-- **Design** end-to-end diffusion pipelines combining latent space compression, U-Net denoising architectures, and text conditioning mechanisms.
-- **Implement** classifier-free guidance (CFG) algorithms to steer generative models while deliberately balancing prompt adherence against artifact generation.
-- **Evaluate** and select appropriate parameter-efficient fine-tuning (PEFT) methods (such as LoRA, QLoRA, and DoRA) based on strict hardware memory limits.
-- **Diagnose** performance bottlenecks and artifact generation by identifying incorrect scheduler configurations and dimensional mismatches.
-- **Compare** multiple LoRA initialization and adaptation strategies, navigating ecosystem inconsistencies to ensure robust production deployments.
+This module teaches the durable spine—linear algebra, intrinsic dimensionality, rank budgeting, alpha scaling, module targeting, and deployment trade-offs—while quarantining fast-moving library versions into a dated snapshot you must re-verify before production use. Diffusion-specific adaptation patterns live in [Module 1.3: Diffusion Models](/ai-ml-engineering/advanced-genai/module-1.3-diffusion-models/); advanced variants such as DoRA and PiSSA are covered in [Module 1.9: Modern PEFT — DoRA & PiSSA](/ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa/). When you are ready to run a complete single-GPU training loop with evaluation gates, continue to [Module 1.10: Single-GPU Local Fine-Tuning](/ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning/).
 
-## The Foundations of Diffusion
+> **The LoRA Analogy**
+>
+> Imagine a grand piano that already plays beautifully for classical repertoire. You do not rebuild the entire instrument to make it suit jazz; you add a modest pedal attachment and adjust touch sensitivity in a few places. The core structure stays intact, but the performance character changes. LoRA does the same for neural networks: the foundation weights remain frozen while a tiny, swappable adapter reshapes behavior for a downstream task.
 
-Imagine you are watching a time-lapse video of a clear photograph slowly dissolving into static noise on an old analog television screen. Frame by frame, the image becomes progressively less recognizable until it is pure, random fuzz. Now, imagine playing that exact video in reverse—starting from absolute static and watching a high-fidelity photograph magically emerge from the chaos. That is the essence of Diffusion Models. We train a neural network to reverse a mathematical corruption process. We force the network to look at noisy images and probabilistically predict what they looked like before the noise was introduced. If you execute this process iteratively enough times, starting from pure random noise, you can generate entirely new, synthetic images.
+---
 
-### The Forward Process: Adding Noise
+## Low-Rank Adaptation: The Core Mathematics
 
-The forward process is conceptually straightforward: we gradually add Gaussian noise to a clean image over a series of sequential timesteps until the image becomes indistinguishable from pure noise. The mathematical elegance of the Gaussian distribution ensures that these perturbations are highly predictable. We use a precise mathematical formula to perturb each pixel independently based on a defined variance schedule.
+Transformer layers are dominated by large linear projections. For a pretrained weight matrix \(W_0 \in \mathbb{R}^{d \times k}\), full fine-tuning learns an unconstrained update \(\Delta W\) with the same shape, which means you pay storage and optimizer memory proportional to \(d \times k\) for every adapted layer. LoRA reparameterizes the update as a product of two skinny matrices:
 
 ```text
-x_t = √(1 - β_t) · x_{t-1} + √(β_t) · ε
+h = W_0 x + ΔW x = W_0 x + B A x
 
 Where:
-- x_t is the noisy image at timestep t
-- x_{t-1} is the image at the previous timestep
-- β_t is the noise schedule (small value, e.g., 0.0001 to 0.02)
-- ε ~ N(0, I) is random Gaussian noise
+- W_0 ∈ ℝ^{d×k} is frozen pretrained weights
+- A ∈ ℝ^{r×k} is the down-projection (trainable)
+- B ∈ ℝ^{d×r} is the up-projection (trainable)
+- r ≪ min(d, k) is the rank
+- x is the input activation vector
 ```
 
-By meticulously tracking the transformation of a single pixel, we can observe the accumulation of noise. Let us examine a concrete worked example tracking a specific numerical value across four explicit timesteps. The variance schedule scales dynamically, slowly erasing the original signal while amplifying the random noise component until the true data distribution is entirely lost.
+The rank \(r\) is the bottleneck dimension. Intuitively, you are saying the task-specific change in each targeted layer can be expressed with at most \(r\) degrees of freedom along the input side and \(r\) along the output side. When \(r = 8\) and the hidden dimension is in the thousands, the adapter stores roughly \(r(d + k)\) trainable values instead of \(d \times k\). That compression is why LoRA checkpoints are often megabytes instead of gigabytes.
 
-```text
-Original pixel value: x_0 = 0.8
-Noise schedule: β = [0.1, 0.2, 0.3, 0.4]
+LoRA also introduces a scaling factor controlled by `lora_alpha` in the PEFT library. During the forward pass the adapter contribution is scaled by \(\alpha / r\), which decouples the learning rate dynamics from the chosen rank. If you double the rank without changing alpha, each rank dimension contributes less individual magnitude to the final update; raising alpha restores the effective adapter strength. Engineers often start with `lora_alpha` equal to twice the rank (for example `r=16`, `lora_alpha=32`) and then tune based on validation loss stability rather than treating alpha as a magic constant.
 
-Step 1: β_1 = 0.1
-  x_1 = √0.9 · 0.8 + √0.1 · (-0.5)  [random noise = -0.5]
-  x_1 = 0.949 · 0.8 + 0.316 · (-0.5)
-  x_1 = 0.759 - 0.158 = 0.601
-
-Step 2: β_2 = 0.2
-  x_2 = √0.8 · 0.601 + √0.2 · (0.3)  [random noise = 0.3]
-  x_2 = 0.894 · 0.601 + 0.448 · 0.3
-  x_2 = 0.537 + 0.134 = 0.671
-
-Step 3: β_3 = 0.3
-  x_3 = √0.7 · 0.671 + √0.3 · (-0.8)  [random noise = -0.8]
-  x_3 = 0.837 · 0.671 + 0.548 · (-0.8)
-  x_3 = 0.561 - 0.438 = 0.123
-
-Step 4: β_4 = 0.4
-  x_4 = √0.6 · 0.123 + √0.4 · (0.9)  [random noise = 0.9]
-  x_4 = 0.775 · 0.123 + 0.632 · 0.9
-  x_4 = 0.095 + 0.569 = 0.664
-```
-
-Notice how the pixel value drifts randomly as noise continually accumulates. After a sufficient number of steps, the original visual signal is utterly obliterated. To maintain strict stability throughout this process, the standard formulation guarantees unit variance across all timesteps. This variance-preserving property prevents floating-point overflow and ensures the neural network receives consistently scaled inputs regardless of the sampled timestep.
-
-```text
-Var(x_t) = (√ᾱ_t)² · Var(x_0) + (√(1-ᾱ_t))² · Var(ε)
-         = ᾱ_t · 1 + (1-ᾱ_t) · 1
-         = 1
-```
-
-> **Pause and predict**: If you increase the noise schedule $\beta_t$ to a much larger value at each step, what will happen to the total number of timesteps required to reach pure Gaussian noise?
-
-### The Reparameterization Trick
-
-Iterating sequentially through a thousand individual steps during training would be computationally disastrous. Fortunately, thanks to the reparameterization trick, we can skip directly to any arbitrary timestep using cumulative mathematical products. This algebraic manipulation leverages the properties of independent Gaussian variables to compute the sum of multiple noise additions in a single, closed-form operation.
-
-```text
-α_t = 1 - β_t
-ᾱ_t = α_1 · α_2 · ... · α_t  (cumulative product)
-
-x_t = √ᾱ_t · x_0 + √(1 - ᾱ_t) · ε
-```
-
-This mathematical shortcut allows us to sample any noisy version of an image directly in a single calculation, drastically parallelizing the training data generation pipeline. The implementation is highly concise, relying exclusively on standard tensor operations to broadcast the cumulative product across the entire batch dimension.
+Initialization is part of the mathematical contract. PEFT initializes matrix \(A\) with a Kaiming-uniform distribution and matrix \(B\) with zeros, so the product \(BA\) is exactly zero at step zero. That means the adapted model is identical to the base model before training begins, which prevents random adapter noise from damaging zero-shot behavior on the first forward pass. This detail matters when stakeholders ask whether attaching adapters will immediately degrade production quality before any gradient steps occur—the answer, given default initialization, is no.
 
 ```python
-def forward_diffusion(x_0, t, noise_schedule):
-    """Add noise to image at timestep t."""
-    alpha_bar = torch.cumprod(1 - noise_schedule, dim=0)
-    alpha_bar_t = alpha_bar[t]
+import torch
+import torch.nn as nn
 
-    noise = torch.randn_like(x_0)
+class LoRALinear(nn.Module):
+    """Minimal LoRA wrapper illustrating the forward pass math."""
 
-    # Direct formula: x_t = √ᾱ_t · x_0 + √(1-ᾱ_t) · ε
-    x_t = torch.sqrt(alpha_bar_t) * x_0 + torch.sqrt(1 - alpha_bar_t) * noise
-
-    return x_t, noise
-```
-
-## Reverse Process and The Training Objective
-
-The reverse process is where the neural network earns its keep. We train the model to predict the exact noise that was added, allowing us to mathematically subtract it back out. This effectively maps the random distribution back to the structured manifold of natural images. Rather than attempting to predict the pristine image directly—which leads to heavily blurred averages—the network acts as an isolated noise estimator.
-
-The objective function acts as a highly effective proxy for optimizing the variational lower bound of the data likelihood. It is a standard Mean Squared Error loss comparing the true noise injected against the predicted noise. We are essentially asking the model: "Given this corrupted image static, isolate and extract the exact mathematical pattern of noise that was applied."
-
-```text
-L = E[||ε - ε_θ(x_t, t)||²]
-
-Where:
-- ε is the actual noise we added
-- ε_θ(x_t, t) is the model's prediction of that noise
-- x_t is the noisy image
-- t is the timestep (tells model how noisy the image is)
-```
-
-In a standard training loop, each execution typically samples timesteps randomly across the batch dimension. This dynamic forces the model to learn how to denoise gracefully across all possible noise levels, acting as an implicit curriculum learning mechanism.
-
-```python
-def train_step(model, x_0, noise_schedule):
-    """Single training step for diffusion model."""
-    batch_size = x_0.shape[0]
-
-    # 1. Sample random timesteps
-    t = torch.randint(0, len(noise_schedule), (batch_size,))
-
-    # 2. Add noise (forward process)
-    x_t, noise = forward_diffusion(x_0, t, noise_schedule)
-
-    # 3. Predict the noise
-    noise_pred = model(x_t, t)
-
-    # 4. Compute loss (simple MSE!)
-    loss = F.mse_loss(noise_pred, noise)
-
-    return loss
-```
-
-## The U-Net Architecture
-
-To isolate noise from an image, the model must understand both global macro-structure and local micro-details. The U-Net architecture accomplishes this through a symmetrical encoder-decoder structure enhanced extensively by skip connections. [Originally invented for biomedical image segmentation](https://arxiv.org/abs/1505.04597), the U-Net became the absolute standard for diffusion models because its skip connections perfectly preserve the fine high-frequency details necessary for generating high-quality images.
-
-```mermaid
-flowchart TD
-    In[Input noisy image] --> C1[Conv 64→128]
-    C1 --> D1[downsample]
-    C1 -.->|skip connection| S1[Skip]
-    D1 --> C2[Conv 128→256]
-    C2 --> D2[downsample]
-    C2 -.->|skip connection| S2[Skip]
-    D2 --> B[Bottleneck 256→256]
-    B --> U1[upsample]
-    U1 --> Concat1[concat]
-    S2 --> Concat1
-    Concat1 --> C3[Conv 256→128]
-    C3 --> U2[upsample]
-    U2 --> Concat2[concat]
-    S1 --> Concat2
-    Concat2 --> C4[Conv 128→64]
-    C4 --> Out[Output predicted noise]
-```
-
-We can visualize the specific architectural flows natively using Mermaid to illustrate how features are downsampled into a bottleneck before being upsampled and recombined via skip connections. The encoder layers progressively reduce the spatial resolution while increasing the channel depth, extracting deep semantic features. The following sequences highlight specific granular aspects of the network.
-
-```mermaid
-flowchart TD
-    A[Conv 64→128] --> B[downsample]
-    A -.->|skip connection| C[Skip]
-```
-
-```mermaid
-flowchart TD
-    A[Conv 128→256] --> B[downsample]
-    A -.->|skip connection| C[Skip]
-```
-
-```mermaid
-flowchart TD
-    A[Bottleneck 256→256] --> B[upsample]
-```
-
-```mermaid
-flowchart TD
-    A[concat] --> B[Conv 256→128]
-    B --> C[upsample]
-    D[skip] --> A
-```
-
-```mermaid
-flowchart TD
-    A[concat] --> B[Conv 128→64]
-    C[skip] --> A
-    B --> D[Output]
-```
-
-The U-Net must also understand exactly how much noise it is looking at during each step. We dynamically encode the current timestep using sinusoidal embeddings and inject it heavily throughout the network. This temporal conditioning allows a single network to operate differently depending on whether it is removing massive amounts of early-stage noise or refining high-frequency details at the final steps.
-
-```python
-def timestep_embedding(t, dim):
-    """Create sinusoidal timestep embedding."""
-    half_dim = dim // 2
-    emb = math.log(10000) / (half_dim - 1)
-    emb = torch.exp(torch.arange(half_dim) * -emb)
-    emb = t[:, None] * emb[None, :]
-    emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
-    return emb
-```
-
-Modern U-Net implementations also inject precise Self-Attention blocks into the architecture. This allows spatially distant pixels to computationally communicate with one another, ensuring global structural integrity across the entire image tensor.
-
-```python
-class AttentionBlock(nn.Module):
-    """Self-attention for spatial features."""
-
-    def __init__(self, channels):
+    def __init__(self, base_linear: nn.Linear, rank: int = 8, alpha: int = 16):
         super().__init__()
-        self.norm = nn.GroupNorm(8, channels)
-        self.qkv = nn.Conv1d(channels, channels * 3, 1)
-        self.proj = nn.Conv1d(channels, channels, 1)
+        self.base = base_linear
+        for param in self.base.parameters():
+            param.requires_grad = False
 
-    def forward(self, x):
-        b, c, h, w = x.shape
-        x_flat = x.view(b, c, h * w)
+        in_features = base_linear.in_features
+        out_features = base_linear.out_features
+        self.rank = rank
+        self.scaling = alpha / rank
 
-        qkv = self.qkv(self.norm(x_flat))
-        q, k, v = qkv.chunk(3, dim=1)
+        self.lora_a = nn.Linear(in_features, rank, bias=False)
+        self.lora_b = nn.Linear(rank, out_features, bias=False)
+        nn.init.kaiming_uniform_(self.lora_a.weight, a=5**0.5)
+        nn.init.zeros_(self.lora_b.weight)
 
-        # Scaled dot-product attention
-        attn = torch.softmax(q.transpose(-1, -2) @ k / math.sqrt(c), dim=-1)
-        out = (v @ attn.transpose(-1, -2)).view(b, c, h, w)
-
-        return x + self.proj(out.view(b, c, -1)).view(b, c, h, w)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        base_out = self.base(x)
+        adapter_out = self.lora_b(self.lora_a(x)) * self.scaling
+        return base_out + adapter_out
 ```
 
-## Schedulers: DDPM vs DDIM
+The snippet above is pedagogical. Production code should use PEFT's `get_peft_model` so module naming, checkpoint formats, and merge utilities stay consistent across training and inference jobs.
 
-Generating outputs from a diffusion model requires iterative mathematical sequences to denoise the state. Understanding the stark performance differences between scheduling algorithms is critical for optimizing production deployments. The choice of scheduler dictates the fundamental mathematical route taken from complete noise to pristine signal.
+During backpropagation, gradients flow only into \(A\) and \(B\) because \(W_0\) is frozen. Optimizer states—Adam's first and second moments, for example—attach exclusively to those adapter parameters. That is where the memory win compounds: a seven-billion-parameter model might require tens of gigabytes of optimizer state in full fine-tuning, while a rank-16 adapter configuration often keeps optimizer memory in the hundreds of megabytes range depending on how many layers you target. Activation memory still scales with sequence length, batch size, and model width, so LoRA does not magically remove all VRAM pressure, but it removes the worst offender for many workstation-class GPUs.
 
-### DDPM (Denoising Diffusion Probabilistic Models)
+Understanding where LoRA attaches in the transformer block clarifies targeting decisions. A decoder layer typically applies self-attention, residual addition, layer normalization, MLP expansion and contraction, then another residual path. LoRA modifies specific linear maps inside attention and MLP submodules but does not replace layer norms or residual wiring. That surgical placement is why targeting matters: adapters on attention projections influence how tokens mix information, while adapters on MLP projections influence how mixed representations are scaled and gated before the next layer sees them.
 
-The original, foundational method required the model to computationally walk backward sequentially through all theoretical timesteps, treating the generative process as a strict Markov chain. This is highly accurate but painfully slow, mandating enormous compute resources for a single batch.
+LoRA is applied as a parallel branch on targeted linear layers rather than as a sequential bottleneck inserted between existing modules. The base linear map and the adapter branch both consume the same input activation, and their outputs are summed. That design preserves the representational pathway of the pretrained network and explains why merging is mathematically well-defined: you can compute \(W_{\text{merged}} = W_0 + (\alpha/r) B A\) offline for each targeted layer when you no longer need runtime adapter composition.
+
+---
+
+## Why Low Rank Works: Intrinsic Dimensionality
+
+LoRA is not arbitrary matrix factorization. It is motivated by evidence that fine-tuning itself operates in a surprisingly small subspace. Aghajanyan and colleagues showed that pretrained language models have low intrinsic dimensionality: there exists a low-dimensional reparameterization that achieves nearly the same fine-tuning quality as updating all parameters. On MRPC, optimizing only hundreds of randomly projected parameters could recover a large fraction of full fine-tuning performance. The LoRA authors explicitly build on this insight by hypothesizing that the *change* in weights during adaptation also has low intrinsic rank.
+
+That hypothesis matches engineering experience. When you adapt a model to follow a formatting convention or classification rubric, you are rarely rewriting the entire knowledge base encoded in pretraining. You are bending decision boundaries and output style in a concentrated way. Low-rank adapters capture those concentrated changes without giving the optimizer enough freedom to overwrite unrelated capabilities—though you can still cause catastrophic forgetting if your dataset teaches the wrong behavior aggressively.
+
+The rank choice is therefore a bias-variance knob, not merely a memory knob. Very small ranks train quickly and resist overfitting on tiny datasets, but they may fail to capture nuanced domain shifts. Larger ranks increase expressivity and optimizer memory but raise the risk that adapters memorize spurious patterns in small corpora. The durable workflow is to treat rank as a hyperparameter you validate on a held-out set, not as a fixed constant copied from a blog post.
+
+Another way to internalize the intuition is to compare LoRA with training only the final classification head. Head-only tuning works when the decision boundary is simple, but generative tasks require changing intermediate representations throughout the stack. Low-rank updates inside multiple layers let the model bend internal features without unlocking enough degrees of freedom to rewrite the entire pretraining manifold. That middle ground is exactly what enterprise adaptation usually needs: stronger than prompting, weaker—and cheaper—than full fine-tuning.
+
+---
+
+## Choosing Rank, Alpha, and Target Modules
+
+Not every matrix in a transformer needs an adapter. The durable recommendation for decoder-only language models is to target the attention projections and the MLP blocks because those layers mediate how tokens attend to each other and how representations are transformed non-linearly. In many GPT-style architectures the attention paths are named `q_proj`, `k_proj`, `v_proj`, and `o_proj`, while MLP paths appear as `gate_proj`, `up_proj`, and `down_proj` depending on the exact model family. For vision-language or diffusion U-Nets the names differ—`to_q`, `to_k`, `to_v`, `to_out.0`—but the principle is identical: adapt the linear maps that control conditioning and feature mixing.
+
+Cross-attention layers deserve special attention in multimodal models because they are the primary pathway through which text steers image generation. Style and subject LoRAs for diffusion often target those projections first. For pure language tasks, covering both attention and MLP modules usually yields better adaptation than attention-only targeting, at the cost of more trainable parameters. PEFT supports `target_modules="all-linear"` as a discovery-oriented default when you are exploring a new architecture, but production configs should name modules explicitly after inspecting `model.named_modules()` so you do not accidentally attach adapters to layers that should remain frozen for compliance or latency reasons.
+
+Dropout on adapters (`lora_dropout`) regularizes the low-rank pathway during training. A small value such as `0.05` can stabilize adaptation on noisy datasets. `task_type` in `LoraConfig` helps PEFT select the right model wrapper for causal language modeling, sequence classification, or other heads. Setting the task type correctly prevents subtle bugs where labels are shifted relative to logits because the training harness assumed the wrong architecture class.
+
+Community conventions for diffusion LoRAs often emphasize cross-attention keys and values because text conditioning flows through those maps, but the durable lesson transfers to language models: target the layers that control the conditioning pathway for your task. Instruction formatting is a conditioning problem on chat templates; domain tone is a representation problem inside MLP stacks; retrieval-heavy behaviors may still be better served by RAG than by adapters unless the model must change how it cites or abstains. Mapping task type to module targeting is a design skill that improves with post-training error analysis.
+
+When you configure adapters for supervised fine-tuning, start from the library defaults and change one variable at a time. A practical sweep keeps `lora_alpha / r` ratio fixed while increasing rank, or keeps rank fixed while adjusting alpha, but not both simultaneously on the first experiment. Document the tokenizer, chat template, and label masking scheme alongside adapter hyperparameters because generation quality can change dramatically when instruction formatting drifts even if adapter settings remain identical.
+
+Bias handling is easy to overlook. `bias="none"` is the common default and matches the original LoRA paper's focus on weight updates. If you enable bias training on selected modules, trainable parameter counts jump modestly but you may recover accuracy on tasks where output shifts require baseline offsets. For most instruction-tuning jobs on decoder-only models, bias training is unnecessary until evaluation proves otherwise.
+
+---
+
+## Worked Parameter Budget: Rank Arithmetic You Can Reuse
+
+Parameter counting should be a pre-flight checklist, not a post-mortem after an out-of-memory crash. For each targeted linear layer with input dimension \(k\) and output dimension \(d\), LoRA adds \(r \cdot k\) parameters in \(A\) and \(r \cdot d\) parameters in \(B\), totaling \(r(d + k)\). Summing across \(L\) targeted layers gives a trainable count of roughly \(L \cdot r \cdot (d + k)\) when dimensions are similar across layers.
+
+Consider a simplified seven-billion-parameter decoder with hidden size \(d = 4096\), MLP intermediate size \(11008\), 32 layers, and adapters on all four attention projections plus three MLP projections per layer. Each square attention map contributes \(r(4096 + 4096) = 8192r\) parameters. Each rectangular MLP map contributes about \(r(4096 + 11008)\) or \(r(11008 + 4096)\) depending on direction. With \(r = 16\) and seven matrices per layer, the adapter parameter total is on the order of tens of millions—not billions. Optimizer states for those adapter parameters dominate memory far less than full fine-tuning would.
 
 ```python
-def ddpm_sample(model, shape, noise_schedule, num_steps=1000):
-    """Sample using DDPM (slow but high quality)."""
-    x = torch.randn(shape)  # Start from pure noise
+def estimate_lora_params(
+    num_layers: int,
+    hidden_size: int,
+    mlp_size: int,
+    rank: int,
+    target_attention: bool = True,
+    target_mlp: bool = True,
+) -> int:
+    """Estimate trainable LoRA parameters for a LLaMA-style block."""
+    params_per_layer = 0
+    if target_attention:
+        # q, k, v, o projections shaped ~ (hidden, hidden)
+        params_per_layer += 4 * rank * (hidden_size + hidden_size)
+    if target_mlp:
+        # gate/up/down style MLP projections
+        params_per_layer += 3 * rank * (hidden_size + mlp_size)
+    return num_layers * params_per_layer
 
-    for t in reversed(range(num_steps)):
-        # Predict noise
-        noise_pred = model(x, t)
-
-        # Compute coefficients
-        alpha = 1 - noise_schedule[t]
-        alpha_bar = torch.cumprod(1 - noise_schedule[:t+1], dim=0)[-1]
-        beta = noise_schedule[t]
-
-        # Denoise one step
-        mean = (1 / torch.sqrt(alpha)) * (
-            x - (beta / torch.sqrt(1 - alpha_bar)) * noise_pred
-        )
-
-        # Add noise (except at t=0)
-        if t > 0:
-            noise = torch.randn_like(x)
-            x = mean + torch.sqrt(beta) * noise
-        else:
-            x = mean
-
-    return x
+# Example: 32 layers, r=16
+trainable = estimate_lora_params(32, 4096, 11008, rank=16)
+print(f"Estimated trainable adapter parameters: {trainable:,}")
 ```
 
-### DDIM (Denoising Diffusion Implicit Models)
+The estimate ignores embedding layers, layer norms, and bias terms, so always compare against `model.print_trainable_parameters()` after wrapping with PEFT. The function's purpose is to build intuition before you launch a multi-hour training job.
 
-DDIM radically improves upon this by allowing a non-Markovian sampling path that can skip timesteps entirely. In the common `eta=0` setting, the update is deterministic and reproducible for a fixed seed. When `eta` is increased above zero, DDIM reintroduces controlled stochasticity, trading some determinism for diversity. That flexibility is why it remains valuable in production inference stacks where you may want either repeatable outputs or a broader sample distribution from the same prompt.
+Teams sometimes ask whether they should train one high-rank adapter or several low-rank adapters specialized by subdomain. The multi-adapter path shines when evaluation shows clearly separated error modes—legal wording versus engineering runbooks, for example—and serving infrastructure already supports adapter routing. The single high-rank path is simpler to operate when errors are diffuse and data is limited, because splitting tiny datasets across multiple adapters can starve each one of examples. There is no universal winner; the decision should emerge from measured error clusters and serving constraints rather than aesthetic preference for modularity.
+
+Translate parameter counts into storage by multiplying by bytes per value. Trainable adapter weights in bf16 use two bytes per parameter, while AdamW optimizer states commonly add eight bytes per trainable parameter when moments are stored in fp32. A twenty-million-parameter adapter therefore might require on the order of forty megabytes for weights plus roughly one hundred sixty megabytes for optimizer states—still orders of magnitude smaller than full-model optimizer footprints. Checkpoint files on disk may be further compressed depending on serialization format; safetensors is preferred in modern Hugging Face workflows because loading is mmap-friendly and avoids arbitrary code execution risks present in pickled binaries.
+
+---
+
+## Memory and Compute: Frozen Base, Trainable Adapters
+
+Full fine-tuning stores gradients and optimizer moments for every updated weight. AdamW keeps two extra floating-point tensors per parameter, which triplicates effective memory for trainable weights in fp32 optimizer states. LoRA freezes \(W_0\) and trains only \(A\) and \(B\), which shrinks the set of tensors participating in the backward pass. During training you still execute forward passes through the full model, so activation memory remains significant, but optimizer memory scales with adapter count instead of full model size.
+
+At inference time you have two durable patterns. **Merged inference** bakes adapters into the base weights so downstream code sees an ordinary model. **Adapter serving** keeps base and adapter checkpoints separate so you can hot-swap behaviors without reloading the entire foundation model. Merge reduces per-request overhead when you have settled on a single behavior. Adapter serving wins when the same base must support many tenants, styles, or safety profiles and you can amortize base-model loading across requests.
 
 ```python
-def ddim_sample(model, shape, noise_schedule, num_steps=50):
-    """Sample using DDIM (fast, deterministic)."""
-    x = torch.randn(shape)
+from peft import PeftModel
 
-    # Use only a subset of timesteps
-    timesteps = torch.linspace(999, 0, num_steps).long()
+# After training: merge adapters into base weights for lowest inference overhead
+merged_model = peft_model.merge_and_unload()
+merged_model.save_pretrained("./merged-checkpoint")
 
-    for i, t in enumerate(timesteps):
-        noise_pred = model(x, t)
-
-        alpha_bar_t = get_alpha_bar(t, noise_schedule)
-
-        if i < len(timesteps) - 1:
-            alpha_bar_prev = get_alpha_bar(timesteps[i+1], noise_schedule)
-        else:
-            alpha_bar_prev = 1.0
-
-        # DDIM update with eta=0 (deterministic path)
-        pred_x0 = (x - torch.sqrt(1 - alpha_bar_t) * noise_pred) / torch.sqrt(alpha_bar_t)
-        dir_xt = torch.sqrt(1 - alpha_bar_prev) * noise_pred
-        x = torch.sqrt(alpha_bar_prev) * pred_x0 + dir_xt
-
-    return x
+# Alternative: keep adapters separate for multi-tenant serving
+peft_model.save_pretrained("./adapter-only")
 ```
 
-## Text Conditioning and CLIP
+`merge_and_unload()` returns a new model object; it is not an in-place mutation. If you need to preserve the ability to unmerge or swap adapters later, use `merge_adapter()` during experimentation and only call `merge_and_unload()` when publishing a single-tenant artifact.
 
-Generating aesthetically pleasing noise is technically impressive, but steering that exact noise to match a user's textual prompt requires highly precise conditioning mechanisms. Without conditioning, the network simply hallucinates random features mapped from its vast training corpus.
+Comparing LoRA to DreamBooth-style full-weight adaptation in diffusion highlights the same economic trade-off in a visual domain. DreamBooth can memorize specific subjects by updating many U-Net parameters, while LoRA adapters often capture style or character with far smaller artifacts. Neither approach removes the need for responsible dataset curation or copyright review. The engineering takeaway is that adapter checkpoints are easier to audit, duplicate, and roll back than monolithic fine-tunes, which matters when generative services face compliance scrutiny.
 
-To consistently generate an image directly from text, we must strictly align the semantic meaning of the words with concrete visual features. The [CLIP (Contrastive Language-Image Pre-training) architecture achieves this alignment by mapping both complex text and detailed images into the exact identical mathematical embedding space](https://arxiv.org/abs/2103.00020).
+Training throughput improves with LoRA partly because optimizer steps touch fewer parameters, but forward passes still execute the full base model. Techniques such as gradient checkpointing trade extra forward recomputation for lower activation memory, which pairs well with adapter training on long contexts. Mixed precision—bf16 activations with fp32 master weights for adapters—is standard on recent NVIDIA hardware. The durable lesson is to profile your step time: if forward compute dominates, shrinking rank further may not speed up epochs as much as reducing sequence length, batch size, or enabling checkpointing.
 
-```mermaid
-flowchart LR
-    Text["'a photo of a cat'"] --> TE[Text Encoder]
-    TE --> TVec["[0.2, -0.5, 0.8, ...]"]
-    Img[actual cat photo] --> IE[Image Encoder]
-    IE --> IVec["[0.3, -0.4, 0.7, ...]"]
-    TVec -.->|should be similar!| IVec
-```
+---
 
-We can visualize the underlying architecture matching process directly as a flowchart sequence where the textual encoders strive to match the visual features dynamically.
+## QLoRA: Quantized Bases with LoRA Adapters
 
-```mermaid
-flowchart TD
-    A[Text Encoder] -.->|should be similar!| B[Image Encoder]
-```
+QLoRA combines LoRA with 4-bit NormalFloat (NF4) quantization of the frozen base weights so even the stationary parameters consume less VRAM. NF4 is designed for weights that are approximately normally distributed, which matches many pretrained transformer tensors. Double quantization applies a second quantization pass to the quantization constants themselves, yielding additional memory savings documented in the QLoRA paper and the bitsandbytes integration guides. Paged optimizers reduce spikes when optimizer states overflow GPU memory by paging blocks to host RAM during updates.
 
-We inject these heavy CLIP text embeddings directly into the core U-Net by [utilizing Cross-Attention layers](https://arxiv.org/abs/2112.10752), allowing the spatial image features to mathematically "attend" to the rich semantic text tokens during generation. This prevents the loss of crucial positional layout information.
+The durable invariant is that **quantized base weights stay frozen**; gradients flow into LoRA adapters and any explicitly enabled trainable modules such as embeddings when you configure them. Attempting to train the 4-bit base weights directly violates the design of bitsandbytes quantization integrations and produces unstable or unsupported behavior. Think of QLoRA as "compress the library stacks but still let you write new sticky notes," not "rewrite the books themselves."
 
 ```python
-class CrossAttention(nn.Module):
-    """Attend to text embeddings."""
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-    def __init__(self, query_dim, context_dim):
-        super().__init__()
-        self.to_q = nn.Linear(query_dim, query_dim)
-        self.to_k = nn.Linear(context_dim, query_dim)
-        self.to_v = nn.Linear(context_dim, query_dim)
-        self.to_out = nn.Linear(query_dim, query_dim)
+model_id = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
-    def forward(self, x, context):
-        """
-        x: image features [batch, seq, dim]
-        context: text embeddings [batch, text_len, context_dim]
-        """
-        q = self.to_q(x)
-        k = self.to_k(context)
-        v = self.to_v(context)
-
-        # Attention: image queries attend to text keys/values
-        attn = torch.softmax(q @ k.transpose(-1, -2) / math.sqrt(q.shape[-1]), dim=-1)
-        out = attn @ v
-
-        return self.to_out(out)
-```
-
-## Classifier-Free Guidance (CFG)
-
-Unconstrained generative models often suffer from inherently "lazy" generation—producing incredibly generic outputs that barely respect the intricate textual details of a prompt. We decisively fix this issue using a technique called Classifier-Free Guidance (CFG).
-
-During the actual training phase, we periodically drop out the text embedding (replacing it entirely with zeros) to train a completely unconditional generation path right alongside the conditional path. This teaches the model to synthesize broad visual layouts without strict textual anchoring.
-
-```python
-def train_with_cfg(model, x_0, text_embedding, noise_schedule, drop_prob=0.1):
-    """Training with classifier-free guidance preparation."""
-    t = torch.randint(0, len(noise_schedule), (x_0.shape[0],))
-    x_t, noise = forward_diffusion(x_0, t, noise_schedule)
-
-    # Randomly drop text conditioning
-    if random.random() < drop_prob:
-        text_embedding = torch.zeros_like(text_embedding)  # Unconditional
-
-    noise_pred = model(x_t, t, text_embedding)
-    loss = F.mse_loss(noise_pred, noise)
-
-    return loss
-```
-
-At dynamic inference time, [we execute the model twice per step: once unconditionally and once conditionally](https://arxiv.org/abs/2207.12598). We then mathematically extrapolate the vector difference between the two to force much stronger adherence to the prompt. This mathematical operation effectively pulls the tensor away from generic noise and propels it intensely toward the requested concept.
-
-```text
-noise_pred = noise_uncond + scale × (noise_cond - noise_uncond)
-```
-
-```python
-def cfg_sample(model, x_t, t, text_embedding, guidance_scale=7.5):
-    """Sample with classifier-free guidance."""
-    # Unconditional prediction (no text)
-    noise_uncond = model(x_t, t, torch.zeros_like(text_embedding))
-
-    # Conditional prediction (with text)
-    noise_cond = model(x_t, t, text_embedding)
-
-    # Blend: move AWAY from unconditional, TOWARD conditional
-    noise_pred = noise_uncond + guidance_scale * (noise_cond - noise_uncond)
-
-    return noise_pred
-```
-
-## Stable Diffusion Architecture
-
-Stable Diffusion seamlessly combines CLIP embeddings, CFG, and an optimized U-Net into a massive generation pipeline that executes exclusively within a highly compressed Latent Space. This latent operation aggressively bypasses the massive compute requirements of raw pixel generation, unlocking consumer hardware viability for incredibly intensive rendering workflows.
-
-```mermaid
-flowchart TD
-    Prompt["'a cat wearing a top hat'"] --> TextEnc[CLIP Text Encoder]
-    TextEnc --> TextEmb["text embeddings [77, 768]"]
-    
-    Noise["Random noise [4, 64, 64]"] --> UNet[U-Net with cross-attention]
-    Timestep["timestep"] --> UNet
-    TextEmb --> UNet
-    
-    UNet --> PredNoise["Predicts noise in latent space"]
-    PredNoise --> Denoised["denoised latent [4, 64, 64]"]
-    Denoised --> VAEDec[VAE Decoder]
-    VAEDec --> FinalImg["Final Image [3, 512, 512]"]
-```
-
-By actively [using a Variational Autoencoder (VAE), Stable Diffusion effectively shrinks a large spatial image down into a compact latent tensor representation](https://arxiv.org/abs/2112.10752)—achieving massive reduction in computational complexity before the actual diffusion process even begins. The decoded output matches the original high-resolution distribution with staggering fidelity.
-
-```python
-def stable_diffusion_inference(prompt, num_steps=50, guidance_scale=7.5):
-    """Complete Stable Diffusion inference."""
-    # 1. Encode text
-    prompt_embeddings = clip_encoder(prompt)
-    negative_embeddings = clip_encoder("")
-    text_embeddings = torch.cat([negative_embeddings, prompt_embeddings], dim=0)
-
-    # 2. Start from random latent noise
-    latents = torch.randn(1, 4, 64, 64)
-
-    # 3. Denoise in latent space
-    for t in tqdm(scheduler.timesteps):
-        # Expand latents for CFG (unconditional + conditional)
-        latent_input = torch.cat([latents] * 2)
-        latent_input = scheduler.scale_model_input(latent_input, t)
-
-        # Predict noise
-        noise_pred = unet(latent_input, t, text_embeddings)
-
-        # Apply CFG
-        noise_uncond, noise_cond = noise_pred.chunk(2)
-        noise_pred = noise_uncond + guidance_scale * (noise_cond - noise_uncond)
-
-        # Scheduler step (DDIM, etc.)
-        latents = scheduler.step(noise_pred, t, latents).prev_sample
-
-    # 4. Decode latents to image
-    image = vae.decode(latents)
-
-    return image
-```
-
-## Parameter-Efficient Fine-Tuning: Enter LoRA
-
-While massive foundation models like Stable Diffusion and LLaMA are undeniably powerful, repeatedly retraining all of their billions of weights for specific enterprise domains is entirely cost-prohibitive. Complete backpropagation algorithms often overwhelm standard GPU memory allocations quickly.
-
-Low-Rank Adaptation (LoRA) fundamentally disrupted and changed the pure economics of fine-tuning. By completely [freezing the vast pre-trained model weights and strategically inserting low-rank trainable matrices](https://arxiv.org/abs/2106.09685), engineers can successfully reduce the total number of trainable parameters dramatically and drastically cut GPU hardware requirements without sacrificing final generation quality.
-
-```python
-from peft import LoraConfig, get_peft_model
-
-# LoRA config for Stable Diffusion
-lora_config = LoraConfig(
-    r=4,                          # Low rank works well for SD
-    lora_alpha=4,
-    target_modules=[
-        "to_k", "to_q", "to_v",   # Cross-attention
-        "to_out.0",               # Output projection
-        "proj_in", "proj_out",    # Convolutions
-    ],
-    lora_dropout=0.0,
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
 )
 
-# Apply to U-Net
-unet = get_peft_model(unet, lora_config)
+base_model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    quantization_config=bnb_config,
+    device_map="auto",
+)
+base_model = prepare_model_for_kbit_training(base_model)
+
+lora_config = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+
+model = get_peft_model(base_model, lora_config)
+model.print_trainable_parameters()
 ```
 
-When comparing LoRA to traditional full-weight adaptation methods like Dreambooth, the efficiency metrics demonstrate absolute superiority for scaled deployments:
+Paged optimizers and gradient checkpointing are complementary tools for single-GPU runs; Module 1.10 walks through the full training loop, checkpoint naming, and evaluation gates. Here the focus is conceptual: QLoRA exists to make the *base model resident* affordable while keeping adaptation quality close to full-precision LoRA for many instruction-tuning tasks.
 
-| Aspect | Dreambooth | LoRA |
-|--------|------------|------|
-| Parameters | Updates far more weights | Usually trains only a small fraction of weights |
-| Data needed | Small, task-dependent datasets can work | Small, task-dependent datasets can also work |
-| Training time | Varies widely by hardware and setup | Usually shorter than full-model retraining, but hardware-dependent |
-| Model size | Full checkpoints are much larger | Adapter checkpoints are usually much smaller |
-| Combinability | Less modular | More modular in many adapter-based workflows |
+Gradient flow in QLoRA deserves explicit attention because misconceptions cause failed runs. The quantized weight tensors store low-bit representations used during the forward pass; adapters sitting beside those layers accumulate high-precision gradients during backward. Bitsandbytes integrates with Transformers so that compute dtypes for matrix multiplications can be set independently from storage dtypes. When you configure `bnb_4bit_compute_dtype=torch.bfloat16`, you are asking the matmul kernels to promote dequantized values into bf16 for arithmetic while keeping stored weights compact. That separation is what makes "4-bit base plus bf16 adapters" a coherent design rather than a contradiction.
 
-One of the absolute greatest engineering advantages of utilizing LoRA is the distinct ability to arbitrarily stack adapters at dynamic runtime. This architecture allows developers to combine completely distinct concepts smoothly without rewriting internal routing logic.
+Hardware compatibility still gates QLoRA adoption in practice. Bitsandbytes 4-bit kernels target CUDA GPUs with sufficient capability; CPU-only environments may load models but training configurations that depend on GPU quantization paths will not reproduce workstation results. Apple Silicon and AMD ROCm stacks evolve on independent timelines, so portability demands explicit smoke tests in target environments rather than assumptions from a single successful Linux CUDA laptop run.
+
+Double quantization targets the scaling constants associated with weight blocks. In blockwise quantization each group of weights carries scale metadata; double quantization compresses those scales further. The savings per parameter are small in isolation but accumulate across billions of frozen weights, which is exactly the regime where QLoRA operates. You should still treat the reported bit savings as vendor-documented approximations rather than guarantees in every custom kernel path.
+
+---
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+
+| Component | Pinned example | Role in QLoRA stack |
+|-----------|----------------|---------------------|
+| `peft` | 0.18.1 | `LoraConfig`, `get_peft_model`, `prepare_model_for_kbit_training`, merge utilities |
+| `transformers` | 4.53.3 | `BitsAndBytesConfig`, base model + tokenizer loading |
+| `bitsandbytes` | 0.41.1 | 4-bit NF4 storage and double quant kernels (also needs `scipy`) |
+| `torch` | 2.1.0+ | `bfloat16` compute dtype for adapter gradients |
+
+These pins are a **tested known-good combination** (verified to import and run together), not necessarily the newest releases — as of 2026-06, later versions exist (e.g. `peft` 0.19.x, `transformers` 5.x, `bitsandbytes` 0.49.x). Re-verify mutual compatibility before upgrading any one of them.
+
+This table is illustrative, not a leaderboard or endorsement. Confirm API field names in your environment before baking them into CI images.
+
+Library upgrades can change default dtype handling or rename configuration fields. Pin versions in training containers and record them in adapter metadata. When upgrading `peft` or `transformers`, rerun the hands-on exercise in this module as a smoke test before promoting new base images to production training clusters. The durable concepts in this module survive version churn even when exact import paths shift slightly between minor releases.
+
+---
+
+## Production Deployment: Merge, Serve, and Swap Adapters
+
+Serving generative models in production requires you to separate *foundation capacity* from *tenant-specific behavior*. Adapters encode the second layer. When latency sensitivity is high and each deployment serves exactly one behavior, merge adapters into the base checkpoint during the release pipeline so inference frameworks load a single weight file. When a shared cluster hosts dozens of behaviors, keep adapters external and load them with PEFT's dynamic adapter APIs, accepting modest per-request overhead in exchange for operational flexibility.
+
+Multi-adapter composition appears frequently in creative workflows—stacking a style adapter with a subject adapter—but stacking is not commutative. Order and strength coefficients change outputs in nonlinear ways. Production systems should treat each combination as a configuration profile with regression tests, not as a free-form user knob without guardrails. For language models, multi-adapter support is less mature than the diffusion ecosystem's community conventions; prefer single-purpose adapters unless you have automated evaluation that covers the combinatorial space.
+
+Operational monitoring for adapter deployments should track not only latency and GPU utilization but also behavioral drift. Adapters trained on stale internal documents can encode deprecated procedures. Version adapters alongside datasets and include metadata such as rank, alpha, target modules, base model revision, and training commit hash. When auditors ask why a model answered differently after a silent rollout, those fields turn a mystery into a traceable configuration change.
+
+Security and compliance teams increasingly ask whether adapters can leak secrets from training corpora. LoRA reduces but does not eliminate memorization risk. Small rank limits capacity to memorize large verbatim excerpts, yet adapters can still overfit sensitive strings present in repetitive training rows. Pair adapter training with dataset redaction, deduplication, and post-training evaluations that probe for unintended disclosure. Treat adapters with the same access controls as the datasets used to create them because downloading an adapter file can be equivalent to downloading a distilled fragment of proprietary text.
+
+Rollback strategy differs between merged and unmerged deployments. Merged checkpoints require you to redeploy a previous merged artifact or re-merge an older adapter revision against a pinned base. Adapter-serving architectures let you flip a routing table entry to the last known-good adapter version while the base remains loaded. For high-churn product teams, external adapters often reduce mean time to recovery even if peak throughput is slightly lower than fully merged weights.
+
+---
+
+## PEFT Configuration Patterns in Practice
+
+The Hugging Face PEFT library is the de facto integration layer for LoRA in Python training stacks. A durable pattern loads a base model, constructs `LoraConfig`, wraps with `get_peft_model`, trains with a standard supervised objective, then saves only adapter weights via `save_pretrained` on the PEFT model. Loading for continued training or inference uses `PeftModel.from_pretrained` with the same base checkpoint path.
 
 ```python
-# Load and combine multiple LoRAs
-base_model = load_stable_diffusion()
-art_style_lora = load_lora("impressionist_style.safetensors")
-character_lora = load_lora("my_character.safetensors")
+from transformers import AutoModelForCausalLM
+from peft import LoraConfig, get_peft_model, PeftModel
 
-# Apply both with different strengths
-model = apply_lora(base_model, art_style_lora, strength=0.8)
-model = apply_lora(model, character_lora, strength=0.6)
+base_id = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+adapter_path = "./tinyllama-lora-adapter"
 
-# Generate: character in impressionist style!
-image = model("portrait of [character], impressionist painting")
+# Training-time wrap
+base = AutoModelForCausalLM.from_pretrained(base_id, torch_dtype=torch.bfloat16)
+config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    target_modules=["q_proj", "v_proj"],
+    lora_dropout=0.05,
+    task_type="CAUSAL_LM",
+)
+train_model = get_peft_model(base, config)
+
+# Inference-time reload
+reloaded_base = AutoModelForCausalLM.from_pretrained(base_id, torch_dtype=torch.bfloat16)
+inference_model = PeftModel.from_pretrained(reloaded_base, adapter_path)
+inference_model.eval()
 ```
 
-> **Stop and think**: If QLoRA quantizes the base model to 4-bit precision, how does the model maintain high-precision gradients during the backward pass without running out of memory?
+When exporting for environments that do not ship PEFT, merge adapters first. When staying inside Hugging Face ecosystems, adapter-only artifacts simplify storage and access control because the foundation weights can remain a read-only shared asset mounted from an internal mirror.
 
-## Production War Stories
+Observability hooks for adapter training mirror standard deep learning practice but should emphasize behavioral metrics, not loss alone. Track training loss for instability, validation perplexity or task accuracy for usefulness, and sample generations from fixed prompts for qualitative regression. Save checkpoints when validation improves, not only at the final epoch, because adapter overfitting can arrive quickly on small datasets. Name checkpoints with hyperparameter summaries so comparative evaluation later does not devolve into guessing which run produced a given file.
 
-Theoretical metrics matter, but real-world enterprise deployments provide the starkest lessons in robust generative architecture. These scenarios encapsulate actual production failures mapped to critical operational checkpoints.
+For diffusion U-Nets, `target_modules` names differ but the API surface is identical. The training loop still optimizes a denoising objective, yet the memory story remains: freeze the U-Net backbone, train adapters on attention pathways, and publish small adapter bundles consumable by community tooling. Keep diffusion training details in Module 1.3; this module only borrows the pattern to show that LoRA is architecture-agnostic.
 
-### The $2 Million Recall: Getty Images vs AI Art
+Advanced PEFT methods extend the same configuration object. DoRA decomposes magnitude and direction updates; PiSSA uses principal singular subspaces for initialization. Both are intentionally deferred to Module 1.9 so this module stays focused on the baseline low-rank adapter contract every engineer should understand first.
 
-Commercial teams should review generated assets for signs of memorized training artifacts such as watermarks or near-duplicates and should validate legal risk before launch.
+Data formatting deserves as much attention as adapter hyperparameters. Instruction-tuning datasets should use a consistent chat template applied by the tokenizer, with labels masked so loss applies only to assistant tokens you want the model to learn. If you accidentally train on user tokens or system prompts, the adapter may learn spurious correlations that hurt deployment when templates change. Keep a frozen evaluation JSONL file with prompts and reference completions so every adapter sweep reports comparable metrics.
 
-```python
-# Always check for potential copyright issues
-import clip
-from PIL import Image
+When exporting artifacts for downstream consumers, publish a model card alongside adapter weights documenting base model revision, dataset hash, training library versions, rank and alpha, target modules, evaluation results, and known failure modes. Consumers of your adapter should not need to read training logs to understand intended use. That discipline mirrors mature API versioning: the adapter is an interface contract, not merely a tensor file.
 
-def check_image_similarity(generated_image, reference_images):
-    """Compare generated image against known copyrighted references"""
-    # Use CLIP to check similarity
-    model, preprocess = clip.load("ViT-B/32")
-    gen_features = model.encode_image(preprocess(generated_image))
+Training loops themselves stay familiar once PEFT wrapping is configured. You still tokenize examples, apply causal masking for decoder-only models, compute cross-entropy loss on label tokens, and call `loss.backward()` followed by optimizer stepping. The difference is which parameters appear in `optimizer.param_groups`. A minimal pattern constructs AdamW over `p for p in model.parameters() if p.requires_grad`, which automatically excludes frozen base weights. Learning rates for adapters are often higher than historical full-model rates because the trainable tensors are fewer and gradients are concentrated; values around `1e-4` to `3e-4` are common starting points for LoRA on language models, but you should treat those as sweep bounds rather than laws.
 
-    for ref in reference_images:
-        ref_features = model.encode_image(preprocess(ref))
-        similarity = (gen_features @ ref_features.T).item()
-        if similarity > 0.85:  # High similarity threshold
-            return True, similarity
-    return False, 0
-```
+Skeptical stakeholders sometimes worry that LoRA cannot teach genuinely new skills, only stylistic nudges. The empirical literature on parameter-efficient fine-tuning shows stronger results: adapters can improve task-specific accuracy on benchmarks when data is representative and evaluation is honest. The limit is not expressivity alone but data coverage and rank budget. If your dataset demonstrates a reliable mapping from prompts to desired outputs, LoRA can encode that mapping. If your dataset is tiny and contradictory, no adaptation method will rescue the project without more examples or clearer task definition.
 
-### The Support Ticket Avalanche
+Catastrophic forgetting is less severe with frozen bases than with full fine-tuning, yet adapters can still damage general capabilities when training data over-represents narrow patterns. Mitigate that risk with mixed generic instruction data, lower learning rates, early stopping when held-out general benchmarks dip, and periodic regression prompts that probe unrelated capabilities. LoRA is not a license to skip dataset design; it is a mechanism that makes well-designed datasets cheaper to apply.
 
-Generative-image APIs can fail under load when inference defaults are too slow for real production traffic, so latency and cost budgets should be validated before launch.
+Evaluation must compare against the base model with adapters disabled when possible. PEFT exposes toggles to deactivate adapters for A/B measurement so you can verify the adapter improved the target behavior without silently harming unrelated prompts. Regression suites should include both in-distribution formatting cases and out-of-distribution probes that check general knowledge and safety refusals. An adapter that improves JSON conformance while increasing hallucination rate on factual questions is not ready for promotion even if the training loss decreased smoothly.
 
-```python
-# Production-optimized settings
-PRODUCTION_SETTINGS = {
-    "num_inference_steps": 25,      # Not 1000!
-    "scheduler": "DPMSolverMultistep",  # Not DDPM!
-    "enable_attention_slicing": True,
-    "enable_vae_slicing": True,
-    "torch_dtype": torch.float16,   # Not float32!
-}
-
-# Result: These optimizations can reduce generation latency substantially.
-# Cost: These optimizations can also reduce infrastructure cost materially under load.
-```
-
-### The NSFW Filter Failure
-
-A seemingly strong offline safety metric can still be inadequate for a public generative product, so production deployments usually need layered safeguards rather than a single classifier threshold.
-
-```python
-# Multi-layer safety system
-def safe_generation_pipeline(prompt: str, user_id: str):
-    # Layer 1: Input prompt filtering
-    if contains_blocked_terms(prompt):
-        return None, "Blocked prompt"
-
-    # Layer 2: Prompt rewriting for safety
-    safe_prompt = llm_rewrite_prompt(prompt, "child-appropriate")
-
-    # Layer 3: Generate with safety model
-    image = generate_with_safety_model(safe_prompt)  # SDXL-safe variant
-
-    # Layer 4: Post-generation NSFW check
-    nsfw_score = nsfw_classifier(image)
-    if nsfw_score > 0.05:  # Very low threshold
-        return None, "Failed safety check"
-
-    # Layer 5: Human review queue for edge cases
-    if nsfw_score > 0.01:
-        queue_for_review(image, user_id)
-
-    return image, "Success"
-```
-
-## Economics at a Glance
-
-Thoroughly understanding the precise financial breakdown of generative machine learning models versus highly traditional artistic rendering pipelines is absolutely mandatory for effective technical leadership. Scaling operations demands optimization across the entire compute stack.
-
-| Use Case | Cost per Image | Time to Find |
-|----------|---------------|--------------|
-| Stock photo license | Cost varies by library and license terms | Usually fast to source |
-| Custom photoshoot | Usually much more expensive than stock assets | Requires planning and lead time |
-| Concept art (freelancer) | Pricing varies by artist and scope | Turnaround usually depends on availability and revision cycles |
-| Product rendering | Pricing varies by complexity and vendor | Delivery time depends on scope and revision requirements |
-
-| Platform | Cost per Image | Time to Generate |
-|----------|---------------|------------------|
-| Midjourney | Subscription economics vary by plan and workload | Usually interactive rather than immediate |
-| DALL-E 3 | API pricing depends on image size and provider terms | Latency depends on queueing and request settings |
-| Stable Diffusion (self-hosted) | Marginal cost depends on hardware utilization and power or rental assumptions | Latency varies widely by model, scheduler, and hardware |
-| Stable Diffusion (cloud API) | Pricing varies by provider, model, and image settings | Latency depends on provider load and configuration |
-
-| Setup | Hardware Cost | Per-Image Cost | Breakeven |
-|-------|--------------|----------------|-----------|
-| RTX 3090-class hardware | Upfront hardware cost varies by market | Low marginal inference cost after purchase, but breakeven depends on utilization assumptions |
-| RTX 4090-class hardware | Upfront hardware cost varies by market | Very low marginal inference cost is possible, but breakeven depends on workload assumptions |
-| A100-class cloud GPU | Rental pricing varies by provider and region | Per-image cost depends on utilization and batching |
-| Hosted inference API | Minimal setup effort is common | Unit pricing depends on provider and model choice |
-
-| Quality Level | Tool | Cost | Use Case |
-|--------------|------|------|----------|
-| Ideation | Many tools | Usually the cheapest tier of use | Brainstorming, moodboards |
-| Social media | Common image generators | Low per-image cost is typical | Instagram, Twitter |
-| Marketing | Higher-end hosted generators | Costs are still low compared with custom production, but vary by provider | Ads, presentations |
-| Print | Custom or fine-tuned workflows | Costs rise with quality-control and production requirements | Magazines, packaging |
-| Hero images | Professional + AI | Costs depend mostly on review, retouching, and creative-direction needs | Final campaign assets |
-
-## The Diffusion Family Tree
-
-The technological lineage of broad diffusion models demonstrates a rapid, relentless convergence of deep thermodynamic theory and profound deep learning scaling algorithms over the last decade.
-
-```mermaid
-graph TD
-    A[2015: Diffusion Models<br>Sohl-Dickstein] --> B[2020: DDPM<br>Ho et al.]
-    B --> C[2020: DDIM<br>Song et al.]
-    B --> D[2021: Guided Diffusion<br>Dhariwal & Nichol]
-    C --> E[2021: GLIDE<br>OpenAI]
-    D --> E
-    E --> F[2022: DALL-E 2<br>OpenAI]
-    E --> G[2022: Stable Diffusion<br>Stability AI]
-    G --> H[2023: SDXL<br>Stability AI]
-    H --> I[2024: SD 3.0 / Flux<br>Transformer-based DiT]
-```
+---
 
 ## Did You Know?
 
-- **Did You Know?** [The original LoRA paper (arXiv:2106.09685) by Hu et al. was submitted on June 17, 2021, and demonstrated that PEFT could reduce trainable parameters by approximately 10,000x and GPU memory by 3x compared to full fine-tuning of GPT-3 175B](https://arxiv.org/abs/2106.09685).
-- **Did You Know?** Using the QLoRA technique (arXiv:2305.14314), engineers can successfully [fine-tune a massive 65B parameter model on just a single 48GB GPU using 4-bit NormalFloat (NF4) precision](https://arxiv.org/abs/2305.14314).
-- **Did You Know?** Enabling nested quantization in the bitsandbytes library [yields an additional 0.4 bits per parameter of memory savings](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes), heavily compounding across billions of weights.
-- **Did You Know?** PEFT moved quickly through the 0.18.x line and into 0.19.x, which is exactly why production fine-tuning guides should pin tested versions instead of implying that one specific minor release will remain current for long.
+- **LoRA initialization guarantees a no-op start**: PEFT initializes adapter matrix \(A\) with Kaiming uniform weights and matrix \(B\) with zeros, so the initial low-rank product is zero and the network matches the base model before training.
+- **Intrinsic dimensionality motivated LoRA's rank hypothesis**: Aghajanyan et al. demonstrated that effective fine-tuning can live in a subspace far smaller than the full parameter count, providing empirical grounding for low-rank adaptation.
+- **QLoRA's NF4 dtype targets normally distributed weights**: The QLoRA paper introduced 4-bit NormalFloat quantization because neural network weights often approximate normal distributions, making NF4 more suitable than naive 4-bit integer formats for frozen bases.
+- **Merge is not in-place**: `merge_and_unload()` returns a new model object without PEFT wrappers; forgetting to reassign the result is a common source of "merged but still slow" inference reports.
+
+---
 
 ## Common Mistakes
 
-Developers repeatedly suffer from the same architectural misunderstandings when integrating generative pipelines. Use this matrix to triage critical failures instantly during active debugging sessions.
+| Mistake | Why it happens | How to fix |
+|---------|----------------|------------|
+| **Choosing rank without validation** | Rank is treated as a universal constant from a tutorial | Sweep ranks on a held-out set and monitor task metrics, not only training loss |
+| **Setting `lora_alpha` independently of rank** | Alpha is copied from an unrelated model family | Scale alpha relative to rank; document the ratio you validated |
+| **Targeting too few modules** | Attention-only configs are easier to type | Include MLP projections when task quality plateaus; inspect `named_modules()` explicitly |
+| **Training quantized base weights** | Misunderstanding which tensors receive gradients in QLoRA | Freeze base weights; train adapters only; call `prepare_model_for_kbit_training` |
+| **Skipping `task_type` in `LoraConfig`** | Defaults appear to work until label shifting appears | Set `task_type="CAUSAL_LM"` (or the correct enum) for your head architecture |
+| **Assuming merge happened in place** | `merge_and_unload()` return value ignored | Assign `model = model.merge_and_unload()` and save the returned object |
+| **Deploying adapters without metadata** | Focus on loss curves during training only | Version adapter artifacts with rank, alpha, targets, base revision, and dataset hash |
+| **Stacking adapters without regression tests** | Creative tooling encourages arbitrary combinations | Treat each adapter pair as a named profile with automated evaluation before release |
 
-| Mistake | Why | Fix |
-|---|---|---|
-| **Blurry or Low-Quality Images** | Guidance scale too low, or too few denoising steps. | Increase guidance scale to 7-12 and use at least 30-50 steps. |
-| **Prompt Not Followed** | Conflicting prompt elements, weak words, or model bias. | Use parentheses for emphasis (e.g., `(detailed hands:1.3)`), negative prompts, and reorder the prompt. |
-| **Artifacts and Distortions** | Guidance scale too high or incompatible model/LoRA combinations. | Lower guidance scale and carefully check LoRA compatibility. |
-| **Inconsistent Characters** | No character consistency mechanism and varied poses in training data. | Use reference images (IP-Adapter), train a dedicated character LoRA, or use a consistent seed. |
-| **Using DDPM Scheduler in Production** | DDPM-style sampling is usually much slower than production-oriented schedulers. | Use faster schedulers such as DDIM or modern multistep solvers to reduce latency, then validate quality on your own workload. |
-| **Ignoring Guidance Scale Trade-offs** | Excessively high guidance can over-constrain the model and introduce artifacts. | Tune the scale empirically for the model, scheduler, and prompt style you are using. |
-| **Not Using Half Precision** | Full precision usually consumes substantially more memory than half precision. | Use reduced precision and other memory-saving settings when your hardware and model support them, then validate image quality on your workload. |
-| **Not Optimizing for Slow Generation** | Large step counts and inefficient attention settings can increase generation latency substantially. | Use memory-efficient attention where supported and consider accelerated or distilled generation methods when low-latency output is a requirement. |
-| **Generating at Wrong Resolutions** | Many diffusion models perform best near their documented training or recommended target resolutions. | Start from the model's documented resolution guidance and validate other aspect ratios experimentally. |
-| **Not Seeding for Reproducibility** | Failing to explicitly define a random seed makes every generation entirely stochastic, preventing iterative prompt engineering and troubleshooting. | Create a deterministic generator via `torch.Generator("cuda").manual_seed(42)` and securely log the seed alongside the generated asset. |
-| **Mismatched Package Versions** | PEFT, Transformers, Diffusers, and bitsandbytes evolve quickly; examples that worked on one minor release can fail on a newer stack if you do not pin and test them together. | Pin exact versions in your `requirements.txt`, record the validated Python version, and treat upstream docs as moving references rather than assuming a single minor release remains current. |
-| **Targeting Only Attention Matrices** | Restricting LoRA adapters exclusively to the Query/Value projections limits the model's capacity to learn complex, cross-domain concepts during fine-tuning. | Follow the PEFT recommended QLoRA-style approach and [target all linear modules in the architecture](https://huggingface.co/docs/peft/developer_guides/lora) by configuring `target_modules="all-linear"`. |
-| **Using 4-bit Training on Base Weights** | Bitsandbytes documentation explicitly states that [8-bit and 4-bit training functions are exclusively intended for training the injected extra parameters, not the quantized base model](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes). | Freeze the base model, quantize it to 4-bit using `bnb_4bit_quant_storage`, and only set `requires_grad=True` on the injected LoRA matrices. |
+The LoRA scaling convention divides by rank so that widening the bottleneck does not automatically amplify adapter outputs; practitioners often pair that convention with an `lora_alpha` value near twice the rank as a starting point before task-specific tuning on validation data.
 
-## Hands-On Exercises
+When debugging a stalled LoRA run, inspect learning rate and rank before blaming quantization. A learning rate that is too high for adapter parameters can destabilize training even when the base is frozen, producing loss spikes that look like hardware faults. A rank that is too low can yield flat validation curves that look like broken data when the adapter simply lacks capacity. Structured sweeps beat random tweaks because they produce evidence you can attach to incident postmortems and compare across teammates who inherit the same adapter lineage weeks later.
 
-To successfully run these complex exercises locally, you must first establish a verifiably isolated Python environment and install the exact critical dependency versions required for this module. Mismatched versions can quickly crash the tensor allocations.
+---
 
-### Prerequisites and Environment Setup
+## Quiz
 
-Begin immediately by carefully installing the necessary deep learning libraries. It is absolutely critical to firmly pin specific versions to strictly avoid destructive ecosystem inconsistencies.
+**Q1**: Scenario: A teammate claims LoRA works by throwing away most of the pretrained weights and replacing them with random small matrices. How do you correct the mental model using the LoRA equation?
+
+<details>
+<summary>Answer</summary>
+
+LoRA keeps the full pretrained matrix \(W_0\) frozen and adds a low-rank update \(BA\) with rank \(r \ll d\). The forward pass is \(W_0 x + (\alpha/r) B A x\), not a replacement of \(W_0\). At initialization, \(B\) is zero so the adapter term vanishes and the model behaves like the base checkpoint. The teammate confused compression of the *update* with deletion of the *base weights*.
+
+</details>
+
+**Q2**: Scenario: You must configure QLoRA to fine-tune a 7B model on one GPU with 24 GB VRAM. Full fp16 fine-tuning exhausts memory during the backward pass. Which `LoraConfig` and `BitsAndBytesConfig` combination addresses optimizer memory and base weight residency?
+
+<details>
+<summary>Answer</summary>
+
+Configure `BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16)` when loading the base, call `prepare_model_for_kbit_training`, then attach `LoraConfig` with appropriate `target_modules` and `task_type="CAUSAL_LM"`. Optimizer states attach only to adapter parameters, not the entire 7B tensor set. Complementary tactics include gradient checkpointing and smaller batch sizes with gradient accumulation, but the defining QLoRA move is frozen 4-bit bases plus trainable low-rank adapters configured through PEFT.
+
+</details>
+
+**Q3**: Scenario: For a LLaMA-style decoder you set `r=64` on all linear layers but validation quality is unchanged versus `r=8`, while training is slower. What hypothesis fits, and what do you do next?
+
+<details>
+<summary>Answer</summary>
+
+Higher rank increases capacity but also risk of overfitting or redundant degrees of freedom when the task lies in a low intrinsic dimension. If metrics plateau, the task may not need large rank. Run a rank sweep with fixed alpha ratio, compare held-out task metrics, and prefer the smallest rank that meets quality gates to save memory and step time.
+
+</details>
+
+**Q4**: Scenario: Production inference shows higher latency with PEFT adapters than expected, even though parameter counts are tiny. Name two deployment-level causes and mitigations.
+
+<details>
+<summary>Answer</summary>
+
+Separate adapter loading adds runtime composition overhead compared with a merged checkpoint; mitigating by merging for single-behavior releases. MoE or multi-adapter paths can materialize more adapter work than necessary per token; mitigating by merging for hot paths or limiting active adapters per request. Also verify you actually assigned the merged model object after `merge_and_unload()`.
+
+</details>
+
+**Q5**: Scenario: You configure `BitsAndBytesConfig(load_in_4bit=True)` but forget `prepare_model_for_kbit_training`. Gradients explode on the first step. Why?
+
+<details>
+<summary>Answer</summary>
+
+Quantized bases require preparation hooks so layer norms and gradient flow paths behave correctly during adapter training. Without `prepare_model_for_kbit_training`, mixed precision paths and frozen weight handling may be inconsistent, producing unstable gradients. The fix is to prepare the k-bit model, keep bases frozen, and train adapters only.
+
+</details>
+
+**Q6**: Scenario: An engineer targets only `q_proj` and `v_proj` for a formatting task and sees weak adherence. MLP layers remain untouched. Why might MLP adapters help?
+
+<details>
+<summary>Answer</summary>
+
+Attention projections route token interactions, but MLP blocks apply the large nonlinear transformations that shape feature magnitudes and gating patterns. Formatting and style often require changing how representations are scaled and filtered after attention. Adding `gate_proj`, `up_proj`, and `down_proj` (names vary by architecture) gives the adapter more leverage over output structure.
+
+</details>
+
+**Q7**: Scenario: You need three customer-specific tone adapters on one shared base model in a SaaS chat API. When is adapter serving preferable to merging three separate full checkpoints?
+
+<details>
+<summary>Answer</summary>
+
+Adapter serving wins when one base replica must hot-swap behaviors per tenant without storing three full 7B copies. Merge wins when each tenant deployment is isolated and latency must be minimal. For shared infrastructure, external adapters reduce storage amplification and simplify rolling out per-tenant updates if evaluation gates pass per adapter version.
+
+</details>
+
+**Q8**: Scenario: After training, `print_trainable_parameters()` shows far more trainable weights than your manual LoRA estimate. What are the first three checks?
+
+<details>
+<summary>Answer</summary>
+
+Verify `requires_grad` is false on base weights, confirm you did not leave embeddings or layer norms trainable unintentionally, and inspect `target_modules` for broader matches than expected (for example `all-linear` matching unintended layers). Also check for duplicate adapter injections from reloading checkpoints twice.
+
+</details>
+
+---
+
+## Hands-On Exercise
+
+**Task**: Configure a QLoRA-ready TinyLlama model, inspect trainable parameters, save an adapter checkpoint, and merge it back into a standalone model for inference.
+
+### Environment Setup
 
 ```bash
-# Execute in your terminal
-python -m venv peft_env
-source peft_env/bin/activate
-
-# Install precise dependencies for verifiable execution
-pip install torch==2.1.0 torchvision==0.16.0 diffusers==0.27.2 peft==0.18.1 transformers==4.53.3 bitsandbytes==0.41.1 matplotlib==3.8.2 requests==2.31.0
+python -m venv lora_lab
+source lora_lab/bin/activate
+pip install "torch>=2.1.0" "transformers==4.53.3" "peft==0.18.1" "bitsandbytes==0.41.1" "accelerate>=0.27.0" "scipy>=1.11"
 ```
 
-### Exercise 1: Visualize the Diffusion Process
+### Steps
 
-Before writing the necessary complex algorithms, we must reliably load verifiable test data representing a core input structure. A properly bounded tensor ensures matrix calculations map successfully to visualization rendering.
+1. Load `TinyLlama/TinyLlama-1.1B-Chat-v1.0` with 4-bit NF4 quantization and double quantization enabled.
+2. Wrap the model with `LoraConfig(r=8, lora_alpha=16, target_modules=["q_proj", "v_proj"], task_type="CAUSAL_LM")`.
+3. Print trainable parameter statistics and compare them to your manual estimate from the worked example section.
+4. Run a single dummy forward pass with random `input_ids` to confirm the graph executes without error.
+5. Save adapter weights to `./tinyllama-lora-lab`, reload with `PeftModel.from_pretrained`, then merge with `merge_and_unload()` and save to `./tinyllama-merged-lab`.
 
 ```python
 import torch
-import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
-from PIL import Image
-import requests
-import io
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, PeftModel, prepare_model_for_kbit_training
 
-# 1. Load an authentic test image
-url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cat.png"
-response = requests.get(url)
-response.raise_for_status()
-test_image = Image.open(io.BytesIO(response.content)).convert("RGB")
+MODEL_ID = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
-# 2. Resize explicitly to standard diffusion dimensions
-test_image = test_image.resize((512, 512))
-
-# 3. Verification Assertion
-assert test_image.size == (512, 512), "Image must be exactly 512x512 pixels"
-print("Test image loaded and verified.")
-```
-
-Now, strictly implement the forward visualization mathematical logic to visibly demonstrate structural signal destruction through recursive noise integration.
-
-```python
-def forward_diffusion(x_0, t, noise_schedule):
-    """Add noise to image at timestep t."""
-    alpha_bar = torch.cumprod(1 - noise_schedule, dim=0)
-    alpha_bar_t = alpha_bar[t]
-    noise = torch.randn_like(x_0)
-    x_t = torch.sqrt(alpha_bar_t) * x_0 + torch.sqrt(1 - alpha_bar_t) * noise
-    return x_t, noise
-
-import torch
-import matplotlib.pyplot as plt
-from diffusers import StableDiffusionPipeline
-
-def visualize_diffusion_steps(image, num_steps=10):
-    """
-    Visualize the forward diffusion process:
-    1. Load an image
-    2. Apply increasing noise levels
-    3. Plot as a grid showing degradation
-
-    Then visualize reverse:
-    1. Start from noise
-    2. Generate with fewer steps each time
-    3. Show progressive denoising
-    """
-    # YOUR CODE HERE
-    # Use the forward_diffusion function from the module
-    # Plot a grid of images at different noise levels
-    pass
-
-# Test with a sample image
-# Create a 2-row visualization: forward (left to right) and reverse (right to left)
-```
-
-The core solution loops over the tensor and plots the deteriorating structural layout.
-
-```python
-import torch
-import matplotlib.pyplot as plt
-import torchvision.transforms as transforms
-
-def visualize_diffusion_steps(image, num_steps=10):
-    # Convert PIL image to tensor
-    transform = transforms.ToTensor()
-    x_0 = transform(image).unsqueeze(0)
-    
-    # Generate linear noise schedule spanning 1000 theoretical timesteps
-    noise_schedule = torch.linspace(0.0001, 0.02, 1000)
-    
-    fig, axes = plt.subplots(1, num_steps, figsize=(15, 3))
-    timesteps = torch.linspace(0, 999, num_steps).long()
-    
-    for i, t in enumerate(timesteps):
-        # Execute mathematical forward diffusion
-        x_t, _ = forward_diffusion(x_0, torch.tensor([t]), noise_schedule)
-        
-        # Denormalize and plot
-        img_t = x_t.squeeze(0).permute(1, 2, 0).clamp(0, 1).numpy()
-        axes[i].imshow(img_t)
-        axes[i].set_title(f"t={t.item()}")
-        axes[i].axis("off")
-        
-    plt.tight_layout()
-    plt.show()
-```
-
-<details>
-<summary>View the Full Implementation Solution</summary>
-
-```python
-import torch
-import matplotlib.pyplot as plt
-import torchvision.transforms as transforms
-
-def visualize_diffusion_steps(image, num_steps=10):
-    # Convert PIL image to tensor
-    transform = transforms.ToTensor()
-    x_0 = transform(image).unsqueeze(0)
-    
-    # Generate linear noise schedule spanning 1000 theoretical timesteps
-    noise_schedule = torch.linspace(0.0001, 0.02, 1000)
-    
-    fig, axes = plt.subplots(1, num_steps, figsize=(15, 3))
-    timesteps = torch.linspace(0, 999, num_steps).long()
-    
-    for i, t in enumerate(timesteps):
-        # Execute mathematical forward diffusion
-        x_t, _ = forward_diffusion(x_0, torch.tensor([t]), noise_schedule)
-        
-        # Denormalize and plot
-        img_t = x_t.squeeze(0).permute(1, 2, 0).clamp(0, 1).numpy()
-        axes[i].imshow(img_t)
-        axes[i].set_title(f"t={t.item()}")
-        axes[i].axis("off")
-        
-    plt.tight_layout()
-    plt.show()
-```
-
-</details>
-
-After executing the provided solution directly, rigorously verify the mathematical output tensor states.
-
-```python
-# Execute the visualization
-visualize_diffusion_steps(test_image)
-
-# Verification check on the math
-transform = transforms.ToTensor()
-x_0 = transform(test_image).unsqueeze(0)
-noise_schedule = torch.linspace(0.0001, 0.02, 1000)
-x_t, noise = forward_diffusion(x_0, torch.tensor([500]), noise_schedule)
-
-assert x_t.shape == x_0.shape, "Output noisy tensor must match input dimensions"
-assert not torch.equal(x_t, x_0), "Image must be perturbed by noise"
-print("Diffusion visualization mathematically verified.")
-```
-
-### Exercise 2: Compare Sampling Methods
-
-Next, we systematically evaluate the raw execution latency and output quality differences of varying generation sampling schedulers to determine optimal API configuration.
-
-```python
-# Setup: Define the prompt and the candidate schedulers
-test_prompt = "A high-contrast photograph of a cyberpunk city at night, neon lights"
-
-# Verification: Ensure hardware is available for accurate timing
-assert torch.cuda.is_available() or torch.backends.mps.is_available(), "Hardware acceleration is required for realistic latency measurement"
-```
-
-```python
-from diffusers import (
-    DDPMScheduler,
-    DDIMScheduler,
-    PNDMScheduler,
-    EulerDiscreteScheduler,
-    DPMSolverMultistepScheduler,
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
 )
 
-def compare_schedulers(prompt, schedulers, step_counts=[10, 20, 30, 50]):
-    """
-    Compare different schedulers on the same prompt:
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+base = AutoModelForCausalLM.from_pretrained(
+    MODEL_ID,
+    quantization_config=bnb_config,
+    device_map="auto",
+)
+base = prepare_model_for_kbit_training(base)
 
-    1. Generate images with each scheduler at different step counts
-    2. Measure generation time
-    3. Calculate FID or CLIP score for quality
-    4. Create comparison grid
-    """
-    results = {}
-    for scheduler_name, scheduler in schedulers.items():
-        for num_steps in step_counts:
-            # YOUR CODE HERE
-            # Time the generation
-            # Store the image and metrics
-            pass
-    return results
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    target_modules=["q_proj", "v_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+model = get_peft_model(base, lora_config)
+model.print_trainable_parameters()
 
-# Compare: DDPM, DDIM, Euler, DPM++
-# Find the sweet spot: minimum steps for acceptable quality
+inputs = tokenizer("Hello, adapter check.", return_tensors="pt").to(model.device)
+with torch.no_grad():
+    outputs = model(**inputs)
+assert outputs.logits.shape[-1] == model.config.vocab_size
+
+model.save_pretrained("./tinyllama-lora-lab")
+
+reloaded = AutoModelForCausalLM.from_pretrained(
+    MODEL_ID,
+    quantization_config=bnb_config,
+    device_map="auto",
+)
+peft_loaded = PeftModel.from_pretrained(reloaded, "./tinyllama-lora-lab")
+merged = peft_loaded.merge_and_unload()
+merged.save_pretrained("./tinyllama-merged-lab")
+print("Adapter save, reload, and merge completed.")
 ```
 
-The proper evaluation iterates dynamically, actively swapping out pipeline components mid-execution while tracking generation timestamps.
+### Success Checklist
 
-```python
-import time
-from diffusers import StableDiffusionPipeline
+- [ ] Configured `LoraConfig` together with `BitsAndBytesConfig` for a QLoRA-ready TinyLlama load
+- [ ] `print_trainable_parameters()` reports less than 1% trainable weights for the TinyLlama QLoRA wrap
+- [ ] Dummy forward pass returns logits shaped `[batch, sequence, vocab_size]` without runtime errors
+- [ ] `./tinyllama-lora-lab/adapter_config.json` exists and records your `r`, `lora_alpha`, and `target_modules`
+- [ ] `merge_and_unload()` output saves to `./tinyllama-merged-lab` and reloads without PEFT wrappers
 
-def compare_schedulers(prompt, schedulers, step_counts=[10, 20, 30, 50]):
-    results = {}
-    
-    # Initialize base pipeline in FP16 to avoid VRAM overflow
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5", 
-        torch_dtype=torch.float16
-    ).to(device)
-    
-    for name, scheduler_class in schedulers.items():
-        results[name] = {}
-        # Swap the scheduler via from_config
-        pipe.scheduler = scheduler_class.from_config(pipe.scheduler.config)
-        
-        for steps in step_counts:
-            start_time = time.time()
-            
-            # Ensure deterministic generation via generator seed
-            generator = torch.Generator(pipe.device).manual_seed(42)
-            image = pipe(prompt, num_inference_steps=steps, generator=generator).images[0]
-            
-            gen_time = time.time() - start_time
-            results[name][steps] = {
-                "image": image,
-                "time": gen_time
-            }
-            print(f"{name} evaluated at {steps} steps | Execution Latency: {gen_time:.2f}s")
-            
-    return results
+**Verification**:
+
+```bash
+python -c "from pathlib import Path; assert Path('tinyllama-lora-lab/adapter_config.json').exists(); print('adapter ok')"
+python -c "from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('tinyllama-merged-lab'); print('merged ok')"
 ```
 
-<details>
-<summary>View the Full Implementation Solution</summary>
+---
 
-```python
-import time
-from diffusers import StableDiffusionPipeline
+## Next Module
 
-def compare_schedulers(prompt, schedulers, step_counts=[10, 20, 30, 50]):
-    results = {}
-    
-    # Initialize base pipeline in FP16 to avoid VRAM overflow
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5", 
-        torch_dtype=torch.float16
-    ).to(device)
-    
-    for name, scheduler_class in schedulers.items():
-        results[name] = {}
-        # Swap the scheduler via from_config
-        pipe.scheduler = scheduler_class.from_config(pipe.scheduler.config)
-        
-        for steps in step_counts:
-            start_time = time.time()
-            
-            # Ensure deterministic generation via generator seed
-            generator = torch.Generator(pipe.device).manual_seed(42)
-            image = pipe(prompt, num_inference_steps=steps, generator=generator).images[0]
-            
-            gen_time = time.time() - start_time
-            results[name][steps] = {
-                "image": image,
-                "time": gen_time
-            }
-            print(f"{name} evaluated at {steps} steps | Execution Latency: {gen_time:.2f}s")
-            
-    return results
-```
+Adapter checkpoints are small enough to email as attachments, yet their behavioral impact can rival full fine-tunes when data and evaluation are sound. Treat that asymmetry with respect: a lightweight artifact can still change customer-facing outputs across an entire product surface.
 
-</details>
+Before leaving this module, rehearse the decision checklist you will reuse on real projects. First, confirm the task belongs in weights rather than retrieval or prompting. Second, estimate adapter parameter budget from rank and target modules before reserving GPU time. Third, choose plain LoRA versus QLoRA based on whether the base model fits in VRAM with acceptable dtype settings. Fourth, define evaluation prompts that stress the intended behavior and at least one unrelated capability. Fifth, decide merge-versus-serve for deployment and document adapter metadata for rollback. That sequence keeps experimentation disciplined instead of reactive.
 
-### Exercise 3: Train a Simple LoRA
+Continue to **[Module 1.3: Diffusion Models](/ai-ml-engineering/advanced-genai/module-1.3-diffusion-models/)** to study latent diffusion, schedulers, classifier-free guidance, and how LoRA adapters attach to U-Net attention blocks for image generation pipelines.
 
-In this extensive exercise, we will explicitly initialize efficient PEFT adapters directly targeting the cross-attention blocks to deliberately manipulate rendering style without causing foundational drift.
-
-```python
-# Data Mocking for verification purposes
-import torch
-from peft import LoraConfig, get_peft_model
-from diffusers import UNet2DConditionModel
-
-# We will mock the training data shapes
-mock_images = [torch.randn(1, 4, 64, 64) for _ in range(5)]
-mock_captions = [torch.randn(1, 77, 768) for _ in range(5)]
-
-# Load a minimal U-Net architecture for testing
-base_model_id = "runwayml/stable-diffusion-v1-5"
-```
-
-```python
-from diffusers import StableDiffusionPipeline
-from peft import LoraConfig, get_peft_model
-import torch
-
-def train_style_lora(
-    base_model_id: str,
-    training_images: list,
-    training_captions: list,
-    output_dir: str,
-    num_epochs: int = 10,
-):
-    """
-    Train a LoRA for a specific art style:
-
-    1. Load base Stable Diffusion
-    2. Apply LoRA config to U-Net
-    3. Create training dataloader
-    4. Training loop with noise prediction loss
-    5. Save LoRA weights
-
-    Target: cross-attention layers (to_k, to_v, to_q)
-    """
-    # YOUR CODE HERE
-    pass
-
-# Train on 10-20 images of a specific style
-# Test that the style transfers to new prompts
-```
-
-This isolated pipeline restricts updates directly to the injected parameter subsets using an AdamW optimizer, fundamentally securing the underlying U-Net.
-
-```python
-import torch
-import torch.nn.functional as F
-from diffusers import UNet2DConditionModel
-from peft import LoraConfig, get_peft_model
-
-def train_style_lora(base_model_id, training_images, training_captions, output_dir, num_epochs=10):
-    # Load foundational U-Net model
-    unet = UNet2DConditionModel.from_pretrained(base_model_id, subfolder="unet")
-    
-    # Configure PEFT LoRA adapter targeting all attention mechanisms
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
-        lora_dropout=0.1
-    )
-    # Inject adapters and freeze base weights
-    unet = get_peft_model(unet, lora_config)
-    
-    optimizer = torch.optim.AdamW(unet.parameters(), lr=1e-4)
-    unet.train()
-    
-    for epoch in range(num_epochs):
-        for img, caption in zip(training_images, training_captions):
-            optimizer.zero_grad()
-            
-            # Forward mathematical perturbation
-            noise = torch.randn_like(img)
-            timesteps = torch.randint(0, 1000, (1,))
-            noisy_img = img + noise 
-            
-            # Predict isolated noise
-            noise_pred = unet(noisy_img, timesteps, encoder_hidden_states=caption).sample
-            
-            # Compute MSE loss gradient
-            loss = F.mse_loss(noise_pred, noise)
-            loss.backward()
-            optimizer.step()
-            
-    unet.save_pretrained(output_dir)
-    print(f"LoRA adapters compiled and saved strictly to {output_dir}")
-```
-
-<details>
-<summary>View the Full Implementation Solution</summary>
-
-```python
-import torch
-import torch.nn.functional as F
-from diffusers import UNet2DConditionModel
-from peft import LoraConfig, get_peft_model
-
-def train_style_lora(base_model_id, training_images, training_captions, output_dir, num_epochs=10):
-    # Load foundational U-Net model
-    unet = UNet2DConditionModel.from_pretrained(base_model_id, subfolder="unet")
-    
-    # Configure PEFT LoRA adapter targeting all attention mechanisms
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
-        lora_dropout=0.1
-    )
-    # Inject adapters and freeze base weights
-    unet = get_peft_model(unet, lora_config)
-    
-    optimizer = torch.optim.AdamW(unet.parameters(), lr=1e-4)
-    unet.train()
-    
-    for epoch in range(num_epochs):
-        for img, caption in zip(training_images, training_captions):
-            optimizer.zero_grad()
-            
-            # Forward mathematical perturbation
-            noise = torch.randn_like(img)
-            timesteps = torch.randint(0, 1000, (1,))
-            noisy_img = img + noise 
-            
-            # Predict isolated noise
-            noise_pred = unet(noisy_img, timesteps, encoder_hidden_states=caption).sample
-            
-            # Compute MSE loss gradient
-            loss = F.mse_loss(noise_pred, noise)
-            loss.backward()
-            optimizer.step()
-            
-    unet.save_pretrained(output_dir)
-    print(f"LoRA adapters compiled and saved strictly to {output_dir}")
-```
-
-</details>
-
-```python
-# Post-execution verification
-# Execute the training sequence on the mocked data
-train_style_lora(base_model_id, mock_images, mock_captions, "./test_lora_output", num_epochs=1)
-
-import os
-assert os.path.exists("./test_lora_output/adapter_config.json"), "LoRA configuration was not saved"
-assert os.path.exists("./test_lora_output/adapter_model.safetensors") or os.path.exists("./test_lora_output/adapter_model.bin"), "LoRA weights were not saved"
-print("LoRA adapter training pipeline verified.")
-```
-
-### Exercise 4: Implement Classifier-Free Guidance
-
-Finally, successfully implement explicit CFG extrapolation mathematics to strictly force generation adherence to highly detailed visual prompts within the loop framework.
-
-```python
-# Setup Context for CFG
-# We require a mock model and an active scheduler
-from diffusers import DDIMScheduler
-class MockModel(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.device = torch.device("cpu")
-    def forward(self, sample, timestep, encoder_hidden_states):
-        class Output:
-            def __init__(self, sample):
-                self.sample = sample
-        return Output(sample)
-
-mock_model = MockModel()
-mock_scheduler = DDIMScheduler.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
-prompt_emb = torch.randn(1, 77, 768)
-neg_emb = torch.randn(1, 77, 768)
-```
-
-```python
-def classifier_free_guidance_sample(
-    model,
-    prompt_embedding,
-    negative_prompt_embedding,
-    scheduler,
-    num_steps: int = 30,
-    guidance_scale: float = 7.5,
-):
-    """
-    Implement CFG sampling:
-
-    1. Start from random noise
-    2. At each step:
-       - Run model with prompt (conditional)
-       - Run model without prompt (unconditional)
-       - Blend: uncond + scale * (cond - uncond)
-    3. Denoise using scheduler
-
-    Experiment with guidance_scale: 1, 3, 7, 12, 20
-    Document the quality vs artifacts trade-off
-    """
-    # YOUR CODE HERE
-    pass
-
-# Generate images at different guidance scales
-# Create a comparison grid showing the effect
-```
-
-Duplicating the state efficiently enables processing the conditional and unconditional passes as a unified batch chunk, reducing iteration bottlenecks.
-
-```python
-import torch
-
-def classifier_free_guidance_sample(model, prompt_emb, neg_emb, scheduler, num_steps=30, guidance_scale=7.5):
-    # Establish absolute initial state via Gaussian tensor
-    latents = torch.randn((1, 4, 64, 64)).to(model.device)
-    scheduler.set_timesteps(num_steps)
-    
-    for t in scheduler.timesteps:
-        # Duplicate state to process unconditional and conditional concurrently
-        latent_model_input = torch.cat([latents, latents])
-        latent_model_input = scheduler.scale_model_input(latent_model_input, t)
-        
-        with torch.no_grad():
-            noise_pred = model(
-                latent_model_input, 
-                t, 
-                encoder_hidden_states=torch.cat([neg_emb, prompt_emb])
-            ).sample
-            
-        # Execute the core CFG algorithmic formula
-        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-        noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-        
-        # Step the scheduler one decrement forward
-        latents = scheduler.step(noise_pred, t, latents).prev_sample
-        
-    return latents
-```
-
-<details>
-<summary>View the Full Implementation Solution</summary>
-
-```python
-import torch
-
-def classifier_free_guidance_sample(model, prompt_emb, neg_emb, scheduler, num_steps=30, guidance_scale=7.5):
-    # Establish absolute initial state via Gaussian tensor
-    latents = torch.randn((1, 4, 64, 64)).to(model.device)
-    scheduler.set_timesteps(num_steps)
-    
-    for t in scheduler.timesteps:
-        # Duplicate state to process unconditional and conditional concurrently
-        latent_model_input = torch.cat([latents, latents])
-        latent_model_input = scheduler.scale_model_input(latent_model_input, t)
-        
-        with torch.no_grad():
-            noise_pred = model(
-                latent_model_input, 
-                t, 
-                encoder_hidden_states=torch.cat([neg_emb, prompt_emb])
-            ).sample
-            
-        # Execute the core CFG algorithmic formula
-        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-        noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-        
-        # Step the scheduler one decrement forward
-        latents = scheduler.step(noise_pred, t, latents).prev_sample
-        
-    return latents
-```
-
-</details>
-
-```python
-# Verification of CFG Logic
-final_latents = classifier_free_guidance_sample(mock_model, prompt_emb, neg_emb, mock_scheduler, num_steps=5, guidance_scale=7.5)
-
-assert final_latents.shape == (1, 4, 64, 64), "Latent shape mutated incorrectly during CFG loop"
-print("CFG sample execution verified.")
-```
-
-## Quiz: Test Your Understanding
-
-**Q1**: Scenario: You are migrating a legacy pixel-space diffusion model to a latent architecture. During the architectural review, a principal engineer questions why the team should add the complexity of a Variational Autoencoder (VAE) step instead of processing raw pixels directly. What is the fundamental mathematical and computational advantage of running diffusion in latent space, and how does it affect memory bandwidth?
-
-<details>
-<summary>Answer</summary>
-
-Running in latent space is **48× more efficient**:
-- Pixel space: 512×512×3 = 786,432 values
-- Latent space: 64×64×4 = 16,384 values
-
-This makes training and inference dramatically faster while maintaining quality because:
-1. The VAE learns to compress to perceptually important features
-2. The U-Net can focus on semantic content, not pixel details
-3. Less memory, faster forward passes
-
-</details>
-
-**Q2**: Scenario: Your production generation pipeline is yielding outputs that consistently drift from the user's prompt into generic, averaged patterns. Your team suggests tweaking the `guidance_scale` parameter in the API request. Describe the mechanism by which classifier-free guidance forces prompt adherence, and predict what visual artifacts will occur if the scale is set drastically too high.
-
-<details>
-<summary>Answer</summary>
-
-Classifier-free guidance (CFG) combines unconditional and conditional predictions:
-
-```text
-noise_pred = noise_uncond + scale × (noise_cond - noise_uncond)
-```
-
-It improves quality by:
-1. **Amplifying** features that distinguish "this prompt" from "generic image"
-2. **Suppressing** generic features not specific to the prompt
-3. Creating a **trade-off**: higher scale = more prompt adherence but more artifacts. If set drastically too high (>15), it forces the model to over-index on the text prompt, causing color oversaturation and severe visual artifacting.
-
-Typical scales: 7-8 for balance, higher for artistic effect.
-
-</details>
-
-**Q3**: Scenario: Your platform requires delivering rendered images within a strict 1.5-second latency window, but your current pipeline uses a DDPM scheduler requiring 1000 sequential forward passes. You are evaluating a migration to DDIM. Explain the fundamental algorithmic difference between DDPM and DDIM that allows DDIM to skip steps while maintaining deterministic outputs.
-
-<details>
-<summary>Answer</summary>
-
-**DDIM (Denoising Diffusion Implicit Models)** allows skipping steps by:
-
-1. Making the sampling process **deterministic** (no random noise added)
-2. Using a **non-Markovian** process that can "skip" timesteps
-3. Interpolating directly between any two noise levels
-
-DDPM requires sequential steps because each step adds random noise. DDIM removes this randomness, allowing larger jumps.
-
-**When to use each:** Use DDPM when you need maximum diversity and quality isn't time-critical. Use DDIM when you need fast inference, reproducibility (same seed = same output), or latent space interpolation.
-
-</details>
-
-**Q4**: Scenario: An artist wants to train a custom fine-tune using only 30 reference images of their unique watercolor style. Instead of a full-parameter Dreambooth fine-tune, you configure a LoRA adapter. Which specific sub-modules within the U-Net architecture must you target to optimize the cross-attention text-to-image mapping, and why are these layers prioritized for style transfer?
-
-<details>
-<summary>Answer</summary>
-
-For **style transfer**, target:
-
-1. **Cross-attention K/V** (`to_k`, `to_v`): How text maps to image features
-2. **Self-attention** (`to_q`, `to_k`, `to_v` in self-attn): Image coherence and style
-3. **Output projections** (`to_out`): Final feature transformation
-
-**Why**: Style is primarily about HOW features are rendered, which is controlled by attention patterns. Cross-attention controls text→image mapping (so "painting" triggers your style), while self-attention controls overall image coherence.
-
-Low rank (r=4-8) is usually sufficient for style.
-
-**Note**: Monitor for overfitting by checking if generations become too similar to training data.
-
-</details>
-
-**Q5**: Scenario: While debugging a custom forward diffusion function, you notice that the generated noisy images are exceeding standard pixel value ranges, resulting in severe gradient explosion during training. You review the source code and see an operation mathematically equivalent to adding raw noise without coefficients. Explain why this naïve implementation fails, and describe how the standard formulation guarantees unit variance across all timesteps.
-
-<details>
-<summary>Answer</summary>
-
-The formula maintains **unit variance** throughout the diffusion process:
-
-```text
-Var(x_t) = (√ᾱ_t)² · Var(x_0) + (√(1-ᾱ_t))² · Var(ε)
-         = ᾱ_t · 1 + (1-ᾱ_t) · 1
-         = 1
-```
-
-If we just added noise (`x_t = x_0 + ε`), variance would grow unbounded, making training unstable.
-
-The coefficients ensure:
-1. **Signal preservation**: `√ᾱ_t` controls how much original signal remains
-2. **Noise calibration**: `√(1-ᾱ_t)` controls noise magnitude
-3. **Smooth transition**: From pure signal (t=0) to pure noise (t=T)
-
-This is also known as a **variance-preserving** diffusion process.
-
-</details>
-
-**Q6**: Scenario: You are tasked with fine-tuning a massive 65B parameter language model, but your hardware budget only allows for a single 48GB GPU. Design a strategy to accomplish this using parameter-efficient techniques while preventing out-of-memory exceptions during the backward pass.
-
-<details>
-<summary>Answer</summary>
-
-You must use QLoRA, which merges 4-bit quantization with Low-Rank Adaptation. As introduced in arXiv:2305.14314, QLoRA enables the fine-tuning of a 65B model on a single 48GB GPU by quantizing the base model weights to 4-bit NormalFloat (NF4) and only actively updating a tiny set of low-rank adapter weights. You should also utilize the nested quantization option to save an additional 0.4 bits per parameter, keeping the memory footprint strictly within your GPU limits.
-
-</details>
-
-**Q7**: Scenario: Your deep learning pipeline runs Transformers v4.53.3 combined with DeepSpeed ZeRO2 optimization. You want to implement a highly directional adapter that explicitly targets both linear and Conv2d layers. Evaluate the compatibility of DoRA and QDoRA for this architectural setup, highlighting any potential system conflicts.
-
-<details>
-<summary>Answer</summary>
-
-DoRA (Directional LoRA) in the PEFT library explicitly supports targeting specific module types including embedding, linear, and Conv2d layers, which natively aligns with your pipeline requirements. However, you must carefully evaluate the integration constraints because utilizing QDoRA (Quantized DoRA) has explicitly documented caveats and known issues when executing alongside DeepSpeed ZeRO2. You will likely need to adjust your tensor distribution strategy or gracefully degrade to standard LoRA if the DeepSpeed memory sharding heuristics conflict with the quantized directional state.
-
-</details>
-
-**Q8**: Scenario: A junior engineer initializes a new LoRA adapter configuration and panics, worried that the completely untrained, random adapter matrices will drastically corrupt the base model's zero-shot performance before the first training epoch even completes. Diagnose this concern based on default initialization behavior.
-
-<details>
-<summary>Answer</summary>
-
-The junior engineer's concern is fundamentally unfounded due to the mathematical defaults dictating how LoRA matrices are instantiated. In the PEFT framework, the adapter's 'A' matrix is initialized using a Kaiming-uniform distribution, while the 'B' matrix is initialized to absolute zero. Because the adapter's output computation is the matrix product of $A \times B$, the initial computed product is strictly zero. This guarantees an identity transform, ensuring the foundation model's zero-shot behavior remains entirely undisturbed at the absolute start of fine-tuning.
-
-</details>
-
-## Next Steps
-
-Now that you have decisively mastered parameter-efficient architectural modifications for generative models, it is time to explore intensely practical AI-assisted software development workflows in active ecosystems. Move on to **[Module 1.7: AI-Powered Code Generation](/ai-ml-engineering/ai-native-development/module-1.7-ai-powered-code-generation/)** where you will deeply investigate:
-
-- How expansive models like Codex, Copilot, and Code Llama execute precise fill-in-the-middle context parsing.
-- The vast intricacies of specialized data preparation and tokenizer construction strictly required for rigid syntax languages.
-- How to properly evaluate dynamic code generation via strict unit-test benchmarking rather than fuzzy semantic grading.
+---
 
 ## Sources
 
-- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Original LoRA paper for claims about freezing base weights, training low-rank adapters, parameter-count reduction, memory savings, and PEFT trade-offs versus full fine-tuning.
-- [arxiv.org: 1505.04597](https://arxiv.org/abs/1505.04597) — The original U-Net paper is the primary source for the architecture and its original application.
-- [arxiv.org: 2103.00020](https://arxiv.org/abs/2103.00020) — The CLIP paper is the primary source for the joint image-text embedding claim.
-- [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) — Backs claims about moving diffusion from pixel space to latent space to reduce compute cost while preserving fidelity, plus cross-attention conditioning for text-to-image systems.
-- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598) — Primary source for classifier-free guidance (CFG), including the quality-versus-diversity tradeoff and conditional/unconditional score combination used in modern diffusion pipelines.
-- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — Primary source for 4-bit fine-tuning, NF4, double quantization, paged optimizers, and realistic single-GPU fine-tuning claims under constrained VRAM.
-- [Transformers bitsandbytes Quantization Guide](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — Official source for practical 8-bit and 4-bit quantization, QLoRA-related setup, device mapping, nested quantization, and hardware compatibility constraints relevant to local tuning.
-- [PEFT LoRA Developer Guide](https://huggingface.co/docs/peft/developer_guides/lora) — Official implementation guide for LoRA configuration in PEFT, including rank, alpha, initialization, adapter behavior, and practical library-level fine-tuning mechanics.
+- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Foundational paper defining the low-rank update parameterization, scaling factor, and efficiency claims for PEFT.
+- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — Primary reference for 4-bit NF4 bases, double quantization, and paged optimizers enabling single-GPU large-model adaptation.
+- [Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning](https://arxiv.org/abs/2012.13255) — Empirical evidence that fine-tuning operates in a low-dimensional subspace, motivating low-rank adaptation.
+- [PEFT LoRA Developer Guide](https://huggingface.co/docs/peft/developer_guides/lora) — Official guidance for `LoraConfig`, target module selection, merge behavior, and adapter initialization defaults.
+- [PEFT Model API Reference](https://huggingface.co/docs/peft/package_reference/peft_model) — Documents `get_peft_model`, `PeftModel.from_pretrained`, and `merge_and_unload` semantics.
+- [PEFT Quantization Developer Guide](https://huggingface.co/docs/peft/developer_guides/quantization) — Explains combining PEFT adapters with bitsandbytes quantized bases during training.
+- [Transformers bitsandbytes Quantization Guide](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — Authoritative `BitsAndBytesConfig` fields for NF4, double quant, and compute dtypes.
+- [Making LLMs more accessible with bitsandbytes and 4-bit quantization](https://huggingface.co/blog/4bit-transformers-bitsandbytes) — Practical overview of 4-bit loading patterns that precede QLoRA training stacks.
+- [Microsoft LoRA GitHub Repository](https://github.com/microsoft/LoRA) — Reference implementation accompanying the original paper and early integration examples.
+- [Hugging Face PEFT GitHub Repository](https://github.com/huggingface/peft) — Source of truth for release cadence, breaking changes, and adapter checkpoint formats used in production.
