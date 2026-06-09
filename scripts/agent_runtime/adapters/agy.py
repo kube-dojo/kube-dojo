@@ -124,6 +124,15 @@ class AgyAdapter:
         # --agent agy so callers can't accidentally route around this.
         cmd: list[str] = [agy_bin, "-p", prompt, "--dangerously-skip-permissions"]
 
+        # Add the dispatch working dir (worktree / repo) to agy's workspace.
+        # Antigravity sandboxes file ops to ~/.gemini/antigravity-cli/scratch/
+        # and IGNORES the process cwd, so without --add-dir agy can neither READ
+        # the file under review (-> s117 "reviewed a file it never read"
+        # confabulation) nor WRITE authored output into the repo (-> s115
+        # "no file written"; it went to the sandbox). One missing flag caused
+        # both past "agy fabrication" verdicts. (#1827)
+        cmd += ["--add-dir", str(cwd)]
+
         resolved_model = self._resolve_model_flag(model)
         if resolved_model:
             cmd += ["--model", resolved_model]
