@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 122 — tool-access fixes + agent telemetry + roster recalibration</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1080px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.6rem;border-bottom:3px solid #2563eb;padding-bottom:.4rem}
+  h2{font-size:1.2rem;margin-top:2rem;color:#1e3a8a;border-bottom:1px solid #e5e7eb;padding-bottom:.2rem}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem}
+  th,td{border:1px solid #d1d5db;padding:.4rem .6rem;text-align:left;vertical-align:top}
+  th{background:#eff6ff}
+  code{background:#f3f4f6;padding:.1rem .3rem;border-radius:3px;font-size:.86em}
+  .tldr{background:#eff6ff;border-left:4px solid #2563eb;padding:.8rem 1rem;margin:1rem 0}
+  .win{background:#ecfdf5;border-left:4px solid #10b981;padding:.6rem 1rem;margin:.8rem 0}
+  ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 122 — tool-access fixes + agent telemetry + roster recalibration</h1>
+<p class="tldr"><strong>2026-06-09 · standalone orchestrator · continued from session 121 (mlops handoff already merged #1856).</strong> A user-question thread turned into an infra workstream: the discovery that agent "fabrications" are mostly <em>tool-starvation / harness bugs</em>, not model failures — fixed across the roster, then built telemetry to track it.</p>
+
+<h2>One-line</h2>
+<p>After mlops completed (s121), the user asked about agent reliability → root-caused that deepseek's review hallucinations were a <strong>dead web tool</strong> and agy's "fabrications" were a <strong>missing <code>--add-dir</code></strong> (agy never had repo access). Fixed both, re-enabled opus, validated grok-build, upgraded agy to a full lane, and shipped <strong>agent performance telemetry</strong> (CLI + store + <code>/api/telemetry/agents</code> + a Monitor "Agents" tab) with a harness⟂model rollup. 5 PRs merged (#1857–#1862, minus the issue).</p>
+
+<h2>Shipped (all merged to main, latest = 744eadb6)</h2>
+<table>
+<tr><th>PR</th><th>What</th><th>Why it matters</th></tr>
+<tr><td><strong>#1857</strong></td><td>fix(#1827): deepseek/grok get the free Hermes <code>browser</code> tool; codex <code>review</code> class <code>codex_search</code>→True</td><td>deepseek's web tool was Firecrawl-gated and dead (no key) → it ran on training memory → the s121 1.9 "frameworks absent" fabrication. <code>browser</code> works standalone, no Firecrawl. Verified live (fetched Node 26.3.0, Python 3.14).</td></tr>
+<tr><td><strong>#1858</strong></td><td>fix(#1827): agy adapter passes <code>--add-dir &lt;cwd&gt;</code></td><td><strong>Root cause of EVERY past "agy fabrication."</strong> Antigravity sandboxes file ops to <code>~/.gemini/antigravity-cli/scratch/</code> and ignores process cwd; without <code>--add-dir</code> agy couldn't READ the review file (→ s117 "reviewed a file it never read") or WRITE into the repo (→ s115 "no file"). Verified: agy authored real web-verified files into the worktree.</td></tr>
+<tr><td><strong>#1859</strong></td><td>docs: lift the s105 Claude-conserve blocker</td><td>User re-enabled opus/<code>-p</code> until programmatic creds run out. opus = strongest reviewer, back in play for the hardest 1–2 reviews/wave.</td></tr>
+<tr><td><strong>#1861</strong></td><td>feat(#1860): agent telemetry — <code>annotate</code> + <code>report</code> CLI + <code>logs/agent_outcomes.jsonl</code></td><td>2,034 dispatch records had no quality signal. Now the orchestrator's ground-check verdict (clean/partial/fabrication/overturned/rejected_fp) is recorded + joined to the dispatch log. 26 outcomes backfilled.</td></tr>
+<tr><td><strong>#1862</strong></td><td>feat(#1860): <code>/api/telemetry/agents</code> + Monitor <code>/agents</code> page (harness/model rollup)</td><td>The requested API + UI. Three groupings — by lane, by harness, by model — built on the harness⟂model correction below.</td></tr>
+</table>
+<p>Issue <strong>#1860</strong> (telemetry) filed; phase-1+2 done, left open for the annotate-habit. <strong>#1827</strong> (reviewer tool-access) commented with the resolution.</p>
+
+<div class="win"><strong>The throughline:</strong> tool access is the root cause of "fabrication" for tool-starved/sandboxed lanes. deepseek had a dead web tool; agy had no repo access at all. Once given tools + the right workspace + a proper prompt, both work fine — exactly the user's thesis. Verification discipline (ground-check every claim against the live file/verifier) still stands for every lane — tools lower the rate, they don't remove the check.</p></div>
+
+<h2>Harness ⟂ model (user correction — now first-class)</h2>
+<p>hermes and opencode are <strong>harnesses</strong> (runtimes); <strong>deepseek and qwen are MODELS that run on the hermes harness</strong> (their adapters wrap <code>hermes -z</code>). Treating "hermes" as a peer of "deepseek" conflated two axes. Telemetry now rolls up three ways: <strong>by lane</strong> (what you dispatch to), <strong>by harness</strong> (the runtime — hermes aggregates deepseek+qwen), <strong>by model</strong> (the brain). This already surfaced insight: <code>gpt-5.3-codex-spark</code> fails 28% operationally vs cursor <code>auto</code> 0.3% — a flaky runtime/model is now distinguishable from a weak one.</p>
+
+<h2>Current roster (after this session)</h2>
+<table>
+<tr><th>Lane</th><th>Harness</th><th>Status</th><th>Use for</th></tr>
+<tr><td>cursor (auto)</td><td>cursor</td><td>✅ workhorse (2% fail)</td><td>author + fix + review (not own work)</td></tr>
+<tr><td>codex (gpt-5.5)</td><td>codex</td><td>✅ (25% fail — flaky launch)</td><td>code-heavy author + best web-verifying reviewer; review web now ON</td></tr>
+<tr><td>opus (claude-opus-4-8)</td><td>claude-code</td><td>✅ RE-ENABLED (until creds)</td><td>hardest 1–2 reviews/wave</td></tr>
+<tr><td>agy (3.1-pro / 3.5-flash)</td><td>antigravity</td><td>✅ FULL lane (Ultra acct)</td><td>author + review (both models) — fabrications were the <code>--add-dir</code> bug; ground-check like all lanes</td></tr>
+<tr><td>deepseek-v4-pro</td><td>hermes</td><td>✅ (11% miss — never sole)</td><td>off-load author + cheap reviewer; now has browser web</td></tr>
+<tr><td>grok-build</td><td>grok-cli</td><td>✅ validated (xAI, disciplined)</td><td>code review + research; web-grounded. <strong>Needs <code>grok login</code> to use</strong></td></tr>
+<tr><td>gemini-cli</td><td>gemini-cli</td><td>🔻 sunsetting → agy by ~Jun-15</td><td>migrate out</td></tr>
+<tr><td>grok-composer-2.5-fast</td><td>grok-cli</td><td>⛔ benched</td><td>= cursor composer; fabricates provenance</td></tr>
+</table>
+
+<h2>Memory updated</h2>
+<ul>
+<li><strong>feedback_deliver_results_not_questions</strong> (NEW, TOP) — user (emphatic ×2): deliver results, stop asking for confirmation on already-endorsed work; act on best-practice judgment, show the proof.</li>
+<li><strong>feedback_agy_gemini_3_5_flash_viable_reviewer</strong> — agy is a FULL write+review lane; the s115/s117 fabrications were the <code>--add-dir</code> harness bug (fixed #1858); web grounding verified; use the Google Ultra account; migrate gemini-cli→agy by ~Jun-15.</li>
+<li><strong>feedback_agy_and_deepseek_hallucinate_reviews</strong> — deepseek fabricated a whole 1.9 review (s121); ground-check must include grep-PRESENCE + line numbers, not just gate names. Tool-starvation is a root cause (now fixed for deepseek).</li>
+<li><strong>feedback_grok_cli_candidate_roster</strong> — grok re-authenticated; grok-build validated (K8s 1.36 grounding test, disciplined, real URLs); grok-composer benched; <code>--output-format plain</code>.</li>
+</ul>
+
+<h2>Open follow-ups</h2>
+<ul>
+<li><strong>Annotate habit (#1860):</strong> run <code>scripts/agent_telemetry.py annotate &lt;task_id&gt; --activity --outcome</code> after EVERY ground-check so <code>miss%</code> becomes statistically meaningful. Wire the reminder into the curriculum-orchestrator skill ("After firing a dispatch" / "On finalize").</li>
+<li><strong>grok login</strong> (owner action) — the only parked roster item; then run a 3-module grok-build code-review trial.</li>
+<li><strong>Telemetry phase 3 (optional):</strong> richer Monitor page (task_class drill-down, time filter); auto-derive a verdict hint from review-response parsing.</li>
+<li><strong>#1827:</strong> deepseek/grok web now resolved; gemini <code>--mcp</code> inert is moot (gemini-cli sunsetting). The corpus re-review backlog #1829 remains.</li>
+</ul>
+
+<h2>NEXT — resume the #1842 curriculum campaign</h2>
+<p>The infra workstream was a detour. Curriculum resumes in curriculum order: <strong>ai-infrastructure (3) → advanced-genai (8) → multimodal-ai (3) → ai-history (1) + stray deep-learning/1.2</strong> → on-premises → platform. mlops sub-track is DONE (board 12/12, s121). Use the improved roster: <strong>agy in both author+review seats</strong> (now that it works), <strong>opus for the hardest review</strong>, deepseek/cursor/codex as before, and a <strong>grok-build trial</strong> once logged in. <strong>Annotate every outcome</strong> to grow the telemetry. Loop unchanged: verify_module sweep first → ≤3 authors → mixed-pool cross-family review (ground-check every claim incl. presence/line-numbers + web-verify both ways) → fix from verdict → pair 2/PR → build in PRIMARY via file-swap → flip after merge.</p>
+</body>
+</html>
