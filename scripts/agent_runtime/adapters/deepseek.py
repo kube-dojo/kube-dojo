@@ -76,9 +76,13 @@ _HERMES_BANNER_RE = re.compile(
 # `hermes tools list`. We deliberately exclude memory / skills from
 # read-only to keep calibration runs reproducible; they're great for
 # real review/code work though.
-_TOOLSETS_READ_ONLY = "web"
-_TOOLSETS_WORKSPACE = "web,file,terminal,code_execution,todo"
-_TOOLSETS_DANGER = "web,file,terminal,code_execution,todo,memory,skills"
+# `browser` (headless browser automation) gives live web fact-checking WITHOUT
+# Firecrawl — the `web` tool (web_search/web_extract) is Firecrawl-gated and
+# fails closed when FIRECRAWL_API_KEY is unset, which silently starved reviews of
+# fact-checking and drove hallucination (s121, #1827). `browser` works standalone.
+_TOOLSETS_READ_ONLY = "web,browser"
+_TOOLSETS_WORKSPACE = "web,browser,file,terminal,code_execution,todo"
+_TOOLSETS_DANGER = "web,browser,file,terminal,code_execution,todo,memory,skills"
 
 
 class DeepSeekAdapter:

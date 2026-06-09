@@ -27,7 +27,7 @@ def test_build_invocation_read_only(monkeypatch) -> None:
         "--provider",
         "deepseek",
         "-t",
-        "web",
+        "web,browser",
         "--oneshot=p",
     ]
     assert "--yolo" not in cmd
@@ -50,7 +50,7 @@ def test_build_invocation_workspace_write(monkeypatch) -> None:
     cmd = plan.cmd
     assert "--yolo" in cmd
     toolsets = cmd[cmd.index("-t") + 1]
-    assert toolsets == "web,file,terminal,code_execution,todo"
+    assert toolsets == "web,browser,file,terminal,code_execution,todo"
 
 
 def test_build_invocation_danger(monkeypatch) -> None:
