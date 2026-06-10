@@ -23,7 +23,7 @@ After completing this module, you will be able to:
 
 The *Infrastructure as Code* module’s Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference is the canonical illustration of why bare-metal and cluster onboarding must be declarative: a single node out of sync can still collapse the reliability of a broader estate.
 
-Modern infrastructure relies on consistency. A financial services company managing multiple Kubernetes clusters across two datacenters using procedural configuration management and shell scripts faces similar risks. Traditionally, it took days to spin up a single cluster: time spent finding servers in an outdated spreadsheet, executing manual PXE boots, running installation binaries, and verifying networking. Decommissioning was equally dangerous, as engineers hesitated to wipe disks without absolute certainty about the server's state, leading to massive resource waste and security vulnerabilities. Every manual step in a provisioning pipeline introduces the potential for human error, turning what should be a deterministic process into a game of chance.
+Modern infrastructure relies on consistency. **Hypothetical scenario:** a financial services company managing multiple Kubernetes clusters across two datacenters using procedural configuration management and shell scripts faces similar risks. Traditionally, it took days to spin up a single cluster: time spent finding servers in an outdated spreadsheet, executing manual PXE boots, running installation binaries, and verifying networking. Decommissioning was equally dangerous, as engineers hesitated to wipe disks without absolute certainty about the server's state, leading to massive resource waste and security vulnerabilities. Every manual step in a provisioning pipeline introduces the potential for human error, turning what should be a deterministic process into a game of chance.
 
 Cluster API fundamentally changes this narrative. By extending Kubernetes to manage its own infrastructure, you can define a physical server cluster in YAML, apply it, and the system provisions hardware, installs the OS, bootstraps Kubernetes, and joins nodes—all declaratively, auditable, and fully version-controlled in Git. No manual steps. No spreadsheets. No single point of failure during deployment. By shifting from imperative scripts to declarative state, you eliminate the configuration drift class of outages at scale.
 
@@ -392,7 +392,7 @@ kubectl --kubeconfig production.kubeconfig get nodes
 
 ## Automated Remediation and Machine Health
 
-One of the most powerful features of Cluster API is the ability to automatically remediate failed nodes by replacing them with fresh hardware from the pool. This drastically reduces the mean time to recovery (MTTR) during hardware failures. [The `MachineHealthCheck` resource monitors the status of individual machines and aggressively evicts and replaces nodes that fall out of compliance](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html).
+One of the most powerful features of Cluster API is the ability to automatically remediate failed nodes by replacing them with fresh hardware from the pool. This drastically reduces the mean time to recovery (MTTR) during hardware failures. [The `MachineHealthCheck` resource monitors the status of individual machines and aggressively evicts and replaces nodes that fall out of compliance](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html). The manifest below uses the still-served `v1beta1` API; CAPI `v1beta2` restructured these into `spec.checks.unhealthyNodeConditions` / `spec.checks.nodeStartupTimeoutSeconds` and a `spec.remediation` block, so do not simply bump the `apiVersion` line without porting the field shape.
 
 ```yaml
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -679,8 +679,22 @@ To optimize resource utilization on a highly constrained edge management cluster
 curl -L https://github.com/kubernetes-sigs/cluster-api/releases/latest/download/clusterctl-linux-amd64 -o clusterctl
 chmod +x clusterctl && sudo mv clusterctl /usr/local/bin/
 
-# Create a kind cluster as the management cluster
-kind create cluster --name capi-mgmt
+# The CAPI Docker provider (CAPD) provisions workload "machines" as sibling
+# containers on the HOST Docker daemon, so the kind management cluster must mount
+# the host Docker socket. Without this extraMount the machines hang in
+# Provisioning and the ControlPlaneReady wait below times out.
+cat > kind-cluster-with-extramounts.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: /var/run/docker.sock
+        containerPath: /var/run/docker.sock
+EOF
+
+# Create a kind cluster as the management cluster (with the Docker socket mount)
+kind create cluster --name capi-mgmt --config kind-cluster-with-extramounts.yaml
 
 # Initialize CAPI with Docker provider
 clusterctl init --infrastructure docker
