@@ -681,7 +681,7 @@ Continue to [Module 3.2: BGP & Routing for Kubernetes](../module-3.2-bgp-routing
 - [RFC 7348 — VXLAN](https://datatracker.ietf.org/doc/html/rfc7348)
 - [RFC 7432 — EVPN](https://datatracker.ietf.org/doc/html/rfc7432)
 - [RFC 7938 — BGP data center scaling](https://datatracker.ietf.org/doc/html/rfc7938)
-- [Cisco Nexus-9000 spine-leaf guidance](https://www.cisco.com/c/en/us/products/collateral/switches/nexus-9000-series-switches/white-paper-c11-743731.html)
+- [RFC 7938 — Use of BGP for Routing in Large-Scale Data Centers (Clos/spine-leaf)](https://datatracker.ietf.org/doc/html/rfc7938)
 - [FRRouting documentation](https://docs.frrouting.org/)
 - [IBTA InfiniBand Architecture — RoCEv2 (Annex A17)](https://www.infinibandta.org/ibta-specification/)
 - [OpenFabrics](https://www.openfabrics.org/)
