@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 125 (cont.) — AI campaign tail + history-book gap + /quality dashboard</title>
+<style>
+  body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.55rem;border-bottom:3px solid #2b6cb0;padding-bottom:.3rem}
+  h2{font-size:1.2rem;margin-top:1.8rem;color:#2b6cb0;border-bottom:1px solid #e2e8f0;padding-bottom:.2rem}
+  code{background:#f1f5f9;padding:.1rem .3rem;border-radius:3px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.92em}
+  th,td{border:1px solid #cbd5e0;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#edf2f7}
+  .ok{color:#22863a;font-weight:600}.warn{color:#b7791f;font-weight:600}
+  .meta{color:#64748b;font-size:.9em}
+  blockquote{border-left:3px solid #2b6cb0;margin:.6rem 0;padding:.2rem .9rem;background:#f7fafc}
+  li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<h1>Session 125 (continued) — AI campaign tail + history-book gap + <code>/quality</code> dashboard</h1>
+<p class="meta">2026-06-10 · continues session 125 (advanced-genai #1872 + multimodal-ai #1874 already shipped) · PRs <strong>#1878</strong> (tooling) + <strong>#1879</strong> (content) · issues <strong>#1876</strong> + <strong>#1877</strong></p>
+
+<h2>TL;DR</h2>
+<p>Drained the <strong>last 2 <code>ai-ml-engineering</code> <code>shipped_unreviewed</code> items</strong> (the AI track is now fully drained for #1842), surfaced and deferred a big content gap (a 73-chapter AI History <em>book</em> that had never been reviewed), and shipped a <code>/quality</code> dashboard change so that book is now trackable. Board: <strong>637 done</strong> (+2 content).</p>
+
+<h2>1. Campaign tail (PR #1879) — AI track fully drained</h2>
+<table>
+<tr><th>Module</th><th>T3→T0</th><th>Author → Reviewer</th><th>Notable</th></tr>
+<tr><td><strong>history/1.1</strong> History of AI &amp; ML</td><td>4101→7144w</td><td>codex → cursor (NEEDS_CHANGES → fixed)</td><td><strong>Web-verified fact-check</strong> (history = highest fab-risk genre): Dartmouth funding corrected (<strong>$7,500 awarded</strong>, $13,500 only <em>requested</em>); removed an unsourced/wrong "Data Explosion" table (2010 ≠ 2 ZB → IDC ≈ 1.2 ZB); Minsky's 1970 <em>Life</em> quote → attributed + disputed + sourced; XCON savings scoped to the broader expert-systems program; Ilya title dated; AlexNet "5–6 days". The fabricated <code>## The Night Everything Changed</code> opener was removed by the author; the AlexNet opener cursor verified as grounded/citable (15.3% vs 26.2%).</td></tr>
+<tr><td><strong>deep-learning/1.2</strong> PyTorch Fundamentals</td><td>already T0 (review-flip)</td><td>(review) → cursor (APPROVE_WITH_NITS)</td><td>cursor <em>ran it on PyTorch 2.12</em> and caught a real bug: the verification assert <code>param.device == device</code> fails on MPS/CUDA (<code>'mps:0' != 'mps'</code>) → compare <code>.device.type</code>; + continuation notes on two incremental snippets.</td></tr>
+</table>
+<p>Both <code>verify_module.py</code> <span class="ok">T0</span>; build 0 schema errors; site-health 0 errors; incident-dedup PASS. Roster: <strong>3-codex authoring</strong> (per user; codex at 44% weekly + reset). Every reviewer claim + corrected date/quote ground-checked.</p>
+
+<h2>2. The AI History book — surfaced + deferred (#1876)</h2>
+<p>The user asked whether "the big ai/ml history book" needed review. Investigation found <code>src/content/docs/ai-history/</code> is a <strong>73-chapter narrative book</strong> (~365,000 words, ch-01→ch-73), <strong>live in the sidebar but never cross-family reviewed</strong> (0 on the quality board). It is book-format (no module structure) so <code>verify_module.py</code> doesn't apply — the review lens is <strong>factual accuracy / dates / quotes / attribution</strong>, not the 7-dim module rubric. Spot-check (ch-50 Transformers) was accurate. <strong>User chose: defer.</strong> Filed <strong>#1876</strong> with a <em>sample-first</em> plan (review ~5 chapters across eras, then decide spot-fix vs full 73-chapter epic). It is a separate initiative from #1842; the campaign's "ai-history (1)" item was a different single survey module (the history/1.1 above).</p>
+
+<h2>3. <code>/quality</code> dashboard — book chapters now trackable (PR #1878, #1877)</h2>
+<p>So the deferred book is visible/trackable, added the 73 chapters to the <code>/quality</code> board in their own section. <code>build_quality_board</code> globbed only <code>module-*.md</code> → book chapters (<code>ch-*.md</code>) were invisible.</p>
+<ul>
+<li>codex (danger-worktree) added the chapters as <code>content_type: "book_chapter"</code> under an <strong>"AI History" track</strong>, status <code>shipped_unreviewed</code> (a dedicated <code>_quality_board_classify_book_chapter</code> avoids the "stage=None → done" trap), with separate <code>book_totals</code>/<code>content_totals</code> so module totals stay clean (828). <code>/api/quality/scores</code> unchanged.</li>
+<li><strong>Ground-check that mattered:</strong> codex added a <code>scripts/local_api/__init__.py</code> — first read as a shadowing-package risk, but the package already existed (empty docstring) and the change is an <em>additive</em> <code>__getattr__</code> lazy-export shim; the server runs <code>local_api.py</code> directly so it's unaffected. Verified by calling <code>build_quality_board()</code> (73 entries, AI History track, shipped_unreviewed) + that the board renders <strong>client-side</strong> from <code>data.tracks</code>.</li>
+<li>Merged #1878, restarted the API → confirmed <strong>live</strong>: <code>/api/quality/board</code> returns 73 AI History entries, the dashboard shows the section.</li>
+</ul>
+
+<h2>Process notes</h2>
+<ul>
+<li><strong>Dispatch gotcha:</strong> the <code>review</code> task-class does NOT honor <code>--new-branch</code> (worktree must pre-exist) — the dl/1.2 review failed silently the first time; re-dispatched after <code>git worktree add</code>.</li>
+<li><strong>Env:</strong> project venv is <code>.venv</code> (not <code>venv</code>); <code>ruff</code>/<code>pytest</code> live there, not in system <code>python3</code>.</li>
+<li><strong>Verifier-blind lab bugs keep showing up</strong> — cursor's PyTorch device-assert (dl/1.2) and the earlier multimodal lab-image 404s are the same class: gates pass, the lab breaks for the learner. Running the code is what catches them.</li>
+</ul>
+
+<h2>Next</h2>
+<p>The <code>ai-ml-engineering</code> #1842 campaign is now <strong>fully drained</strong> (generative-ai, vector-rag, frameworks-agents, mlops, ai-infrastructure, advanced-genai, multimodal-ai, history, + deep-learning/1.2). Next per curriculum order: <strong>on-premises → platform</strong>. Standing follow-up: <strong>#1876</strong> (review the AI History book — now visible on <code>/quality</code> as 73 <code>shipped_unreviewed</code> book chapters).</p>
+<p class="meta">Reusables: <code>logs/remediation/briefs/session125/</code> (ag-brief/-review/-fix for history-1.1, dl12, quality-book-section; finalize-tail.sh).</p>
+</body>
+</html>
