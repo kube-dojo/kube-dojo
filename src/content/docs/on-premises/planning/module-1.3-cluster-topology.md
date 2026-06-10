@@ -130,17 +130,17 @@ A robust cluster topology must intelligently expose this underlying hardware div
 
 Creating dedicated worker pools using node taints and tolerations establishes firm boundaries. These are programmatic boundaries that guarantee resource isolation at the scheduler level. Consider a scenario where you purchase a multi-million-dollar rack of NVIDIA A100 GPUs. These are intended to support a critical data science initiative. You absolutely cannot afford to have a generic, memory-leaking web application schedule onto those nodes. It would consume the underlying host's RAM, starving the ML models. 
 
-By applying a `NoSchedule` taint to the GPU nodes, you solve this problem. For example, you use `node.kubernetes.io/gpu=nvidia-a100:NoSchedule`. You instruct the Kubernetes scheduler to instantly reject any pod lacking a specific toleration. This guarantees that only specifically engineered ML workloads can execute there. These workloads must be configured to tolerate the taint. They must also explicitly request the GPU resource. They will be the only pods to ever execute on that expensive, specialized hardware pool.
+By applying a `NoSchedule` taint to the GPU nodes, you solve this problem. For example, you use `nvidia.com/gpu=nvidia-a100:NoSchedule`. You instruct the Kubernetes scheduler to instantly reject any pod lacking a specific toleration. This guarantees that only specifically engineered ML workloads can execute there. These workloads must be configured to tolerate the taint. They must also explicitly request the GPU resource. They will be the only pods to ever execute on that expensive, specialized hardware pool.
 
 ```yaml
 # Example: Tainting a node to protect specialized hardware
 # Run this command during hardware provisioning
-# kubectl taint nodes gpu-worker-01 node.kubernetes.io/gpu=nvidia-a100:NoSchedule
+# kubectl taint nodes gpu-worker-01 nvidia.com/gpu=nvidia-a100:NoSchedule
 
 apiVersion: v1
 kind: Pod
 metadata:
-  name: ML-model-training-job
+  name: ml-model-training-job
 spec:
   containers:
   - name: cuda-container
@@ -150,7 +150,7 @@ spec:
         nvidia.com/gpu: 1
   # This toleration allows the pod to bypass the protective taint
   tolerations:
-  - key: "node.kubernetes.io/gpu"
+  - key: "nvidia.com/gpu"
     operator: "Equal"
     value: "nvidia-a100"
     effect: "NoSchedule"
@@ -182,10 +182,11 @@ metadata:
 provisioner: rbd.csi.ceph.com
 parameters:
   clusterID: "ceph-production-cluster-id"
+  # Rack-aware replication is NOT a StorageClass parameter. It is enforced by
+  # the CRUSH rule bound to the Ceph pool referenced below: create the pool with
+  # a rack-failure-domain rule (e.g. `ceph osd crush rule create-replicated
+  # rack-aware default rack`), and the StorageClass simply points at that pool.
   pool: "kubernetes-production-pool"
-  # This specific parameter tells the CSI driver to utilize a CRUSH rule
-  # that strictly mandates replication across distinct physical racks.
-  topology.kubernetes.io/zone: "rack-level-replication-enforced"
 reclaimPolicy: Retain
 allowVolumeExpansion: true
 ```
@@ -402,7 +403,7 @@ You must meticulously deploy exactly one control plane node into each of the thr
 
 <details>
 <summary>Question 4: Your platform team recently purchased a highly expensive rack of NVIDIA GPUs. They are meant for machine learning workloads. During the first week of operation, you notice standard Java web applications randomly scheduling onto these nodes. These applications are starving the ML models. How do you implement a hardware segmentation strategy to fix this?</summary>
-You must immediately apply a `NoSchedule` taint to all the physical GPU nodes. For example, use `node.kubernetes.io/gpu=true:NoSchedule`. This programmatic taint actively repels any standard workload from the hardware. To allow the machine learning models to access the hardware, you must update their specific pod manifests. Include a corresponding toleration for that exact taint in their configuration. You must also include a `nodeSelector` explicitly directing them to the GPU hardware pool. This guarantees that only authorized workloads can consume the specialized compute resources.
+You must immediately apply a `NoSchedule` taint to all the physical GPU nodes. For example, use `nvidia.com/gpu=true:NoSchedule`. This programmatic taint actively repels any standard workload from the hardware. To allow the machine learning models to access the hardware, you must update their specific pod manifests. Include a corresponding toleration for that exact taint in their configuration. You must also include a `nodeSelector` explicitly directing them to the GPU hardware pool. This guarantees that only authorized workloads can consume the specialized compute resources.
 </details>
 
 <details>
@@ -411,7 +412,7 @@ The critical bottleneck is catastrophic disk latency. This is caused by the inad
 </details>
 
 <details>
-<summary>Question 6: An enterprise architect proposes stretching a single Kubernetes cluster across two datacenters. The datacenters are located 200 miles apart. He wants to achieve "active-active" disaster recovery. The leased fiber link between the sites has a consistent round-trip time (RTT) of 35 milliseconds. Why must you reject this multi-cluster topology design?</summary>
+<summary>Question 6: An enterprise architect proposes stretching a single Kubernetes cluster across two datacenters. The datacenters are located 200 miles apart. He wants to achieve "active-active" disaster recovery. The leased fiber link between the sites has a consistent round-trip time (RTT) of 35 milliseconds. Why must you reject this stretched-cluster topology design?</summary>
 You must reject this design entirely. The 35ms network latency far exceeds the practical limits for stable etcd Raft consensus. The etcd system relies on an incredibly tight default heartbeat interval of just 100 milliseconds. A 35ms RTT consumes a massive portion of that critical window immediately. This guarantees that the cluster will suffer from severe, continuous leader election instability under load. To achieve multi-datacenter resilience across that distance safely, you must deploy fully independent clusters in each site. You must then utilize global server load balancing (GSLB) to route traffic securely.
 </details>
 
