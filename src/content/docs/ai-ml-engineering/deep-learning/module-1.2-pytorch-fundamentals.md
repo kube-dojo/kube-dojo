@@ -388,6 +388,7 @@ Batch collation is the quiet third job. When a dataset returns one image tensor 
 The `DataLoader` does not magically put batches on the GPU. It yields CPU tensors unless the dataset already returns tensors on another device, which is uncommon for ordinary datasets. Move each batch inside the training loop. That keeps data loading separate from device execution and avoids quietly storing an entire dataset in GPU memory.
 
 ```python
+# Continues the running example: best_device(), FashionMLP, and loader are defined in earlier parts.
 device = best_device()
 model = FashionMLP().to(device)
 
@@ -522,6 +523,7 @@ Two PyTorch habits deserve early attention because they produce confusing bugs i
 Mode is state on the module, not state on the optimizer or the data. A common mistake is to put `model.eval()` around validation and then forget to call `model.train()` when training resumes for the next epoch. Another mistake is to assume `model.eval()` makes gradients impossible. It does not. It changes module behavior; `torch.no_grad()` changes graph recording. Keeping those two ideas separate prevents subtle bugs when B5 and B6 introduce dropout and normalization.
 
 ```python
+# Continues the running example: FashionMLP and device are defined in earlier parts.
 model = FashionMLP().to(device)
 
 model.train()
@@ -658,7 +660,7 @@ B2 will go deeper on training-loop structure: checkpointing, validation cadence,
 **Verification:**
 
 ```python
-assert next(model.parameters()).device == device
+assert next(model.parameters()).device.type == device.type  # compare type: device "mps"/"cuda" vs param "mps:0"/"cuda:0"
 assert logits.shape[1] == 10
 assert labels.dtype == torch.long
 assert all(parameter.grad is not None for parameter in model.parameters())
