@@ -2444,6 +2444,7 @@ _QUALITY_BOX_DRAWING_LINE_RE = re.compile(
 _QUALITY_BOX_DRAWING_MIN_LINES = 5
 _QUALITY_TRACK_LABELS = {
     "ai": "AI",
+    "ai-history": "AI History",
     "ai-ml-engineering": "AI/ML Engineering",
     "cloud": "Cloud",
     "linux": "Linux",
@@ -2477,6 +2478,8 @@ def _quality_track_label(rel: Path) -> str:
     if len(parts) >= 2 and first == "k8s" and parts[1] in _CERT_TRACKS:
         return parts[1].upper()
     top = _QUALITY_TRACK_LABELS.get(first, first.replace("-", " ").title())
+    if first == "ai-history":
+        return top
     if len(parts) >= 2 and not parts[1].startswith(("module-", "part")):
         return f"{top} {parts[1].replace('-', ' ').title()}"
     return top
@@ -3633,6 +3636,7 @@ _QUALITY_BOARD_IN_FLIGHT_STAGES = frozenset({
     "REVIEW_APPROVED",
 })
 _QUALITY_BOARD_DONE_STAGES = frozenset({"COMMITTED", "SKIPPED"})
+_QUALITY_BOARD_STATUS_KEYS = ("done", "needs_rewrite", "needs_review", "shipped_unreviewed", "both", "in_flight")
 _QUALITY_BOARD_REVISION_RE = re.compile(r"^revision_pending\s*:\s*true", re.MULTILINE)
 _QUALITY_BOARD_REVIEW_VERDICT_RE = re.compile(
     r"^## .*?— `REVIEW`(?: — `(?P<verdict>APPROVE|REJECT)`)?.*?$",
@@ -3794,6 +3798,24 @@ def _quality_board_classify(
     return "needs_review"
 
 
+def _quality_board_classify_book_chapter(*, latest_verdict: str | None) -> str:
+    """Classify narrative book chapters without applying module scoring.
+
+    AI History chapters are live site content but are not pipeline modules.
+    With no review log they are shipped-but-unreviewed, not structurally
+    ``done`` because there is no module rubric score or pipeline state.
+    """
+    if latest_verdict == "approve":
+        return "done"
+    if latest_verdict == "reject":
+        return "needs_rewrite"
+    return "shipped_unreviewed"
+
+
+def _quality_board_empty_totals() -> dict[str, int]:
+    return {**dict.fromkeys(_QUALITY_BOARD_STATUS_KEYS, 0), "total": 0}
+
+
 def build_quality_board(repo_root: Path) -> dict[str, Any]:
     """Per-module status grid joining heuristic scores, pipeline state,
     revision banners, the post-review queue, and review verdicts.
@@ -3814,7 +3836,8 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
     if not docs_root.exists():
         return {
             "generated_at": int(time.time()),
-            "totals": {"done": 0, "needs_rewrite": 0, "needs_review": 0, "shipped_unreviewed": 0, "both": 0, "in_flight": 0, "total": 0},
+            "totals": _quality_board_empty_totals(),
+            "book_totals": _quality_board_empty_totals(),
             "tracks": [],
             "modules": [],
         }
@@ -3829,15 +3852,25 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
             score_by_path[rel] = entry
 
     # Iterate every EN module on disk so we cover modules with no state
-    # file (e.g. UNAUDITED) and modules with no review log yet.
-    paths = sorted(
+    # file (e.g. UNAUDITED) and modules with no review log yet. AI
+    # History chapters are additive board entries, not quality-score
+    # modules, so they get a distinct content_type and separate totals.
+    module_paths = sorted(
         path
         for path in docs_root.glob("**/module-*.md")
         if ".staging." not in path.name
         and not path.relative_to(docs_root).as_posix().startswith("uk/")
     )
+    book_paths = sorted(
+        path
+        for path in (docs_root / "ai-history").glob("ch-*.md")
+        if ".staging." not in path.name
+    )
+    board_paths: list[tuple[Path, str]] = [(path, "module") for path in module_paths] + [
+        (path, "book_chapter") for path in book_paths
+    ]
     redirect_stub_slugs: set[str] = set()
-    for path in paths:
+    for path, _content_type in board_paths:
         rel_str = path.relative_to(docs_root).as_posix()
         try:
             text = path.read_text(encoding="utf-8")
@@ -3852,7 +3885,8 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
 
     modules: list[dict[str, Any]] = []
     track_buckets: dict[str, dict[str, Any]] = {}
-    totals = {"done": 0, "needs_rewrite": 0, "needs_review": 0, "shipped_unreviewed": 0, "both": 0, "in_flight": 0, "total": 0}
+    totals = _quality_board_empty_totals()
+    book_totals = _quality_board_empty_totals()
     source_counts = {
         "quality_pipeline_records": len(states),
         "committed_full_review": sum(
@@ -3863,10 +3897,12 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
         ),
         "revision_pending": _quality_board_count_revision_pending_docs(docs_root),
         "english_module_revision_pending": 0,
+        "book_chapter_revision_pending": 0,
+        "english_book_chapters": 0,
         "post_review_queue": len(post_review_queue),
     }
 
-    for path in paths:
+    for path, content_type in board_paths:
         rel = path.relative_to(docs_root)
         rel_str = rel.as_posix()
         slug = _quality_board_slug_for_path(rel_str)
@@ -3878,14 +3914,19 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
             text = ""
         revision_pending = _quality_board_has_revision_banner(text)
         if revision_pending:
-            source_counts["english_module_revision_pending"] += 1
+            if content_type == "book_chapter":
+                source_counts["book_chapter_revision_pending"] += 1
+            else:
+                source_counts["english_module_revision_pending"] += 1
+        if content_type == "book_chapter":
+            source_counts["english_book_chapters"] += 1
 
-        score_entry = score_by_path.get(rel_str)
+        score_entry = score_by_path.get(rel_str) if content_type == "module" else None
         score = float(score_entry["score"]) if score_entry and score_entry.get("score") is not None else None
 
         state = states.get(slug) or {}
         stage_raw = state.get("stage")
-        stage = str(stage_raw) if stage_raw else "UNAUDITED"
+        stage = str(stage_raw) if stage_raw else ("none" if content_type == "book_chapter" else "UNAUDITED")
         review = state.get("review") or {}
         auto_approved = review.get("auto_approved") is True
         verdict_raw = review.get("verdict")
@@ -3902,14 +3943,17 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
         if latest_verdict is None:
             latest_verdict = latest_review_verdicts.get(review_key)
 
-        status = _quality_board_classify(
-            score=score,
-            revision_pending=revision_pending,
-            stage=stage_raw if stage_raw else None,
-            auto_approved=auto_approved,
-            in_post_review_queue=slug in post_review_queue,
-            latest_verdict=latest_verdict,
-        )
+        if content_type == "book_chapter":
+            status = _quality_board_classify_book_chapter(latest_verdict=latest_verdict)
+        else:
+            status = _quality_board_classify(
+                score=score,
+                revision_pending=revision_pending,
+                stage=stage_raw if stage_raw else None,
+                auto_approved=auto_approved,
+                in_post_review_queue=slug in post_review_queue,
+                latest_verdict=latest_verdict,
+            )
 
         module = {
             "module_key": module_key_label,
@@ -3925,20 +3969,17 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
             "in_post_review_queue": slug in post_review_queue,
             "latest_review_verdict": latest_verdict,
         }
+        if content_type == "book_chapter":
+            module["content_type"] = "book_chapter"
         modules.append(module)
 
-        totals[status] += 1
-        totals["total"] += 1
+        subtotal = book_totals if content_type == "book_chapter" else totals
+        subtotal[status] += 1
+        subtotal["total"] += 1
         bucket = track_buckets.setdefault(
             track,
             {
-                "done": 0,
-                "needs_rewrite": 0,
-                "needs_review": 0,
-                "shipped_unreviewed": 0,
-                "both": 0,
-                "in_flight": 0,
-                "total": 0,
+                **_quality_board_empty_totals(),
                 "modules": [],
             },
         )
@@ -3958,6 +3999,8 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
     return {
         "generated_at": int(time.time()),
         "totals": totals,
+        "book_totals": book_totals,
+        "content_totals": {"module": totals, "book_chapter": book_totals},
         "source_counts": source_counts,
         "tracks": tracks,
         "modules": modules,
@@ -6581,15 +6624,17 @@ _QUALITY_BOARD_PAGE_JS = r"""
       const el = $('#qb-detail');
       if (!el) return;
       if (!module) {
-        el.innerHTML = '<div class="qb-detail-title">No module selected</div>';
+        el.innerHTML = '<div class="qb-detail-title">No entry selected</div>';
         return;
       }
+      const typeLabel = module.content_type === 'book_chapter' ? 'Book chapter' : 'Module';
       el.innerHTML = `
         <div>
           <div class="qb-detail-title">${esc(module.title || module.module_key || module.path)}</div>
           <div class="qb-path mono">${esc(module.path || module.slug)}</div>
         </div>
         <div class="qb-detail-kv">Status<br><strong>${QB_LABEL[module.status] || module.status}</strong></div>
+        <div class="qb-detail-kv">Type<br><strong>${typeLabel}</strong></div>
         <div class="qb-detail-kv">Score<br><strong>${module.score == null ? 'n/a' : Number(module.score).toFixed(1)}</strong></div>
         <div class="qb-detail-kv">Banner<br><strong>${module.revision_pending ? 'pending' : 'clear'}</strong></div>
         <div class="qb-detail-kv">Stage<br><strong>${esc(module.stage || 'none')}</strong></div>
@@ -6632,18 +6677,19 @@ _QUALITY_BOARD_PAGE_JS = r"""
       qualityBoardSelected = selected?.slug || null;
       const body = rows.map(m => {
         const detailPath = encodeQualityPath(m.path || `${m.slug}.md`);
+        const typeLabel = m.content_type === 'book_chapter' ? 'Book chapter' : 'Module';
         return `<tr data-slug="${esc(m.slug)}" class="${m.slug === qualityBoardSelected ? 'selected' : ''}">
           <td>${qbChip(m.status)}</td>
           <td>
             <div class="qb-module"><a class="qb-module-link" href="/quality/${detailPath}">${esc(m.title || m.module_key)}</a></div>
-            <div class="qb-path mono">${esc(m.path)}</div>
+            <div class="qb-path mono">${esc(typeLabel)} · ${esc(m.path)}</div>
           </td>
           <td>${esc(m.track || '')}</td>
           <td class="mono">${esc(m.stage || 'none')}</td>
           <td class="qb-num">${m.score == null ? '' : Number(m.score).toFixed(1)}</td>
         </tr>`;
       }).join('');
-      $('#qb-table-body').innerHTML = body || '<tr><td colspan="5" class="empty-state">No modules match filters</td></tr>';
+      $('#qb-table-body').innerHTML = body || '<tr><td colspan="5" class="empty-state">No entries match filters</td></tr>';
       for (const tr of document.querySelectorAll('#qb-table-body tr[data-slug]')) {
         tr.addEventListener('click', () => {
           qualityBoardSelected = tr.dataset.slug;
@@ -6668,10 +6714,14 @@ _QUALITY_BOARD_PAGE_JS = r"""
       qualityBoardData = data;
       const totals = data.totals || {};
       const total = totals.total || 0;
+      const bookTotals = data.book_totals || {};
+      const bookTotal = bookTotals.total || 0;
       const needs = (totals.needs_rewrite || 0) + (totals.needs_review || 0) + (totals.shipped_unreviewed || 0) + (totals.both || 0);
-      badge.textContent = `${totals.done || 0} / ${total} done · ${needs} left`;
-      badge.style.background = needs ? 'var(--amber-muted)' : 'var(--green-muted)';
-      badge.style.color = needs ? 'var(--amber)' : 'var(--green)';
+      const bookNeeds = (bookTotals.needs_rewrite || 0) + (bookTotals.needs_review || 0) + (bookTotals.shipped_unreviewed || 0) + (bookTotals.both || 0);
+      const bookText = bookTotal ? ` · ${bookTotal} book chapters tracked` : '';
+      badge.textContent = `${totals.done || 0} / ${total} modules done · ${needs} left${bookText}`;
+      badge.style.background = (needs || bookNeeds) ? 'var(--amber-muted)' : 'var(--green-muted)';
+      badge.style.color = (needs || bookNeeds) ? 'var(--amber)' : 'var(--green)';
 
       const tracks = data.tracks || [];
       const trackOptions = tracks
@@ -6703,7 +6753,7 @@ _QUALITY_BOARD_PAGE_JS = r"""
           <div class="qb-legend">${legend}</div>
           <div class="qb-tracks">${trackCards || '<div class="empty-state">No tracks</div>'}</div>
           <div class="qb-tools">
-            <input class="qb-input" id="qb-search" type="search" placeholder="Search modules">
+            <input class="qb-input" id="qb-search" type="search" placeholder="Search entries">
             <select class="qb-select" id="qb-track"><option value="">All tracks</option>${trackOptions}</select>
             <select class="qb-select" id="qb-status">
               <option value="">All statuses</option>
@@ -6712,7 +6762,7 @@ _QUALITY_BOARD_PAGE_JS = r"""
           </div>
           <div class="qb-table-wrap">
             <table class="qb-table">
-              <thead><tr><th>Status</th><th>Module</th><th>Track</th><th>Stage</th><th class="qb-num">Score</th></tr></thead>
+              <thead><tr><th>Status</th><th>Entry</th><th>Track</th><th>Stage</th><th class="qb-num">Score</th></tr></thead>
               <tbody id="qb-table-body"></tbody>
             </table>
           </div>
@@ -7074,7 +7124,7 @@ def render_quality_board_page_html() -> str:
   <div class=\"page-head\">
     <div>
       <h1 class=\"page-title\">Quality Board</h1>
-      <div class=\"page-sub\">Module review health, score bands, and gates.</div>
+      <div class=\"page-sub\">Module and book chapter review health, score bands, and gates.</div>
     </div>
     <div class=\"page-actions\">
       <span class=\"status-pill\" id=\"conn-status\"><span class=\"dot\"></span> Connected</span>
