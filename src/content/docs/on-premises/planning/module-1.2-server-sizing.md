@@ -26,7 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In September 2022, a logistics company ordered twelve Dell PowerEdge R750xs servers for their new Kubernetes platform. Each server had dual 24-core Intel Xeon Gold 5317 processors, 256 GB of RAM, and four 1.92 TB SATA SSDs. The hardware cost $216,000. When the platform team deployed their first workloads — a real-time vehicle tracking system processing 50,000 GPS events per second — they discovered two critical mistakes that no amount of tuning could fix in software, because the constraints were physical.
+**Hypothetical scenario (a composite of common on-prem sizing failures).** A logistics company orders twelve Dell PowerEdge R750xs-class servers for a new Kubernetes platform. Each server has dual 24-core Intel Xeon Gold 5317 processors, 256 GB of RAM, and four 1.92 TB SATA SSDs — roughly $216,000 of hardware. When the platform team deploys its first workloads — a real-time vehicle tracking system processing 50,000 GPS events per second — they discovered two critical mistakes that no amount of tuning could fix in software, because the constraints were physical.
 
 First, the SATA SSDs could not keep up with etcd's fsync requirements. etcd commit latency exceeded 100 ms during peak hours, causing leader elections every few minutes. The API server became unreliable, deployments stalled mid-rollout, and the operations channel filled with `context deadline exceeded` errors that pointed at a healthy-looking control plane. They needed NVMe drives for the control-plane nodes — a $24,000 additional investment and two weeks of downtime for hardware replacement, plus a tense conversation with the procurement team about why "enterprise SSD" turned out not to be enough.
 
@@ -176,7 +176,7 @@ etcd is the most resource-sensitive component in a Kubernetes control plane beca
 │                                                               │
 │  Cluster Size    │ CP Nodes │ CPU/Node │ RAM/Node │ Storage  │
 │  ────────────────┼──────────┼──────────┼──────────┼──────────│
-│  < 10 nodes      │    3     │  4 cores │   8 GB   │ 50GB SSD │
+│  < 10 nodes      │    3     │  4 cores │   8 GB   │ 50GB NVMe│
 │  10-100 nodes    │    3     │  8 cores │  16 GB   │ 100GB NVMe│
 │  100-500 nodes   │    3     │ 16 cores │  32 GB   │ 200GB NVMe│
 │  500-2000 nodes  │    5     │ 32 cores │  64 GB   │ 500GB NVMe│
@@ -374,15 +374,92 @@ Kubernetes ships with a [default of 110 pods per node](https://kubernetes.io/doc
 
 The CNI ceiling is often invisible until you hit it. Calico in IPAM-per-block mode allocates a /26 block to each node by default, which gives you sixty-four addresses per block and a hard upper bound on pods regardless of CPU and RAM headroom. Cilium with cluster-pool IPAM has its own per-node ceilings tied to the cluster CIDR. Verify the CNI configuration before you provision a node-pool that targets two hundred pods per node, or you will discover the constraint in production when a deployment refuses to schedule.
 
+### Few Large Nodes or Many Small Ones?
+
+The procurement conversation often collapses into a false dichotomy: buy fewer, bigger servers to save rack space, or buy many smaller servers to spread risk. Both answers can be wrong for the same workload, because the trade-off is multidimensional and Kubernetes amplifies whichever dimension you neglect. Few large nodes maximize bin-packing efficiency in theory — one scheduler decision places hundreds of pods — but they also maximize blast radius, per-node DaemonSet overhead, and the cost of any single failure event. Many small nodes shrink blast radius and make incremental growth cheaper, but they multiply fixed per-node costs: kubelet CPU, CNI agents, observability sidecars, BMC management, switch ports, and licensing lines that charge per socket regardless of utilization.
+
+Every worker node pays a tax before your first application pod schedules. The kubelet, container runtime, CNI plugin, node exporter, log shipper, and security agent collectively consume one to four vCPUs and two to eight gigabytes of RAM depending on pod density and policy stack. On a sixty-four-vCPU node that tax is noise; on a sixteen-vCPU node it can consume twenty percent of allocatable capacity before you account for system-reserved and kube-reserved settings. DaemonSets scale with node count, not node size, so a fleet of forty small nodes runs forty copies of every cluster-wide agent while a fleet of ten large nodes runs ten. The arithmetic favors larger nodes for DaemonSet-heavy platforms until blast radius and scheduling fragmentation push back.
+
+Pod-density limits interact with node size in ways the default `--max-pods=110` obscures. Kubernetes chose 110 as a conservative default because early clusters broke etcd and the API server watch cache when single nodes hosted thousands of pods; the limit remains configurable but upstream guidance still treats very high pod counts as a scaling risk. Raising `--max-pods` on a large node without raising CNI IPAM pools, without verifying API server LIST throughput, and without confirming your average pod size still fits CPU and RAM guarantees is how teams end up with nodes that report healthy capacity while refusing new pods for unrelated reasons. Size nodes so the binding constraint is intentional — CPU, RAM, or pod count — not an accidental collision between three independent limits.
+
+Licensing is the silent variable in the node-size decision on owned hardware. VMware, Windows Server Datacenter, Oracle Database, and several enterprise middleware stacks price per socket or per core regardless of how full the node runs. A dual-socket server with low utilization can cost more in license true-ups than two single-socket servers delivering the same pod capacity, even when the dual-socket machine wins on raw watts-per-core. Run the license model before you run the Kubernetes math, especially when JVM or Windows workloads dominate the fleet.
+
+> **Stop and think**: Your cluster runs 400 pods averaging 0.25 CPU and 1 GB RAM. Option A is eight nodes at 64 vCPU / 256 GB each; Option B is sixteen nodes at 32 vCPU / 128 GB each. Total capacity is identical. Which option tolerates a single node failure with less rescheduling pressure, and which option wastes more capacity to DaemonSet overhead? Sketch the DaemonSet tax before reading on.
+
+Option B spreads pods across more failure domains — losing one sixteen-node fleet member displaces twenty-five pods instead of fifty — but Option A runs half as many DaemonSet replicas and usually achieves better bin-packing because fewer scheduler boundaries exist. The right answer depends on your PodDisruptionBudget posture and spare headroom: if you size to sixty-five percent steady-state utilization, Option B survives one node loss with room to reschedule; if you size to eighty-five percent, Option B may cascade-evict while Option A still has slack. Neither SKU is universally correct; the decision framework later in this module turns these variables into a procurement checklist.
+
 ---
 
-## GPU Node Considerations
+## GPU and Accelerator Node Considerations
 
 GPU nodes break most of the rules above because the GPU itself dominates the cost and the surrounding silicon has to be sized to feed it. A modern training-class GPU (an NVIDIA H100 or B200) draws 700 to 1000 watts under load, consumes sixteen PCIe Gen5 lanes per device, and pairs with one to two CPU cores per GPU at most because the host's job is data movement, not compute. Filling a chassis with eight GPUs therefore demands a CPU and motherboard chosen to deliver lanes and power, not cores. AMD Genoa's 128-lane budget per socket is one of the reasons most reference designs for eight-GPU servers are single-socket EPYC — there are simply not enough Intel lanes to go around without bifurcation.
 
 Sizing the host RAM for GPU nodes is counter-intuitive: you want roughly two to three times the aggregate GPU memory, which on an eight-H100 server (640 GB of HBM3 across the GPUs) means 1.5 to 2 TB of host RAM. The reason is that training pipelines stage data in host memory before pushing it to the GPU, and inference servers cache model shards and KV caches on the host between requests. Under-provisioning host RAM forces every batch through the storage subsystem and turns a GPU-bound workload into a storage-bound one, which is the worst kind of stranded capacity because GPUs are the most expensive silicon in the rack.
 
 Kubernetes also forces you to think about scheduling: a single H100 cannot be split across pods without MIG (Multi-Instance GPU), and even with MIG the granularity is fixed by hardware. [The NVIDIA device plugin advertises GPUs as `nvidia.com/gpu: 1`, so two pods cannot share one device unless you opt into time-slicing or MIG](https://github.com/NVIDIA/k8s-device-plugin); both have throughput penalties relative to dedicated allocation. Plan capacity at the GPU-per-pod level, not the GPU-per-node level, and reserve at least one GPU per node as headroom because evicting a GPU pod is far slower than evicting a CPU pod (model load times dominate).
+
+Dedicated accelerator pools — GPU for training and inference, DPU or SmartNIC for storage or security offload — should almost never share a node pool with general workloads. Taint accelerator nodes with a hardware-specific taint, size the CPU and RAM envelope to feed the accelerator rather than to run arbitrary microservices, and cable them to a network tier that matches the traffic pattern (100–400 GbE or InfiniBand for training, not the same 25 GbE top-of-rack pair that serves stateless APIs). Mixing accelerators into a homogeneous SKU catalog feels operationally convenient until a batch job schedules onto an inference node and evicts latency-sensitive model servers; separate pools cost more line items on the purchase order but eliminate an entire class of production incidents.
+
+---
+
+## Compute Sizing: vCPU, Physical Cores, and Oversubscription
+
+Kubernetes exposes CPU in fractional units where **one CPU equals one hyperthread on typical x86 servers**, not one physical core. A dual-socket server with thirty-two cores per socket and simultaneous multithreading (SMT) advertises 128 `cpu` capacity to the scheduler even though only sixty-four physical cores exist. That distinction matters for CPU-bound workloads: two pods each requesting `2` CPU may land on the same physical core's two hyperthreads and contend for execution units, while the scheduler believes four CPUs are allocated. For latency-sensitive or HPC-style jobs, treat hyperthreads as a scheduling convenience, not as real isolated compute, and prefer whole-core requests with the [CPU Manager static policy](https://kubernetes.io/docs/tasks/administer-cluster/cpu-manager-policy/) on dedicated node pools.
+
+The CPU Manager pairs with the Topology Manager and, for Guaranteed-QoS pods, can pin workloads to specific cores and NUMA nodes. Static policy reserves exclusive cores; the none policy (default) lets the Linux scheduler move pods freely. On-prem clusters running databases, low-latency queues, or telco NFVs on bare metal frequently enable static policy on labeled pools while leaving general microservices on the default path. The cost is reduced bin-packing efficiency: exclusive cores cannot be shared, so allocatable CPU on a pinned pool is lower than the raw `/proc/cpuinfo` count suggests.
+
+CPU oversubscription — allowing sum(pod CPU requests) to exceed node capacity because average utilization stays low — is tempting on owned hardware where you pay for silicon whether it idles or not. Ratios of 2:1 or 3:1 request-to-capacity appear in internal private-cloud runbooks and can work when workloads are bursty and well-instrumented. The failure mode arrives on the first correlated spike: batch jobs, marketing events, or recovery after a node loss all raise utilization simultaneously, throttling every pod on the node through CFS shares without a clear owner. On-prem lacks cloud's infinite burst buffer; oversubscription without hard limits and without priority classes is how a "healthy" cluster enters CPU starvation. If you oversubscribe, cap it per node pool, enforce LimitRange defaults, and keep at least twenty percent physical core headroom for kubelet and DaemonSets.
+
+Hyperthreading itself should usually stay **enabled** for mixed microservice fleets because it improves throughput on I/O-bound pods at minimal power cost. Disable SMT only when vendor guidance or regulatory baselines require deterministic core isolation, or when running latency-sensitive numerical workloads where sibling hyperthread contention measurably regresses p99 latency. Document the BIOS setting in your golden image; a drifted SMT flag between racks changes allocatable CPU and invalidates capacity spreadsheets silently.
+
+---
+
+## Memory Sizing: Working Set, Page Cache, and Eviction Headroom
+
+Memory is the binding constraint on most on-prem Kubernetes fleets long before CPU saturates, because pod authors request RAM generously, JVM heaps are sized statically, and caches (Redis, Memcached, in-process) consume gigabytes that do not appear in CPU requests. The scheduler sums **requests**, not live working set, so a node can admit pods whose combined limits exceed physical RAM if limits are unset — and the kubelet will eventually evict pods when memory pressure crosses eviction thresholds. Sizing memory therefore starts from requested RAM plus explicit headroom for the operating system page cache when workloads depend on buffered I/O, not from `free -m` on an idle node.
+
+The page cache accelerates container filesystem and volume reads but is reclaimable under pressure; databases and streaming pipelines often benefit from leaving ten to twenty percent of node RAM outside pod requests so the kernel can cache without triggering premature eviction. Hugepages reduce TLB pressure for DPDK, certain databases, and some JVM configurations, but require pre-allocation at boot or through the kubelet and reduce flexible RAM available for ordinary pods. Reserve hugepages only on dedicated pools with a documented consumer; otherwise they strand capacity.
+
+Eviction thresholds — `memory.available` signals derived from `eviction-hard` and `eviction-soft` kubelet settings — define when the kubelet begins reclaiming pod memory. Defaults assume a general-purpose node; memory-heavy platforms often raise soft thresholds and pair them with PodDisruptionBudgets so evictions become controlled drains rather than random SIGKILLs. ECC RAM remains mandatory: silent bit flips in non-ECC DIMMs corrupt data without triggering reschedule, which is unacceptable on nodes running etcd members, databases, or long-lived caches.
+
+When profiling, compare Prometheus `container_memory_working_set_bytes` against requests over a full business cycle before buying RAM-heavy SKUs. A fleet averaging seventy-eight percent RAM utilization with twenty-two percent CPU utilization (a pattern this module returns to in the quiz) is not "efficient" — it signals a CPU-to-RAM ratio mismatch that the next hardware generation should correct, not replicate.
+
+---
+
+## Reserved vs Allocatable: A Worked Example
+
+Kubernetes never exposes 100% of hardware to pods. **Capacity** is what the node reports; **allocatable** is capacity minus kube-reserved, system-reserved, and eviction-threshold reservations. Procurement spreadsheets that divide total cluster RAM by pod requests without subtracting overhead systematically over-order nodes and under-order control-plane storage.
+
+Consider a worker SKU with 128 logical CPUs (64 cores with SMT) and 512 GiB RAM installed. A typical production kubelet configuration might set:
+
+```yaml
+# /var/lib/kubelet/config.yaml (illustrative)
+kubeReserved:
+  cpu: "2"
+  memory: "4Gi"
+systemReserved:
+  cpu: "2"
+  memory: "4Gi"
+evictionHard:
+  memory.available: "500Mi"
+  nodefs.available: "10%"
+```
+
+After reservation, allocatable CPU is roughly 124 logical CPUs and allocatable memory is roughly 503 GiB minus the 500 MiB eviction floor — call it **502 GiB** for planning. DaemonSets (monitoring, CNI, logging) consume another **3 vCPU and 6 GiB** before application pods schedule. Usable envelope for workloads: **121 vCPU and ~496 GiB**.
+
+Your pod catalog sums to **95 vCPU requested** and **420 GiB requested** at steady state. With thirty-percent growth headroom you plan for **124 vCPU** and **546 GiB**. CPU fits one node (121 ≥ 124 is false — you need a second node for CPU headroom); RAM fits one node for steady state but not with growth (546 > 496). **RAM is the binding dimension** after reservations, not the raw 512 GiB sticker on the DIMMs. Two nodes deliver 242 allocatable vCPU and ~992 GiB — enough for growth with N+1 spare if you target sixty-five percent steady-state utilization on RAM (420 / (2 × 496) ≈ 42%, leaving room for one node loss).
+
+Always run this arithmetic per node pool; GPU and control-plane SKUs use different reservation profiles. The upstream reference for reservation semantics is [Reserve compute resources on a node](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/) and the [Node allocatable](https://kubernetes.io/docs/concepts/architecture/nodes/#allocatable) documentation.
+
+---
+
+## Failure Domains, N+1 Headroom, and Disruption Budgets
+
+Hardware sizing and failure tolerance are the same spreadsheet. **N+1** means the cluster continues operating if one node disappears; **N+2** means two simultaneous failures (rolling upgrade plus hardware fault) still leave schedulable capacity. Production on-prem fleets should default to N+2 for worker pools above a dozen nodes because maintenance and failure correlate — patching node A while node B throws a memory error is routine, not a black-swan.
+
+PodDisruptionBudgets (PDBs) and pod anti-affinity rules translate application redundancy requirements into minimum node counts. An application with `replicas: 3` and `podAntiAffinity` requiring distinct hosts needs at least three workers available **after** reservations, not three workers total. If one node is cordoned for maintenance and another fails, anti-affinity plus PDB `minAvailable: 2` may block evictions and stall your upgrade. Size headroom so a single rack or PDU loss — map nodes to `topology.kubernetes.io/zone` labels matching physical layout — never drops available capacity below the sum of your tightest PDB budgets.
+
+Control-plane sizing follows the same logic with different numbers: three etcd members tolerate one loss; five tolerate two. Never run four members — even counts do not increase quorum tolerance. Spread control-plane nodes across independent PDUs or racks; stacking three CP VMs on one hypervisor defeats the purpose of three-node etcd.
 
 ---
 
@@ -413,6 +490,48 @@ Networking decisions have a similar structure: the speed line item on the bill o
 | 100GbE | High-throughput (storage, ML) | ~$300 |
 
 Twenty-five gigabit Ethernet is the modern minimum for any production Kubernetes cluster because the east-west traffic patterns of a typical microservices fleet plus a software-defined storage layer (Ceph, Rook, Longhorn) saturate 10 GbE quickly, especially during a node failure when the storage layer has to rebuild. One-gigabit is fine for the management network and out-of-band traffic to the BMC, but it is insufficient for any pod-to-pod traffic. Plan for two NICs per server bonded LACP into two top-of-rack switches so that a switch failure takes out half the bandwidth, not all of it.
+
+---
+
+## Patterns & Anti-Patterns
+
+| Pattern / Anti-Pattern | Description | Why It Happens / When to Use | Impact / Better Approach |
+|--------------------------|-------------|------------------------------|---------------------------|
+| **Pattern: Capacity buffer + scale-out** | Size steady-state utilization to 60–70% of allocatable CPU/RAM and add nodes when sustained utilization crosses a threshold for two weeks. | **When to use:** Any production fleet with seasonal traffic or batch windows. | Absorbs node loss and deployment surges without emergency procurement; trades capital efficiency for operational calm. |
+| **Pattern: Profile-matched node pools** | Separate compute-heavy, memory-heavy, storage, and GPU pools sized to pod request ratios. | **When to use:** Workload mix spans JVM services, caches, CI, and ML. | Eliminates stranded CPU or RAM; increases SKU count but raises fleet-wide utilization. |
+| **Pattern: Pre-delivery storage benchmark** | Run etcd-shaped fio on every control-plane drive before sign-off. | **When to use:** Always, for any self-managed control plane on owned hardware. | Catches RAID-cache latency and wrong drive tier before production leader elections. |
+| **Pattern: NUMA-aware pools** | Label latency-sensitive pools; enable Topology Manager + CPU Manager static on those nodes only. | **When to use:** In-memory databases, low-latency APIs on bare metal. | Prevents silent 30–50% regressions from cross-socket memory traffic. |
+| **Anti-Pattern: Peak-only sizing** | Buying exactly enough silicon for Black Friday peak with zero headroom. | **Why it happens:** Finance caps capital; teams confuse peak requests with steady state. | First node loss or upgrade triggers mass evictions; add N+2 and growth buffer explicitly. |
+| **Anti-Pattern: Uniform mega-nodes** | Four 256-core / 2 TB servers instead of sixteen 64-core / 512 GB servers at equal aggregate capacity. | **Why it happens:** Rack-space savings and simpler BOM. | Single failure displaces hundreds of pods; image pulls and storage rebuilds thundering-herd the cluster. |
+| **Anti-Pattern: SATA etcd** | Using Tier-2 SATA SSDs for control-plane data directories because the label says "enterprise SSD." | **Why it happens:** Procurement conflates interface with fsync tail latency. | Leader elections, read-only API windows, and unexplained `context deadline exceeded` during deploys. |
+| **Anti-Pattern: Ignoring allocatable math** | Dividing total DIMMs by pod requests without kube/system reserved or DaemonSet tax. | **Why it happens:** Spreadsheet uses hardware specs, not `kubectl describe node` allocatable. | Systematic under-provisioning; RAM outages despite "plenty" of sticker capacity. |
+
+---
+
+## Decision Framework: How Many Nodes of What Size
+
+Use this flow when translating pod requests into a purchase order. It assumes you already collected CPU and RAM **requests** (not limits) weighted by replica count.
+
+```
+START → Sum pod CPU/RAM requests × 1.3 growth headroom
+      → Compute CPU:RAM ratio → pick matching worker SKU family
+      → Subtract kube/system reserved + DaemonSet tax → allocatable per node
+      → nodes = max( CPU_need / allocatable_cpu , RAM_need / allocatable_ram )
+      → Add N+2 (production) or N+1 (non-prod)
+      → Check pod-density + CNI IPAM + max-pods ceiling per node
+      → If any PDB/anti-affinity needs > (nodes − maintenance − 1), increase nodes
+      → Size CP separately: NVMe etcd benchmark + 3 or 5 members by cluster scale
+      → Verify rack power + cooling at 65% of PDU budget → END
+```
+
+| Decision Factor | Favor Fewer, Larger Nodes | Favor More, Smaller Nodes | On-Prem Notes |
+|-----------------|---------------------------|---------------------------|---------------|
+| **DaemonSet / agent count** | Lower replica count of node agents | Higher overhead; more switch ports | CNI, observability, and security stacks tax small nodes harder |
+| **Blast radius** | Single failure disrupts many pods | Failure displaces fewer workloads | Pair small nodes with strict PDBs and spare headroom |
+| **Bin-packing efficiency** | Fewer scheduler boundaries | More fragmentation at scale | Re-run sizing if average pod < 0.25 CPU |
+| **Licensing model** | May reduce per-socket fees if utilization high | Spreads per-socket licenses across more boxes | Oracle/Windows stacks may invert the economics |
+| **Incremental growth** | Each addition is expensive | Add one node at a time | Leave 30–40% empty rack units and PDU headroom |
+| **Pod density target** | Raise max-pods only with CNI + API headroom | Keep ≤110 unless measured otherwise | etcd/API watch load rises with object count, not just nodes |
 
 ---
 
@@ -487,7 +606,7 @@ The key insight is that with three servers you cannot afford to waste sixty perc
 </details>
 
 ### Question 4
-Your procurement team suggests buying four massive 256-core / 2 TB servers instead of twelve 64-core / 512 GB servers to save on rack space, since both options provide roughly the same total capacity. What operational risk does the four-server architecture introduce for Kubernetes?
+Your procurement team suggests buying four massive 256-core / 2 TB servers instead of sixteen 64-core / 512 GB servers to save on rack space, since both options provide roughly the same total capacity. What operational risk does the four-server architecture introduce for Kubernetes?
 
 <details>
 <summary>Answer</summary>
@@ -502,7 +621,6 @@ The better approach is medium-sized servers in the 64-to-96-core range with 256 
 ### Question 5
 A platform team is benchmarking a Redis cache pod on a freshly provisioned dual-socket EPYC server with 96 cores per socket. In isolation Redis hits its target throughput easily, but once the node fills up with other tenants the Redis p99 latency triples and `numastat -p $(pgrep redis-server)` shows the process's resident memory split roughly fifty-fifty across the two NUMA nodes. The kubelet is running with default settings. What is the diagnosis, and what is the minimum set of changes to fix it without overhauling the cluster?
 
-<parameter name="$">
 <details>
 <summary>Answer</summary>
 
@@ -650,6 +768,15 @@ Continue to [Module 1.3: Cluster Topology Planning](../module-1.3-cluster-topolo
 
 ## Sources
 
-- [Kubernetes Node Resource Managers](https://kubernetes.io/docs/concepts/policy/node-resource-managers/) — Covers CPU, memory, and topology-aware allocation behavior that directly affects server-sizing decisions.
-- [Considerations for Large Clusters](https://kubernetes.io/docs/setup/best-practices/cluster-large/) — Provides upstream scaling criteria such as pods-per-node and general control-plane scaling guidance.
-- [Thread and Memory Placement on NUMA Systems: Asymmetry Matters](https://www.usenix.org/publications/login/oct15/lepers) — Gives a concrete, authoritative reference for how NUMA placement can materially alter performance on identical hardware.
+- [Kubernetes Node Resource Managers](https://kubernetes.io/docs/concepts/policy/node-resource-managers/) — CPU, memory, and topology-aware allocation behavior that directly affects server-sizing decisions.
+- [Reserve Compute Resources on a Node](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/) — Defines kube-reserved, system-reserved, and eviction thresholds used in allocatable capacity math.
+- [Node Allocatable Resources](https://kubernetes.io/docs/concepts/architecture/nodes/#allocatable) — Explains capacity versus allocatable and what the scheduler actually consumes.
+- [Configure the CPU Manager Policy](https://kubernetes.io/docs/tasks/administer-cluster/cpu-manager-policy/) — Static versus none policies for whole-core pinning on latency-sensitive pools.
+- [Control Topology Management Policies on a Node](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager/) — NUMA alignment policies including `single-numa-node` for databases and caches.
+- [Memory Manager System Configuration](https://kubernetes.io/docs/tasks/administer-cluster/memory-manager/) — Static memory pinning paired with Topology Manager on bare-metal pools.
+- [Assign Memory Resources to Containers and Pods](https://kubernetes.io/docs/tasks/configure-pod-container/assign-memory-resource/) — Request/limit semantics and OOM behavior that drive RAM sizing.
+- [Considerations for Large Clusters](https://kubernetes.io/docs/setup/best-practices/cluster-large/) — Pods-per-node defaults, scaling limits, and control-plane pressure at scale.
+- [Pod Disruption Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets) — How `minAvailable` / `maxUnavailable` translate into minimum node headroom during maintenance.
+- [etcd Hardware recommendations](https://etcd.io/docs/v3.6/op-guide/hardware/) — Disk latency, CPU, and memory guidance for quorum members on owned hardware.
+- [Dell PowerEdge for Kubernetes reference architecture](https://infohub.delltechnologies.com/en-us/l/dell-poweredge-for-kubernetes-2-0/kubernetes-node-sizing-considerations/) — Vendor-neutral node sizing patterns for worker and control-plane roles (verify SKU against your workload profile).
+- [Thread and Memory Placement on NUMA Systems: Asymmetry Matters](https://www.usenix.org/publications/login/oct15/lepers) — Authoritative NUMA placement performance data for dual-socket sizing decisions.
