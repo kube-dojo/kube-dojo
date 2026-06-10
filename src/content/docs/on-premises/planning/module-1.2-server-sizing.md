@@ -26,7 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In September 2022, a logistics company ordered twelve Dell PowerEdge R750xs servers for their new Kubernetes platform. Each server had dual 24-core Intel Xeon Gold 5317 processors, 256 GB of RAM, and four 1.92 TB SATA SSDs. The hardware cost $216,000. When the platform team deployed their first workloads — a real-time vehicle tracking system processing 50,000 GPS events per second — they discovered two critical mistakes that no amount of tuning could fix in software, because the constraints were physical.
+**Hypothetical scenario (a composite of common on-prem sizing failures).** A logistics company orders twelve Dell PowerEdge R750xs-class servers for a new Kubernetes platform. Each server has dual 24-core Intel Xeon Gold 5317 processors, 256 GB of RAM, and four 1.92 TB SATA SSDs — roughly $216,000 of hardware. When the platform team deploys its first workloads — a real-time vehicle tracking system processing 50,000 GPS events per second — they discovered two critical mistakes that no amount of tuning could fix in software, because the constraints were physical.
 
 First, the SATA SSDs could not keep up with etcd's fsync requirements. etcd commit latency exceeded 100 ms during peak hours, causing leader elections every few minutes. The API server became unreliable, deployments stalled mid-rollout, and the operations channel filled with `context deadline exceeded` errors that pointed at a healthy-looking control plane. They needed NVMe drives for the control-plane nodes — a $24,000 additional investment and two weeks of downtime for hardware replacement, plus a tense conversation with the procurement team about why "enterprise SSD" turned out not to be enough.
 
@@ -176,7 +176,7 @@ etcd is the most resource-sensitive component in a Kubernetes control plane beca
 │                                                               │
 │  Cluster Size    │ CP Nodes │ CPU/Node │ RAM/Node │ Storage  │
 │  ────────────────┼──────────┼──────────┼──────────┼──────────│
-│  < 10 nodes      │    3     │  4 cores │   8 GB   │ 50GB SSD │
+│  < 10 nodes      │    3     │  4 cores │   8 GB   │ 50GB NVMe│
 │  10-100 nodes    │    3     │  8 cores │  16 GB   │ 100GB NVMe│
 │  100-500 nodes   │    3     │ 16 cores │  32 GB   │ 200GB NVMe│
 │  500-2000 nodes  │    5     │ 32 cores │  64 GB   │ 500GB NVMe│
@@ -502,7 +502,7 @@ Twenty-five gigabit Ethernet is the modern minimum for any production Kubernetes
 | **Pattern: Pre-delivery storage benchmark** | Run etcd-shaped fio on every control-plane drive before sign-off. | **When to use:** Always, for any self-managed control plane on owned hardware. | Catches RAID-cache latency and wrong drive tier before production leader elections. |
 | **Pattern: NUMA-aware pools** | Label latency-sensitive pools; enable Topology Manager + CPU Manager static on those nodes only. | **When to use:** In-memory databases, low-latency APIs on bare metal. | Prevents silent 30–50% regressions from cross-socket memory traffic. |
 | **Anti-Pattern: Peak-only sizing** | Buying exactly enough silicon for Black Friday peak with zero headroom. | **Why it happens:** Finance caps capital; teams confuse peak requests with steady state. | First node loss or upgrade triggers mass evictions; add N+2 and growth buffer explicitly. |
-| **Anti-Pattern: Uniform mega-nodes** | Four 256-core / 2 TB servers instead of twelve 64-core / 512 GB servers at equal aggregate capacity. | **Why it happens:** Rack-space savings and simpler BOM. | Single failure displaces hundreds of pods; image pulls and storage rebuilds thundering-herd the cluster. |
+| **Anti-Pattern: Uniform mega-nodes** | Four 256-core / 2 TB servers instead of sixteen 64-core / 512 GB servers at equal aggregate capacity. | **Why it happens:** Rack-space savings and simpler BOM. | Single failure displaces hundreds of pods; image pulls and storage rebuilds thundering-herd the cluster. |
 | **Anti-Pattern: SATA etcd** | Using Tier-2 SATA SSDs for control-plane data directories because the label says "enterprise SSD." | **Why it happens:** Procurement conflates interface with fsync tail latency. | Leader elections, read-only API windows, and unexplained `context deadline exceeded` during deploys. |
 | **Anti-Pattern: Ignoring allocatable math** | Dividing total DIMMs by pod requests without kube/system reserved or DaemonSet tax. | **Why it happens:** Spreadsheet uses hardware specs, not `kubectl describe node` allocatable. | Systematic under-provisioning; RAM outages despite "plenty" of sticker capacity. |
 
@@ -606,7 +606,7 @@ The key insight is that with three servers you cannot afford to waste sixty perc
 </details>
 
 ### Question 4
-Your procurement team suggests buying four massive 256-core / 2 TB servers instead of twelve 64-core / 512 GB servers to save on rack space, since both options provide roughly the same total capacity. What operational risk does the four-server architecture introduce for Kubernetes?
+Your procurement team suggests buying four massive 256-core / 2 TB servers instead of sixteen 64-core / 512 GB servers to save on rack space, since both options provide roughly the same total capacity. What operational risk does the four-server architecture introduce for Kubernetes?
 
 <details>
 <summary>Answer</summary>
