@@ -35,7 +35,7 @@ Think of PXE as a loading dock rather than as the finished warehouse. It does no
 
 PXE starts before Linux exists, before systemd exists, and before any Kubernetes component can help you. The only code running is firmware from the server, the NIC, and whichever UEFI or legacy BIOS path the hardware selected. That means the early boot path must be deliberately simple. Firmware can broadcast for network configuration, download a small boot program, and execute it. Everything else must be staged after that first handoff.
 
-The canonical PXE sequence is easier to reason about if you treat it as a contract between components. The NIC PXE ROM asks for enough network configuration to find a Network Bootstrap Program. DHCP or proxyDHCP answers with an address, a next-server value, and a boot filename or URI. TFTP, HTTP Boot, or iPXE retrieves the boot program. The boot program retrieves a kernel, an initramfs, and command-line arguments. The kernel starts the installer or an in-memory provisioning environment. The installer writes the target OS and prepares the first real boot.
+The canonical PXE sequence is easier to reason about if you treat it as a contract between components. The NIC PXE ROM asks for enough network configuration to find a Network Bootstrap Program. DHCP or proxyDHCP answers with an address, a next-server value (DHCP option 66), and a boot filename or URI (option 67); the client also advertises its firmware architecture via option 93 (client-arch) and its vendor class via option 60. TFTP, HTTP Boot, or iPXE retrieves the boot program. The boot program retrieves a kernel, an initramfs, and command-line arguments. The kernel starts the installer or an in-memory provisioning environment. The installer writes the target OS and prepares the first real boot.
 
 ```text
 +----------------+       +----------------+       +----------------+
@@ -112,6 +112,7 @@ tftp-root=/srv/pxe/tftp
 # Architecture tags from RFC 4578 option 93.
 dhcp-match=set:bios,option:client-arch,0
 dhcp-match=set:uefi-x64,option:client-arch,7
+dhcp-match=set:uefi-x64,option:client-arch,9
 dhcp-boot=tag:bios,undionly.kpxe
 dhcp-boot=tag:uefi-x64,ipxe.efi
 ```
@@ -172,7 +173,7 @@ A generated script for an Ubuntu worker might then look like this. The server re
 ```text
 #!ipxe
 set base-url http://10.20.0.10/images/ubuntu-24.04/amd64
-kernel ${base-url}/casper/vmlinuz ip=dhcp autoinstall ds=nocloud-net;s=http://10.20.0.10/seed/host-0008/
+kernel ${base-url}/casper/vmlinuz ip=dhcp url=http://10.20.0.10/images/ubuntu-24.04/ubuntu-24.04-live-server-amd64.iso autoinstall ds=nocloud-net;s=http://10.20.0.10/seed/host-0008/
 initrd ${base-url}/casper/initrd
 boot || goto failed
 
@@ -497,6 +498,7 @@ enable-tftp
 tftp-root=/srv/pxe/tftp
 dhcp-match=set:bios,option:client-arch,0
 dhcp-match=set:uefi-x64,option:client-arch,7
+dhcp-match=set:uefi-x64,option:client-arch,9
 dhcp-boot=tag:bios,undionly.kpxe
 dhcp-boot=tag:uefi-x64,ipxe.efi
 EOF
@@ -532,7 +534,7 @@ EOF
 cat > http/boot/host-0008.ipxe <<'EOF'
 #!ipxe
 set base-url http://10.20.0.10/images/ubuntu-24.04/amd64
-kernel ${base-url}/casper/vmlinuz ip=dhcp autoinstall ds=nocloud-net;s=http://10.20.0.10/seed/host-0008/
+kernel ${base-url}/casper/vmlinuz ip=dhcp url=http://10.20.0.10/images/ubuntu-24.04/ubuntu-24.04-live-server-amd64.iso autoinstall ds=nocloud-net;s=http://10.20.0.10/seed/host-0008/
 initrd ${base-url}/casper/initrd
 boot || goto failed
 
