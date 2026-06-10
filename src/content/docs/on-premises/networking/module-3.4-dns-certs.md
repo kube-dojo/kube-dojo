@@ -140,7 +140,13 @@ metadata:
   name: external-dns
   namespace: external-dns
 spec:
+  selector:
+    matchLabels:
+      app: external-dns
   template:
+    metadata:
+      labels:
+        app: external-dns
     spec:
       serviceAccountName: external-dns
       containers:
@@ -274,7 +280,7 @@ Grant ExternalDNS permission to submit RFC2136 updates only inside `apps.interna
 
 unbound on dedicated VMs or on each node (via systemd-resolved forwarding) provides DNSSEC validation and aggressive caching before queries hit the Internet. A simple unbound stanza forwards internal zones to BIND and everything else to provider resolvers while validating DNSSEC where possible:
 
-```yaml
+```text
 server:
   verbosity: 1
   interface: 0.0.0.0

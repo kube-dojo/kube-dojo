@@ -611,7 +611,7 @@ linkerd check
 
 kubectl create namespace echo
 kubectl annotate namespace echo linkerd.io/inject=enabled
-kubectl -n echo create deployment a --image=curlimages/curl -- sleep 3600
+kubectl -n echo create deployment a --image=nicolaka/netshoot -- sleep 3600
 kubectl -n echo create deployment b --image=nginxdemos/nginx-hello --port=8080
 kubectl -n echo expose deployment b --port=8080
 kubectl -n echo wait --for=condition=Available deployment/a --timeout=120s
@@ -620,7 +620,7 @@ kubectl -n echo wait --for=condition=Available deployment/b --timeout=120s
 linkerd viz install | kubectl apply -f -
 linkerd check
 POD=$(kubectl -n echo get pod -l app=a -o jsonpath='{.items[0].metadata.name}')
-kubectl -n echo exec "$POD" -c curl -- curl -sS -o /dev/null -w "%{http_code}\n" http://b.echo.svc.cluster.local:8080/
+kubectl -n echo exec "$POD" -- curl -sS -o /dev/null -w "%{http_code}\n" http://b.echo.svc.cluster.local:8080/
 ```
 
 Expected: meshed pods show proxy containers; `linkerd check` passes; curl from `a` to `b` returns HTTP `200` (nginx-hello demo page) with mTLS established—use `linkerd viz tap deploy/b -n echo` to observe TLS metadata.

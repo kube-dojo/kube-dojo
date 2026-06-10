@@ -370,21 +370,8 @@ metadata:
   name: frr
 EOF
 
-# 4. Define a valid MetalLB BGP peer model for lab topology.
+# 4. Define MetalLB BGP advertisement and pool (peer wired after FRR starts).
 kubectl apply -f - <<'EOF'
-apiVersion: metallb.io/v1beta1
-kind: BGPPeer
-metadata:
-  name: lab-peer
-  namespace: metallb-system
-spec:
-  myASN: 64512
-  peerASN: 65099
-  peerAddress: 172.18.0.254
-  holdTime: 30s
-  keepaliveTime: 10s
-  ebgpMultihop: true
----
 apiVersion: metallb.io/v1beta1
 kind: BGPAdvertisement
 metadata:
@@ -397,10 +384,7 @@ spec:
     - 64512:100
   peers:
     - lab-peer
-EOF
-
-# 5. Define an IPAddressPool for test VIPs and one workload Service.
-kubectl apply -f - <<'EOF'
+---
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -417,7 +401,7 @@ metadata:
   namespace: lab
 spec:
   selector:
-    app: echo
+    app: echo-server
   type: LoadBalancer
   ports:
     - name: web
@@ -425,7 +409,7 @@ spec:
       targetPort: 8080
 EOF
 
-# 6. Run a lightweight application.
+# 5. Run a lightweight application.
 kubectl -n lab create deployment echo-server \
   --image=hashicorp/http-echo \
   --replicas=2 \
@@ -433,16 +417,32 @@ kubectl -n lab create deployment echo-server \
 
 kubectl -n lab expose deployment echo-server --port=80 --target-port=8080
 
-# 7. Start an FRR container for route validation.
+# 6. Start FRR and derive peer addresses from live pod/container IPs.
 docker run -d --name lab-frr \
   --network kind \
   --privileged \
-  -v /tmp/frr:/etc/frr \
-  frrouting/frr:v10.0.1
+  quay.io/frrouting/frr:10.2.1
+FRR_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' lab-frr)
 METALLB_SPEAKER_IP=$(kubectl -n metallb-system get pods -l component=speaker -o jsonpath='{.items[0].status.podIP}')
-docker exec lab-frr vtysh -c "conf t" -c "router bgp 65099" -c "neighbor $METALLB_SPEAKER_IP remote-as 64512" -c "exit" -c "exit" -c "write memory"
 
-# 8. Verify BGP state and service reachability.
+kubectl apply -f - <<EOF
+apiVersion: metallb.io/v1beta1
+kind: BGPPeer
+metadata:
+  name: lab-peer
+  namespace: metallb-system
+spec:
+  myASN: 64512
+  peerASN: 65099
+  peerAddress: ${FRR_IP}
+  holdTime: 30s
+  keepaliveTime: 10s
+  ebgpMultihop: true
+EOF
+
+docker exec lab-frr vtysh -c "conf t" -c "router bgp 65099" -c "neighbor ${METALLB_SPEAKER_IP} remote-as 64512" -c "exit" -c "exit" -c "write memory"
+
+# 7. Verify BGP state and service reachability.
 kubectl -n lab get svc lab-bgp
 docker exec -i lab-frr vtysh -c "show bgp summary"
 VIP=$(kubectl -n lab get svc lab-bgp -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
