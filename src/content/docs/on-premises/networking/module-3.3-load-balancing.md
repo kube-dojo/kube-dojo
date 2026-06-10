@@ -262,6 +262,7 @@ A split-brain scenario in VRRP often starts with misaligned priorities or wrong 
 HAProxy remains mature for high-throughput fronting while offering both transport and HTTP modes. It can be used to front Kubernetes ingress, API servers, and mixed legacy traffic.
 
 ```bash
+cat >/etc/haproxy/haproxy.cfg <<'EOF'
 global
     log stdout local0
     maxconn 25000
@@ -499,7 +500,8 @@ When planning replacement, test failover scenarios explicitly. Some teams move o
 ## Section 16: Real Incident Postmortems and Mitigation Patterns
 
 ### Incident: Split-brain from VRRP misconfiguration
-The split-brain pattern appears when backups and masters can both assert ownership due to identical priorities or inconsistent interfaces. The network then sees intermittent path ownership and duplicate traffic ownership signatures.
+
+Hypothetical scenario: the split-brain pattern appears when backups and masters can both assert ownership due to identical priorities or inconsistent interfaces. The network then sees intermittent path ownership and duplicate traffic ownership signatures.
 
 The mitigation is deterministic election parameters, strict advert settings, and pre-production chaos tests that intentionally isolate master health.
 

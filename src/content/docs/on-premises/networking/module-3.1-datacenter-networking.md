@@ -73,10 +73,10 @@ graph LR
       LEAF2 -->|ebgp 65011| SPINE1
       LEAF2 -->|ebgp 65011| SPINE2
     end
-    SPINE1 -->|ECMP| SPINE2
+    SPINE1 -.->|independent spines| SPINE2
 ```
 
-Closed form intuition for why this works: if each leaf can forward to multiple equal paths, transient congestion can be distributed, and a single link problem has fewer downstream side effects than in hierarchical trees where one bad bridge or uplink can force many unrelated flows into contention.
+Closed form intuition for why this works: each leaf ECMP-load-balances across multiple spine uplinks (leaf→spine→leaf), not spine-to-spine. Transient congestion can be distributed across those uplinks, and a single link problem has fewer downstream side effects than in hierarchical trees where one bad bridge or uplink can force many unrelated flows into contention.
 
 ## Section 3: ECMP, EBGP, and IBGP under Kubernetes assumptions
 
@@ -147,7 +147,7 @@ Use explicit commands to verify both unencapsulated and encapsulated paths, then
 ```bash
 ip link set eth0 mtu 1500
 ip link show eth0
-ping -M do -s 1460 10.0.0.1
+ping -M do -s 1472 10.0.0.1
 ping -M do -s 8972 10.0.50.10
 iptables -t mangle -A POSTROUTING -o vxlan0 -p tcp --tcp-flags SYN,RST SYN \
   -j TCPMSS --clamp-mss-to-pmtu
@@ -157,7 +157,7 @@ If one rack uses 1500 and another uses 9000 without strict policy, pod-to-pod pa
 
 ## Section 12: SmartNIC and DPU realities
 
-SmartNIC and DPU offload shifts flow handling out of host CPU and makes high-throughput fabrics viable at lower CPU saturation. NVIDIA BlueField and Intel IPU class platforms are representative examples where this reduction is practical in production.
+SmartNIC and DPU offload shifts flow handling out of host CPU and makes high-throughput fabrics viable at lower CPU saturation. Advanced SmartNICs with programmable flow engines (for example TruFlow-class adapters) and true DPUs such as NVIDIA BlueField and Intel IPU platforms are representative examples where this reduction is practical in production.
 
 Offload decisions should target measurable workloads: storage replication, heavy VXLAN encapsulation, and policy-heavy multi-tenant fabrics. Teams that offload everything by default often lose visibility and pay a debugging cost when observability does not keep up with offloaded features.
 
@@ -595,7 +595,7 @@ cat > /tmp/oversubscription-check.sh <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 
-cat <<'DATA' | while IFS=',' read -r model down up reason; do
+while IFS=',' read -r model down up reason; do
   ratio=$(awk "BEGIN {printf \"%.2f\", ${down}/${up}}")
   risk="acceptable"
   if awk "BEGIN {exit !(${down}/${up} >= 6)}"; then
@@ -604,11 +604,11 @@ cat <<'DATA' | while IFS=',' read -r model down up reason; do
     risk="caution"
   fi
   printf "%s,%s,%s\n" "$model" "$ratio" "$risk"
-done
-DATA
+done <<'DATA'
 A,1200,200,48x25GbE hosts / 2x100GbE uplinks
-B,1200,500,48x25GbE hosts / 2x100GbE + 1x400GbE uplinks
+B,1200,600,48x25GbE hosts / 2x100GbE + 1x400GbE uplinks
 C,2560,400,64x40GbE hosts / 4x100GbE uplinks
+DATA
 SH
 
 bash /tmp/oversubscription-check.sh
@@ -617,14 +617,14 @@ bash /tmp/oversubscription-check.sh
 ```text
 Model,ratio,risk
 A,6.00,high-risk
-B,2.40,acceptable
+B,2.00,acceptable
 C,6.40,high-risk
 ```
 
 ```bash
 cat > /tmp/oversubscription-decision.txt <<'TXT'
 Chosen model: B
-Reason: 2.40:1 with one 400GbE uplink gives the best burst profile and single-failure path safety.
+Reason: 2.00:1 with one 400GbE uplink gives the best burst profile and single-failure path safety.
 Alert: trigger when >72% utilization on any spine uplink for 5m and ECMP imbalance >1.8:1 for 1m.
 TXT
 cat /tmp/oversubscription-decision.txt
@@ -657,7 +657,7 @@ ping: local error: Message too long (MTU exceeded)
 
 3: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 ...
 64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=...
-ping: fragmentation needed and DF set
+ping: local error: Message too long (MTU exceeded)
 RX: bytes packets errs drop fifo frame compressed multicast
 ...
 Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
@@ -681,12 +681,12 @@ Continue to [Module 3.2: BGP & Routing for Kubernetes](../module-3.2-bgp-routing
 - [RFC 7348 — VXLAN](https://datatracker.ietf.org/doc/html/rfc7348)
 - [RFC 7432 — EVPN](https://datatracker.ietf.org/doc/html/rfc7432)
 - [RFC 7938 — BGP data center scaling](https://datatracker.ietf.org/doc/html/rfc7938)
-- [Cisco Nexus-9000 spine-leaf guidance](https://www.cisco.com/c/en/us/products/collateral/switches/nexus-9000-series-switches/white-paper-c11-743731.html)
+- [RFC 7938 — Use of BGP for Routing in Large-Scale Data Centers (Clos/spine-leaf)](https://datatracker.ietf.org/doc/html/rfc7938)
 - [FRRouting documentation](https://docs.frrouting.org/)
-- [RFC 8939 — RoCEv2](https://datatracker.ietf.org/doc/html/rfc8939)
+- [IBTA InfiniBand Architecture — RoCEv2 (Annex A17)](https://www.infinibandta.org/ibta-specification/)
 - [OpenFabrics](https://www.openfabrics.org/)
 - [SNIA RDMA flow-control content](https://www.snia.org/node/18815)
 - [Kubernetes networking concepts](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
 - [Linux kernel networking documentation](https://docs.kernel.org/networking/)
-- [Broadcom DPU overview](https://www.broadcom.com/products/ethernet-connectivity/network-adapters/p2100g)
+- [NVIDIA BlueField DPU platform](https://www.nvidia.com/en-us/networking/products/data-processing-unit/)
 - [Juniper VXLAN/EVPN integration](https://www.juniper.net/documentation/us/en/software/junos/evpn/topics/concept/vxlan-evpn-integration-overview.html)
