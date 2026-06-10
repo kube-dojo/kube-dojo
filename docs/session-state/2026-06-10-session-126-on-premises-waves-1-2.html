@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 126 — on-premises drain waves 1-2 + gemini retired</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 126 — on-premises drain (waves 1-2) + gemini retired, agy proven</h1>
+<p class="meta">2026-06-10. Started the <b>on-premises track</b> drain (the next curriculum work after the ai-ml-engineering campaign completed in s125c). Shipped <b>two full waves — 10 modules to <code>done</code></b> (planning+provisioning, then networking), all cross-family reviewed + ground-checked + merged. Mid-session the user emphatically <b>retired gemini</b> (it returned empty then timed out 1800s, twice) in favor of <b>agy</b> as the Google-family lane — which then proved out with two grounded reviews. User also corrected the orchestrator's habit of pausing for sign-off on clean waves (&ldquo;why do you need my go?&rdquo;) &rarr; drive autonomously. Side quest: diagnosed + fixed an 11&nbsp;GB worktree disk bleed in the <i>learn-ukrainian</i> sibling repo.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1882</td><td><span class="pill merged">MERGED</span></td><td>on-premises wave 1 — planning + provisioning (1.2, 1.3, 2.2, 2.4)</td><td>2 expand (cursor/codex) + 2 review-flip; deepseek/opus/cursor R1 NEEDS_CHANGES &rarr; ground-checked fixes &rarr; build 2171p &rarr; merged</td></tr>
+<tr><td>#1883</td><td><span class="pill merged">MERGED</span></td><td>drop stale <code>revision_pending</code> flag on 1.2</td><td>1-line frontmatter; the flag pinned a reviewed T0/5.0 module to <code>needs_rewrite</code> on the board</td></tr>
+<tr><td>#1884</td><td><span class="pill merged">MERGED</span></td><td>on-premises wave 2 — networking 3.1&ndash;3.6</td><td>6 review-flip (cursor/opus/agy, no gemini) &rarr; consolidated cursor fix-pass &rarr; re-verified &rarr; build 2171p &rarr; merged</td></tr>
+<tr><td>#1881</td><td><span class="pill inflight">TRACKING</span></td><td>on-premises track review-and-flip drain (40 non-done)</td><td>filed this session; waves 1-2 ACs ticked; 30 non-done remain</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. gemini RETIRED &mdash; agy is the Google-family lane (user, emphatic)</h3>
+<p>User: &ldquo;<i>YOU HAVE TO FUCKING STOP USING GEMINI PLS AND USE AGY</i>&rdquo; &mdash; then &ldquo;<i>gemini is being retired remember?</i>&rdquo; This session gemini-cli/gemini-3.1-pro headless review returned <b>empty</b> (2.2, first try) then <b>hung 42&nbsp;min &rarr; <code>AgentTimeoutError hard_timeout=1800s</code>, resp_chars 0</b> (the same review). Never dispatch <code>--agent gemini</code> again; use <code>--agent agy</code> (<code>gemini-3.1-pro-high</code> write, <code>gemini-3.5-flash-high</code> review). Hardened in memory <code>feedback_agy_gemini_3_5_flash_viable_reviewer</code> + MEMORY.md index. The s121 &ldquo;migrate by ~Jun-15&rdquo; soft framing is now <b>DONE</b>.</p>
+
+<h3>2. No sign-off gate on clean waves (user)</h3>
+<p>User: &ldquo;<i>why do you need my go?</i>&rdquo; The orchestrator had self-imposed a &ldquo;pause at each consolidated PR for sign-off&rdquo; that the user never asked for. Reviewed + ground-checked + build-green waves are endorsed-queue work &mdash; merge and flip them, report with evidence, don't gate behind permission. (Re-affirms <code>feedback_deliver_results_not_questions</code> / <code>feedback_dont_ask_within_endorsed_queue</code>.) After this, #1882 and #1884 were merged without asking.</p>
+
+<h3>3. agy validated as a reviewer (positive datapoint)</h3>
+<p>agy on <code>gemini-3.1-pro-high</code> did two clean, fully-grounded cross-family reviews (3.4, 3.6), each catching a real verifier-blind P1 (kubectl-rejecting Deployment; CrashLoop entrypoint). Sharp contrast to the s117 whole-review fabrication (that was the <code>--add-dir</code>-less tool-starved era, since fixed). Still ground-check every claim <i>and its suggested fix</i> &mdash; agy's &ldquo;use alpine, it has curl&rdquo; fix was wrong (alpine ships no curl) &rarr; corrected to <code>nicolaka/netshoot</code>.</p>
+
+<h2>Headline data</h2>
+<ul>
+<li><b>Site-wide modules done: 637 &rarr; 647 (+10)</b> (content_totals.module: done 647 / needs_rewrite 150 / shipped_unreviewed 27 / total 828).</li>
+<li><b>On-premises: 27/57 done</b> (was 17 at session start; +4 wave-1 +6 wave-2).</li>
+<li>All 10 modules T0 (verifier) with heuristic score &ge;4 (1.2=5.0, 3.1=5.0).</li>
+</ul>
+
+<h2>What the review layer caught (all verifier-blind, all ground-checked)</h2>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Real defect(s)</th></tr>
+<tr><td>1.2 server-sizing</td><td>deepseek</td><td>fabricated dated opener (Sept-2022 / $216k, pre-existing) &rarr; <code>Hypothetical scenario:</code>; etcd-NVMe table contradiction; mega-node &ldquo;equal capacity&rdquo; arithmetic</td></tr>
+<tr><td>1.3 cluster-topology</td><td>opus</td><td>invalid RFC-1123 pod name; reserved <code>node.kubernetes.io/gpu</code> taint ns &rarr; <code>nvidia.com/gpu</code>; fabricated Ceph StorageClass param; quiz stretched-vs-multi-cluster</td></tr>
+<tr><td>2.2 pxe-provisioning</td><td>cursor</td><td>P1 Ubuntu autoinstall missing <code>url=</code> (casper no rootfs); client-arch type 9; DHCP option naming</td></tr>
+<tr><td>2.4 declarative-bare-metal</td><td>opus</td><td>P1 CAPD hands-on missing host <code>docker.sock</code> extraMount (timed out); war-story label; MHC v1beta1/v1beta2 trap</td></tr>
+<tr><td>3.1 datacenter-networking</td><td>cursor</td><td>P1 broken heredoc (<code>DATA</code> closed before CSV rows); Model-B oversubscription math; RoCEv2 citation (RFC 8939 is DetNet); ECMP wording; SmartNIC SKU; bot-403 Cisco source &rarr; RFC 7938</td></tr>
+<tr><td>3.2 bgp-routing</td><td>opus</td><td>P1 nonexistent FRR image <code>frrouting/frr:v10.0.1</code> &rarr; <code>quay.io/frrouting/frr:10.2.1</code>; Service selector mismatch (zero endpoints)</td></tr>
+<tr><td>3.3 load-balancing</td><td>cursor</td><td>APPROVE_WITH_NITS &mdash; HAProxy block + Section-16 label</td></tr>
+<tr><td>3.4 dns-certs</td><td>agy</td><td>P1 external-dns Deployment missing <code>spec.selector</code>+labels (kubectl-rejects); unbound <code>yaml</code>&rarr;<code>text</code></td></tr>
+<tr><td>3.5 cross-cluster-networking</td><td>opus</td><td>clean (flip to done) &mdash; opener label only</td></tr>
+<tr><td>3.6 service-mesh-bare-metal</td><td>agy</td><td>P1 <code>curlimages/curl -- sleep</code> &rarr; CrashLoop (ENTRYPOINT trap) &rarr; <code>nicolaka/netshoot</code></td></tr>
+</table>
+<p><b>Lesson reinforced:</b> on-premises is dense, accurate <i>conceptual</i> content with <i>buggy labs</i>. The verifier passes every one of these. Cross-family review (ground-checked) is the load-bearing gate. Rejected one finding as defensible (deepseek &ldquo;64-core CP node idle&rdquo; &mdash; apiserver is multi-threaded).</p>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>1.2 expand</td><td>cursor auto</td><td>draft</td><td>T0/6042, 12 src; fixed a pre-existing malformed Quiz-5 markup</td></tr>
+<tr><td>2.4 expand</td><td>codex gpt-5.5</td><td>draft</td><td>T0/6410, 20 src, structure gates fixed; web-verified CAPI/Metal3</td></tr>
+<tr><td>1.3 / 2.4 review</td><td>opus 4.8</td><td>review</td><td>APPROVE-WITH-NITS / NEEDS_CHANGES (P1) &mdash; both accurate, web-verified both directions</td></tr>
+<tr><td>1.2 review</td><td>deepseek-v4-pro</td><td>review</td><td>NEEDS_CHANGES, 4 P2 (caught fabricated opener); did not edit worktree; rejected 1 finding</td></tr>
+<tr><td>2.2 review</td><td>gemini &rarr; cursor</td><td>review</td><td>gemini DIED (empty &rarr; 1800s timeout) &rarr; re-routed cursor NEEDS_CHANGES (ran verify+lab)</td></tr>
+<tr><td>3.1 / 3.3 review</td><td>cursor auto</td><td>review</td><td>NEEDS_CHANGES (2 P1) / APPROVE_WITH_NITS</td></tr>
+<tr><td>3.2 / 3.5 review</td><td>opus 4.8</td><td>review</td><td>NEEDS_CHANGES (P1 image) / flip-to-done</td></tr>
+<tr><td>3.4 / 3.6 review</td><td>agy gemini-3.1-pro</td><td>review</td><td>NEEDS_CHANGES &mdash; 2 real verifier-blind P1s, fully grounded</td></tr>
+<tr><td>networking fix-pass</td><td>cursor auto</td><td>draft</td><td>6 files, all P1s applied correctly; orchestrator amended 3.1 Cisco source</td></tr>
+</table>
+<p><i>Dispatch hygiene note:</i> two review dispatches (3.1/3.2) were mis-backgrounded with an inner <code>&amp;</code> + <code>&gt;/dev/null</code> &mdash; they still completed and wrote their verdicts to <code>logs/dispatch_responses/smart-*-review-*.txt</code>; recovered from there. Use <code>run_in_background:true</code> alone, no inner <code>&amp;</code>, no <code>/dev/null</code>.</p>
+
+<h2>Process facts worth keeping</h2>
+<ul>
+<li><b>Board axis vs verifier axis:</b> the /quality board (<code>build_quality_board</code>, local_api.py:3776) classifies <code>needs_rewrite</code> on <code>revision_pending</code> OR score&lt;3.0 OR stage==FAILED; <code>done</code> needs score&ge;4 + not revision_pending + stage in DONE_STAGES + verdict approve. It uses heuristic <b>score, not verifier tier</b>. So verifier T3 does NOT block a flip if score&ge;4.</li>
+<li><b><code>revision_pending: true</code> frontmatter</b> silently pins a reviewed module to <code>needs_rewrite</code> (verifier-blind). The expand brief says strip it, but cursor missed it on 1.2 &rarr; needed #1883. Grep frontmatter for it before flipping.</li>
+<li><b>verify_module source-reachability is live-fetch nondeterministic:</b> <code>sources_all_reachable</code> fails only on 404/fetch_failed buckets, fetched live each run, so the tier flickers T0&harr;T3 on transient timeouts (3.1 had 0 real failures, still flickered). Cosmetic &mdash; board uses score.</li>
+<li><b>check_citations.py</b> (NOT CI-wired) fails on the bare-URL <code>&lt;url&gt;</code> Sources autolink format + missing inline markers &mdash; several on-prem modules fail it (incl. 1.3 which shipped <code>done</code> failing it). Non-blocking; a normalization sweep, not a gate.</li>
+<li>Flip mechanism: write <code>.pipeline/reviews/&lt;track&gt;__&lt;section&gt;__&lt;module&gt;.md</code> (force-added, gitignored) with <code>## &lt;ts&gt; &mdash; `REVIEW` &mdash; `APPROVE`</code> + <code>python3 -m scripts.quality.pipeline reset-stage &lt;DASHED-key&gt; COMMITTED</code>.</li>
+</ul>
+
+<h2>What's next</h2>
+<ul>
+<li><b>Top priority &mdash; on-premises Wave 3 (#1881):</b> the 2 planning/provisioning stragglers deferred from Wave 1 &mdash; <b>1.5 finops-chargeback + 2.3 immutable-os</b> (both already T0/dense, review-flip) &mdash; then <b>multi-cluster 5.1&ndash;5.5</b> (5.2 needs_review, 5.4/5.5 needs_rewrite). Verifier-sweep first to split expand-vs-flip. Same loop, no gemini.</li>
+<li>Then: operations (7.x non-done), ai-ml-infrastructure (9.4), storage/security/resilience non-done. 30 on-prem modules remain.</li>
+<li><b>Non-blocking follow-ups</b> (file as small issues): (a) citation-format sweep &mdash; convert bare-URL <code>&lt;url&gt;</code> Sources to <code>[title](url)</code> + add inline markers so check_citations passes; consider CI-wiring it; (b) verify_module reachability nondeterminism &mdash; cache/retry or treat as advisory.</li>
+<li><b>Standing (out of this track):</b> #1876 AI History book review (73 chapters, sample-first); #1823 mermaid campaign; #1829 corpus re-review.</li>
+</ul>
+
+<h2>Cross-project side quest (learn-ukrainian)</h2>
+<p>User flagged <code>.worktrees/</code> bleeding disk in the <i>learn-ukrainian</i> repo. Diagnosed: dispatch worktrees (each a full ~700&nbsp;MB monorepo checkout) leak because <code>delegate.py</code>'s reaper only fires on the happy path (danger+done+clean); the existing safe backstop <code>scripts/orchestration/reap_worktrees.py</code> was never run. Reclaimed <b>11.6 &rarr; 3.7&nbsp;GB</b> (merged/closed worktrees + preserve-then-reap on dirty-qualifying). The cold-start wiring (<code>session_start.sh</code> auto-reap) was independently committed there as #2936 byte-identical to the orchestrator's edit (a parallel LU session). Remaining LU worktrees have unmerged work &rarr; need PR-finalize before they're reapable (handoff prompt given to the user).</p>
+
+<h2>Files touched (KubeDojo)</h2>
+<ul>
+<li><code>src/content/docs/on-premises/planning/{module-1.2,module-1.3}.md</code>, <code>.../provisioning/{module-2.2,module-2.4}.md</code> &mdash; wave 1 expand+fix</li>
+<li><code>src/content/docs/on-premises/networking/module-3.{1..6}.md</code> &mdash; wave 2 review-fix</li>
+<li><code>.pipeline/reviews/on-premises__{planning,provisioning,networking}__*.md</code> &mdash; 10 review records (force-added)</li>
+<li><code>logs/remediation/briefs/onprem-w1/</code>, <code>onprem-w2/</code> &mdash; reusable expand/fix briefs</li>
+<li>memory: <code>feedback_agy_gemini_3_5_flash_viable_reviewer.md</code> + MEMORY.md &mdash; gemini retired, agy positive datapoint</li>
+</ul>
+
+</body></html>

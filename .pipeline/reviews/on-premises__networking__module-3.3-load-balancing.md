@@ -1,0 +1,2 @@
+## 2026-06-10T20:46:07Z — `REVIEW` — `APPROVE`
+On-premises wave 2 networking (#1881, PR #1884). Back-catalog review→flip, T0 dense. Reviewer: cursor (R1, cross-family, NO gemini). APPROVE_WITH_NITS 4.6/5; ran verify_module + executed lab; P2 HAProxy block + Section-16 Hypothetical label. Orchestrator ground-checked every finding vs the live file before fixing; consolidated cursor fix-pass; re-verified score>=4 (3.1=5.0). Tier flickers T0/T3 on live-fetch nondeterminism (0 real 404/fetch_failed) — board uses score not tier. Merged → main (#1884). APPROVE.

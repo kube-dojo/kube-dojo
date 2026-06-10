@@ -1,27 +1,2 @@
-# Review Audit: on-premises/networking/module-3.5-cross-cluster-networking
-
-**Path**: `src/content/docs/on-premises/networking/module-3.5-cross-cluster-networking.md`
-**First pass**: 2026-04-14T09:18:50Z
-**Last pass**: 2026-04-14T13:37:28Z
-**Total passes**: 2
-**Current phase**: write
-**Current reviewer**: gemini
-**Current severity**: clean
-
----
-
-## 2026-04-14T13:37:28Z — `RESET`
-
-**New phase**: write
-**Cleared errors**:
-- Deterministic checks failed after review
-
----
-
-## 2026-04-14T09:18:50Z — `WRITE`
-
-**Writer**: gemini-3.1-pro-preview
-**Mode**: write
-**Plan**: Resume improvement. Last failed checks: unknown.
-**Output**: 22616 chars
-**Duration**: 2m 19s
+## 2026-06-10T20:46:07Z — `REVIEW` — `APPROVE`
+On-premises wave 2 networking (#1881, PR #1884). Back-catalog review→flip, T0 dense. Reviewer: opus (R1, cross-family, NO gemini). flip to done; accurate/dense/current (Submariner, Cilium ClusterMesh, Istio multi-cluster); opener Hypothetical scenario label only. Orchestrator ground-checked every finding vs the live file before fixing; consolidated cursor fix-pass; re-verified score>=4 (3.1=5.0). Tier flickers T0/T3 on live-fetch nondeterminism (0 real 404/fetch_failed) — board uses score not tier. Merged → main (#1884). APPROVE.
