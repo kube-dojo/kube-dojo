@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 124 — advanced-genai sub-track COMPLETE (#1842)</title>
+<style>
+  body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.6rem;border-bottom:3px solid #2b6cb0;padding-bottom:.3rem}
+  h2{font-size:1.2rem;margin-top:1.8rem;color:#2b6cb0;border-bottom:1px solid #e2e8f0;padding-bottom:.2rem}
+  code{background:#f1f5f9;padding:.1rem .3rem;border-radius:3px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.92em}
+  th,td{border:1px solid #cbd5e0;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#edf2f7}
+  .ok{color:#22863a;font-weight:600}.warn{color:#b7791f;font-weight:600}
+  .meta{color:#64748b;font-size:.9em}
+  blockquote{border-left:3px solid #2b6cb0;margin:.6rem 0;padding:.2rem .9rem;background:#f7fafc}
+  li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<h1>Session 124 — <code>advanced-genai</code> sub-track COMPLETE (#1842)</h1>
+<p class="meta">2026-06-10 · standalone orchestrator session · continues the <code>ai-ml-engineering</code> shipped_unreviewed campaign (#1842) · PR <strong>#1872</strong> merged → main <code>e54fde6e</code></p>
+
+<h2>TL;DR</h2>
+<p>Drained the remaining <code>advanced-genai</code> sub-track: the last 5 <code>shipped_unreviewed</code> modules (1.5–1.9), all genuine T3 (1140–3852 prose words), expanded to <strong>T0</strong>, cross-family reviewed, fixed, and merged in one consolidated PR. <strong>Three were mis-filled vs their titles and re-scoped + de-duped</strong> onto the durable spine rather than expanded in place. Board: <strong>632 done</strong> (+5). All <code>advanced-genai</code> shipped_unreviewed now <code>done</code> → the sub-track is complete.</p>
+
+<h2>What shipped (PR #1872)</h2>
+<table>
+<tr><th>Module</th><th>Author → Reviewer</th><th>T3→T0</th><th>Key work + notable catches</th></tr>
+<tr><td><strong>1.5 Advanced Generation Techniques</strong></td><td>cursor → opus (APPROVE_WITH_NITS)</td><td>2292→5050w</td><td><strong>RE-SCOPE</strong> off Constitutional AI (already owned by the done 1.4) → inference-time decoding/sampling, speculative & constrained generation, inference-time scaling. opus nit applied: speculative-decoding resample from the <em>normalized residual distribution</em> <code>(p_target−p_draft)₊</code> — makes the "distribution-preserving" claim exact. arXiv IDs web-verified (Leviathan 2211.17192, Holtzman 1904.09751).</td></tr>
+<tr><td><strong>1.6 LLM Evaluation</strong></td><td>codex → opus (APPROVE_WITH_NITS)</td><td>1783→5127w</td><td><strong>RE-FOCUS</strong> off guardrails/red-team → benchmarks, LLM-as-Judge bias+debiasing, statistical rigor (guardrails→1.8, red-team→1.7). opus <em>ran both labs</em>; P2 fixes: stale prereq numbering (Module 35/36→descriptive 1.4); prose-vs-output mismatch — with identical toy deltas the bootstrap CI is <em>degenerate/zero-width</em>, so the sign-test p-value is the real small-sample signal (build-invisible class).</td></tr>
+<tr><td><strong>1.7 AI Red Teaming</strong></td><td>deepseek → codex (NEEDS_CHANGES → fixed)</td><td>3018→5123w</td><td>On-topic expand + the full deepseek-fabrication set, all ground-checked then fixed: <strong>Air Canada opener factually overstated</strong> (bereavement fares DID exist) <strong>AND incident-dedup-owned by vector-rag 1.2</strong> → replaced with <code>Hypothetical scenario:</code>; <strong>OWASP LLM Top-10 v1.1 → 2025 taxonomy</strong> (web-verified); fabricated 15/100k RAG-poisoning stat + model-extraction $ figures removed; <strong>fabricated <code>kubedojo/labs</code> lab URLs</strong> → self-contained inline K8s manifests on real <code>python:3.12-slim</code>.</td></tr>
+<tr><td><strong>1.8 AI Safety &amp; Alignment</strong></td><td>cursor → opus (APPROVE_WITH_NITS)</td><td>1140→5014w</td><td><strong>RE-SCOPE</strong> off LLM Evaluation (owned by 1.6) → runtime safety: defense-in-depth, input/output guardrails, moderation cascades, jailbreak defense, governance, K8s guardrail deployment. opus <em>ran the guardrail code + validated the YAML</em>; Bard opener web-verified against BBC. Distinguished "Constitutional Classifiers" (runtime) from "Constitutional AI" (1.4 training).</td></tr>
+<tr><td><strong>1.9 Modern PEFT: DoRA &amp; PiSSA</strong></td><td>deepseek → cursor (NEEDS_CHANGES → fixed)</td><td>3852→5779w</td><td>On-topic expand + de-fab. cursor <em>ran the peft APIs + checked DoRA math with torch.allclose</em>: <strong>fabricated LoRA+ <code>loarop_lr_ratio</code> on LoraConfig</strong> → real <code>create_loraplus_optimizer</code>; GSM8K abstract figures → paper Table-2 values; VeRA dims; dated peft snapshot; quiz vignettes Hypothetical-labeled.</td></tr>
+</table>
+
+<h2>The structural finding: a content scramble across the sub-track</h2>
+<p>The <code>verify_module.py</code> sweep showed all 5 thin (genuine T3), but reading the headers revealed three modules were <strong>mis-filled relative to their (fixed, nav-stable) titles</strong>:</p>
+<ul>
+<li><strong>1.5 "Advanced Generation Techniques"</strong> was teaching <em>Constitutional AI</em> — already fully owned by the done <strong>1.4 RLHF &amp; Alignment</strong> (which covers RLHF + DPO + CAI + alignment failure modes). Pure duplication.</li>
+<li><strong>1.8 "AI Safety &amp; Alignment"</strong> was teaching <em>LLM Evaluation</em> (benchmarks, LLM-as-Judge, a "debiased judge" exercise) — <strong>1.6</strong>'s job.</li>
+<li><strong>1.6 "LLM Evaluation"</strong> was bloated with guardrails/moderation/red-team that belongs in 1.7/1.8.</li>
+</ul>
+<p>Per <code>.claude/rules/durable-vendor-content.md</code> ("fix the layer, not the symptom") the fix was <strong>re-scope each module onto what its title says + de-dup against siblings</strong>, not expand the duplication. The 1.4 boundary was established empirically (1.4 already owns CAI) before briefing any author. This is the same de-dup pattern the campaign already used in ai-infrastructure 1.1-vs-1.2.</p>
+
+<h2>Reviewer findings overturned by orchestrator ground-check</h2>
+<p>Two reviewer P1/nit recommendations were <strong>wrong</strong> and caught by ground-checking before applying:</p>
+<ul>
+<li><strong>1.9 PiSSA A/B "swap" (cursor P1) — FALSE POSITIVE.</strong> cursor read the PiSSA <em>paper's</em> A/B labels (A=U·S<sup>½</sup>, B=S<sup>½</sup>·Vᵀ), but the module uses <strong>PEFT's <code>B@A</code> convention</strong> where the forward is <code>(W_res + B×A)·x</code>. For <code>B×A</code> to be m×n, B must be m×r (from U) and A must be r×n (from Vᵀ) — exactly what the module had. The proposed swap would be <em>dimensionally invalid</em>. The fix brief explicitly withdrew it; the fixer left the math alone and added a clarifying note.</li>
+<li><strong>1.8 "swap to Why→Outcomes" (opus nit-1) — REGRESSED the gate.</strong> opus claimed the verifier passes either order, but moving Learning Outcomes after the long Why section flipped <code>structure_order_correct</code> T0→T1. These modules need <strong>Outcomes-first</strong> (deepseek's 1.9 independently reordered the same way). Reverted; kept opus's two valid nits (Bard figure precision, <code>[A-Z|a-z]</code>→<code>[A-Za-z]</code> regex).</li>
+</ul>
+<p class="meta">Lesson reinforced: ground-check <em>every</em> reviewer claim against the live file — including math conventions and structure-gate predictions, not just density/sources. Two strong reviewers (opus, cursor) each produced one confident-but-wrong finding this wave.</p>
+
+<h2>Verification</h2>
+<ul>
+<li>All 5 <code>verify_module.py</code> <span class="ok">T0</span>, all gates pass (body_words 5014–5779).</li>
+<li><code>npm run build</code> in PRIMARY (file-swap): <span class="ok">2171 pages, 0 schema errors</span> (PR CI has no full astro build).</li>
+<li><code>incident_dedup_gate.py</code> (delta vs origin/main): <span class="ok">PASS</span> — 0 new incident triples (Air Canada removed from 1.7; Bard in 1.8 is dedup-clean).</li>
+<li><code>check_site_health.py</code>: <span class="ok">0 errors</span> (5 warnings are pre-existing, in other modules — an mlops 1.6 link + platform index entries).</li>
+<li>PR #1872 CI all green (Incident dedup gate, Site health, CodeQL, detect). Rebase-merged → <code>e54fde6e</code>.</li>
+<li>Board-flipped UNAUDITED→COMMITTED for all 5; 5 review records written to <code>.pipeline/reviews/</code> (local-only, per prior waves).</li>
+</ul>
+
+<h2>Routing &amp; process notes</h2>
+<ul>
+<li><strong>Routing held:</strong> 2 waves of ≤3 concurrent authors (cursor/codex/deepseek, mixed families). Reviews: opus ×3 (the re-scopes + 1.6), codex (1.7, the security/code module), cursor (1.9, the math/code module — ran the APIs). Reserved opus to ~the hardest reviews; used cursor/codex for the code-correctness modules.</li>
+<li><strong>deepseek committed 1.9 cleanly</strong> (no pre-commit drop this time) but <strong>dropped before commit on 1.7</strong> (the known failure mode) — recovered by committing the finished worktree myself.</li>
+<li><strong>codex <code>OK: False</code> on its dispatches is benign</strong> — it's the "origin stale / remote missing" warning (authors commit locally; orchestrator pushes at PR assembly).</li>
+<li><strong>Tooling gotcha:</strong> <code>ps</code> on this machine is aliased to the Rust <code>procs</code> tool, so <code>ps aux</code>/<code>-A</code> silently return nothing — use <code>/bin/ps</code> for liveness checks.</li>
+</ul>
+
+<h2>Follow-ups noted (not blocking)</h2>
+<ul>
+<li><strong>Track-wide prereq-numbering cleanup</strong> (opus flagged): foreign absolute "Module 35/40/41" numbering across several advanced-genai modules. Fixed in 1.6/1.7/1.8 this wave; other modules (1.9–1.12 etc.) may still carry it — a small descriptive-rename follow-up.</li>
+<li>Pre-existing broken relative link in <code>ai-ml-engineering/mlops/module-1.6-experiment-tracking.md</code> → <code>module-1.7-data-versioning-feature-stores</code> (site-health warning, last session's sub-track).</li>
+</ul>
+
+<h2>Next (per #1842 curriculum order)</h2>
+<p><strong>multimodal-ai (3)</strong> → <strong>ai-history (1)</strong> + stray <strong>deep-learning/1.2</strong> → on-premises → platform. Same loop: <code>verify_module.py</code> sweep first (T3 = genuine expand here, watch for more title/content scramble + de-dup vs siblings); ≤3 concurrent authors; mixed-pool cross-family review; ground-check every reviewer claim + source URL/arXiv-ID against the live file; consolidated PR; build in PRIMARY; board-flip after merge.</p>
+<p class="meta">Reusables: <code>logs/remediation/briefs/session124/</code> (_shared-rules, per-module ag-briefs, ag-reviews, ag-fix briefs, finalize-ag-wave2.sh).</p>
+</body>
+</html>
