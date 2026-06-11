@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 132 — Platform Foundations Reliability Engineering 2.1-2.5 to done</title>
+<style>
+ body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.6rem;border-bottom:3px solid #326ce5;padding-bottom:.3rem}
+ h2{font-size:1.25rem;margin-top:1.8rem;color:#326ce5}
+ h3{font-size:1.05rem;margin-top:1.2rem}
+ code{background:#f3f4f6;padding:.1em .35em;border-radius:3px;font-size:.88em}
+ table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem}
+ th,td{border:1px solid #d0d7de;padding:.4rem .55rem;text-align:left;vertical-align:top}
+ th{background:#f6f8fa}
+ .tldr{background:#eef4ff;border-left:4px solid #326ce5;padding:.8rem 1rem;border-radius:4px}
+ .warn{background:#fff4e5;border-left:4px solid #bc4c00;padding:.8rem 1rem;border-radius:4px}
+ .ok{color:#1a7f37;font-weight:600}.bad{color:#bc4c00;font-weight:600}
+ ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 132 — Platform Foundations Reliability Engineering 2.1-2.5 → done</h1>
+<p>2026-06-11. Standalone orchestrator session, continuing the <strong>Platform Foundations campaign (#1897)</strong> from the s131 handoff. Wave 1 (Systems Thinking) was done; this session drove <strong>Wave 2 — Reliability Engineering 2.1-2.5</strong> fully to <code>done</code> / score 5.0.</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> A <code>verify_module.py</code> sweep confirmed all five Reliability Engineering modules were genuine T3 expands (body 1399-2176w, <strong>0 sources each</strong>, density fails, unsourced War-Story openers, 2.3 had a <code>47</code> magic number). Expanded all five to <strong>T0</strong> (≥5000 prose words, ≥10 cited sources, quiz 6-8, density green, <code>revision_pending:false</code>), de-fabricated; ≤3 concurrent authors (cursor/codex/deepseek); <strong>mixed-pool cross-family review, NO gemini</strong> (opus/codex/cursor/agy); every finding ground-checked + web-verified; consolidated into <strong>PR #1899</strong>; build green PRIMARY (2171 pages, 0 schema errors); merged; board flipped to <strong>5× <code>done</code> / score 5.0</strong>.
+</div>
+
+<h2>What shipped (PR #1899)</h2>
+<table>
+<tr><th>Module</th><th>Before→After</th><th>Author → Reviewer</th><th>Fixes (all ground-checked)</th></tr>
+<tr><td>2.1 what-is-reliability</td><td>1853w/0src → T0 5010w/12src</td><td>cursor → agy</td><td>de-fab (War Story→labeled Hypothetical); dangling "chaos-engineering reference in the diagram above" reworded (diagram showed Company-A/B failover, no chaos). agy's "broken link" (P1) + "MTBF/(MTBF+MTTR) formula" (P2) findings ground-checked as <span class="bad">false positives</span> (house link convention + standard "≈ approximation") and correctly not applied.</td></tr>
+<tr><td>2.2 failure-modes-and-effects</td><td>1399w/0src → T0 5764w/18src</td><td>codex → cursor (APPROVE)</td><td>de-fab both War Stories→Hypothetical; Mars Climate Orbiter verified real+cited. Clean — only P2 active-learning + P3 stats nits (accepted, not blocking).</td></tr>
+<tr><td>2.3 redundancy-and-fault-tolerance</td><td>1597w/0src/<code>47</code> → T0 8102w/11src</td><td>deepseek → opus → codex fix</td><td><strong>3 P1 (opus):</strong> quorum <code>W+R&gt;N</code> math error (<code>2+2=4&gt;5 "still satisfied"</code>); <code>W=3,R=1</code> is strongly consistent, <em>not</em> "potentially stale" (trade-off is write availability); broken <code>kubectl delete pod -l app=... $(name)</code> (selector+name rejected). <strong>P2:</strong> Spanner <em>does</em> use Paxos quorum+commit-wait; Raft venue is USENIX ATC'14 not OSDI'14 (opus web-verified both).</td></tr>
+<tr><td>2.4 measuring-and-improving-reliability</td><td>1973w/0src → T0 5012w/14src</td><td>cursor → codex → cursor fix</td><td><strong>4 P1 (codex):</strong> SLI/error-budget arithmetic (99.95% vs 99.9% target = 21.6 not 5 min consumed); <code>p99 ≤500ms</code> percentile-target conflated with a 0.05% proportion budget (×2); "15 of 43.2 ≈ 35% remaining" (it's 35% <em>consumed</em> → Yellow). Orchestrator de-duped Knight Capital + Chaos Monkey (incident-dedup gate).</td></tr>
+<tr><td>2.5 slos-slis-error-budgets</td><td>2176w/0src → T0 5057w/11src</td><td>cursor → agy → deepseek fix</td><td><strong>P1 (agy):</strong> burn-rate alert params misaligned with the cited SRE Workbook → realigned to canonical <code>14.4/(1h,5m)</code> page, <code>6/(6h,30m)</code> page, <code>1/(72h,6h)</code> ticket (+diagram). <strong>P2:</strong> throughput vs freshness distinct; anti-pattern/common-mistakes tables differentiated. Added Common Mistakes + Did You Know + Next Module. agy's "broken next-module link" ground-checked as a <span class="bad">false positive</span> and not applied.</td></tr>
+</table>
+
+<h2>Reusable lessons</h2>
+<ul>
+<li><strong>Cross-family review caught 9 genuine P1s the verifier was blind to</strong> — quorum theory, broken kubectl (selector+name), SLO/error-budget + burn-rate math. Tier ≠ correctness (all five were T0-verifier-PASS with these errors live). The review layer earns its keep on theory-heavy modules just as much as code-heavy ones.</li>
+<li><strong>Ground-check every reviewer finding before applying.</strong> agy produced two confident "broken relative link" P1s; both were false positives. The within-section <code>../module-X/</code> and cross-section <code>../observability-theory/</code> relative links both resolve per the site link-checker. <strong>Deciding to <em>hold</em> the link "fix" and let the authoritative build/<code>check_site_health.py</code> arbitrate was the right call</strong> — applying agy's <code>../../</code> change would have <em>broken</em> a working link.</li>
+<li><strong>Incident-dedup fingerprints on the named incident, not the framing.</strong> 2.4 cross-linked the Knight-Capital IaC module and said "that incident is not retold here", but the gate still failed on the literal names "Knight Capital 2012" + "Netflix Chaos Monkey" (owned by IaC / chaos-engineering). Fix = remove the name fingerprints, keep the cross-links + generic teaching. Run <code>scripts/quality/incident_dedup_gate.py</code> locally before pushing to catch it pre-CI.</li>
+<li><strong>Worktree builds now work with a node_modules symlink.</strong> <code>ln -s ../../node_modules .worktrees/&lt;wt&gt;/node_modules</code> then <code>npm run build</code> ran clean (2171 pages) — the old "worktree builds fail on Homepage.astro" issue is resolved, so the consolidated build no longer needs to pollute PRIMARY. Health-check needs PRIMARY's venv: <code>/abs/path/.venv/bin/python scripts/check_site_health.py</code> from inside the worktree.</li>
+<li><strong>Flip mechanism (axis 3):</strong> board <code>done</code> = pipeline stage <code>COMMITTED</code>. Append a final <code>## &lt;ts&gt; — `REVIEW` — `APPROVE`</code> entry to <code>.pipeline/reviews/&lt;__-joined-path&gt;.md</code> (git-ignored, local-only), then <code>pipeline reset-stage &lt;dash-slug&gt; COMMITTED</code>. Score auto-recomputes 1.5→5.0.</li>
+<li><strong>Git discipline held.</strong> The cleanup API listed the just-created <code>pf-rel-21/22/23</code> branches as "merged" (they were empty-vs-main) — running the blanket <code>git cleanup-merged</code> would have nuked active author worktrees. Only deleted unambiguously-stale, worktree-less, already-merged branches. Post-merge sync = plain <code>git pull --ff-only</code> (no pre-clean), touching only the 5 tracked module files.</li>
+</ul>
+
+<h2>Roster / dispatch notes</h2>
+<ul>
+<li>Authors: cursor <code>--model auto</code> (2.1, 2.4, 2.5), codex gpt-5.5 (2.2), deepseek (2.3). Fixers: codex (2.3), cursor (2.4), deepseek (2.5). Reviewers: opus (2.3, hardest), codex (2.4), cursor (2.2), agy gemini-3.5-flash (2.1, 2.5). All authored/fixed in throwaway per-module worktrees; final files copied into one integration worktree <code>pf-rel-batch</code> for the consolidated PR.</li>
+<li><strong>agy redeemed on this wave</strong> — both agy reviews (2.1, 2.5) were genuine, accurately line-referenced, and the burn-rate finding's canonical SRE-Workbook numbers were correct. Still mixed-pool-only + ground-check every finding (it produced 2 link false positives).</li>
+<li>deepseek and codex applied their fix verdicts faithfully (the burn-rate canonical values + the quorum/kubectl corrections all landed exactly as specified).</li>
+</ul>
+
+<h2>State + DO NEXT</h2>
+<ul>
+<li><strong>Platform Foundations #1897 progress:</strong> Wave 1 Systems Thinking (1.1-1.4) ✅ + Wave 2 Reliability Engineering (2.1-2.5) ✅ = 9 modules <code>done</code>. Remaining: Wave 3 Observability Theory (3.1, 3.4) → Security Principles (4.1, 4.2, 4.4) → Distributed Systems expands (5.1, 5.2, 5.3) → Advanced Networking (1.1-1.5) → Engineering Leadership (1.1-1.6), <strong>+ 2 flips</strong> (distributed-systems 5.4/5.5, already T0) as a review-only batch.</li>
+<li>Same loop: <code>verify_module.py</code> sweep first; ≤3 concurrent authors (cursor/codex/deepseek); mixed-pool cross-family review NO gemini; ground-check + web-verify every finding both ways; set <code>revision_pending:false</code>; outcome alignment lands in the quiz ANSWER body; learning-outcomes heading must be <code>##</code> H2; review dispatches target the worktree path; build in PRIMARY (or worktree+node_modules symlink); consolidated PR; run the local incident-dedup gate before pushing; reset-stage COMMITTED (dash-slug) + review records after merge.</li>
+<li>After Platform Foundations: Disciplines (45 critical) → Toolkits (36 critical), curriculum order.</li>
+</ul>
+
+<div class="warn">
+<strong>⚠ Carryover (still open from s131):</strong> the user's uncommitted <code>start-claude.sh</code> launcher change was destroyed in the s131 post-merge sync and is unrecoverable. <strong>User must re-apply it.</strong> (No git mishaps this session — sync was plain ff-only.)
+</div>
+
+</body>
+</html>
