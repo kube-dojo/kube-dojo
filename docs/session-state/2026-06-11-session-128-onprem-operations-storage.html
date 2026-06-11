@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 128 — on-premises operations + storage chapters</title>
+<style>
+ body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.6rem;border-bottom:3px solid #326ce5;padding-bottom:.3rem}
+ h2{font-size:1.25rem;margin-top:1.8rem;color:#326ce5}
+ h3{font-size:1.05rem;margin-top:1.2rem}
+ code{background:#f3f4f6;padding:.1em .35em;border-radius:3px;font-size:.88em}
+ table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem}
+ th,td{border:1px solid #d0d7de;padding:.4rem .55rem;text-align:left;vertical-align:top}
+ th{background:#f6f8fa}
+ .tldr{background:#eef4ff;border-left:4px solid #326ce5;padding:.8rem 1rem;border-radius:4px}
+ .ok{color:#1a7f37;font-weight:600}.warn{color:#bc4c00;font-weight:600}
+ ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 128 — on-premises <em>operations</em> + <em>storage</em> chapters complete</h1>
+
+<div class="tldr">
+<strong>2026-06-11.</strong> Standalone orchestrator session. Drove the on-premises track (#1881)
+through <strong>two full chapters</strong>: <strong>operations 7.x (9/9)</strong> via Wave-4 batch 3
+(PR #1891) and <strong>storage 4.x (5/5)</strong> (PR #1892). <strong>7 modules</strong> expanded/reviewed
+→ <code>done</code>; board <strong>654→666</strong>; on-prem <strong>46/57</strong>. Every reviewer
+finding ground-checked against the live file + web-verified both directions. Cross-family review
+caught a <strong>large deepseek expand-fabrication on 4.2-ceph-rook</strong> (5 P1) and a stack of
+verifier-blind currency/lab defects across the rest. No gemini (retired). Next curriculum action:
+<strong>on-premises security chapter 6.x</strong> (7 modules), then resilience 8.x (3) + 9.4 (1) → platform.
+</div>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Wave / PR</th><th>Modules</th><th>Finalize</th></tr>
+<tr><td><strong>Operations batch 3</strong><br>PR #1891 → <code>f8358aae</code></td>
+<td>7.4 observability (review-flip), 7.7 self-hosted-registry (2098→5159w), 7.9 serverless-bare-metal (1764→5053w)</td>
+<td><code>2b87f62f</code> — operations chapter <strong>9/9</strong></td></tr>
+<tr><td><strong>Storage chapter</strong><br>PR #1892 → <code>53ac149b</code></td>
+<td>4.1 storage-architecture (724→5030w), 4.2 ceph-rook (1192→6541w), 4.4 object-storage (1619→5159w), 4.5 database-operators (1878→5809w)</td>
+<td><code>60787887</code> — storage chapter <strong>5/5</strong></td></tr>
+</table>
+<p>The stale s127 handoff (written mid-session at 02:22) had been overtaken: that session continued
+and completed Wave 3 + Wave-4 batch 1/2 (commits through <code>a760904e</code>) without a fresh handoff.
+STATUS.md TODO was current; reconciled via git log + board before starting.</p>
+
+<h2>Verifier-blind defects caught by cross-family review (all ground-checked + web-verified)</h2>
+<h3>Operations</h3>
+<ul>
+<li><strong>7.7</strong>: cosign <code>sign/verify</code> missing <code>--allow-http-registry</code> for the plain-HTTP Harbor lab (Step 5 would fail); obsolete <code>chartmuseum</code>/<code>notary</code> Helm stanzas (ChartMuseum removed Harbor v2.8.0); signature storage reframed onto OCI 1.1 referrers; Compose host-reqs scoped to the Compose path.</li>
+<li><strong>7.9</strong>: CRIU checkpoint claimed "Stable in 1.32" → still <strong>Beta as of 1.35</strong> (KEP-2008); electricity "$200–800/kW-yr" → <strong>~$1,200–1,900</strong> (EIA ~14¢/kWh Feb-2026); KEDA RabbitMQ deprecated bare <code>queueLength</code> → <code>mode+value+host</code>; KEDA 2.19→<strong>2.20</strong>; Knative lab v1.14.0→<strong>v1.22.1</strong> + net-kourier org move (<code>knative</code>→<code>knative-extensions</code>); <code>scale-to-zero-grace-period</code> semantics; CronJob "holds memory between runs" corrected.</li>
+<li><strong>7.4</strong>: clean (opus APPROVE_WITH_NITS) — only an illustrative-TLS-caveat nit; Grafana OnCall archival 2026-03-24 + Jaeger v2 ClickHouse backend web-confirmed.</li>
+</ul>
+<h3>Storage</h3>
+<ul>
+<li><strong>4.2-ceph-rook</strong> (<span class="warn">deepseek heavy fabrication, 5 P1</span>): Rook Helm URL <code>rook.github.io/charts</code> <strong>404</strong> → <code>charts.rook.io/release</code> (orchestrator curl-confirmed 200); missing <code>ceph-csi-operator</code> chart install step; GitLab opener overstated → corrected to cited 6-hour loss; ~8 unsourced perf/cost numbers (5-10x, $/TB, breakeven, jumbo-frame %) → dated/softened; wrong 3-node CRUSH rebuild scenario; wrong <code>pg_autoscale</code>/<code>allowUnsupported</code>/<code>portable</code>/scrub-auto-repair.</li>
+<li><strong>4.1</strong>: fabricated 40-node incident opener → <code>Hypothetical scenario:</code>; in-tree-plugin claim corrected (<strong>nfs/iscsi remain</strong>, only Ceph CephFS/RBD removed v1.31 — web-confirmed); "default/dominant SDS" leadership claims softened (durable-content).</li>
+<li><strong>4.4</strong>: invalid Tenant CRD shape → <code>pools[].volumeClaimTemplate</code>; operator <code>replicaCount:2</code>+anti-affinity wouldn't deploy on single-node kind → 1 replica; MinIO/AIStor edition currency dated (CE archived 2026-04); quiz single-PUT 5 TiB consistency.</li>
+<li><strong>4.5</strong> (heuristic score 1.5): Kubernetes <code>Lease</code> objects ≠ DB primary fencing (→ readiness + fencing annotation + BMC/IPMI bare-metal split-brain); <code>walStorage</code> WAL PVC mount path; K8s-support attribution to the 1.29 supported-releases matrix; lab secret namespace. bitnami-clean (CNPG <code>ghcr.io/cloudnative-pg/postgresql</code>, MinIO <code>quay.io/minio</code>).</li>
+</ul>
+
+<h2>Gotchas / learnings (new this session)</h2>
+<ul>
+<li><strong class="warn">reset-stage slug = DASH-delimited key</strong> (<code>on-premises-storage-module-4.X</code>), NOT the slash path. The slash form FileNotFErrors on a nested <code>.lock</code> that doesn't exist. The per-module pipeline JSON lives flat at <code>.pipeline/quality-pipeline/&lt;dash-key&gt;.json</code>.</li>
+<li><strong class="warn">Board <code>done</code> = pipeline stage COMMITTED</strong>, NOT just an APPROVE review record. Writing the review file alone does not flip; you must <code>reset-stage … COMMITTED</code> (dash-slug). Review records are force-added to git (<code>.pipeline/</code> is otherwise gitignored; 132 tracked).</li>
+<li><strong class="warn">Incident-dedup gate default mode is ABSOLUTE</strong> (fails on ANY violation, not just delta). 4.2's Ceph <code>PG_DEGRADED</code>/OSD-config <strong>Sources list</strong> false-matched the <code>github-2021-mysql</code> fingerprint. Suppress with <code>&lt;!-- incident-xref: github-2021-mysql --&gt;</code> within 200 chars of the match — <strong>slug MUST equal the check's internal slug</strong> (<code>github-2021-mysql</code>, defined in <code>scripts/check_incident_reuse.py</code>), NOT main's stale marker text <code>github-august-2021-mysql</code>.</li>
+<li><strong>cursor pads to exactly 5000 body_words</strong> (4.1, 7.9, 4.4 all landed at exactly 5000). De-fabbing during the fix-pass can dip it below floor → re-verify after every fix; the in-tree-plugin fix on 4.1 added enough words to offset the opener de-fab.</li>
+<li><strong>Background dispatch:</strong> do NOT combine the Bash <code>run_in_background</code> flag with a trailing <code>&amp;</code> — the wrapper shell exits early and the completion notification fires on the wrapper, not the dispatch (the codex/cursor CLIs do survive, orphaned; poll the worktree commit instead). Use <code>run_in_background</code> alone for a real completion notification.</li>
+</ul>
+
+<h2>Roster observations</h2>
+<ul>
+<li><strong>codex (gpt-5.5)</strong> = the most reliable web-verifier this session — delivered precise, line-accurate, source-cited reviews (caught the Rook Helm 404, MinIO Tenant CRD shape, KEDA/Knative/CRIU currency) and clean fixes (diff-audited, residual-leadership-claim was the only orchestrator catch).</li>
+<li><strong>cursor (auto)</strong> = reliable author + reviewer; the consistent fixer. Pads to floor; occasional real lab-correctness misses (4.4 Tenant shape) but no fabrication.</li>
+<li><strong class="warn">deepseek (v4-pro)</strong> = expand-fabrication confirmed again (4.2: 5 P1 of fabricated/wrong content). Dirt-cheap and usable as a T0 off-load author <em>only</em> with a strong codex review + full ground-check. Annotated <code>author/fabrication</code> in telemetry.</li>
+<li><strong>opus 4.8</strong> = strongest reviewer, used on the hardest 1 (7.4). No worktree review attempted (kept to read-on-main).</li>
+<li><strong>gemini</strong> = RETIRED, not dispatched (policy).</li>
+<li>All ~20 dispatches telemetry-annotated (author/review/fix; clean/fabrication/partial).</li>
+</ul>
+
+<h2>What's next</h2>
+<p><strong>on-premises (#1881): 11 modules remain</strong>, curriculum order:</p>
+<ol>
+<li><strong>security 6.x (7)</strong> — 6.1 air-gapped, 6.2 hardware-security, 6.7 policy-as-code are <code>needs_rewrite</code>; 6.3 enterprise-identity, 6.5 workload-identity-spiffe, 6.6 secrets-management-vault, 6.8 zero-trust-architecture are <code>shipped_unreviewed</code>. <strong>Sweep with <code>verify_module.py</code> FIRST</strong> to split expand-vs-flip (all show score 5.0 but that's misleading — storage's "score 5.0 needs_rewrite" were all genuinely thin).</li>
+<li><strong>resilience 8.x (3)</strong> — 8.1 multi-site-dr, 8.2 hybrid-connectivity (needs_rewrite), 8.3 cloud-repatriation (shipped_unreviewed).</li>
+<li><strong>ai-ml-infrastructure 9.4 (1)</strong> — private-mlops-platform (needs_review).</li>
+<li>Then <strong>platform</strong> (the big one): Disciplines 45 + Toolkits 36 + Foundations 28 critical-rubric modules.</li>
+</ol>
+<p><strong>The loop</strong> (proven across both chapters): verify_module sweep → ≤3 authors (cursor/codex; deepseek OK with strong review) → mixed-pool cross-family review (NO gemini) → ground-check EVERY finding + web-verify currency both directions → consolidated fix (dispatch heavy loads back to codex, inline-fix small) → build in PRIMARY (file-swap) → incident-dedup check on the assembled batch → PR → CI green → squash-merge → <code>reset-stage COMMITTED</code> (dash-slug) → finalize commit on main. Reusable briefs: <code>logs/remediation/briefs/onprem-storage/</code> (shared expand rules + per-module DEEPEN hints copy cleanly for the security chapter).</p>
+
+<h2>Standing non-blocking follow-ups (unchanged)</h2>
+<ul>
+<li>#1876 — review the 73-chapter AI History book.</li>
+<li>Citation-format sweep (bare-URL Sources); verify_module source-reachability nondeterminism.</li>
+<li>#1823 mermaid campaign; CI full-astro-build gate gap (PR CI still has no <code>astro build</code> → run it in PRIMARY before declaring a content wave done).</li>
+<li>Telemetry annotation discipline (#1860) — kept up this session.</li>
+</ul>
+
+</body>
+</html>
