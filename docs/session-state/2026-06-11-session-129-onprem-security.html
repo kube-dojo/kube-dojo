@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 129 — on-premises security chapter complete</title>
+<style>
+ body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.6rem;border-bottom:3px solid #326ce5;padding-bottom:.3rem}
+ h2{font-size:1.25rem;margin-top:1.8rem;color:#326ce5}
+ h3{font-size:1.05rem;margin-top:1.2rem}
+ code{background:#f3f4f6;padding:.1em .35em;border-radius:3px;font-size:.88em}
+ table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem}
+ th,td{border:1px solid #d0d7de;padding:.4rem .55rem;text-align:left;vertical-align:top}
+ th{background:#f6f8fa}
+ .tldr{background:#eef4ff;border-left:4px solid #326ce5;padding:.8rem 1rem;border-radius:4px}
+ .ok{color:#1a7f37;font-weight:600}.warn{color:#bc4c00;font-weight:600}
+ ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 129 — on-premises <em>security</em> chapter complete (6.1–6.8)</h1>
+
+<div class="tldr">
+<strong>2026-06-11.</strong> Standalone orchestrator session. Drove the on-premises track (#1881)
+<strong>security chapter 6.x to 8/8 <code>done</code></strong> across two consolidated PRs:
+<strong>#1893</strong> (Wave A: 6.1/6.2/6.6) and <strong>#1894</strong> (Wave B: 6.3/6.5/6.8 + 6.7 fix-pass).
+6 modules expanded T3→T0, 1 fix-pass (6.7); on-prem <strong>46→53/57</strong>; site-wide done
+<strong>~666→673</strong>. Every reviewer finding ground-checked against the live file + web-verified
+both directions. Mixed reviewer pool (opus / codex / deepseek / cursor), <strong>no gemini</strong>
+(retired). Build green PRIMARY 2171 pages; all CI green incl. incident-dedup. Next curriculum action:
+<strong>on-prem resilience 8.1/8.2/8.3 + ai-ml-infrastructure 9.4 (4 modules) → then <code>platform</code></strong>.
+</div>
+
+<h2>What shipped</h2>
+<p>The verifier sweep split the 7 remaining modules (6.4-compliance was already done) into
+<strong>6 genuine expand-to-floor</strong> (body prose &lt; 5000) + <strong>1 fix-pass</strong> (6.7,
+already dense at 5312w). Authored ≤3 concurrent per wave (hard cap), mixed cursor/codex; reviewed
+each by a different model family than its author.</p>
+
+<table>
+<tr><th>Module</th><th>Before→After</th><th>Author</th><th>Reviewer (R1)</th><th>Key catches (all ground-checked + web-verified)</th></tr>
+<tr><td>6.1 air-gapped</td><td>640→5049w</td><td>cursor</td><td><strong>opus</strong></td><td>No fabrication (opus pulled real <code>v1.35.0/constants.go</code>, all image tags match). 3×P2: OCIRepository <code>v1</code>→<code>v1beta2</code> for pinned Flux 2.4.x; dropped removed Harbor "content trust" (Notary v1, gone ~2.8); repointed mis-cited Trivy-offline source (was a Clair page) → harbor-scanner-trivy. <code>anti_leak</code> was a FP ("as an <strong>ai</strong>r-gapped").</td></tr>
+<tr><td>6.2 hardware-security</td><td>1108→6527w</td><td>codex</td><td><strong>deepseek</strong></td><td>1×P1: <strong>fabricated PKCS#11 v3.2 "Committee Specification, Nov 2025"</strong> → web-verified it is CSD01, 16 Apr 2025. <code>kms-vault-provider</code> example-plugin note; IEEE source AMP→canonical (fixed lone 301→0 redirects) + corrected mismatched annotation. deepseek's redirect <em>guess</em> (Red Hat 4.14) was wrong — orchestrator curl proved IEEE AMP.</td></tr>
+<tr><td>6.6 secrets/vault</td><td>2525→5111w (rebuild)</td><td>cursor</td><td><strong>codex</strong></td><td>Heaviest structural rebuild (non-canonical headings). 2×P1: Raft stanza missing <code>retry_join</code> (vault-1/2 never join → lab break); K8s-auth <code>audience</code> is a <em>role</em> param not a <code>token_audience</code> config key. PKCS#11/KMIP/TPM seal overstated → HSM(Enterprise)+KMS; ESO <code>v1beta1</code>→<code>v1</code>.</td></tr>
+<tr><td>6.3 enterprise-identity</td><td>1812→5049w</td><td>cursor</td><td><strong>codex</strong></td><td>1×P1: non-runnable <code>AuthenticationConfiguration</code> (fake <code>exp requiredValue:""</code> + wrong <code>userValidationRules</code> expr → real <code>user.username</code> CEL). 6×P2: local-JWKS validation + TTL-revocation (not "instant"), removed stale v1.36 schedule, softened volatile version pins (oauth2-proxy ≤7.15.1 CVE, Keycloak), multi-DB Keycloak, Dex/Keycloak kubelogin client-secret.</td></tr>
+<tr><td>6.5 workload-identity-spiffe</td><td>2251→6779w</td><td>codex</td><td><strong>opus</strong></td><td>APPROVE_WITH_NITS. 2×P2: k8s_psat <code>parentID</code> used node-name not a node-alias (entry never matched the agent → silent no-SVID); removed fabricated <code>Intermediate Chained</code> CLI line. CNCF/version currency clean both ways.</td></tr>
+<tr><td>6.7 policy-as-code</td><td>fix-pass (5312w, no expand)</td><td>cursor</td><td><strong>deepseek</strong></td><td>De-flagged mislabeled "War Story" callout; sources 7→28 (all verified reachable+official); canonical order. Softened unverifiable Kyverno/Nirmata origin-story DYK; MutatingAdmissionPolicy v1.36-stable hedge (web-verified).</td></tr>
+<tr><td>6.8 zero-trust</td><td>2727→5062w</td><td>codex</td><td><strong>cursor</strong></td><td>5×P2: corrected <strong>$872M Change Healthcare</strong> figure (Q1 <em>total</em> impacts per SEC, not response costs); SVID≠ServiceAccount-token; softened uncited ZTA counterfactual; <strong>added the missing out-of-mesh-caller test</strong> for lab success-criterion #1; kubelet-only probes; relaxed kind version pin.</td></tr>
+</table>
+
+<h2>Loop refinements proven / reusable lessons</h2>
+<ul>
+<li><strong>Reviewers each found real verifier-blind defects</strong> — code-correctness (Raft <code>retry_join</code>, non-runnable AuthenticationConfiguration, k8s_psat parentID), fabrication (PKCS#11 v3.2 date, <code>Intermediate Chained</code> line, Nirmata origin-story), and currency ($872M mischaracterization, oauth2-proxy CVE). T0-pass ≠ correctness, every time.</li>
+<li><strong>Ground-check the reviewer too:</strong> deepseek <em>guessed</em> the 6.2 redirecting source (Red Hat 4.14) — a deterministic <code>curl</code> over the Sources proved it was the IEEE-Spectrum AMP URL. deepseek also wrongly claimed 6.7's <code>structure_order_correct</code> gate was false (the live verifier showed all-green). Always run <code>verify_module.py</code> yourself.</li>
+<li><strong>Durable-content discipline on volatile facts:</strong> softened "latest stable is X" version pins (Keycloak/oauth2-proxy) rather than bumping to today's number; date-stamped draft-spec status (PKCS#11 v3.2 CSD01) and forward feature-states (MutatingAdmissionPolicy stable v1.36 — "verify your cluster version").</li>
+<li><strong>Finalize gotcha (recurred):</strong> 6.2 stayed <code>needs_review</code> after reset-stage because its <code>.pipeline/quality-pipeline/&lt;key&gt;.json</code> carried a stale April-gemini <code>review.verdict: changes_requested</code>. Fix = set that JSON's <code>review.verdict</code> to <code>approve</code> (reset-stage only moves <code>stage</code>). 6.1/6.6 had <code>review=None</code> → flipped cleanly on reset-stage alone.</li>
+<li><strong>reset-stage slug</strong> = dash key <code>on-premises-security-module-6.X-&lt;suffix&gt;</code> (the full board key, incl. the topic suffix). Review records <code>.pipeline/reviews/*.md</code> are <strong>gitignored</strong> (local state; ~136 grandfathered exceptions are tracked) — do NOT try to commit them.</li>
+<li><strong>incident-dedup:</strong> 6.8's Change Healthcare opener is unique site-wide (passed CI); 6.5's Capital One use is the sanctioned <code>&lt;!-- incident-xref: capital-one-2019 --&gt;</code> cross-reference marker, not a duplicate claim.</li>
+</ul>
+
+<h2>State at session end</h2>
+<ul>
+<li>on-premises security chapter <strong>6.1–6.8 = 8/8 <code>done</code></strong>; on-prem <strong>53/57</strong>.</li>
+<li>PRs <strong>#1893</strong> (Wave A) + <strong>#1894</strong> (Wave B) squash-merged → main <code>de60923d</code>. Build green PRIMARY <strong>2171 pages</strong>, all CI green.</li>
+<li>Reusable briefs: <code>logs/remediation/briefs/onprem-security/</code> (shared expand+review rules, per-module expand/fix briefs, review prompts).</li>
+</ul>
+
+<h2>DO NEXT</h2>
+<ul>
+<li><strong>on-prem resilience chapter (#1881): 8.1 + 8.2 + 8.3</strong> — sweep <code>verify_module.py</code> first to split expand-vs-flip.</li>
+<li><strong>on-prem ai-ml-infrastructure 9.4</strong> (1 module) — completes the on-prem track (then <code>platform</code>: Disciplines 45 + Toolkits 36 + Foundations 28 critical).</li>
+<li>Same loop: ≤3 authors (cursor/codex; deepseek OK but expand-fabrication-prone → strong codex review + ground-check); mixed-pool review <strong>no gemini</strong>; ground-check EVERY finding + web-verify currency both ways; build in PRIMARY; reset-stage COMMITTED (dash-slug) + set <code>review.verdict=approve</code> in quality-pipeline JSON if a prior NEEDS_CHANGES left it stale.</li>
+<li><strong>Pending (non-blocking):</strong> telemetry annotation of this session's dispatches (#1860); citation-format sweep; #1876 AI-history 73-chapter book review.</li>
+</ul>
+
+</body>
+</html>
