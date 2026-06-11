@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
-> **Prerequisites**: [Module 7.1: Kubernetes Upgrades on Bare Metal](../module-7.1-upgrades/), [Module 2.1: Datacenter Fundamentals](/on-premises/provisioning/module-2.1-datacenter-fundamentals/)
+> **Prerequisites**: [Module 7.1: Kubernetes Upgrades on Bare Metal](../module-7.1-upgrades/), [Module 2.1: Datacenter Fundamentals](../provisioning/module-2.1-datacenter-fundamentals/)
 
 ---
 
@@ -306,21 +306,23 @@ NVMe devices add useful health fields such as critical warning, temperature, med
 
 ### Disk Replacement Workflow (Ceph OSD)
 
-This procedure safely removes a failing disk from a Ceph cluster, replaces it, and re-adds the new disk. The critical step is `ceph osd set noout` -- it prevents Ceph from starting a full rebalance while you are swapping the disk, which would add unnecessary I/O load during the maintenance window.
+This procedure safely removes a failing disk from a Ceph cluster, replaces it, and re-adds the new disk. Prefer scoped `noout` on the affected OSD rather than a cluster-wide flag — see the prose caveat below.
 
 ```bash
 # Step 1: Identify the failing disk
 ceph osd tree  # find which OSD is on the failing disk
 
-# Step 2: Set OSD noout to prevent rebalancing during replacement
-ceph osd set noout
+# Step 2: Scope noout to the affected OSD (not cluster-wide)
+ceph osd add-noout osd.5
 
 # Step 3: Mark the OSD down and out
 ceph osd down osd.5
 ceph osd out osd.5
 
-# Step 4: Remove the OSD from the cluster
+# Step 4: Confirm the OSD is safe to destroy before purge
+ceph osd safe-to-destroy osd.5
 # (purge removes the OSD from CRUSH, deletes its auth keys, and removes it from the map)
+# Use --force only when redundancy is verified and safe-to-destroy still blocks
 ceph osd purge osd.5 --yes-i-really-mean-it
 
 # Step 5: Physically replace the disk (or wait for datacenter hands)
@@ -328,8 +330,8 @@ ceph osd purge osd.5 --yes-i-really-mean-it
 # Step 6: Prepare the new disk
 ceph-volume lvm create --data /dev/sdc
 
-# Step 7: Unset noout to allow rebalancing
-ceph osd unset noout
+# Step 7: Remove scoped noout to allow rebalancing
+ceph osd rm-noout osd.5
 
 # Step 8: Monitor rebalancing
 ceph -w  # watch rebalancing progress
@@ -396,6 +398,8 @@ The decommission phase must close both technical and financial loops. Kubernetes
 This state model matters because it prevents hidden half-states. A node should not be both a spare and a production worker. A returned RMA motherboard should not inherit the old firmware state until it is inspected. A decommissioned server should not have an active BMC account. The lifecycle system does not need to be fancy, but it must make invalid transitions visible enough that someone stops before a broken assumption becomes a production incident.
 
 ### Annual Hardware Maintenance Calendar
+
+The calendar below ties recurring hardware checks to capacity planning and change windows — use it as a scheduling backbone, not a standalone checklist.
 
 ### Monthly Checks
 
@@ -478,6 +482,40 @@ Do not let remediation race maintenance. Planned firmware work should add a main
 
 The capacity question remains central. Automated remediation is only safe if the cluster can absorb the removed node and if a replacement path exists. For bare metal, that replacement path may be a warm spare, a cold spare that can be provisioned through Metal3 or Tinkerbell, or a manual repair. If none of those paths is ready, the best automation may be to cordon, alert, and hold the node in quarantine rather than starting an irreversible rebuild.
 
+### MachineHealthCheck Example
+
+[Cluster API MachineHealthCheck](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking) watches Machine conditions and triggers remediation when unhealthy thresholds are exceeded. Pair it with maintenance labels so planned firmware work does not look like failure — see [Module 7.3: Node Failure & Auto-Remediation](../module-7.3-node-remediation/) for the full remediation stack.
+
+```yaml
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineHealthCheck
+metadata:
+  name: worker-hardware-mhc
+  namespace: default
+spec:
+  clusterName: production
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/deployment-name: worker-pool
+    matchExpressions:
+      - key: maintenance.kubedojo.io/reason
+        operator: DoesNotExist
+  unhealthyConditions:
+    - type: Ready
+      status: "False"
+      timeout: 300s
+    - type: HardwareHealthy
+      status: "False"
+      timeout: 60s
+  maxUnhealthy: 40%
+  nodeStartupTimeout: 600s
+  # Skip machines under planned maintenance (set by maintenance-drain.sh)
+  # MHC controllers honor nodeSelector/matchExpressions on the Machine;
+  # exclude nodes labeled maintenance.kubedojo.io/reason during rollout windows.
+```
+
+Label nodes with `maintenance.kubedojo.io/reason` before drain (see the maintenance workflow above) and scope the MHC selector to exclude those labels during firmware rings. Without that bypass, a rolling BIOS update can trigger delete-and-reprovision on nodes that are intentionally offline.
+
 ## Prometheus Alerts for Hardware Health
 
 These alerting rules turn SMART data and IPMI sensor readings into actionable notifications. The severity levels map to response times: critical means act within hours, warning means plan a replacement within days.
@@ -498,25 +536,25 @@ groups:
           runbook: "Follow disk replacement procedure in ops runbook."
 
       - alert: DiskWearoutHigh
-        expr: smartmon_wear_leveling_count_value < 20
+        expr: smartmon_wear_leveling_count_value < 10
         for: 1h
         labels:
           severity: warning
         annotations:
           summary: "SSD wear leveling low on {{ $labels.instance }}"
-          description: "Disk {{ $labels.disk }} has {{ $value }}% life remaining."
+          description: "Disk {{ $labels.disk }} has {{ $value }}% life remaining (aligns with SMART table threshold of < 10%)."
 
       - alert: MemoryECCErrors
-        expr: node_edac_correctable_errors_total > 100
+        expr: increase(node_edac_correctable_errors_total[1h]) > 50
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "ECC memory errors on {{ $labels.instance }}"
-          description: "{{ $value }} correctable ECC errors detected. DIMM may be failing."
+          description: "{{ $value }} correctable ECC errors in the last hour. DIMM may be failing."
 
       - alert: PSURedundancyLost
-        expr: ipmi_sensor_state{name=~".*PSU.*",state="critical"} == 1
+        expr: ipmi_sensor_state{name=~".*PSU.*"} == 2
         for: 1m
         labels:
           severity: critical
@@ -843,5 +881,4 @@ Continue to [Module 7.3: Node Failure & Auto-Remediation](/on-premises/operation
 - [Linux Vendor Firmware Service](https://fwupd.org/) — Official LVFS site describing firmware metadata distribution for clients such as `fwupdmgr`.
 - [Smartmontools Upstream Repository](https://github.com/smartmontools/smartmontools) — Upstream project for `smartctl` and `smartd` SMART monitoring utilities.
 - [NVM Express NVMe-CLI Overview](https://nvmexpress.org/open-source-nvme-management-utility-nvme-command-line-interface-nvme-cli/) — Official overview of NVMe-CLI health, firmware, format, and sanitize commands.
-- [kube-vip Documentation](https://kube-vip.io/) — Documents virtual IP and load-balancer behavior for bare-metal Kubernetes control planes and services.
 - [IRS Publication 946](https://www.irs.gov/forms-pubs/about-publication-946) — Official IRS entry point for depreciation guidance used when discussing capital cost recovery.

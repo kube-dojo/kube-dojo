@@ -36,7 +36,7 @@ In cloud environments, when a virtual machine fails the cloud provider silently 
 
 This gap between cloud auto-healing and bare-metal reality is the central challenge of on-premises operations. Building automated node remediation is not just a convenience feature — it is the mechanism that closes the mean-time-to-repair (MTTR) gap between owned hardware and cloud infrastructure, and it directly determines whether a three-node control plane failure at 3 AM wakes an on-call engineer or resolves itself while they sleep.
 
-> **Hypothetical scenario**: A ToR switch loses power at 2 AM, taking 14 worker nodes offline in rack B. The control plane detects 14 NotReady conditions within 60 seconds. If your cluster has no automated remediation, those 14 nodes sit idle until an on-call engineer is paged, wakes up, logs in, diagnoses the switch failure, and manually restores power — a 45-minute outage. If your cluster has MachineHealthChecks configured with `maxUnhealthy` safeguards, the MHC controller recognizes that 40% of nodes are already unhealthy and *halts* remediation, preventing a destructive reprovisioning storm on nodes that are actually fine. When the switch power returns, all 14 nodes report Ready and workloads reschedule. The automated system didn't fix the switch, but it prevented the wrong fix from making the outage worse.
+> **Hypothetical scenario**: A ToR switch loses power at 2 AM, taking 14 worker nodes offline in rack B. The control plane detects 14 NotReady conditions within 60 seconds. If your cluster has no automated remediation, those 14 nodes sit idle until an on-call engineer is paged, wakes up, logs in, diagnoses the switch failure, and manually restores power — a 45-minute outage. If your cluster has MachineHealthChecks configured with `maxUnhealthy` safeguards **scoped to the worker pool** (80 workers cluster-wide, but the MHC selector matches only `worker-pool` Machines — 35 nodes in rack B's failure domain), the MHC controller evaluates 14/35 = 40% unhealthy against the threshold and *halts* further remediation at the boundary, preventing a destructive reprovisioning storm on nodes that are actually fine. When the switch power returns, all 14 nodes report Ready and workloads reschedule. The automated system didn't fix the switch, but it prevented the wrong fix from making the outage worse.
 
 ---
 
@@ -82,7 +82,7 @@ On bare metal, the stack must also contend with hardware that the Kubernetes con
 
 ---
 
-> **Pause and predict**: Kubernetes marks a node unhealthy only after missed heartbeats accumulate for about 50 seconds by default. During those 40 seconds, pods on the node are running but potentially broken. What types of hardware failures would be invisible to the kubelet heartbeat mechanism?
+> **Pause and predict**: Kubernetes marks a node unhealthy only after missed heartbeats accumulate for about 50 seconds by default (`node-monitor-grace-period`, 50s since Kubernetes 1.32). During those 50 seconds, pods on the node are running but potentially broken. What types of hardware failures would be invisible to the kubelet heartbeat mechanism?
 
 ## Node Problem Detector
 
@@ -146,7 +146,7 @@ NPD distinguishes between two categories of problems that map to different remed
 
 The default NPD configuration ships with monitors for kernel logs, containerd/docker runtime logs, and a kubelet health checker, but the monitor types you can configure include system-log monitors (scanning journald for kernel, daemon, and system log patterns), custom-plugin monitors (running an arbitrary script on a cron schedule and interpreting its exit code), and health-checker monitors (periodically probing a local endpoint such as the kubelet healthz port). For bare-metal on-premises clusters, the most valuable additions are usually a custom-plugin monitor that reads EDAC sysfs counters and a system-log monitor pattern that catches NIC firmware error messages in dmesg, neither of which is visible to the kubelet heartbeat.
 
-The reporting cadence matters for remediation timing. NPD's system-log monitors run continuously, tailing journald and evaluating each log line against configured regex patterns as it arrives. Custom-plugin monitors run on a configurable cron schedule — typically every 30 to 60 seconds. The health-checker plugin probes its target endpoint on the same schedule. This means the worst-case detection latency for a hardware fault is the plugin's check interval plus the MHC's condition timeout. If a custom EDAC checker runs every 60 seconds and the MHC timeout for `HardwareHealthy=False` is 60 seconds, the total time from DIMM failure to remediation trigger is between 60 and 120 seconds. Tightening the plugin interval below 30 seconds is rarely beneficial because the MHC's reconciliation loop itself runs on a ~10-second period, and faster-than-30-second plugin intervals increase node CPU load for marginal detection-speed gains.
+The reporting cadence matters for remediation timing. NPD's kernel monitor tails `/dev/kmsg` directly; containerd and system-log monitors evaluate journald patterns as lines arrive. Custom-plugin monitors run on a configurable cron schedule — typically every 30 to 60 seconds. The health-checker plugin probes its target endpoint on the same schedule. This means the worst-case detection latency for a hardware fault is the plugin's check interval plus the MHC's condition timeout. If a custom EDAC checker runs every 60 seconds and the MHC timeout for `HardwareHealthy=False` is 60 seconds, the total time from DIMM failure to remediation trigger is between 60 and 120 seconds. Tightening the plugin interval below 30 seconds is rarely beneficial because faster-than-30-second plugin intervals increase node CPU load for marginal detection-speed gains.
 
 ---
 
@@ -281,9 +281,21 @@ done
 
 ### Medik8s Self-Node Remediation
 
-For clusters that need more sophisticated remediation than a shell script but do not run Cluster API, the medik8s project provides a family of Kubernetes-native remediation operators. [Self-Node Remediation (SNR)](https://github.com/medik8s/self-node-remediation) runs as a DaemonSet and watches node conditions from within each node. When SNR detects that its own node is unhealthy — typically by observing a custom condition set by Node Problem Detector or by detecting that the API server is unreachable — it cordons the node, drains pods (respecting PodDisruptionBudgets), and triggers a reboot. After the reboot, if the node returns healthy the operator clears the condition; if the node remains unhealthy, SNR escalates by leaving the condition set, which allows an external controller or on-call engineer to take further action.
+For clusters that need more sophisticated remediation than a shell script but do not run Cluster API, the medik8s project provides a family of Kubernetes-native remediation operators. The flow starts with [Node Health Check (NHC)](https://github.com/medik8s/node-healthcheck-operator): NHC watches node conditions and, when a node is unhealthy, creates a `SelfNodeRemediation` custom resource. [Self-Node Remediation (SNR)](https://github.com/medik8s/self-node-remediation) runs as a DaemonSet on every node and executes the remediation defined by that CR.
 
-SNR's design addresses a critical gap in the simple watchdog approach: what happens when the node cannot reach the API server? A CronJob running on a management node can detect that a worker's kubelet stopped reporting, but it cannot tell whether the worker is genuinely dead or whether the worker's network interface is isolated while the node itself is fine. SNR runs *on* the worker node itself and can make a local determination: if it can still reach the default gateway but not the API server, the problem is network isolation (do not reboot — the node is fine). If it cannot reach anything, including the BMC's management network, the node is likely powered off or kernel-panicked (reboot may not help, but it is the right first attempt).
+The actual SNR flow ([documented in the medik8s how-it-works guide](https://www.medik8s.io/remediation/self-node-remediation/how-it-works/)) works like this:
+
+1. **NHC detects** an unhealthy node (via NPD conditions, `Ready=False`, or other configured checks) and creates a `SelfNodeRemediation` CR.
+2. **Healthy peer nodes** — not the unhealthy node itself — cordon the failed node and **delete its Node object** so the scheduler reschedules workloads elsewhere.
+3. **SNR on the unhealthy node** reboots it (`isSoftwareRebootEnabled` defaults to `true`; hardware watchdog is the fallback when software reboot fails).
+4. **API-server-loss handling**: when the unhealthy node cannot reach the API server, it asks **healthy peers** to verify API-server reachability on its behalf (peer checks) — this is not a default-gateway-vs-API-server heuristic run locally in isolation.
+5. **Total isolation**: when peers confirm the node is unreachable, they fence it by deleting the Node object; SNR may escalate to watchdog-based reboot.
+
+NHC's `minHealthy` field is the storm breaker for medik8s stacks without CAPI's `maxUnhealthy` — it prevents NHC from creating remediation CRs when too few nodes in the selector are healthy, analogous to the MHC circuit breaker in [Module 7.2](../module-7.2-hardware-lifecycle/).
+
+SNR does **not** cordon-and-drain from the failing node itself — peers handle cordon and Node deletion while SNR handles the reboot. This differs from CAPI MHC (which deletes the Machine and reprovisions) and from the simple BMC watchdog (which power-cycles without scheduler-aware workload evacuation).
+
+The reboot mechanism itself is the subtle part. When a hardware watchdog device (such as `/dev/watchdog`, backed by the BMC or a kernel softdog) is present, SNR arms it and lets the timer expire, which forces a hardware reset that cannot be blocked by a hung kernel, a stuck I/O path, or a wedged container runtime. This guarantee matters on bare metal: a node that *looks* down but is still electrically alive can keep holding a storage lock, an iSCSI session, or a floating VIP, creating a split-brain hazard the moment workloads reschedule elsewhere. Only after the watchdog (or, as a fallback, a forced software reboot) confirms the node is truly down do peers safely complete fencing. This is why medik8s strongly recommends provisioning a real watchdog device on every node rather than relying on best-effort software reboots — the timer is the hardware-level proof that the old instance of the node is gone.
 
 ### Fence-Agents Remediation and BMC Protocols
 
@@ -359,7 +371,7 @@ The MHC for control plane nodes must respect these bounds. A `maxUnhealthy` of 3
 A node hosting the sole replica of a StatefulSet pod or the only copy of a PersistentVolume's data must not be reprovisioned until its data is confirmed safe elsewhere. The MHC has no built-in awareness of storage topology — it can and will delete a Machine object hosting the only Ceph OSD in a failure domain, causing permanent data loss if that OSD's data was not fully replicated. Before enabling automated remediation on nodes that host stateful workloads, operators must ensure:
 
 1. All PersistentVolumes have a reclaim policy that preserves data (Retain), not Delete.
-2. All StatefulSet pods have `podManagementPolicy: Parallel` only if anti-affinity ensures no two replicas of the same shard land on the same node.
+2. `podManagementPolicy` controls **startup and scale ordering**, not blast-radius containment — `Parallel` starts or scales all pods simultaneously and can *widen* simultaneous disruption. Use `OrderedReady` unless the workload is explicitly parallel-safe. Blast-radius guardrails come from `topologySpreadConstraints`, pod anti-affinity, and PodDisruptionBudgets.
 3. Storage replication (Ceph, Longhorn, Portworx) is configured to require at least `min_size` replicas before acknowledging writes, so that a single-node failure never creates a write hole.
 4. Topology spread constraints ensure that no single failure domain holds all replicas of any stateful workload.
 5. A pre-remediation webhook or custom controller verifies that the node about to be remediated does not host any "last replica" before allowing the MHC to proceed. This is not a built-in feature — it requires custom integration between the storage layer and the remediation controller.
@@ -488,7 +500,7 @@ spec:
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: kubedojo.io/rack
-      whenUnsatisfiable: ScheduleAnyway
+      whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
           app: critical-workload
@@ -508,14 +520,16 @@ Default Kubernetes eviction settings are tuned for cloud environments. On bare m
 Node-failure eviction relies on taint-based eviction and per-pod `NoExecute` tolerations. [When a node becomes `NotReady`, the node lifecycle controller adds a `node.kubernetes.io/not-ready` taint. Pods are evicted when their toleration for this taint expires.](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
 
 ```bash
-# Default behavior:
+# Default behavior (Kubernetes 1.32+):
 #   kube-controller-manager:
 #     --node-monitor-period=5s         (check node status every 5s)
-#     --node-monitor-grace-period=40s  (mark NotReady after 40s no heartbeat)
+#     --node-monitor-grace-period=50s  (mark NotReady after 50s no heartbeat)
 #
 #   kube-apiserver:
 #     --default-not-ready-toleration-seconds=300     (evict 5 min after NotReady taint)
 #     --default-unreachable-toleration-seconds=300   (evict 5 min after Unreachable taint)
+
+# Pre-1.32 legacy: node-monitor-grace-period defaulted to 40s.
 
 # For faster bare metal remediation:
 # Edit kube-apiserver manifest (/etc/kubernetes/manifests/kube-apiserver.yaml)
@@ -531,7 +545,7 @@ Node-failure eviction relies on taint-based eviction and per-pod `NoExecute` tol
 
 # Also tune node-monitor-grace-period for faster NotReady detection:
 # Edit kube-controller-manager manifest
-#   --node-monitor-grace-period=30s  (mark NotReady after 30s instead of 40s)
+#   --node-monitor-grace-period=40s  (faster than 50s default; pre-1.32 legacy value)
 ```
 
 ### Tuning Storage Recovery Throttling
@@ -575,7 +589,7 @@ Start with the least destructive action (BMC power cycle), escalate to more inva
 | **Setting `maxUnhealthy` to 100%** | A systemic event (power loss, switch failure) triggers simultaneous remediation of every node, turning recoverable downtime into a total cluster rebuild | Set `maxUnhealthy` to 40% or lower; the circuit breaker exists to prevent remediation storms |
 | **Remediating nodes without timeouts per condition** | A node that blips NotReady for 10 seconds gets the same treatment as one that has been down for 10 minutes, causing unnecessary reboots for transient issues | Set shorter timeouts for hardware-specific NPD conditions (60s) and longer timeouts for kubelet heartbeats (300s) — different conditions need different urgency |
 | **Using automated remediation on control plane nodes without quorum-awareness** | Remediating a second control plane node while the first replacement has not yet joined etcd breaks quorum, taking down the entire API server | Set control-plane MHC `maxUnhealthy` to floor((N-1)/N × 100)% and ensure the replacement node is fully joined before allowing the next remediation |
-| **Rebooting nodes without first cordoning and draining** | Pods are forcefully terminated without graceful shutdown, in-flight requests are dropped, and stateful workloads may lose unflushed writes | Always cordon + drain before power-cycling; the extra 30-60 seconds of drain time prevents application-level data loss |
+| **Rebooting nodes without workload evacuation** | Pods are forcefully terminated without graceful shutdown, in-flight requests are dropped, and stateful workloads may lose unflushed writes | Match evacuation to the remediation layer: CAPI MHC deletes the Machine (provider reprovisions); medik8s SNR relies on **healthy peers** to cordon and delete the Node before SNR reboots; BMC watchdog scripts should cordon + drain before power-cycling when the host OS is still responsive |
 | **Hard-coding BMC credentials in remediation scripts** | Credential rotation becomes impossible without updating every script; a compromised script exposes credentials for every BMC in the fleet | Store BMC credentials in a Kubernetes Secret or a vault (HashiCorp Vault, sealed secrets), mount them into the remediation controller at runtime, and rotate them on a schedule |
 | **No cooldown between remediation attempts** | A node with a persistent hardware fault gets rebooted every 5 minutes indefinitely, wasting power cycles and generating noise in monitoring | Implement a minimum 30-minute cooldown between remediation attempts on the same node; after 3 failed attempts in 24 hours, escalate to a human and stop automatic remediation for that node |
 
@@ -583,13 +597,15 @@ Start with the least destructive action (BMC power cycle), escalate to more inva
 
 ## On-Premises Cost Lens: The Economics of Automated Remediation
 
+> **Illustrative figures below** — order-of-magnitude examples for planning conversations, not vendor quotes or audited financial models.
+
 Every automated remediation decision has a capital and operational cost attached to it, and the on-premises operator must account for costs that cloud users never see because the cloud provider absorbs them into the instance price.
 
-**CapEx drivers for remediation infrastructure.** Automated remediation requires BMC-capable servers (the BMC chip, management network switch port, and VLAN are all hardware you own), a provisioning network (dedicated switch, DHCP/TFTP/HTTP server, OS image storage), spare nodes (servers that consume rack space, power, and cooling while idle), and redundant control plane hardware to survive remediation cycles without quorum loss. A minimal remediation-capable cluster with 3 control plane nodes, 10 workers, 1 spare, and a dedicated management switch adds roughly $8,000-12,000 in hardware cost compared to a cluster with no remediation automation, primarily from the spare node and the management network infrastructure.
+**CapEx drivers for remediation infrastructure.** Automated remediation requires BMC-capable servers (the BMC chip, management network switch port, and VLAN are all hardware you own), a provisioning network (dedicated switch, DHCP/TFTP/HTTP server, OS image storage), spare nodes (servers that consume rack space, power, and cooling while idle), and redundant control plane hardware to survive remediation cycles without quorum loss. A minimal remediation-capable cluster with 3 control plane nodes, 10 workers, 1 spare, and a dedicated management switch might add on the order of $8,000–12,000 in hardware cost compared to a cluster with no remediation automation (illustrative), primarily from the spare node and the management network infrastructure.
 
-**OpEx drivers.** The ongoing costs include power for cordoned spare nodes (~$300-500/year per spare at typical datacenter rates), cooling overhead (~$150-250/year per spare), network switch port consumption on the management VLAN, and the engineering time to build, test, and maintain the remediation automation. Engineering time is the largest variable: building a production-grade remediation pipeline (NPD configuration, MHC tuning, BMC integration, alert routing, audit logging, runbooks) typically takes a two-person platform team 4-6 weeks of focused work. Ongoing maintenance — updating NPD configurations for new kernel versions, refreshing BMC firmware, rotating credentials, reviewing audit logs — adds roughly 2-4 hours per week.
+**OpEx drivers.** The ongoing costs include power for cordoned spare nodes (illustratively ~$300–500/year per spare at typical datacenter rates), cooling overhead (~$150–250/year per spare), network switch port consumption on the management VLAN, and the engineering time to build, test, and maintain the remediation automation. Engineering time is the largest variable: building a production-grade remediation pipeline (NPD configuration, MHC tuning, BMC integration, alert routing, audit logging, runbooks) might take a two-person platform team several weeks of focused work. Ongoing maintenance — updating NPD configurations for new kernel versions, refreshing BMC firmware, rotating credentials, reviewing audit logs — might add a few hours per week.
 
-**When automated remediation pays for itself.** The breakeven calculation compares the cost of building and operating the remediation system against the cost of outages it prevents. If a 60-minute manual-response outage costs $10,000 in engineering time and degraded service (a conservative figure for a revenue-affecting production service), and automated remediation reduces MTTR from 60 minutes to 5 minutes for 80% of node failures, preventing roughly 6 outages per year saves approximately $44,000 annually. At that rate, the remediation infrastructure pays for itself within the first year. The calculation shifts unfavorably for clusters with fewer than ~20 nodes, where the outage frequency is low enough that building full automation may cost more than simply accepting occasional manual response. For clusters above ~50 nodes, the math is unambiguous: automated remediation is cheaper than manual response.
+**When automated remediation pays for itself.** The breakeven calculation compares the cost of building and operating the remediation system against the cost of outages it prevents. If a 60-minute manual-response outage costs on the order of $10,000 in engineering time and degraded service (illustrative for a revenue-affecting production service), and automated remediation reduces MTTR from 60 minutes to 5 minutes for most node failures, preventing a handful of outages per year can exceed the automation investment. The calculation shifts unfavorably for clusters with fewer than ~20 nodes, where the outage frequency is low enough that building full automation may cost more than simply accepting occasional manual response. For clusters above ~50 nodes, automated remediation often wins on labor alone.
 
 **The MTTR gap vs. cloud.** On a major cloud provider, a failed VM is typically replaced in 2-5 minutes with no operator action required. On bare metal with automated remediation, a power-cycle recovery takes 2-3 minutes — comparable to cloud. A full reprovision takes 10-18 minutes — 3-6x longer than cloud. This gap is irreducible because physical hardware has POST times, firmware initialization, and PXE image transfer latencies that virtualized infrastructure does not. The on-premises operator's goal is not to match cloud MTTR exactly; it is to close the gap to the point where the difference is no longer the dominant factor in application availability. At 10-18 minutes, a reprovision is faster than the 30-60 minutes of manual response — the automation has done its job, even if it is slower than a cloud provider's hypervisor.
 
@@ -624,12 +640,12 @@ flowchart TD
 |--------|----------------|-------------------|-------------------------|
 | **Cluster size** | < 20 nodes | 20-100 nodes | > 50 nodes (justifies CAPI overhead) |
 | **Setup complexity** | 1-2 days | 3-5 days | 2-4 weeks |
-| **Remediation action** | BMC power cycle only | Cordon + drain + reboot; fence on failure | Delete Machine → full reprovision via Ironic |
+| **Remediation action** | BMC power cycle only | Peers cordon + delete Node; SNR reboots; FAR fences on failure | Delete Machine → full reprovision via Ironic |
 | **Node replacement time** | 2-3 min (power cycle) | 3-5 min (reboot) | 10-18 min (full reprovision) |
 | **Requires CAPI** | No | No | Yes |
 | **Requires BMC access** | Yes (IPMI/Redfish) | Yes (IPMI/Redfish) | Yes (Redfish preferred, IPMI fallback) |
 | **Stateful workload aware** | No | Partial (PDB-aware drain) | Partial (PDB-aware drain, needs custom webhook for last-replica check) |
-| **Remediation storm protection** | Manual (cooldown timer) | Manual (cooldown timer) | Built-in (maxUnhealthy circuit breaker) |
+| **Remediation storm protection** | Manual (cooldown timer) | NHC `minHealthy` + cooldown timer | Built-in (`maxUnhealthy` circuit breaker) |
 | **Audit trail** | Script logs | Operator logs + Events | CAPI status conditions + Events |
 | **Best for** | Small clusters, dev/staging | Mid-size production without CAPI | Large production with CAPI investment |
 
@@ -697,7 +713,7 @@ A node shows `Ready` status in Kubernetes but is experiencing intermittent packe
 1. **Node Problem Detector custom check**: Monitor NIC link state changes
    ```bash
    # NPD script: detect NIC flapping
-   FLAPS=$(dmesg --time-format iso | grep -c "link is down" | tail -1)
+   FLAPS=$(dmesg --time-format iso | grep -c "link is down")
    if [ "$FLAPS" -gt 3 ]; then
      echo "NIC flapping detected: ${FLAPS} link-down events"
      exit 1  # Sets node condition to unhealthy
@@ -715,8 +731,8 @@ A node shows `Ready` status in Kubernetes but is experiencing intermittent packe
 
 **Remediation:**
 1. NPD sets a custom condition: `NetworkHealthy = False`
-2. MHC watches for `NetworkHealthy = False` with timeout 60s
-3. MHC triggers remediation (cordon + reboot)
+2. NHC (medik8s) or MHC (CAPI) watches for `NetworkHealthy = False` with timeout 60s
+3. **CAPI MHC**: deletes the Machine and reprovisions via the infrastructure provider. **medik8s SNR**: healthy peers cordon and delete the Node; SNR reboots the unhealthy host
 4. If NIC flapping persists after reboot, the node stays unhealthy and gets escalated to Level 3 (physical NIC replacement)
 
 **Workaround while waiting for fix:**
@@ -850,7 +866,7 @@ Your team is evaluating whether to adopt Cluster API + CAPM3 for bare-metal node
 
 **Arguments against adopting CAPI:**
 1. CAPI adds significant operational complexity: a management cluster (or bootstrap cluster), multiple CRDs and controllers, provider-specific configuration, and a migration of your existing node lifecycle management to CAPI's MachineDeployment model. For a 40-node cluster, this is 2-4 weeks of engineering work and an ongoing maintenance burden.
-2. If remediation is the only reason you are adopting CAPI, the cost of learning and operating CAPI likely outweighs the benefit — the medik8s Self-Node Remediation operator can deliver equivalent remediation capabilities (cordon, drain, reboot, fence) without requiring CAPI.
+2. If remediation is the only reason you are adopting CAPI, the cost of learning and operating CAPI likely outweighs the benefit — the medik8s NHC + SNR stack can deliver peer-coordinated Node eviction, reboot, and fencing without requiring CAPI.
 3. CAPI couples your remediation strategy to your cluster provisioning strategy. If you later change how nodes are provisioned (e.g., switching from PXE to image-based provisioning with Talos or Flatcar), you may need to change both your provisioning pipeline AND your remediation pipeline because they share the same CAPM3 integration.
 
 **The pragmatic recommendation:** For a 40-node cluster not already using CAPI, deploy medik8s SNR + NPD for remediation, invest the saved engineering time in building a solid BMC credential management and remediation audit pipeline, and revisit CAPI if and when the cluster grows beyond ~100 nodes or you need CAPI for other reasons (multi-cluster management, declarative cluster lifecycle).
@@ -913,8 +929,8 @@ EOF
 4. **Simulate a kernel issue:**
    ```bash
    # Exec into the worker node container (kind-specific)
-   # Write to /dev/kmsg so the message is picked up by journald and NPD
-   # (kind nodes use journald, not traditional syslog, so /var/log/kern.log may not exist)
+   # Write to /dev/kmsg — NPD's kernel monitor tails /dev/kmsg directly
+   # (not via journald; /var/log/kern.log may not exist on kind nodes)
    docker exec npd-lab-worker bash -c \
      'echo "kernel: BUG: unable to handle kernel NULL pointer dereference" > /dev/kmsg'
    ```
@@ -952,7 +968,8 @@ Continue to [Module 7.4: Observability Without Cloud Services](/on-premises/oper
 - [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) — Backs rack/zone spread behavior, topology keys, default spread behavior, and cluster scheduling policy claims when distributing workloads across mixed racks or hardware domains.
 - [kubernetes.io: troubleshooting kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/) — The kubeadm troubleshooting docs explicitly describe expired kubelet client certificates causing authentication and rejoin problems.
 - [Node Status](https://kubernetes.io/docs/reference/node/node-status) — Documents `Ready` and `Unknown` semantics and the current default node-monitor-grace-period.
-- [medik8s: Self-Node Remediation](https://github.com/medik8s/self-node-remediation) — Supports claims about the SNR operator, DaemonSet-based remediation, cordon-drain-reboot flow, PDB awareness, and API-server-unreachable detection for non-CAPI clusters.
+- [medik8s: Node Health Check Operator](https://github.com/medik8s/node-healthcheck-operator) — Creates SelfNodeRemediation CRs when nodes are unhealthy; `minHealthy` provides storm protection for medik8s stacks.
+- [medik8s: Self-Node Remediation](https://github.com/medik8s/self-node-remediation) — SNR DaemonSet executes peer-coordinated cordon, Node deletion, and software/watchdog reboot per medik8s.io/how-it-works.
 - [medik8s: Fence-Agents Remediation](https://github.com/medik8s/fence-agents-remediation) — Supports claims about hard fencing via BMC, wrapping ClusterLabs fence agents behind a Kubernetes operator, and power-off isolation of unresponsive bare-metal nodes.
 - [Metal3 (CAPM3) Provider](https://github.com/metal3-io/cluster-api-provider-metal3) — Supports claims about the CAPM3 bare-metal reprovision flow, Ironic integration, BMC power-off/wipe/PXE-boot sequence, and BareMetalHost provisioning state machine.
 - [DMTF Redfish Standard](https://www.dmtf.org/standards/redfish) — Supports claims about Redfish as the modern RESTful HTTPS BMC management protocol replacing IPMI, covering power control, hardware inventory, and certificate-based authentication.
