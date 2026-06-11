@@ -121,10 +121,7 @@ PersistentKeepalive = 25
 EOF
 
 systemctl enable --now wg-quick@wg0
-
-# Add routes for cross-cluster communication
-ip route add 10.100.0.0/16 via 10.200.0.1 dev wg0
-ip route add 172.20.0.0/16 via 10.200.0.1 dev wg0
+# wg-quick installs routes for AllowedIPs (10.100.0.0/16, 172.20.0.0/16) onto wg0 automatically
 ```
 
 Network constraints dominate tunnel performance in ways that raw bandwidth charts hide. Encapsulation adds 50–70 bytes per packet depending on protocol (WireGuard vs IPsec/GRE), which shrinks the effective MSS and can trigger silent TCP black holes when Path MTU Discovery is blocked. [AWS Site-to-Site VPN MTU is restricted to 1446 bytes (MSS 1406 bytes)](https://docs.aws.amazon.com/vpn/latest/s2svpn/cgw-best-practice.html), while internal AWS Transit Gateway MTU for inter-VPC and Direct Connect traffic can be much larger at 8500 bytes. If your pod network MTU remains at 1500 but the tunnel path only supports 1400, large responses may never arrive and `curl` will hang after the TCP handshake succeeds.
@@ -158,7 +155,7 @@ flowchart LR
 
 | Feature | AWS Direct Connect | Azure ExpressRoute | GCP Cloud Interconnect |
 |---------|-------------------|-------------------|----------------------|
-| **Bandwidth** | 1, 10, 100 Gbps (verify 400 Gbps availability) | 50 Mbps - 100 Gbps | 10, 100 Gbps dedicated; Partner up to 50 Gbps |
+| **Bandwidth** | 1, 10, 100, 400 Gbps | 50 Mbps - 100 Gbps | 10, 100, 400 Gbps dedicated (LAG up to 8×400G); Partner up to 50 Gbps |
 | **Latency** | Low single-digit ms typical within metro | Low single-digit ms typical within metro | Low single-digit ms typical within metro |
 | **Setup time** | Weeks (physical provisioning) | Weeks (physical provisioning) | Weeks (physical provisioning) |
 | **Monthly cost (10G)** | Order-of-magnitude ~$1,000–$3,000/port (verify current pricing) | Order-of-magnitude ~$3,000–$6,000/port (verify current pricing) | Order-of-magnitude ~$1,500–$2,500/port (verify current pricing) |
@@ -181,7 +178,7 @@ Azure ExpressRoute standard circuits offer bandwidths from 50 Mbps up to 10 Gbps
 
 **Google Cloud Interconnect Topologies**
 
-GCP Dedicated Interconnect links are available at 10 Gbps or 100 Gbps; up to 8 links can be bundled in a Link Aggregation Group (LAG) for up to 800 Gbps aggregate. [GCP Partner Interconnect VLAN attachments support capacities from 50 Mbps up to 50 Gbps](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/overview). The GCP Network Connectivity Center (NCC) provides a hub-and-spoke architecture for connecting on-premises and cloud networks with BGP route exchange—think of it as the control plane for which prefixes each spoke advertises, similar in role to AWS Transit Gateway or Azure Virtual WAN.
+GCP Dedicated Interconnect links are available at 10 Gbps, 100 Gbps, or 400 Gbps; up to 8 links can be bundled in a Link Aggregation Group (LAG) for up to 3.2 Tbps aggregate (8×400G). [GCP Partner Interconnect VLAN attachments support capacities from 50 Mbps up to 50 Gbps](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/overview). The GCP Network Connectivity Center (NCC) provides a hub-and-spoke architecture for connecting on-premises and cloud networks with BGP route exchange—think of it as the control plane for which prefixes each spoke advertises, similar in role to AWS Transit Gateway or Azure Virtual WAN.
 
 ### Multi-Cloud Interconnectivity
 
@@ -219,7 +216,7 @@ flowchart LR
 
 Architecturally, Submariner splits into three concerns you should keep mentally separate: **gateway engines** terminate encrypted tunnels and forward pod CIDR routes; **Lighthouse** synchronizes `ServiceExport` / `ServiceImport` objects and teaches CoreDNS to resolve the `clusterset.local` domain; and the **broker** cluster holds CRDs that other clusters join against. If DNS works but TCP fails, suspect tunnels or CIDR overlap. If TCP works by IP but names fail, suspect Lighthouse or missing `ServiceExport`.
 
-> **Stop and think**: Submariner requires non-overlapping pod and service CIDRs between clusters. Both your on-prem and EKS clusters use the default 10.244.0.0/16 pod CIDR. What are your options, and which one avoids rebuilding either cluster?
+> **Stop and think**: Submariner requires non-overlapping pod and service CIDRs between clusters. Your on-prem cluster uses the default 10.244.0.0/16 pod CIDR, and your EKS cluster also advertises 10.244.0.0/16 because it runs an overlay CNI (Calico or Cilium) rather than the default Amazon VPC CNI—which assigns pod IPs from VPC subnets instead. What are your options, and which one avoids rebuilding either cluster?
 
 Your options are: rebuild one cluster with a unique pod CIDR (cleanest long term), enable Submariner Globalnet to NAT into a dedicated global CIDR (adds complexity but avoids rebuild), or perform manual NAT at gateways (fragile, breaks network policy semantics). Document chosen CIDRs in a central IPAM registry before any cluster exists—retrofits are expensive.
 
@@ -327,7 +324,9 @@ for CLUSTER in on-prem cloud; do
     -out certs/${CLUSTER}-ca-csr.pem -subj "/O=KubeDojo/CN=${CLUSTER} CA"
   openssl x509 -req -days 3650 -CA certs/root-cert.pem -CAkey certs/root-key.pem \
     -set_serial "0x$(openssl rand -hex 8)" \
+    -extfile <(printf "basicConstraints=critical,CA:TRUE\nkeyUsage=critical,digitalSignature,keyCertSign,cRLSign") \
     -in certs/${CLUSTER}-ca-csr.pem -out certs/${CLUSTER}-ca-cert.pem
+  cat certs/${CLUSTER}-ca-cert.pem certs/root-cert.pem > certs/${CLUSTER}-cert-chain.pem
 done
 
 # 3. Install Istio on the primary cluster with the shared CA
@@ -336,7 +335,7 @@ kubectl create secret generic cacerts -n istio-system \
   --from-file=ca-cert.pem=certs/on-prem-ca-cert.pem \
   --from-file=ca-key.pem=certs/on-prem-ca-key.pem \
   --from-file=root-cert.pem=certs/root-cert.pem \
-  --from-file=cert-chain.pem=certs/on-prem-ca-cert.pem
+  --from-file=cert-chain.pem=certs/on-prem-cert-chain.pem
 
 istioctl install -y -f - <<EOF
 apiVersion: install.istio.io/v1alpha1
@@ -440,7 +439,8 @@ spec:
       package k8sallowedregistries
       violation[{"msg": msg}] {
         container := input.review.object.spec.containers[_]
-        not startswith(container.image, input.parameters.registries[_])
+        satisfied := [good | repo := input.parameters.registries[_]; good := startswith(container.image, repo)]
+        not any(satisfied)
         msg := sprintf("Container '%v' uses image '%v' from unauthorized registry",
           [container.name, container.image])
       }
@@ -484,7 +484,7 @@ Hybrid failures often present as application errors three layers away from the r
 
 Document a runbook that links each symptom to three commands—your on-call should not re-derive the entire Submariner architecture during an outage.
 
-**Worked example: MTU black hole after enabling IPsec.** Symptom: `curl https://inventory-api.internal/health` returns HTTP 200 from a cloud jump host but hangs from an on-prem pod. `traceroute` shows the path ends at the VPN gateway. `ping -s 1400` fails but `ping -s 1200` succeeds. Fix: lower the WireGuard/interface MTU to 1400, add `iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu` on gateways, and set CNI MTU via your CNI config (Calico `vethMTU`, Cilium `--mtu`). Re-test with `curl` payloads larger than 8 KB.
+**Worked example: MTU black hole after enabling IPsec.** Symptom: `curl https://inventory-api.internal/health` returns HTTP 200 from a cloud jump host but hangs from an on-prem pod. `traceroute` shows the path ends at the VPN gateway. `ping -M do -s 1400` fails but `ping -M do -s 1200` succeeds. Fix: lower the WireGuard/interface MTU to 1400, add `iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu` on gateways, and set CNI MTU via your CNI config (Calico `vethMTU`, Cilium `--mtu`). Re-test with `curl` payloads larger than 8 KB.
 
 **Worked example: Submariner DNS NXDOMAIN.** Symptom: `nslookup nginx.web.svc.clusterset.local` returns NXDOMAIN on cluster-a but the service exists on cluster-b. `subctl show connections` is connected. Root cause: service never exported—missing `subctl export` or `ServiceExport` deleted by GitOps prune. Fix: re-export, confirm `kubectl get serviceexports.multicluster.x-k8s.io -A` on cluster-b and `serviceimports` on cluster-a. If exports exist but DNS still fails, restart CoreDNS pods after verifying the lighthouse plugin stanza—stale ConfigMaps occasionally survive partial Lighthouse upgrades.
 
@@ -515,7 +515,7 @@ Document a runbook that links each symptom to three commands—your on-call shou
 ## Quiz
 
 ### Question 1
-Your on-premises Kubernetes cluster uses pod CIDR 10.244.0.0/16. Your EKS cluster also uses the default 10.244.0.0/16. You connect them via WireGuard and developers report that cross-cluster service calls randomly fail. What is happening and how do you fix it?
+Your on-premises Kubernetes cluster uses pod CIDR 10.244.0.0/16. Your EKS cluster also uses 10.244.0.0/16 because it runs an overlay CNI (Calico or Cilium) rather than the default Amazon VPC CNI, which assigns pod IPs from VPC subnets. You connect them via WireGuard and developers report that cross-cluster service calls randomly fail. What is happening and how do you fix it?
 
 <details>
 <summary>Answer</summary>
@@ -524,7 +524,7 @@ Your on-premises Kubernetes cluster uses pod CIDR 10.244.0.0/16. Your EKS cluste
 
 **Fix options (in order of preference):**
 
-1. **Rebuild one cluster with a different CIDR** (e.g., 10.100.0.0/16 for EKS). This is the cleanest solution but requires recreating the cluster and migrating workloads. For EKS, this means creating a new cluster with `--kubernetes-network-config serviceIpv4Cidr` and a custom VPC CNI configuration.
+1. **Rebuild one cluster with a different CIDR** (e.g., 10.100.0.0/16 for the overlay-CNI EKS cluster). This is the cleanest solution but requires recreating the cluster and migrating workloads. For overlay-CNI EKS, plan a non-overlapping pod CIDR at install time via the CNI configuration. For VPC-CNI EKS overlap instead, the conflict is usually VPC subnet sizing—resize subnets or enable custom networking so pod IPs do not collide with on-prem ranges; `--kubernetes-network-config serviceIpv4Cidr` only controls the service CIDR, not pod IPs.
 
 2. **Use Submariner with Globalnet**, which assigns virtual global IPs from a non-overlapping range (e.g., 242.0.0.0/8). Submariner handles the NAT transparently, and cross-cluster DNS resolves to global IPs. This avoids rebuilding either cluster but adds complexity.
 
@@ -543,7 +543,7 @@ Your on-premises to cloud VPN tunnel has 50ms RTT and 200 Mbps bandwidth. The da
 
 1. **Bandwidth saturation**: A write-heavy PostgreSQL database generating 50-100 MB/s of WAL (Write-Ahead Log) data would consume 400-800 Mbps -- far exceeding the 200 Mbps tunnel capacity. Replication lag would grow unbounded until the tunnel is upgraded or write volume decreases. This means the DR replica is perpetually behind, defeating the purpose.
 
-2. **Latency impact on synchronous replication**: Synchronous replication adds the full 50ms RTT to every transaction commit. For a workload doing 1,000 transactions/second, this adds 50 seconds of cumulative latency per second -- transactions would queue up, causing application timeouts. Synchronous replication at 50ms RTT is impractical for any write-intensive workload.
+2. **Latency impact on synchronous replication**: Synchronous replication blocks each commit until the remote replica acknowledges, adding roughly one RTT (~50 ms) per commit. A single database session therefore caps at about 20 commits/s (1 ÷ 0.05 s). Sustaining 1,000 commits/s synchronously would require on the order of 50 concurrent commit sessions—a concurrency ceiling most applications do not have. Synchronous replication at 50ms RTT is impractical for write-intensive workloads.
 
 3. **VPN reliability**: VPN tunnels over the public internet have variable latency (50ms average but 200ms+ during congestion). Reconnections after tunnel drops cause replication lag spikes and potentially require WAL replay to catch up.
 
@@ -595,7 +595,7 @@ An architect proposes using Azure ExpressRoute Global Reach to route data betwee
 <details>
 <summary>Answer</summary>
 
-**Global Reach data transfer is billed separately and is explicitly excluded from the Unlimited Data plan.** Zone 1 data transfer costs $0.02/GB inbound and $0.02/GB outbound. The architect successfully created a functional private network, but the high volume of cross-datacenter replication traffic will generate significant unbudgeted per-GB charges entirely outside the unlimited tier.
+**Global Reach data transfer is billed separately and is explicitly excluded from the Unlimited Data plan.** Cross-region Global Reach traffic is metered per gigabyte on top of the circuit fee—verify current Azure pricing before budgeting. The architect successfully created a functional private network, but the high volume of cross-datacenter replication traffic will generate significant unbudgeted per-GB charges entirely outside the unlimited tier.
 </details>
 
 ### Question 7
