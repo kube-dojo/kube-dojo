@@ -207,7 +207,7 @@ Running Kubernetes disconnected means you own the entire supply chain: container
 
 On the high side, verification order matters: **integrity first** (SHA256 against signed manifest), **authenticity second** (cosign/Notation signature against your org trust root), **policy third** (Trivy/Grype scan against offline DB). Reversing scan-before-checksum wastes time on tampered inputs. Generate SBOMs on the connected side with **[Syft](https://github.com/anchore/syft)** and store them alongside each bundle; when a CVE bulletin arrives weeks later, you can grep SBOMs offline to see exposure without rescanning every layer from scratch.
 
-Offline Trivy and Grype databases age like milk, not wine. Establish a **weekly transfer cadence** for DB refreshes even when no application images change — otherwise Harbor reports green scans while missing newly published CVEs. Include Java-specific DB artifacts if you scan JVM images: Harbor 2.11+ exposes `skip_java_db_update` alongside `skip_update` and `offline_scan` ([Harbor Trivy offline configuration](https://goharbor.io/docs/2.11.0/administration/vulnerability-scanning/import-vulnerability-data/)); forgetting the Java DB produces confusing scan failures on Spring-based workloads.
+Offline Trivy and Grype databases age like milk, not wine. Establish a **weekly transfer cadence** for DB refreshes even when no application images change — otherwise Harbor reports green scans while missing newly published CVEs. Include Java-specific DB artifacts if you scan JVM images: Harbor 2.11+ exposes `skip_java_db_update` alongside `skip_update` and `offline_scan` (the underlying `harbor-scanner-trivy` env vars are `SCANNER_TRIVY_SKIP_JAVA_DB_UPDATE`, `SCANNER_TRIVY_SKIP_UPDATE`, and `SCANNER_TRIVY_OFFLINE_SCAN` — [harbor-scanner-trivy configuration](https://github.com/goharbor/harbor-scanner-trivy#configuration)); forgetting the Java DB produces confusing scan failures on Spring-based workloads.
 
 Every bundle needs a **provenance record**: bundle ID, author, connected-side scan timestamp, signing key ID, manifest hash, and approval ticket. When an auditor asks "what is the provenance of bundle 2026-W23?", you produce a signed manifest chain, not a Slack thread.
 
@@ -340,7 +340,7 @@ Configure **containerd mirror rules** on every node so `registry.k8s.io` and oth
 
 ### Image Signing on Import
 
-Checksums prove a file was not corrupted in transit; **signatures** prove it was published by your organization and not swapped by an insider on the connected mirror station. **[cosign](https://docs.sigstore.dev/cosign/signing/overview/)** (Sigstore) and **[Notation](https://notaryproject.dev/docs/)** (CNCF Notary v2) both attach signatures to OCI artifacts — choose one trust root and enforce it consistently. On the connected side, sign each archive or manifest list with your org key; on the high side, configure Harbor's **content trust** or admission policies (Kyverno verifyImages, Gatekeeper, or native policy in later releases — verify against your 1.35 cluster capabilities) to reject unsigned images before pods schedule.
+Checksums prove a file was not corrupted in transit; **signatures** prove it was published by your organization and not swapped by an insider on the connected mirror station. **[cosign](https://docs.sigstore.dev/cosign/signing/overview/)** (Sigstore) and **[Notation](https://notaryproject.dev/docs/)** (CNCF Notary v2) both attach signatures to OCI artifacts — choose one trust root and enforce it consistently. On the connected side, sign each archive or manifest list with your org key; on the high side, rely on Harbor's cosign/Notation signature storage (Harbor keeps signatures as OCI artifacts in the same repository — the legacy Notary v1 "content trust" integration was deprecated in 2.6 and removed by ~2.8, so it does not exist in current releases) plus a cluster **admission policy** (Kyverno `verifyImages`, the Sigstore policy-controller, or Gatekeeper with a signature-verification constraint — verify against your 1.35 cluster capabilities) to reject unsigned images before pods schedule.
 
 Store signing keys in an HSM or offline ceremony machine — not on the same mirror laptop that pulls from the public internet. Rotate keys on a documented schedule and cross-sign during rotation so bundles signed under the old key remain valid until expiry.
 
@@ -457,7 +457,10 @@ flux bootstrap git \
 
 # Configure Flux to use Harbor for all image pulls
 cat > clusters/production/registry-mirror.yaml <<'EOF'
-apiVersion: source.toolkit.fluxcd.io/v1
+# OCIRepository graduated to v1 in Flux 2.6 (May 2025). The components pinned above are
+# Flux 2.4.x, where this kind is still v1beta2 — match your Flux version (bump the pins to a
+# current release and switch this to v1 once you do).
+apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: OCIRepository
 metadata:
   name: cilium-chart
@@ -859,7 +862,7 @@ Continue to [Module 6.2: Hardware Security (HSM/TPM)](../module-6.2-hardware-sec
 - [nvd.nist.gov: CVE 2023 27997](https://nvd.nist.gov/vuln/detail/CVE-2023-27997) — The NVD entry directly documents CVE-2023-27997 as a FortiOS/FortiProxy SSL-VPN remote-code-execution vulnerability.
 - [NIST SP 800-53 Rev. 5](https://csrc.nist.gov/Pubs/sp/800/53/r5/upd1/Final) — Useful for grounding physical security, media handling, access control, and audit-control language in a primary control catalog.
 - [Kubernetes Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) — Relevant for the module's access-logging and evidence expectations in high-assurance or regulated environments.
-- [Harbor: import vulnerability data offline](https://goharbor.io/docs/2.11.0/administration/vulnerability-scanning/import-vulnerability-data/) — Documents offline Trivy database expectations for disconnected Harbor instances.
+- [harbor-scanner-trivy configuration](https://github.com/goharbor/harbor-scanner-trivy#configuration) — Documents the Trivy scanner's offline settings (`SCANNER_TRIVY_SKIP_UPDATE`, `SCANNER_TRIVY_SKIP_JAVA_DB_UPDATE`, `SCANNER_TRIVY_OFFLINE_SCAN`) and the air-gapped DB-mount requirement for disconnected Harbor instances.
 - [Sigstore cosign signing overview](https://docs.sigstore.dev/cosign/signing/overview/) — Official cosign documentation for signing and verifying OCI artifacts in supply-chain workflows.
 - [Notary Project documentation](https://notaryproject.dev/docs/) — CNCF Notary v2 (Notation) reference for OCI artifact signing alternative to cosign.
 - [Zarf documentation](https://docs.zarf.dev/) — Official guide to packaging Kubernetes workloads for air-gapped deployment.
