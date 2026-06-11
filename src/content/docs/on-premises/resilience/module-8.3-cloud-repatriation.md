@@ -322,7 +322,7 @@ Object migration is not just object copying. S3-compatible APIs cover the common
 
 During a long object migration, keep a reconciliation ledger. At minimum, track source object count, destination object count, transferred bytes, skipped bytes, failures, retry counts, and checksum mismatches for each run. Store the `rclone` command line, version, config profile names, and logs in the migration record so a later audit can explain how data moved. If the provider charges for egress, use current pricing pages when budgeting; the exact per-gigabyte rate varies by region, tier, transfer path, and date, so this module intentionally avoids treating any single price as universal.
 
-For [comprehensive state migration of native Kubernetes resources (such as CustomResourceDefinitions, Secrets, and ConfigMaps) alongside persistent volumes](https://github.com/vmware-tanzu/velero), **Velero** is the undisputed industry standard tool. As of its v1.18.0 release in March 2025, [Velero introduced highly anticipated concurrent backup processing and sophisticated cache volume support](https://github.com/vmware-tanzu/velero/releases/tag/v1.18.0), drastically reducing recovery time objectives (RTO). Recognizing its critical role in the ecosystem, [Broadcom officially donated Velero to the CNCF Sandbox in April 2026](https://www.cncf.io/news/2026/04/02/the-new-stack-why-broadcom-gave-velero-to-the-cncf-sandbox-and-what-it-means-for-kubernetes-data-protection/).
+For [comprehensive state migration of native Kubernetes resources (such as CustomResourceDefinitions, Secrets, and ConfigMaps) alongside persistent volumes](https://github.com/velero-io/velero), **Velero** is a widely-used, CNCF-hosted backup and migration tool. As of its v1.18.0 release in March 2026, [Velero introduced concurrent backup processing and cache-volume support](https://github.com/velero-io/velero/releases/tag/v1.18.0), reducing recovery time objectives (RTO) for large clusters. Recognizing its critical role in the ecosystem, [Broadcom officially donated Velero to the CNCF Sandbox in April 2026](https://www.cncf.io/news/2026/04/02/the-new-stack-why-broadcom-gave-velero-to-the-cncf-sandbox-and-what-it-means-for-kubernetes-data-protection/).
 
 Velero is powerful, but it is not a substitute for understanding application state. It can capture Kubernetes resources and integrate with volume snapshots, yet it cannot automatically make every database transactionally consistent at the moment you want. Treat Velero as one layer in the plan: use it for cluster resource migration, namespace restore testing, and rollback scaffolding, while using database-native replication, backup, or dump mechanisms for the data systems that require transactional guarantees.
 
@@ -430,7 +430,7 @@ A successful infrastructure repatriation takes multiple months of careful, delib
 gantt
     title Phased Migration Timeline
     dateFormat  M
-    axisFormat  Month %M
+    axisFormat  Month %m
     section Preparation
     Provision hardware       :a1, 1, 30d
     Install K8s              :a2, after a1, 30d
@@ -480,10 +480,10 @@ Executing a successful rollback requires technical precision to ensure continuou
 ```bash
 # Pre-cutover validation
 rclone check aws-s3:production-data ceph-rgw:production-data
-kubectl --context on-prem get pods -n production | grep -v Running  # Should be empty
+kubectl --context on-prem get pods -n production --field-selector=status.phase!=Running  # Should be empty
 
 # Rollback: redirect DNS back to cloud
-kubectl --context cloud annotate service api-gateway \
+kubectl --context cloud annotate service api-gateway -n production \
   external-dns.alpha.kubernetes.io/hostname=api.internal.corp
 
 # Sync any data written to on-prem back to cloud
@@ -679,8 +679,8 @@ Return directly to the [Resilience & Migration overview](/on-premises/resilience
 - [github.com: annotations.md](https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/main/docs/guide/ingress/annotations.md) — The AWS Load Balancer Controller annotation reference documents the ALB annotations named in the module.
 - [owasp.org: Web Application Firewall](https://owasp.org/www-community/Web_Application_Firewall) — OWASP describes WAFs as application-layer controls that filter, monitor, and block HTTP traffic.
 - [github.com: rclone](https://github.com/rclone/rclone) — The upstream rclone repository describes rclone as a tool for syncing files with cloud storage and includes S3-compatible backend support.
-- [github.com: velero](https://github.com/vmware-tanzu/velero) — The upstream Velero repository describes backup, restore, disaster recovery, and Kubernetes cluster resource migration use cases.
-- [github.com: v1.18.0](https://github.com/vmware-tanzu/velero/releases/tag/v1.18.0) — The upstream v1.18 release notes list concurrent backup processing and cache-volume/data-movement changes.
+- [github.com: velero](https://github.com/velero-io/velero) — The upstream Velero repository describes backup, restore, disaster recovery, and Kubernetes cluster resource migration use cases.
+- [github.com: v1.18.0](https://github.com/velero-io/velero/releases/tag/v1.18.0) — The upstream v1.18 release notes list concurrent backup processing and cache-volume/data-movement changes.
 - [cncf.io: the new stack why broadcom gave velero to the cncf sandbox and what it means for kubernetes data protection](https://www.cncf.io/news/2026/04/02/the-new-stack-why-broadcom-gave-velero-to-the-cncf-sandbox-and-what-it-means-for-kubernetes-data-protection/) — The CNCF news item discusses Broadcom donating Velero to CNCF Sandbox.
 - [docs.aws.amazon.com: installing vcenter appliance mgn.html](https://docs.aws.amazon.com/mgn/latest/ug/installing-vcenter-appliance-mgn.html) — The AWS MGN documentation describes installing the MGN vCenter Client for agentless migration.
 - [learn.microsoft.com: create manage projects](https://learn.microsoft.com/en-us/azure/migrate/create-manage-projects) — Microsoft's Azure Migrate project documentation states that classic Azure Migrate retired in February 2024 and classic metadata would be deleted.
