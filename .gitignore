@@ -79,6 +79,7 @@ scripts/quality/day*-pilot-*.txt
 clusterctl
 talosctl
 demo-cluster.yaml
+kind-mesh.yaml
 test_script.sh
 .venv
 .venv/
@@ -86,6 +87,7 @@ test_script.sh
 .pids/
 *.bak
 .pipeline/rewrite-output/
+.pipeline/briefs/
 .pipeline/budgets/
 .pipeline/fact-ledgers/
 .pipeline/link-cache.json

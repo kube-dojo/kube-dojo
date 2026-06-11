@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 127 — orientation + git hygiene (no curriculum work)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 127 — orientation + git hygiene</h1>
+<p class="meta">2026-06-11. Short session: user asked for a handoff to continue next session. No curriculum work was done — this was a cold-start orientation plus a git-hygiene cleanup of two pre-existing scratch residuals. Project state is unchanged since session 126 (everything through s126 is merged and clean). <b>The next curriculum action is unchanged: on-premises Wave 3 (#1881).</b></p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>this</td><td><span class="pill inflight">DOCS+CHORE</span></td><td>session-127 handoff + gitignore lab/pipeline residuals</td><td>worktree → PR (no content touched → CI trivially green)</td></tr>
+</table>
+<p>No dispatches were fired. No modules were authored, reviewed, or flipped. The only working-tree change is git hygiene + this handoff.</p>
+
+<h2>What actually happened</h2>
+<ol>
+<li><b>Cold-start orientation</b> — invoked <code>curriculum-orchestrator</code> + <code>session-handoff-writer</code> skills; ran <code>bash scripts/cold-start.sh</code>. Briefing parsed clean: pipeline v2 queue empty (<code>ready 0 / in_progress 0</code>), <code>actions.next: []</code>, freshness <code>fresh</code>, services 5/6 running (1 stale pid file — cosmetic).</li>
+<li><b>Git-hygiene cleanup</b> — the briefing flagged "2 uncommitted file(s) on main — pipeline/pilot residuals." Both verified as pure scratch and gitignored:
+  <ul>
+    <li><code>kind-mesh.yaml</code> (repo root) — regenerated every run by the <code>cat &lt;&lt;'EOF' &gt; kind-mesh.yaml</code> heredoc in the just-merged on-prem lab <code>on-premises/networking/module-3.6-service-mesh-bare-metal.md:498</code> (Wave 2, PR #1884). The canonical copy lives inside that module's code block → gitignore beats <code>rm</code> (it would just come back). Added next to the existing <code>demo-cluster.yaml</code> ignore.</li>
+    <li><code>.pipeline/briefs/</code> — 17 mlops fix/delta scratch briefs dated 2026-06-10 from the already-merged #1842 mlops campaign (session 121). Canonical briefs live in <code>logs/remediation/briefs/</code>; <code>.pipeline/briefs/</code> is off-convention scratch. Added to the existing <code>.pipeline/*</code> ignore block.</li>
+  </ul>
+  After both edits, <code>git status --short</code> shows only <code>.gitignore</code> — clean.</li>
+</ol>
+
+<h2>Headline data (briefing API at session start)</h2>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Review-axis <code>done</code> (site-wide)</td><td>647 (per s126 commit <code>1829be0f</code>: 637→647)</td></tr>
+<tr><td>On-premises track</td><td>27/57 <code>done</code> — Waves 1–2 (10 modules) landed in s126</td></tr>
+<tr><td>Pipeline v2</td><td>567 modules total; queue head ready 0 / in_progress 0 / dead-letter 0; needs_human 0</td></tr>
+<tr><td>Critical-rubric (&lt;2.0)</td><td>112 modules (mostly Platform Disciplines/Toolkits/Foundations + on-prem cost modules)</td></tr>
+<tr><td>ai-ml-engineering #1842</td><td>FULLY DRAINED (s125c) — 0 shipped_unreviewed remain</td></tr>
+</table>
+
+<h2>Active policy state (carried, unchanged this session)</h2>
+<ul>
+<li><b>🚫 gemini RETIRED (s126, user emphatic).</b> Do NOT dispatch <code>--agent gemini</code> (returned empty then hung 1800s twice). The Google-family seat is <code>--agent agy</code> (gemini-3.1-pro-high write / gemini-3.5-flash-high review). Migration is done, not "by Jun-15." Still ground-check every agy claim; agy never the sole reviewer.</li>
+<li><b>✅ No sign-off gate on clean waves (s126, user: "why do you need my go?").</b> Reviewed + ground-checked + build-green waves are endorsed-queue work → merge + flip + report with evidence, don't pause for permission.</li>
+<li><b>✅ opus/claude dispatch re-enabled (s121)</b> until the programmatic creds run out — route the hardest 1–2 reviews/wave to opus, keep cursor/codex/deepseek/agy as the volume tier.</li>
+<li>Roster: NEITHER agy NOR deepseek as a sole reviewer (both have fabricated whole reviews); mixed-pool, ≤2/OAuth, ground-check every finding against the live file (grep section presence + line numbers, not just word-count).</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+<p>None. No agents dispatched this session.</p>
+
+<h2>What's next</h2>
+<ul>
+<li><b>Top priority — on-premises Wave 3 (#1881):</b> the 2 planning/provisioning stragglers deferred from Wave 1 — <b>1.5 finops-chargeback + 2.3 immutable-os</b> (both T0/dense → review-flip) — then <b>multi-cluster 5.1–5.5</b> (5.2 needs_review; 5.4/5.5 needs_rewrite). <code>verify_module.py</code> sweep FIRST to split expand-vs-flip; same loop (≤3 authors, mixed-pool review, NO gemini, ground-check every finding, build in PRIMARY, <code>reset-stage COMMITTED</code>). 30 on-prem modules remain.</li>
+<li><b>On-premises after Wave 3:</b> operations (7.x non-done) → ai-ml-infrastructure (9.4) → storage/security/resilience non-done → then <code>platform</code> (the big one: Disciplines 45 + Toolkits 36 + Foundations 28 critical).</li>
+<li>Reusable Wave-1/2 briefs to copy: <code>logs/remediation/briefs/onprem-w1/</code> + <code>onprem-w2/</code>.</li>
+<li>Standing non-blocking follow-ups (unchanged): #1876 (73-chapter AI History book review), citation-format sweep (bare-URL Sources), <code>verify_module</code> reachability nondeterminism, telemetry annotation discipline (#1860), #1823 mermaid campaign, CI full-astro-build gate gap.</li>
+</ul>
+
+<h2>Files touched</h2>
+<ul>
+<li><code>.gitignore</code> — added <code>kind-mesh.yaml</code> + <code>.pipeline/briefs/</code> (two scratch residuals).</li>
+<li><code>docs/session-state/2026-06-11-session-127-orientation-handoff.html</code> — this handoff.</li>
+<li><code>STATUS.md</code> — new index row; TODO head noted s127 = orientation + hygiene, on-prem Wave 3 stays the next action.</li>
+</ul>
+
+</body></html>
