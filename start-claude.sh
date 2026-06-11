@@ -28,13 +28,8 @@ if [ -n "$MISSING_TOOLS" ]; then
     echo "   (These are recommended but not required to start)"
 fi
 
-# Check for npx (required to launch Claude Code)
-if ! command -v npx &> /dev/null; then
-    echo "Error: npx not found"
-    echo "   Install Node.js: https://nodejs.org/"
-    exit 1
-fi
-echo "npx found"
+# Claude Code runs as a standalone native binary (no Node/npx needed); the
+# presence check + install hint lives next to the launch at the bottom.
 
 # Change to project directory
 cd "$PROJECT_DIR"
@@ -109,7 +104,30 @@ echo ""
 # see agents_extensions/claude/statusline/statusline.sh handoff-discipline bands).
 export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
 
-# Launch via npx to avoid cache bugs (stale binary + prompt caching issues)
-# See: https://reddit.com/r/ClaudeAI/comments/1s7mkn3/
-echo "Launching Claude Code via npx (cache-safe)..."
-npx @anthropic-ai/claude-code@latest --chrome --permission-mode bypassPermissions "$@"
+# Launch the self-updating native build straight from PATH (installed to
+# ~/.local/bin via `claude install`; PATH is prepended at the top of this
+# script). This mirrors how start-codex.sh runs `codex` from PATH.
+#
+# We deliberately no longer use `npx @anthropic-ai/claude-code@latest`. With the
+# native-binary packaging the npm package ships a 500-byte error stub at
+# bin/claude.exe that a postinstall must overwrite with the ~220MB binary; under
+# npx that step is flaky and the broken stub gets *cached* in ~/.npm/_npx — the
+# recurring "claude native binary not installed" failure. The native install has
+# no such step. npx's only real benefit was staleness-avoidance, which the
+# background `claude update` below covers without the fragility.
+if ! command -v claude >/dev/null 2>&1; then
+    echo "Error: 'claude' not found on PATH."
+    echo "  Install the self-updating native build:"
+    echo "      curl -fsSL https://claude.ai/install.sh | bash"
+    echo "  (it installs to ~/.local/bin, which this script already puts on PATH)"
+    exit 1
+fi
+
+# Keep it current without blocking startup: this refreshes the binary for the
+# NEXT launch (the native updater writes a new versioned dir + repoints the
+# symlink; it never touches the running process). No-op when already latest or
+# offline.
+( claude update >/dev/null 2>&1 & )
+
+echo "Launching Claude Code (native build from PATH: $(command -v claude))..."
+exec claude --chrome --permission-mode bypassPermissions "$@"
