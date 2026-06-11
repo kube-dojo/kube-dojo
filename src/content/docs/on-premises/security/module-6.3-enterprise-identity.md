@@ -23,9 +23,7 @@ After completing this module, you will be able to:
 
 In many on-premises environments, managing human access with individually issued client certificates becomes cumbersome: offboarding is harder, group changes require credential reissuance, and the operational overhead grows quickly.
 
-Many organizations already have a corporate directory that serves as the source of truth for employees, teams, and roles. A common fix is to federate Kubernetes authentication through an OIDC provider such as Keycloak or Dex and map directory groups to Kubernetes RBAC. 
-
-With OIDC-based human authentication, disabling a user's directory account prevents new token issuance, short-lived tokens limit lingering access, and the platform team no longer needs to manage large inventories of long-lived client certificates by hand.
+Many organizations already have a corporate directory that serves as the source of truth for employees, teams, and roles, and the sustainable fix is to federate Kubernetes authentication through an OIDC provider such as Keycloak or Dex while mapping directory groups to Kubernetes RBAC. With OIDC-based human authentication, disabling a user's directory account prevents new token issuance, short-lived tokens limit lingering access, and the platform team no longer needs to manage large inventories of long-lived client certificates by hand.
 
 > **The Hotel Key Card Analogy**
 >
@@ -41,6 +39,18 @@ With OIDC-based human authentication, disabling a user's directory account preve
 - Transitioning to the new Structured Authentication Configuration in modern Kubernetes releases.
 - Setting up Single Sign-On (SSO) for the Kubernetes dashboard, Grafana, and other operational tools using OAuth2 Proxy.
 
+## The Identity Spine: Authentication vs Authorization
+
+Before choosing Keycloak, Dex, or Entra ID, you need a clear mental model of what Kubernetes actually does with identity. **Authentication** answers the question "who are you?" — the API server validates a presented credential (x509 certificate, bearer token, OIDC JWT) and extracts a username and zero or more group names. **Authorization** answers "what may you do?" — after authentication succeeds, the RBAC engine matches those username and group strings against RoleBindings and ClusterRoleBindings to decide whether a specific API request is allowed. Kubernetes never stores employee records in etcd; it only stores RBAC policy objects that reference external identity strings.
+
+This separation is deliberate and durable. [The Kubernetes authentication documentation states that normal users cannot be added to a cluster through an API call](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) — there is no `User` API resource for humans. When HR onboards a developer, you do not `kubectl create user`; you add them to an Active Directory group, wait for the OIDC broker to reflect that membership in JWT group claims, and ensure a RoleBinding already maps that group to the correct ClusterRole or Role. Offboarding is the mirror image: disable the directory account, and new tokens stop being issued; existing short-lived tokens expire on their own schedule.
+
+On-premises clusters amplify this design because you own every hop. Cloud-managed Kubernetes often bundles a cloud IAM layer (AWS IAM Roles for Service Accounts, GKE Workload Identity) that humans never touch directly. In your datacenter, the API server delegates human authentication to external mechanisms you operate: OIDC issuers configured via legacy `--oidc-*` flags or the GA Structured Authentication Configuration file, webhook token authenticators for proprietary token formats, or x509 client certificates for break-glass administrators. Service account tokens follow a parallel path — projected tokens bound to a Pod via the TokenRequest API — but those are workload credentials, not substitutes for human OIDC login.
+
+The OIDC bridge pattern works because JWTs carry signed claims the API server can verify locally. After startup, the API server fetches the issuer's JWKS (JSON Web Key Set) from the discovery document at `/.well-known/openid-configuration` and caches public keys. Each incoming request with a bearer token is validated for signature, issuer, audience, and expiration without a synchronous round trip to Keycloak on every `kubectl get pods`. That local validation is fast and resilient, but it also means **revocation is not instantaneous** — a disabled directory account continues to work until the current JWT expires unless you operate additional controls (very short lifetimes, webhook revocation, or network-level blocks).
+
+Structured Authentication Configuration, [stable in Kubernetes v1.34 and enabled by default](https://kubernetes.io/docs/reference/access-authn-authz/authentication/), replaces the single-issuer limitation of legacy flags. You define one or more `jwt` authenticators in a YAML file, map claims to username and groups with static claim names or CEL expressions, attach CEL validation rules (for example, rejecting tokens whose `exp - iat` exceeds 3600 seconds), and reload configuration without restarting the API server. For multi-tenant on-prem fleets where internal staff use Keycloak-backed AD groups while acquired teams authenticate through their own Okta tenant, this is the native answer — no extra reverse proxy required.
+
 ## Authentication Options for On-Premises Kubernetes
 
 Before diving into implementations, it is essential to understand the landscape of Kubernetes human authentication. Kubernetes provides several mechanisms for authenticating users, but not all of them are suitable for enterprise environments.
@@ -54,13 +64,23 @@ flowchart LR
 
     X509 --> X509Limits["No revocation<br/>Manual renewal<br/>No group sync<br/>No audit trail"]
     Static --> StaticLimits["Restart to add or remove users<br/>Plaintext file<br/>No groups<br/>No audit trail"]
-    OIDC --> OIDCBenefits["Short-lived tokens<br/>Instant revocation<br/>Group claims<br/>AD or LDAP backed<br/>Full audit trail and SSO"]
+    OIDC --> OIDCBenefits["Short-lived tokens<br/>Central revoke at IdP (TTL-bounded)<br/>Group claims<br/>AD or LDAP backed<br/>Full audit trail and SSO"]
 
     X509 --> X509Use["Use for service accounts,<br/>kubelet bootstrap, and CI/CD"]
     OIDC --> OIDCUse["Use for kubectl, dashboards,<br/>and every human user"]
 ```
 
-[Kubernetes v1.35 ('Timbernetes'), released December 17, 2025](https://kubernetes.io/blog/2025/12/17/kubernetes-v1-35-release/), continued the long-standing architectural philosophy of not including a built-in user database. With Kubernetes v1.36 scheduled for release on April 22, 2026, the API server trusts external identity providers entirely. [There is no `kubectl create user` command. Users exist only in the identity provider (AD, LDAP, OIDC) and are referenced in RBAC bindings by name or group.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/)
+[Kubernetes v1.35 ('Timbernetes'), released December 17, 2025](https://kubernetes.io/blog/2025/12/17/kubernetes-v1-35-release/), continued the long-standing architectural philosophy of not including a built-in user database. The API server trusts external identity providers entirely. [There is no `kubectl create user` command. Users exist only in the identity provider (AD, LDAP, OIDC) and are referenced in RBAC bindings by name or group.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/)
+
+### x509, Static Tokens, Webhooks, and OIDC Compared
+
+**x509 client certificates** remain appropriate for control-plane components, kubelet bootstrap, and break-glass administrators — not for every developer laptop. Certificates embed identity in the TLS handshake; revocation requires CRL or OCSP infrastructure many on-prem teams never fully operate, which is why client cert auth is a poor enterprise human-access default.
+
+**Static token files** (`--token-auth-file`) are legacy: plaintext CSV on disk, API server restart to add users, no groups, no SSO. Treat them as technical debt if still present on aging clusters.
+
+**Webhook token authentication** delegates validation to an HTTP service implementing the `TokenReview` API shape. The API server POSTs the bearer token on each request (or according to cache settings); the webhook returns username and groups. This enables real-time revocation databases and custom MFA gates, but introduces availability coupling — if the webhook is down, humans cannot authenticate unless fallback authenticators are configured. Webhooks complement OIDC rather than replacing directory federation; you still need a broker or token issuer upstream.
+
+**OIDC JWT authentication** (legacy flags or Structured Authentication Configuration) is the default recommendation for human kubectl and dashboard access because verification is local after JWKS fetch, directory integration happens once at the broker, and group claims map cleanly to RBAC. The tradeoff is delayed revocation bounded by token TTL — design around that with short lifetimes rather than pretending JWTs are session cookies.
 
 ## Understanding LDAP and Active Directory Protocols
 
@@ -70,9 +90,7 @@ Active Directory communicates using the Lightweight Directory Access Protocol (L
 
 Standard LDAP uses port 389. This connection can be unencrypted, or it can be upgraded to an encrypted state using StartTLS. [LDAP StartTLS upgrades a plaintext TCP/389 connection to TLS in-band and is defined in RFC 4513. Conversely, LDAPS (LDAP over SSL/TLS from connection start) uses port 636](https://www.rfc-editor.org/info/rfc4513) and wraps the entire session in TLS before any LDAP traffic is transmitted.
 
-For large Active Directory forests, the Active Directory Global Catalog is highly relevant. It is accessible on [port 3268 (LDAP) and port 3269 (LDAPS)](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/specify-server-port-active-directory-powershell-cmdlet).
-
-Active Directory also imposes specific schema constraints. For example, the Active Directory `sAMAccountName` attribute is widely cited as being limited to 20 characters. Microsoft documents the Active Directory `sAMAccountName` attribute as 20 characters or fewer.
+For large Active Directory forests, the Active Directory Global Catalog is highly relevant and is accessible on [port 3268 (LDAP) and port 3269 (LDAPS)](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/specify-server-port-active-directory-powershell-cmdlet). Active Directory also imposes specific schema constraints — for example, the `sAMAccountName` attribute is documented as 20 characters or fewer, which matters when designing Kubernetes username claims that mirror short login names rather than email addresses.
 
 ## The OpenID Connect (OIDC) Bridge
 
@@ -100,14 +118,14 @@ sequenceDiagram
     AD-->>OIDC: Identity confirmed
     OIDC-->>Dev: ID token with groups claim
     Dev->>API: API request with bearer token
-    API->>OIDC: Validate JWT signature
+    API->>API: Validate JWT signature locally (cached JWKS)
     API->>API: Extract groups claim and run RBAC lookup
     API-->>Dev: Authorized response
 ```
 
 ## Option 1: Keycloak as an Enterprise Identity Broker
 
-Keycloak is a powerful, full-featured open-source identity provider. The Keycloak latest stable release is [26.6.0, released April 8, 2026](https://github.com/keycloak/keycloak/releases/tag/26.6.0). 
+Keycloak is a powerful, full-featured open-source identity provider. It ships frequent releases (the 26.x line is current as of 2026) — always [check the latest Keycloak release](https://github.com/keycloak/keycloak/releases) for security patches before deploying. 
 
 Keycloak supports LDAP and Active Directory user federation deeply, including password validation via LDAP/AD protocols and LDAP password policy enforcement. Furthermore, Keycloak [supports federated client authentication where Kubernetes Service Account tokens (via TokenRequest API or Token Volume Projection) can be used as client credentials](https://github.com/keycloak/keycloak/releases/tag/26.6.0).
 
@@ -146,7 +164,15 @@ After Keycloak is running, configure AD federation through the Admin Console or 
 4. **Create an OIDC client** named `kubernetes` (public client, redirect to `http://127.0.0.1:8000/*`)
 5. **Add a "groups" protocol mapper** to include group memberships in the ID token `groups` claim
 
-> **Pause and predict**: Keycloak requires PostgreSQL, 512MB-2GB RAM, and Java expertise to operate. Under what circumstances would this overhead be justified over the simpler Dex alternative?
+> **Pause and predict**: Keycloak needs an external relational database (PostgreSQL, MariaDB/MySQL, or another supported engine), roughly 512MB-2GB RAM per replica, and JVM operational expertise. Under what circumstances would this overhead be justified over the simpler Dex alternative?
+
+### Keycloak High Availability on Owned Hardware
+
+Production Keycloak on-premises is rarely a single Pod. The reference shape is three Keycloak replicas behind an internal load balancer (metalLB BGP VIP, hardware ADC, or kube-vip), all pointing at a PostgreSQL cluster that holds realm configuration, user federation settings, and client definitions. Session affinity is less critical for kubectl flows (tokens are JWTs validated at the API server) but still matters for admin console changes and browser SSO to Grafana — configure health checks on Keycloak's `--health-enabled` endpoints and fail out unhealthy replicas before engineers hit timeout loops during login.
+
+Certificate rotation for `keycloak.example.com` must be automated: internal CA or cert-manager DNS-01/HTTP-01 against a corporate DNS zone. When issuer TLS expires, every API server JWKS fetch and every kubelogin browser redirect fails simultaneously — treat IdP TLS like control-plane etcd certificates with calendar reminders. Backup PostgreSQL with point-in-time recovery; realm JSON export before major upgrades is cheap insurance when LDAP mapper experiments go wrong.
+
+Keycloak's admin API and realm import/export enable GitOps-style realm promotion: develop mappers in a staging realm, export JSON, review in pull request, import to production. This mirrors how you already promote RoleBindings — identity configuration is infrastructure, not a one-time wizard click. For AD federation specifically, schedule full LDAP sync during maintenance windows when changing group mapper filters; incremental sync every 60 seconds is fine for steady state but full sync rebuilds membership caches when OU structure changes.
 
 ## Option 2: Dex and Pinniped for Lightweight Identity
 
@@ -190,9 +216,15 @@ staticClients:
   secret: $DEX_CLIENT_SECRET
 ```
 
-### Pinniped
+### Pinniped for Multi-Cluster Federation
 
-Another modern tool is Pinniped. The Pinniped architecture consists of two components: the Supervisor (acts as an OIDC server / identity hub) and the Concierge (runs per-cluster, handles credential exchange). Pinniped is another option for Kubernetes authentication and federation; verify its current release and project status directly from the project's own documentation before standardizing on it.
+[Pinniped](https://pinniped.dev/docs/) is a VMware-originated open-source authentication service designed for fleets where many Kubernetes clusters must share one login experience without copying OIDC configuration into every API server manifest. Its architecture splits responsibilities across two deployable components plus a CLI. The **Supervisor** is an OIDC issuer that authenticates users against upstream identity providers — OIDC, LDAP, Active Directory, or GitHub — via Kubernetes custom resources such as `OIDCIdentityProvider`, `LDAPIdentityProvider`, and `ActiveDirectoryIdentityProvider`. After upstream login succeeds, the Supervisor issues its own federation ID tokens scoped to specific clusters or audiences.
+
+The **Concierge** runs inside each workload cluster. It accepts credentials from the Supervisor (or other sources), validates them through `JWTAuthenticator` or webhook authenticator custom resources, and exchanges them for cluster-native credentials the local API server understands — typically short-lived user impersonation tokens or certificates. Users run the `pinniped` CLI as a kubeconfig exec plugin (`pinniped login oidc` with Concierge flags) so one browser login can fan out across dozens of regional clusters without maintaining separate kubelogin profiles per cluster.
+
+Pinniped fits on-prem when Dex alone feels too thin but Keycloak feels too heavy for Kubernetes-only use, especially if you already operate a central Supervisor tier and want GitOps-managed `FederationDomain` resources instead of editing static Dex YAML on every cluster. You can also configure clusters to trust the Supervisor's FederationDomain issuer directly via API server OIDC settings, skipping the Concierge credential exchange when a simpler topology suffices. [The Pinniped architecture documentation](https://pinniped.dev/docs/background/architecture/) describes three login paths: Supervisor plus Concierge exchange, direct upstream OIDC to Concierge, and Supervisor tokens presented directly to an OIDC-configured API server.
+
+Operationally, Pinniped adds another HA surface: Supervisor TLS certificates, FederationDomain DNS, and per-cluster Concierge authenticator CRDs must stay aligned. The payoff is consistent RBAC subject names (`username` and `groups` claim mappings are declared once upstream) and a single place to wire MFA policy before tokens ever reach cluster RBAC. For air-gapped environments, the Supervisor can authenticate against on-prem LDAP/AD without cloud IdP dependencies — the same reason Keycloak and Dex remain popular, but with multi-cluster ergonomics Dex does not provide natively.
 
 ### Dex vs Keycloak Decision Matrix
 
@@ -212,13 +244,15 @@ Another modern tool is Pinniped. The Pinniped architecture consists of two compo
 
 Many enterprises have moved their directories to the cloud. Microsoft Azure Active Directory (Azure AD) was officially renamed to Microsoft Entra ID on July 11, 2023.
 
-If you integrate Kubernetes with Entra ID, the Microsoft Entra ID OIDC discovery document URL format for tenant-specific apps is: [`https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration`](https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc). You would supply this as the issuer URL to your cluster.
+If you integrate Kubernetes with Entra ID, the Microsoft Entra ID OIDC discovery document URL format for tenant-specific apps is: [`https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration`](https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc). You would supply the issuer URL `https://login.microsoftonline.com/{tenant}/v2.0/` to the cluster — the API server appends the discovery path automatically per OpenID Connect Discovery 1.0.
+
+Hybrid on-prem operations often keep authoritative HR identity in cloud Entra ID while Kubernetes runs on owned hardware. That is still an on-prem *cluster* problem: you are not using EKS/GKE managed IAM; you are configuring your self-hosted API server to trust Microsoft's issuer, storing JWKS caches on control-plane nodes, and mapping Entra groups into Kubernetes RBAC with the same `oidc:` prefix discipline as AD-backed Keycloak. Register a tenant-specific application in Entra, enable ID tokens, configure redirect URIs for kubelogin (`http://127.0.0.1:8000` or device-code flows), and grant API permissions only for what the cluster needs — typically `openid`, `profile`, and group claims via optional claims configuration. Conditional Access policies in Entra become your MFA and device-compliance gate before any JWT reaches the cluster.
+
+For regulated environments that forbid cloud directory dependency, Entra ID is the wrong anchor — but when the enterprise has already standardized on Microsoft 365 identity, wiring Kubernetes to Entra avoids duplicating user lifecycle in a second on-prem IdP. The operational tradeoff is egress dependency: API server startup and periodic JWKS refresh require HTTPS reachability to `login.microsoftonline.com`, unlike a Keycloak instance on the same datacenter VLAN.
 
 ## Configuring the Kubernetes API Server
 
-Historically, configuring OIDC required adding specific flags to the `kube-apiserver`. 
-
-Regardless of whether you use Keycloak or Dex, the API server configuration is the same. These flags tell the API server where to find the OIDC provider's signing keys and which JWT claims to extract for username and group information.
+Historically, configuring OIDC required adding specific flags to the `kube-apiserver`, and regardless of whether you use Keycloak or Dex, the legacy flag shape is the same — they tell the API server where to find the OIDC provider's signing keys and which JWT claims to extract for username and group information.
 
 Kubernetes kube-apiserver legacy OIDC flags are: [`--oidc-issuer-url` (HTTPS only), `--oidc-client-id`, `--oidc-username-claim` (default: sub), `--oidc-groups-claim`, `--oidc-ca-file`, `--oidc-username-prefix`, and `--oidc-groups-prefix`](https://kubernetes.io/docs/reference/access-authn-authz/authentication/). 
 
@@ -265,9 +299,7 @@ spec:
 
 ### The Transition to Structured Authentication Configuration
 
-Modern clusters (v1.35+) are shifting toward Structured Authentication Configuration. 
-
-Kubernetes documentation describes `AuthenticationConfiguration` as beta in v1.30 and stable in v1.34; rely on current upstream authentication documentation when planning migrations from legacy `--oidc-*` flags.
+Modern clusters running Kubernetes v1.35 have Structured Authentication Configuration available as the GA path — the feature graduated to stable in v1.34 per [the v1.34 release notes](https://kubernetes.io/blog/2025/08/27/kubernetes-v1-34-release/) and [upstream authentication documentation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/), so plan migrations from legacy `--oidc-*` flags rather than investing in new single-issuer flag setups.
 
 This new method uses a YAML configuration file rather than command-line flags. [The `--authentication-config` flag is mutually exclusive with the legacy `--oidc-*` kube-apiserver flags; using both causes an immediate startup failure.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/)
 
@@ -275,6 +307,35 @@ Key advantages of the new configuration:
 - [AuthenticationConfiguration supports configuring multiple simultaneous JWT/OIDC issuers, unlike the legacy `--oidc-*` flags which support only a single issuer.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/)
 - AuthenticationConfiguration supports hot-reload: changes to the config file are applied without restarting the kube-apiserver.
 - AuthenticationConfiguration supports CEL (Common Expression Language) for claim validation rules and claim mapping expressions.
+
+Here is a representative `AuthenticationConfiguration` fragment for an on-prem cluster that trusts a Keycloak realm backed by Active Directory, with explicit group prefixing and a maximum token lifetime enforced via CEL:
+
+```yaml
+# /etc/kubernetes/authn/authentication-config.yaml
+apiVersion: apiserver.config.k8s.io/v1
+kind: AuthenticationConfiguration
+jwt:
+- issuer:
+    url: https://keycloak.example.com/realms/kubernetes
+    audiences:
+    - kubernetes
+    audienceMatchPolicy: MatchAny
+  claimValidationRules:
+  - expression: 'claims.exp - claims.iat <= 3600'
+    message: "token lifetime cannot exceed 3600 seconds"
+  claimMappings:
+    username:
+      claim: preferred_username
+      prefix: "oidc:"
+    groups:
+      claim: groups
+      prefix: "oidc:"
+  userValidationRules:
+  - expression: '!user.username.startsWith("system:")'
+    message: "username cannot use reserved system: prefix"
+```
+
+Mount this file on control-plane nodes and pass `--authentication-config=/etc/kubernetes/authn/authentication-config.yaml` to `kube-apiserver`. Remove every legacy `--oidc-*` flag — [mutual exclusivity is enforced at startup](https://kubernetes.io/docs/reference/access-authn-authz/authentication/). For non-standard discovery URLs (some brokers host JWKS off the default path), set `issuer.discoveryURL` explicitly in the structured file rather than guessing flag equivalents.
 
 ## RBAC Mapping to Corporate Groups
 
@@ -349,6 +410,18 @@ subjects:
   apiGroup: rbac.authorization.k8s.io
 ```
 
+### Group→RBAC Mapping at Scale
+
+Enterprise directories rarely stop at a handful of groups. Platform teams eventually manage dozens of `k8s-*` security groups nested under organizational units, plus dynamic membership from HR systems. The sustainable pattern is **group-as-role**: every Kubernetes permission tier maps to exactly one AD group with a predictable name (`k8s-dev-frontend`, `k8s-sre`, `k8s-cluster-admins`), and RBAC bindings reference those groups — never individual users in ClusterRoleBindings except for temporary break-glass accounts.
+
+Nested AD groups introduce a subtle failure mode. Keycloak LDAP federation and Dex LDAP connectors must be configured to expand nested membership into flat group lists in the JWT `groups` claim. If a user sits in `k8s-dev-frontend` only through nesting inside `All-Engineering`, but the mapper emits parent groups only, RBAC bindings on the leaf group never match. Test with a real nested account during design, decoding tokens before you declare the integration complete.
+
+The **header-size problem** appears when brokers place every AD group into the token. Large enterprises sometimes attach hundreds of group memberships to each employee; JWTs grow until HTTP headers exceed proxy limits (common nginx defaults around 8 KB). Mitigations include: (1) dedicated Kubernetes groups with minimal membership, separate from all-purpose mailing lists; (2) Keycloak group mappers that filter to `OU=K8s Groups` only; (3) Dex `groupSearch` base DN scoped narrowly; (4) CEL group mapping expressions that intersect token groups with an allow-list. Never bind `cluster-admin` to a group that HR also uses for company-wide distribution.
+
+Naming conventions should encode scope: `k8s-global-*` for ClusterRoleBindings, `k8s-<namespace>-*` for namespace Roles, and `k8s-<region>-*` when one AD forest backs multiple independent clusters. Document the convention in your internal runbook so auditors can trace `oidc:k8s-eu-platform` from Entra or AD through Keycloak to a RoleBinding in Git. Least privilege means defaulting new hires to a read-only group (`k8s-readonly`) and requiring ticket-driven addition to edit groups — the OIDC path makes that HR workflow sufficient because group membership changes propagate on the next token refresh without reissuing certificates.
+
+GitOps amplifies consistency: store RoleBindings in the same repository ArgoCD or Flux applies to cluster configuration. When a new namespace `payments` launches, add `k8s-dev-payments` in AD and a matching RoleBinding manifest in Git; CI validates that every `oidc:` group string matches an existing AD group naming pattern. This is how five regional clusters stay aligned — one directory, one broker, one RBAC repo — rather than five divergent static token files nobody remembers to edit.
+
 ## Configuring kubectl for OIDC Login
 
 Developers need a way to authenticate via OIDC from the command line. The `kubelogin` plugin handles this beautifully:
@@ -365,6 +438,7 @@ kubectl config set-credentials oidc-user \
   --exec-arg=get-token \
   --exec-arg=--oidc-issuer-url=https://keycloak.example.com/realms/kubernetes \
   --exec-arg=--oidc-client-id=kubernetes \
+  --exec-arg=--oidc-client-secret=$CLIENT_SECRET \
   --exec-arg=--oidc-extra-scope=groups
 
 # Set context to use OIDC user
@@ -378,15 +452,21 @@ kubectl get pods -n frontend-app
 # Browser opens -> AD login page -> redirect back -> token cached
 ```
 
+The [kubelogin plugin](https://github.com/int128/kubelogin) (installed via Krew as `oidc-login`) implements the Kubernetes exec credential plugin protocol. On each `kubectl` invocation it checks cached tokens in `~/.kube/cache/oidc-login/`; if the access token is still valid, it returns it silently. If expired, it uses a refresh token (when the IdP issued one with the `offline_access` scope) to obtain a new access token without opening a browser. Only when refresh fails — password changed, account disabled, MFA policy updated — does kubelogin launch the authorization-code or device-code flow again.
+
+Device-code flow matters in air-gapped jump hosts without a local browser: `kubectl oidc-login get-token --grant-type=device-code` displays a one-time code the user completes on a trusted workstation. Auth-code flow with `http://127.0.0.1:8000` redirect URIs is simpler for developer laptops but requires loopback reachability from the browser back to the machine running kubectl. Configure Keycloak or Dex redirect URIs to match exactly — trailing slashes and port numbers must align or login fails with opaque `redirect_uri mismatch` errors.
+
+**Long-lived service account tokens for human users are an anti-pattern.** Before Kubernetes 1.24, auto-generated Secret-based SA tokens never expired; teams reused them in kubeconfig files for people. Bound tokens via TokenRequest or projected volumes are correct for CI/CD workloads with scoped audiences and TTL, but humans should always flow through OIDC with refresh and directory-backed revocation. If your security audit finds `token: <static>` entries in engineers' kubeconfig files, migrate them to exec plugins and delete the Secrets.
+
+Token refresh intervals interact directly with offboarding SLAs. A 60-minute access token with a 24-hour refresh token means a terminated employee might silently reauthenticate for up to a day if refresh tokens remain valid. Tighten access token TTL (15–60 minutes is common), shorten refresh token lifetime in Keycloak realm settings, and require re-login daily for highly privileged groups via Conditional Access or Keycloak authentication flows attached to `k8s-cluster-admins` mappers.
+
 ## SSO for Kubernetes Dashboard and Tools
 
-Once OIDC is configured centrally, you can extend Single Sign-On (SSO) to other web-based Kubernetes operational tools. 
+Once OIDC is configured centrally, you can extend Single Sign-On (SSO) to other web-based Kubernetes operational tools so engineers authenticate once against the same Keycloak realm or Dex issuer they already use for kubectl.
 
 ### OAuth2 Proxy for Web UIs
 
-For tools without native OIDC support, you can deploy `oauth2-proxy` as a secure reverse proxy that handles authentication on behalf of the application. [The oauth2-proxy was accepted into the CNCF at the Sandbox maturity level on October 2, 2025. Its latest stable release is v7.15.1, released March 23, 2026.](https://www.cncf.io/projects/oauth2-proxy/)
-
-Deploy it in the same namespace as the target tool, configure it with the OIDC issuer URL and client credentials, and point it upstream to the tool's internal service.
+For tools without native OIDC support, deploy `oauth2-proxy` as a secure reverse proxy that handles authentication on behalf of the application. [oauth2-proxy was accepted into the CNCF at the Sandbox maturity level on October 2, 2025.](https://www.cncf.io/projects/oauth2-proxy/) It releases frequently with security fixes — always run a current patched release and check the project's [security advisories](https://github.com/oauth2-proxy/oauth2-proxy/security/advisories) (older 7.15.x releases were affected by an authentication-bypass CVE). Deploy it in the same namespace as the target tool, configure it with the OIDC issuer URL and client credentials, and point it upstream to the tool's internal service.
 
 ```bash
 # Key oauth2-proxy flags for Kubernetes Dashboard:
@@ -399,7 +479,9 @@ Deploy it in the same namespace as the target tool, configure it with the OIDC i
 
 ### Tools That Support OIDC Natively
 
-Many modern tools natively integrate with your OIDC provider, allowing you to standardize on one centralized authentication authority. For example, Grafana uses the `auth.generic_oauth` directive in its configuration.
+Many modern tools natively integrate with your OIDC provider, allowing you to standardize on one centralized authentication authority instead of maintaining separate local admin passwords per tool. Grafana uses the `auth.generic_oauth` directive in `grafana.ini` with `auth_url`, `token_url`, and `api_url` pointing at your Keycloak realm endpoints discovered from `/.well-known/openid-configuration`. ArgoCD can embed Dex or delegate to external OIDC — on-prem GitOps clusters often share the same `kubernetes` client ID and group mappers so deployment privileges track the same AD groups as kubectl access.
+
+Harbor registry OIDC integration maps group claims to Harbor roles (admin, developer, guest) and eliminates robot-account sharing for human pushes. Vault's `vault auth enable oidc` path is relevant when secrets management shares the corporate directory — note that [HashiCorp Vault licensing moved to BUSL](https://www.hashicorp.com/license-faq) in August 2023; organizations needing a fully open-source secrets plane may standardize on [OpenBao](https://openbao.org/) while keeping the same OIDC integration pattern. The unifying principle: one issuer URL, one set of group mappers, many downstream clients — you pay federation complexity once at the broker instead of per application.
 
 | Tool | OIDC Support | Configuration |
 |------|-------------|---------------|
@@ -409,6 +491,88 @@ Many modern tools natively integrate with your OIDC provider, allowing you to st
 | Harbor | Native OIDC | Admin > Configuration > Authentication |
 | Vault | Native OIDC | `vault auth enable oidc` |
 | Gitea | Native OAuth2 | Admin > Authentication Sources |
+
+## Failure Modes, Break-Glass, and Hardening
+
+OIDC federation shifts availability risk from Kubernetes to your identity tier. **IdP outage equals cluster lockout** for every human who lacks an alternate credential — not because the API server stops running, but because kubelogin cannot obtain fresh tokens and existing tokens eventually expire. On-prem teams should document and annually test break-glass access: one or two `cluster-admin` bindings tied to x509 client certificates stored in hardware-backed safes, not in engineers' daily kubeconfig files. Break-glass certs should use short planned lifetimes with calendar-driven rotation, separate from the corporate OIDC path, and every use should generate an auditable API log entry with the certificate's subject CN.
+
+Clock skew breaks JWT validation silently. API servers compare `exp` and `nbf` claims against node time; if NTP drifts on control-plane nodes or IdP VMs exceed typical skew tolerance (often ~60 seconds), valid users see `Unauthorized` with unhelpful messages. Monitor `clock_sync` on every host that participates in authentication — API servers, Keycloak nodes, Dex pods, and domain controllers — and alert before skew crosses seconds, not minutes.
+
+mTLS between brokers and directory servers is non-optional for production. LDAP bind passwords traverse the wire on every federation sync; use LDAPS (636) or LDAP+StartTLS on 389 with verified CA chains (`rootCA` in Dex config, Java truststores in Keycloak). Pin corporate CA certificates in API server `oidc-ca-file` or `AuthenticationConfiguration` `certificateAuthority` PEM blocks rather than relying on public internet CAs for internal issuer hostnames.
+
+Audit trails depend on consistent username claims. Choose `preferred_username` or `email` deliberately — `sub` is stable but opaque in log review. Kubernetes audit logs record the authenticated user string after prefixing; SIEM correlation maps that to HR records only if you aligned claims with directory `sAMAccountName` or corporate email. Enable API server audit logging at `RequestResponse` level for `SubjectAccessReview` and mutating verbs on sensitive namespaces when compliance requires who-did-what reconstruction.
+
+Webhook token authenticators remain relevant when OIDC alone cannot meet policy — for example, a central session service that tracks revocation in real time. The tradeoff is latency and availability: every request may call the webhook, unlike JWKS-cached OIDC. Some regulated on-prem shops run OIDC for developers and a TokenReview webhook for contractors with instant kill switches. Evaluate operational cost before adding webhooks; OIDC with five-minute tokens plus directory disable is often sufficient.
+
+Hypothetical scenario: a datacenter network partition isolates worker nodes from the identity VLAN but leaves the API server reachable from engineer laptops. OIDC-authenticated kubectl continues working until tokens expire because validation is local; only refresh and new logins fail. Runbooks should state whether operators should extend partition tolerance by temporarily issuing break-glass certs or fail closed — there is no cloud provider support ticket to escalate.
+
+## Cost Lens: Self-Hosting Identity On Premises
+
+Running identity on owned hardware trades cloud IdP subscription fees for CapEx, rack space, and headcount. A highly available Keycloak deployment typically spans two or more application replicas plus a managed relational database such as PostgreSQL or MariaDB (three nodes for quorum), load balancers, and TLS certificates — as a rough planning estimate, often 4–8 vCPU and several gigabytes of RAM dedicated to identity before counting directory infrastructure you already operate. Dex is lighter (single-replica Go binaries, optional Kubernetes storage backend) but still needs HA load balancing and backup of its Kubernetes CRD-backed state (or a Postgres/MySQL backend) if you keep identity state in-cluster.
+
+**TCO drivers** beyond software licenses include: domain controller capacity for LDAP bind and group lookup load during morning login storms; dedicated service accounts per broker with password rotation ceremonies; HSM or enterprise CA integration for issuer TLS; monitoring and on-call for the identity namespace; and security review cycles whenever realm mappers change. Depreciation cycles for identity VMs align with general server refresh (often three to five years) — budget Keycloak major-version upgrades and PostgreSQL minor upgrades in the same window.
+
+**When self-hosted on-prem IdP wins** over cloud Entra/Okta: air-gapped or sovereign-cloud requirements where egress to `login.microsoftonline.com` is forbidden; existing AD forest with decades of group policy investment; egress-sensitive token validation that must stay on LAN; and steady high utilization where per-user SaaS pricing exceeds amortized hardware. **When it does not win**: small clusters with fewer than twenty humans where a cloud IdP's MFA and Conditional Access are effectively free at low seat counts; spiky contractor populations needing instant federation without operating LDAP sync; and organizations without platform engineers to patch Keycloak on CVE release days.
+
+Labor is the hidden majority cost. Cloud managed Kubernetes bundles human IAM elsewhere; on-prem you staff integration runbooks — nested group expansion, token header limits, Structured Authentication migrations, quarterly access reviews mapping AD groups to RBAC manifests. Factor 0.25–0.5 FTE platform engineering ongoing, not just the initial LDAP mapper ticket. Buying a support contract for Keycloak (or Red Hat build) may be cheaper than emergency weekend LDAP debugging when HR reorganizations rename every security group simultaneously.
+
+## Patterns and Anti-Patterns
+
+### Proven Patterns
+
+| Pattern | When to Use | Why It Scales |
+|---------|-------------|---------------|
+| **Group-as-role with `oidc:` prefixes** | Any AD/LDAP-backed fleet | HR changes group membership; RBAC stays static in Git. Prefixes prevent collision with `system:masters` and other reserved identities. |
+| **Single OIDC broker per organization** | Multi-cluster on-prem | One Keycloak realm or Pinniped Supervisor fans out to many API servers; directory bind credentials live in one hardened tier. |
+| **Structured Authentication Configuration** | Kubernetes v1.34+ | Multiple issuers, CEL lifetime caps, hot-reload — avoids API server restart for every new contractor IdP. |
+| **Short-lived access tokens + exec plugins** | All human kubectl access | Limits blast radius of stolen tokens; pairs with directory disable for offboarding. |
+| **Scoped LDAP service accounts** | Keycloak/Dex federation | Read-only bind DN in a dedicated OU; compromise of broker does not grant AD write paths. |
+
+### Anti-Patterns
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|-------------------|
+| **Per-user ClusterRoleBindings** | Offboarding requires editing Kubernetes objects; audits cannot rely on HR workflows. | Bind ClusterRoles to `oidc:` groups only; keep users out of RBAC manifests. |
+| **Omitting username/group prefixes** | AD group `system:masters` or user `admin` grants unintended superuser access. | Always set prefix flags or CEL `prefix` fields — treat as mandatory, not optional. |
+| **Dumping all AD groups into JWTs** | Proxies reject oversized Authorization headers; login fails unpredictably for senior staff with many memberships. | Filter mappers to `OU=K8s Groups`; intersect claims with allow-lists in CEL. |
+| **Static SA tokens in human kubeconfig** | Non-expiring credentials bypass directory revocation entirely. | `kubelogin` exec plugin with OIDC; bound tokens only for CI workloads. |
+| **Single-node Keycloak without DB backup** | Identity outage blocks all cluster access; restore from empty PVC loses realm config. | HA replicas + external PostgreSQL with tested restore + break-glass x509 documented. |
+| **Skipping break-glass testing** | Real IdP outage during change window leaves team locked out for hours. | Quarterly test x509 `cluster-admin` login from sealed credentials; log and rotate. |
+
+## Decision Framework: Choosing Your Identity Architecture
+
+Use this flowchart when scoping a new on-prem cluster's human authentication design:
+
+```mermaid
+flowchart TD
+    Start["Human access needed for on-prem cluster"]
+    Start --> Airgap{"Air-gap or data<br/>sovereignty required?"}
+    Airgap -->|Yes| OnPremIdP["Self-hosted OIDC broker<br/>(Keycloak or Dex) + AD/LDAP"]
+    Airgap -->|No| MultiCluster{"More than three<br/>clusters?"}
+    MultiCluster -->|Yes| PinnipedQ{"Need unified login<br/>across all clusters?"}
+    PinnipedQ -->|Yes| Pinniped["Pinniped Supervisor + Concierge<br/>or Supervisor as OIDC issuer"]
+    PinnipedQ -->|No| CloudOk{"Entra/Okta already<br/>enterprise standard?"}
+    MultiCluster -->|No| CloudOk
+    CloudOk -->|Yes| CloudIdP["API server trusts cloud issuer URL<br/>+ group claim mapping"]
+    CloudOk -->|No| Features{"Need MFA UI, SAML,<br/>app catalog beyond K8s?"}
+    Features -->|Yes| Keycloak["Keycloak HA + PostgreSQL<br/>federate to AD"]
+    Features -->|No| Dex["Dex LDAP connector<br/>lightweight OIDC"]
+    OnPremIdP --> K8sVersion{"Kubernetes >= 1.34?"}
+    Keycloak --> K8sVersion
+    Dex --> K8sVersion
+    Pinniped --> K8sVersion
+    CloudIdP --> K8sVersion
+    K8sVersion -->|Yes| AuthConfig["Structured AuthenticationConfiguration<br/>multiple issuers + CEL rules"]
+    K8sVersion -->|No| LegacyFlags["Legacy --oidc-* flags<br/>plan migration"]
+```
+
+| Decision | Choose Keycloak | Choose Dex | Choose Pinniped | Choose Cloud IdP Direct |
+|----------|-----------------|------------|-------------------|-------------------------|
+| Primary constraint | MFA, SAML, many apps need SSO | K8s-only, minimal ops | Many clusters, one login | M365/Entra already standard |
+| Team skill | Java ops, DB HA comfort | Go YAML, small teams | CRD/GitOps fluency | Cloud IAM admins available |
+| Availability model | HA app + PostgreSQL | HA load balancer + Dex replicas | Supervisor HA + per-cluster Concierge | Microsoft/Okta SLA |
+| Typical RAM | 512 MB–2 GB per replica | 50–100 MB per replica | Supervisor + Concierge pods | None on-prem |
+| Directory sync | Full federation + mappers | Query-on-login LDAP | Upstream via Supervisor CRDs | Cloud directory only |
 
 ## Did You Know?
 
@@ -517,12 +681,17 @@ You can natively support both identity providers simultaneously by leveraging th
    ```bash
    kubectl oidc-login get-token \
      --oidc-issuer-url=https://dex.identity.svc.cluster.local:5556 \
-     --oidc-client-id=kubernetes
+     --oidc-client-id=kubernetes \
+     --oidc-client-secret=$DEX_CLIENT_SECRET
    ```
 
 5. **Examine the Token**: Decode the resulting JWT to confirm that the `groups` and `email` claims map correctly to the attributes defined in your Dex static user configuration.
 
 6. **Implement an OAuth2 Proxy**: Deploy a sample web service (e.g., an Nginx welcome page) alongside `oauth2-proxy`. Configure `oauth2-proxy` to use the Dex issuer and verify that accessing the web service redirects you to the Dex login page.
+
+7. **Optional Structured Authentication path**: On a lab cluster running v1.34+, replace `--oidc-*` flags with an `AuthenticationConfiguration` file referencing the Dex issuer. Confirm hot-reload by adding a CEL `claimValidationRules` entry and observing the API server pick up changes without Pod restart (watch API server logs for authentication config reload messages).
+
+8. **Document token claims**: Save a decoded JWT sample (header and payload only — never commit live tokens) in your team runbook showing `preferred_username`, `groups`, `iss`, `aud`, and `exp` fields. This becomes the reference when debugging Forbidden errors months later.
 
 ### Success Criteria
 - [ ] Kind cluster created with OIDC API server flags or Structured Authentication config.
@@ -540,6 +709,9 @@ You can natively support both identity providers simultaneously by leveraging th
 4. **Use username and group prefixes** to prevent privilege escalation via name collision.
 5. **Short token lifetimes** limit the window during which a disabled account may still have access through an unexpired token.
 6. **Modernise with Structured Authentication**: Transition to `AuthenticationConfiguration` in Kubernetes v1.35 to support multiple IdPs, hot-reloading, and CEL-based validation.
+7. **Budget identity as infrastructure**: HA brokers, directory integration labor, and break-glass ceremonies are recurring on-prem costs — not a one-time LDAP ticket.
+
+Treat enterprise identity as control-plane infrastructure with the same change management, monitoring, and disaster-recovery rigor you apply to etcd backups. A cluster without working authentication is effectively down for humans even when every Pod is healthy.
 
 ## Next Module
 
@@ -557,3 +729,8 @@ Continue to [Module 6.4: Compliance for Regulated Industries](../module-6.4-comp
 - [github.com: v2.45.1](https://github.com/dexidp/dex/releases/tag/v2.45.1) — The upstream repository README covers Dex's role and the upstream release page covers the version date.
 - [learn.microsoft.com: v2 protocols oidc](https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc) — Microsoft Learn documents both the authority URL shape and the well-known discovery path.
 - [cncf.io: oauth2 proxy](https://www.cncf.io/projects/oauth2-proxy/) — The CNCF project page gives the Sandbox acceptance date and the upstream GitHub release page gives the version date.
+- [pinniped.dev: documentation](https://pinniped.dev/docs/) — Official Pinniped docs for Supervisor, Concierge, and architecture paths.
+- [pinniped.dev: architecture](https://pinniped.dev/docs/background/architecture/) — Supervisor and Concierge credential exchange model.
+- [github.com: kubelogin](https://github.com/int128/kubelogin) — kubectl oidc-login plugin for exec-based OIDC authentication.
+- [kubernetes.io: v1.34 release](https://kubernetes.io/blog/2025/08/27/kubernetes-v1-34-release/) — Structured Authentication Configuration graduation to stable.
+- [openbao.org: docs](https://openbao.org/docs/) — OpenBao documentation; open-source secrets management fork with OIDC auth paths (alternative when Vault BUSL licensing applies).

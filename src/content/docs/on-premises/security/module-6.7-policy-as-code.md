@@ -1,6 +1,5 @@
 ---
 citations_verified: true
-revision_pending: true
 title: "Policy as Code & Governance"
 description: "Implement cluster governance, admission control, and runtime security using OPA Gatekeeper, Kyverno, Falco, and Tetragon."
 slug: on-premises/security/module-6.7-policy-as-code
@@ -8,15 +7,7 @@ sidebar:
   order: 67
 ---
 
-## Why This Module Matters
-
-A cluster-wide admission policy change can cascade into control-plane instability if critical system namespaces or dependencies are not exempted. For example, a policy that blocks essential system pods from restarting can turn a routine rollout into a widespread outage.
-
-That pattern, a policy intended to harden the platform instead taking it offline, is not unique to that firm. It is the canonical bare-metal Kubernetes failure mode, and it explains why senior platform engineers treat policy as code as a higher-risk surface than the workloads it governs. On managed platforms like EKS or GKE the cloud provider runs the control plane, isolates it from your workloads, and gives you a fast revert button when an admission policy goes wrong. On bare-metal, when the policy engine deadlocks the API server, you are SSH'd into a node at 02:00 editing webhook configurations by hand to restore quorum. The blast radius of a bad policy is the same as the blast radius of a bad kernel patch, because in both cases the control loop you depend on to recover is the very thing that is broken.
-
-That is the world this module prepares you for. You will learn to design admission and runtime policies that scale from a five-node test cluster to a thousand-node bare-metal estate without becoming a single point of failure. You will learn the trade-offs between OPA Gatekeeper, Kyverno, and the new native ValidatingAdmissionPolicy expressed in the Common Expression Language, and when each is the right answer. You will understand why runtime tools such as Falco and Tetragon are non-negotiable on bare-metal, where you cannot lean on cloud provider security hubs to detect a compromised node. By the end you will be able to make architecture decisions that a security review board can defend, and to debug the failure modes that crater clusters in the middle of the night.
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 By the end of this module you will be able to:
 
@@ -25,6 +16,14 @@ By the end of this module you will be able to:
 - **Implement** a tested policy pipeline that lints, unit-tests, and integration-tests Gatekeeper or Kyverno policies in CI before they ever reach a live cluster, using `gator test` and `kyverno test` against a representative corpus of valid and invalid manifests.
 - **Debug** a runtime security incident by tracing a syscall-level alert from Falco or a kernel-level enforcement action from Tetragon back to the originating workload, identifying whether the eBPF probe failed open, was rate-limited by ring buffer drops, or detected a true positive.
 - **Evaluate** whether to adopt asynchronous detection (Falco) or synchronous enforcement (Tetragon) for a given workload class, accounting for kernel version constraints, eBPF support, dropped event cost, and the operational complexity of running in-kernel kill actions in production.
+
+## Why This Module Matters
+
+A cluster-wide admission policy change can cascade into control-plane instability if critical system namespaces or dependencies are not exempted. For example, a policy that blocks essential system pods from restarting can turn a routine rollout into a widespread outage.
+
+That pattern, a policy intended to harden the platform instead taking it offline, is not unique to that firm. It is the canonical bare-metal Kubernetes failure mode, and it explains why senior platform engineers treat policy as code as a higher-risk surface than the workloads it governs. On managed platforms like EKS or GKE the cloud provider runs the control plane, isolates it from your workloads, and gives you a fast revert button when an admission policy goes wrong. On bare-metal, when the policy engine deadlocks the API server, you are SSH'd into a node at 02:00 editing webhook configurations by hand to restore quorum. The blast radius of a bad policy is the same as the blast radius of a bad kernel patch, because in both cases the control loop you depend on to recover is the very thing that is broken.
+
+That is the world this module prepares you for. You will learn to design admission and runtime policies that scale from a five-node test cluster to a thousand-node bare-metal estate without becoming a single point of failure. You will learn the trade-offs between OPA Gatekeeper, Kyverno, and the new native ValidatingAdmissionPolicy expressed in the Common Expression Language, and when each is the right answer. You will understand why runtime tools such as Falco and Tetragon are non-negotiable on bare-metal, where you cannot lean on cloud provider security hubs to detect a compromised node. By the end you will be able to make architecture decisions that a security review board can defend, and to debug the failure modes that crater clusters in the middle of the night.
 
 ## The Governance Architecture
 
@@ -60,13 +59,13 @@ sequenceDiagram
 
 The two phases serve genuinely different purposes. [**Mutating admission** modifies the incoming object: injecting sidecars, appending default labels, rewriting image references to use a private registry mirror. The mutating phase is a chance to make the request acceptable before anyone judges it. **Validating admission** inspects the post-mutation object and strictly allows or denies the request, with no opportunity to fix it.](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) That ordering is what allows the canonical pattern of "mutate to add the missing label, then validate that the label is present" to work as a single coherent policy.
 
-:::caution[War Story: The Webhook Deadlock]
+:::caution[Failure Mode: The Webhook Deadlock]
 A validating webhook that covers critical system namespaces can deadlock a cluster if the webhook service becomes unavailable, because replacement pods may be blocked from admission. Exempt critical namespaces such as `kube-system` and the policy engine's own namespace, and [scope requests carefully with `namespaceSelector` or `matchConditions`](https://kubernetes.io/docs/concepts/cluster-administration/admission-webhooks-good-practices/) so the cluster can recover without manual intervention.
 :::
 
 ## Native Validating Admission Policy with CEL
 
-Before choosing an external engine you should understand the most important shift in Kubernetes admission control of the last three releases. [Starting in Kubernetes v1.30, **ValidatingAdmissionPolicy** is a stable feature. It natively integrates the Common Expression Language (CEL) into the API server](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy), eliminating the network round-trip to an external webhook and removing the entire class of webhook-deadlock outages described above. [Policies are written as CRDs that contain CEL expressions evaluated in-process; the API server reads the policy on every request and applies it without ever leaving its own process boundary.](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy) [It supports `validationActions` values of `Deny`, `Warn`, and `Audit`, with the constraint that `Deny` and `Warn` cannot be applied to the same policy together.](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy) [**MutatingAdmissionPolicy** entered beta in Kubernetes v1.34 (requiring a feature gate and runtime-config flag)](https://kubernetes.io/docs/reference/access-authn-authz/mutating-admission-policy/), [giving the same in-process treatment to mutation.](https://kubernetes.io/docs/reference/access-authn-authz/mutating-admission-policy/)
+Before choosing an external engine you should understand the most important shift in Kubernetes admission control of the last three releases. [Starting in Kubernetes v1.30, **ValidatingAdmissionPolicy** is a stable feature. It natively integrates the Common Expression Language (CEL) into the API server](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy), eliminating the network round-trip to an external webhook and removing the entire class of webhook-deadlock outages described above. [Policies are written as CRDs that contain CEL expressions evaluated in-process; the API server reads the policy on every request and applies it without ever leaving its own process boundary.](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy) [It supports `validationActions` values of `Deny`, `Warn`, and `Audit`, with the constraint that `Deny` and `Warn` cannot be applied to the same policy together.](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy) [**MutatingAdmissionPolicy** entered beta in Kubernetes v1.34 (requiring a feature gate and runtime-config flag) and reached stable in v1.36](https://kubernetes.io/docs/reference/access-authn-authz/mutating-admission-policy/), [giving the same in-process treatment to mutation](https://kubernetes.io/docs/reference/access-authn-authz/mutating-admission-policy/) — verify the exact feature state for your cluster's Kubernetes version.
 
 The practical implication is significant. For simple structural checks ("disallow `:latest`", "require labels", "block hostPath"), CEL policies are now the cheapest, lowest-latency, and most operationally safe option available. Both Gatekeeper and Kyverno have responded by adding CEL-based policy types of their own that compile down to native ValidatingAdmissionPolicy resources, so the engines orchestrate native CEL where it suffices and fall back to webhooks only for logic that genuinely exceeds CEL's expressiveness. The decision tree for new policies is therefore: try CEL first; fall back to a webhook engine when you need cross-resource lookups, generated resources, complex string manipulation, or external data calls.
 
@@ -308,7 +307,7 @@ eBPF tools require modern kernels with BTF enabled. If you operate bare-metal no
 1. **Pod Security Policy was deprecated three full minor releases before its removal**, an unusually long deprecation window driven by the realisation that PSP had no clean migration path. The Kubernetes community treated the PSP-to-PSA migration as a forcing function for the entire admission-control ecosystem and used the experience to design the much shorter deprecation cycles for ValidatingAdmissionPolicy graduation.
 2. **Rego's name comes from "regere," the Latin verb "to rule"**, reflecting OPA's design intent as a general-purpose rules engine rather than a Kubernetes-specific tool. OPA is used outside Kubernetes for API authorisation in service meshes, Terraform plan validation, and SQL row-level security; Gatekeeper is just the most visible application of the underlying engine.
 3. **eBPF programs are formally verified before they load.** The Linux kernel's eBPF verifier statically analyses every eBPF program for safety before it runs, rejecting anything with unbounded loops, out-of-bounds memory access, or unprivileged kernel pointer dereferences. This verification is what makes it safe to load runtime security tools like Tetragon into the same kernel that handles your production traffic; a buggy eBPF probe simply fails to load rather than crashing the node.
-4. **Kyverno's generation feature was originally added to solve a multi-tenancy onboarding problem at Nirmata**, the company that founded the project. Their platform team was manually creating a NetworkPolicy, ResourceQuota, and default ServiceAccount for every new tenant namespace, and the toil eventually justified building generation as a first-class policy primitive. The feature now ships in dozens of platform engineering reference architectures.
+4. **Kyverno can *generate* resources, not just validate or mutate them.** A `generate` rule can auto-populate every new tenant namespace with a default NetworkPolicy, ResourceQuota, and ServiceAccount the moment it is created — the "policy that creates objects" model that distinguishes Kyverno from validation-only engines and makes it a common choice for multi-tenancy onboarding in platform-engineering reference architectures.
 
 ## Common Mistakes
 
@@ -595,28 +594,27 @@ kind delete cluster --name policy-lab
 
 If the Kyverno admission controller does not become ready within 90 seconds, check `kubectl logs -n kyverno -l app.kubernetes.io/component=admission-controller` for OOMKill events; the chart's default memory request is conservative for large clusters and may need adjustment via `--set admissionController.container.resources.limits.memory=256Mi`. If the Falco pod is in `CrashLoopBackOff` with driver errors, your host kernel may be incompatible with the modern eBPF probe; switch the install to `--set driver.kind=modern_ebpf` or fall back to the legacy kernel module on a full Linux VM. If the `latest`-tag policy fails to deny pods after Step 3, confirm the policy's `READY` status and check the validating webhook configuration with `kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg -o yaml` to ensure the webhook is registered and pointing at the running Kyverno service.
 
-## Further Reading
-
-- [OPA Gatekeeper Official Documentation](https://open-policy-agent.github.io/gatekeeper/website/docs/)
-- [Kyverno Documentation](https://kyverno.io/docs/)
-- [Falco Project Documentation](https://falco.org/docs/)
-- [Tetragon GitHub Repository](https://github.com/cilium/tetragon)
-- [Kubernetes Reference: Admission Controllers](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)
-- [Pod Security Standards (Kubernetes Docs)](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
-- [ValidatingAdmissionPolicy and CEL](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/)
-
 ## Next Module
 
 Continue to [Module 6.8: Zero Trust Architecture](/on-premises/security/module-6.8-zero-trust-architecture/) to learn how to replace implicit perimeter trust with identity-aware access, mTLS, and microsegmentation on bare-metal fleets.
 
 ## Sources
 
+- [OPA Gatekeeper Official Documentation](https://open-policy-agent.github.io/gatekeeper/website/docs/) — Primary upstream documentation for installing, configuring, and authoring Gatekeeper policies.
+- [Gatekeeper Policy Library](https://github.com/open-policy-agent/gatekeeper-library) — Curated ConstraintTemplates covering common Kubernetes security and governance patterns.
+- [Kyverno Documentation](https://kyverno.io/docs/) — Official Kyverno docs for validate, mutate, generate, and CEL-based policy types.
+- [Kyverno Policies Repository](https://github.com/kyverno/policies) — Community-maintained policy catalog packaged for Helm and GitOps workflows.
+- [Falco Project Documentation](https://falco.org/docs/) — Official Falco documentation for rules, drivers, and runtime detection deployment.
 - [Kubernetes Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/) — Official source for PSA feature state, namespace labels, and the privileged/baseline/restricted levels that replaced PodSecurityPolicy-era workflows.
+- [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) — Canonical Kubernetes definitions for the privileged, baseline, and restricted pod-security profiles enforced by PSA.
 - [kubernetes.io: extensible admission controllers](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) — Kubernetes dynamic admission docs explicitly describe mutating webhooks first and validating webhooks after object validation.
 - [kubernetes.io: kubernetes v1 28 release](https://kubernetes.io/blog/2023/08/15/kubernetes-v1-28-release/) — The Kubernetes v1.28 release notes specifically describe the feature timeline for admission webhook match conditions.
 - [Kubernetes Validating Admission Policy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy) — Primary source for native CEL-based validating admission, policy/binding resources, validation actions, failure behavior, and matchConditions semantics.
+- [Common Expression Language in Kubernetes](https://kubernetes.io/docs/reference/using-api/cel/) — Official Kubernetes reference for CEL syntax, types, and evaluation semantics used by ValidatingAdmissionPolicy.
+- [CEL Language Definition](https://github.com/google/cel-spec/blob/master/doc/langdef.md) — Upstream CEL specification for language semantics referenced by Kubernetes admission policies.
 - [kubernetes.io: mutating admission policy](https://kubernetes.io/docs/reference/access-authn-authz/mutating-admission-policy/) — The MutatingAdmissionPolicy docs state the beta feature state and required control-plane flags.
 - [kubernetes.io: admission controllers](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/) — Kubernetes admission control docs describe both the two-phase process and the rule that any rejection fails the request.
+- [Kubernetes Admission Webhook Good Practices](https://kubernetes.io/docs/concepts/cluster-administration/admission-webhooks-good-practices/) — Best source for webhook scoping, failure behavior, latency, and deadlock-avoidance guidance.
 - [github.com: gatekeeper](https://github.com/open-policy-agent/gatekeeper) — The Gatekeeper repository README lists these Kubernetes-specific capabilities explicitly.
 - [cncf.io: open policy agent opa](https://www.cncf.io/projects/open-policy-agent-opa/) — The CNCF project page gives the graduation date for OPA.
 - [github.com: v3.10.0](https://github.com/open-policy-agent/gatekeeper/releases/tag/v3.10.0) — The v3.10.0 Gatekeeper release notes explicitly say mutation is promoted to stable.
@@ -627,8 +625,6 @@ Continue to [Module 6.8: Zero Trust Architecture](/on-premises/security/module-6
 - [github.com: v1.14.0](https://github.com/kyverno/kyverno/releases/tag/v1.14.0) — The v1.14.0 release notes explicitly mention `ValidatingPolicy` support and generated VAP resources.
 - [github.com: 14276](https://github.com/kyverno/kyverno/issues/14276) — The tracked migration issue includes an explicit version matrix for the new `policies.kyverno.io` APIs.
 - [cncf.io: falco](https://www.cncf.io/projects/falco/) — The CNCF project page records Falco's graduation status and date.
+- [Falco Repository](https://github.com/falcosecurity/falco) — Useful for the current project scope, runtime-detection model, and adjacent documentation links for Falco deployments.
 - [github.com: libs](https://github.com/falcosecurity/libs) — The Falco libs repository describes the kernel module/eBPF drivers and the userspace ring-buffer path.
 - [github.com: tetragon](https://github.com/cilium/tetragon) — The Tetragon repository README explicitly describes real-time eBPF-based runtime enforcement and reaction to security-significant events.
-- [Kubernetes Validating Admission Policy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) — Primary reference for native CEL-based admission validation, bindings, match conditions, and validation actions.
-- [Kubernetes Admission Webhook Good Practices](https://kubernetes.io/docs/concepts/cluster-administration/admission-webhooks-good-practices/) — Best source for webhook scoping, failure behavior, latency, and deadlock-avoidance guidance.
-- [Falco Repository](https://github.com/falcosecurity/falco) — Useful for the current project scope, runtime-detection model, and adjacent documentation links for Falco deployments.
