@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 8.1: Multi-Site & Disaster Recovery"
 slug: on-premises/resilience/module-8.1-multi-site-dr
 sidebar:
