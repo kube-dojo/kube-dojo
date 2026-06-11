@@ -116,12 +116,11 @@ spec:
   online: true
   bootMACAddress: "52:54:00:12:34:56"
   bmc:
-    address: "redfish+https://192.168.100.14"
+    address: "redfish+https://192.168.100.14/redfish/v1/Systems/1"
     credentialsName: rack2-u14-bmc-secret
     disableCertificateVerification: false
   rootDeviceHints:
     wwn: "5002538e4020a1b2"
-  hardwareProfile: unknown
 ```
 
 Hardware inventory management extends beyond CR creation. Platform teams label hosts by rack, failure domain, CPU generation, and role (`control-plane`, `worker`, `spare`). Machine templates use `hostSelector` to pin control planes to NVMe-backed hosts and workers to denser storage tiers. Maintain at least ten to fifteen percent spare BareMetalHosts powered off but registered; MachineHealthCheck remediation otherwise creates Machines that sit **Pending** forever when no Available host exists.
@@ -151,7 +150,7 @@ spec:
     spec:
       image:
         url: "https://images.internal.example/os/ubuntu-24.04-k8s-v1.35.qcow2"
-        checksum: "sha256:abcdef0123456789..."
+        checksum: "abcdef0123456789..."
         checksumType: sha256
         format: qcow2
       hostSelector:
@@ -196,7 +195,7 @@ spec:
   controlPlaneEndpoint:
     host: 10.10.50.100   # kube-vip VIP on CP VLAN
     port: 6443
-  noCloudProvider: true
+  cloudProviderEnabled: false
 ```
 
 Without a stable VIP, every control-plane Machine carries its own apiserver address and client kubeconfig breaks when that node is deprovisioned during upgrades or remediation events. Document which VLAN owns the VIP, which switches permit gratuitous ARP, how BGP sessions fail over during rack maintenance, and who between network and platform on-call receives the first page when apiserver TLS errors spike. MetalLB address pools for application Services should be carved from different subnets than API VIPs so a exhausted LoadBalancer pool cannot accidentally consume the control-plane address. Run quarterly failover drills: stop kube-vip on one control-plane node, verify clients reconnect through the VIP, then restore and confirm etcd member list matches Machine inventory in the management cluster.
@@ -438,7 +437,16 @@ Use the Docker infrastructure provider to observe CAPI Machine phases, controlle
 ```bash
 curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.5/clusterctl-linux-amd64 -o clusterctl
 chmod +x clusterctl && sudo mv clusterctl /usr/local/bin/
-kind create cluster --name capi-mgmt
+cat > kind-capd.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraMounts:
+  - hostPath: /var/run/docker.sock
+    containerPath: /var/run/docker.sock
+EOF
+kind create cluster --name capi-mgmt --config kind-capd.yaml
 export CLUSTER_TOPOLOGY=true
 clusterctl init --infrastructure docker
 clusterctl generate cluster lab --infrastructure docker \
@@ -500,7 +508,7 @@ spec:
   online: true
   bootMACAddress: "52:54:00:aa:bb:01"
   bmc:
-    address: redfish+https://192.0.2.1
+    address: redfish+https://192.0.2.1/redfish/v1/Systems/1
     credentialsName: lab-u01-bmc-secret
     disableCertificateVerification: true
 EOF
@@ -537,7 +545,7 @@ spec:
   controlPlaneEndpoint:
     host: 10.10.50.100
     port: 6443
-  noCloudProvider: true
+  cloudProviderEnabled: false
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
@@ -564,7 +572,7 @@ spec:
   controlPlaneEndpoint:
     host: 10.10.50.100
     port: 6443
-  noCloudProvider: true
+  cloudProviderEnabled: false
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: TalosControlPlane

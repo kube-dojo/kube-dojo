@@ -112,7 +112,7 @@ graph LR
 
 ### Enterprise agreements and reserved capacity pass-through
 
-When you buy servers under an enterprise agreement (EA) or reserved capacity from a vendor, the **discount belongs in the rate card**, not in a one-time spreadsheet celebration. Document the EA unit price, term, and which hardware pools it covers. Pass through to internal customers as a lower `CPU`/`RAM` rate on tagged node pools (`hardware-generation=2026-ea`) so teams scheduling onto EA nodes see the benefit. For burst cloud capacity purchased with committed use discounts, mirror the same pattern: a separate pricing zone `cloud-burst-west` with hourly rates derived from amortized commitment plus expected spot overflow.
+When you buy servers under an enterprise agreement (EA) or reserved capacity from a vendor, the **discount belongs in the rate card**, not in a one-time spreadsheet celebration. Document the EA unit price, term, and which hardware pools it covers. OpenCost OSS `default.json`/Helm `costModel` is **one global rate card** per cluster—per-node-pool rates require the CSV provider (`USE_CSV_PROVIDER=true`, mapping node labels to SKUs) or Kubecost. Treat "pricing zones" as a finance overlay; implement EA pass-through via CSV SKUs, separate OpenCost instances per hardware pool, or finance spreadsheets that reference node labels (`hardware-generation=2026-ea`). For burst cloud capacity purchased with committed use discounts, mirror the same pattern with a separate finance tier or CSV SKU for burst overflow.
 
 > **Stop and think:** A platform engineer amortizes only the server invoice over 60 months to minimize chargeback rates, but operations replaces that generation at 36 months. Who absorbs the early refresh cost, and how should the pricing model signal "expensive new pool" versus "discounted legacy pool"?
 
@@ -158,7 +158,7 @@ Hierarchy allocation mirrors how enterprises already structure budgets: business
 
 Chargeback disputes destroy trust faster than outage postmortems. Publish the rate card methodology—formula links to Module 1.4 line items, PUE source, platform tax percentage, idle policy—in the same document controllers sign. When an application lead challenges a bill, your first artifact is the PromQL query reproducing the allocation, not a screenshot of a pie chart. Mature programs record dispute outcomes and feed them into rate card revisions quarterly rather than arguing ad hoc in Slack.
 
-Multi-cluster estates should share one rate-card repository with environment-specific overlays (`zone=prod-dc-a`, `zone=dr-dc-b`) so finance compares dollars consistently. Dr clusters often run underutilized; showback should make DR overhead visible instead of hiding it in a blended average that discourages teams from testing failover. When DR is truly shared insurance, allocate a fixed percentage to every cost-center rather than pretending DR has no cost.
+Multi-cluster estates should share one rate-card repository with environment-specific finance overlays (prod-dc-a versus dr-dc-b tiers in CSV SKUs or separate OpenCost installs) so finance compares dollars consistently. Dr clusters often run underutilized; showback should make DR overhead visible instead of hiding it in a blended average that discourages teams from testing failover. When DR is truly shared insurance, allocate a fixed percentage to every cost-center rather than pretending DR has no cost.
 
 ---
 
@@ -174,6 +174,7 @@ Example custom pricing (hourly units—verify against your chart version):
 
 ```json
 {
+  "provider": "custom",
   "description": "On-Prem Bare Metal Pool Alpha — FY2026 rates",
   "CPU": "0.015",
   "spotCPU": "0.000",
@@ -181,7 +182,9 @@ Example custom pricing (hourly units—verify against your chart version):
   "spotRAM": "0.000",
   "GPU": "0.950",
   "storage": "0.0002",
-  "zone": "dc-alpha-rack-12"
+  "LBIngressDataCost": "0",
+  "FirstFiveForwardingRulesCost": "0",
+  "AdditionalForwardingRuleCost": "0"
 }
 ```
 
@@ -201,13 +204,16 @@ opencost:
     defaultClusterId: "on-prem-prod-baremetal-01"
   customPricing:
     enabled: true
-    provider: default
+    provider: custom
     costModel:
       description: "On-Prem Bare Metal Pool Alpha — FY2026 rates"
       CPU: "0.015"
       RAM: "0.005"
       GPU: "0.950"
       storage: "0.0002"
+      LBIngressDataCost: "0"
+      FirstFiveForwardingRulesCost: "0"
+      AdditionalForwardingRuleCost: "0"
 ```
 
 IBM Kubecost 3.x is a separate product with enterprise CSV pricing and version-specific architecture; treat Prometheus requirements as **version-dependent** and read the deployment guide for your release before teaching a single pipeline diagram.
@@ -240,11 +246,8 @@ groups:
     expr: |
       (
         sum by (namespace) (
-          avg by (namespace, node) (container_cpu_allocation)
-            * on (node) group_left () avg by (node) (node_cpu_hourly_cost)
-          +
-          avg by (namespace, node) (container_memory_allocation_bytes)
-            * on (node) group_left () avg by (node) (node_ram_hourly_cost) / (1024 * 1024 * 1024)
+          container_cpu_allocation * on(node) group_left node_cpu_hourly_cost
+          + container_memory_allocation_bytes * on(node) group_left node_ram_hourly_cost / (1024^3)
         )
       ) * 730 > 500
     for: 12h
@@ -405,19 +408,19 @@ Cross-functional office hours accelerate adoption. Platform brings live PromQL q
 | Phased showback before chargeback | First 6–12 months of FinOps | Builds trust; surfaces label gaps without budget warfare |
 | Label-enforced attribution | >3 teams on shared clusters | Prevents mystery spend in `default` |
 | VPA Off + FinOps review queue | >50 deployments | Surfaces savings without forced restarts |
-| Separate pricing zones per hardware generation | Mixed-age fleets | Steers batch jobs to depreciated nodes |
+| CSV SKUs or separate OpenCost instances per hardware pool | Mixed-age fleets | Steers batch jobs to depreciated nodes when global rate card cannot vary by label |
 | Monthly metric-to-invoice reconciliation | CFO oversight | Catches Prometheus gaps before they become disputes |
 
 | Anti-pattern | Why teams do it | Better approach |
 |--------------|-----------------|-----------------|
 | Cloud list price as on-prem proxy | Fast to model | Use Module 1.4 TCO inputs only |
-
-Patterns succeed when tied to observable metrics: idle percentage falling, untagged spend below two percent, bridge variance under five percent, and deferred rack purchases with written justification. Anti-patterns fail silently for quarters because capital is already spent—FinOps makes waste visible early enough to change procurement timelines instead of explaining variances after the fact.
 | Bill on usage, schedule on requests | Feels "fair" | Bill on max(request, usage) for capacity signals |
 | Hide idle cluster cost | Makes teams look efficient | Share idle explicitly |
 | Day-one hard chargeback | Executive pressure | Minimum six months showback |
 | Ignore PVC $/GB-hour | Focus on CPU charts | Price storage from array TCO |
 | Skip platform tax | Keep app rates low | Mark up rates; publish transparent overhead line |
+
+Patterns succeed when tied to observable metrics: idle percentage falling, untagged spend below two percent, bridge variance under five percent, and deferred rack purchases with written justification. Anti-patterns fail silently for quarters because capital is already spent—FinOps makes waste visible early enough to change procurement timelines instead of explaining variances after the fact.
 
 ---
 
@@ -464,7 +467,7 @@ Teaching FinOps to application teams lands better when you connect dollars to re
 ## Did You Know?
 
 - The [CNCF FinOps microsurvey (2023)](https://www.cncf.io/wp-content/uploads/2023/12/CNCF_Finops-Microsurvey-2023.pdf) reported that 49% of respondents saw Kubernetes drive cloud spend up, while 38% had no Kubernetes cost monitoring in place—visibility gaps are common even when clusters grow.
-- OpenCost implements the FinOps Foundation's [FOCUS specification](https://focus.finops.org/) for normalized cost and usage data, helping teams align on-prem metrics with cloud billing exports when running hybrid fleets.
+- OpenCost offers FOCUS-aligned custom-cost plugin schema and terminology; core allocation remains OpenCost-spec/Prometheus-based, not a native FOCUS export.
 - [Uptime Institute's Tier classification](https://uptimeinstitute.com/tiers) ties facility redundancy levels to construction and operating cost—Tier IV availability can cost roughly double Tier II for the same IT load, which must flow into per-kW allocation math.
 - The FinOps Foundation's 2021 Kubernetes report found only 14% of surveyed organizations had chargeback in place versus 44% using monthly estimates—most fleets still lack real-time pod-level accountability.
 
@@ -534,7 +537,7 @@ Admission only fixes forward-looking Pods: legacy workloads, DaemonSets, Operato
 <details>
 <summary>Question 8: Your EA provides 30% off servers delivered this quarter. How should internal customers see that benefit?</summary>
 
-Publish a lower custom pricing zone tied to node labels such as `ea-2026=true` or reduce CPU and RAM rates for that pool in the OpenCost JSON. Teams that schedule onto EA nodes should see cheaper showback than teams on list-priced hardware, steering batch and dev workloads toward discounted silicon. Document the pass-through methodology beside Module 1.4 quotes so finance can audit it the same way cloud RI discounts are passed to internal product lines.
+Pass EA discounts through CSV SKUs keyed to node labels such as `ea-2026=true`, separate OpenCost instances per hardware pool, or finance overlays—OpenCost's default `costModel` is cluster-global and cannot express per-pool CPU/RAM rates without the CSV provider (`USE_CSV_PROVIDER=true`). Teams that schedule onto EA nodes should see cheaper showback than teams on list-priced hardware. Document the pass-through methodology beside Module 1.4 quotes so finance can audit it the same way cloud RI discounts are passed to internal product lines.
 </details>
 
 ---
@@ -561,6 +564,7 @@ Task 1 establishes the finance-approved rate card in both a ConfigMap artifact f
 
 ```json
 {
+  "provider": "custom",
   "description": "Simulated On-Prem Datacenter Pricing Model",
   "CPU": "0.020",
   "spotCPU": "0.000",
@@ -568,7 +572,9 @@ Task 1 establishes the finance-approved rate card in both a ConfigMap artifact f
   "spotRAM": "0.000",
   "GPU": "1.500",
   "storage": "0.0005",
-  "zone": "on-prem-zone-alpha"
+  "LBIngressDataCost": "0",
+  "FirstFiveForwardingRulesCost": "0",
+  "AdditionalForwardingRuleCost": "0"
 }
 ```
 
@@ -581,12 +587,9 @@ helm upgrade --install opencost --repo https://opencost.github.io/opencost-helm-
   --set opencost.prometheus.internal.serviceName=prometheus-operated \
   --set opencost.prometheus.internal.port=9090 \
   --set opencost.customPricing.enabled=true \
-  --set opencost.customPricing.provider=default \
-  --set-string opencost.customPricing.costModel.description="Simulated On-Prem Datacenter Pricing Model" \
-  --set-string opencost.customPricing.costModel.CPU="0.020" \
-  --set-string opencost.customPricing.costModel.RAM="0.008" \
-  --set-string opencost.customPricing.costModel.GPU="1.500" \
-  --set-string opencost.customPricing.costModel.storage="0.0005"
+  --set opencost.customPricing.provider=custom \
+  --set opencost.customPricing.configmapName=opencost-custom-pricing \
+  --set opencost.customPricing.createConfigmap=false
 kubectl wait --for=condition=available deployment/opencost -n opencost --timeout=180s
 kubectl get configmap opencost-custom-pricing -n opencost
 ```

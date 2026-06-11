@@ -1,5 +1,4 @@
 ---
-revision_pending: false
 title: "Module 2.3: Immutable OS for Kubernetes"
 slug: on-premises/provisioning/module-2.3-immutable-os
 sidebar:
@@ -82,7 +81,7 @@ Immutability in these operating systems is not a marketing term — it is enforc
 
 - **Talos Linux**: The root filesystem is SquashFS, a compressed read-only filesystem. There is no mechanism to remount it read-write. The `/var` partition is writable but ephemeral — it is wiped on upgrade. Only `/system/state` persists across upgrades.
 - **Bottlerocket**: The root filesystem is a dm-verity device — a block-level integrity mechanism where every read is verified against a Merkle hash tree. Any unauthorized block modification triggers a kernel panic and reboot.
-- **Flatcar Container Linux**: The root partition (`/usr`) is mounted read-only with dm-verity verification. Writable directories (`/etc`, `/var`) are separate partitions, and `/opt` is available for containerized workloads.
+- **Flatcar Container Linux**: The root partition (`/usr`) is mounted read-only with dm-verity verification. Writable directories (`/etc`, `/var`) are separate partitions, and `/opt` provides writable overlay/state space.
 - **Fedora CoreOS**: Uses rpm-ostree, which treats the OS as a content-addressed object store (similar to Git for binaries). The running deployment is a checked-out tree that cannot be modified in place.
 - **Kairos**: The OS image is a container — yes, the entire OS boots from an OCI container image pulled at install time. Immutability is inherent to the container model; you cannot modify a running container's image.
 
@@ -111,9 +110,11 @@ Talos is purpose-built for Kubernetes and nothing else. It has no SSH daemon, no
 │  │  ├── trustd        mTLS certificate management (port 50001)  ││
 │  │  ├── networkd      network configuration engine              ││
 │  │  ├── containerd    container runtime (CRI)                    ││
-│  │  │   ├── kubelet                                              ││
-│  │  │   ├── etcd          (control-plane nodes only)             ││
-│  │  │   └── kube-apiserver (control-plane nodes only)            ││
+│  │  │   └── kubelet                                              ││
+│  │  │       ├── kube-apiserver (static pod, control-plane only)  ││
+│  │  │       ├── kube-controller-manager (static pod)             ││
+│  │  │       └── kube-scheduler (static pod)                      ││
+│  │  ├── etcd          machined service (control-plane only)      ││
 │  │  └── dashboard     built-in TUI for node inspection           ││
 │  └──────────────────────────────────────────────────────────────┘│
 │                                                                    │
@@ -152,7 +153,7 @@ machine:
     bootloader: true
 ```
 
-Talos is also the only immutable OS where Kubernetes components (kubelet, etcd, kube-apiserver) run as system services managed by the OS init process (`machined`), not as static pods or systemd units. This means Talos can manage the full lifecycle of Kubernetes components atomically: when you upgrade Talos, the bundled Kubernetes version upgrades in lockstep, and vice versa.
+Talos runs kubelet and etcd as `machined` services, but kube-apiserver, kube-controller-manager, and kube-scheduler run as static pods managed by kubelet (verify with `talosctl get staticpods`). This means Talos can manage the full lifecycle of Kubernetes components atomically: when you upgrade Talos, the bundled Kubernetes version upgrades in lockstep, and vice versa.
 
 Operational implications of the no-SSH model:
 
@@ -174,7 +175,7 @@ Bottlerocket's tradeoff is that it is less "extreme" than Talos — SSH access e
 
 ### Flatcar Container Linux: The CoreOS Heir
 
-Flatcar is the community-maintained successor to CoreOS Container Linux (which Red Hat acquired and discontinued in 2018). It is the most "familiar-feeling" immutable OS — it runs systemd, supports SSH, has a `/usr` read-only root with an overlay for `/etc`, and uses Ignition (JSON-based provisioning config) instead of cloud-init.
+Flatcar is the community-maintained successor to CoreOS Container Linux—Red Hat acquired CoreOS in 2018, the community forked Flatcar that same year in anticipation of change, and Container Linux reached end-of-life in May 2020. It is the most "familiar-feeling" immutable OS — it runs systemd, supports SSH, has a `/usr` read-only root with an overlay for `/etc`, and uses Ignition (JSON-based provisioning config) instead of cloud-init.
 
 Flatcar's design philosophy is centered on reducing the conceptual distance between traditional Linux administration and immutable operations. The architecture preserves the tools and abstractions that Linux engineers already know — systemd, journalctl, SSH, bash — while enforcing immutability at the filesystem level through dm-verity and a read-only `/usr` partition. The key architectural characteristics that make this possible are:
 
@@ -301,7 +302,7 @@ Immutable OS without an update pipeline is just a frozen OS — secure at a mome
 
 ### A/B Partition Architecture
 
-All five distributions covered in this module use some form of A/B (dual-partition) update scheme. The principle is simple and, by now, battle-tested at planetary scale — ChromeOS has used A/B updates since 2012 across hundreds of millions of devices. The scheme works by maintaining two complete OS installations on separate disk partitions. At any moment, one partition is active (the running OS) and the other is passive (available to receive an update). The update is written to the passive partition while the active partition continues serving workloads, then the bootloader swaps roles on the next reboot. If the new OS fails to boot, the bootloader falls back to the previous partition automatically. The entire mechanism operates below the OS layer — it is a bootloader feature, not an OS feature — which is why it works identically across Talos, Bottlerocket, Flatcar, and Kairos despite their radically different userspace designs.
+Talos, Bottlerocket, Flatcar, and Kairos use A/B (dual-partition) update schemes; Fedora CoreOS uses rpm-ostree multi-deployment for equivalent atomic rollback rather than partition-level A/B. The principle is simple and, by now, battle-tested at planetary scale — ChromeOS has used A/B updates since 2012 across hundreds of millions of devices. The scheme works by maintaining two complete OS installations on separate disk partitions (or ostree deployments for FCOS). At any moment, one partition is active (the running OS) and the other is passive (available to receive an update). The update is written to the passive partition while the active partition continues serving workloads, then the bootloader swaps roles on the next reboot. If the new OS fails to boot, the bootloader falls back to the previous partition automatically. The entire mechanism operates below the OS layer — it is a bootloader feature, not an OS feature — which is why it works identically across Talos, Bottlerocket, Flatcar, and Kairos despite their radically different userspace designs.
 
 ```ascii
 ┌─────────────────────────────────────────────────────────────────┐
@@ -587,7 +588,7 @@ flowchart TD
 | Update protocol | talosctl upgrade | updog (TUF-based) | Omaha (Nebraska) | Container registry pull | Zincati (Cincinnati) |
 | Learning curve | High (new paradigm) | Medium (TOML + API) | Low (familiar Linux) | Low (familiar base distro) | Medium (rpm-ostree) |
 | Air-gap support | Yes (image cache) | Yes (private registry) | Yes (Nebraska server) | Yes (designed for) | Yes (Cincinnati mirror) |
-| CAPI provider | Sidero (native) | CAPB (community) | None (kubeadm-based) | Native CAPI | None (OpenShift MAPI) |
+| CAPI provider | Sidero (native) | CAPB (community) | CABPK + Ignition (no standalone CAPF) | Native CAPI | None (OpenShift MAPI) |
 
 The decision typically comes down to two dimensions: **security posture vs. operational familiarity**, and **Kubernetes lifecycle coupling**. Talos maximizes security at the cost of tooling investment. Flatcar minimizes operational disruption at the cost of a larger attack surface (SSH, systemd). Bottlerocket and Kairos occupy the middle: Bottlerocket for AWS-centric teams wanting strong immutability without the full Talos toolswitch, Kairos for teams that need their existing distribution ecosystem.
 
@@ -597,9 +598,9 @@ The decision typically comes down to two dimensions: **security posture vs. oper
 
 - **Talos Linux has no `/bin/sh` binary anywhere on the filesystem.** Even if an attacker escapes a container to the host, there is literally no shell interpreter to execute commands. This is the most extreme form of attack-surface reduction in any Linux distribution designed for server workloads. For comparison, a minimal Debian installation ships approximately 120 binaries in `/bin` and `/usr/bin`; Talos ships roughly 12 userspace binaries total.
 
-- **The A/B update scheme used by all immutable Kubernetes OSes was pioneered by ChromeOS in 2011.** ChromeOS devices use the same dual-partition layout with automatic fallback. Today, over 300 million ChromeOS devices use this mechanism. When Flatcar, Bottlerocket, and Talos adopted A/B updates, they were adopting a pattern validated at consumer-electronics scale over more than a decade.
+- **The A/B update scheme used by immutable Kubernetes OSes was pioneered by ChromeOS in 2012.** ChromeOS devices use the same dual-partition layout with automatic fallback. Today, hundreds of millions of ChromeOS devices use this mechanism. When Flatcar, Bottlerocket, and Talos adopted A/B updates, they were adopting a pattern validated at consumer-electronics scale over more than a decade.
 
-- **Flatcar Container Linux was forked from CoreOS Container Linux in 2018** after Red Hat acquired CoreOS and discontinued the community edition. The fork was maintained by Kinvolk (later acquired by Microsoft) and now operates as a CNCF Sandbox project. Microsoft contributes engineers and infrastructure to Flatcar because it underpins Azure's container-optimized OS strategy. The fork is a rare case where a corporate acquisition spawned a community project that outlived the original product's independent existence.
+- **Flatcar Container Linux was forked from CoreOS Container Linux in 2018** after Red Hat acquired CoreOS; Container Linux reached end-of-life in May 2020. The fork was maintained by Kinvolk (later acquired by Microsoft) and now operates as a **CNCF Incubating** project (accepted 2024-10-29). Microsoft contributes engineers and infrastructure to Flatcar because it underpins Azure's container-optimized OS strategy. The fork is a rare case where a corporate acquisition spawned a community project that outlived the original product's independent existence.
 
 - **Bootc (bootable containers) is an emerging model** that blurs the line between OS image and application container. With bootc, the entire OS is built as an OCI container image using a Containerfile, and the system boots directly from that image. This means the same `podman build` or `docker build` pipeline that produces your application containers can produce your OS images, with the same signing, scanning, and registry infrastructure. The model is being developed in the Fedora/CentOS ecosystem and represents the convergence of immutable OS and container-native operating models into a single toolchain.
 
@@ -647,7 +648,7 @@ Your security team mandates that every OS update must be cryptographically verif
 
 **The Update Framework (TUF)** provides multi-signer compromise resilience. TUF defines four metadata roles: Root (establishes trust anchors), Targets (lists valid update files and their hashes), Snapshot (prevents replay attacks by versioning the Targets metadata), and Timestamp (ensures freshness by providing the latest Snapshot version number).
 
-The key property is threshold signatures: the Root role requires a quorum of keys (e.g., 3 of 5) to sign new Targets metadata. If a single key is compromised, the attacker cannot sign valid Targets metadata because they lack the threshold. A client verifies that each piece of metadata is signed by the required number of trusted keys before accepting an update.
+The key property is threshold signatures: the **Targets** role signs `targets.json` (its threshold is defined in Root metadata); Root signs `root.json` to establish trust anchors and role thresholds. If a single key is compromised, the attacker cannot sign valid Targets metadata because they lack the threshold. A client verifies that each piece of metadata is signed by the required number of trusted keys before accepting an update.
 
 In practice: Bottlerocket's `updog` agent validates full TUF metadata (four-role model via the `tough` library) before applying an update — this is the native TUF implementation in the immutable-Kubernetes-OS space. Flatcar's Nebraska uses the Omaha protocol for signed, channel-aware rollouts, which provides signing and rollout control but does not implement the full TUF specification; for TUF compliance, organizations layer a TUF mirror in front of Nebraska. Talos uses a simpler Ed25519 signing model for installer images, but the same principle applies — a single key compromise does not grant unilateral push access if you configure multi-key verification.
 
@@ -840,7 +841,7 @@ talosctl mounts --nodes $CONTROLPLANE_IP
 <details>
 <summary>Solution: Task 2</summary>
 
-`talosctl services` shows that every system component runs as a service managed by `machined`. There is no systemd, no cron, no syslog daemon. The service count is notably small — typically 8-12 services on a control-plane node.
+`talosctl services` shows kubelet and etcd as `machined` services; `talosctl get staticpods` shows kube-apiserver, kube-controller-manager, and kube-scheduler as kubelet-managed static pods. There is no systemd, no cron, no syslog daemon. The service count is notably small — typically 8-12 services on a control-plane node.
 
 `talosctl processes` reveals approximately 20-30 processes total, compared to 100+ on a minimal Ubuntu server. This is the attack-surface reduction in practice. There is no shell (`/bin/sh`), no Python, no Perl, no text editors.
 
@@ -860,9 +861,10 @@ talosctl version --nodes $CONTROLPLANE_IP
 # Examine the disk layout via the API
 talosctl disks --nodes $CONTROLPLANE_IP
 
-# List available upgrades (Talos checks its image registry for newer versions)
-# Note: In air-gapped mode, this would point to your internal registry
-talosctl upgrade --dry-run --nodes $CONTROLPLANE_IP
+# Preview the Kubernetes component upgrade plan (--dry-run is supported on upgrade-k8s):
+talosctl upgrade-k8s --dry-run --nodes $CONTROLPLANE_IP
+# The OS upgrade itself takes an explicit installer image and has NO --dry-run flag; run it only when ready:
+# talosctl upgrade --image ghcr.io/siderolabs/installer:v1.9.0 --nodes $CONTROLPLANE_IP
 
 # View the upgrade controller status
 talosctl health --nodes $CONTROLPLANE_IP
@@ -875,7 +877,7 @@ talosctl health --nodes $CONTROLPLANE_IP
 
 `talosctl disks` shows the partition layout. On a bare-metal install, you would see two OS partitions (A and B) plus the persistent state partition and an EFI system partition. Inside Docker, the partition layout is simplified, but the concept is the same.
 
-`talosctl upgrade --dry-run` queries the configured image registry for newer Talos versions. In production, this registry is your internal mirror (for air-gap) or the public GitHub Container Registry. The `--dry-run` flag reports what version *would* be installed without making changes — this is the discovery phase of the update pipeline.
+`talosctl upgrade-k8s --dry-run` previews the Kubernetes component upgrade plan without applying it. The OS upgrade (`talosctl upgrade`) has **no `--dry-run` flag** — it takes an explicit installer `--image` (registry tag) and applies immediately, so stage the target image against your internal mirror (for air-gap) or the public GitHub Container Registry before running it. There is no "discover newer versions" step for the OS upgrade; you specify the target image explicitly.
 
 The health check confirms that all system services are running and that the cluster is in a state where an upgrade can safely proceed. If any service is unhealthy, Talos will refuse the upgrade — this prevents compounding an existing problem with an untested OS version.
 </details>

@@ -1,7 +1,6 @@
 ---
 title: "Module 5.5: Active-Active Multi-Site"
 slug: on-premises/multi-cluster/module-5.5-active-active-multi-site
-revision_pending: false
 sidebar:
   order: 55
 ---
@@ -66,7 +65,7 @@ Kubernetes control planes depend on etcd’s Raft consensus. Stretching one etcd
 
 ### Stretched etcd versus federated clusters
 
-A **stretched** cluster places etcd members (and sometimes control plane nodes) in multiple sites so one Kubernetes API remains authoritative. Quorum still requires ⌊n/2⌋+1 healthy members. A five-member etcd cluster tolerates two member failures; if WAN partition isolates two members in site A and two in site B, neither side holds majority and the API halts—preferable to split-brain writes, painful for operators who expected “survive one site loss” to mean “keep serving from the surviving site.” Stretching etcd across exactly two equal sites without a witness is the same quorum trap as two-datacenter databases: each side holds half the votes.
+A **stretched** cluster places etcd members (and sometimes control plane nodes) in multiple sites so one Kubernetes API remains authoritative. Quorum still requires ⌊n/2⌋+1 healthy members. A five-member etcd cluster tolerates two member failures; with **2+2+1** placement (two members in site A, two in site B, one witness in site C), the side that can still reach the witness keeps quorum (three votes); the halt case is the witness unreachable from both primary sites—or, with only four members split **2+2**, partition yields two versus two with no majority anywhere. Stretching etcd across exactly two equal sites without a witness is the same quorum trap as two-datacenter databases: each side holds half the votes.
 
 A **federated** approach runs independent Kubernetes clusters per site, each with local etcd quorum on fast storage. Fleet tools, GitOps, or multi-cluster ingress distribute workloads; global service discovery uses Cilium ClusterMesh or Submariner Lighthouse rather than one giant API server. Application failover shifts to DNS/GSLB and data replication rather than etcd leader election across cities. The tradeoff is no single `kubectl` context for all pods unless you build one with OCM or similar, but blast radius shrinks: Frankfurt etcd trouble does not London API availability.
 
@@ -166,7 +165,7 @@ flowchart LR
     ING2 --> SVC2
 ```
 
-Envoy-based ingress controllers can add **global rate limiting** and **active health checks** upstream of clusters, but they do not replace database conflict policies. Treat north-south routing as independent from east-west ClusterMesh connectivity: clients may land in Frankfurt while an internal batch job in London calls `payments.clusterset.local` across clusters.
+Envoy-based ingress controllers can add **global rate limiting** and **active health checks** upstream of clusters, but they do not replace database conflict policies. Treat north-south routing as independent from east-west ClusterMesh connectivity: clients may land in Frankfurt while an internal batch job in London calls `payments.finance.svc.clusterset.local` across clusters.
 
 Corporate DNS teams often resist delegating subzones to Kubernetes-hosted authoritative servers. A compromise keeps the parent zone in IPAM-managed BIND or Infoblox while automation pushes short-TTL records via API when health controllers detect ingress failure. Whether records originate from k8gb or external DNS, the contract is the same: health signal, record change, propagation delay, client retry. Run quarterly drills that fail ingress in one site and measure how long external synthetic monitors flip—compare results to internal kube-probe green dashboards.
 
@@ -235,7 +234,7 @@ sequenceDiagram
     participant DNS as CoreDNS + Lighthouse
     participant Broker as Broker API
     participant ClusterB as Cluster B endpoints
-    PodA->>DNS: lookup payments.clusterset.local
+    PodA->>DNS: lookup payments.finance.svc.clusterset.local
     DNS->>DNS: ServiceImport cache
     Broker-->>DNS: exported EndpointSlices
     DNS->>ClusterB: choose local or remote backend
@@ -380,9 +379,9 @@ Galera **flow control** likely throttles all sites when one replica lags over WA
 
 </details>
 
-<details><summary>Question 5: Connect services with Submariner Lighthouse. What Kubernetes object must exist before remote clusters resolve `my-svc.clusterset.local`?</summary>
+<details><summary>Question 5: Connect services with Submariner Lighthouse. What Kubernetes object must exist before remote clusters resolve `my-svc.default.svc.clusterset.local`?</summary>
 
-Create a **ServiceExport** for the Service in the source cluster. Lighthouse agents export ServiceImport and EndpointSlice objects to the Broker; remote clusters import copies and the Lighthouse DNS server answers `clusterset.local` queries via CoreDNS forwarding. Without export, Services remain local-only despite tunnels being up.
+Create a **ServiceExport** for the Service in the source cluster. Lighthouse agents export ServiceImport and EndpointSlice objects to the Broker; remote clusters import copies and the Lighthouse DNS server answers `*.svc.clusterset.local` queries (for example `my-svc.default.svc.clusterset.local`) via CoreDNS forwarding. Without export, Services remain local-only despite tunnels being up.
 
 </details>
 
@@ -445,12 +444,32 @@ Even member counts (2, 4) do not increase tolerated failures versus the next low
 Create two kind clusters, install Cilium with distinct cluster names/IDs, and inspect ClusterMesh enablement status. Requires Docker and the Cilium CLI.
 
 ```bash
-kind create cluster --name cm-a
-kind create cluster --name cm-b
+cat > kind-cm-a.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+nodes:
+- role: control-plane
+EOF
+cat > kind-cm-b.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: "10.245.0.0/16"
+  serviceSubnet: "10.97.0.0/12"
+nodes:
+- role: control-plane
+EOF
+kind create cluster --name cm-a --config kind-cm-a.yaml
+kind create cluster --name cm-b --config kind-cm-b.yaml
 cilium install --context kind-cm-a --set cluster.name=cm-a --set cluster.id=1
 cilium install --context kind-cm-b --set cluster.name=cm-b --set cluster.id=2
-cilium clustermesh enable --context kind-cm-a
-cilium clustermesh enable --context kind-cm-b
+cilium clustermesh enable --context kind-cm-a --service-type NodePort
+cilium clustermesh enable --context kind-cm-b --service-type NodePort
 cilium clustermesh status --context kind-cm-a
 cilium clustermesh status --context kind-cm-b
 kubectl --context kind-cm-a get pods -n kube-system -l k8s-app=cilium
@@ -493,7 +512,7 @@ grep -E '^kind:|^  name:' /tmp/lighthouse-lab/serviceexport.yaml
 
 <details><summary>Expected analysis</summary>
 
-Without Submariner CRDs installed, `kubectl apply` fails API discovery—that is expected in YAML-only labs. Production installs require Broker connectivity and non-overlapping Service CIDRs. Pair exports with NetworkPolicy allowing gateway paths on UDP 4500/4800 per Submariner prerequisites.
+Without Submariner CRDs installed, `kubectl apply` fails API discovery—that is expected in YAML-only labs. Production installs require Broker connectivity and non-overlapping Service CIDRs. Pair exports with infra firewall or security-group rules allowing gateway UDP 4500/4490 and node UDP 4800; keep application NetworkPolicies separate from gateway tunnel ports.
 
 </details>
 
