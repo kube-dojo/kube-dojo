@@ -6,13 +6,15 @@ sidebar:
   order: 76
 ---
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
-* Compare self-hosted CI/CD platforms on architecture, resource overhead, and Kubernetes-native integration, and diagnose common scheduling and volume-attachment failures in dynamic CI environments.
-* Implement rootless, unprivileged container image builds using Kaniko or Buildah on bare-metal clusters.
-* Configure distributed build caching and artifact storage using internal S3-compatible endpoints (MinIO) and local OCI registries.
-* Design secret injection workflows that decouple credentials from pipeline definitions using External Secrets Operator.
-* Route multi-architecture builds to dedicated hardware nodes using node labels and tolerations.
+After completing this module, you will be able to:
+
+1. **Compare** self-hosted CI/CD platforms on architecture, resource overhead, and Kubernetes-native integration, and diagnose common scheduling and volume-attachment failures in dynamic CI environments
+2. **Implement** unprivileged container image builds using Kaniko or Buildah on bare-metal clusters
+3. **Configure** distributed build caching and artifact storage using internal S3-compatible endpoints (MinIO) and local OCI registries
+4. **Design** secret injection workflows that decouple credentials from pipeline definitions using External Secrets Operator
+5. **Route** multi-architecture builds to dedicated hardware nodes using node labels and tolerations
 
 ## Why This Module Matters
 
@@ -76,18 +78,49 @@ This architecture delivers scale-to-zero behavior: when no workflows are running
 
 The ephemeral, single-job lifecycle is the key security property of ARC. Because each runner pod handles exactly one workflow job and is then destroyed, there is no persistent state across jobs. A compromised build step cannot leave a backdoor in the runner filesystem for the next job to inherit. Similarly, secrets injected into the runner's environment are scoped to a single job execution; they cannot leak into a subsequent job through a shared filesystem or lingering process. This per-job isolation is not an optional feature — it is the default behavior of the Autoscaling Runner Sets mode, and it should be treated as a hard requirement for any production deployment where the CI runner has network access to internal systems.
 
-Configuration of ARC is done through Helm, and the operational model is familiar to anyone who has managed a Kubernetes operator. The controller manager watches AutoScalingRunnerSet and EphemeralRunnerSet CRDs, reconciles desired state, and handles the lifecycle of Listener and runner pods. Resource limits on the runner pods are set at the scale-set level, and you can define multiple scale sets with different resource profiles — for example, a `large-build` scale set with 8 CPU / 16 GiB pods for compilation-heavy jobs, and a `small-test` scale set with 2 CPU / 4 GiB pods for lightweight test suites. GitHub routes jobs to the appropriate scale set based on the `runs-on` label in the workflow definition.
+Configuration of ARC is done through Helm, and the operational model is familiar to anyone who has managed a Kubernetes operator. The controller manager watches `AutoscalingRunnerSet` and `EphemeralRunnerSet` CRDs, reconciles desired state, and handles the lifecycle of Listener and runner pods. Resource limits on the runner pods are set at the scale-set level, and you can define multiple scale sets with different resource profiles — for example, a `large-build` scale set with 8 CPU / 16 GiB pods for compilation-heavy jobs, and a `small-test` scale set with 2 CPU / 4 GiB pods for lightweight test suites. GitHub routes jobs to the appropriate scale set based on the `runs-on` label in the workflow definition.
+
+An `AutoscalingRunnerSet` ties together three concerns operators often split across separate Helm values: which GitHub repository or organization the runners register against, how large the ephemeral runner pods are, and how many concurrent runners the scale set may create. The `maxRunners` and `minRunners` fields bound concurrency — when fifty workflows queue simultaneously, a `maxRunners: 10` cap explains why jobs wait even though the cluster still has free CPU. Tune those bounds against runner pod `resources.requests` and your cluster's PDB and quota posture, not against GitHub's queue depth alone. Pair scale sets with `template.spec` node affinity when builds need GPU nodes, large memory, or ARM hardware; the workflow's `runs-on` label selects the scale set, and Kubernetes scheduling places the resulting pod.
+
+```yaml
+apiVersion: actions.github.com/v1alpha1
+kind: AutoscalingRunnerSet
+metadata:
+  name: large-linux-builders
+  namespace: arc-runners
+spec:
+  githubConfigUrl: https://github.example.internal/my-org
+  maxRunners: 40
+  minRunners: 0
+  template:
+    spec:
+      repository: my-org
+      labels:
+        - large-linux
+      containers:
+        - name: runner
+          image: ghcr.io/actions/actions-runner:latest
+          resources:
+            requests:
+              cpu: "8"
+              memory: 16Gi
+            limits:
+              cpu: "8"
+              memory: 16Gi
+```
+
+Operational hardening matters as much as scale. Run ARC controllers and listeners in a dedicated namespace with default-deny `NetworkPolicy`, allow outbound HTTPS only to your GitHub Enterprise host, and mount registry credentials through Kubernetes Secrets rather than workflow variables. Because each runner pod is single-use, log shipping should tag logs with the workflow run ID before the pod disappears; otherwise debugging a failed build means reconstructing context from GitHub's UI alone. For air-gapped GitHub Enterprise Server deployments, verify that the Listener's long-poll path to the internal GHES hostname survives certificate rotation and proxy changes — a NAT or egress policy change mid-run breaks in-flight jobs even when idle runners look healthy.
 
 > **Pause and predict**: If a self-hosted GitHub runner relies on outbound HTTPS/443 polling to fetch jobs, what happens to the runner agent if your cluster's NAT gateway IP changes unexpectedly during a workflow execution?
 
 ### Gitea Actions: The Compatibility Layer
 
-Gitea Actions implements a GitHub Actions-compatible engine using `act_runner`. Runners connect to Gitea via gRPC, poll for jobs, and spawn Docker containers or Kubernetes pods.
+Gitea Actions implements a GitHub Actions-compatible engine using `act_runner`. Runners connect to Gitea via gRPC and poll for jobs. Official `act_runner` execution modes are host, Docker, or Docker-in-Docker (DinD) — not native per-job Kubernetes pods. On Kubernetes you typically run the `act_runner` controller itself inside a pod (often with DinD sidecar or host Docker socket on a dedicated node), and that controller launches job containers according to the selected mode.
 
 **Operational Characteristics:**
 * **Pros:** Reuses existing GitHub Actions community steps (`uses: actions/checkout@v4`). Familiar syntax.
 * **Cons:** GitHub-Actions-style workflows can become harder to debug when complex multi-container networking patterns are adapted to self-hosted runners. The translation layer occasionally fails on complex container networking setups (e.g., service containers communicating with the build container).
-* **Configuration:** Require configuring `container` contexts explicitly. `act_runner` daemon must have appropriate RBAC to spawn pods in the target namespace.
+* **Configuration:** Require configuring `container` contexts explicitly. When `act_runner` runs in-cluster, grant its ServiceAccount only the RBAC needed for its own pod — not cluster-admin — and isolate DinD nodes if you must use socket-based builds during migration.
 
 ## Deep Dive: GitLab Runner on Kubernetes
 
@@ -101,33 +134,70 @@ To do this securely, the GitLab Kubernetes executor requires Kubernetes API perm
 
 ### GitLab Runner Autoscaling on Kubernetes
 
-The GitLab Kubernetes executor does not include a native autoscaler, which means that a static set of runner pods will either sit idle and waste resources or become a bottleneck during build surges. Two common patterns address this. The first uses the Kubernetes `HorizontalPodAutoscaler` (HPA) on the runner Deployment, scaling based on CPU or memory utilization. This is straightforward but reactive — it takes a full metric collection cycle plus pod startup time before new capacity arrives, and the runner pods themselves must be configured to pick up multiple concurrent jobs (via the `concurrent` setting) for the HPA to have meaningful utilization signals.
+The GitLab Kubernetes executor already creates one pod per CI job. Autoscaling therefore means scaling how many runner manager pods accept work, or how many job pods the cluster can schedule — not invoking a separate "Kubernetes driver" inside `docker-autoscaler`. The `docker-autoscaler` and `fleeting` plugins target cloud instance groups or hypervisor APIs; they are not the supported on-prem pattern for pod-per-job builds.
 
-The second and more robust pattern uses the GitLab Runner's `docker+machine` or `docker-autoscaler` executor with a Kubernetes driver, which provisions VMs or containers on demand and deregisters them after idle timeout. On bare-metal Kubernetes, the `fleeting` plugin framework is the modern path: it allows GitLab Runner to dynamically create and destroy runner instances via a cloud-provider or Kubernetes API, with each instance handling a configurable number of jobs before being recycled. The key operational consideration is the `IdleCount` and `IdleTime` settings: `IdleCount` controls how many idle runners are kept warm (trading resource waste for job-start latency), while `IdleTime` determines how long an idle runner survives before the autoscaler removes it. For on-premises deployments where every node-hour has a direct CapEx cost, set `IdleCount` to zero so that capacity scales fully to demand, accepting the ~30-60 second cold-start penalty for new runner pods.
+Two patterns fit bare-metal Kubernetes. First, run GitLab Runner itself as a Deployment with the `kubernetes` executor and raise `concurrent` so each manager pod can schedule multiple job pods; pair the Deployment with an HPA on CPU or custom metrics (queued jobs if you export them). Second, run multiple runner Deployments partitioned by `nodeSelector`/`tolerations` — for example `amd64-build`, `arm64-build`, and `gpu-build` — so surge capacity lands on the right hardware without one queue starving another.
+
+```toml
+[[runners]]
+  name = "k8s-amd64"
+  executor = "kubernetes"
+  concurrent = 20
+  [runners.kubernetes]
+    namespace = "gitlab-runners"
+    cpu_request = "2"
+    memory_request = "4Gi"
+    poll_timeout = 600
+    node_selector = { "kubernetes.io/arch" = "amd64" }
+```
+
+Tune `poll_timeout`, job pod `resources.requests`, and cluster quotas together. On CapEx-sensitive fleets, keep `concurrent` aligned with real schedulable headroom rather than inflating runner replicas while the scheduler cannot place job pods. Any experimental Kubernetes fleeting plugin should be treated as non-official until your GitLab version documents it as supported.
 
 ## Deep Dive: Argo Workflows (CRD Native CI)
 
-Argo Workflows is a CNCF graduated project and the most widely adopted container-native workflow engine for Kubernetes. Unlike Tekton, which is purpose-built for CI/CD pipelines with a Task/Pipeline model, Argo Workflows provides a general-purpose DAG (directed acyclic graph) and steps-based workflow execution framework implemented entirely as Kubernetes CRDs. Each step in an Argo workflow runs as a container in a pod, and the workflow engine handles artifact passing, retry logic, and conditional branching natively.
+Argo Workflows is a CNCF graduated project and a mature container-native workflow engine for Kubernetes. Unlike Tekton, which is purpose-built for CI/CD pipelines with a Task/Pipeline model, Argo Workflows provides a general-purpose DAG (directed acyclic graph) and steps-based workflow execution framework implemented entirely as Kubernetes CRDs. Each step in an Argo workflow runs as a container in a pod, and the workflow engine handles artifact passing, retry logic, and conditional branching natively.
 
 Argo Workflows is particularly well-suited to CI/CD pipelines that mix build steps with data processing, machine learning training, or infrastructure provisioning — any scenario where the workflow graph contains non-trivial branching, fan-out/fan-in, or long-running compute steps. Its artifact repository (which defaults to S3-compatible storage like MinIO) decouples data passing from POSIX filesystem semantics entirely: steps exchange artifacts through S3 objects rather than shared volumes, eliminating the PVC attach/detach latency that plagues multi-node Tekton pipelines. This is a decisive architectural advantage on bare-metal clusters where `ReadWriteOnce` block storage forces all tasks onto the same node.
 
-The tradeoff is that Argo Workflows is not a dedicated CI tool — it does not include built-in Git webhook handling, pull-request status reporting, or a CI dashboard. These concerns are handled by Argo Events (for event-driven triggering) and Argo CD (for GitOps delivery), forming the broader Argo ecosystem. Teams that adopt Argo Workflows for CI typically pair it with Argo Events to trigger workflows from Git webhooks and Argo CD Notifications to report build status back to the Git provider.
+Production CI on Argo usually starts with a `WorkflowTemplate` that encodes build, test, scan, and push steps, then triggers it from Argo Events when a Git webhook fires. A `Sensor` listens to an `EventSource`, applies filters (branch, path, label), and submits a `Workflow` with parameters such as commit SHA and image tag. Status reporting back to Gitea or GitLab is not built in — wire a final workflow step that calls the provider API, or use Argo CD Notifications patterns for deployment events only.
 
-## Deep Dive: Jenkins on Kubernetes
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-and-push
+spec:
+  entrypoint: pipeline
+  artifactRepositoryRef:
+    configMap: artifact-repositories
+    key: default-v1
+  templates:
+    - name: pipeline
+      steps:
+        - - name: clone
+            template: git-clone
+        - - name: build
+            template: kaniko-build
+            arguments:
+              artifacts:
+                - name: source
+                  from: "{{steps.clone.outputs.artifacts.source}}"
+    - name: kaniko-build
+      inputs:
+        artifacts:
+          - name: source
+            path: /workspace
+      container:
+        image: ghcr.io/osscontainertools/kaniko:v1.23.2
+        args:
+          - --dockerfile=/workspace/Dockerfile
+          - --context=dir:///workspace
+          - --destination=registry.internal/app:{{workflow.parameters.tag}}
+```
 
-When migrating from virtual machines to Kubernetes, teams often attempt to lift-and-shift legacy CI tools like Jenkins. Jenkins uses a distributed architecture of controller, nodes, agents, and executors. The workers themselves, known as Jenkins agents, are Java-based processes that can use any operating system that supports Java.
+Configure the artifact repository `ConfigMap` once per cluster so every workflow step uses the same internal MinIO endpoint and credentials. For multi-architecture builds, fan out with `withItems` or separate workflow templates pinned to `kubernetes.io/arch` node selectors, then run a lightweight manifest-tool step to publish the OCI index. Retention is an etcd problem at scale — set `ttlStrategy` on workflows and run the Argo Workflow Controller's archive/retention settings so completed CI runs do not accumulate indefinitely.
 
-Modern deployments avoid static nodes. Jenkins can dynamically allocate agents through systems including Kubernetes. When configured correctly, the Jenkins Kubernetes plugin provisions pods for agents, creating a pod per agent and supporting shared/extra containers via pod templates. Interestingly, Jenkins agents are not required to run inside Kubernetes even when using the Kubernetes plugin — they can communicate with external controllers.
-
-**Operational Characteristics:**
-* **Pros:** Handles extreme edge cases via Groovy scripting.
-* **Configuration:** Running Jenkins on Kubernetes effectively requires abandoning UI-based configuration; Jenkins Configuration as Code (JCasC) should define the master state.
-* **Architecture:** The agent pod definition often requires multiple containers (a JNLP agent container to communicate with the master, and specific tool containers like `maven` or `node`).
-
-However, running a monolithic Jenkins controller inside Kubernetes presents significant operational challenges:
-* **Cons:** The JVM master is a single point of failure and memory hog. Long JVM pauses or an undersized Jenkins controller can destabilize webhook handling and agent connectivity under load.
-
-To mitigate this, you must explicitly configure `-Xmx` and `-Xms` JVM flags to match your Kubernetes Pod resource limits, preventing the Linux kernel OOM killer from terminating the controller during high load.
+The tradeoff is that Argo Workflows is not a dedicated CI tool — it does not include built-in Git webhook handling, pull-request status reporting, or a CI dashboard. These concerns are handled by Argo Events (for event-driven triggering) and Argo CD (for GitOps delivery), forming the broader Argo ecosystem. Teams that adopt Argo Workflows for CI typically pair it with Argo Events to trigger workflows from Git webhooks and Argo CD Notifications to report build status back to the Git provider. Legacy Jenkins pipelines are a common migration source: translate Groovy stages into workflow templates incrementally rather than lift-and-shifting the Jenkins controller into Kubernetes as a long-term target.
 
 ## Deep Dive: Tekton Pipelines (CRD Native)
 
@@ -137,6 +207,42 @@ Tekton operates without a central CI server. [Tekton is a cloud-native CI/CD fra
 * **Pros:** Complete Kubernetes API integration. RBAC applies directly to pipelines. Highly scalable; controller bottlenecks are extremely rare.
 * **Cons:** Extremely verbose YAML syntax. Sharing data between tasks requires `Workspaces` (PersistentVolumeClaims), which can introduce attach/detach latency on bare-metal block storage like Ceph.
 * **Production Gotcha:** PVC attach limits. If a `PipelineRun` spins up 10 parallel tasks [sharing the same `ReadWriteOnce` Workspace, the pods must be scheduled on the same node](https://tekton.dev/docs/pipelines/).
+
+Tekton Triggers closes the Git webhook gap without a monolithic CI server. An `EventListener` Service receives POSTed payloads, `TriggerBinding` extracts fields such as repository URL and revision, and `TriggerTemplate` materializes a `PipelineRun`. Because every object is a CRD, you can grant a team `create` on `pipelineruns` in its namespace while denying access to neighbor pipelines — something difficult to express when CI configuration lives only inside a SaaS UI.
+
+```yaml
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: gitea-push
+spec:
+  serviceAccountName: tekton-triggers
+  triggers:
+    - name: main-branch-build
+      bindings:
+        - ref: gitea-push-binding
+      template:
+        ref: build-pipeline-template
+```
+
+For supply-chain steps, Tekton Chains attaches provenance to `TaskRun` results and can push signatures to your internal registry. Pair Chains with cosign **public-key** verification in admission policy for air-gapped clusters — keyless Fulcio/Rekor flows assume reachable Sigstore services. When artifacts must cross tasks without shared PVCs, prefer Tekton's S3-compatible `artifact` storage (via credentials in a Secret) or an internal Results API deployment instead of chaining multiple `ReadWriteOnce` workspaces across nodes.
+
+Retention belongs in `TektonConfig`, not the observability ConfigMap. Enable the pruner (or Tekton Pruner component, depending on your distribution) to delete completed `PipelineRun` and `TaskRun` objects after a TTL, and cap `status` history so etcd stays healthy:
+
+```yaml
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonConfig
+metadata:
+  name: config
+spec:
+  pruner:
+    disabled: false
+    keep: 100
+    schedule: "0 3 * * *"
+    resources:
+      - pipelineruns
+      - taskruns
+```
 
 > **Stop and think**: If Tekton stores pipeline state entirely in `etcd`, what is the risk of [retaining 100,000 completed `PipelineRun` objects](https://tekton.dev/docs/pipelines/) in a production cluster?
 
@@ -154,7 +260,7 @@ The fundamental architectural distinction between CI push and CD pull becomes cr
 
 The GitOps pull model inverts this relationship entirely. With Argo CD or Flux, the CD agent runs inside the target cluster and pulls the desired state from a Git repository on a polling interval (default 3 minutes for Argo CD, configurable down to seconds). The CD agent authenticates to the Git server using its own read-only credentials. The CI pipeline never needs direct cluster access — it only needs permission to push to a Git branch. This inversion has profound security implications for bare-metal deployments. If a CI runner is compromised, the attacker can push to a Git branch, but the GitOps operator will reconcile that change through the normal diff-and-sync path, which should include required reviewers on the deployment branch, automated policy checks via OPA or Kyverno, and the normal Git audit trail. The attacker does not get a raw `kubectl apply` against the cluster.
 
-For air-gapped environments with no outbound internet access, both Argo CD and Flux support fully offline operation with internal Git servers (Gitea, GitLab CE). The CD agent polls the internal Git repository over the cluster-internal network. Container images referenced in the manifests must come from an internal registry (see Module 7.7), and Helm charts must be sourced from an internal chart repository or stored directly in the Git repository. Flux's OCIRepository source is particularly useful here: it can pull Helm charts packaged as OCI artifacts from your internal Harbor instance, and its `verify` field supports cosign signature verification against an air-gapped cosign deployment with an internal Rekor transparency log.
+For air-gapped environments with no outbound internet access, both Argo CD and Flux support fully offline operation with internal Git servers (Gitea, GitLab CE). The CD agent polls the internal Git repository over the cluster-internal network. Container images referenced in the manifests must come from an internal registry (see Module 7.7), and Helm charts must be sourced from an internal chart repository or stored directly in the Git repository. Flux's `OCIRepository` source can pull Helm charts packaged as OCI artifacts from your internal Harbor instance, but Flux does **not** support custom root CAs or self-hosted Rekor for cosign **keyless** verification. In air-gapped environments, verify OCI artifacts with cosign **public-key** signatures (`cosign verify --key cosign.pub`) or use Notation with a trust policy you control offline.
 
 ## Runner Security and Isolation
 
@@ -170,7 +276,7 @@ The corollary is that you must never, under any circumstances, bind-mount a pers
 
 Building OCI container images inherently involves operations that, in a traditional Docker-based CI setup, require the Docker daemon — which runs as root. Mounting the Docker socket (`/var/run/docker.sock`) into a CI pod gives that pod root-equivalent access to the host node's container runtime. An attacker who controls a Dockerfile can trivially escape the container by running a privileged container from inside the build, or by manipulating the host filesystem through volume mounts.
 
-The rootless build tools covered in the Unprivileged Container Builds section below — Kaniko, BuildKit (rootless), and Buildah — solve this by executing Dockerfile instructions entirely in user space, without any daemon. Kaniko runs as a non-root user inside its container and parses each Dockerfile instruction, executing the equivalent filesystem operations directly. BuildKit in rootless mode uses user namespaces to map the root user inside the build container to an unprivileged UID on the host. Neither requires the Docker socket, neither requires `privileged: true`, and neither can escape their pod's security context.
+The rootless build tools covered in the Unprivileged Container Builds section below — Kaniko, BuildKit (rootless), and Buildah — solve this by executing Dockerfile instructions entirely in user space, without any daemon. Kaniko is daemonless and avoids the Docker socket, but it is not generally rootless by default — it often runs as root inside the build container unless you combine a non-root `securityContext`, a compatible base image, and Dockerfile instructions that do not require setuid operations. BuildKit in rootless mode uses user namespaces to map the root user inside the build container to an unprivileged UID on the host. None of these tools require the Docker socket or `privileged: true` when configured correctly, but you should still set explicit pod `securityContext` and test with your real Dockerfiles.
 
 ### Supply Chain Integrity with Cosign and Sigstore
 
@@ -216,7 +322,7 @@ In the SaaS model, you pay a predictable per-minute rate for CI execution. GitHu
 
 On-premises CI shifts the bulk of the cost to CapEx: you buy servers, network gear, and rack space upfront, and those assets depreciate over a 3-5 year lifecycle. A modest CI cluster — three 1U servers with 32 cores and 128 GiB of RAM each, plus a 10 GbE switch, installed in an existing rack — might cost $25,000–$45,000 in hardware. Amortized over 3 years, that is $700–$1,250 per month, plus power and cooling (roughly $150–$300/month for three servers at typical datacenter rates), plus the ops headcount to maintain them. A fraction of one FTE — say, 10% of a platform engineer — adds another $1,000–$1,500/month in fully loaded cost. Total monthly cost for the on-prem CI cluster: roughly $2,000–$3,000.
 
-At a list price of $0.008/minute for GitHub Actions (typical Linux runner), 16,000 SaaS minutes cost $128/month. The SaaS is dramatically cheaper at this scale. The crossover point — where on-premises becomes cost-competitive — depends on your build volume, but a rough heuristic is around 200,000–400,000 CI minutes per month. Below that volume, SaaS CI is almost always cheaper. Above it, and especially when builds require specialized hardware (GPUs, large memory, ARM) that SaaS providers charge a premium for or simply do not offer, on-premises CI can deliver net savings.
+GitHub's published rate for Linux 2-core x64 hosted runners is [$0.006/minute](https://docs.github.com/en/billing/reference/actions-runner-pricing) as of 2026-06 — verify current pricing before modeling. **Illustrative example:** at that list rate, 16,000 SaaS minutes cost about $96/month. The SaaS line item is often dramatically cheaper at modest team scale. The crossover point — where on-premises becomes cost-competitive — depends on your build volume, power, staffing, and hardware specialization; treat any fixed minute threshold as a planning heuristic until you plug in your own quotes. Below modest utilization, SaaS CI is frequently cheaper. Above sustained high utilization, and especially when builds require specialized hardware (GPUs, large memory, ARM) that SaaS providers charge a premium for or simply do not offer, on-premises CI can deliver net savings.
 
 ### The Hidden Costs
 
@@ -441,13 +547,13 @@ D) A sidecar container in every CI pod that downloads dependencies during the po
 <summary>Question 7: You configure ARC Autoscaling Runner Sets for your GitHub Actions workflows. During a surge of 50 simultaneous workflow runs, you observe that only 10 runner pods are created, and the remaining 40 jobs queue with a `waiting for a runner` status for over 10 minutes. The Kubernetes cluster has ample free CPU and memory. What configuration is most likely limiting the scale-up?</summary>
 
 A) The GitHub Actions service has a hard limit of 10 concurrent jobs per repository.
-B) The AutoScalingRunnerSet resource has a `maxReplicas` field that caps the number of concurrent runner pods, and it is set to 10.
+B) The AutoscalingRunnerSet resource has `maxRunners` set to 10, capping concurrent ephemeral runner pods.
 C) The ARC Listener pod's long-poll connection to GitHub can only receive one job message per second.
 D) The Kubernetes scheduler cannot place more than 10 pods on the same node due to pod anti-affinity rules.
 
-**Answer:** B) The AutoScalingRunnerSet resource has a `maxReplicas` field that caps the number of concurrent runner pods, and it is set to 10.
+**Answer:** B) The AutoscalingRunnerSet resource has `maxRunners` set to 10, capping concurrent ephemeral runner pods.
 
-**Explanation:** ARC's Autoscaling Runner Sets scale within bounds defined by `minReplicas` and `maxReplicas` on the AutoScalingRunnerSet resource. If `maxReplicas` is set to 10, the controller will not create more than 10 runner pods regardless of how many jobs are queued. This is a deliberate safety mechanism to prevent a CI surge from consuming all available cluster resources, and it should be tuned based on your cluster's capacity and the resource profile of your runner pods. GitHub Actions itself supports far more than 10 concurrent jobs per repository (the limit is in the hundreds for paid plans).
+**Explanation:** ARC Autoscaling Runner Sets scale within bounds defined by `minRunners` and `maxRunners` on the `AutoscalingRunnerSet` resource. If `maxRunners` is 10, the controller will not create more than ten runner pods regardless of how many jobs are queued. This is a deliberate safety mechanism to prevent a CI surge from consuming all available cluster resources, and it should be tuned based on your cluster's capacity and the resource profile of your runner pods. GitHub Actions itself supports far more than ten concurrent jobs per repository on typical paid plans.
 </details>
 
 ## Hands-On Lab: Tekton Unprivileged Builds with Kaniko
@@ -521,7 +627,7 @@ kubectl get pods -n registry -l app=registry
 Apply the current Tekton Pipelines release directly from the release artifact.
 
 ```bash
-kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+kubectl apply --filename https://infra.tekton.dev/tekton-releases/pipeline/latest/release.yaml
 ```
 
 Wait for the controllers to become ready:
@@ -533,7 +639,7 @@ kubectl wait --for=condition=ready pods -l app.kubernetes.io/part-of=tekton-pipe
 <details>
 <summary>Task 3: Create the Kaniko Task</summary>
 
-Define a reusable `Task` that accepts a Git repository URL, clones it, and runs Kaniko. Note we are using `v1.22.0` of Kaniko in this specific example.
+Define a reusable `Task` that accepts a Git repository URL, clones it, and runs Kaniko from the maintained [osscontainertools/kaniko](https://github.com/osscontainertools/kaniko) lineage. The sample repo has no root `Dockerfile` — build `src/emailservice/` instead.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -558,13 +664,12 @@ spec:
         rm -rf \$(workspaces.source.path)/*
         git clone \$(params.git-url) \$(workspaces.source.path)
     - name: build-and-push
-      image: gcr.io/kaniko-project/executor:v1.22.0
-      workingDir: \$(workspaces.source.path)
+      image: ghcr.io/osscontainertools/kaniko:v1.23.2
       command:
         - /kaniko/executor
       args:
         - --dockerfile=Dockerfile
-        - --context=\$(workspaces.source.path)
+        - --context=dir://\$(workspaces.source.path)/src/emailservice
         - --destination=\$(params.image)
         - --insecure=true
         - --skip-tls-verify=true
@@ -614,9 +719,9 @@ POD=$(kubectl get pod -l tekton.dev/taskRun=$TASKRUN -o jsonpath='{.items[0].met
 kubectl logs $POD -c step-build-and-push -f
 ```
 
-Expected output:
+Expected output (Python base image for emailservice):
 ```text
-INFO[0000] Retrieving image manifest golang:1.22.1-alpine
+INFO[0000] Retrieving image manifest python:3.12-slim
 ...
 INFO[0012] Pushing image to registry.registry.svc.cluster.local:5000/email-service:latest
 INFO[0012] Pushed registry.registry.svc.cluster.local:5000/email-service@sha256:...
@@ -629,7 +734,7 @@ INFO[0012] Pushed registry.registry.svc.cluster.local:5000/email-service@sha256:
 
 **Practitioner Gotchas:** Beyond the basic troubleshooting steps above, experienced operators should watch for these deeper failure modes that surface under sustained production load with complex multi-step pipelines:
 1. **PVC Attach/Detach Latency on Workspaces:** When pipelines pass state between tasks via a shared PVC, volume detach/attach delays can add noticeable overhead if successive tasks land on different nodes. This adds massive overhead to multi-step pipelines. *Fix:* Use Node affinity to force all Pods for a specific `PipelineRun` onto the same Node, or switch to S3/GCS API-based artifact passing instead of POSIX mounts. If `ReadWriteMany` is used via NFS to bypass this, I/O bottlenecks will quickly degrade build performance.
-2. **Dangling Pipeline Resources:** Tekton and Jenkins Kubernetes agents can leave stale pods behind when cleanup paths fail, so operators should monitor CI namespaces and prune abandoned resources. *Fix:* Configure aggressive Pod GC thresholds on the kubelet, and deploy a CronJob to prune CI namespaces of pods older than 24 hours. For Tekton, configure the `tekton-config-observability` ConfigMap to limit history.
+2. **Dangling Pipeline Resources:** Tekton TaskRuns and legacy migration agents can leave stale pods behind when cleanup paths fail, so operators should monitor CI namespaces and prune abandoned resources. *Fix:* Configure aggressive Pod GC thresholds on the kubelet, deploy a CronJob to prune CI namespaces of pods older than 24 hours, and enable Tekton pruning via `TektonConfig` `spec.pruner` or the Tekton Pruner component — not `tekton-config-observability`, which controls metrics rather than retention.
 3. **Kaniko Memory Spikes:** Large image builds can exhaust Kaniko pod memory, so resource sizing and Kaniko snapshot and caching settings should be tested against the real build context.
 4. **Woodpecker/Drone Server SQLite Corruption:** Some lightweight CI servers default to embedded SQLite databases, which is convenient for evaluation but a poor fit for a production CI control plane; use an external database for serious deployments.
 
@@ -656,7 +761,6 @@ Now that you have established a secure, unprivileged CI pipeline capable of buil
 
 * [Tekton Architecture Overview](https://tekton.dev/docs/concepts/overview/)
 * [Building Images with Kaniko](https://github.com/GoogleContainerTools/kaniko)
-* [Jenkins Kubernetes Plugin Documentation](https://plugins.jenkins.io/kubernetes/)
 * [Woodpecker CI Architecture](https://woodpecker-ci.org/docs/architecture)
 * [act_runner Configuration](https://docs.gitea.com/usage/actions/act-runner)
 * [Argo Workflows Overview](https://argoproj.github.io/argo-workflows/)
