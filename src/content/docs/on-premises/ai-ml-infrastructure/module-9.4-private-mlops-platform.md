@@ -122,18 +122,18 @@ Machine learning models are functions of the code and the data they are trained 
 
 ### DVC (Data Version Control)
 
-DVC operates directly on top of Git. It tracks large datasets by storing metadata pointers (`.dvc` files) in Git while pushing the actual payload to MinIO. [The latest stable version of DVC is 3.67.1, released under the Apache 2.0 license](https://github.com/iterative/dvc/releases).
+DVC operates directly on top of Git. It tracks large datasets by storing metadata pointers (`.dvc` files) in Git while pushing the actual payload to MinIO. [As of 2026-06, DVC remained on the 3.x release line and was released under the Apache 2.0 license; verify the exact patch version against the releases page before pinning it in production](https://github.com/iterative/dvc/releases).
 *   **Pros:** Requires zero additional infrastructure beyond your Git server and an S3-compatible endpoint. It leverages the developer's existing Git workflow seamlessly.
 *   **Cons:** Client-side heavy. Engineers must configure their local environment with S3 credentials, which can become an operational burden as the team scales across many projects.
 
 ### LakeFS
 
 LakeFS provides Git-like operations (branch, commit, merge, revert) directly over object storage via an API proxy. 
-*   **Pros:** Server-side implementation. Zero-copy branching (branching a ten-terabyte dataset takes milliseconds and consumes no extra storage).
+*   **Pros:** Server-side implementation. Zero-copy branching is near-instant in normal operation because a branch records metadata pointers instead of copying every object.
 *   **Cons:** Requires running a dedicated LakeFS PostgreSQL database and API server on the cluster. Applications must use the LakeFS S3 gateway endpoint instead of the direct MinIO endpoint.
 
 :::tip
-For smaller teams, DVC is sufficient. Once you exceed 50TB of training data or require strict isolation between concurrent training runs accessing the same dataset, deploy LakeFS.
+For smaller teams, DVC is usually sufficient. Treat the LakeFS cutover as a local benchmark decision rather than a universal capacity number: when dataset volume, concurrent branch isolation, or audit requirements outgrow client-side Git-pointer workflows on your hardware, move the branch semantics into LakeFS.
 :::
 
 For massive relational data warehousing on-prem, teams often rely on Greenplum or distributed PostgreSQL extensions, treating them as equivalent to cloud-native BigQuery.
@@ -142,11 +142,11 @@ For massive relational data warehousing on-prem, teams often rely on Greenplum o
 
 A feature store solves a fundamental problem: bridging the gap between historical data (used for batch training) and real-time data (used for millisecond-latency inference serving). It ensures that the data features used for training exactly match the features used for serving, preventing training-serving skew. 
 
-Feast is a prominent open-source choice. [Currently at v0.62.0, Feast is licensed under Apache 2.0](https://github.com/feast-dev/feast/releases). Notably, Feast is not a CNCF project, operating independently as an open standard for feature engineering.
+Feast is a prominent open-source choice. [As of 2026-06, Feast was on the 0.x release line and licensed under Apache 2.0; verify the exact release against the project releases page before pinning a deployment](https://github.com/feast-dev/feast/releases). Notably, Feast is not a CNCF project, operating independently as an open standard for feature engineering.
 
 Feast relies on two storage tiers:
 1.  **Offline Store:** Used for batch training. On bare metal, this is typically Apache Parquet files stored in MinIO or tables in a centralized PostgreSQL instance. It stores the historical data required to generate training datasets.
-2.  **Online Store:** Used for low-latency inference lookups. On bare metal, this is exclusively Redis. It serves only the latest real-time data points needed by live models.
+2.  **Online Store:** Used for low-latency inference lookups. Redis is the usual low-latency default we use in this module, but Feast also supports online stores such as Dragonfly, PostgreSQL, MySQL, Cassandra, MongoDB, and others; verify the supported list against the Feast documentation before standardizing. The online tier serves only the latest real-time data points needed by live models.
 
 ### Feast Configuration (`feature_store.yaml`)
 
@@ -179,7 +179,7 @@ Finally, this design generalises: any feature store you evaluate (Tecton, Hopswo
 
 ## Experiment Tracking: MLflow Architecture
 
-MLflow is hosted under the LF AI & Data Foundation (it is not a CNCF project) and is Apache 2.0 licensed. The current stable release is in major version 3 (v3.11.1), moving well past the legacy v2 architecture. MLflow officially supports Kubernetes as a backend for running MLflow Projects, allowing it to build Docker images and submit Kubernetes Jobs seamlessly without external orchestrators.
+MLflow is hosted under the LF AI & Data Foundation (it is not a CNCF project) and is Apache 2.0 licensed. As of 2026-06, MLflow was on its 3.x release line, moving well past the legacy v2 architecture; verify the exact patch version against the project releases page before pinning production images. MLflow officially supports Kubernetes as a backend for running MLflow Projects, allowing it to build Docker images and submit Kubernetes Jobs seamlessly without external orchestrators.
 
 MLflow requires a carefully architected deployment to prevent data loss and ensure high availability. By default, running `mlflow server` writes data to the local container filesystem, which is immediately lost upon pod termination.
 
@@ -220,15 +220,15 @@ The connection-pool sizing rule that catches most teams off-guard is worth memor
 
 ### Why MinIO over Ceph for the Small-Cluster Case
 
-The reflexive on-prem answer for "S3-compatible storage" is Ceph via the Rook operator, but that choice is wrong for most MLOps deployments below roughly fifty terabytes of artifacts. MinIO is a **single-binary object server** that stores data on the host filesystem with optional erasure coding across drives; a four-node MinIO cluster on commodity NVMe hardware consistently delivers single-digit-millisecond `GET` latencies and is operationally trivial to deploy via the Bitnami chart used in this module's lab. Ceph, by contrast, is a **distributed storage system** that provides block (RBD), file (CephFS), and object (RGW) interfaces simultaneously, with a CRUSH map, monitors, OSDs, and an MDS to coordinate. Operating Ceph competently is a full-time discipline; the cluster requires a minimum of three monitor nodes, careful network sizing (separate front-end and back-end networks for OSD recovery traffic), and operational familiarity with PG balancing and scrubbing.
+The reflexive on-prem answer for "S3-compatible storage" is Ceph via the Rook operator, but that choice is too heavy for many early MLOps deployments whose object-store workload is mostly experiment artifacts and model checkpoints. MinIO is a **single-binary object server** that stores data on the host filesystem with optional erasure coding across drives; on your hardware, benchmark latency, throughput, erasure-coding overhead, and failure recovery before declaring it sufficient for production. Ceph, by contrast, is a **distributed storage system** that provides block (RBD), file (CephFS), and object (RGW) interfaces simultaneously, with a CRUSH map, monitors, OSDs, and an MDS to coordinate. Operating Ceph competently is a full-time discipline; the cluster requires multiple monitor nodes, careful network sizing, and operational familiarity with PG balancing and scrubbing.
 
-The break-even point depends on workload, but a useful rule of thumb is: stay on MinIO until at least one of these is true — total artifact volume exceeds fifty terabytes, multi-region replication is a hard requirement, or the same cluster must already host Ceph for block storage (in which case running RGW on top of the existing OSDs costs nothing extra). Below that threshold, MinIO's operational simplicity dominates: a single SRE can confidently take MinIO from zero to production in an afternoon, while Ceph will require weeks of capacity planning, network tuning, and failover drills before it is trustworthy enough to back a model registry. Teams that pick Ceph "because it scales further" without first hitting MinIO's limits typically discover that the unfamiliar failure modes — placement-group degradation, slow `osd_op_complaint_time` warnings, MDS rank failures — pull more SRE time than they ever save.
+The break-even point depends on workload, but a useful rule of thumb is: stay on MinIO until benchmarking shows that artifact volume, recovery time, multi-site replication, or shared storage strategy requires Ceph. Below that locally measured threshold, MinIO's operational simplicity often dominates; above it, Ceph's broader storage model may justify the extra planning, network tuning, and failover practice. Teams that pick Ceph "because it scales further" without first measuring MinIO's limits typically discover that unfamiliar failure modes — placement-group degradation, slow `osd_op_complaint_time` warnings, MDS rank failures — pull more SRE time than they expected.
 
 The exception worth flagging: if the cluster is *already* running Ceph for stateful workloads (Postgres PVCs, Redis AOF, or RWX volumes for shared notebook home directories), enabling RGW costs essentially nothing and centralises object storage on the same operational substrate. In that environment, MinIO becomes redundant infrastructure. The decision is contextual, not categorical.
 
 :::caution
 **Boto3 Connection Timeouts**
-When configuring MLflow client pods to talk to MinIO, you must explicitly set connection timeouts in boto3. If `MLFLOW_S3_ENDPOINT_URL` is inaccessible or misconfigured, boto3 defaults to a high-latency timeout with multiple retries, causing training pods to hang silently for over five minutes before finally failing. [Always set `AWS_METADATA_SERVICE_TIMEOUT=1` and `AWS_MAX_ATTEMPTS=2`](https://docs.aws.amazon.com/sdkref/latest/guide/settings-reference.html) to ensure the pod fails fast and frees up cluster resources.
+When configuring MLflow client pods to talk to MinIO, you must explicitly set connection timeouts in boto3. If `MLFLOW_S3_ENDPOINT_URL` is inaccessible or misconfigured, boto3 can wait through multiple high-latency retry attempts, causing training pods to hang for minutes before finally failing. [Always set `AWS_METADATA_SERVICE_TIMEOUT=1` and `AWS_MAX_ATTEMPTS=2`](https://docs.aws.amazon.com/sdkref/latest/guide/settings-reference.html) to ensure the pod fails fast and frees up cluster resources.
 :::
 
 ## Orchestration & Pipelines
@@ -246,20 +246,20 @@ flowchart LR
     C --> D[Evaluate Holdout<br/>scikit-learn]
     D -->|metric &gt; threshold| E[Register Model<br/>MLflow]
     D -->|metric &le; threshold| F[Notify Owner<br/>Alertmanager]
-    E --> G[Promote to Staging<br/>KServe canary]
+    E --> G[Assign @challenger<br/>KServe canary]
 ```
 
 Steps A and B are I/O bound and fail most often due to upstream data drift; they should retry aggressively (up to 5 times with exponential backoff). Steps C and D are compute bound on GPU nodes; retrying a 4-hour training run blindly burns expensive cycles, so retry policy here should be `OnFailure` with a strict count of 1 and clear escalation to a human. Step E is a transactional write to MLflow and PostgreSQL; idempotency must be guaranteed by hashing the model artifact rather than the wall-clock timestamp, otherwise a partial failure leaves duplicate registry entries.
 
 ### Kubeflow & KFP
-[Kubeflow is a CNCF Incubating project (accepted July 2023, not yet Graduated)](https://www.cncf.io/blog/2023/07/25/kubeflow-brings-mlops-to-the-cncf-incubator/), with its latest stable release at v1.10.0. Kubeflow Pipelines (KFP) SDK v1 is frozen at v1.8.22; SDK v2 (v2.16.0) is the only actively developed version. Crucially, [the KFP v2 SDK compiles pipelines to a backend-agnostic IR YAML format](https://kubeflow-pipelines.readthedocs.io/en/sdk-2.16.0/source/overview.html), moving away from the Argo Workflow YAML dependency of v1.
+[Kubeflow is a CNCF Incubating project (accepted July 2023, not yet Graduated)](https://www.cncf.io/blog/2023/07/25/kubeflow-brings-mlops-to-the-cncf-incubator/). As of 2026-06, Kubeflow remained in the 1.x platform release line; verify the exact patch version before pinning platform manifests. Kubeflow Pipelines (KFP) SDK v1 is frozen on the legacy 1.x line, while SDK v2 is the actively developed line. Crucially, [the KFP v2 SDK compiles pipelines to a backend-agnostic `PipelineSpec` intermediate representation](https://kubeflow-pipelines.readthedocs.io/en/sdk-2.16.0/source/overview.html), a protobuf/JSON structure that is distinct from Argo Workflow YAML and Argo runtime status.
 
-For model training, [Kubeflow Trainer v2.2 supports PyTorch, JAX, XGBoost, MPI, and Flux distributed training under a single unified `TrainJob` CRD](https://github.com/kubeflow/trainer). Hyperparameter optimization is handled by [Katib (v0.19.0), which supports algorithms including grid search, random search, Bayesian optimization, Hyperband, TPE, multivariate-TPE, CMA-ES, Sobol, and Population Based Training (PBT)](https://github.com/kubeflow/katib).
+For model training, [Kubeflow Trainer's v2-era `TrainJob` API supports PyTorch, JAX, XGBoost, MPI, and Flux distributed training under a single unified CRD](https://github.com/kubeflow/trainer). Hyperparameter optimization is handled by [Katib, whose 0.x release line supports algorithms including grid search, random search, Bayesian optimization, Hyperband, TPE, multivariate-TPE, CMA-ES, Sobol, and Population Based Training (PBT)](https://github.com/kubeflow/katib); verify the exact Katib release before selecting CRD versions.
 
 ### Argo & Tekton
-Argo Workflows maintains both a v4.x branch (v4.0.4) and a v3.x LTS branch (v3.7.13) simultaneously, and [the Argo project as a whole is a CNCF Graduated project](https://www.cncf.io/projects/argo/). Alternatively, [Tekton Pipelines (latest v1.11.0) is a CNCF Incubating project as of March 2026, having moved from the Continuous Delivery Foundation](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/).
+As of 2026-06, Argo Workflows maintained both v4 and v3 LTS release lines, and [the Argo project as a whole is a CNCF Graduated project](https://www.cncf.io/projects/argo/); verify the exact controller patch before installing CRDs. Alternatively, [Tekton Pipelines is a CNCF Incubating project as of March 2026, having moved from the Continuous Delivery Foundation](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/), and its exact release should be checked against the Tekton releases page before pinning pipeline manifests.
 
-A minimal Argo Workflow that mirrors the canonical DAG above looks like this. Note the explicit `artifacts` block that hands the trained model from the `train` step to the `evaluate` step via the cluster's MinIO bucket — without this declaration, Argo would not know how to wire pod outputs into pod inputs.
+A minimal Argo Workflow excerpt that mirrors the canonical DAG above looks like this. It is intentionally abbreviated: the DAG wiring and GPU `pytorch-train` template are shown, while the `ge-validate`, `feast-materialize`, and `holdout-eval` step templates are elided for brevity. Note the explicit `artifacts` block that hands the trained model from the `train` step to the `evaluate` step via the cluster's MinIO bucket — without this declaration, Argo would not know how to wire pod outputs into pod inputs.
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -308,12 +308,12 @@ spec:
 
 The `retryStrategy` is intentionally tight on GPU steps: silently retrying a failed training job consumes hours of accelerator time and almost never succeeds the second time without human intervention. The `arguments.artifacts` block uses Argo's `from:` syntax to reference an upstream task's output, which the controller resolves to a MinIO presigned URL at scheduling time.
 
-#### From High-Level Template to Compiled IR
+#### Authored Workflow, Runtime Status, and KFP IR
 
-The YAML above is the *authored* form — what a platform engineer types into version control. What actually runs on the cluster is the *compiled* form: the Argo controller takes the templates, resolves all `{{tasks.*.outputs.*}}` references, expands artifact arguments, and synthesises a `WorkflowTaskResult` plus per-step `Pod` specs. KFP v2 makes this lowering explicit: the SDK emits a backend-agnostic IR YAML where every step is a fully-qualified executor spec with its inputs and outputs already resolved. Reading this lowered form is the difference between debugging a pipeline by guessing and debugging it by inspection.
+The YAML above is the *authored* Argo Workflow form — what a platform engineer types into version control. Once submitted, the Argo controller creates pods, records node state, resolves artifact locations, and stores runtime details under `status.nodes`; that runtime status is what `argo get -o yaml <workflow-name>` shows. KFP v2 is a separate layer: the SDK compiler emits a backend-agnostic `PipelineSpec` IR as a protobuf/JSON structure before any backend turns it into runnable resources. Do not treat Argo `status.nodes` as KFP IR, and do not expect a KFP run lookup to dump the same Argo runtime object.
 
 ```yaml
-# Argo / KFP v2 lowered IR — what the controller actually executes
+# Argo runtime status excerpt — representative output shape from `argo get -o yaml`
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
@@ -369,28 +369,28 @@ status:
       boundaryID: train-fraud-model-9c2f1
 ```
 
-Three things are worth noticing in the lowered form. First, the `from:` reference in the authored YAML has been resolved into a concrete `s3.bucket` + `s3.key` pair pointing at the workflow-scoped MinIO prefix — this is why two simultaneous runs of the same pipeline never collide on artifact paths, and why deleting a workflow safely garbage-collects its artifacts. Second, the `resourcesDuration` block under each Pod node records exactly how many GPU-seconds and memory-megabyte-seconds that step consumed; the cluster autoscaler and your chargeback dashboard read this same field, so a pipeline whose IR is missing `resourcesDuration` is invisible to FinOps. Third, `boundaryID` ties child nodes to their parent DAG node, which is how Argo prunes a sub-tree when a parent fails — without it, a failed `train` step would orphan `evaluate` rather than mark it `Omitted`.
+Three things are worth noticing in the runtime status. First, the `from:` reference in the authored YAML has been resolved into a concrete `s3.bucket` + `s3.key` pair pointing at the workflow-scoped MinIO prefix; this is why two simultaneous runs of the same pipeline do not collide on artifact paths. Artifact cleanup is a separate control: Argo deletes object-store artifacts only when artifact garbage collection is explicitly configured through `spec.artifactGC` and the artifact repository policy, so never assume Workflow deletion alone cleans the bucket. Second, the `resourcesDuration` block under each Pod node records how many GPU-seconds and memory-megabyte-seconds that step consumed; your chargeback dashboard can use this runtime field, but it is not part of the authored KFP `PipelineSpec`. Third, `boundaryID` ties child nodes to their parent DAG node, which is how Argo prunes a sub-tree when a parent fails — without it, a failed `train` step would orphan `evaluate` rather than mark it `Omitted`.
 
-When debugging a stuck pipeline, fetch the lowered IR with `argo get -o yaml <workflow-name>` rather than re-reading the authored template. The authored template tells you what was *supposed* to happen; the IR tells you what the controller actually scheduled, which step is currently `Running`, and which artifact key downstream pods are blocking on. KFP v2 users get the same view through `kfp run get --output yaml`, which dumps the same IR structure with KFP's wrapper fields.
+When debugging a stuck Argo-backed pipeline, fetch runtime status with `argo get -o yaml <workflow-name>` rather than re-reading the authored template. The authored template tells you what was *supposed* to happen; the Argo status tells you what the controller actually scheduled, which step is currently `Running`, and which artifact key downstream pods are blocking on. For KFP v2, inspect the compiled `PipelineSpec` when validating the portable pipeline contract, then inspect the backend-specific run or Argo Workflow status when debugging a concrete execution.
 
 ### KubeRay
-For heavy distributed computing, [KubeRay (v1.6.0) is utilized. KubeRay is not a CNCF project; it is maintained under the Ray project ecosystem](https://github.com/ray-project/kuberay) originating at Anyscale. Ray is the right choice when a single training step needs to fan out across dozens of pods (distributed XGBoost, distributed hyperparameter tuning, or large-scale data preprocessing); Argo and KFP remain the right choice for stitching coarse-grained steps into a multi-stage pipeline.
+For heavy distributed computing, [KubeRay is used in the Ray ecosystem and, as of 2026-06, remained on the 1.x release line rather than being a CNCF project](https://github.com/ray-project/kuberay). Ray is the right choice when a single training step needs to fan out across dozens of pods (distributed XGBoost, distributed hyperparameter tuning, or large-scale data preprocessing); Argo and KFP remain the right choice for stitching coarse-grained steps into a multi-stage pipeline.
 
 > **Pause and predict**: A team complains that their nightly KFP pipeline succeeds in development but fails in production with `artifact not found` errors at the `evaluate` step. The pipeline definitions are byte-identical between environments. What is the most likely root cause?
 > *Answer*: The production cluster is using a different MinIO bucket prefix than the artifact repository the pipeline expects, and the `artifactRepositoryRef` ConfigMap is missing or misconfigured in the production namespace. Argo and KFP resolve artifact paths at scheduling time using the cluster-scoped artifact repository configuration; pipeline YAML alone never carries the bucket name. Verify the ConfigMap in each target namespace before promoting pipelines across environments.
 
 ## Model Serving: KServe & Triton
 
-KServe provides a Kubernetes Custom Resource Definition (CRD) for serving ML models. It handles autoscaling, networking, health checking, and server configuration across multiple frameworks. [It is a CNCF Incubating project (accepted September 2025). The latest stable release is v0.17.0](https://www.cncf.io/projects/kserve/). 
+KServe provides a Kubernetes Custom Resource Definition (CRD) for serving ML models. It handles autoscaling, networking, health checking, and server configuration across multiple frameworks. [It is a CNCF Incubating project; the public CNCF announcement for incubation is dated November 11, 2025, and as of 2026-06 KServe remained on the 0.x release line, so verify the exact controller version before installing CRDs](https://www.cncf.io/projects/kserve/).
 
 While historically widely referred to as KFServing in community lore—though this historical rename is unverified in current official documentation—[canonical documentation today refers to it exclusively as KServe. The KServe InferenceService API version is `serving.kserve.io/v1beta1`](https://www.cncf.io/blog/2025/11/11/kserve-becomes-a-cncf-incubating-project/); it has not yet graduated to a v1 stable release. You will often see `modelserving/v1beta1` in legacy deployment descriptors.
 
-Knative Serving (latest v1.21.2) is optional for KServe; it is only required for the serverless (scale-to-zero) deployment mode. Standard deployments can run without Knative if autoscaling to zero is not required or desired.
+As of 2026-06, Knative Serving remained on the 1.x release line. It is optional for KServe; Knative is only required for the serverless scale-to-zero deployment mode. Standard deployments can run without Knative if autoscaling to zero is not required or desired.
 
 ### Supported Runtimes
-KServe built-in runtimes include TensorFlow Serving, NVIDIA Triton, Hugging Face Server, LightGBM, XGBoost, SKLearn, MLflow, and OpenVINO Model Server. TorchServe is not a built-in runtime; PyTorch models are served via Triton. [NVIDIA Triton Inference Server (v2.67.0, NGC container release 26.03) is particularly powerful, supporting TensorRT, PyTorch (TorchScript), TensorFlow, ONNX Runtime, OpenVINO, Python, RAPIDS FIL, and vLLM backends](https://github.com/triton-inference-server/server/releases). 
+KServe built-in runtimes include TensorFlow Serving, NVIDIA Triton, Hugging Face Server, LightGBM, XGBoost, SKLearn, MLflow, OpenVINO Model Server, and a TorchServe runtime. PyTorch's TorchServe project is in limited maintenance with no planned fixes or security patches, so treat TorchServe as a legacy option and prefer Triton for new PyTorch serving. [As of 2026-06, NVIDIA Triton Inference Server remained on the v2 release line with NGC container releases and supported TensorRT, PyTorch (TorchScript), TensorFlow, ONNX Runtime, OpenVINO, Python, RAPIDS FIL, and vLLM backends](https://github.com/triton-inference-server/server/releases).
 
-As an alternative to KServe, Seldon Core v2 uses the Business Source License (BSL), not Apache 2.0, which may impact your deployment compliance. BentoML (v1.4.38) is another alternative, commonly understood to be Apache 2.0 licensed, though you must always verify repository licenses in enterprise contexts (as the license is unverified in our authoritative fact ledger).
+As an alternative to KServe, Seldon Core v2 uses the Business Source License (BSL), not Apache 2.0, which may impact your deployment compliance. As of 2026-06, BentoML was on the 1.x release line and commonly understood to be Apache 2.0 licensed, though you must always verify repository licenses in enterprise contexts because the license is unverified in our authoritative fact ledger.
 
 ### A/B Testing and Canary Rollouts
 
@@ -421,7 +421,7 @@ GPU-backed serving introduces failure modes you will never see on CPU-only workl
 
 1. **GPU memory exhaustion under concurrent requests.** A model that fits in 12 GB of VRAM at batch size 1 may overflow at batch size 8 because the framework allocates intermediate activation tensors per request. The pod does not crash cleanly — `nvidia-smi` reports `out of memory` and Triton or TorchServe returns HTTP 500 for that request only, leaving the pod in a degraded state where every fourth or fifth request fails. Mitigation: enforce a `containerConcurrency` ceiling derived from a load test, not from CPU intuition.
 2. **Model loading hangs at pod startup.** When a 30 GB LLM weight file pulls slowly from MinIO, the readiness probe times out before the model finishes loading, Kubernetes marks the pod unhealthy, and rolling updates stall indefinitely. Mitigation: set `readinessProbe.initialDelaySeconds` to at least the 95th-percentile model load time observed in staging, and prefer `storageInitializer` sidecars that pre-stage weights to a `RWO` PVC during the init phase.
-3. **Eviction by GPU pressure on shared nodes.** When a higher-priority training job lands on the same GPU node, the kubelet evicts the inference pod even if its CPU and memory budgets are well within limits. Mitigation: separate inference and training into distinct node pools using `nodeSelector` and a dedicated `kserve-gpu` taint, or use Kubernetes Pod Priority classes with a `system-cluster-critical` priority for production inference services.
+3. **Eviction by GPU pressure on shared nodes.** When a higher-priority training job lands on the same GPU node, the kubelet evicts the inference pod even if its CPU and memory budgets are well within limits. Mitigation: separate inference and training into distinct node pools using `nodeSelector` and a dedicated `kserve-gpu` taint, or define a custom application PriorityClass such as `mlops-inference-critical` with a value below the reserved system priority range. Built-in `system-cluster-critical` and `system-node-critical` priorities are for cluster components, not ordinary inference workloads.
 
 > **Stop and think**: If your serving SLO is p99 < 200 ms and your model takes 90 seconds to load from MinIO, why is `minScale: 0` always wrong even when traffic is sparse?
 > *Answer*: A scale-from-zero event introduces a worst-case 90-second pod startup tail before the first byte of response, which is 450× the SLO budget. Cost-conscious teams sometimes accept this for internal-only batch APIs, but any externally-facing inference service must use `minScale: 1` (or higher) to keep at least one warm replica in memory.
@@ -456,8 +456,49 @@ flowchart LR
 OPA Gatekeeper compiles Rego policies into ConstraintTemplates and enforces them via Kubernetes admission webhooks. A common ML platform requirement is forbidding any pod that requests a GPU without also declaring a memory limit — without the limit, a runaway training job can starve every other pod on the node.
 
 ```yaml
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sgpumemorylimit
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sGpuMemoryLimit
+      validation:
+        openAPIV3Schema:
+          type: object
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8sgpumemorylimit
+
+      import rego.v1
+
+      violation contains {"msg": msg} if {
+        input.review.object.kind == "Pod"
+        container := input.review.object.spec.containers[_]
+        gpu_request := container.resources.requests["nvidia.com/gpu"]
+        not container.resources.limits.memory
+        msg := sprintf(
+          "container %q requests %v GPU(s) but does not set resources.limits.memory",
+          [container.name, gpu_request],
+        )
+      }
+
+      violation contains {"msg": msg} if {
+        input.review.object.kind == "Pod"
+        container := input.review.object.spec.initContainers[_]
+        gpu_request := container.resources.requests["nvidia.com/gpu"]
+        not container.resources.limits.memory
+        msg := sprintf(
+          "initContainer %q requests %v GPU(s) but does not set resources.limits.memory",
+          [container.name, gpu_request],
+        )
+      }
+---
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sRequiredResources
+kind: K8sGpuMemoryLimit
 metadata:
   name: gpu-pods-must-set-memory-limit
 spec:
@@ -466,17 +507,13 @@ spec:
     - apiGroups: [""]
       kinds: ["Pod"]
     namespaces: ["mlops", "training"]
-  parameters:
-    limits: ["memory"]
-    selectors:
-      resourceRequests: ["nvidia.com/gpu"]
 ```
 
 When a pipeline submits a training pod that requests a GPU but omits `resources.limits.memory`, the admission webhook rejects the pod and writes a structured deny event to the audit log. The pipeline step fails fast at submission rather than mid-run, which prevents wasted GPU time and produces a clear, actionable error message for the data scientist who authored the manifest.
 
 #### Enforcing Model-Promotion Rules in Rego
 
-Resource policies are the easy half of governance. The harder half is policies that gate *what* gets shipped — specifically, the rule that no model artifact may move from the `staging` to the `production` MLflow stage without (a) a passing evaluation score on a holdout dataset, (b) a signed-off model card, and (c) provenance that ties the artifact back to a known training run. These checks must happen at admission time on the KServe `InferenceService` resource, not in CI, because a determined operator can always `kubectl apply` directly and bypass any pipeline-level gate. Below is a ConstraintTemplate plus the corresponding Rego module that encodes all three rules. The Rego is valid against OPA's `v1` (formerly `rego.v1`) syntax and uses the standard `gatekeeper.sh/v1` ConstraintTemplate shape.
+Resource policies are the easy half of governance. The harder half is policies that gate *what* gets shipped — specifically, the rule that a model version should receive an MLflow alias such as `@champion` or `@challenger`, plus the required environment tags, only after (a) a passing evaluation score on a holdout dataset, (b) a signed-off model card, and (c) provenance that ties the artifact back to a known training run. MLflow Model Registry stages are deprecated, so do not build new promotion workflows around those stage fields. These checks must happen at admission time on the KServe `InferenceService` resource, not only in CI, because a determined operator can always `kubectl apply` directly and bypass any pipeline-level gate. Below is a ConstraintTemplate plus the corresponding Rego module that encodes the KServe-side deployment guard: production is a deployment environment label, while the MLflow model version is identified by annotations carrying model name, version, alias, run ID, and environment tag. The Rego is valid against OPA's `v1` (formerly `rego.v1`) syntax and uses the standard `gatekeeper.sh/v1` ConstraintTemplate shape.
 
 ```yaml
 apiVersion: templates.gatekeeper.sh/v1
@@ -498,6 +535,10 @@ spec:
               type: array
               items:
                 type: string
+            allowedAliases:
+              type: array
+              items:
+                type: string
   targets:
   - target: admission.k8s.gatekeeper.sh
     rego: |
@@ -507,7 +548,7 @@ spec:
 
       violation contains {"msg": msg} if {
         input.review.object.kind == "InferenceService"
-        input.review.object.metadata.labels["mlops.kubedojo.io/stage"] == "production"
+        input.review.object.metadata.labels["mlops.kubedojo.io/environment"] == "production"
         ann := input.review.object.metadata.annotations
         score := to_number(ann["mlops.kubedojo.io/holdout-auc"])
         score < input.parameters.minHoldoutAuc
@@ -519,7 +560,7 @@ spec:
 
       violation contains {"msg": msg} if {
         input.review.object.kind == "InferenceService"
-        input.review.object.metadata.labels["mlops.kubedojo.io/stage"] == "production"
+        input.review.object.metadata.labels["mlops.kubedojo.io/environment"] == "production"
         required := input.parameters.requiredAnnotations
         some key in required
         not input.review.object.metadata.annotations[key]
@@ -528,10 +569,22 @@ spec:
 
       violation contains {"msg": msg} if {
         input.review.object.kind == "InferenceService"
-        input.review.object.metadata.labels["mlops.kubedojo.io/stage"] == "production"
+        input.review.object.metadata.labels["mlops.kubedojo.io/environment"] == "production"
+        alias := input.review.object.metadata.annotations["mlops.kubedojo.io/mlflow-model-alias"]
+        not alias_allowed(alias)
+        msg := sprintf("promotion blocked: MLflow alias %q is not allowed for production deployment", [alias])
+      }
+
+      violation contains {"msg": msg} if {
+        input.review.object.kind == "InferenceService"
+        input.review.object.metadata.labels["mlops.kubedojo.io/environment"] == "production"
         run_id := input.review.object.metadata.annotations["mlops.kubedojo.io/mlflow-run-id"]
         not regex.match(`^[a-f0-9]{32}$`, run_id)
         msg := "promotion blocked: mlflow-run-id annotation must be a 32-char hex string"
+      }
+
+      alias_allowed(alias) if {
+        alias == input.parameters.allowedAliases[_]
       }
 ---
 apiVersion: constraints.gatekeeper.sh/v1beta1
@@ -546,16 +599,23 @@ spec:
     namespaces: ["mlops-prod"]
   parameters:
     minHoldoutAuc: 0.85
+    allowedAliases:
+    - "@champion"
+    - "@challenger"
     requiredAnnotations:
     - mlops.kubedojo.io/holdout-auc
     - mlops.kubedojo.io/model-card-url
     - mlops.kubedojo.io/mlflow-run-id
+    - mlops.kubedojo.io/mlflow-model-name
+    - mlops.kubedojo.io/mlflow-model-version
+    - mlops.kubedojo.io/mlflow-model-alias
+    - mlops.kubedojo.io/mlflow-env-tag
     - mlops.kubedojo.io/signed-off-by
 ```
 
-The policy contains three independent `violation` rules. The first parses the `holdout-auc` annotation and rejects any promotion whose evaluation score is below the configured threshold (here `0.85`); a deploy that ships a regressed model will fail at admission with a human-readable message instead of silently degrading user experience. The second iterates the operator-supplied `requiredAnnotations` list and asserts every name resolves to a non-empty value, so a manifest that simply omits the model-card URL is rejected the same way as one with a deliberately wrong score. The third rule enforces the *shape* of the MLflow run ID — a 32-character hex string — which catches copy-paste errors and accidental promotion of a temporary value like `"replace-me"` or `"latest"`.
+The policy contains four independent `violation` rules. The first parses the `holdout-auc` annotation and rejects any production deployment whose evaluation score is below the configured threshold (here `0.85`); a deploy that ships a regressed model will fail at admission with a human-readable message instead of silently degrading user experience. The second iterates the operator-supplied `requiredAnnotations` list and asserts every name resolves to a non-empty value, so a manifest that simply omits the model-card URL, MLflow alias, or environment tag is rejected the same way as one with a deliberately wrong score. The third rule limits production manifests to explicitly allowed model-version aliases, such as `@champion` or `@challenger`, rather than accepting an arbitrary alias like `"@untested"`. The fourth rule enforces the *shape* of the MLflow run ID — a 32-character hex string — which catches copy-paste errors and accidental promotion of a temporary value like `"replace-me"`.
 
-Together these three rules close the gap between CI promotion (which any operator can bypass) and a cluster-side admission gate (which is the last line of defence). The Rego runs in milliseconds against every `InferenceService` apply, the deny message points the responsible engineer directly at the missing field, and the `K8sAuditLogs` Loki stream captures every rejection so a release retrospective can answer the question "which promotions did Gatekeeper block this quarter?" without spelunking through individual `kubectl describe` outputs. This is how a small platform team enforces model-promotion governance at scale without slowing down the data-science teams that consume the platform.
+Together these four rules close the gap between CI promotion (which any operator can bypass) and a cluster-side admission gate (which is the last line of defence). The Rego runs quickly against every `InferenceService` apply, the deny message points the responsible engineer directly at the missing field, and the `K8sAuditLogs` Loki stream captures every rejection so a release retrospective can answer the question "which promotions did Gatekeeper block this quarter?" without spelunking through individual `kubectl describe` outputs. This is how a small platform team enforces model-promotion governance at scale without slowing down the data-science teams that consume the platform.
 
 ### Infrastructure Alerting with Prometheus
 
@@ -591,7 +651,7 @@ Pod-level metrics tell you the platform is healthy; they do not tell you the mod
 
 The clearest separation of concerns: platform engineers own the Gatekeeper constraints and the Prometheus alert rules; model owners own the Evidently drift thresholds and the retraining cadence. Both signals land in the same SIEM so that the audit trail tells a coherent story when an incident reconstruction asks who knew what and when.
 
-For specialized ML monitoring, tools like Evidently AI (v0.7.21, Apache 2.0) and ZenML (0.94.2, Apache 2.0) offer drift detection and pipeline management. If you prefer managed platforms, Weights & Biases (wandb) provides an MIT-licensed Python SDK, but the W&B platform itself is a commercial SaaS with no open-source self-hosted server edition.
+For specialized ML monitoring, tools like Evidently AI and ZenML offer drift detection and pipeline management; as of 2026-06, both projects were still in pre-1.0 release lines, so verify exact versions and APIs before adopting them. If you prefer managed platforms, Weights & Biases (wandb) provides an MIT-licensed Python SDK, but the W&B platform itself is a commercial SaaS with no open-source self-hosted server edition.
 
 ## Patterns & Anti-Patterns
 
@@ -601,7 +661,7 @@ The most reliable private MLOps platforms are built as small, explicit contracts
 
 **Pattern: treat online stores as derived caches.** Redis, DragonflyDB, or another online feature store should be rebuilt from the offline store through materialization jobs, not treated as the only source of truth. The operational benefit is enormous: backup policy focuses on PostgreSQL, Parquet, and object storage, while Redis recovery becomes a repeatable rebuild procedure. This pattern also clarifies ownership during incidents. Platform engineers restore the service and materialization job, while model owners verify whether a recent feature definition change produced the wrong values.
 
-**Pattern: enforce promotion rules at admission time.** CI checks are useful, but they are not the last line of defense in a cluster where operators can apply Kubernetes manifests directly. Gatekeeper constraints on KServe resources let you require holdout scores, model-card URLs, run provenance, and resource limits before production objects are accepted by the API server. This pattern scales because policy becomes part of the control plane rather than a spreadsheet maintained by release managers. It also produces auditable denial events that can be routed to logs and reviewed after a failed promotion.
+**Pattern: enforce promotion rules at admission time.** CI checks are useful, but they are not the last line of defense in a cluster where operators can apply Kubernetes manifests directly. Gatekeeper constraints on KServe resources let you require holdout scores, model-card URLs, MLflow aliases, environment tags, run provenance, and resource limits before production objects are accepted by the API server. This pattern scales because policy becomes part of the control plane rather than a spreadsheet maintained by release managers. It also produces auditable denial events that can be routed to logs and reviewed after a failed promotion.
 
 **Anti-pattern: building the platform around notebooks.** Notebooks are excellent for exploration, but a notebook server is not an MLOps platform. Teams fall into this trap because early prototypes feel productive: a scientist can load data, fit a model, and upload a file in one place. The problem appears later when nobody can reproduce the environment, locate the exact training data, or prove which code generated a model in production. Keep notebooks as clients of the platform, then require experiments, artifacts, feature definitions, and serving manifests to flow through versioned interfaces.
 
@@ -624,9 +684,9 @@ For serving, choose KServe when you want Kubernetes-native model serving with ru
 ## Did You Know?
 
 *   [Argo Workflows graduated from the CNCF on December 6, 2022](https://www.cncf.io/projects/argo/), cementing its status in cloud-native orchestration.
-*   MLflow v3.11.1 represents a major milestone in experiment tracking, officially supporting Kubernetes as a native backend for MLflow Projects.
+*   As of 2026-06, MLflow's 3.x release line represented the current architecture for experiment tracking and officially supported Kubernetes as a native backend for MLflow Projects.
 *   Kubeflow was accepted into the CNCF Incubator on July 25, 2023, transitioning away from standard Google governance.
-*   NVIDIA Triton v2.67.0 (NGC container release 26.03) integrates directly with the vLLM backend, offering massive throughput improvements for LLM serving.
+*   As of 2026-06, NVIDIA Triton's v2 release line included NGC container releases and direct vLLM backend integration; verify the exact tag before pinning serving images.
 
 ## Common Mistakes
 
@@ -637,7 +697,7 @@ For serving, choose KServe when you want Kubernetes-native model serving with ru
 | **KServe Cold Start Latencies** | Knative scales model pods to zero. Loading a multi-gigabyte neural network into GPU memory causes severe HTTP timeouts. | Add the annotation `serving.knative.dev/minScale: "1"` to the InferenceService. |
 | **MLflow DB Connection Exhaustion** | Hundreds of concurrent tuning workers attempt to log metrics to PostgreSQL without a connection pooler. | Deploy PgBouncer in front of PostgreSQL and route the `backend-store-uri` through it. |
 | **Missing S3 Endpoints** | Client pods assume public AWS because `MLFLOW_S3_ENDPOINT_URL` is completely absent from their environment definition. | Inject the MinIO endpoint URL into every training pod's environment variables. |
-| **Mixing KFP SDKs** | Engineers attempt to compile KFP v2 Python code directly into Argo Workflow YAML manifests. | Use the KFP v2 compiler to generate IR YAML, as Argo YAML generation is deprecated. |
+| **Mixing KFP SDKs** | Engineers attempt to compile KFP v2 Python code directly into Argo Workflow YAML manifests. | Use the KFP v2 compiler to generate a `PipelineSpec` IR, then inspect the backend-specific runtime object separately. |
 | **Boto3 Silent Hangs** | Pods without correct MinIO routing attempt to reach public AWS and hang silently due to high default timeout limits. | [Set `AWS_METADATA_SERVICE_TIMEOUT=1`](https://docs.aws.amazon.com/sdkref/latest/guide/settings-reference.html) to force early failures and surface the error. |
 
 ## Quiz
@@ -908,14 +968,14 @@ Exit the Python shell to terminate the temporary client pod. Then, utilize a por
 kubectl port-forward svc/mlflow-server -n mlops 5000:5000
 ```
 
-Navigate to `http://localhost:5000`. You should see your recent run logged. Click into the run to verify that `model.txt` is visible in the Artifacts pane.
+Navigate to `http://127.0.0.1:5000`. You should see your recent run logged. Click into the run to verify that `model.txt` is visible in the Artifacts pane.
 
 <details>
 <summary>Solution & Expected Output</summary>
 The MLflow UI should load correctly, demonstrating that the frontend API server successfully queries the PostgreSQL database for metadata and retrieves the artifact byte stream directly from MinIO.
 
 **Success Checklist:**
-- [ ] MLflow UI is accessible via localhost.
+- [ ] MLflow UI is accessible via `127.0.0.1`.
 - [ ] Run parameter `learning_rate` displays `0.01`.
 - [ ] The `model.txt` artifact is visible and downloadable.
 </details>
@@ -965,31 +1025,31 @@ The point of this exercise is not to produce a perfect manifest. It is to surfac
 ## Sources
 
 * [MLflow Tracking Server docs](https://mlflow.org/docs/latest/tracking.html#tracking-server)
-* [MLflow artifact stores](https://mlflow.org/docs/latest/tracking/artifacts-stores/)
-* [Feast architecture and components](https://docs.feast.dev/getting-started/architecture-and-components)
+* [MLflow artifact stores](https://mlflow.org/docs/latest/ml/tracking/artifact-stores/)
+* [Feast architecture and components](https://docs.feast.dev/getting-started/architecture)
 * [Feast online stores](https://docs.feast.dev/reference/online-stores)
-* [KServe InferenceService architecture](https://kserve.github.io/website/latest/modelserving/v1beta1/inferenceservice/)
+* [KServe InferenceService architecture](https://kserve.github.io/website/latest/modelserving/control_plane/)
 * [KServe canary rollout docs](https://kserve.github.io/website/latest/modelserving/v1beta1/rollout/canary/)
 * [Argo Workflows artifact repository docs](https://argo-workflows.readthedocs.io/en/latest/configure-artifact-repository/)
-* [Kubeflow Pipelines v2 concepts](https://www.kubeflow.org/docs/components/pipelines/concepts/pipeline-v2/)
-* [MinIO Kubernetes documentation](https://min.io/docs/minio/kubernetes/upstream/)
+* [Kubeflow Pipelines v2 concepts](https://www.kubeflow.org/docs/components/pipelines/overview/)
+* [MinIO Kubernetes documentation](https://min.io/docs/minio/kubernetes/upstream/index.html)
 * [LakeFS architecture](https://docs.lakefs.io/understand/architecture.html)
 * [OPA Gatekeeper ConstraintTemplates](https://open-policy-agent.github.io/gatekeeper/website/docs/constrainttemplates/)
 * [NVIDIA Triton Inference Server user guide](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/)
 - [github.com: minio](https://github.com/minio/minio) — The MinIO repository identifies the project and its AGPL-3.0 license; the commercial AIStor naming is vendor-specific and should be checked against MinIO's own materials if the allowlist expands.
-- [github.com: releases](https://github.com/iterative/dvc/releases) — The GitHub releases page shows DVC 3.67.1, and the repository exposes the Apache-2.0 license.
+- [github.com: releases](https://github.com/iterative/dvc/releases) — The GitHub releases page supports the dated DVC release-line snapshot, and the repository exposes the Apache-2.0 license.
 - [github.com: releases](https://github.com/feast-dev/feast/releases) — The Feast GitHub releases and repository license support the version and license; CNCF project status can be checked against the CNCF project index.
 - [docs.aws.amazon.com: settings reference.html](https://docs.aws.amazon.com/sdkref/latest/guide/settings-reference.html) — AWS SDK settings documentation covers retry attempts and metadata-service timeout environment variables; the exact observed duration may still vary by SDK configuration.
 - [cncf.io: kubeflow brings mlops to the cncf incubator](https://www.cncf.io/blog/2023/07/25/kubeflow-brings-mlops-to-the-cncf-incubator/) — The CNCF announcement directly states Kubeflow's acceptance into the CNCF Incubator on July 25, 2023.
 - [kubeflow-pipelines.readthedocs.io: overview.html](https://kubeflow-pipelines.readthedocs.io/en/sdk-2.16.0/source/overview.html) — The KFP SDK documentation describes the v2 IR and compilation model on an allowlisted readthedocs.io host.
-- [github.com: trainer](https://github.com/kubeflow/trainer) — The Kubeflow Trainer repository and release notes describe Trainer v2.2 and the supported runtimes/frameworks.
+- [github.com: trainer](https://github.com/kubeflow/trainer) — The Kubeflow Trainer repository and release notes describe the v2-era Trainer API and the supported runtimes/frameworks.
 - [github.com: katib](https://github.com/kubeflow/katib) — Katib's repository and documentation list hyperparameter tuning and supported algorithms; exact release version should be checked against the release page.
 - [cncf.io: argo](https://www.cncf.io/projects/argo/) — CNCF's Argo project page states the graduation date; release-specific versions should be validated on the Argo Workflows GitHub releases page.
-- [cncf.io: tekton becomes a cncf incubating project](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/) — The CNCF announcement supports Tekton's incubation and CDF-to-CNCF transition; the v1.11.0 release is supported by Tekton's release announcement.
+- [cncf.io: tekton becomes a cncf incubating project](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/) — The CNCF announcement supports Tekton's incubation and CDF-to-CNCF transition; check Tekton's release page for the exact pipeline version to install.
 - [github.com: kuberay](https://github.com/ray-project/kuberay) — The KubeRay repository identifies the project and releases; CNCF project membership can be checked against the CNCF project index.
-- [cncf.io: kserve](https://www.cncf.io/projects/kserve/) — CNCF's KServe project page gives the incubation date; KServe's GitHub releases page supports the current release line.
+- [cncf.io: kserve](https://www.cncf.io/projects/kserve/) — CNCF's KServe project page identifies the project status; KServe's GitHub releases page should be checked for the exact controller version.
 - [cncf.io: kserve becomes a cncf incubating project](https://www.cncf.io/blog/2025/11/11/kserve-becomes-a-cncf-incubating-project/) — The CNCF KServe incubation post states the KFServing-to-KServe rebrand, and KServe examples use serving.kserve.io/v1beta1.
-- [github.com: releases](https://github.com/triton-inference-server/server/releases) — The Triton GitHub release page supports the v2.67.0/26.03 release mapping, and Triton backend repositories document supported backends.
+- [github.com: releases](https://github.com/triton-inference-server/server/releases) — The Triton GitHub release page supports the dated v2-line snapshot, and Triton backend repositories document supported backends.
 - [MLflow GitHub Repository](https://github.com/mlflow/mlflow) — Authoritative source for MLflow releases, license, and top-level platform capabilities.
 - [Feast GitHub Repository](https://github.com/feast-dev/feast) — Authoritative source for Feast releases, license, and supported feature-store architecture.
 
