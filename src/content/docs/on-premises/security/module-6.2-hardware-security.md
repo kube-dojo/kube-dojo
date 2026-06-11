@@ -52,7 +52,7 @@ classDiagram
     class HSM {
         <<Hardware Security Module>>
         +Network appliance or PCIe card
-        +FIPS 140-2/3 Level 3
+        +FIPS 140-3 Level 3 (140-2 legacy)
         +Tamper-evident/proof
         +High throughput
         +$5,000 - $50,000+
@@ -164,6 +164,7 @@ tpm2_pcrread sha256:0,1,4,7,8,9
 #     9 : 0x9F8E7D6C5B4A...     (initramfs)
 
 # If PCR[0] is all zeros, measured boot is not active
+# (non-zero PCRs alone do not prove measured boot is enforcing policy — verify the full chain)
 # Common cause: TPM not enabled in BIOS
 
 # Verify Secure Boot status
@@ -205,7 +206,7 @@ machine:
 
 ## HashiCorp Vault with HSM Backend (PKCS#11)
 
-Vault remains a common secrets manager for Kubernetes, but on-premises teams need to treat product and license choices as part of the architecture. [HashiCorp announced a move to the Business Source License in August 2023](https://discuss.hashicorp.com/t/hashicorp-projects-changing-license-to-business-source-license-v1-1/57106), so organizations that require a community-governed open-source Vault lineage should evaluate [OpenBao, the Linux Foundation OpenSSF-managed fork](https://openbao.org/) alongside commercial Vault. In cloud environments, Vault commonly uses cloud KMS for auto-unseal. On-premises, you replace that managed KMS dependency with an HSM via the PKCS#11 interface. [PKCS#11 Specification v3.1 is the current OASIS Standard, with v3.2 published as a Committee Specification in November 2025](https://docs.oasis-open.org/pkcs11/pkcs11-spec/v3.1/os/pkcs11-spec-v3.1-os.html). Note that [HashiCorp Vault PKCS#11 HSM auto-unseal requires Vault Enterprise](https://developer.hashicorp.com/vault/docs/configuration/seal/pkcs11), while [OpenBao documents PKCS#11 seal support for HSM-backed auto-unseal](https://openbao.org/docs/configuration/seal/pkcs11/).
+Vault remains a common secrets manager for Kubernetes, but on-premises teams need to treat product and license choices as part of the architecture. [HashiCorp announced a move to the Business Source License in August 2023](https://discuss.hashicorp.com/t/hashicorp-projects-changing-license-to-business-source-license-v1-1/57106), so organizations that require a community-governed open-source Vault lineage should evaluate [OpenBao, the Linux Foundation OpenSSF-managed fork](https://openbao.org/) alongside commercial Vault. In cloud environments, Vault commonly uses cloud KMS for auto-unseal. On-premises, you replace that managed KMS dependency with an HSM via the PKCS#11 interface. [PKCS#11 Specification v3.1 is the current OASIS Standard](https://docs.oasis-open.org/pkcs11/pkcs11-spec/v3.1/os/pkcs11-spec-v3.1-os.html) (v3.2 was at Committee Specification Draft 01 as of April 2025 — verify its status before depending on v3.2-only features). Note that [HashiCorp Vault PKCS#11 HSM auto-unseal requires Vault Enterprise](https://developer.hashicorp.com/vault/docs/configuration/seal/pkcs11), while [OpenBao documents PKCS#11 seal support for HSM-backed auto-unseal](https://openbao.org/docs/configuration/seal/pkcs11/).
 
 This choice is not only about price. Vault Enterprise, OpenBao, and any external operator you use to project secrets into Kubernetes create different support, licensing, upgrade, and compliance paths. [Vault Secrets Operator is HashiCorp's supported Kubernetes operator for Vault-backed Kubernetes Secrets](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/vso). [External Secrets Operator is a CNCF Sandbox project](https://www.cncf.io/projects/external-secrets/) that integrates with multiple backends, including Vault, and can reduce provider lock-in when a platform team has more than one secrets system. Neither operator removes the need for hardware key custody. They synchronize or project secret values; the HSM still protects the root keys and unseal path that make the secrets manager trustworthy.
 
@@ -309,7 +310,8 @@ resources:
 # Install the KMS plugin on control plane nodes
 # The plugin translates Kubernetes KMS gRPC calls to Vault API calls
 
-# Start the KMS plugin
+# Start the KMS plugin (kms-vault-provider is an EXAMPLE plugin name, not a standard binary —
+# substitute your organization's Kubernetes KMS provider plugin for Vault)
 kms-vault-provider \
   --listen unix:///var/run/kms-vault/kms.sock \
   --vault-addr https://vault.vault.svc:8200 \
@@ -727,7 +729,7 @@ Continue to [Module 6.3: Enterprise Identity (AD/LDAP/OIDC)](../module-6.3-enter
 - [github.com: spire tpm plugin](https://github.com/bloomberg/spire-tpm-plugin) — The repository README directly describes TPM credential activation as the attestation mechanism.
 - [learn.microsoft.com: use trusted launch](https://learn.microsoft.com/en-us/azure/aks/use-trusted-launch) — Microsoft Learn directly states that Trusted Launch provides a TPM 2.0-compliant vTPM and measured-boot-based attestation.
 - [csrc.nist.gov: FAQs](https://csrc.nist.gov/Projects/cryptographic-module-validation-program/FAQs) — The CMVP FAQ directly gives the active-list deadline and the switch to FIPS 140-3-only active validations.
-- [spectrum.ieee.org: the future of cybersecurity is the quantum random number generator 2650277204](https://spectrum.ieee.org/amp/the-future-of-cybersecurity-is-the-quantum-random-number-generator-2650277204) — The IEEE Spectrum article explicitly identifies RSA as named for Rivest, Shamir, and Adleman.
+- [spectrum.ieee.org: the future of cybersecurity is the quantum random number generator](https://spectrum.ieee.org/the-future-of-cybersecurity-is-the-quantum-random-number-generator) — IEEE Spectrum on quantum random number generators as a hardware entropy source, relevant to HSM key generation and on-board RNG quality.
 - [learn.microsoft.com: windows 11 requirements](https://learn.microsoft.com/en-us/windows/whats-new/windows-11-requirements) — Microsoft's Windows 11 requirements page directly lists TPM version 2.0 as a minimum hardware requirement.
 - [Encrypting Confidential Data at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/) — Authoritative Kubernetes guidance for etcd encryption at rest and KMS provider integration points.
 - [Using a KMS provider for data encryption](https://kubernetes.io/docs/tasks/administer-cluster/kms-provider/) — Upstream Kubernetes documentation for KMS provider versions, deprecation guidance, and KMS v2 configuration expectations.
