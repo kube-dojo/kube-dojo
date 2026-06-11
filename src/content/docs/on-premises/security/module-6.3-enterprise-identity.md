@@ -64,13 +64,13 @@ flowchart LR
 
     X509 --> X509Limits["No revocation<br/>Manual renewal<br/>No group sync<br/>No audit trail"]
     Static --> StaticLimits["Restart to add or remove users<br/>Plaintext file<br/>No groups<br/>No audit trail"]
-    OIDC --> OIDCBenefits["Short-lived tokens<br/>Instant revocation<br/>Group claims<br/>AD or LDAP backed<br/>Full audit trail and SSO"]
+    OIDC --> OIDCBenefits["Short-lived tokens<br/>Central revoke at IdP (TTL-bounded)<br/>Group claims<br/>AD or LDAP backed<br/>Full audit trail and SSO"]
 
     X509 --> X509Use["Use for service accounts,<br/>kubelet bootstrap, and CI/CD"]
     OIDC --> OIDCUse["Use for kubectl, dashboards,<br/>and every human user"]
 ```
 
-[Kubernetes v1.35 ('Timbernetes'), released December 17, 2025](https://kubernetes.io/blog/2025/12/17/kubernetes-v1-35-release/), continued the long-standing architectural philosophy of not including a built-in user database. With Kubernetes v1.36 scheduled for release on April 22, 2026, the API server trusts external identity providers entirely. [There is no `kubectl create user` command. Users exist only in the identity provider (AD, LDAP, OIDC) and are referenced in RBAC bindings by name or group.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/)
+[Kubernetes v1.35 ('Timbernetes'), released December 17, 2025](https://kubernetes.io/blog/2025/12/17/kubernetes-v1-35-release/), continued the long-standing architectural philosophy of not including a built-in user database. The API server trusts external identity providers entirely. [There is no `kubectl create user` command. Users exist only in the identity provider (AD, LDAP, OIDC) and are referenced in RBAC bindings by name or group.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/)
 
 ### x509, Static Tokens, Webhooks, and OIDC Compared
 
@@ -118,14 +118,14 @@ sequenceDiagram
     AD-->>OIDC: Identity confirmed
     OIDC-->>Dev: ID token with groups claim
     Dev->>API: API request with bearer token
-    API->>OIDC: Validate JWT signature
+    API->>API: Validate JWT signature locally (cached JWKS)
     API->>API: Extract groups claim and run RBAC lookup
     API-->>Dev: Authorized response
 ```
 
 ## Option 1: Keycloak as an Enterprise Identity Broker
 
-Keycloak is a powerful, full-featured open-source identity provider. The Keycloak latest stable release is [26.6.0, released April 8, 2026](https://github.com/keycloak/keycloak/releases/tag/26.6.0). 
+Keycloak is a powerful, full-featured open-source identity provider. It ships frequent releases (the 26.x line is current as of 2026) — always [check the latest Keycloak release](https://github.com/keycloak/keycloak/releases) for security patches before deploying. 
 
 Keycloak supports LDAP and Active Directory user federation deeply, including password validation via LDAP/AD protocols and LDAP password policy enforcement. Furthermore, Keycloak [supports federated client authentication where Kubernetes Service Account tokens (via TokenRequest API or Token Volume Projection) can be used as client credentials](https://github.com/keycloak/keycloak/releases/tag/26.6.0).
 
@@ -164,7 +164,7 @@ After Keycloak is running, configure AD federation through the Admin Console or 
 4. **Create an OIDC client** named `kubernetes` (public client, redirect to `http://127.0.0.1:8000/*`)
 5. **Add a "groups" protocol mapper** to include group memberships in the ID token `groups` claim
 
-> **Pause and predict**: Keycloak requires PostgreSQL, 512MB-2GB RAM, and Java expertise to operate. Under what circumstances would this overhead be justified over the simpler Dex alternative?
+> **Pause and predict**: Keycloak needs an external relational database (PostgreSQL, MariaDB/MySQL, or another supported engine), roughly 512MB-2GB RAM per replica, and JVM operational expertise. Under what circumstances would this overhead be justified over the simpler Dex alternative?
 
 ### Keycloak High Availability on Owned Hardware
 
@@ -321,9 +321,6 @@ jwt:
     - kubernetes
     audienceMatchPolicy: MatchAny
   claimValidationRules:
-  - claim: exp
-    requiredValue: ""
-    message: "exp claim is required"
   - expression: 'claims.exp - claims.iat <= 3600'
     message: "token lifetime cannot exceed 3600 seconds"
   claimMappings:
@@ -334,7 +331,7 @@ jwt:
       claim: groups
       prefix: "oidc:"
   userValidationRules:
-  - expression: '!strings.hasPrefix(claims.preferred_username, "system:")'
+  - expression: '!user.username.startsWith("system:")'
     message: "username cannot use reserved system: prefix"
 ```
 
@@ -441,6 +438,7 @@ kubectl config set-credentials oidc-user \
   --exec-arg=get-token \
   --exec-arg=--oidc-issuer-url=https://keycloak.example.com/realms/kubernetes \
   --exec-arg=--oidc-client-id=kubernetes \
+  --exec-arg=--oidc-client-secret=$CLIENT_SECRET \
   --exec-arg=--oidc-extra-scope=groups
 
 # Set context to use OIDC user
@@ -468,7 +466,7 @@ Once OIDC is configured centrally, you can extend Single Sign-On (SSO) to other 
 
 ### OAuth2 Proxy for Web UIs
 
-For tools without native OIDC support, deploy `oauth2-proxy` as a secure reverse proxy that handles authentication on behalf of the application. [The oauth2-proxy was accepted into the CNCF at the Sandbox maturity level on October 2, 2025. Its latest stable release is v7.15.1, released March 23, 2026.](https://www.cncf.io/projects/oauth2-proxy/) Deploy it in the same namespace as the target tool, configure it with the OIDC issuer URL and client credentials, and point it upstream to the tool's internal service.
+For tools without native OIDC support, deploy `oauth2-proxy` as a secure reverse proxy that handles authentication on behalf of the application. [oauth2-proxy was accepted into the CNCF at the Sandbox maturity level on October 2, 2025.](https://www.cncf.io/projects/oauth2-proxy/) It releases frequently with security fixes — always run a current patched release and check the project's [security advisories](https://github.com/oauth2-proxy/oauth2-proxy/security/advisories) (older 7.15.x releases were affected by an authentication-bypass CVE). Deploy it in the same namespace as the target tool, configure it with the OIDC issuer URL and client credentials, and point it upstream to the tool's internal service.
 
 ```bash
 # Key oauth2-proxy flags for Kubernetes Dashboard:
@@ -510,7 +508,7 @@ Hypothetical scenario: a datacenter network partition isolates worker nodes from
 
 ## Cost Lens: Self-Hosting Identity On Premises
 
-Running identity on owned hardware trades cloud IdP subscription fees for CapEx, rack space, and headcount. A highly available Keycloak deployment typically spans two or more application replicas plus a managed PostgreSQL cluster (three nodes for quorum), load balancers, and TLS certificates — often 4–8 vCPU and several gigabytes of RAM dedicated to identity before counting directory infrastructure you already operate. Dex is lighter (single-replica Go binaries, optional Kubernetes storage backend) but still needs HA load balancing and backup of its Kubernetes `Secret` storage if you use in-cluster state.
+Running identity on owned hardware trades cloud IdP subscription fees for CapEx, rack space, and headcount. A highly available Keycloak deployment typically spans two or more application replicas plus a managed relational database such as PostgreSQL or MariaDB (three nodes for quorum), load balancers, and TLS certificates — as a rough planning estimate, often 4–8 vCPU and several gigabytes of RAM dedicated to identity before counting directory infrastructure you already operate. Dex is lighter (single-replica Go binaries, optional Kubernetes storage backend) but still needs HA load balancing and backup of its Kubernetes CRD-backed state (or a Postgres/MySQL backend) if you keep identity state in-cluster.
 
 **TCO drivers** beyond software licenses include: domain controller capacity for LDAP bind and group lookup load during morning login storms; dedicated service accounts per broker with password rotation ceremonies; HSM or enterprise CA integration for issuer TLS; monitoring and on-call for the identity namespace; and security review cycles whenever realm mappers change. Depreciation cycles for identity VMs align with general server refresh (often three to five years) — budget Keycloak major-version upgrades and PostgreSQL minor upgrades in the same window.
 
@@ -683,7 +681,8 @@ You can natively support both identity providers simultaneously by leveraging th
    ```bash
    kubectl oidc-login get-token \
      --oidc-issuer-url=https://dex.identity.svc.cluster.local:5556 \
-     --oidc-client-id=kubernetes
+     --oidc-client-id=kubernetes \
+     --oidc-client-secret=$DEX_CLIENT_SECRET
    ```
 
 5. **Examine the Token**: Decode the resulting JWT to confirm that the `groups` and `email` claims map correctly to the attributes defined in your Dex static user configuration.
