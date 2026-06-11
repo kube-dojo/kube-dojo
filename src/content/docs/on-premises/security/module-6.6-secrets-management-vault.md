@@ -78,7 +78,7 @@ When a Vault node starts, it is *sealed*: it knows where encrypted data lives on
 
 1. **Shamir's Secret Sharing (manual)**: The master key splits into `n` shards with threshold `t`. Operators submit `t` shards via CLI/API after restarts. Operationally expensive during node drains, OOM kills, and automated rescheduling—yet valuable as a break-glass path when auto-unseal endpoints are unreachable.
 2. **Transit auto-unseal**: A centralized Vault Transit engine wraps the master key. Spoke clusters unseal automatically if the hub is healthy. Requires hub HA and strict network policy; popular for multi-cluster estates that already operate a management Vault.
-3. **PKCS#11 / KMIP / TPM auto-unseal**: Keys never leave HSM or TPM hardware. Aligns with FIPS 140-3 programs and regulated industries; adds hardware refresh cycles and vendor support contracts to your TCO model.
+3. **PKCS#11 (HSM) auto-unseal**: The seal key is wrapped by a hardware security module and never leaves it. This is a Vault Enterprise seal type (OpenBao is adding an OSS equivalent); managed cloud KMS wrappers (AWS KMS, GCP Cloud KMS, Azure Key Vault) are the other hardware-backed alternative. Aligns with FIPS 140-3 programs and regulated industries; adds hardware refresh cycles and vendor support contracts to your TCO model.
 
 Before choosing Shamir for production Kubernetes, pause and trace the reschedule path: if a node crashes and kubelet schedules a replacement Vault pod, that instance boots **sealed** until operators supply key shards. Without on-call coverage, your secrets plane becomes a single-human bottleneck every time the scheduler moves a pod. That is why highly dynamic bare-metal clusters favor auto-unseal for steady state while keeping Shamir shards in a physical safe for disaster recovery only.
 
@@ -137,7 +137,7 @@ To avoid long-lived Vault tokens in manifests, Vault cryptographically verifies 
 
 The login flow proceeds as follows: a Pod runs with a dedicated ServiceAccount; Kubernetes injects a short-lived signed JWT; the client (application, ESO, or Agent) calls Vault's `auth/kubernetes/login` with that JWT; Vault invokes the API server's `TokenReview` API to validate signature, expiration, and service account identity; if the ServiceAccount matches a configured Vault role (`bound_service_account_names`, `bound_service_account_namespaces`), Vault issues a token with attached policies. Misconfigured `issuer` or `audience` values produce the infamous `claim "aud" is invalid` error—align `kubernetes_host`, `issuer`, and token audience with your cluster's OIDC discovery document or documented API server issuer string.
 
-Troubleshooting Kubernetes auth on bare metal usually traces to three configuration gaps. First, `kubernetes_host` must be reachable from Vault pods—use the in-cluster service address for co-located Vault, or the external API server URL with proper CA trust when Vault runs outside the cluster. Second, TokenReview requires Vault to present credentials trusted by the API server; Helm charts typically mount a dedicated ServiceAccount for Vault with `system:auth-delegator` binding. Third, projected tokens must include the audience Vault expects—when using bound tokens, set `audience` in the projected volume spec to match `token_audience` in `auth/kubernetes/config`. Legacy clusters migrating from long-lived ServiceAccount secrets should delete unused secret-based tokens so operators are not surprised when Vault accepts only projected JWTs after upgrade.
+Troubleshooting Kubernetes auth on bare metal usually traces to three configuration gaps. First, `kubernetes_host` must be reachable from Vault pods—use the in-cluster service address for co-located Vault, or the external API server URL with proper CA trust when Vault runs outside the cluster. Second, TokenReview requires Vault to present credentials trusted by the API server; Helm charts typically mount a dedicated ServiceAccount for Vault with `system:auth-delegator` binding. Third, projected tokens must include the audience Vault expects—when using bound tokens, set the `audience` in the projected volume spec (`serviceAccountToken.audience`) to match the `audience` parameter on the Vault **role** (`vault write auth/kubernetes/role/<name> audience=...`). Note that `audience` is a role parameter; `auth/kubernetes/config` has no audience key (it carries `kubernetes_host`, `issuer`, and the CA/reviewer settings). Legacy clusters migrating from long-lived ServiceAccount secrets should delete unused secret-based tokens so operators are not surprised when Vault accepts only projected JWTs after upgrade.
 
 For multi-cluster estates, avoid copying the same `auth/kubernetes/config` block everywhere. Each Vault cluster should trust only the API server that issues tokens for that environment, with roles namespaced per cluster (`payments-prod-k8s`, `payments-staging-k8s`). Federation of Vault itself (performance replication in Enterprise, or operational replication patterns in OpenBao roadmaps) is separate from Kubernetes auth—do not confuse replication DR with letting one Vault trust multiple unrelated API servers without explicit role boundaries.
 
@@ -202,7 +202,7 @@ path "database/creds/readonly-payments" {
 }
 ```
 
-Tokens inherit TTL and `max_ttl` from roles and auth method configuration. For ESO, keep Vault token TTL aligned with projected ServiceAccount lifetime so sync loops renew before expiry without holding month-long god tokens. For Vault Agent, enable `agent-inject-template` renewals and revoke on pod termination hooks where your orchestrator supports preStop handlers. Periodic tokens suit long-running controllers; batch tokens suit CI jobs that should not renew. Explicitly disable root-token workflows in automation—bootstrap with root, enable OIDC or LDAP for humans, then revoke root except break-glass envelopes stored offline.
+Tokens inherit TTL and `max_ttl` from roles and auth method configuration. For ESO, keep Vault token TTL aligned with projected ServiceAccount lifetime so sync loops renew before expiry without holding month-long god tokens. For Vault Agent, rely on auto-auth to renew the token and templates to re-render secret files (the injector's template annotations render files; they do not themselves renew tokens), and revoke on pod termination hooks where your orchestrator supports preStop handlers. Periodic tokens suit long-running controllers; batch tokens suit CI jobs that should not renew. Explicitly disable root-token workflows in automation—bootstrap with root, enable OIDC or LDAP for humans, then revoke root except break-glass envelopes stored offline.
 
 Entity and alias modeling becomes important at scale. A Kubernetes ServiceAccount in namespace `payments` might map to a Vault entity with metadata labels your SIEM understands (`cost-center`, `data-class`). When auditors ask which human or robot accessed a path, audit log `entity_id` fields must resolve cleanly. On OpenBao and Vault alike, invest early in consistent mount paths (`secret/`, `database/`, `pki/`) so policy reviews do not chase ad-hoc mount sprawl across teams.
 
@@ -302,7 +302,7 @@ Finally, align secrets infrastructure with the broader hardware security modules
 | Mistake | Why It Happens | Better Approach |
 | :--- | :--- | :--- |
 | **Raft quorum loss during upgrades** | Rolling Helm upgrades restart multiple Vault pods simultaneously | Verify `vault operator raft list-peers` after each node; use PDB `maxUnavailable: 1`. |
-| **JWT audience mismatch on K8s auth** | Vault `issuer`/`audience` defaults do not match bound SA token audiences | Configure `auth/kubernetes/config` with correct `issuer` and audience matching cluster TokenReview behavior. |
+| **JWT audience mismatch on K8s auth** | The Vault role's `audience` (or the cluster `issuer`) does not match the bound SA token's audience | Set `audience` on the Vault **role** (`auth/kubernetes/role/<name>`) to match the projected token's `serviceAccountToken.audience`, and align `issuer` on `auth/kubernetes/config` with the API server's token issuer. |
 | **ESO aggressive `refreshInterval`** | Operators want instant rotation and set `1s` on hundreds of ExternalSecrets | Use 15m–1h for static secrets; prefer event-driven refresh or Agent watches for hot paths. |
 | **KMS provider socket death** | Static KMS pod on control plane fails; API server cannot decrypt | Run KMS plugin on every control-plane node; monitor socket health as tier-zero; external Vault backend. |
 | **Circular KMS dependency** | Vault for etcd encryption deployed inside encrypted cluster | Host KMS-providing Vault on management cluster or systemd hosts outside workload cluster. |
@@ -449,6 +449,15 @@ server:
         }
         storage "raft" {
           path = "/vault/data"
+          retry_join {
+            leader_api_addr = "http://vault-0.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-1.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-2.vault-internal:8200"
+          }
         }
 ```
 
@@ -478,7 +487,7 @@ for i in 0 1 2; do
 done
 ```
 
-After unseal, list Raft peers with the root token to confirm three members and a single leader—if a peer is missing, check network policies and cluster addresses on port 8201 before continuing to secrets engines.
+The `retry_join` stanzas in the config tell `vault-1` and `vault-2` to discover and join `vault-0`'s Raft cluster over the `vault-internal` headless service; because they join `vault-0`'s cluster they share its seal, so the same unseal key applies to all three. After unseal, list Raft peers with the root token to confirm three members and a single leader—if a peer is missing, check network policies and cluster addresses on port 8201 (and that the `retry_join` addresses resolve) before continuing to secrets engines.
 
 ```bash
 kubectl exec -n vault vault-0 -- sh -c "VAULT_TOKEN=$VAULT_ROOT_TOKEN vault operator raft list-peers"
@@ -549,7 +558,7 @@ Apply the `SecretStore` to instruct ESO how to authenticate to Vault:
 
 ```yaml
 # secret-store.yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
   name: vault-backend
@@ -576,7 +585,7 @@ Apply the `ExternalSecret` to fetch the data and create a native K8s Secret:
 
 ```yaml
 # external-secret.yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: myapp-secret
