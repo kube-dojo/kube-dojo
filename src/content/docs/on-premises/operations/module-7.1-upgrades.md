@@ -104,8 +104,7 @@ ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-pre-upgrade.db \
   --key=/etc/kubernetes/pki/etcd/server.key
 
 # Verify the backup
-ETCDCTL_API=3 etcdctl snapshot status /backup/etcd-pre-upgrade.db \
-  --write-out=table
+etcdutl snapshot status /backup/etcd-pre-upgrade.db --write-out=table
 ```
 
 Run this on a control-plane node with valid client certificates, then copy the snapshot off-node. A backup that lives only on the server you are about to reboot is not a backup. For external etcd clusters, snapshot from a member with quorum healthy and store artifacts in object storage with versioning enabled.
@@ -134,13 +133,18 @@ The first control plane node executes cluster-wide changes: API server, controll
 
 > **Note**: For Kubernetes versions released after September 13, 2023, [you must use the community-owned `pkgs.k8s.io` package repositories](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/), which use per-minor URLs. Legacy apt/yum repos are frozen and no longer receive updates.
 
-> **Note**: If `kubeadm upgrade apply` fails partway through, it does not fully roll back automatically. However, [the command is idempotent—you can fix the underlying issue and safely run `kubeadm upgrade apply` again.](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
+> **Note**: If `kubeadm upgrade apply` fails partway through, it does not fully roll back automatically. You can fix the underlying issue and safely run `kubeadm upgrade apply` again — [kubeadm documents this as a re-runnable upgrade step](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/), not an automatic rollback.
 
 #### Step 1: Upgrade the First Control Plane Node
+
+[The version-skew policy requires draining control-plane nodes before upgrading kubeadm/kubelet on them](https://kubernetes.io/releases/version-skew-policy/) — the same drain discipline as workers applies.
 
 ```bash
 # Check available versions
 apt-cache madison kubeadm | head -5
+
+# Drain the control-plane node before package upgrades
+kubectl drain cp-01 --ignore-daemonsets --delete-emptydir-data --timeout=300s
 
 # Unhold packages to allow upgrade
 apt-mark unhold kubeadm
@@ -163,6 +167,8 @@ apt-get install -y kubelet=1.35.3-1.1 kubectl=1.35.3-1.1
 apt-mark hold kubelet kubectl
 systemctl daemon-reload
 systemctl restart kubelet
+
+kubectl uncordon cp-01
 ```
 
 `kubeadm upgrade plan` is your pre-flight checklist rendered as a table: component config versions, available target releases, and whether the cluster is upgradeable. Run it from a jump host with `admin.conf` before you touch production packages. Patch within the current minor first (`1.35.x` latest), then step minors one at a time—kubeadm does not support skipping versions.
@@ -171,6 +177,8 @@ systemctl restart kubelet
 
 ```bash
 # On each additional control plane node
+kubectl drain cp-02 --ignore-daemonsets --delete-emptydir-data --timeout=300s
+
 apt-mark unhold kubeadm
 apt-get update && apt-get install -y kubeadm=1.35.3-1.1
 apt-mark hold kubeadm
@@ -183,6 +191,8 @@ apt-get install -y kubelet=1.35.3-1.1 kubectl=1.35.3-1.1
 apt-mark hold kubelet kubectl
 systemctl daemon-reload
 systemctl restart kubelet
+
+kubectl uncordon cp-02
 ```
 
 Since Kubernetes 1.28, kubeadm waits until all control-plane nodes reach the new version before upgrading cluster addons like CoreDNS and kube-proxy. That prevents a half-upgraded HA plane from running addon versions incompatible with older apiservers still serving traffic.
@@ -227,7 +237,7 @@ Kubernetes core components are only half the upgrade story. Your CNI, CSI, ingre
 
 [The deprecated API migration guide](https://kubernetes.io/docs/reference/using-api/deprecation-guide/) lists APIs removed per minor release. Before jumping to 1.35, scan manifests and Helm releases for versions removed in 1.32–1.35 (for example, flowcontrol `v1beta3` removals). Tools like `pluto` or `kubepug` help, but the authoritative list is the upstream guide—run checks against staging first.
 
-Admission webhooks deserve special attention: [the version skew policy requires validating and mutating webhooks to handle new API fields before apiserver upgrades](https://kubernetes.io/releases/version-skew-policy). A webhook that rejects unknown fields can brick `kubectl apply` cluster-wide the moment the new apiserver starts.
+Admission webhooks deserve special attention: validate that your validating and mutating webhooks tolerate new API fields before apiserver upgrades — a webhook that rejects unknown fields can brick `kubectl apply` cluster-wide the moment the new apiserver starts. See the [version skew policy](https://kubernetes.io/releases/version-skew-policy/) for component ordering; webhook compatibility is a separate preflight gate.
 
 ### Automating Preflight Checks
 
@@ -371,7 +381,7 @@ Label nodes with `kubedojo.io/hardware-gen` or similar before upgrades begin. Ca
 
 ```mermaid
 flowchart TD
-    subgraph Phase 1: Canary
+    subgraph phase1["Phase 1: Canary"]
         C1["[dell-r640-01]"]
         C2["[dell-r740-01]"]
         C3["[hp-dl380-01]"]
@@ -379,20 +389,20 @@ flowchart TD
         C1 & C2 & C3 --> M
     end
     
-    subgraph Phase 2: Remaining Gen 1
+    subgraph phase2["Phase 2: Remaining Gen 1"]
         G1["[dell-r640-02..08]<br>rolling, 2 at a time"]
         N1["Why oldest first?<br>- Oldest hardware is most likely to surface problems<br>- If a kernel incompatibility exists, you find it early<br>- Newest hardware has the most spare capacity as buffer"]
     end
     
-    subgraph Phase 3: Gen 2
+    subgraph phase3["Phase 3: Gen 2"]
         G2["[dell-r740-02..15]<br>rolling, 3 at a time"]
     end
     
-    subgraph Phase 4: Gen 3
+    subgraph phase4["Phase 4: Gen 3"]
         G3["[hp-dl380-02..20]<br>rolling, 3 at a time<br>(newest hardware last)"]
     end
     
-    Phase 1 --> Phase 2 --> Phase 3 --> Phase 4
+    phase1 --> phase2 --> phase3 --> phase4
 ```
 
 ### Pre-flight Checks per Hardware Generation
@@ -442,10 +452,11 @@ systemctl restart kubelet
 
 # Step 3: Restore etcd from backup (if schema changed)
 # This is why you ALWAYS back up etcd before upgrading
-ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-pre-upgrade.db \
+etcdutl snapshot restore /backup/etcd-pre-upgrade.db \
   --data-dir /var/lib/etcd-restored \
   --name $(hostname) \
-  --initial-cluster $(hostname)=https://$(hostname):2380
+  --initial-cluster $(hostname)=https://$(hostname):2380 \
+  --initial-advertise-peer-urls https://$(hostname):2380
 
 # Step 4: Swap the etcd data directory
 mv /var/lib/etcd /var/lib/etcd-broken
@@ -531,13 +542,13 @@ Ownership matters in design reviews. Platform engineering owns the staging clust
 
 ```mermaid
 flowchart TD
-    subgraph Staging Cluster For Upgrade Testing
+    subgraph staging["Staging Cluster For Upgrade Testing"]
         CP["3 control plane nodes<br>(same hardware as production)"]
         W["1 worker per hardware generation"]
         Env["Same CNI, CSI, and ingress controller versions<br>Representative workloads (not production data)"]
     end
     
-    subgraph Test Matrix
+    subgraph testmatrix["Test Matrix"]
         T1["kubeadm upgrade: No errors, all nodes Ready"]
         T2["Pod scheduling: Pods schedule on all generations"]
         T3["CNI networking: Pod-to-pod across nodes works"]
@@ -548,7 +559,7 @@ flowchart TD
         T8["Monitoring: Prometheus scrapes all targets"]
     end
     
-    Staging Cluster For Upgrade Testing --> Test Matrix
+    staging --> testmatrix
 ```
 
 Run the full production runbook on staging, including notifications (to a test channel) and etcd snapshot restore. Staging that only runs `kubeadm upgrade plan` without draining real workloads misses PDB interactions.
