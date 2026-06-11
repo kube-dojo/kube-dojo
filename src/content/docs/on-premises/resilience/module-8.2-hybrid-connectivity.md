@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 8.2: Hybrid Cloud Connectivity"
 slug: on-premises/resilience/module-8.2-hybrid-connectivity
 sidebar:
