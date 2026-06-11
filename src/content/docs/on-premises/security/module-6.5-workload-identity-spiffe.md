@@ -243,7 +243,7 @@ On Kubernetes, selectors take the form of `k8s:<property>:<value>`. When definin
 ```bash
 spire-server entry create \
     -spiffeID spiffe://example.org/ns/backend/sa/payments \
-    -parentID spiffe://example.org/spire/agent/k8s_psat/on-prem-cluster-01/$(NODE_NAME) \
+    -parentID spiffe://example.org/ns/spire/sa/spire-agent \
     -selector k8s:ns:backend \
     -selector k8s:sa:payments
 ```
@@ -636,7 +636,6 @@ Received 1 svid after 12.5ms
 SPIFFE ID:              spiffe://dojo.local/ns/default/sa/backend-sa
 SVID Valid After:       2026-04-12 10:00:00 +0000 UTC
 SVID Valid Until:       2026-04-12 11:00:00 +0000 UTC
-Intermediate Chained:   false
 CA #1 Valid After:      2026-04-10 00:00:00 +0000 UTC
 CA #1 Valid Until:      2026-04-17 00:00:00 +0000 UTC
 ```
