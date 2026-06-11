@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Module 6.1: Physical Security & Air-Gapped Environments"
 slug: on-premises/security/module-6.1-air-gapped
 sidebar:
@@ -18,16 +17,20 @@ After completing this module, you will be able to:
 
 1. **Design** an air-gapped Kubernetes deployment with a secure image transfer pipeline, private registry, and offline package mirrors
 2. **Implement** physical security controls including USB port lockdown, network segmentation, and access logging for classified environments
-3. **Deploy** Harbor as an air-gapped container registry with image signing, vulnerability scanning, and approval workflows
+3. **Deploy** Harbor as an offline, air-gapped container registry with image signing, vulnerability scanning, and approval workflows
 4. **Secure** the supply chain for disconnected clusters by validating image provenance and maintaining offline CVE databases
 
 ---
 
 ## Why This Module Matters
 
-Teams operating high-assurance Kubernetes environments have repeatedly learned that an "air gap" fails the moment engineers improvise an unapproved network path for convenience. Even when no breach occurs, the resulting audit, revalidation, and hardware review can be expensive and disruptive.
+Hypothetical scenario: a regulated organization runs Kubernetes on owned hardware in a facility with no outbound internet path. During a quarterly audit, investigators discover that an engineer attached a personal USB drive to a worker node to "pull one missing image quickly." No malware entered the cluster, but the isolation boundary was broken, the change was undocumented, and the entire accreditation package must be revalidated — a process that consumes weeks of staff time and delays production deployments.
 
-The larger lesson is organizational: if there is no documented process for getting images and updates into a disconnected environment, engineers will improvise under pressure. Designing the transfer workstation, approval flow, and registry process up front is far cheaper than rebuilding it after an isolation failure.
+Teams operating high-assurance Kubernetes environments have repeatedly learned that an "air gap" fails the moment engineers improvise an unapproved network path for convenience. Even when no breach occurs, the resulting audit, revalidation, and hardware review can be expensive and disruptive. On-premises operators cannot lean on a cloud provider's managed registry, managed scanning feeds, or IAM-backed break-glass — you own the root of trust, the transfer process, and the operational tax of moving every byte across the gap by hand.
+
+The accreditation boundary for air-gapped platforms typically spans facilities, media handling, and software supply chain — not just Kubernetes RBAC. Assessors map your architecture to control catalogs like [NIST SP 800-53](https://csrc.nist.gov/Pubs/sp/800/53/r5/upd1/Final) PE, MP, and SI families. If your narrative says "no external connectivity" but your mirror station browses the web on the same laptop that writes production bundles, the story collapses before anyone asks about PodSecurity standards.
+
+The larger lesson is organizational: if there is no documented process for getting images and updates into a disconnected environment, engineers will improvise under pressure. Designing the transfer workstation, approval flow, and registry process up front is far cheaper than rebuilding it after an isolation failure. The submarine analogy below captures the engineering reality: resupply happens through a single controlled hatch, or not at all.
 
 > **The Submarine Analogy**
 >
@@ -46,9 +49,23 @@ The larger lesson is organizational: if there is no documented process for getti
 
 ---
 
+## Air-Gap Threat Model and Taxonomy
+
+Before you disable a network cable, classify what kind of "gap" you actually need, because the controls, cost, and failure modes differ sharply across isolation levels. A **true air gap** means no physical or automated logical connection between the high-side (production) environment and any untrusted network — [NIST defines this as no physical connection and no automated logical connection](https://csrc.nist.gov/glossary/term/air_gap). A **low-side/high-side split** keeps a connected staging enclave that mirrors artifacts inward through a one-way transfer, while production remains disconnected. **Intermittently connected (DDIL — disconnected, degraded, intermittent, or limited)** environments schedule batch transfers through a controlled window rather than maintaining permanent isolation; financial and healthcare operators sometimes choose this model when patch latency must stay below weeks, accepting weaker assurance than a physics-enforced gap.
+
+What an air gap buys you is structural: there is no inbound exploit path over the network and no outbound exfiltration channel over the same wire, because the wire does not exist. What it does **not** buy is immunity from insiders, compromised transfer bundles, or malware embedded in vendor media that crossed the gap through your own approved process. Supply-chain attacks do not require internet access on the target cluster — they require only that you trust the wrong tarball. USB-born malware, malicious insiders with rack access, and tampered optical media remain in scope regardless of network topology.
+
+Transfer guards fall into two families. **Data diodes** and certified cross-domain solutions enforce one-way flow in hardware — [NIST's data diode definition](https://csrc.nist.gov/glossary/term/data_diode) emphasizes that data travels in only one direction, which simplifies audit evidence compared to firewall rule reviews. **Sneakernet** (encrypted removable media with chain-of-custody logging and two-person integrity) trades bandwidth for operational flexibility; it is slower and human-intensive but does not require specialized hardware. Many defense programs combine both: diode for high-frequency telemetry ingestion, sneakernet for bulky container image bundles.
+
+Threat modeling for air gaps should explicitly list **insider paths**: administrators with Harbor admin credentials can push malicious images even without internet; couriers can swap USB sticks if chain-of-custody is weak; vendors can ship compromised offline installers if you skip signature verification on Harbor's own tarball. Network elimination removes an entire attack surface class but shifts attacker economics toward supply-chain and physical channels — your controls must follow that shift, not pretend the gap alone equals "secure."
+
+Document your isolation level in the System Security Plan using precise language. Assessors distinguish "no inbound connection from untrusted networks" from marketing phrases like "virtually air-gapped." Mislabeling a firewall-segmented VLAN as a physical air gap creates compliance debt that surfaces during penetration tests or incident response, when someone discovers the maintenance VPN was left up after a vendor session.
+
+---
+
 ## Datacenter Physical Controls
 
-Physical security is the foundation. If someone can touch the hardware, every software control is moot.
+Physical security is the foundation. If someone can touch the hardware, every software control is moot — and on bare-metal Kubernetes nodes, "touching the hardware" includes BMC consoles, USB ports, and rack-level KVM switches that bypass your Kubernetes RBAC entirely. [NIST SP 800-53 Rev. 5](https://csrc.nist.gov/Pubs/sp/800/53/r5/upd1/Final) maps these expectations to control families such as Physical and Environmental Protection (PE), Media Protection (MP), and Access Control (AC); your accreditation package should trace each layer below to specific control statements rather than treating "locked door" as sufficient.
 
 ### The Seven Layers of Physical Security
 
@@ -69,9 +86,13 @@ Physical security is the foundation. If someone can touch the hardware, every so
 └──────────────────────────────────────────────────────────────┘
 ```
 
+Layers 1–4 are familiar datacenter hygiene: site selection, perimeter cameras, badge access, and caged colocation space. Layers 6–7 are where Kubernetes on bare metal diverges from cloud assumptions — an attacker with rack access and a USB Rubber Ducky does not need your API server credentials. SCIF and classified-tier facilities add tamper-evident seals on media, escorted maintenance, and separate HVAC zones so exhaust-side attacks remain out of scope; even non-classified high-assurance labs benefit from media control logs that record who wrote bundle N, who transported it, and who verified checksums on arrival.
+
+Visitor and contractor access deserves the same rigor as employee badges: escorted at all times in the server room, tool inventories checked in and out, and photography bans enforced where policy requires. Kubernetes nodes look like generic servers to facilities staff — label racks clearly with data classification so a well-meaning hardware swap does not introduce a non-hardened replacement into a high-side cage. Camera retention policies should align with your incident response window; discovering tampering six months after the fact helps lawyers more than operators.
+
 ### Port Control on Bare Metal Nodes
 
-Disable unused physical ports at the BIOS and OS level. The following commands prevent USB storage devices from being used to exfiltrate data or introduce malware, and isolate BMC interfaces on a management-only VLAN.
+Disable unused physical ports at the BIOS and OS level. The following commands prevent USB storage devices from being used to exfiltrate data or introduce malware, and isolate BMC interfaces on a management-only VLAN. Defense in depth means BIOS disables USB boot **and** the kernel refuses to bind the storage driver **and** optional userspace tools like USBGuard enforce policy for remaining USB classes (keyboards with embedded hubs are a recurring bypass vector if you only block mass storage).
 
 > **Stop and think**: Why does the script use `install usb-storage /bin/false` instead of `blacklist usb-storage`? What is the security difference between these two approaches?
 
@@ -96,6 +117,8 @@ ipmitool lan set 1 ipaddr 10.99.0.11    # Management VLAN
 ipmitool lan set 1 netmask 255.255.255.0
 ```
 
+BMC and IPMI interfaces are a soft underbelly: they provide power cycle, virtual media mount, and serial console even when the host OS is hardened. Restrict BMC NICs to a dedicated management VLAN with no route to production workloads, rotate default credentials before rack-and-stack, disable unused Redfish users, and log every remote session. Hypothetical scenario: an attacker on the corporate LAN discovers a BMC still using the vendor default password; they mount an ISO over virtual media and reboot the node into a live environment that reads etcd data from disk — no Kubernetes vulnerability required.
+
 ### BIOS/UEFI Hardening
 
 ```
@@ -111,11 +134,13 @@ BIOS Settings for Air-Gapped Kubernetes Nodes:
 8. Disable AMT/Intel ME if possible  -- reduce remote management surface
 ```
 
+Secure Boot and TPM measured boot (covered in [Module 6.2](../module-6.2-hardware-security/)) close the loop between firmware trust and disk encryption: if an attacker replaces the bootloader, PCR values change and sealed LUKS keys refuse to unlock. Pair UEFI Secure Boot with an internal certificate authority whose keys never leave your HSM boundary — cloud providers publish their PKI roots for you; on-premises, you publish your own.
+
 ---
 
 ## Air-Gapped Kubernetes Architecture
 
-[A truly air-gapped cluster has zero network connectivity to the internet or any untrusted network.](https://csrc.nist.gov/glossary/term/air_gap) All software enters through a controlled transfer process.
+[A truly air-gapped cluster has zero network connectivity to the internet or any untrusted network.](https://csrc.nist.gov/glossary/term/air_gap) All software enters through a controlled transfer process. Architecturally, think in three zones: a **connected mirror station** that can reach upstream registries and CVE feeds; a **transfer enclave** where humans or hardware diodes move approved artifacts; and the **high-side cluster** where Harbor, Gitea, Flux, and workloads run with no default route to the outside world.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -144,6 +169,10 @@ BIOS Settings for Air-Gapped Kubernetes Nodes:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+DNS deserves explicit design on the high side: CoreDNS must resolve internal service names (`registry.internal.corp`, `gitea.gitea.svc`) without forwarding to public resolvers. Pre-create records for every upstream hostname you mirror into Harbor so application manifests can keep familiar image paths while containerd redirects pulls to your local registry via mirror configuration. Forwarding stubs that leak queries outward — even "just for debugging" — violate isolation; use split-horizon DNS with internal-only zones and logging on every non-recursive query so anomalies surface during SIEM review.
+
+Network segmentation inside the high side still matters: Harbor, Gitea, etcd, and worker nodes should not share flat L2 if you can avoid it. Micro-segmentation with network policies (and physical VLANs for BMC) limits lateral movement when a workload is compromised. The air gap stops inbound internet paths; it does not stop east-west propagation after a bad image runs.
+
 ### Transfer Methods
 
 | Method | Bandwidth | Security | Use Case |
@@ -153,11 +182,48 @@ BIOS Settings for Air-Gapped Kubernetes Nodes:
 | Cross-domain solution (CDS) | Medium-High | High (certified product) | Government, multi-level security |
 | Scheduled batch transfer | High | Medium (network-based, time-limited) | Financial, healthcare (not true air-gap) |
 
+Scheduled batch transfer is **not** a true air gap — it is a disconnected **cadence** with a latent bidirectional path. Document the distinction in your System Security Plan so assessors do not inherit false assurance. When regulatory language requires "no automated logical connection," batch VPN windows fail the test even if firewalls are strict.
+
+When evaluating **cross-domain solutions**, verify the product's certification matches your accreditation tier — a CDS approved for one classification level may not satisfy another. Installation cost includes not only hardware but ongoing validator labor: diodes and CDS appliances still need firmware updates, and those updates arrive through the same sneakernet you built for Kubernetes images. Budget maintenance transfers for security appliances themselves, or they become the oldest software on site.
+
+---
+
+## The Disconnected Supply Chain
+
+Running Kubernetes disconnected means you own the entire supply chain: container images, Helm charts, OS packages, vulnerability databases, SBOMs, and signature verification keys must all arrive as a coherent bundle with provenance you can defend in an audit. Nothing "just downloads" on the high side — if it does, you have a policy violation or a backdoor.
+
+### Artifact classes and transfer tooling
+
+| Artifact | Connected-side source | Bundle format | High-side verification |
+|----------|----------------------|---------------|------------------------|
+| Container images | Upstream registries | OCI archive tar via `skopeo copy` | SHA256 + cosign/Notation signature |
+| Kubernetes core images | `kubeadm config images list` | Same OCI archives | Match digest list in signed manifest |
+| Helm charts | Chart repos | `.tgz` + provenance | `helm verify` if publisher signs |
+| OS packages | Vendor mirrors | RPM/DEB + repodata | GPG repo signing keys transferred once |
+| Trivy DB | `oras pull ghcr.io/aquasecurity/trivy-db:2` | OCI artifact | metadata.json freshness timestamp |
+| GitOps manifests | GitHub/GitLab | Git bundle or tarball | Signed commits / tag signatures |
+
+**Skopeo** and **crane** copy images without a local Docker daemon — essential on mirror stations that should not run arbitrary containers. **`kubeadm config images pull --kubernetes-version v1.35.0`** (verify exact patch with your kubeadm package) pre-stages control-plane images into the local container runtime store before you export them. Bundle tools like **[Zarf](https://docs.zarf.dev/)** and **Hauler** (verify current release notes at install time) package images, charts, and manifests into a single compressed artifact with optional cosign signatures — valuable when operators need repeatable "drop one file, deploy a platform" workflows rather than ad-hoc shell loops.
+
+On the high side, verification order matters: **integrity first** (SHA256 against signed manifest), **authenticity second** (cosign/Notation signature against your org trust root), **policy third** (Trivy/Grype scan against offline DB). Reversing scan-before-checksum wastes time on tampered inputs. Generate SBOMs on the connected side with **[Syft](https://github.com/anchore/syft)** and store them alongside each bundle; when a CVE bulletin arrives weeks later, you can grep SBOMs offline to see exposure without rescanning every layer from scratch.
+
+Offline Trivy and Grype databases age like milk, not wine. Establish a **weekly transfer cadence** for DB refreshes even when no application images change — otherwise Harbor reports green scans while missing newly published CVEs. Include Java-specific DB artifacts if you scan JVM images: Harbor 2.11+ exposes `skip_java_db_update` alongside `skip_update` and `offline_scan` ([Harbor Trivy offline configuration](https://goharbor.io/docs/2.11.0/administration/vulnerability-scanning/import-vulnerability-data/)); forgetting the Java DB produces confusing scan failures on Spring-based workloads.
+
+Every bundle needs a **provenance record**: bundle ID, author, connected-side scan timestamp, signing key ID, manifest hash, and approval ticket. When an auditor asks "what is the provenance of bundle 2026-W23?", you produce a signed manifest chain, not a Slack thread.
+
+**Offline OS repositories** deserve the same rigor as container images. Mirror RHEL, Ubuntu, or SUSE content on the connected side with repo metadata signed by vendor keys you transfer once through an out-of-band key ceremony. On the high side, point `dnf`/`apt` at internal mirrors — never at cached `.rpm` folders without repodata, or dependency resolution will diverge silently across nodes. Node OS patching and Kubernetes patch versions must stay coupled in change records so you can answer "which kernel CVEs were open on worker-17 during incident X?"
+
+**Helm chart provenance** varies by publisher: some charts ship `.prov` files for `helm verify`; many do not. For unsigned charts, treat the tarball hash in your signed manifest as the trust anchor and store a copy of the exact `.tgz` in WORM storage. Flux `HelmRepository` and `OCIRepository` sources should reference internal Harbor OCI chart locations after you re-push charts inward — do not configure high-side Flux to poll chart museums that require internet.
+
+When bundling **CNI, ingress, and CSI** operators, remember their CRDs and webhook certificates are part of the transfer, not just container images. A complete platform bundle includes admission webhooks, monitoring stack CRDs, and the CA that signs them — missing any piece produces a cluster that "installs" but fails silently on first Pod with unmet dependencies.
+
 ---
 
 ## Setting Up Harbor as a Local Registry
 
-Harbor is a common choice for air-gapped container registries because it combines registry management with security and access-control workflows.
+Harbor is a common choice for air-gapped container registries because it combines registry management with security and access-control workflows — project quotas, robot accounts, vulnerability scanning, and Notary/cosign-compatible signing workflows depending on your configuration. Treat Harbor as mandatory infrastructure **before** any worker joins the cluster: nodes that pull directly from embedded tarballs bypass centralized policy gates.
+
+A local **OS package mirror** (apt/yum) on the high side is equally mandatory. Kubernetes nodes still need kernel updates, container runtime patches, and firmware tools; air-gapping only the container registry while leaving OS updates to sneakernet RPM folders without a managed repo produces inconsistent patch levels across the fleet.
 
 ### Install Harbor (Air-Gapped Side)
 
@@ -194,6 +260,7 @@ data_volume: /data/harbor
 trivy:
   ignore_unfixed: false
   skip_update: true          # Critical: no internet for DB updates
+  skip_java_db_update: true  # Prevent Java DB download attempts
   offline_scan: true         # Use bundled vulnerability DB
 HARBOREOF
 
@@ -201,22 +268,25 @@ HARBOREOF
 ./install.sh --with-trivy
 ```
 
+Harbor **robot accounts** automate high-side imports with scoped credentials and expiration dates — prefer robots over shared admin passwords for CI and Flux image automation. **Proxy-cache projects** pull-through from upstream on the connected side only; on the high side, use **full mirror** projects populated by your transfer pipeline so Harbor never attempts outbound registry calls. Configure **retention policies** and per-project quotas so a runaway CI job cannot fill `/data/harbor` and halt all cluster pulls.
+
 ### Mirror Images for Transfer
 
-On the connected side, use `skopeo` or `crane` to create portable image bundles. The workflow creates a list of every image needed, exports each to a portable OCI archive format, and generates checksums for integrity verification on the air-gapped side.
+On the connected side, use `skopeo` or `crane` to create portable image bundles. The workflow creates a list of every image needed, exports each to a portable OCI archive format, and generates checksums for integrity verification on the air-gapped side. Pin tags with digests in your manifest where possible — tags move; digests do not.
 
 > **Pause and predict**: Why does the transfer process use SHA256 checksums AND GPG signatures? What attack does each one protect against?
 
 ```bash
 # Create a manifest of required images
+# Verify exact tags with: kubeadm config images list --kubernetes-version v1.35.0
 cat > image-list.txt <<'EOF'
-registry.k8s.io/kube-apiserver:v1.31.4
-registry.k8s.io/kube-controller-manager:v1.31.4
-registry.k8s.io/kube-scheduler:v1.31.4
-registry.k8s.io/kube-proxy:v1.31.4
-registry.k8s.io/etcd:3.5.16-0
-registry.k8s.io/coredns/coredns:v1.12.0
-registry.k8s.io/pause:3.10
+registry.k8s.io/kube-apiserver:v1.35.0
+registry.k8s.io/kube-controller-manager:v1.35.0
+registry.k8s.io/kube-scheduler:v1.35.0
+registry.k8s.io/kube-proxy:v1.35.0
+registry.k8s.io/etcd:3.6.6-0
+registry.k8s.io/coredns/coredns:v1.13.1
+registry.k8s.io/pause:3.10.1
 quay.io/cilium/cilium:v1.16.5
 ghcr.io/fluxcd/flux-cli:v2.4.0
 ghcr.io/fluxcd/source-controller:v1.4.1
@@ -266,11 +336,23 @@ done < image-list.txt
 echo "Import complete. Verify in Harbor UI: https://registry.internal.corp"
 ```
 
+Configure **containerd mirror rules** on every node so `registry.k8s.io` and other upstream names transparently resolve to Harbor — operators keep upstream-style references in manifests while pulls never leave the high side. Document the mirror table in Git alongside Flux manifests so rebuilds stay reproducible.
+
+### Image Signing on Import
+
+Checksums prove a file was not corrupted in transit; **signatures** prove it was published by your organization and not swapped by an insider on the connected mirror station. **[cosign](https://docs.sigstore.dev/cosign/signing/overview/)** (Sigstore) and **[Notation](https://notaryproject.dev/docs/)** (CNCF Notary v2) both attach signatures to OCI artifacts — choose one trust root and enforce it consistently. On the connected side, sign each archive or manifest list with your org key; on the high side, configure Harbor's **content trust** or admission policies (Kyverno verifyImages, Gatekeeper, or native policy in later releases — verify against your 1.35 cluster capabilities) to reject unsigned images before pods schedule.
+
+Store signing keys in an HSM or offline ceremony machine — not on the same mirror laptop that pulls from the public internet. Rotate keys on a documented schedule and cross-sign during rotation so bundles signed under the old key remain valid until expiry.
+
+Harbor **vulnerability scanning policies** can block pulls of images exceeding a severity threshold — valuable on the high side where you cannot rely on external CI gates. Configure project-level policies after validating Trivy offline DB freshness; a policy backed by stale data creates false confidence. **Replication** features matter when you operate multiple high-side clusters in different bunkers: replicate approved images between Harbor instances over dedicated links rather than re-running sneakernet for each site — but never replicate from low-side directly; each replication path should stay within the same trust zone.
+
+For **admission-time enforcement**, combine Harbor scan results with Kubernetes admission policy: Kyverno `verifyImages` rules, Gatekeeper constraints, or ValidatingAdmissionPolicy with CEL expressions (verify GA status on your 1.35 cluster before committing). The registry is your last centralized gate before containerd pulls; admission is the last software gate before pods run — use both so a pushed-but-never-scanned image cannot schedule because someone bypassed the UI workflow.
+
 ---
 
 ## Sneakernet Update Workflow
 
-Updates to an air-gapped cluster require a disciplined process. This is the most failure-prone part of air-gapped operations.
+Updates to an air-gapped cluster require a disciplined process. This is the most failure-prone part of air-gapped operations — not because the technology is exotic, but because humans skip steps under outage pressure.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -305,6 +387,10 @@ Updates to an air-gapped cluster require a disciplined process. This is the most
 │      └── Verify rollout, run smoke tests                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+The two-person integrity rule is not bureaucracy — it reduces single-insider tampering risk and catches honest mistakes (wrong bundle, wrong USB stick) before they reach production. Chain-of-custody logs should include media serial numbers, cryptographic hashes of the manifest, escort names, and tamper-evident bag seals where policy requires them. Reconcile manifest line counts on arrival: if the connected side exported forty-two OCI archives, the high side should import forty-two — not forty-one, not forty-three. Discrepancies trigger investigation before any `skopeo copy` pushes to Harbor.
+
+Version your bundle format in Git: when `weekly-mirror.sh` changes directory layout, old runbooks must still parse historical bundles for forensic reconstruction. Teams that overwrite scripts without semver tags discover during audits that nobody can re-verify a six-month-old transfer.
 
 ### Automating the Connected Side
 
@@ -343,7 +429,7 @@ gpg --detach-sign --armor SHA256SUMS
 
 ## Air-Gapped GitOps with Flux
 
-GitOps in an air-gapped environment requires a local Git server (Gitea or GitLab) instead of GitHub.
+GitOps in an air-gapped environment requires a local Git server (Gitea or GitLab) instead of GitHub — Flux controllers poll internal Git and OCI sources on intervals you define, with no outbound hooks to SaaS. The Git server itself is just another artifact in your transfer bundle: initialize it from a pinned image in Harbor, restore repositories from signed git bundles, and only then bootstrap Flux.
 
 ### Set Up Gitea (Local Git Server)
 
@@ -384,6 +470,10 @@ spec:
 EOF
 ```
 
+Flux's **image-automation** components can still tag and commit manifest updates on the high side, but they cannot reach external registries — image reflector scans Harbor only. Disable or remove ImageUpdateAutomation paths that assume Docker Hub metadata APIs exist. [Flux documentation](https://fluxcd.io/flux/installation/bootstrap/) describes bootstrap flags; adapt registry URLs to your internal Harbor hostname.
+
+Treat **Git history on Gitea** as part of your evidence chain: signed commits, protected branches, and mandatory review before merges to `main`. Sneakernet-delivered manifest updates should land via pull request on the high side even when only two operators exist — self-merge without review recreates the insider risk the air gap was supposed to reduce. Flux reconciles whatever is on `main`; if `main` is writable without oversight, your GitOps pipeline is only as trustworthy as the least careful engineer with push access.
+
 ### Update Workflow
 
 When new manifests arrive via sneakernet:
@@ -403,7 +493,122 @@ flux get kustomizations --watch
 
 ## Updating Trivy's Vulnerability Database Offline
 
-Trivy cannot fetch vulnerability data in an air-gapped environment. Include the Trivy DB in every weekly transfer bundle: download it on the connected side with `oras pull ghcr.io/aquasecurity/trivy-db:2`, transfer it, then copy to Harbor's Trivy data directory and restart the Trivy container. Verify the DB freshness via Harbor's system info API.
+Trivy cannot fetch vulnerability data in an air-gapped environment. Include the Trivy DB in every weekly transfer bundle: download it on the connected side with `oras pull ghcr.io/aquasecurity/trivy-db:2`, transfer it, then copy to Harbor's Trivy data directory and restart the Trivy container. Verify the DB freshness via Harbor's system info API or by checking `metadata.json` timestamps inside the scanner cache path documented for your Harbor version.
+
+Harbor's offline scanning model expects you to refresh both the primary vulnerability database and, when scanning Java applications, the Java-specific database — configure `skip_java_db_update: true` only **after** you have a process to transfer that database artifact as well. Scan failures that mention `java-db` download timeouts in air-gapped sites are a common Day-2 surprise; treat Java DB transfer as part of the standard bundle checklist, not an optional appendix.
+
+Document the **expected scan latency** after DB import: large Harbor projects with thousands of tags may take hours to rescan. Schedule imports during maintenance windows and communicate to application teams that "green in Harbor" means green against the DB timestamp stamped on the bundle, not against the public internet's live CVE feed at this exact minute.
+
+---
+
+## Day-2 Operations in the Dark
+
+Air-gapped clusters do not stop needing care after bootstrap — they need **more** operational discipline because you cannot `kubectl apply` your way out of a missing image at 2 a.m. by pulling from the internet. Patch latency becomes a first-class risk metric: every day between public CVE disclosure and your next approved transfer window is exposure time you consciously accept.
+
+**Knowing a CVE matters without a live feed** requires preparatory work: maintain SBOMs for every deployed image, subscribe to vendor bulletins on the connected side, and ship summarized exposure reports inward with each bundle. Security analysts on the high side should not need Twitter to learn about critical Kubernetes CVEs — your low-side team filters noise and transfers actionable intelligence as signed markdown advisories.
+
+**Break-glass** procedures must exist before emergencies: pre-approved emergency transfer roles, after-hours escorts for media, and documented rollback paths when a bad patch enters Harbor. Break-glass without logging destroys accreditation; break-glass with immutable [Kubernetes audit logs](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) preserves accountability.
+
+**Offline GitOps drift** still happens when operators `kubectl edit` during incidents. Flux will fight manual changes on the next reconcile — train teams to patch Git on the high side (via sneakernet-delivered commits) rather than mutating production directly. For incidents requiring immediate mutation, use a time-bounded suspension of Flux kustomizations with ticket IDs and automatic re-enable timers.
+
+Hypothetical scenario: a zero-day in a ingress controller image is disclosed on Monday; your transfer window is Friday. Leadership must decide whether to accept four days of known exposure, spend courier overtime for an emergency bundle, or temporarily scale affected workloads to zero — there is no managed-cloud "click to patch" escape hatch on owned hardware.
+
+**Capacity planning in the dark** also differs from connected operations: you cannot autoscale node pools from a cloud API during traffic spikes if you never pre-staged excess hardware and images on the high side. Maintain a buffer of spare nodes, pre-pulled pause images, and empty PV capacity in your quarterly bundles so burst traffic does not force an unplanned transfer. **Observability** stacks (Prometheus, Loki, tracing collectors) must be installed from the same Harbor/Gitea pipeline — otherwise on-call engineers fly blind during the exact incidents where improvisation breaks isolation.
+
+**Access logging** for classified environments extends beyond Kubernetes audit logs: physical entry logs, BMC session recordings, Harbor pull audit trails, and Git push history on Gitea should correlate to a single ticket ID for each change window. When investigators reconstruct timelines, gaps in any layer look like concealment even when the gap is innocent oversight. Export logs to WORM storage on the high side; do not assume you can "pull logs from SaaS" later.
+
+Training matters as much as tooling: engineers accustomed to `docker pull` during incidents will revert under stress unless drills rehearse sneakernet imports quarterly. Tabletop exercises that walk through "CVE published → bundle approved → media escorted → import verified → Flux reconcile" expose missing runbook steps before auditors or attackers do.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Proven Patterns
+
+**Dedicated transfer workstation with no route to production.** The mirror station lives on a connected VLAN, writes bundles to staging media, and never mounts production clusters. Compromise of the mirror laptop does not instantly become compromise of etcd — you still have checksum and signature gates on the high side, but network separation limits lateral movement during bundle preparation.
+
+**Signed manifest of expected artifacts per bundle ID.** Every transfer publishes a human-readable manifest (image names, digests, chart versions, DB timestamps) signed with your org GPG or cosign key. Importers reject any file not listed in the manifest, preventing "extra" images from slipping in alongside approved updates.
+
+**Harbor project per trust zone with robot importers.** Separate Harbor projects for `platform-core`, `tenant-apps`, and `lab-experimental` with different retention, scanning strictness, and RBAC. Robot accounts scoped to a single project limit blast radius when automation credentials leak.
+
+**Weekly DB refresh even when images unchanged.** Vulnerability intelligence updates faster than application releases. Transfer Trivy and Grype databases on schedule independent of application churn so Harbor scans remain meaningful.
+
+**Pre-staged break-glass media.** Maintain sealed emergency bundles for critical platform components (CoreDNS, CNI, ingress) approved quarterly but not deployed until needed — reduces emergency courier scrambles when leadership accepts patch delay risk for applications but not for platform survival.
+
+### Anti-Patterns
+
+| Anti-Pattern | Why Teams Fall Into It | What Goes Wrong | Better Approach |
+|--------------|------------------------|-----------------|-----------------|
+| Firewall-only "air gap" | Faster setup, familiar ops | Residual bidirectional path; rule misconfigurations | True physical/logical disconnect per NIST definition |
+| Shared admin password on Harbor | Simplicity | Credential sprawl; no scoped revocation | Robot accounts + per-operator SSO where available |
+| Scan-after-deploy | Pressure to ship | Vulnerable images run before anyone reads Trivy output | Scan on import; admission policy blocks critical CVEs |
+| Skipping chain-of-custody for "small" bundles | Perceived low risk | Undetected swap/tamper; audit failure | Two-person integrity for all media, regardless of size |
+| Pulling directly to nodes bypassing Harbor | "Just this once" | No central scan/signing gate; inconsistent tags | Mandatory containerd mirrors to Harbor |
+| Stale Trivy DB + green scans | DB transfer is tedious | False negative assurance | Weekly DB bundle + metadata freshness alerts |
+| Emergency USB without runbook | Outage panic | Isolation broken; untracked artifacts | Pre-approved break-glass with logging and revalidation |
+
+---
+
+## Decision Framework
+
+Choosing isolation level, transfer mechanism, and bundle tooling should be deliberate — not a default copied from a vendor reference architecture. Use the flowchart below, then the matrix for tooling tradeoffs.
+
+```mermaid
+flowchart TD
+    A[Need to run Kubernetes without internet] --> B{Regulatory language requires<br/>no automated logical connection?}
+    B -->|Yes| C[True air gap<br/>sneakernet or data diode]
+    B -->|No| D{Patch latency budget<br/>under 72 hours?}
+    D -->|Yes| E[Scheduled batch transfer<br/>document as NOT true air gap]
+    D -->|No| C
+    C --> F{Classified / multi-level<br/>security domains?}
+    F -->|Yes| G[Hardware data diode or<br/>certified CDS]
+    F -->|No| H{Bundle size mostly<br/>small and frequent?}
+    H -->|Yes| I[Skopeo + signed manifests<br/>+ Harbor import]
+    H -->|No| J[Zarf or Hauler monolithic<br/>packages + Harbor]
+    G --> K[Separate clusters per domain<br/>no direct image sharing]
+    I --> L[Flux + Gitea GitOps<br/>on high side]
+    J --> L
+    E --> L
+```
+
+### Transfer and Registry Decision Matrix
+
+| Factor | Sneakernet + skopeo | Data diode | Zarf/Hauler bundle | Scheduled VPN batch |
+|--------|---------------------|------------|--------------------|---------------------|
+| Assurance | High (physical control) | Very high (one-way physics) | High (if signed) | Medium |
+| Bandwidth | Low–medium | Medium | High (compressed) | High |
+| OpEx (people) | High courier/escort cost | Lower after install | Medium | Lower |
+| CapEx | Low media cost | High hardware | Low | Medium firewall/CDN |
+| True air gap? | Yes | Yes | Yes | No |
+| Best fit | Classified, small sites | Defense, nuclear | Platform bootstrap | Finance with DR window |
+
+---
+
+## Cost Lens: On-Premises Economics of Air-Gapped Operations
+
+Air-gapping saves cloud egress and SaaS subscription costs but introduces **human-courier operational tax** and **duplicated infrastructure** that cloud-native teams often underestimate during the business case.
+
+### CapEx and duplicated infrastructure
+
+Expect at least two parallel footprints: a connected **build/mirror enclave** (servers, switches, signing HSM, scanner workstations) and the **high-side production cluster** (Harbor, Gitea, Kubernetes nodes, storage). You cannot share the same Harbor instance across the gap — you mirror artifacts inward. CapEx includes encrypted removable media inventories, optical drives for write-once policies, optional data-diode hardware (specialized appliances can exceed generic server budgets by an order of magnitude — verify vendor quotes for your throughput requirement), and spare transfer workstations so a failed mirror laptop does not halt all inbound software.
+
+### OpEx drivers
+
+OpEx dominates over time: security analysts reviewing manifests, couriers and escorts for classified sites, change-advisory meetings for each bundle, and senior engineers spending hours on manual import verification instead of feature work. A weekly transfer cadence with two-person integrity can consume **multiple FTE-days per month** even when zero application releases occur — because vulnerability databases and OS patches still move. Budget headcount explicitly; hiding the cost inside "platform team overhead" leads to skipped transfers and stale scans.
+
+Power, cooling, and rack space apply to **both** sides of the gap. Depreciation cycles (~4–5 years for servers) hit twice if mirror and production hardware refresh on different schedules. Support contracts for Harbor, RHEL/Ubuntu, and hardware BMC firmware must be maintained on both enclaves.
+
+### The slower-patch risk premium
+
+When a critical CVE lands, cloud tenants patch in hours; air-gapped tenants patch on the next approved bundle — days to weeks later. That latency is a **risk premium** you accept in exchange for isolation. Quantify it in your risk register: expected cost of exposure window × probability, compared to cloud patch SLAs. For some regulated data (classified workloads, critical infrastructure control planes, strict data-sovereignty mandates), the premium is acceptable. For spiky startup workloads with no compliance driver, air-gapping is often **security theater** — expensive isolation without proportional threat reduction.
+
+### When on-prem air-gap wins vs loses
+
+**Wins** when steady high utilization, data gravity, regulatory mandates, or egress-heavy architectures make cloud OpEx painful and isolation is genuinely required — not merely preferred. **Loses** when scale is small, utilization is spiky, or patch velocity matters more than inbound network elimination — a well-segmented connected cluster with strict egress controls may deliver better security per dollar than a porous "air gap" with weekly USB shortcuts.
+
+Compare TCO against cloud using **date-stamped** numbers from your procurement team, not blog posts: include courier contracts, diode maintenance, duplicate Harbor clusters, signing HSM leases, and the fully loaded cost of security reviewers per bundle. Cloud egress fees and managed registry pricing change frequently; on-prem power and colocation rates vary by region. The honest business case states assumptions explicitly ("we assume 52 transfers/year, 4 hours security review each") so leadership can sensitivity-test whether air-gapping still wins if patch frequency doubles.
+
+Depreciation schedules interact with **hardware refresh**: transfer workstations and diode appliances age on different cycles than Kubernetes worker nodes. Budget refresh for mirror infrastructure before laptops fail mid-bundle — a mirror station with failing SSDs corrupts tar archives that pass checksums only if you get lucky. Spares inventory (encrypted USB drives, optical media, HSM tokens) is CapEx that cloud teams never line-item; on-prem FinOps must.
 
 ---
 
@@ -535,6 +740,42 @@ Why is it insufficient to "just block outbound traffic with a firewall" instead 
 A true air gap provides defense through physics (no wire, no fiber). A firewall provides defense through configuration (which can be wrong).
 </details>
 
+### Question 5
+**Scenario:** An auditor asks how you prove that bundle `2026-W24-platform` contains exactly the images listed in your change ticket — no extras. What evidence do you produce?
+
+<details>
+<summary>Answer</summary>
+
+You produce the **signed manifest** generated on the connected mirror station: a file listing every artifact name, digest, and size, with a GPG detached signature or cosign attestation from an org-controlled key. You match that manifest to the change ticket ID, then show high-side import logs demonstrating `sha256sum -c` succeeded against the same hash file, Harbor push records for only those repositories, and Kubernetes audit entries showing no pulls from unlisted digests during the import window. Chain-of-custody paperwork ties the USB serial number to the manifest hash. Extra images could only enter if someone bypassed all three gates — which is exactly what the auditor is testing your ability to detect.
+</details>
+
+### Question 6
+**Scenario:** Harbor Trivy scans report zero critical CVEs on a Java Spring Boot image, but your low-side team confirmed a critical Log4j-class issue exists in that tag on the public internet. The image imported yesterday. What is the most likely root cause?
+
+<details>
+<summary>Answer</summary>
+
+The most likely cause is a **stale or incomplete offline vulnerability database** on the high side — especially missing the Java-specific DB if `skip_java_db_update` is true without transferring `trivy-java.db`. Secondary causes include scanning only OS packages while JVM JAR layers are ignored due to misconfiguration, or importing an image tag that was patched upstream but your connected-side pull used an older digest. Fix by refreshing both Trivy DB artifacts on the next bundle, verifying `metadata.json` timestamps, rescanning after DB import, and pinning images by digest in manifests so tag confusion cannot recur.
+</details>
+
+### Question 7
+**Scenario:** A platform engineer proposes mounting the connected mirror station on the same Layer-2 network as production "to speed up testing." Leadership asks for your risk assessment in one paragraph. What do you say?
+
+<details>
+<summary>Answer</summary>
+
+Collapsing mirror and production onto one broadcast domain destroys the isolation boundary the air gap is built on: compromise of the internet-facing mirror station — via supply-chain malware in an upstream image, a phishing attack, or a vulnerable browser on the same laptop — gains direct network paths to etcd, Harbor, and BMC interfaces that were previously unreachable without crossing a controlled transfer gate. Speed belongs in **process automation on the mirror side**, not in shortening the network distance between untrusted inputs and production. If they need faster testing, stand up a **high-side lab cluster** fed by the same sneakernet pipeline, not a VLAN shortcut.
+</details>
+
+### Question 8
+**Scenario:** Your organization debates Zarf monolithic packages versus weekly skopeo loops for a 40-node fleet. Operations headcount is fixed — no new hires. Which approach reduces long-term toil and why?
+
+<details>
+<summary>Answer</summary>
+
+For a **fixed headcount**, Zarf (or Hauler) reduces toil when bootstrap and upgrade paths are repeatable: one signed artifact, one deploy command, embedded SBOM and signature verification — fewer bespoke shell scripts drifting across engineers. Skopeo loops win when you need **granular, frequent partial updates** (single image hotfixes) without repackaging an entire platform tarball. Many teams hybridize: Zarf for initial platform install, skopeo+Harbor for weekly CVE patches. The wrong choice is optimizing for Day-0 convenience and ignoring Day-2 patch frequency — document expected update cadence before picking tooling.
+</details>
+
 ---
 
 ## Hands-On Exercise: Build an Air-Gapped Image Pipeline
@@ -553,8 +794,8 @@ You manage an air-gapped Kubernetes cluster. A new version of CoreDNS needs to b
 
    # Pull the image
    skopeo copy \
-     docker://registry.k8s.io/coredns/coredns:v1.12.0 \
-     oci-archive:images/coredns_v1.12.0.tar
+     docker://registry.k8s.io/coredns/coredns:v1.13.1 \
+     oci-archive:images/coredns_v1.13.1.tar
 
    # Generate checksums
    cd images && sha256sum *.tar > SHA256SUMS
@@ -573,14 +814,14 @@ You manage an air-gapped Kubernetes cluster. A new version of CoreDNS needs to b
 
    # If you have a local registry (kind with registry):
    skopeo copy \
-     oci-archive:coredns_v1.12.0.tar \
-     docker://localhost:5000/coredns/coredns:v1.12.0 \
+     oci-archive:coredns_v1.13.1.tar \
+     docker://localhost:5000/coredns/coredns:v1.13.1 \
      --dest-tls-verify=false
    ```
 
 4. **Verify the image is available**:
    ```bash
-   skopeo inspect docker://localhost:5000/coredns/coredns:v1.12.0 \
+   skopeo inspect docker://localhost:5000/coredns/coredns:v1.13.1 \
      --tls-verify=false | jq '.Digest'
    ```
 
@@ -600,6 +841,9 @@ You manage an air-gapped Kubernetes cluster. A new version of CoreDNS needs to b
 3. **Harbor is a common choice** for air-gapped registries with offline vulnerability scanning
 4. **The transfer process is the hardest part** -- design it before you need it, with checksums and two-person integrity
 5. **GitOps works air-gapped** -- use Gitea/GitLab locally with Flux pointing to internal Git
+6. **Supply-chain trust moves inward** -- checksums, signatures, SBOMs, and offline CVE databases are part of the platform, not optional extras you add after go-live
+
+Successful air-gapped Kubernetes is less about exotic tooling than about **boring repetition**: the same manifest, checksum, signature, scan, import, Git push, and Flux reconcile steps every week until muscle memory prevents the shortcut that breaks isolation. Measure success by **transfer discipline metrics** — missed windows, unsigned bundles, emergency USB events — not by cluster uptime alone. A highly available cluster with undocumented imports is a liability waiting for an assessor or attacker to notice. Review those metrics in the same leadership forum where you review patch SLAs so isolation debt visible to operators becomes visible to budget holders too. Small gaps in process become large gaps in accreditation.
 
 ---
 
@@ -615,3 +859,10 @@ Continue to [Module 6.2: Hardware Security (HSM/TPM)](../module-6.2-hardware-sec
 - [nvd.nist.gov: CVE 2023 27997](https://nvd.nist.gov/vuln/detail/CVE-2023-27997) — The NVD entry directly documents CVE-2023-27997 as a FortiOS/FortiProxy SSL-VPN remote-code-execution vulnerability.
 - [NIST SP 800-53 Rev. 5](https://csrc.nist.gov/Pubs/sp/800/53/r5/upd1/Final) — Useful for grounding physical security, media handling, access control, and audit-control language in a primary control catalog.
 - [Kubernetes Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) — Relevant for the module's access-logging and evidence expectations in high-assurance or regulated environments.
+- [Harbor: import vulnerability data offline](https://goharbor.io/docs/2.11.0/administration/vulnerability-scanning/import-vulnerability-data/) — Documents offline Trivy database expectations for disconnected Harbor instances.
+- [Sigstore cosign signing overview](https://docs.sigstore.dev/cosign/signing/overview/) — Official cosign documentation for signing and verifying OCI artifacts in supply-chain workflows.
+- [Notary Project documentation](https://notaryproject.dev/docs/) — CNCF Notary v2 (Notation) reference for OCI artifact signing alternative to cosign.
+- [Zarf documentation](https://docs.zarf.dev/) — Official guide to packaging Kubernetes workloads for air-gapped deployment.
+- [Flux bootstrap installation](https://fluxcd.io/flux/installation/bootstrap/) — Upstream Flux docs for GitOps bootstrap parameters adapted to internal Git/registries.
+- [Aquasecurity Trivy documentation](https://aquasecurity.github.io/trivy/latest/) — Scanner behavior, offline DB usage, and air-gapped scanning considerations.
+- [NIST SP 800-207 Zero Trust](https://csrc.nist.gov/publications/detail/sp/800-207/final) — Zero Trust architecture principles applicable to high-side/low-side segmentation design.
