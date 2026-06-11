@@ -162,6 +162,9 @@ processors:
     timeout: 5s
 
 exporters:
+  # Endpoints below are illustrative cluster-internal addresses with plaintext
+  # transport for readability. In the regulated/air-gapped deployment this module
+  # targets, terminate these with internal mTLS (see the internal-TLS requirement above).
   prometheusremotewrite:
     endpoint: http://mimir-nginx.monitoring.svc.cluster.local/api/v1/push
     headers:
@@ -171,7 +174,7 @@ exporters:
   otlp/tempo:
     endpoint: tempo-distributor.monitoring.svc.cluster.local:4317
     tls:
-      insecure: true
+      insecure: true  # illustrative only — enable internal mTLS in a regulated deployment
 
 service:
   pipelines:
@@ -281,7 +284,7 @@ receivers:
       - to: platform-team@example.internal
         from: alertmanager@example.internal
         smarthost: smtp-relay.monitoring.svc.cluster.local:25
-        require_tls: false
+        require_tls: false  # illustrative only — require STARTTLS to the internal relay in a regulated deployment
   - name: platform-oncall-webhook
     webhook_configs:
       - url: http://incident-router.monitoring.svc.cluster.local/api/alertmanager
