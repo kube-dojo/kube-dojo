@@ -425,7 +425,7 @@ Chaos Engineering deliberately introduces failures to discover weaknesses before
 4. **Run experiments continuously**: Systems drift. Regular chaos experiments detect this drift.
 5. **Build confidence, not heroics**: The goal is a boring incident response because you've seen it before.
 
-Netflix's Chaos Monkey, described in the [Principles of Chaos Engineering](https://principlesofchaos.org/), was among the early tools that randomly terminates production instances so teams design for survivability rather than assuming instance permanence. The tool does not merely test resilience—it forces resilient design by making instance loss routine. For a deeper KubeDojo treatment, see [Chaos Principles](../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/).
+Chaos engineering tools that randomly terminate production instances, described in the [Principles of Chaos Engineering](https://principlesofchaos.org/), push teams to design for survivability rather than assuming instance permanence. Making instance loss routine does not merely test resilience—it forces resilient design. KubeDojo covers the specific tools and the discipline in depth in [Chaos Principles](../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/).
 
 **Common Chaos Experiments:**
 
