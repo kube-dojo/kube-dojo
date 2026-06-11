@@ -18,9 +18,9 @@ sidebar:
 
 In early 2024, the healthcare sector witnessed one of the most devastating cyberattacks in history: the UnitedHealth Group (Change Healthcare) breach. The intrusion began simply enough—attackers from the ALPHV/BlackCat ransomware gang compromised credentials on a remote access portal that lacked multi-factor authentication. However, the catastrophic damage was not caused by the initial entry, but by the network architecture that awaited the attackers once inside. Because the internal infrastructure operated on a legacy, perimeter-based implicit trust model, the attackers were able to move laterally with absolute impunity.
 
-Once past the perimeter, the attackers freely navigated the internal network, discovering data stores, compromising domain controllers, and mapping service-to-service communications that blindly trusted any request originating from an internal IP address. They exfiltrated the highly sensitive health data of millions of patients and systematically deployed ransomware across thousands of mission-critical systems. The financial impact was staggering, with UnitedHealth Group estimating the immediate response costs to be in excess of $872 million, not accounting for the ensuing regulatory fines, class-action lawsuits, and long-term reputational damage.
+Once past the perimeter, the attackers freely navigated the internal network, discovering data stores, compromising domain controllers, and mapping service-to-service communications that blindly trusted any request originating from an internal IP address. They exfiltrated the highly sensitive health data of millions of patients and systematically deployed ransomware across thousands of mission-critical systems. The financial impact was staggering: UnitedHealth Group's SEC filings reported roughly $872 million in total cyberattack impacts for the first quarter of 2024 alone (direct response plus business disruption), with full-year costs estimated far higher and excluding the ensuing regulatory fines, class-action lawsuits, and long-term reputational damage.
 
-If a Zero Trust Architecture (ZTA) had been enforced internally—with strict cryptographic microsegmentation, mandatory mutual TLS (mTLS), and continuous identity-based access controls for every workload—the breach would have played out entirely differently. The blast radius would have been surgically contained to the single compromised entry point, as the attackers would lack the cryptographic ServiceAccount tokens (SVIDs) required to authenticate to any adjacent internal service. Zero Trust transforms the internal network from a soft, vulnerable underbelly into a far more hostile, cryptographically enforced environment, making it much less likely that a single breach results in total systemic collapse.
+Had a Zero Trust Architecture (ZTA) been enforced internally—with strict cryptographic microsegmentation, mandatory mutual TLS (mTLS), and continuous identity-based access controls for every workload—lateral movement of this kind would have been far harder to sustain. In principle, the blast radius could have been contained much closer to the single compromised entry point, because an attacker without a valid workload identity (a SPIFFE SVID or an equivalent mesh-issued mTLS credential) cannot authenticate to adjacent internal services. Zero Trust transforms the internal network from a soft, vulnerable underbelly into a far more hostile, cryptographically enforced environment, making it much less likely that a single breach results in total systemic collapse.
 
 For an on-premises Kubernetes platform, the lesson is sharper than it is in a managed cloud. There is no cloud security group, provider IAM condition key, managed certificate authority, or hosted KMS quietly narrowing the blast radius for you; the platform team owns the policy decision points, the enforcement points, the key hierarchy, the logging plane, and the failure modes. Zero trust is therefore not a product SKU in this track. It is the durable security spine you build from workload identity, encrypted service-to-service traffic, admission controls, node trust, and operational discipline.
 
@@ -219,7 +219,7 @@ spec:
 
 ### The Kubelet Health Check Problem
 
-When `STRICT` mTLS is enabled, the API server/kubelet cannot perform TCP or HTTP readiness/liveness probes directly against the pod's IP. The kubelet does not possess a mesh-issued client certificate, so the proxy rejects the plaintext health check probe.
+When `STRICT` mTLS is enabled, the kubelet cannot perform TCP or HTTP readiness/liveness probes directly against the pod's IP. The kubelet does not possess a mesh-issued client certificate, so the proxy rejects the plaintext health check probe.
 
 **The Fix:** Modern meshes handle this via probe rewriting. The mutating admission webhook changes the pod specification so the probe points to the sidecar proxy's specific probe port (e.g., 15020 in Istio). The sidecar receives the plaintext probe, performs the actual health check against the application container via localhost, and returns the result to the kubelet. Ensure `sidecar.istio.io/rewriteAppHTTPProbers: "true"` is active (default in recent Istio versions).
 
@@ -433,7 +433,7 @@ D) iptables cannot scale past a single namespace under Kubernetes 1.35.
 In this lab, you will progressively deploy a microservices application, enforce a default-deny network posture, enable strict mTLS, and write cryptographic authorization policies using Istio.
 
 ### Prerequisites
-* `kind` cluster running Kubernetes v1.35+.
+* `kind` cluster (Kubernetes 1.29+; this lab uses no 1.35-specific features, so any recent `kind` node image works).
 * `istioctl` CLI installed (v1.29+).
 * `kubectl` configured and ready.
 
@@ -577,7 +577,23 @@ EOF
 kubectl apply -f mtls-strict.yaml
 ```
 
-If you attempt to call `httpbin` from a pod outside the mesh, it will fail because the request is not part of the mesh. Connections between `sleep` and `httpbin` succeed because the sidecar Envoy proxies handle the mTLS transparently.
+Now prove that mesh and non-mesh callers are treated differently. The injected `sleep` pod still succeeds (its sidecar negotiates mTLS transparently), but a caller **without** a sidecar is refused:
+
+```bash
+# In-mesh caller still works (sidecar handles mTLS) -> 200
+kubectl exec deploy/sleep -- curl -s -o /dev/null -w "%{http_code}\n" httpbin.default.svc.cluster.local:8000/headers
+
+# Out-of-mesh caller: a pod in a namespace WITHOUT sidecar injection
+kubectl create namespace no-mesh --dry-run=client -o yaml | kubectl apply -f -
+kubectl label namespace no-mesh istio-injection=disabled --overwrite
+kubectl run plain-caller -n no-mesh --image=curlimages/curl --restart=Never -- \
+  sh -c 'curl -s -o /dev/null -w "%{http_code}\n" --max-time 5 httpbin.default.svc.cluster.local:8000/headers || echo "connection rejected"'
+kubectl logs -n no-mesh plain-caller
+# Expected: a connection reset / "connection rejected" — the plaintext caller cannot satisfy STRICT mTLS
+kubectl delete pod plain-caller -n no-mesh
+```
+
+Connections between `sleep` and `httpbin` succeed because the sidecar Envoy proxies handle the mTLS transparently; the out-of-mesh `plain-caller` is refused because it cannot present a mesh-issued client certificate. This is the proof behind success criterion #1.
 
 </details>
 
