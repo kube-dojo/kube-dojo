@@ -102,16 +102,30 @@ A stretched cluster runs one Kubernetes cluster across two physical sites. Worke
 Kubernetes stores its authoritative cluster state in etcd. Creating a Pod, updating a ConfigMap, changing a Lease, writing an EndpointSlice, or recording a controller status update eventually becomes an etcd write. etcd uses the Raft consensus algorithm, which means a leader proposes a change and the change is committed only after a majority of members acknowledge it. When the majority includes a member across a slow or lossy link, the control plane pays for that link on the write path.
 
 ```
-etcd WRITE IN A STRETCHED CLUSTER
+etcd WRITE IN A STRETCHED CLUSTER (3 members: Leader+M2 in Site A, M3 in Site B)
 
-  API Server (Site A) ──► etcd Leader (Site A) ──► Replicate
-                               │                        │
-                          etcd M2 (A)             etcd M3 (B)
-                          ACK: 0.1ms              ACK: 4ms (RTT)
-                               │                        │
-                          Quorum reached ◄──────────────┘
-                          Total latency: ~5ms (if RTT=4ms)
+STEADY STATE — local majority (Leader + M2 both in Site A, RTT to B = 4ms):
+
+  API Server (A) ──► etcd Leader (A) ──► replicate to M2 (A) and M3 (B)
+                               │
+                          M2 (A) ACK: ~0.1ms (local)
+                               │
+                    Quorum reached (Leader counts itself + M2)
+                    Write latency: ~sub-ms — M3 is NOT on the commit path
+                               │
+                          M3 (B) ACK: ~4ms (async catch-up, after commit)
+
+FAILURE CASE — M2 unavailable; cross-site member required for quorum:
+
+  API Server (A) ──► etcd Leader (A) ──► must wait for M3 (B)
+                               │
+                          M3 (B) ACK: ~4ms (RTT)
+                               │
+                    Quorum reached (Leader + M3 only)
+                    Write latency jumps to ~RTT until M2 returns
 ```
+
+A 2-1 metro split commits locally in steady state. Cross-site RTT gates writes only when the local majority is broken — a local member is down, or the leader is isolated alone in one site.
 
 This is why a low-latency metro link can behave very differently from a regional or cross-country link. The Kubernetes API server is not just writing occasional human changes; controllers continuously update status, endpoints, leases, events, and coordination objects. A few extra milliseconds can be acceptable. Jitter, packet loss, microbursts, or a link that performs well at noon and poorly during backups can turn the same topology into a source of intermittent API timeouts.
 
@@ -129,22 +143,22 @@ Treat this table as a starting point, not a universal guarantee. The current etc
 
 Stretched clusters also have a quorum placement problem that diagrams often hide. A three-member etcd cluster split across two sites must place two members in one site and one in the other. If the minority site fails, the cluster survives. If the majority site fails, the surviving site has only one member and cannot accept writes. A five-member cluster split three-and-two has the same asymmetry. A third failure domain or witness pattern can help, but it adds another dependency and must still meet the latency budget.
 
-For 5-10ms RTT, tune etcd to compensate:
+For 5-10ms RTT, tune etcd toward observed RTT after measurement proves the link is viable. Defaults of `--heartbeat-interval=100` and `--election-timeout=1000` are correct for local clusters; stretched metro links need tighter heartbeats with a proportionally longer election timeout (typically ≥10× heartbeat):
 
 ```yaml
-# /etc/kubernetes/manifests/etcd.yaml
+# /etc/kubernetes/manifests/etcd.yaml — example for ~5ms observed RTT
 spec:
   containers:
   - name: etcd
     command:
     - etcd
-    - --heartbeat-interval=250       # Default: 100ms
-    - --election-timeout=2500        # Default: 1000ms
+    - --heartbeat-interval=10        # ~2× observed RTT (default: 100ms)
+    - --election-timeout=100       # ≥10× heartbeat (default: 1000ms)
     - --snapshot-count=10000
     - --listen-metrics-urls=http://0.0.0.0:2381
 ```
 
-Those settings are not a recommendation to stretch every cluster to 10ms. They show the shape of the control you would use after measurement proves that the topology is viable. The heartbeat interval should be related to observed RTT, and the election timeout must leave enough room for variance without making real failures slow to detect. Keep the same timeout values across members, monitor leader changes, and roll back the stretched design if leader elections increase during normal operations.
+Those RTT-matched values are not a recommendation to stretch every cluster to 10ms. They show the shape of the control you would use after measurement proves the topology is viable. The heartbeat interval should be related to observed RTT, and the election timeout must leave enough room for variance without making real failures slow to detect. Keep the same timeout values across members, monitor leader changes, and roll back the stretched design if leader elections increase during normal operations.
 
 The safest design review question is: what exact failure do we expect this stretched control plane to survive? If the answer is "either site can disappear and the cluster keeps accepting writes," a two-site etcd layout usually cannot satisfy that without a third quorum participant or an asymmetric majority. If the answer is "we want pods in both sites, but can tolerate restoring control-plane state during a regional failure," two independent clusters plus application-level replication may be simpler and more reliable.
 
@@ -160,14 +174,14 @@ Recovery objectives convert fear into engineering constraints. Recovery Point Ob
      │  Data loss  │                     │  Downtime   │
 
   RPO: "How much data can we lose?"    RTO: "How long until operational?"
-  RPO=0    → stretched cluster          RTO=0    → active-active
+  RPO=0 (app data) → sync data-layer replication   RTO=0 → active-active
   RPO=15m  → backup every 15 min       RTO=5m   → hot standby
   RPO=1h   → hourly snapshots          RTO=24h  → cold restore
 ```
 
 | Workload | RPO | RTO | DR Approach |
 |----------|-----|-----|-------------|
-| Payment processing | 0 | <60s | Active-active, stretched etcd |
+| Payment processing | 0 | <60s | Active-active + synchronous DB replication |
 | E-commerce | 5 min | 15 min | Hot standby, async replication |
 | Internal tools | 1 hour | 4 hours | Warm standby, Velero |
 | Dev/staging | 24 hours | 24 hours | Daily backups, cold restore |
@@ -228,7 +242,7 @@ EOF
 # Install Velero pointing to MinIO
 velero install \
   --provider aws \
-  --plugins velero/velero-plugin-for-aws:v1.10.0 \
+  --plugins velero/velero-plugin-for-aws:v1.13.0 \
   --bucket velero-backups \
   --secret-file /tmp/velero-credentials \
   --backup-location-config \
@@ -269,7 +283,7 @@ Think of Velero and etcd snapshots as complementary lenses. Velero understands K
 
 ### Taking and Verifying Snapshots
 
-Always verify snapshot integrity immediately after creation. A corrupt snapshot is worse than no snapshot because it gives the team confidence right up to the moment recovery fails. The [`snapshot status` command confirms the hash, revision, key count, and size](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/). Store that output with the backup metadata so a drill can prove which snapshot was used and whether it had passed integrity checks when it was created.
+Always verify snapshot integrity immediately after creation. A corrupt snapshot is worse than no snapshot because it gives the team confidence right up to the moment recovery fails. Use [`etcdutl snapshot status`](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) on the offline file to confirm hash, revision, key count, and size (`etcdctl snapshot status` prints a deprecation notice in etcd 3.5). Store that output with the backup metadata so a drill can prove which snapshot was used and whether it had passed integrity checks when it was created.
 
 ```bash
 # Take a snapshot on a control plane node
@@ -279,8 +293,8 @@ ETCDCTL_API=3 etcdctl snapshot save /var/lib/etcd-backup/snapshot-latest.db \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
   --key=/etc/kubernetes/pki/etcd/server.key
 
-# Verify the snapshot integrity
-ETCDCTL_API=3 etcdctl snapshot status /var/lib/etcd-backup/snapshot-latest.db --write-out=table
+# Verify the snapshot integrity (offline file read — preferred over deprecated etcdctl snapshot status)
+etcdutl snapshot status /var/lib/etcd-backup/snapshot-latest.db --write-out=table
 # +----------+----------+------------+------------+
 # |   HASH   | REVISION | TOTAL KEYS | TOTAL SIZE |
 # +----------+----------+------------+------------+
@@ -317,7 +331,7 @@ spec:
           hostNetwork: true
           containers:
           - name: etcd-backup
-            image: registry.k8s.io/etcd:3.5.15-0
+            image: registry.k8s.io/etcd:3.5.21-0  # match your cluster: kubeadm config images list
             command: ["/bin/sh", "-c"]
             args:
             - |
@@ -353,7 +367,12 @@ Do not let the backup schedule create its own denial of service. etcd snapshots 
 Restoring etcd is intentionally disruptive. You are not applying a patch to the live cluster; you are replacing the authoritative control-plane database with the contents of a snapshot. The etcd disaster recovery guide emphasizes recovering from disastrous quorum loss by restoring from a snapshot, and Kubernetes documentation links to that process for cluster restore examples. Practice this in a non-production environment until the steps are familiar, because improvising during a control-plane outage is how partial recoveries become longer outages.
 
 ```bash
-# CRITICAL: Stop API server and etcd on ALL control plane nodes first
+# CRITICAL: Stop static-pod etcd and API server on ALL control plane nodes first
+sudo mv /etc/kubernetes/manifests/etcd.yaml /root/
+sudo mv /etc/kubernetes/manifests/kube-apiserver.yaml /root/
+# kubelet detects the move and stops the static pods
+
+# On each control plane node (repeat with node-specific --name and --initial-advertise-peer-urls)
 sudo mv /var/lib/etcd /var/lib/etcd.bak
 
 etcdutl snapshot restore /var/lib/etcd-backup/snapshot-latest.db \
@@ -363,9 +382,9 @@ etcdutl snapshot restore /var/lib/etcd-backup/snapshot-latest.db \
   --initial-advertise-peer-urls=https://10.0.1.10:2380 \
   --data-dir=/var/lib/etcd
 
-# Repeat on each CP node with its own --name and --initial-advertise-peer-urls
-# Then restart kubelet on all control plane nodes
-sudo systemctl restart kubelet
+# Move manifests back — kubelet auto-restarts etcd and API server
+sudo mv /root/etcd.yaml /etc/kubernetes/manifests/
+sudo mv /root/kube-apiserver.yaml /etc/kubernetes/manifests/
 ```
 
 Every control-plane member must be restored consistently from the same snapshot lineage. Do not restore separate snapshots onto separate members and expect Raft to reconcile them safely. In a kubeadm-style cluster, you also need to account for static Pod manifests, certificate validity, member names, advertise URLs, and any load balancer or virtual IP in front of the API servers. The commands are only one part of the recovery; the surrounding inventory is what makes them safe to run.
@@ -518,7 +537,7 @@ During a DR drill, you restore your on-premises cluster from a Velero backup to 
 
 **503 errors after Velero restore indicate that traffic is reaching the cluster but services cannot serve requests.** Troubleshoot layer by layer:
 
-1. **EndpointSlices not populated yet**: Pods may be starting but not yet Ready. The Kubernetes endpoints controller only adds pods to EndpointSlices when their readiness probes pass. Check: `kubectl get endpointslices -n production` -- if empty, wait for pods to pass readiness checks.
+1. **EndpointSlices not ready yet**: Pods may be starting but not yet Ready. EndpointSlices include pods immediately, but endpoints stay `ready=false` until readiness probes pass; kube-proxy routes traffic only to Ready endpoints. Check: `kubectl get endpointslices -n production` — if no Ready endpoints, wait for pods to pass readiness checks.
 
 2. **PV data not restored**: If `--default-volumes-to-fs-backup` was not set during the original backup, PVCs were restored as empty volumes. Databases, caches, and file-based services would start with no data. Check: `kubectl get pvc -n production` and verify the volumes contain data.
 
@@ -604,7 +623,7 @@ cat > /tmp/credentials-velero <<EOF
 aws_access_key_id = minioadmin
 aws_secret_access_key = minioadmin
 EOF
-velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.10.0 \
+velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.13.0 \
   --bucket velero-backups --secret-file /tmp/credentials-velero \
   --backup-location-config region=us-east-1,s3ForcePathStyle=true,s3Url=http://minio:9000 \
   --use-node-agent
@@ -619,7 +638,7 @@ velero backup create site-a-full --include-namespaces demo-app --wait
 
 # 3. Install Velero on site-b and restore
 kubectl config use-context kind-site-b
-velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.10.0 \
+velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.13.0 \
   --bucket velero-backups --secret-file /tmp/credentials-velero \
   --backup-location-config region=us-east-1,s3ForcePathStyle=true,s3Url=http://minio:9000 \
   --use-node-agent
@@ -651,7 +670,7 @@ Continue to [Module 8.2: Hybrid Cloud Connectivity](/on-premises/resilience/modu
 
 ## Sources
 
-- [docs.aws.amazon.com: rel planning for recovery disaster recovery.html](https://docs.aws.amazon.com/wellarchitected/2025-02-25/framework/rel_planning_for_recovery_disaster_recovery.html) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: rel planning for recovery disaster recovery.html](https://docs.aws.amazon.com/wellarchitected/2025-02-25/framework/rel_planning_for_recovery_disaster_recovery.html) — AWS Well-Architected Reliability pillar guidance on recovery planning, backup strategy, and disaster-recovery architecture choices.
 - [docs.aws.amazon.com: disaster recovery dr objectives.html](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/disaster-recovery-dr-objectives.html) — The AWS Well-Architected DR objectives page directly defines RTO and RPO.
 - [velero.io: backup reference](https://velero.io/docs/v1.17/backup-reference/) — Velero's backup reference documents scheduled backups, Cron expressions, and schedule-generated backup names.
 - [velero.io: disaster recovery](https://velero.io/docs/main/disaster-case/) — Velero's disaster recovery guide documents restoring from scheduled backups and setting backup storage locations to read-only during recovery.
@@ -661,7 +680,7 @@ Continue to [Module 8.2: Hybrid Cloud Connectivity](/on-premises/resilience/modu
 - [github.com: how velero works.md](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/how-velero-works.md) — The Velero architecture documentation describes backing up and restoring Kubernetes resources through the API.
 - [kubernetes.io: configure upgrade etcd](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) — The Kubernetes etcd administration page directly states etcd stores all cluster data and documents snapshot save and restore.
 - [etcd.io: disaster recovery](https://etcd.io/docs/v3.5/op-guide/recovery/) — The etcd disaster recovery guide explains quorum loss, snapshotting, and restoring a failed etcd cluster from a snapshot.
-- [etcd.io: tuning](https://etcd.io/docs/v3.4/tuning/) — The etcd tuning guide documents heartbeat interval, election timeout, and their relationship to network round-trip time.
+- [etcd.io: tuning](https://etcd.io/docs/v3.5/tuning/) — The etcd tuning guide documents heartbeat interval, election timeout, and their relationship to network round-trip time.
 - [external-dns: annotations](https://kubernetes-sigs.github.io/external-dns/latest/docs/annotations/annotations/) — ExternalDNS annotation documentation covers hostname, target, provider-specific, and TTL annotations used in DNS automation.
 - [coredns.io: kubernetes plugin](https://coredns.io/plugins/kubernetes/) — CoreDNS Kubernetes plugin documentation explains service discovery behavior, EndpointSlice watching, readiness, TTL, and multicluster options.
 - [sig-multicluster: multicluster services api](https://multicluster.sigs.k8s.io/concepts/multicluster-services-api/) — SIG Multicluster documentation describes ServiceExport, ServiceImport, and the scope of the Multi-Cluster Services API.
