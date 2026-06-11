@@ -121,7 +121,7 @@ flowchart TD
         B1["Network: leaf switch installed, cabled to spines"]
         B2["Power: PDUs installed, circuits provisioned"]
         B3["VLANs: management, production, storage trunked on leaf"]
-        B4["BGP: leaf peering with spines (new AS number for rack)"]
+        B4["BGP: sessions/advertised prefixes validated for the new leaf/rack"]
         B5["PXE: DHCP relay configured for new subnet"]
         B6["DNS: reverse DNS entries for new BMC/management IPs"]
         B7["IPAM: IP ranges allocated for nodes, pods, services"]
@@ -146,7 +146,7 @@ flowchart TD
 
 > **Stop and think**: If you provision a new rack of older OS images (which default to cgroup v1) and try to join them to a Kubernetes 1.35+ cluster, what will happen? By default, the kubelet will refuse to start because [cgroup v1 is officially deprecated](https://kubernetes.io/docs/concepts/architecture/cgroups/). Both the kubelet and your container runtime must strictly use [cgroup v2 with the systemd cgroup driver](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) to successfully register the node.
 
-> **Pause and predict**: You are adding 40 new AMD EPYC servers to a cluster running Intel Xeon nodes. The Kubernetes scheduler sees "32 cores available" on both, but the AMD cores are 44% faster per-core. How would you prevent latency-sensitive pods from being scheduled on slower Intel nodes without hardcoding node names?
+> **Pause and predict**: You are adding 40 new AMD EPYC servers to a cluster running Intel Xeon nodes. The Kubernetes scheduler sees "32 cores available" on both, but the AMD cores deliver roughly 45–55% higher per-core throughput depending on benchmark and date (verify current figures). How would you prevent latency-sensitive pods from being scheduled on slower Intel nodes without hardcoding node names?
 
 Before a new rack becomes production capacity, run an acceptance checklist that proves every adjacent dependency is ready. The network team should confirm leaf-to-spine links, BGP sessions, VLAN trunks, MTU, and route advertisements before Kubernetes workloads depend on the rack. The platform team should confirm that PXE, iPXE, or virtual media boot paths can reach the correct image, that BMC credentials work through Redfish or the vendor's supported interface, and that the node OS image contains the same kubelet, container runtime, cgroup, kernel, storage, and CNI prerequisites as the current cluster. The storage team should confirm whether the rack hosts only stateless workers, also contributes Ceph OSDs, or needs local PV migration handling. None of this is glamorous, but every missed prerequisite turns a planned scale-up into a partial rack that cannot carry production load.
 
@@ -166,7 +166,7 @@ kubectl taint nodes -l kubedojo.io/rack=rack-e \
 
 ### Node Provisioning Script for New Rack
 
-Unlike cloud environments, [the vanilla Kubernetes Cluster Autoscaler does not support on-premises bare-metal node provisioning](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md) because it relies on cloud provider node pool APIs. This means bare-metal capacity expansion requires manual or scripted provisioning processes. Before running any automation, ensure that each bare-metal server has a [unique hostname, MAC address, and `product_uuid`](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/), as `kubeadm` will fail to register nodes if these are duplicated.
+The vanilla Kubernetes Cluster Autoscaler expects a resizable NodeGroup abstraction backed by a cloud or infrastructure API — it scales by changing a group size, not by hand-running `kubeadm join` on arbitrary servers. On bare metal, that usually means manual or scripted provisioning unless you wire Cluster API and Metal3 (or another provider) so hosts become Machines behind a resizable `MachineDeployment`; Cluster Autoscaler can then run with `--cloud-provider=clusterapi` against that declarative pool. A one-off kubeadm script without CAPI is outside what vanilla CA automates. Before running any automation, ensure that each bare-metal server has a [unique hostname, MAC address, and `product_uuid`](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/), as `kubeadm` will fail to register nodes if these are duplicated.
 
 This script automates the most error-prone part of rack expansion: waiting for each server to PXE boot, joining it to the cluster, and applying the correct topology labels. Labels for rack, hardware generation, and CPU model enable scheduling policies that account for heterogeneous hardware.
 
@@ -241,6 +241,7 @@ metadata:
 spec:
   online: true
   bootMACAddress: "52:54:00:aa:bb:01"
+  # BMC URL scheme varies by vendor — e.g. Dell iDRAC often uses idrac-virtualmedia://
   bmc:
     address: redfish-virtualmedia://bmc-rack-e-01.example.internal/redfish/v1/Systems/1
     credentialsName: worker-rack-e-01-bmc
@@ -274,13 +275,15 @@ This is also where Tinkerbell, Metal3, Ironic, and image-based operating systems
 
 When mixing CPU generations, you must account for varying hardware capabilities. In Kubernetes 1.35, advanced features like [the Topology Manager's `max-allowable-numa-nodes` reached General Availability (GA)](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager/), giving you granular control over workload placement on modern multi-socket AMD and Intel systems. However, even with advanced topology management, the primary challenge remains: raw performance differences across generations.
 
+PassMark scores as of 2026-06 — verify against [cpubenchmark.net](https://www.cpubenchmark.net/) before relying on these figures for procurement or decommission math.
+
 | Model | Year | Cores | Single-Thread | Passmark |
 |-------|------|-------|---------------|----------|
 | Xeon Silver 4214 | 2019 | 12 | 1,800 | 15,200 |
 | Xeon Gold 6330 | 2021 | 28 | 2,100 | 35,000 |
 | EPYC 9354 | 2023 | 32 | 2,600 | 53,000 |
 
-The EPYC 9354 substantially outperforms the 4214 in both single-threaded and multithreaded benchmark data, but the exact percentage depends on the benchmark source and snapshot date.
+The EPYC 9354 substantially outperforms the 4214 in both single-threaded and multithreaded benchmark data, but the exact percentage depends on the benchmark source and snapshot date. Newer EPYC and Xeon generations offer materially higher per-core throughput; treat the integers in this table as illustrative planning inputs, not authoritative specs.
 
 Kubernetes natively sees: "32 cores available" on both.
 Reality dictates: 32 EPYC cores >> 32 Xeon Silver cores.
@@ -347,7 +350,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        kubedojo.io/cpu-vendor: amd          # Needs AVX-512
+        kubedojo.io/cpu-feature/avx512: "true"   # validate with a feature label from node discovery
         kubedojo.io/performance-tier: premium
       containers:
         - name: training
@@ -458,7 +461,7 @@ flowchart TD
 
 ## Scaling Limits Beyond the Next Rack
 
-At small scale, expansion planning feels like a worker-node problem: buy servers, install the OS, join nodes, and rebalance workloads. At larger scale, the limits move into the control plane and the surrounding systems. Kubernetes publishes large-cluster guidance with tested limits such as 5,000 nodes, 110 pods per node, 150,000 total pods, and 300,000 total containers, but those numbers are not a promise that every on-premises environment can safely run at the edge. They assume disciplined resource usage, healthy control-plane infrastructure, reliable networking, and components that have been tested at similar object counts. Your practical limit may arrive earlier through API server latency, controller queue depth, CNI scale, DNS load, storage control loops, or the time it takes operators to reason about incidents.
+At small scale, expansion planning feels like a worker-node problem: buy servers, install the OS, join nodes, and rebalance workloads. At larger scale, the limits move into the control plane and the surrounding systems. Kubernetes publishes large-cluster guidance (verified through v1.36; this module targets 1.35) with tested limits such as 5,000 nodes, 110 pods per node, 150,000 total pods, and 300,000 total containers, but those numbers are not a promise that every on-premises environment can safely run at the edge. They assume disciplined resource usage, healthy control-plane infrastructure, reliable networking, and components that have been tested at similar object counts. Your practical limit may arrive earlier through API server latency, controller queue depth, CNI scale, DNS load, storage control loops, or the time it takes operators to reason about incidents.
 
 The first question is whether you are expanding a single cluster or whether you should split capacity into multiple clusters. A single cluster gives the scheduler more placement flexibility and reduces duplicated platform services, but it also concentrates blast radius and increases API object count. Multiple clusters reduce failure scope, support staged upgrades, and let you place clusters closer to data or business boundaries, but they add fleet-management overhead and can strand capacity if workloads cannot move between clusters. The right answer is usually driven by failure-domain policy, team ownership, networking boundaries, and etcd/API server health rather than by a round-number node count.
 
@@ -490,7 +493,7 @@ Use these checks to define expansion gates. For example, do not add the next 50 
 
 Removing nodes requires careful capacity planning to avoid overloading the remaining cluster.
 
-> **Pause and predict**: Before decommissioning 20 nodes, you need to verify the remaining cluster can handle the load. But Kubernetes reports CPU in cores -- and not all cores are equal. A 2023 AMD core delivers 44% more throughput than a 2019 Intel core. How do you calculate the true capacity impact of removing 20 Intel nodes?
+> **Pause and predict**: Before decommissioning 20 nodes, you need to verify the remaining cluster can handle the load. But Kubernetes reports CPU in cores -- and not all cores are equal. A 2023 AMD core can deliver roughly 45–55% more throughput than a 2019 Intel core depending on benchmark and date (verify current figures). How do you calculate the true capacity impact of removing 20 Intel nodes?
 
 ### Decommission Checklist
 
@@ -518,7 +521,9 @@ NODE_CPU=$(kubectl get node "$NODE" -o json | jq '
     else tonumber * 1000 end')
 REMAINING_CPU=$((TOTAL_CPU - NODE_CPU))
 REQUESTED_CPU=$(kubectl get pods -A -o json | jq '
-  [.items[].spec.containers[].resources.requests.cpu // "0" |
+  [.items[].spec | (
+      (.containers // []) + (.initContainers // [])
+    )[].resources.requests.cpu // "0" |
     if endswith("m") then rtrimstr("m") | tonumber
     else tonumber * 1000 end
   ] | add')
@@ -537,16 +542,34 @@ if [ $((REQUESTED_CPU * 100 / REMAINING_CPU)) -gt 80 ]; then
   [[ $REPLY =~ ^[Yy]$ ]] || exit 1
 fi
 
-# Check 2: Any local PVs on this node?
+# Check 2: Any local PVs on this node? (partial — review bound PVCs on local SCs too)
 LOCAL_PVS=$(kubectl get pv -o json | jq -r --arg node "$NODE" '
   .items[] | select(
-    .spec.nodeAffinity.required.nodeSelectorTerms[].matchExpressions[].values[] == $node
+    .spec.nodeAffinity.required.nodeSelectorTerms[]?.matchExpressions[]?.values[]? == $node
   ) | .metadata.name')
 
-if [ -n "$LOCAL_PVS" ]; then
-  echo "WARNING: Node has local PVs that will be lost:"
-  echo "$LOCAL_PVS"
-  echo "Migrate data before proceeding."
+LOCAL_SCS=$(kubectl get sc -o json | jq -r '
+  .items[] | select(
+    .provisioner == "kubernetes.io/no-provisioner" or
+    (.provisioner | test("local-path|hostpath"; "i"))
+  ) | .metadata.name')
+
+BOUND_LOCAL_PVCS=""
+for sc in $LOCAL_SCS; do
+  while IFS= read -r pvc; do
+    [ -n "$pvc" ] && BOUND_LOCAL_PVCS+="${pvc} (sc=${sc})"$'\n'
+  done < <(kubectl get pvc -A -o json | jq -r --arg sc "$sc" --arg node "$NODE" '
+    .items[] | select(.status.phase == "Bound" and .spec.storageClassName == $sc) |
+    .spec.volumeName as $pv |
+    .metadata.namespace + "/" + .metadata.name
+  ')
+done
+
+if [ -n "$LOCAL_PVS" ] || [ -n "$BOUND_LOCAL_PVCS" ]; then
+  echo "WARNING: Node may have local PVs or bound PVCs on local/hostPath storage classes:"
+  [ -n "$LOCAL_PVS" ] && echo "$LOCAL_PVS"
+  [ -n "$BOUND_LOCAL_PVCS" ] && echo "$BOUND_LOCAL_PVCS"
+  echo "Migrate data before proceeding. This script does not catch every local-volume pattern."
   exit 1
 fi
 
@@ -656,7 +679,7 @@ timeline
 ```
 
 **Benefits:**
-- Smooth CapEx ($333k/year instead of $1M every 3 years)
+- Smooth CapEx (illustrative: `<annual_refresh_spend>` per year instead of a large `<triennial_lump_sum>` every three years — plug your quotes into the TCO worksheet)
 - Always have recent hardware in the fleet
 - Never need to decommission more than 33% at once
 - Team practices add/remove procedure regularly
@@ -671,11 +694,33 @@ timeline
 
 ## Capacity Planning with Hardware Generations
 
-When forecasting long-term growth across multiple hardware refresh cycles, remember that Kubernetes v1.35 has official large-cluster tested limits: [a maximum of 5,000 nodes, 110 pods per node, 150,000 total pods, and 300,000 total containers](https://kubernetes.io/docs/setup/best-practices/cluster-large/). Your capacity plans must ensure all four constraints are met simultaneously.
+When forecasting long-term growth across multiple hardware refresh cycles, remember that Kubernetes large-cluster guidance (verified through v1.36; this module targets 1.35) documents tested limits of [a maximum of 5,000 nodes, 110 pods per node, 150,000 total pods, and 300,000 total containers](https://kubernetes.io/docs/setup/best-practices/cluster-large/). Your capacity plans must ensure all four constraints are met simultaneously.
 
 ### Monitoring Capacity Trends
 
-Create Prometheus recording rules that track CPU capacity and utilization broken down by hardware generation. The most valuable metric is `cluster:capacity_days_remaining`, which uses `deriv()` over a 30-day window to project when current capacity will be exhausted at the current growth rate. Alert when this drops below 60 days to trigger procurement.
+Create Prometheus recording rules that track CPU capacity and utilization broken down by hardware generation. A useful custom metric is `cluster:capacity_days_remaining`, which projects when requested CPU will exhaust allocatable headroom at the current growth rate. Define it explicitly rather than assuming a built-in rule:
+
+```yaml
+groups:
+  - name: onprem-capacity-days-remaining
+    interval: 5m
+    rules:
+      - record: cluster:cpu_headroom_ratio
+        expr: |
+          1 - (
+            sum(kube_pod_container_resource_requests{resource="cpu", unit="core"})
+            /
+            sum(kube_node_status_allocatable{resource="cpu", unit="core"})
+          )
+
+      - record: cluster:capacity_days_remaining
+        expr: |
+          cluster:cpu_headroom_ratio
+          /
+          (deriv(cluster:cpu_headroom_ratio[30d]) * 86400)
+```
+
+Alert when `cluster:capacity_days_remaining` drops below 60 days to trigger procurement. If `deriv()` is flat or negative, the rule returns empty — treat that as "no linear exhaustion signal" and fall back to pool-specific forecasts.
 
 Capacity planning should be run as a monthly operational review, not only as an annual budgeting exercise. The review should compare forecasted consumption with actual consumption, confirm whether recent hardware performed as expected, and update lead-time assumptions from real procurement data. If a vendor quote took two weeks longer than expected or a burn-in batch produced several failed DIMMs, that evidence belongs in the next capacity forecast. The value of the review is not the dashboard; it is the decision record that says when to buy, what to buy, which risks were accepted, and which workloads will be moved first.
 
@@ -893,42 +938,28 @@ Hypothetical scenario: Your company uses a 5-year refresh cycle. It is now year 
 <details>
 <summary>Answer</summary>
 
-Extending the hardware lifecycle to seven years introduces compounding hidden costs that negate the deferred capital expenditure. As servers age past year five, component failure rates skyrocket, particularly for mechanical or heavily written storage drives, increasing labor and emergency replacement costs. Additionally, older hardware is significantly less power-efficient than newer generations, leading to inflated electricity bills that can completely offset the price of new servers. Finally, keeping slower legacy processors limits application throughput, forcing you to run more nodes to handle the same workload volume and increasing the operational burden on the infrastructure team.
+Extending the hardware lifecycle to seven years can defer capital expenditure, but the decision should be argued with a TCO worksheet your finance team owns — not with invented failure-rate or dollar totals. Build the case from measured inputs and label every projection as illustrative until vendor quotes and meter readings back it.
 
-**Argument against extending to 7 years:**
+**TCO worksheet template (fill with your fleet data):**
 
-**1. Disk failure cost escalation:**
-- Year 4: 6% failure rate across 200 disks = 12 failures/year
-- Year 5 (projected): 10% = 20 failures
-- Year 6 (projected): 15% = 30 failures
-- Year 7 (projected): 22% = 44 failures
-- Each disk replacement: $500 (disk) + $200 (labor) + risk of data loss
-- Years 6-7 disk costs: 74 failures x $700 = $51,800
+| Line item | Variable | Your value | Notes |
+|-----------|----------|------------|-------|
+| Disk failures/year | `<disk_annual_failure_rate>` × `<disk_count>` | | Use SMART telemetry or RMA history, not a generic curve |
+| Disk replacement cost | `<disk_unit_cost>` + `<labor_hours>` × `<hourly_rate>` | | Include data-loss risk for unc replicated local disks |
+| Extended support premium | `<support_year5>` vs `<support_year7>` | | Vendor quotes vary widely by SKU |
+| Power per compute unit | `<kWh_price>` × `<server_watts>` × `<hours_per_year>` | | Measure at realistic load, not nameplate only |
+| Performance gap | `<benchmark_ratio_old_vs_new>` | | Validate with your workloads, not a public benchmark alone |
+| Correlated failure risk | `<spare_host_count>` vs `<batch_size>` | | Aging batches often fail together |
 
-**2. Increasing support contract costs:**
-- Vendors charge 30-60% more for extended support beyond 5 years
-- Some vendors refuse to support hardware past 7 years
-- Parts availability decreases (end-of-life components)
+**Argument structure for the CFO:**
 
-**3. Power efficiency gap:**
-- Year 4 hardware uses ~30% more power per compute unit than current generation
-- Year 7: ~50% more power per compute unit
-- At $0.10/kWh with 100 servers at 500W: $438,000/year
-- New servers at 350W equivalent performance: $306,600/year
-- Power savings: $131,400/year (pays for 13 new servers)
+1. **Disk and component costs rise non-linearly** as drives and PSUs age — model `<disk_annual_failure_rate>` from your CMDB, not a hypothetical escalation table.
+2. **Support contracts** often jump after year five; get a written quote for years six and seven before assuming savings.
+3. **Power efficiency** gaps are real but fleet-specific — multiply `<server_watts>` by `<kWh_price>` for old vs replacement SKUs at the same throughput tier.
+4. **Performance opportunity cost** matters when the same request volume needs more nodes on older silicon — express it as additional `<nodes_required>` or longer batch windows, not a fixed multiplier.
+5. **Operational risk** includes correlated failures, drain constraints, and firmware end-of-support — quantify spare capacity, not just dollars.
 
-**4. Performance opportunity cost:**
-- Applications running on 7-year-old hardware are 2-3x slower per core
-- Need 2-3x more servers to achieve the same throughput
-- Hiring developers is more expensive than buying faster hardware
-
-**5. Risk:**
-- Cascading failures become more likely (correlated aging)
-- If 5 nodes fail in the same week (common in aging batches), the cluster may not have spare capacity
-- Security patches may stop being available for older firmware
-
-**Summary for the CFO:**
-"Extending to 7 years saves $200,000 in deferred CapEx but adds $150,000+ in disk replacements, $130,000 in excess power costs, and significant operational risk. The net savings is near zero, but the risk is substantially higher."
+**Summary framing:** "Deferring refresh saves `<deferred_capex>` on paper, but measured OpEx from disks, power, support, and spare-host risk may erase that gap. The decision is whether we accept higher operational risk for `<deferred_capex>` — not whether a generic spreadsheet says seven years is cheaper."
 </details>
 
 ### Question 4
@@ -966,9 +997,8 @@ Migrating workloads between different CPU vendors introduces subtle architectura
 - Run load tests comparing AMD vs Intel node behavior
 
 **Phase 4: Production canary (1 week)**
-- Add 3 AMD nodes to production
-- Do NOT label them differently from production nodes
-- Let the scheduler place normal workloads
+- Add 3 AMD nodes to production with the same rack and hardware-gen labels as the eventual fleet, but do not create a separate experimental performance-tier label until validation passes
+- Let the scheduler place normal workloads only after Phase 3 metrics are clean
 - Monitor for 7 days: error rates, latency distributions, resource usage
 - If stable, proceed with full 33-node deployment
 
@@ -1002,7 +1032,7 @@ The plan treated compute as the only bottleneck and missed adjacent capacity. St
 ## Hands-On Exercise: Plan a Hardware Expansion
 
 ### The Scenario
-You manage a 60-node bare metal Kubernetes cluster spread across 3 racks (20 nodes each). The cluster is currently running at 65% CPU utilization. The business is forecasting a 40% growth in traffic next quarter, so you have just racked and powered on 20 new servers (a newer hardware generation) in a 4th rack. The new servers have a Passmark score 44% higher per core than the old servers.
+You manage a 60-node bare metal Kubernetes cluster spread across 3 racks (20 nodes each). The cluster is currently running at 65% CPU utilization. The business is forecasting a 40% growth in traffic next quarter, so you have just racked and powered on 20 new servers (a newer hardware generation) in a 4th rack. The new servers have a Passmark score roughly 45–55% higher per core than the old servers (verify current figures on cpubenchmark.net).
 
 ### The Objective
 Design a safe capacity expansion and decommission plan that successfully integrates the new hardware, spreads workloads across all 4 racks, and safely retires 10 of the oldest nodes without exceeding an 80% cluster-wide utilization ceiling.
@@ -1020,7 +1050,7 @@ Use your understanding of Kubernetes scheduling, topology spread constraints, an
 ### Tiered Hints
 <details>
 <summary>Hint 1: The Concept</summary>
-Because the new servers are 44% faster per core, a simple sum of CPU cores will underestimate your new total capacity. You need to calculate "performance-adjusted units" to accurately predict post-expansion and post-decommission utilization.
+Because the new servers are roughly 45–55% faster per core depending on benchmark and date (verify current figures), a simple sum of CPU cores will underestimate your new total capacity. You need to calculate "performance-adjusted units" to accurately predict post-expansion and post-decommission utilization.
 </details>
 
 <details>
@@ -1052,7 +1082,7 @@ This concludes the Day-2 Operations section. Return to the [Operations index](/o
 
 - [kubernetes.io: cgroups](https://kubernetes.io/docs/concepts/architecture/cgroups/) — The upstream cgroups documentation explicitly documents the v1.35 deprecation and default kubelet behavior.
 - [kubernetes.io: container runtimes](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) — The container runtime documentation covers the shared-driver requirement and the cgroup v2/systemd recommendation.
-- [github.com: FAQ.md](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md) — Upstream Cluster Autoscaler docs assume node groups and external provisioning/registration tooling, but they do not state this bare-metal limitation in exactly those words.
+- [github.com: FAQ.md](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md) — Upstream Cluster Autoscaler docs describe node groups and external provisioning; bare-metal scale-out is typically wired through Cluster API (`--cloud-provider=clusterapi`) rather than manual kubeadm joins.
 - [kubernetes.io: install kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/) — The kubeadm install guide explicitly requires these identifiers to be unique and warns that installation may fail otherwise.
 - [kubernetes.io: topology manager](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager/) — The Topology Manager task page states that `max-allowable-numa-nodes` is GA in Kubernetes 1.35.
 - [kubernetes.io: volumes](https://kubernetes.io/docs/concepts/storage/volumes/) — The volumes documentation explains local PV node affinity and the reduced availability/data-loss risk tied to the underlying node.
