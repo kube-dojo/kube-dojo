@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 130 — on-premises track COMPLETE (resilience 8.x + 9.4 MLOps)</title>
+<style>
+ body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+ h1{font-size:1.6rem;border-bottom:3px solid #326ce5;padding-bottom:.3rem}
+ h2{font-size:1.25rem;margin-top:1.8rem;color:#326ce5}
+ h3{font-size:1.05rem;margin-top:1.2rem}
+ code{background:#f3f4f6;padding:.1em .35em;border-radius:3px;font-size:.88em}
+ table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem}
+ th,td{border:1px solid #d0d7de;padding:.4rem .55rem;text-align:left;vertical-align:top}
+ th{background:#f6f8fa}
+ .tldr{background:#eef4ff;border-left:4px solid #326ce5;padding:.8rem 1rem;border-radius:4px}
+ .ok{color:#1a7f37;font-weight:600}.warn{color:#bc4c00;font-weight:600}
+ ul{margin:.4rem 0}
+</style>
+</head>
+<body>
+<h1>Session 130 — on-premises track <em>COMPLETE</em> (resilience 8.1/8.2/8.3 + ai-ml 9.4)</h1>
+
+<div class="tldr">
+<strong>2026-06-11.</strong> Standalone orchestrator session. Finished the <strong>on-premises track (#1881)</strong> —
+the last 4 non-green modules → all <code>done</code>. Shipped via <strong>PR #1895</strong> (consolidated content)
++ <strong>PR #1896</strong> (revision_pending bookkeeping). 3 genuine expand-to-floor (8.1/8.2/8.3) + 1 back-catalog
+flip (9.4, already dense). Every reviewer finding ground-checked against the live file + web-verified both
+directions. Mixed reviewer pool (<strong>opus / codex / deepseek</strong>), <strong>no gemini</strong> (retired).
+Build green PRIMARY 2171 pages; all CI green incl. incident-dedup. <strong>On-premises track is now done →
+next curriculum action: <code>platform</code></strong> (Disciplines 45 + Toolkits 36 + Foundations 28 critical-score).
+</div>
+
+<h2>What shipped</h2>
+<p>A <code>verify_module.py</code> sweep split the 4 remaining modules into <strong>3 genuine expand-to-floor</strong>
+(body prose &lt; 5000) + <strong>1 source-only flip</strong> (9.4 was already T0/6402w; only <code>sources_all_reachable</code>
+failed). Authored 3 concurrent (hard cap), mixed codex/cursor; reviewed each by a different model family than its author;
+every finding ground-checked + fixes re-verified to T0.</p>
+
+<table>
+<tr><th>Module</th><th>Before</th><th>After</th><th>Author</th><th>Reviewer (R1)</th><th>Fixes (all ground-checked)</th></tr>
+<tr><td><strong>8.1</strong> Multi-Site &amp; DR</td><td>693w skeleton</td><td>T0 5203w</td><td>codex gpt-5.5</td><td>opus (Anthropic)</td>
+<td>1 P1 + 5 P2. <strong>P1:</strong> etcd write-path diagram mis-taught Raft commit latency (implied cross-site RTT gates every write) → redrawn: 2-1 metro split commits locally (Leader+M2 ~sub-ms, M3 off commit path), RTT only on majority break. RPO=0 data-layer conflation; canonical kubeadm etcd-restore; RTT-aligned tuning; Velero plugin v1.13.0 + etcd 3.5.21-0; etcdutl snapshot status.</td></tr>
+<tr><td><strong>8.2</strong> Hybrid Connectivity</td><td>1644w</td><td>T0 5063w</td><td>cursor auto</td><td>opus (Anthropic)</td>
+<td>2 P1 + 4 P2. <strong>P1:</strong> Gatekeeper Rego <code>rego_unsafe_var_error</code> (iter var only under <code>not</code>) → safe comprehension; Istio intermediate CA missing <code>CA:TRUE</code>/<code>keyCertSign</code> → added <code>-extfile</code> (would break cross-cluster mTLS — the exact 503 the module teaches). Plus redundant wg routes, EKS pod/service CIDR, dropped $0.02/GB quiz price, reframed sync-replication latency. opus web-verified every volatile claim accurate.</td></tr>
+<tr><td><strong>8.3</strong> Cloud Repatriation</td><td>2687w</td><td>T0 5506w</td><td>codex gpt-5.5</td><td>deepseek-v4-pro</td>
+<td>1 P1 + 2 P2 (orchestrator inline-fixed — small/deterministic). <strong>P1:</strong> Velero v1.18.0 dated "March 2025" → March 2026 (deepseek GitHub-API confirmed). mermaid <code>axisFormat %M</code>(minutes)→<code>%m</code>; <code>kubectl annotate -n production</code>. Dropped "undisputed industry standard" leadership claim; velero-io canonical URLs.</td></tr>
+<tr><td><strong>9.4</strong> Private MLOps</td><td>T0, 5 dead URLs</td><td>T0 6664w</td><td>(back-catalog)</td><td>codex (OpenAI)</td>
+<td>5 dead Source URLs repaired (orchestrator). 4 P1 + 6 P2. <strong>P1:</strong> Argo Workflow excerpt labeled abbreviated; KFP <code>PipelineSpec</code> IR vs Argo runtime status separated; explicit <code>spec.artifactGC</code>; MLflow stages→aliases (<code>@champion</code>); custom Gatekeeper GPU-memory ConstraintTemplate. P2: version-currency→dated snapshot, KServe Incubating Nov-11-2025, Feast online-store, TorchServe limited-maintenance, custom PriorityClass.</td></tr>
+</table>
+
+<p><strong>Anti-fabrication:</strong> clean across all 4 — opus/codex/deepseek each confirmed no unlabeled invented
+incidents/companies/figures; scenario openers carry <code>Hypothetical scenario:</code>. Build green PRIMARY (2171 pages, 0 schema errors).</p>
+
+<h2>Loop refinements proven / reusable lessons</h2>
+<ul>
+<li><strong>Roster this wave:</strong> codex gpt-5.5 (2 expand authors + 9.4 review/fix), cursor auto (1 author + 8.1/8.2 fixes — the consistent fixer), opus 4.8 (2 reviews — strongest, caught the subtle etcd-Raft + Istio-CA correctness bugs), deepseek-v4-pro (1 review — well-grounded with GitHub-API/strftime evidence). No gemini (retired s126).</li>
+<li><strong>Small/deterministic review fixes → orchestrator inline</strong> (8.3: wrong year, mermaid token, missing <code>-n</code>) instead of a fixer dispatch round — faster, ground-checked the same way.</li>
+<li><strong>codex/opus = strongest code-correctness reviewers on code-heavy content</strong> (Raft commit semantics, Rego safety, openssl CA extensions, Argo IR vs KFP PipelineSpec) — exactly the layer the verifier is blind to. Route ≥1 code-heavy review to opus.</li>
+<li><strong>Brief miss to fix next time:</strong> expand briefs did NOT instruct authors to clear <code>revision_pending: true</code> frontmatter → 8.1/8.2 needed a follow-up PR (#1896) to flip the board to <code>done</code>. <em>Add "set revision_pending: false" to every expand/finalize brief.</em></li>
+<li><strong>Board-flip mechanics (reconfirmed):</strong> <code>done</code> needs score≥4.0 AND <code>revision_pending:false</code> (frontmatter) AND stage∈DONE AND verdict∈{None,approve}. 9.4 carried a stale gemini <code>changes_requested</code> in its <code>.pipeline/quality-pipeline/*.json</code> (JSON verdict takes precedence over the review-log) → had to overwrite it to <code>approve</code>. <code>.pipeline/reviews/</code> + <code>.pipeline/quality-pipeline/</code> are gitignored = local board state.</li>
+</ul>
+
+<h2>State at session end</h2>
+<ul>
+<li><strong>On-premises track: COMPLETE.</strong> All chapters done (planning, provisioning, networking, storage, operations, multi-cluster, security, resilience, ai-ml-infrastructure). On-prem board 53→57/57 <code>done</code>.</li>
+<li><strong>PRs:</strong> #1895 (merged, squash 342caca7), #1896 (revision_pending bookkeeping — merge pending CI at handoff write; verify merged).</li>
+<li><strong>Working-tree residuals (local, expected):</strong> <code>start-claude.sh</code> (user's npx→native-binary launcher change — left for the user) + a few <code>.pipeline/reviews/*.md</code> (gitignored local board bookkeeping for 6.6/6.7/8.x/9.4). Not committed by design.</li>
+</ul>
+
+<h2>DO NEXT</h2>
+<ul>
+<li><strong>Start the <code>platform</code> track</strong> (next in curriculum order after on-premises): Disciplines 45 + Toolkits 36 + Foundations 28 modules at critical rubric score (&lt;2.0). Same loop: <code>verify_module.py</code> sweep FIRST to split expand-vs-flip; ≤3 authors (cursor/codex; deepseek OK but expand-fabrication-prone → strong review + ground-check); mixed-pool review NO gemini; ground-check EVERY finding + web-verify currency both ways; <strong>add "set revision_pending:false" to expand briefs</strong>; build in PRIMARY; consolidated PR; reset-stage COMMITTED (dash-slug) + clear any stale <code>changes_requested</code> JSON verdict.</li>
+<li>Within platform: confirm curriculum order (Foundations → Disciplines → Toolkits) and process lowest-in-curriculum critical modules first.</li>
+<li>Verify #1896 merged; if not, merge it (frontmatter-only, CI fast).</li>
+</ul>
+
+</body>
+</html>
