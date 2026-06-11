@@ -1,7 +1,6 @@
 ---
 title: "Module 5.1: Private Cloud Platforms"
 slug: on-premises/multi-cluster/module-5.1-private-cloud
-revision_pending: false
 sidebar:
   order: 2
 ---
@@ -44,7 +43,7 @@ Neutron provides networks, subnets, routers, security groups, and advanced overl
 
 Glance stores bootable images that Nova consumes during instance creation. Platform teams often maintain golden images with hardened SSH settings, auditing agents, and preinstalled container runtime packages so kubeadm or Ansible runs finish quickly. Swift offers durable object storage for backups, Helm chart mirrors, or log archives when you do not want those objects on POSIX volumes. Cinder provides persistent block volumes that map cleanly to Kubernetes PersistentVolumeClaims when you install the Cinder CSI driver and storage classes with the right availability zone hints.
 
-Magnum clusters illustrate the alternative Kubernetes-on-OpenStack path where a COE template provisions masters and minions as Nova instances with Neutron networks already wired. Magnum suits teams that want OpenStack-native lifecycle APIs, but you must track Magnum, Heat, and Kubernetes version matrices together. When Magnum lags behind upstream Kubernetes, platform teams fall back to kubeadm on self-managed networks while still using Cinder and Octavia through the cloud provider, which is why this module emphasizes service ownership over any single installer.
+Magnum clusters illustrate the alternative Kubernetes-on-OpenStack path where a COE template provisions masters and minions as Nova instances with Neutron networks already wired. Magnum suits teams that want OpenStack-native lifecycle APIs, but you must track Magnum and Kubernetes version matrices (and whether your deployment uses the Heat- or CAPI-based driver—the legacy Heat driver is deprecated in favor of Cluster API drivers). When Magnum lags behind upstream Kubernetes, platform teams fall back to kubeadm on self-managed networks while still using Cinder and Octavia through the cloud provider, which is why this module emphasizes service ownership over any single installer.
 
 ```mermaid
 flowchart TB
@@ -73,7 +72,7 @@ flowchart TB
     KW --> NT
 ```
 
-Security groups act as stateful firewalls around instance ports; Kubernetes node security groups must allow kubelet, etcd, and CNI tunnel traffic between members while denying arbitrary corporate clients to kubelet port 10250. Document required rules in Git beside cluster templates so auditors can diff rule changes during penetration test remediations instead of discovering ad hoc holes opened during late-night incidents.
+Security groups act as stateful firewalls around instance ports; node security groups must allow kubelet and CNI tunnel traffic between members (and etcd peer/client traffic on control-plane nodes) while denying arbitrary clients to kubelet 10250. Document required rules in Git beside cluster templates so auditors can diff rule changes during penetration test remediations instead of discovering ad hoc holes opened during late-night incidents.
 
 Operational teams should also plan upgrades across the OpenStack control plane independently from Kubernetes minor version bumps. A broken Neutron agent rolling upgrade can strand new node joins while existing workloads keep running, which looks like a Kubernetes failure even though the kubelet is healthy. Document dependency order: Keystone and Galera or PostgreSQL backing stores first, then API services, then hypervisor agents, then Kubernetes cloud provider credentials rotation.
 
@@ -129,11 +128,11 @@ Content libraries distribute OVF templates for worker nodes with cloud-init scri
 
 ## CloudStack, oVirt, and Alternative Private Cloud Stacks
 
-Apache CloudStack targets organizations that want an Apache-licensed cloud management plane with a smaller service surface than full OpenStack. It presents zones, pods, clusters, primary storage, secondary storage, and system VMs that implement routing and console proxy functions. Kubernetes integration typically means launching instances through CloudStack’s compute service and attaching volumes through its disk offerings, then installing a CSI or in-tree provider where community support exists for your release combination.
+Apache CloudStack targets organizations that want an Apache-licensed cloud management plane with a smaller service surface than full OpenStack. It presents zones, pods, clusters, primary storage, secondary storage, and system VMs that implement routing and console proxy functions. Kubernetes integration typically means launching instances through CloudStack’s compute service and attaching volumes through its disk offerings, then installing the CloudStack CSI driver (csi.cloudstack.apache.org); in-tree cloud providers are removed in modern Kubernetes.
 
 CloudStack networking models include basic zones with flat networking and advanced zones with VLAN-isolated guest networks and virtual routers. The choice affects how you carve Service CIDRs and whether pod networks can reach corporate RFC1918 space without NAT hairpins. Because CloudStack clusters often serve managed service providers, quota and account isolation features map naturally to tenant namespaces in Kubernetes when you align project IDs with cloud accounts.
 
-oVirt, downstream of Red Hat Virtualization concepts, centers on datacenters, clusters, hosts, storage domains, and logical networks managed through the Engine API. RHV customers migrating to OpenShift Virtualization may recognize the lineage, but oVirt remains relevant for teams standardizing on KVM without adopting the entire OpenStack control plane footprint. Kubernetes nodes run as oVirt VMs with disks on NFS, iSCSI, or Fibre Channel domains depending on performance needs.
+oVirt is the upstream community KVM-management project; Red Hat Virtualization (RHV) was its downstream commercial distribution (now reaching end-of-life), with OpenShift Virtualization as the successor for RHV workloads. oVirt centers on datacenters, clusters, hosts, storage domains, and logical networks managed through the Engine API. Kubernetes nodes run as oVirt VMs with disks on NFS, iSCSI, or Fibre Channel domains depending on performance needs.
 
 Harvester and other hyperconverged platforms blur the line between virtualization and Kubernetes by shipping both layers together. This module mentions them because decision makers compare them against vSphere and OpenStack, yet the integration patterns for Kubernetes still reduce to reliable VM networking, persistent disks, and a cloud provider that understands the platform API. Evaluate these alternatives when your team size cannot operate a dozen OpenStack projects but you still need multi-tenant VM APIs better than manual vCenter clicks.
 
@@ -200,9 +199,9 @@ Cluster API can treat private cloud VMs as machines when providers exist for you
 
 Worker scaling should respect cloud quotas and IP address consumption. Autoscaler integrations need Nova or vSphere APIs that can create instances faster than pods accumulate, and they need pre-baked images to avoid thirty-minute apt installs during incidents. Store join tokens and bootstrap secrets in vaults with rotation policies; baking long-lived tokens into golden images has caused full-cluster compromises when an image leaked to a less trusted project.
 
-Red Hat OpenShift on RHV or oVirt inherits similar VM dependencies while adding Operator lifecycle for cluster components. VMware Tanzu Kubernetes Grid clusters provision through Tanzu Mission Control or standalone management clusters depending on edition, yet both still require compatible vSphere versions and NSX configurations documented in VMware interoperability matrices. Choose container-native paths when your organization values vendor-supported upgrade highways; choose kubeadm on Nova or vSphere VMs when you need maximum customization and already employ Ansible expertise.
+Red Hat OpenShift on RHV or oVirt inherits similar VM dependencies while adding Operator lifecycle for cluster components. VMware Tanzu Kubernetes Grid clusters provision through Tanzu Mission Control Self-Managed (TMC-SM) or standalone management clusters depending on edition—the Tanzu Mission Control SaaS offering reached end-of-life on 2025-11-15, with Broadcom directing customers to TMC-SM—yet both paths still require compatible vSphere versions and NSX configurations documented in VMware interoperability matrices. Choose container-native paths when your organization values vendor-supported upgrade highways; choose kubeadm on Nova or vSphere VMs when you need maximum customization and already employ Ansible expertise.
 
-The Kubernetes cloud provider documentation describes how provider IDs, routes, and load balancers reconcile per platform. On OpenStack, install the external cloud-controller-manager chart with correct `cloud.conf` secrets referencing Keystone application credentials scoped to the tenant project. On vSphere, enable the CPI and CSI with paravirtual or full feature sets matching your vCenter permissions model. Skipping either component produces nodes labeled `node.kubernetes.io/exclude-from-external-load-balancers` incorrectly or Services that never receive VIPs, which wastes days of CNI debugging.
+The Kubernetes cloud provider documentation describes how provider IDs, routes, and load balancers reconcile per platform. On OpenStack, install the external cloud-controller-manager chart with correct `cloud.conf` secrets referencing Keystone application credentials scoped to the tenant project. On vSphere, enable the CPI and CSI with paravirtual or full feature sets matching your vCenter permissions model. Skipping either leaves LoadBalancer Services `<pending>` and provider IDs unset, which wastes days of CNI debugging.
 
 ## IPAM, DHCP, and DNS Dependencies
 
@@ -327,7 +326,7 @@ Use the public OpenStack API quick start documentation to list endpoints for Key
 ```bash
 # After sourcing openrc for your project:
 openstack endpoint list --interface public -c "Service Name" -c URL
-openstack quota show --project "$(openstack project list -f value -c ID | head -1)"
+openstack quota show "$(openstack project list -f value -c ID | head -1)"
 openstack network list
 openstack flavor list
 ```
@@ -404,7 +403,7 @@ mkdir -p "$HOME/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "$HOME/.kube/config"
 sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 kubectl get nodes
-kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 ```
 
 - [ ] I initialized a control plane VM on libvirt or OpenStack and joined nothing else yet.
@@ -423,7 +422,7 @@ Continue to [Module 5.2: Multi-Cluster Control Planes](./module-5.2-multi-cluste
 
 ## Learner Check
 
-> **Pause and predict**: your OpenStack cloud can boot instances quickly, yet Kubernetes Services of type LoadBalancer stay pending forever. Which two services would you inspect first, and what misconfiguration often explains the symptom? Keystone and Neutron are the usual starting points because the cloud controller must authenticate and create ports on the correct provider network with available addresses from the load balancer subnet pool.
+> **Pause and predict**: your OpenStack cloud can boot instances quickly, yet Kubernetes Services of type LoadBalancer stay pending forever. Which two services would you inspect first, and what misconfiguration often explains the symptom? After Keystone auth, inspect **Neutron and Octavia**—the cloud controller must create ports and listeners on the correct provider network with available addresses from the load balancer subnet pool (Octavia owns the LB VIP/listener path).
 
 ## Sources
 

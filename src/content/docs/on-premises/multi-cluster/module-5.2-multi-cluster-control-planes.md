@@ -3,7 +3,6 @@ title: "Module 5.2: Multi-Cluster Control Planes"
 slug: on-premises/multi-cluster/module-5.2-multi-cluster-control-planes
 sidebar:
   order: 3
-revision_pending: false
 ---
 
 > **Complexity**: `[ADVANCED]` | Time: 55–65 minutes
@@ -90,7 +89,7 @@ CAPI intentionally splits **infrastructure lifecycle** from **application delive
 A minimal management-cluster install uses `clusterctl` to initialize providers:
 
 ```bash
-# Install clusterctl matching your target Kubernetes minor version
+# Install clusterctl per the CAPI release support matrix (illustrative pin v1.12.1)
 curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.1/clusterctl-linux-amd64 -o clusterctl
 chmod +x clusterctl && sudo mv clusterctl /usr/local/bin/
 
@@ -113,7 +112,7 @@ Production on-premises stacks add CAPV (vSphere), CAPO (OpenStack), or CAPM3 (Me
 
 Exercise scenario: a platform team must **design** a **management-cluster** **architecture** that **provisions** and **upgrades** **workload** **clusters** on VMware vSphere while keeping factory-edge sites on bare metal. They choose one management cluster in the primary datacenter running CAPI with CAPV for virtualized workload clusters and CAPM3 for metal edge sites. The design document lists three etcd nodes on fast storage, two worker nodes tainted for `fleet=capi`, and outbound Git access to an internal Gitea mirror.
 
-When a developer requests a staging cluster, the flow is: merge request adds a `Cluster` manifest to the `clusters/staging/` directory; CAPI controllers create three control-plane VMs and three workers through vSphere templates; upon `Ready`, Rancher Fleet imports the cluster label `env=staging` and applies the platform bundle (Cilium, Longhorn, ingress-nginx); only then do application pipelines receive kubeconfig credentials via OIDC. Upgrades follow the same Git trail: bump `spec.topology.version` on the `KubeadmControlPlane`, watch rolling VM replacement, then advance Fleet bundle pins after conformance tests pass.
+When a developer requests a staging cluster, the flow is: merge request adds a `Cluster` manifest to the `clusters/staging/` directory; CAPI controllers create three control-plane VMs and three workers through vSphere templates; upon `Ready`, Rancher Fleet imports the cluster label `env=staging` and applies the platform bundle (Cilium, Longhorn, ingress-nginx); only then do application pipelines receive kubeconfig credentials via OIDC. Upgrades follow the same Git trail: bump `KubeadmControlPlane.spec.version` on standalone clusters (or `Cluster.spec.topology.version` when using ClusterClass topology), watch rolling VM replacement, then advance Fleet bundle pins after conformance tests pass.
 
 This **design** deliberately keeps CAPM3 edge **clusters** off the same MachineDeployment template as vSphere staging **clusters** because BMC timing, firmware validation, and PXE networks differ from DRS-backed VM creation. Attempting one template for both surfaces would force edge exceptions into manual runbooks—the exact toil the management plane exists to eliminate. Documenting those boundaries in architecture reviews prevents “temporary” SSH steps from becoming permanent operational debt.
 
@@ -249,7 +248,7 @@ OCM’s policy framework attaches policies to `PlacementRule` or `Placement` dec
 
 Design policies for **fail-closed** platform safety: require labels, block `latest` tags in production placements, enforce resource quotas via generated policies, and validate ingress TLS settings. Keep application-team policies in separate Git repositories to avoid merge contention with platform engineers.
 
-Sync waves matter: admission policies must exist before workloads that violate them, or CI will flap. Use GitOps sync hooks or OCM `ManifestWork` dependencies to order installation.
+Sync waves matter: admission policies must exist before workloads that violate them, or CI will flap. Use Argo CD or Fleet sync waves, or controller/CI sequencing—`ManifestWork` has no arbitrary dependency primitive (OCM 1.3 adds kind-ordering only).
 
 To **implement** **policy** **distribution** safely, start from a golden repository structured by blast radius:
 
@@ -325,7 +324,7 @@ flowchart LR
 
 Choose networking based on whether you need pod IP reachability (Submariner gateways), cross-cluster **Service** DNS/discovery (Submariner Lighthouse or Cilium ClusterMesh), or L7 policy with mTLS (Istio). Many teams implement only GitOps federation first, then discover application dependencies that require east-west connectivity—budget time accordingly.
 
-**Submariner** deploys gateway nodes that encapsulate traffic between pod CIDRs. On-premises routing teams must install routes or BGP advertisements pointing remote pod CIDRs at Submariner gateways. **Lighthouse** publishes `ServiceExport` objects and serves MCS DNS so clients resolve remote cluster Services by name. NAT scenarios use Globalnet when overlapping service CIDRs cannot be renumbered. Latency-sensitive workloads should measure cross-site RTT before assuming pod-to-pod access is free.
+**Submariner** deploys gateway nodes that encapsulate traffic between pod CIDRs. Route Agents program node routing/VXLAN to the active Gateway; underlay prerequisites are gateway reachability, firewall rules, and NAT mapping—not BGP pod-CIDR advertisement on every router. **Lighthouse** publishes `ServiceExport` objects and serves MCS DNS so clients resolve remote cluster Services by name. NAT scenarios use Globalnet when overlapping service CIDRs cannot be renumbered. Latency-sensitive workloads should measure cross-site RTT before assuming pod-to-pod access is free.
 
 **Cilium ClusterMesh** requires mutual trust between cluster etcd-visible identities and compatible Cilium versions. Enable clustermesh-apiserver with proper TLS rotation; stale certificates break service discovery silently while pods still run locally. Global services excel at spreading HTTP backends across datacenters when health checks propagate quickly.
 
@@ -363,7 +362,7 @@ Backup scope checklist:
 
 Twelve Prometheus instances are unusable for executive dashboards and slow for on-call engineers. **Observability fan-in** centralizes metrics, logs, and traces while preserving per-cluster isolation labels.
 
-Common metrics pattern: Prometheus agents or lightweight scrapers on spokes remote-write to Thanos Receive or Grafana Mimir on the management site or a dedicated observability cluster. Mandatory labels include `cluster`, `environment`, `site`, and `platform_version`. OCM addon `ObservabilityMetric` resources can deploy collectors consistently.
+Common metrics pattern: Prometheus agents or lightweight scrapers on spokes remote-write to Thanos Receive or Grafana Mimir on the management site or a dedicated observability cluster. Mandatory labels include `cluster`, `environment`, `site`, and `platform_version`. OCM OpenTelemetry Collector addons (`ManagedClusterAddon` for the observability collector, or MultiClusterObservability in RHACM) can deploy collectors consistently.
 
 **HA deduplication differs by backend:** Thanos deduplicates redundant Prometheus replicas at **query time**—the Thanos Querier merges series and drops duplicates using `replica` external labels on scrape targets. Grafana Mimir deduplicates at **ingestion time** via its HA tracker: the distributor keeps samples from only one replica of a HA-paired Prometheus pair, so duplicates never land in long-term storage. Design remote-write labels and HA pairing accordingly when spokes run redundant scrapers.
 
@@ -383,7 +382,7 @@ Runbooks should state explicit **failover** steps: if the primary metrics store 
 
 1. Cluster API is a subproject of Kubernetes SIG Cluster Lifecycle—not a CNCF incubating project on its own—and providers ship independently from Kubernetes minor releases.
 2. Open Cluster Management’s klusterlet uses a pull model so edge clusters behind outbound-only firewalls can receive `ManifestWork` without exposing their API servers to the corporate CI network.
-3. Cilium ClusterMesh requires non-overlapping pod and service CIDRs across member clusters, a planning constraint that must be enforced before the first cluster is provisioned.
+3. Cilium ClusterMesh requires non-overlapping pod CIDRs, unique cluster names/IDs, and compatible datapath modes across member clusters—a planning constraint that must be enforced before the first cluster is provisioned.
 4. Losing management-cluster etcd quorum typically freezes fleet-wide GitOps and policy updates long before workload-cluster applications stop running—making hub monitoring easy to under-prioritize until the first failed upgrade window.
 
 Platform teams that treat the management cluster as “just another dev cluster” usually learn this lesson during the first coordinated Kubernetes minor upgrade across a fleet. Elevate hub SLOs, backup verification, and etcd latency alerts to the same tier as production workload apiserver monitoring on every private cloud and bare-metal site you operate fleet-wide.
@@ -528,7 +527,16 @@ These exercises use kind clusters and public documentation commands so you can p
 ### Exercise 1: Initialize Cluster API on a kind management cluster
 
 ```bash
-kind create cluster --name capi-mgmt
+cat > kind-capd.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraMounts:
+  - hostPath: /var/run/docker.sock
+    containerPath: /var/run/docker.sock
+EOF
+kind create cluster --name capi-mgmt --config kind-capd.yaml
 kubectl cluster-info --context kind-capi-mgmt
 
 curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.1/clusterctl-linux-amd64 -o /tmp/clusterctl
@@ -536,6 +544,7 @@ chmod +x /tmp/clusterctl
 /tmp/clusterctl init --infrastructure docker
 
 kubectl wait --for=condition=Ready pod -l cluster.x-k8s.io/provider=cluster-api -n capi-system --timeout=180s
+kubectl wait --for=condition=Ready pod -l cluster.x-k8s.io/provider=infrastructure-docker -n capd-system --timeout=180s
 kubectl get pods -n capi-system
 kubectl get pods -n capd-system
 ```
@@ -586,6 +595,7 @@ metadata:
   name: prometheus-scrape-contract
   namespace: observability-drill
 data:
+  # platform_version is mandatory for fan-in (see Observability section); one mandatory label is intentionally omitted for this drill
   required_labels: "cluster,environment,site"
 EOF
 

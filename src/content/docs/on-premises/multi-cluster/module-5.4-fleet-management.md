@@ -25,7 +25,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A regional manufacturer operated forty-seven bare-metal Kubernetes clusters across factory floors, warehouse edge racks, and two central datacenters. Each cluster was provisioned correctly the first time, yet the platform team spent most of their sprint capacity chasing configuration drift: monitoring agents missing on six clusters, ingress controller versions spanning three minor releases, and sealed secrets that expired silently because nobody owned rotation across sites. When a new compliance rule required Pod Security Admission on every production cluster, engineers opened forty-seven pull requests and still missed three edge locations that had been offline during the change window.
+Hypothetical scenario: a regional manufacturer operated forty-seven bare-metal Kubernetes clusters across factory floors, warehouse edge racks, and two central datacenters. Each cluster was provisioned correctly the first time, yet the platform team spent most of their sprint capacity chasing configuration drift: monitoring agents missing on six clusters, ingress controller versions spanning three minor releases, and sealed secrets that expired silently because nobody owned rotation across sites. When a new compliance rule required Pod Security Admission on every production cluster, engineers opened forty-seven pull requests and still missed three edge locations that had been offline during the change window.
 
 They replaced per-cluster GitOps silos with a fleet management plane that separated *what* should run from *where* it should run. A single Placement rule targeting `region=eu` and `hardware=bare-metal` pushed baseline policies to every matching cluster within minutes of registration, while pull-based agents on edge sites continued working through outbound-only firewalls. Bootstrap of a replacement cluster after hardware failure dropped from two days of manual kubectl to a documented join token flow plus automated ManifestWork delivery. The platform team could finally answer the executive question: *Which clusters are non-compliant right now?*
 
@@ -369,7 +369,7 @@ Capacity planning for hub clusters mirrors control plane sizing for large Kubern
 
 - **Rancher Fleet was designed for RKE2 and K3s edge fleets** before broader Kubernetes support, which explains its pull-agent-first model and tolerance for high-latency links to store backrooms and cell towers.
 - **Open Cluster Management originated in Red Hat's multicluster engine work** and became a CNCF Sandbox project; its Placement API inspired several downstream fleet schedulers.
-- **Argo CD ApplicationSet graduated to a core Argo CD controller**, so separate ApplicationSet installs are legacy; fleet designs should target the integrated controller metrics and sharding documentation.
+- **Argo CD ApplicationSet is bundled as a core Argo CD controller**, so separate ApplicationSet installs are legacy; fleet designs should target the integrated controller metrics and sharding documentation.
 - **Karmada's name derives from "karma" plus "armada"** reflecting its goal of scheduling armies of resources across clusters while allowing per-cluster overrides for real-world heterogeneity.
 
 ---
@@ -455,6 +455,7 @@ Create two kind clusters and join the spoke to the hub using the OCM CLI, then d
 kind create cluster --name fleet-hub
 kind create cluster --name fleet-spoke
 kubectl config use-context kind-fleet-hub
+# Inspect the script at the URL before piping to bash
 curl -L https://raw.githubusercontent.com/open-cluster-management-io/clusteradm/main/install.sh | bash
 clusteradm init --wait
 kubectl get pods -n open-cluster-management
@@ -558,7 +559,7 @@ spec:
   paths:
     - multi-cluster/helm
 EOF
-python3 -m pip install pyyaml
+python3 -m pip install --break-system-packages pyyaml  # lab convenience on PEP 668 hosts
 python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-lab/gitrepo.yaml'))" && echo "GitRepo YAML OK"
 python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-lab/baseline/fleet.yaml'))" && echo "fleet.yaml OK"
 grep -E 'kind:|repo:|paths:' /tmp/fleet-lab/gitrepo.yaml
@@ -649,7 +650,7 @@ spec:
         server: '{{.server}}'
         namespace: '{{.app}}'
 EOF
-python3 -m pip install pyyaml
+python3 -m pip install --break-system-packages pyyaml  # lab convenience on PEP 668 hosts
 python3 -c "import yaml; yaml.safe_load(open('/tmp/appset-lab/appset.yaml'))" && echo "ApplicationSet YAML OK"
 grep -c 'generators:' /tmp/appset-lab/appset.yaml
 grep 'matchLabels' /tmp/appset-lab/appset.yaml
