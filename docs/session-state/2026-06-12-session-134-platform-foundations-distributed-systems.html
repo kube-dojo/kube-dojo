@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 134 — Platform Foundations Wave 5 (Distributed Systems)</title>
+<style>
+ body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+ h1{font-size:1.5rem;border-bottom:2px solid #2563eb;padding-bottom:.3rem}
+ h2{font-size:1.18rem;margin-top:1.8rem;color:#1e40af}
+ h3{font-size:1.02rem;margin-top:1.2rem;color:#374151}
+ code{background:#f1f5f9;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.92em}
+ th,td{border:1px solid #cbd5e1;padding:.35rem .55rem;text-align:left;vertical-align:top}
+ th{background:#eff6ff}
+ .ok{color:#15803d;font-weight:600}
+ .warn{color:#b45309}
+ ul{margin:.4rem 0}
+ li{margin:.25rem 0}
+ .meta{color:#64748b;font-size:.9em}
+ blockquote{border-left:3px solid #2563eb;margin:.6rem 0;padding:.2rem .8rem;background:#f8fafc}
+</style>
+</head>
+<body>
+<h1>Session 134 — Platform Foundations Wave 5 (Distributed Systems)</h1>
+<p class="meta">2026-06-12 · campaign #1897 · standalone orchestrator session · predecessor: session 133 (Observability + Security Principles)</p>
+
+<h2>Outcome</h2>
+<p>Wave 5 of the Platform Foundations campaign (#1897) driven end-to-end: <strong>5 modules to <span class="ok">T0 + score-cleared + COMMITTED</span></strong> — 3 genuine T3→T0 expands + 2 already-T0 flips. Same proven loop (verifier sweep → ≤3 authors in own worktrees → mixed-pool review NO gemini → ground-check + web-verify every finding → fix-pass from the verdict → consolidated PR → build → dedup gate → reset-stage COMMITTED + review records). PR <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1902">#1902</a> merged → <code>9a7fceca</code>.</p>
+
+<table>
+<tr><th>Module</th><th>Before</th><th>After</th><th>Author → Reviewer</th></tr>
+<tr><td>5.1 what-makes-systems-distributed</td><td>T3 309w 0src (stub)</td><td>T0 5214w 14src</td><td>codex → cursor</td></tr>
+<tr><td>5.2 consensus-and-coordination</td><td>T3 856w 0src</td><td>T0 5184w 14src</td><td>cursor → codex</td></tr>
+<tr><td>5.3 eventual-consistency</td><td>T3 1369w 0src</td><td>T0 7123w 15src</td><td>deepseek → cursor (fix: codex)</td></tr>
+<tr><td>5.4 partial-failure-and-timeouts</td><td>T0 (flip)</td><td>T0 5603w</td><td>opus APPROVE</td></tr>
+<tr><td>5.5 clock-skew-and-ordering</td><td>T0 (flip)</td><td>T0 5156w</td><td>opus APPROVE</td></tr>
+</table>
+<p>Build (full astro, worktree + <code>node_modules</code> symlink): <strong>2171 pages, Complete!</strong>, 0 schema errors. <code>incident_dedup_gate.py</code> (run from worktree) PASS. <code>check_site_health.py</code> 0 errors (8 pre-existing warnings, none in distributed-systems). Briefing <code>critical_quality</code> list no longer contains any distributed-systems module.</p>
+
+<h2>Verifier-blind defects the review layer caught (all ground-checked + web-verified)</h2>
+<h3>Expands</h3>
+<ul>
+<li><strong>5.1 — the AWS-S3-2017 opener repeated the same fabrication corrected in 3.1 last session.</strong> The stub stated <code>$150M</code> as fact and said "a mistyped command took the index offline." codex (author) corrected it to the accurate post-mortem causal chain (an incorrect input during a <em>billing-subsystem</em> server removal over-removed servers that also supported the <em>index</em> + <em>placement</em> subsystems, both needing a multi-hour full restart); <code>$150M</code> reframed as an external Cyence estimate (not AWS-reported). Kept the <code>&lt;!-- incident-xref: aws-s3-useast1-2017 --&gt;</code> marker; post-mortem NOT cited in <code>## Sources</code> (dedup-gate title trap).</li>
+<li><strong>5.1 — cursor R1 P1 (ground-checked):</strong> line-29 cross-link falsely claimed reliability 2.2 <em>hosts</em> the full S3 case study. Ground-check confirmed 2.2's opener is a labeled <em>hypothetical</em> ("The Quiet Dependency Failure") and 2.2 is only the dedup-registry owner (<code>check_incident_reuse.py:94</code>) — it never narrates the incident. Reworded to point at 2.2's actual failure-mode-taxonomy / blast-radius teaching (which it genuinely covers). P2 nits (clock-skew depth, in-body prompts) accepted: overview module defers depth to 5.4/5.5.</li>
+<li><strong>5.2 — de-fabbed the "$4.2M etcd Split-Brain" War Story</strong> → <code>Hypothetical scenario:</code> (term-based reconciliation lesson preserved; no fake company/$/date). ZooKeeper correctly described as <strong>Zab</strong>, not Raft. codex R1 caught 5 real Raft-precision errors: commit-safety missing the current-term rule (Raft §5.4.2); "heartbeats are cheap noop writes" (they're <em>empty AppendEntries RPCs</em>); "minority partition accepts writes" (a stale leader appends locally but can never commit/ack without a quorum — clients time out / errors; entries discarded on heal) — fixed at <em>all</em> occurrences; <code>term 42/41</code> → generic <code>N+1/N</code>; the leaderless-vs-leader latency table qualified.</li>
+<li><strong>5.3 — de-fabbed the "$8.2M Shopping Cart" War Story</strong> → <code>### 4.4 Hypothetical Scenario:</code> (Amazon Dynamo cited for the real mergeable-cart design; LWW→OR-Set code preserved). cursor R1 caught a <strong>fabrication</strong> (false "Google Docs abandoned OT" — Google Docs still uses OT; Figma uses CRDTs → removed) and a <strong>K8s factual error</strong> (<code>resourceVersion</code> is optimistic concurrency → HTTP 409 Conflict on a stale precondition, NOT silent LWW → hands-on reframed as an explicit overwrite <em>analogy</em>), plus quorum overlap ≠ linearizability (it's <em>quorum consistency</em>), the CPU memory-model claim (x86 = TSO, ARM/RISC-V weak — not "most CPUs implement sequential consistency"), and a quiz Q1 durability overstatement. codex fix-pass applied all 6 accurately + added an x86-TSO source.</li>
+</ul>
+<h3>Flips</h3>
+<ul>
+<li><strong>5.4 — opus caught 2 real defects</strong> (not a clean flip): a Lease jsonpath bug <code>{.status.renewTime}</code> → <code>{.spec.renewTime}</code> (a <code>coordination.k8s.io/v1</code> Lease has no status subresource, so the command printed a blank line and defeated the task's renewTime observation) and a missing forward-nav (Next Module routed only to Platform Disciplines, never to 5.5; per <code>index.md</code> order 5.5 follows 5.4) → added the 5.5 link.</li>
+<li><strong>5.5 — opus APPROVE</strong>, no required changes. opus web-verified the one Jepsen Scylla quote verbatim and confirmed the Lamport / vector-clock / Spanner-TrueTime / fencing-token content all correct.</li>
+</ul>
+
+<h2>The real score-clear for the two flips: <code>## Further Reading</code> → <code>## Sources</code></h2>
+<p>5.4 and 5.5 were on the critical-score list despite being T0 — <strong>not a stale flag</strong>. The heuristic scorer (<code>scripts/local_api.py:2566</code>, <code>:2579</code>) requires a <em>literal</em> <code>## Sources</code> heading; without it, <code>score = min(score, 1.5)</code> (critical). Both modules had their 11–12 reachable citations under <code>## Further Reading</code> only → renaming the heading to <code>## Sources</code> is what actually clears the cap to ~5.0. Every already-done reliability/observability/security flip carries <code>## Sources</code> for the same reason. <strong>Lesson for future flips: a T0 module on the critical-score list almost always just needs the <code>## Further Reading</code>→<code>## Sources</code> rename, not a content rewrite — check the heading first.</strong></p>
+
+<h2>Loop notes &amp; gotchas (this session)</h2>
+<ul>
+<li><strong>Concurrent authors need separate worktrees.</strong> 3 authors each got their own worktree (<code>pf-ds-51/52/53</code>) because concurrent <code>git add -A &amp;&amp; commit</code> in one worktree races on the index. Consolidated at the end into <code>pf-ds-final</code> via <code>git checkout &lt;branch&gt; -- &lt;file&gt;</code> (clean for independent single files; no cherry-pick conflicts).</li>
+<li><strong>opus headless broke mid-session</strong> with <code>claude native binary not installed</code> after npm bumped <code>@anthropic-ai/claude-code</code> to 2.1.174 (the native-binary postinstall didn't run). The 5.4/5.5 opus reviews ran <em>before</em> the bump and are valid; the 5.1 opus review failed twice → re-routed to cursor. Did NOT touch the global install (it's a headless-dispatch-lane issue, not the interactive session). When opus headless 0-output-5s with that error, re-route — don't retry.</li>
+<li><strong>agy timed out empty</strong> on the 5.5 flip review (0 output, 337s) → re-routed to opus. Confirms the s126 "agy reliability" caution; the Google seat needs a fast fallback ready.</li>
+<li><strong>deepseek (5.3) is fab-prone — confirmed.</strong> It produced a clean-looking T0 but introduced a fabrication + a K8s error; routing its output to a strong cross-family reviewer (cursor) + ground-checking caught both. Telemetry annotated <code>fabrication</code>.</li>
+<li><strong>Flip-module state init:</strong> 5.4/5.5 had no pipeline state (first flips this campaign; 188 of 921 modules repo-wide lack state). Did NOT run a repo-wide <code>bootstrap</code> (would create 188 UNAUDITED states and move the board denominator) — created state for <em>only</em> 5.4/5.5 directly via <code>state.new_state()</code> with a non-colliding <code>module_index</code>, set to COMMITTED. 5.1-5.3 (UNAUDITED) reset-stage to COMMITTED. <code>.pipeline/</code> is gitignored (local state, no commit).</li>
+<li><strong>Reviewer findings ground-checked both ways:</strong> all 18 cross-family findings across the wave were confirmed real before acting (codex's Raft nuances, cursor's fabrication/K8s catches, opus's Lease/nav). codex's "5.2 needs 6 outcomes" was intentionally skipped — 4 bolded-verb outcomes is within the 4-5 standard and the verifier passes alignment.</li>
+</ul>
+
+<h2>NEXT (curriculum order, #1897)</h2>
+<ul>
+<li><strong>Wave 6 — Advanced Networking:</strong> 1.1-dns-at-scale (412w), 1.2-cdn-edge (2255w), 1.3-waf-ddos (1507w), 1.4-bgp-routing (706w; <strong>cloudflare-2020-bgp canonical — preserve the xref</strong>), 1.5-load-balancing (3514w).</li>
+<li><strong>Wave 7 — Engineering Leadership:</strong> 1.1-incident-command … 1.6-mentorship (6 modules, 1398–2633w).</li>
+<li>Then Platform <strong>Disciplines</strong> (45 critical) → <strong>Toolkits</strong> (36 critical).</li>
+<li>Reusable briefs: <code>logs/remediation/briefs/pf-distributed/</code> (shared expand rules + per-module + flip-review template + fix briefs). Carry the per-module <strong>INCIDENT MAP</strong> pattern into Wave 6 (cloudflare-2020-bgp in networking 1.4). For flips, check the <code>## Further Reading</code>→<code>## Sources</code> heading first.</li>
+</ul>
+</body>
+</html>
