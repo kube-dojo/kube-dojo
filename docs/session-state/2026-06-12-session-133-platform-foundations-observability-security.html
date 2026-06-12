@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 133 — Platform Foundations Waves 3+4 (Observability + Security Principles)</title>
+<style>
+ body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+ h1{font-size:1.5rem;border-bottom:2px solid #2563eb;padding-bottom:.3rem}
+ h2{font-size:1.18rem;margin-top:1.8rem;color:#1e40af}
+ h3{font-size:1.02rem;margin-top:1.2rem;color:#374151}
+ code{background:#f1f5f9;padding:.1rem .3rem;border-radius:3px;font-size:.9em}
+ table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.92em}
+ th,td{border:1px solid #cbd5e1;padding:.35rem .55rem;text-align:left;vertical-align:top}
+ th{background:#eff6ff}
+ .ok{color:#15803d;font-weight:600}
+ .warn{color:#b45309}
+ ul{margin:.4rem 0}
+ li{margin:.25rem 0}
+ .meta{color:#64748b;font-size:.9em}
+ blockquote{border-left:3px solid #2563eb;margin:.6rem 0;padding:.2rem .8rem;background:#f8fafc}
+</style>
+</head>
+<body>
+<h1>Session 133 — Platform Foundations Waves 3 + 4 (Observability Theory + Security Principles)</h1>
+<p class="meta">2026-06-12 · campaign #1897 · standalone orchestrator session · predecessor: session 132 (Reliability Engineering 2.1–2.5)</p>
+
+<h2>Outcome</h2>
+<p>Two full waves of the Platform Foundations campaign (#1897) driven end-to-end: <strong>5 modules expanded T3→T0, reviewed cross-family, ground-checked, merged, and board-flipped to <span class="ok">done / score 5.0</span></strong>. Same proven loop (verifier sweep → ≤3 authors → mixed-pool review NO gemini → ground-check + web-verify every finding → consolidated PR → build PRIMARY → dedup gate → reset-stage COMMITTED + review records).</p>
+
+<table>
+<tr><th>Wave / Module</th><th>Before</th><th>After</th><th>Author → Reviewer</th><th>PR</th></tr>
+<tr><td><strong>W3</strong> observability-theory 3.1 what-is-observability</td><td>T3 3077w 0src</td><td>T0 5114w 12src</td><td>cursor → codex</td><td rowspan="2"><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1900">#1900</a><br><code>7f2f94f5</code></td></tr>
+<tr><td><strong>W3</strong> observability-theory 3.4 from-data-to-insight</td><td>T3 1169w 0src</td><td>T0 6346w 14src</td><td>codex → opus</td></tr>
+<tr><td><strong>W4</strong> security-principles 4.1 security-mindset</td><td>T3 799w 0src</td><td>T0 5010w 17src</td><td>cursor → codex</td><td rowspan="3"><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1901">#1901</a><br><code>813fa0fe</code></td></tr>
+<tr><td><strong>W4</strong> security-principles 4.2 defense-in-depth</td><td>T3 981w 0src</td><td>T0 6027w 15src</td><td>codex → cursor</td></tr>
+<tr><td><strong>W4</strong> security-principles 4.4 secure-by-default</td><td>T3 811w 0src</td><td>T0 6184w 13src</td><td>deepseek → opus</td></tr>
+</table>
+<p>Every PR: build PRIMARY <strong>2171 pages green</strong>, <code>incident_dedup_gate.py</code> PASS, <code>check_site_health.py</code> 0 errors.</p>
+
+<h2>Verifier-blind defects the review layer caught (all ground-checked + web-verified)</h2>
+<h3>Wave 3 — Observability</h3>
+<ul>
+<li><strong>3.1 — fabricated AWS-S3-2017 causal chain.</strong> The pre-existing opener claimed "billing subsystem failed → index couldn't query billing for account standing → S3 nodes locked down." Web-verified against the <a href="https://aws.amazon.com/message/41926/">official AWS post-mortem</a>: the command targeted a few <em>billing-subsystem</em> servers; a mistyped input over-removed capacity supporting the <em>index</em> + <em>placement</em> subsystems, both of which then required a <em>full restart</em>. Corrected opener + Quiz Q8. (codex caught; orchestrator web-verified the authoritative facts.)</li>
+<li><strong>3.1 — mis-sourced</strong> <code>$150–160M</code> reframed as external Cyence estimates (not AWS); a high-cardinality-<em>metrics</em> contradiction split into low-card labels vs high-card event attributes; a Loki mischaracterization corrected; a redirecting CNCF URL → <code>tag-observability.cncf.io</code>.</li>
+<li><strong>3.4 — opus APPROVE</strong>: the <strong>SLO multi-window burn-rate math</strong> (the riskiest content) verified flawless from first principles vs the Google SRE Workbook (14.4×/(1h,5m), 6×/(6h,30m), 1×/(72h,6h)). Its 2 "non-canonical Grafana URL" P2s were <strong>OVERTURNED by ground-check</strong> — the module's URLs are the direct 200 destinations; opus's "canonical" forms 301-redirect <em>into</em> them.</li>
+</ul>
+<h3>Wave 4 — Security Principles</h3>
+<ul>
+<li><strong>4.1 — the "$300M Firewall" War Story mis-attributed a fabricated firewall-exception-rot narrative to Equifax</strong> (real Equifax 2017 = unpatched Apache Struts CVE-2017-5638, ~76 days, ~147M). De-fabbed → <code>Hypothetical scenario:</code> + accurate cited Equifax cross-ref; SolarWinds/Equifax xref markers preserved. codex: DBIR "human element" reframe, NIST <strong>CSF 2.0 Govern</strong>, dead MS-SDL URL, ambiguous "No passwords" quadrant label.</li>
+<li><strong>4.2 — real verifier-blind K8s bug</strong> (cursor): a <code>default-deny-ingress-and-egress</code> + <em>ingress-only</em> <code>allow-web-to-api</code> means <strong>web→api silently fails</strong> (K8s requires both halves; web's egress was never allowed) and default-deny egress <strong>blocks DNS</strong>. Added <code>allow-web-egress-to-api</code> + <code>allow-dns-egress</code>. This module is the <strong>canonical owner of target-2013</strong> — Target facts web-verified (Fazio HVAC, ~40M cards/~70M records, FireEye alerts ignored, ~$292M).</li>
+<li><strong>4.4 — opus caught 3 P1</strong> in deepseek's draft, all ground-checked: <strong>Restricted PSS does NOT require <code>readOnlyRootFilesystem</code></strong> (not a PSS control; recommended but enforced separately) — corrected in 2 places; a <strong>broken Next-Module link</strong> (<code>module-5.1-why-distributed-systems</code> → real <code>module-5.1-what-makes-systems-distributed</code>); a logic inversion ("has enforcement"→"no enforcement"); clarified "PSS enabled by default" (unlabeled namespace ≈ privileged); cited MongoDB-2017 (BleepingComputer). opus <strong>reverse-saved</strong> the Kyverno/OPA-Gatekeeper "CNCF Graduated" status (correct as of 2026-03).</li>
+</ul>
+
+<h2>Loop refinements &amp; gotchas (new this session)</h2>
+<ul>
+<li><strong>The incident-dedup gate trips on a SOURCE-CITATION TITLE, not just prose.</strong> Adding the real AWS-S3-2017 source to 3.1 made the citation title "Summary of the Amazon S3 Service Disruption in US-EAST-1 (February 2017)" match the <code>S3…us-east-1…2017</code> regex → 3.1 flagged duplicate (canonical owner = reliability-engineering <strong>2.2</strong>). Fix per the established convention (cf. distributed-systems 5.1): an <code>&lt;!-- incident-xref: aws-s3-useast1-2017 --&gt;</code> marker in prose within 200 chars + a cross-link to the canonical. <strong>Lesson:</strong> when you add a real-incident source/citation, re-run the dedup gate — the title can trip it even if the body doesn't.</li>
+<li><strong><code>incident_dedup_gate.py</code> resolves <code>REPO_ROOT</code> from the SCRIPT'S own location.</strong> Run it via the <em>worktree's relative path</em> (<code>cd &lt;wt&gt; &amp;&amp; .venv/bin/python scripts/quality/incident_dedup_gate.py</code>) so it scans the worktree; invoking PRIMARY's absolute-path copy scans PRIMARY (old content) → false "0 violations".</li>
+<li><strong>deepseek dropped its API before commit on 4.4</strong> (known failure) — the file was fully written (T0) but uncommitted; recovered + committed in the worktree.</li>
+<li><strong>Never put a trailing <code>&amp;</code> inside a Bash <code>run_in_background</code> command</strong> — the wrapper shell exits and SIGHUPs the detached dispatch (left only the banner). Re-dispatched cleanly.</li>
+<li><code>Hypothetical Scenario</code> as an H2 heading (capital S) also satisfies anti-fab — grep case-insensitively before assuming a de-fab is unlabeled.</li>
+<li>Two opus/codex source/URL findings were <strong>overturned by ground-check</strong> (3.4 Grafana redirect direction) — ground-check every reviewer claim both ways.</li>
+</ul>
+
+<h2>Roster notes</h2>
+<ul>
+<li>Authors cursor/codex/deepseek; reviewers codex/cursor/opus (NO gemini — retired, agy is the Google seat). opus used on the 2 hardest reviews (3.4 SLO math, 4.4 deepseek fab-risk) — earned its keep both times.</li>
+<li>deepseek (4.4) = <strong>partial</strong>: strong prose-ification but introduced a propagated PSS factual error + broken link + logic inversion + dropped-before-commit → confirms "route deepseek's output to the strongest reviewer + ground-check hard." Its de-fab + Log4Shell-marker preservation were clean.</li>
+<li>Telemetry annotated for all 13 dispatches across both waves (<code>scripts.agent_telemetry annotate</code>).</li>
+</ul>
+
+<h2>NEXT (curriculum order, #1897)</h2>
+<ol>
+<li><strong>Wave 5 — Distributed Systems:</strong> expands 5.1-what-makes-systems-distributed (309w), 5.2-consensus-and-coordination (856w), 5.3-eventual-consistency (1369w) → <strong>+ 2 review-only flips</strong> 5.4-partial-failure-and-timeouts &amp; 5.5-clock-skew-and-ordering (already T0, stale score flag only). NOTE: 5.1 is the canonical landing the 4.4 Next-Module link now points to.</li>
+<li><strong>Wave 6 — Advanced Networking:</strong> 1.1-dns-at-scale (412w), 1.2-cdn-edge, 1.3-waf-ddos, 1.4-bgp-routing (706w; note: 1.4 is the cloudflare-2020-bgp canonical), 1.5-load-balancing.</li>
+<li><strong>Wave 7 — Engineering Leadership:</strong> 1.1-incident-command … 1.6-mentorship (6 modules, 1398–2633w).</li>
+<li>Then Platform <strong>Disciplines</strong> (45 critical) → <strong>Toolkits</strong> (36 critical).</li>
+</ol>
+<p class="meta">Reusable briefs: <code>logs/remediation/briefs/pf-observability/</code> (shared rules + per-module + reviews + fixes) and <code>logs/remediation/briefs/pf-security/</code> (shared rules with the incident-ownership map + per-module + reviews + fixes). The security shared-rules' INCIDENT MAP pattern (which incidents a module owns / must xref / must de-fab) is worth carrying into Waves 6–7 (cloudflare-2020-bgp in networking 1.4).</p>
+
+</body>
+</html>
