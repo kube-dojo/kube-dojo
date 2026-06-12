@@ -101,8 +101,13 @@ INCIDENTS: dict[str, list[str]] = {
     "Cloudflare 2019 regex outage": [
         # Tightened 2026-05-04 (sweep #4 review): bare "2019" / "July" signals matched
         # Verizon BGP leak narratives that mention Cloudflare as one of the affected
-        # services. Require a WAF/regex/backtracking signal unique to the July 2019 incident.
-        r"Cloudflare.{0,200}(regex|catastrophic backtrack|WAF.{0,40}(rule|outage|deployed)|July 2,?\s*2019|July 2019)",
+        # services. Require a regex/backtracking/date signal unique to the July 2019 incident.
+        # Tightened again 2026-06-12 (#1897 networking wave): dropped the
+        # "WAF.{0,40}(rule|outage|deployed)" signal — it was NOT unique to the incident and
+        # false-matched WAF vendor-comparison Rosetta tables (a WAF module naming Cloudflare
+        # near "WAF rules"). The regex / catastrophic-backtrack / "July 2 2019" signals are the
+        # genuinely unique ones; the canonical narration carries them.
+        r"Cloudflare.{0,200}(regex|catastrophic backtrack|July 2,?\s*2019|July 2019)",
         r"(regex|catastrophic backtrack).{0,200}Cloudflare",
     ],
     "Cloudflare 2020 BGP / config": [
