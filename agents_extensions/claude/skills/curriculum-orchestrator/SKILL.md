@@ -73,7 +73,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 > **The full Activity × lane matrix lives in [[dispatch-router]] — consult it before EVERY dispatch.** Route by ACTIVITY (write / code / review / research / mechanical), not just review. Condensed role view below.
 
-> **What changed (2026-06-04, session 100):** agy `--model` works (#1780) → agy is a Gemini-3.1-Pro-High content/reviewer lane (re-prove write first); cursor is `auto`/`composer-2.5` ONLY (review default fixed off gpt-5.5, #1782); grok via hermes `--provider xai-oauth` (#1783) — grok-4.20-reasoning (content) + grok-build-0.1 (code) validated; **deepseek is dirt-cheap → use freely** as the off-seat cross-family reviewer (NOT avoided). opus headless = the only metered-after-2026-06-15 lane → ≤1–2 hardest reviews/wave.
+> **What changed (2026-06-04, session 100):** agy `--model` works (#1780) → agy is a Gemini-3.1-Pro-High content/reviewer lane (re-prove write first); cursor is `auto`/`composer-2.5` ONLY (review default fixed off gpt-5.5, #1782); grok via hermes `--provider xai-oauth` (#1783) — grok-4.20-reasoning (content) + grok-build-0.1 (code) validated; **deepseek is dirt-cheap → use freely** as the off-seat cross-family reviewer (NOT avoided). **🚫 claude -p is OFF (user, s135): NEVER `--agent claude`/`claude -p` (capped pool + broken native-binary) — the Claude/opus REVIEW seat = the orchestrator working INLINE in this session (main quota), or an Agent-tool `claude` subagent for the 1–2 hardest/wave** ([[feedback_claude_billing_reroute]]).
 
 | Activity | Primary | Cross-family reviewer(s) / fallback | Notes |
 |---|---|---|---|
