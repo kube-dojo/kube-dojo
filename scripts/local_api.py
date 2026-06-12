@@ -6907,6 +6907,7 @@ _UK_BOARD_PAGE_JS = r"""
       const stale = totals.stale || 0;
       const missing = totals.missing || 0;
       const currentPct = totals.current_pct || 0;
+      const toGo = stale + missing;
       badge.textContent = `${current} / ${total} current`;
       badge.style.background = currentPct >= 60 ? 'var(--green-muted)' : 'var(--amber-muted)';
       badge.style.color = currentPct >= 60 ? 'var(--green)' : 'var(--amber)';
@@ -6939,9 +6940,10 @@ _UK_BOARD_PAGE_JS = r"""
 
       el.innerHTML = `
         <div class="uk-wrap">
-          <h2 class="uk-headline"><span>${currentPct}%</span> current</h2>
-          <div class="uk-subcounts">${current} current · ${stale} stale · ${missing} missing · ${total} pages</div>
+          <h2 class="uk-headline"><span>${currentPct}%</span> current — goal 100%</h2>
+          <div class="uk-subcounts">${current} current · ${stale} stale · ${missing} missing · ${total} pages · ${toGo} to go</div>
           <div class="uk-note">Currency measured by word-ratio (UK &lt; 60% of current EN = stale), not file existence.</div>
+          <div class="uk-note">Nothing is excluded — every page will be translated. The AI tracks (ai / ai-ml-engineering / ai-history) and parts of platform / on-premises are translated LAST, after their English stabilizes, to avoid immediate re-staleness.</div>
           <div class="uk-table-wrap">
             <table class="uk-table">
               <thead>
