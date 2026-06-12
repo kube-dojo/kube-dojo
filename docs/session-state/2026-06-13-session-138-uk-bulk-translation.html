@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 138 — UK bulk translation (in-order, agy chunked lane)</title>
+<style>
+  body { font: 15px/1.55 -apple-system, system-ui, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a2332; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #38bdf8; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.5rem; color: #0b5; }
+  code { background: #f0f3f7; padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #d0d7de; padding: 5px 9px; text-align: left; font-size: 13px; }
+  th { background: #f0f3f7; }
+  .warn { color: #b80; font-weight: 600; } .ok { color: #0a7; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 138 — Ukrainian bulk translation (in-order, agy chunked lane)</h1>
+<p><strong>Date:</strong> 2026-06-13 · <strong>Epic:</strong>
+<a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1911">#1911</a> ·
+<strong>Continues</strong> session 137 (which built + proved the lane). User: "continue up to 650k" → drive the bulk
+in-order translation.</p>
+
+<h2>Done this session</h2>
+<ul>
+<li><strong class="ok">zero-to-terminal 0.1–0.4 re-translated</strong> to current EN (PR <strong>#1919</strong>, build-green 2171p):
+0.1 (7828w/0.97), 0.2 (7562w/0.94), 0.3 (7466w/0.96), 0.4 (8522w/0.96). All were ~0.37–0.43 stubs.
+Verified: valid frontmatter+`en_commit`, balanced fences, 0 Russicism letters, safe calque-autofix. Dashboard
+prerequisites 17 → <strong>21</strong> current (after #1919 merges).</li>
+<li>Driver: <code>logs/uk_bulk.sh</code> — for each EN path: <code>rm</code> stale UK stub → <code>uk_sync.py translate</code>
+(chunked agy) → safe deterministic calque-autofix (по мірі→у міру, на протязі→протягом, прийняти участь→взяти участь,
+учбов→навчальн) → reports <code>ukw/enw/ratio</code> and FLAGS <code>RUSSICISM</code> / <code>AMBIG</code>
+(в залежності, любий, слідуюч — manual review) / <code>TRUNCATED</code> (ratio&lt;0.85).</li>
+</ul>
+
+<h2 class="warn">⚠ Three hard-won execution lessons (read before resuming the bulk)</h2>
+<ol>
+<li><strong>agy is SEQUENTIAL-ONLY.</strong> Concurrent <code>agy</code> CLI sessions share one
+<code>~/.gemini/antigravity-cli/</code> session state and collide. Run <strong>ONE</strong> <code>uk_bulk.sh</code> driver at a
+time (each translates its modules sequentially; each module is ~6 chunked agy calls, ~6 min).</li>
+<li><strong>You CANNOT see background-task processes via <code>ps</code>/<code>pgrep</code></strong> from the Bash tool —
+the sandbox has a separate process namespace (returns empty even when tasks are alive). And piping a driver to
+<code>tail</code> buffers all output until the pipe closes (looks like 0 bytes mid-run). <strong>Verify background
+progress via the task OUTPUT FILE (run the driver WITHOUT a <code>tail</code> pipe so it streams per-module) + files
+appearing in the worktree + the completion notification.</strong> This session I misread an empty <code>ps</code> as
+"both streams died" and <code>TaskStop</code>'d two healthy parallel batches — wasted work + a scare. (Also reaffirmed
+agy-sequential after.)</li>
+<li><strong>The bulk worktree was created DETACHED</strong> (<code>git worktree add .worktrees/uk-bulk origin/main</code>
+→ detached HEAD). Commits there are GC-bait. <code>git switch -c &lt;branch&gt;</code> in the worktree before/after
+committing to preserve them.</li>
+</ol>
+
+<h2>How to resume (mechanical)</h2>
+<ol>
+<li>Reset the bulk worktree to current main: <code>git -C .worktrees/uk-bulk fetch origin main &amp;&amp; git -C .worktrees/uk-bulk
+switch -C uk/prereq-zt2 origin/main</code> (or a fresh worktree off main).</li>
+<li>Run ONE driver per batch (3–6 modules), e.g.
+<code>cd .worktrees/uk-bulk &amp;&amp; bash ../../logs/uk_bulk.sh &lt;EN-paths…&gt;</code> in the background (no <code>tail</code>).</li>
+<li>On completion: read the output file; for any FLAGGED module read+fix (ambiguous calques / Russicism) inline with the
+<code>mcp__sources__*</code> RAG; structural-check frontmatter+fences; commit.</li>
+<li>Per section: <code>npm run build</code> in the worktree (<code>ln -s ../../node_modules node_modules</code> first) → PR → squash-merge → pull primary → dashboard ticks.</li>
+</ol>
+
+<h2>Remaining worklist (34 prereq pages, 30 left; curriculum order)</h2>
+<ul>
+<li><strong>zero-to-terminal</strong> (done: 0.1–0.4): <strong>0.5, 0.7, 0.8, 0.9, 0.10, 0.11</strong> (6 left; 0.6 already current)</li>
+<li><strong>cloud-native-101</strong>: 1.1, 1.2, 1.3, 1.4, 1.5 (5)</li>
+<li><strong>kubernetes-basics</strong>: 1.2, 1.4, 1.5, 1.6, 1.7, 1.8 (6)</li>
+<li><strong>philosophy-design</strong>: 1.1, 1.2, 1.3, 1.4 (4)</li>
+<li><strong>modern-devops</strong>: 1.1, 1.2, 1.4, 1.6 (4; 1.5 done s137)</li>
+<li><strong>git-deep-dive</strong>: module-1, 2, 3, 7, 8 (5; index done s137)</li>
+</ul>
+<p>Then (Phase A): <strong>linux → cloud → k8s certs</strong> (full <code>/uk</code> board worklist). Defer platform/on-prem/AI
+(Phase C) until their EN settles. <strong>Watch progress at <code>http://127.0.0.1:8768/uk</code>.</strong></p>
+
+<h2>Also queued</h2>
+<ul>
+<li>Build the <strong>context-aware calque-fixer</strong> (the AMBIG flags need it: don't auto-"fix" legit «залежність» noun).</li>
+<li><strong>#1871</strong> Dependabot npm/Starlight — HELD, needs local astro build then merge.</li>
+<li><strong>Wave 7 — Engineering Leadership</strong> (Platform Foundations, 6 genuine-T3 expands) — still queued; sweep banked.</li>
+</ul>
+</body>
+</html>
