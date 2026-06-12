@@ -31,8 +31,9 @@ const aimlHref = t.lang === 'uk' ? '/ai-ml-engineering/' : `${p}/ai-ml-engineeri
   <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
   <!-- GoatCounter — privacy-friendly analytics (no cookies). This custom homepage
        layout does not render the Starlight Head, so the script is added directly
-       here; all Starlight content pages get it via the head[] config in astro.config.mjs. -->
-  <script is:inline data-goatcounter="https://kube-dojo.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+       here; all Starlight content pages get it via the head[] config in astro.config.mjs.
+       The loader is self-hosted at /count.js (public/count.js) — same-origin, no CDN. -->
+  <script is:inline data-goatcounter="https://kube-dojo.goatcounter.com/count" async src="/count.js"></script>
   <style>
     :root {
       --kube-blue: #326CE5;
