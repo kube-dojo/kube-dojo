@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 135 — Platform Foundations Wave 6 (Advanced Networking)</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1.2rem;color:#1a1a1a}
+  h1{font-size:1.7rem;border-bottom:3px solid #2b6cb0;padding-bottom:.3rem}
+  h2{font-size:1.25rem;margin-top:1.8rem;color:#2b6cb0;border-bottom:1px solid #e2e8f0;padding-bottom:.2rem}
+  code{background:#f1f5f9;padding:.1rem .3rem;border-radius:3px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #cbd5e1;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#edf2f7}
+  .tldr{background:#ebf8ff;border-left:4px solid #2b6cb0;padding:.8rem 1rem;border-radius:4px}
+  .ok{color:#276749;font-weight:600}
+  li{margin:.25rem 0}
+</style>
+</head>
+<body>
+<h1>Session 135 — Platform Foundations Wave 6 (Advanced Networking)</h1>
+<p class="tldr"><strong>2026-06-12 · campaign #1897 · standalone orchestrator session · predecessor: session 134 (Distributed Systems 5.1–5.5).</strong> Wave 6 of the Platform Foundations campaign driven end-to-end: 5 Advanced Networking modules expanded T3 → <strong>T0</strong> + score-cleared + board-flipped <span class="ok">done</span>. PR <strong>#1903</strong> squash-merged → <code>69a5916b</code>. No flips this wave — all 5 were genuine sub-floor expands.</p>
+
+<h2>Outcome</h2>
+<p>Same proven loop (verifier sweep → ≤3 concurrent authors in own worktrees → mixed-pool cross-family review NO gemini → ground-check + web-verify every finding → fix-pass from the verdict → consolidated PR → full astro build → incident-dedup gate → reset-stage COMMITTED + review records). Full astro build <strong>2171 pages, 0 schema errors</strong>; <code>incident_dedup_gate.py --mode delta</code> PASS (0 violations); <code>check_site_health.py</code> 0 errors (8 pre-existing warnings, none in advanced-networking); all 5 <code>verify_module.py</code> T0/PASS. Board now shows all 5 <code>COMMITTED / done</code>.</p>
+
+<table>
+<tr><th>Module</th><th>Before</th><th>After</th><th>Author → Reviewer (verdict)</th></tr>
+<tr><td>1.1 dns-at-scale</td><td>T3 412w (stub)</td><td>T0 5099w, 22 src</td><td>codex → cursor (APPROVE + 5 P2 polish applied)</td></tr>
+<tr><td>1.2 cdn-edge</td><td>T3 2255w</td><td>T0 5000w, 11 src</td><td>cursor → deepseek (1 P1 + 3 P2, fixed)</td></tr>
+<tr><td>1.3 waf-ddos</td><td>T3 1507w</td><td>T0 5351w, 16 src</td><td>deepseek → cursor (2 P1 lab bugs + 6 P2, fixed)</td></tr>
+<tr><td>1.4 bgp-routing</td><td>T3 706w</td><td>T0 5105w, 25 src</td><td>cursor → codex (6 P1 incl. a fabrication, fixed)</td></tr>
+<tr><td>1.5 load-balancing</td><td>T3 3514w</td><td>T0 5306w, 13 src</td><td>deepseek → cursor (7 P1, fixed) → codex R2 (lab, ran on real cluster)</td></tr>
+</table>
+
+<h2>Verifier-blind defects the review layer caught (all ground-checked / web-verified)</h2>
+<ul>
+<li><strong>1.4 — a fabrication the orchestrator's own single-fact check missed.</strong> codex (cross-family) flagged a fabricated <code>$17M</code> theft figure on the 2018 MyEtherWallet / Route 53 BGP hijack. Web-verified the real figure: <strong>215 ETH ≈ $152,000</strong> over ~2 hours (Apr 24 2018, ThousandEyes/CyberScoop) → corrected at both occurrences. Plus 5 more P1s: AS-path-prepend quiz answer was backwards (prepending makes a path <em>less</em> preferred); BGP communities described as "signed" (RFC 1997 = optional transitive attribute, not cryptographic); route leaks "always accidental" (RFC 7908 covers malicious too); RPKI "no covering ROA → INVALID" wrong (no covering VRP = <strong>NotFound</strong>; Invalid = covered-but-unauthorized); RFC 9582 is the <strong>ROA profile</strong>, not ASPA (ASPA is still SIDROPS drafts). The Cloudflare-2020-BGP canonical narration (this module owns it) was web-verified <em>accurate</em>: Atlanta ATL01, LOCAL_PREF 200 vs edge 100, ~50% backbone traffic, ~27 min (21:12–21:39 UTC).</li>
+<li><strong>1.3 — non-runnable WAF lab (deepseek-authored).</strong> cursor caught two P1s, both verified against ingress-nginx docs: <code>limit-rps:"5"</code> actually allows a burst of 25 (default <code>limit-burst-multiplier:5</code>) so the 6th request would not 503 → added <code>:"1"</code> + corrected expected output; a bare <code>modsecurity-snippet</code> overrides the controller's default snippet that <code>Include</code>s the OWASP CRS → SQLi would never 403, fixed. Plus lab prerequisites, a F5-vs-kubernetes/ingress-nginx source swap, and removal of an unsourced "hundreds of thousands of servers" claim.</li>
+<li><strong>1.5 — fabricated opener + LB errors (deepseek-authored), and a lab that needed a real cluster to debug.</strong> cursor caught a fabricated <code>$100M</code> AWS-Dec-2021 opener with a misattributed post-mortem → replaced with a labeled <code>Hypothetical scenario:</code>; least-connections causality inverted; NLB conflated with GWLB/Maglev (NLB does not use GENEVE encapsulation); wrong NLB idle-timeout (UDP 120s / TCP-TLS 350s); an "AWS dominates" market claim removed (durable-vendor rule). Then a focused <strong>codex R2 built a real kind cluster and ran the rewritten lab</strong>, finding it still broken: the first fix had <em>inverted</em> the curl/python bug (<code>python:3.12-slim</code> has python3 but no curl), the kind config lacked the <code>ingress-ready=true</code> node label (controller stays Pending), and <code>INGRESS_IP</code> was set in the local shell but never reached the test pod. codex fixed all three (kubeadm <code>node-labels</code> + <code>nicolaka/netshoot</code> + in-cluster Service DNS) and re-tested end-to-end.</li>
+<li><strong>1.1</strong> — APPROVE; 5 P2 precision/portability polish applied (SRV weight = RFC 2782 selection-order probability not a traffic split; SRV scoped to headless+named-port K8s; DNS cache/reuse nuance; <code>drill</code>→<code>dig</code> macOS portability; named the SOA MINIMUM field). DNSSEC chain-of-trust was the previously-uncovered outcome — added + quiz-probed.</li>
+<li><strong>1.2</strong> — Fastly-2021 narrative kept (web-verified accurate) but removed as a <code>## Sources</code> citation title; nginx <code>default_type</code> ordering; varnish <code>-F</code> foreground flag (else CrashLoopBackOff); swapped a 403 bot-walled Cloudflare URL. <code>varnish:8</code> tag confirmed to exist.</li>
+</ul>
+
+<h2>Tooling fix — incident-dedup matcher false positive (root-caused, not worked around)</h2>
+<p>The dedup gate first failed on 1.3 with a Cloudflare-2019-regex "duplicate". It was a <strong>false positive</strong>: the <code>cloudflare-2019-regex</code> matcher in <code>scripts/audit_incident_reuse.py</code> required <code>Cloudflare</code> within 200 chars of a non-unique <code>WAF.{0,40}(rule|outage|deployed)</code> signal — which matches <em>any</em> WAF vendor-comparison Rosetta table that names Cloudflare (exactly what a WAF module contains). Rewording the table was impractical (Cloudflare + "WAF rules" co-occur in nearly every row), so the fix was at the right layer: <strong>dropped the over-broad WAF-rule alternative</strong>, leaving <code>regex</code> / <code>catastrophic backtrack</code> / <code>July 2 2019</code> — the genuinely unique signals. Verified the canonical narration (prereqs/cicd) still matches. The second residual was a real proximity issue: the 1.3 hook-reframe had pushed the existing <code>&lt;!-- incident-xref: equifax-2017 --&gt;</code> marker &gt;200 chars from the word "Equifax" → moved it adjacent. Both fixes shipped in the PR; CI's Incident-dedup gate passed.</p>
+
+<h2>Loop notes &amp; gotchas (this session)</h2>
+<ul>
+<li><strong>opus headless lane is still down</strong> (the <code>@anthropic-ai/claude-code@2.1.175</code> "native binary not installed" error from s134 persists — OK:False, 0 chars, ~5s). Reviews were round-robined across the 3 working agents (cursor/codex/deepseek), each reviewing a different family's module. The strongest-reviewer seat being unavailable is a standing constraint until the headless install is repaired.</li>
+<li><strong>Running labs on a real cluster pays off.</strong> The codex R2 that built an <code>lb-lab</code> kind cluster found a class of bug a read-only review cannot — an image missing <code>curl</code>, a missing node label, an env var that doesn't cross into a pod. Worth the spin-up for lab-heavy modules. (codex tore down its own cluster afterward; the orchestrator also cleaned up an orphaned <code>helm-ckad-review</code> cluster from a May-31 session, flagged by the user.)</li>
+<li><strong>deepseek (fab-prone) was kept to one authored module + given the most rigorous review.</strong> Its 1.3 and 1.5 drafts passed the deterministic verifier clean yet carried fabrications + non-runnable labs — caught only by cross-family review + ground-check. Verifier ≠ correctness, again.</li>
+<li><strong>Board finalize:</strong> all 5 were <code>UNAUDITED / shipped_unreviewed</code>; prepended a <code>## &lt;ts&gt; — `REVIEW` — `APPROVE`</code> entry to each <code>.pipeline/reviews/&lt;__path&gt;.md</code> then <code>reset-stage &lt;dash-slug&gt; COMMITTED</code> → board flipped 5× done.</li>
+</ul>
+
+<h2>NEXT (curriculum order, #1897)</h2>
+<ul>
+<li><strong>Wave 7 — Engineering Leadership</strong>: 1.1-incident-command, 1.2-postmortems, 1.3-oncall, 1.4-adrs, 1.5-stakeholders, 1.6-mentorship (6 modules, 1398–2633w — all genuine expands per the #1897 sweep).</li>
+<li>Then Platform <strong>Disciplines</strong> (45 critical) → <strong>Toolkits</strong> (36 critical).</li>
+<li>Reusable briefs: <code>logs/remediation/briefs/pf-networking/</code> (shared expand rules + per-module + review template + per-module fix briefs). Carry the per-module INCIDENT-MAP pattern and the durable-vendor-content quarantine (dated snapshot + Rosetta) — networking is heavy on volatile vendor skin.</li>
+</ul>
+</body>
+</html>
