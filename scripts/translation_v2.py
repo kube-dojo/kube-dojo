@@ -143,6 +143,158 @@ def detect_module_state(repo_root: Path, module_key: str) -> dict[str, Any]:
     return result
 
 
+_CURRICULUM_TRACK_ORDER = (
+    "prerequisites",
+    "linux",
+    "cloud",
+    "k8s",
+    "platform",
+    "on-premises",
+    "ai",
+    "ai-ml-engineering",
+    "ai-history",
+    "root",
+)
+
+
+def _body_without_frontmatter(text: str) -> str:
+    if text.startswith("---\n") and "\n---\n" in text[4:]:
+        return text[4:].split("\n---\n", 1)[1]
+    return text
+
+
+def _word_count(path: Path) -> int:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    return len(_body_without_frontmatter(text).split())
+
+
+def _en_file_matches(tracked_en_file: str, rel: str) -> bool:
+    tracked = str(tracked_en_file or "").strip().strip('"')
+    if not tracked:
+        return True
+    rel_norm = rel.replace("\\", "/")
+    candidates = {
+        rel_norm,
+        f"src/content/docs/{rel_norm}",
+    }
+    return tracked in candidates or tracked.replace("\\", "/").endswith(f"/{rel_norm}")
+
+
+def _track_for_rel(rel: str) -> str:
+    parts = rel.split("/")
+    if len(parts) == 1:
+        return "root"
+    first = parts[0]
+    if first in _CURRICULUM_TRACK_ORDER and first != "root":
+        return first
+    return first
+
+
+def _track_sort_key(track: str) -> tuple[int, int | str]:
+    try:
+        return (0, _CURRICULUM_TRACK_ORDER.index(track))
+    except ValueError:
+        return (1, track)
+
+
+def _iter_en_pages(repo_root: Path) -> list[Path]:
+    docs_root = repo_root / "src" / "content" / "docs"
+    if not docs_root.is_dir():
+        return []
+    pages: list[Path] = []
+    for path in docs_root.rglob("*"):
+        if not path.is_file() or path.suffix not in {".md", ".mdx"}:
+            continue
+        rel_str = path.relative_to(docs_root).as_posix()
+        if rel_str.startswith("uk/") or ".staging." in path.name:
+            continue
+        pages.append(path)
+    return sorted(pages, key=lambda p: p.relative_to(docs_root).as_posix())
+
+
+def _classify_page_status(
+    repo_root: Path,
+    en_path: Path,
+    uk_path: Path,
+    rel: str,
+) -> tuple[str, int, int, float]:
+    en_words = _word_count(en_path)
+    if not uk_path.is_file():
+        return "missing", en_words, 0, 0.0
+
+    uk_words = _word_count(uk_path)
+    if en_words == 0:
+        ratio = 1.0 if uk_words == 0 else 0.0
+    else:
+        ratio = uk_words / en_words
+
+    frontmatter = _extract_frontmatter(uk_path)
+    tracked_en_file = str(frontmatter.get("en_file", ""))
+    metadata_stale = not _en_file_matches(tracked_en_file, rel)
+
+    if ratio < 0.60 or metadata_stale:
+        return "stale", en_words, uk_words, round(ratio, 2)
+    return "current", en_words, uk_words, round(ratio, 2)
+
+
+def build_translation_board(repo_root: Path) -> dict[str, Any]:
+    """Per-page UK translation currency board keyed by EN docs-relative paths.
+
+    Currency is measured by word-ratio (UK < 60% of current EN = stale), not
+    file existence. See issue #1911.
+    """
+    docs_root = repo_root / "src" / "content" / "docs"
+    track_pages: dict[str, list[dict[str, Any]]] = {}
+    totals = {"total": 0, "current": 0, "stale": 0, "missing": 0, "current_pct": 0}
+
+    for en_path in _iter_en_pages(repo_root):
+        rel = en_path.relative_to(docs_root).as_posix()
+        uk_path = docs_root / "uk" / rel
+        status, en_words, uk_words, ratio = _classify_page_status(repo_root, en_path, uk_path, rel)
+        track = _track_for_rel(rel)
+        page = {
+            "rel": rel,
+            "status": status,
+            "en_words": en_words,
+            "uk_words": uk_words,
+            "ratio": ratio,
+        }
+        track_pages.setdefault(track, []).append(page)
+        totals["total"] += 1
+        totals[status] += 1
+
+    tracks: list[dict[str, Any]] = []
+    for track in sorted(track_pages, key=_track_sort_key):
+        pages = sorted(track_pages[track], key=lambda p: p["rel"])
+        track_total = len(pages)
+        current = sum(1 for p in pages if p["status"] == "current")
+        stale = sum(1 for p in pages if p["status"] == "stale")
+        missing = sum(1 for p in pages if p["status"] == "missing")
+        tracks.append(
+            {
+                "track": track,
+                "total": track_total,
+                "current": current,
+                "stale": stale,
+                "missing": missing,
+                "current_pct": round(100 * current / track_total) if track_total else 0,
+                "pages": pages,
+            }
+        )
+
+    total = totals["total"]
+    totals["current_pct"] = round(100 * totals["current"] / total) if total else 0
+
+    return {
+        "generated_at": int(time.time()),
+        "totals": totals,
+        "tracks": tracks,
+    }
+
+
 def build_freshness_report(repo_root: Path, *, section: str | None = None) -> dict[str, Any]:
     modules = [detect_module_state(repo_root, _module_key_for_en_path(repo_root, p)) for p in _iter_en_modules(repo_root, section=section)]
     counts = {"synced": 0, "missing": 0, "stale": 0, "unknown": 0}

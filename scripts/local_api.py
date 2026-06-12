@@ -4332,6 +4332,7 @@ def _render_top_nav(active: str) -> str:
         ("operator", "/operator", "Operator"),
         ("artifacts", "/artifacts", "Artifacts"),
         ("quality", "/quality", "Quality"),
+        ("uk", "/uk", "Translation"),
         ("pipeline", "/pipeline", "Pipeline"),
         ("activity", "/activity", "Activity"),
         ("benchmarks", "/benchmarks", "Benchmarks"),
@@ -6800,6 +6801,245 @@ _QUALITY_BOARD_PAGE_JS = r"""
     setInterval(refresh, 60000);
 """
 
+_UK_BOARD_PAGE_CSS = """
+    :root { --bg:#0a0f1a; --surface-0:#111827; --surface-1:#1a2332; --surface-2:#1f2b3d; --text:#e5e7eb; --text-secondary:#9ca3af; --text-dim:#6b7280; --accent:#38bdf8; --accent-muted:rgba(56,189,248,0.12); --green:#4ade80; --green-muted:rgba(74,222,128,0.12); --amber:#fbbf24; --amber-muted:rgba(251,191,36,0.10); --red:#f87171; --red-muted:rgba(248,113,113,0.10); --border:rgba(255,255,255,0.06); --border-subtle:rgba(255,255,255,0.03); --radius:12px; --radius-sm:8px; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; line-height:1.5; }
+    .main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 40px; }
+    .page-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:18px; }
+    .page-title { margin:0; font-size:26px; letter-spacing:0; }
+    .page-sub { margin-top:4px; color:var(--text-secondary); font-size:13px; }
+    .page-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+    .status-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:12px; font-weight:600; background:var(--green-muted); color:var(--green); }
+    .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .refresh-btn { display:flex; align-items:center; gap:6px; border:1px solid var(--border); background:var(--surface-1); color:var(--text); border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer; }
+    .refresh-btn:hover { background:var(--surface-2); }
+    .panel { background:var(--surface-0); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .panel-header { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--border); }
+    .panel-title { display:flex; align-items:center; gap:10px; font-weight:700; }
+    .panel-icon { width:24px; height:24px; border-radius:var(--radius-sm); display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; background:var(--accent-muted); color:var(--accent); }
+    .panel-badge { padding:3px 8px; border-radius:999px; font-size:11px; font-weight:700; background:var(--accent-muted); color:var(--accent); }
+    .uk-wrap { padding: 16px 18px 18px; }
+    .uk-headline { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--text); }
+    .uk-headline span { color: var(--green); }
+    .uk-subcounts { color: var(--text-secondary); font-size: 14px; margin-bottom: 6px; }
+    .uk-note { color: var(--text-dim); font-size: 12px; margin-bottom: 16px; }
+    .uk-table-wrap { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+    .uk-table { width: 100%; border-collapse: collapse; }
+    .uk-table th {
+      background: var(--surface-1); color: var(--text-dim); text-align: left;
+      padding: 8px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }
+    .uk-table td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); vertical-align: middle; }
+    .uk-table tr:last-child td { border-bottom: 0; }
+    .uk-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .uk-mini { display:flex; height: 6px; overflow: hidden; border-radius: 999px; background: var(--border); min-width: 72px; }
+    .uk-seg-current { background: var(--green); }
+    .uk-seg-stale { background: var(--amber); }
+    .uk-seg-missing { background: var(--red); }
+    .uk-track-row { cursor: pointer; }
+    .uk-track-row:hover td { background: rgba(255,255,255,0.02); }
+    .uk-expand { color: var(--text-dim); font-size: 11px; }
+    .uk-page-list { margin: 0; padding: 8px 12px 10px 28px; background: var(--surface-1); list-style: none; }
+    .uk-page-item { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 12px; color: var(--text-secondary); }
+    .uk-page-path { font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; color: var(--text-dim); font-size: 11px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uk-page-words { font-variant-numeric: tabular-nums; color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+    .uk-chip {
+      display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px;
+      font-weight: 700; text-transform: uppercase; white-space: nowrap;
+    }
+    .uk-chip.current { background: var(--green-muted); color: var(--green); }
+    .uk-chip.stale { background: var(--amber-muted); color: var(--amber); }
+    .uk-chip.missing { background: var(--red-muted); color: var(--red); }
+    .empty-state { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
+    @media (max-width: 900px) {
+      .page-head { flex-direction: column; }
+      .page-actions { justify-content: flex-start; }
+    }
+"""
+
+_UK_BOARD_PAGE_JS = r"""
+    const $ = (sel) => document.querySelector(sel);
+
+    async function fetchJson(url) {
+      const r = await fetch(url);
+      if (!r.ok) return { error: `HTTP ${r.status}`, url };
+      return r.json();
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = String(s ?? '');
+      return d.innerHTML;
+    }
+
+    function ukChip(status) {
+      return `<span class="uk-chip ${esc(status)}">${esc(status)}</span>`;
+    }
+
+    function ukMiniBar(track) {
+      const total = Math.max(1, track.total || 0);
+      const segments = [
+        { key: 'current', n: track.current || 0 },
+        { key: 'stale', n: track.stale || 0 },
+        { key: 'missing', n: track.missing || 0 },
+      ];
+      return segments.map(seg => {
+        if (!seg.n) return '';
+        const pct = Math.max(1.5, seg.n / total * 100);
+        return `<div class="uk-seg-${seg.key}" title="${seg.key}: ${seg.n}" style="width:${pct}%"></div>`;
+      }).join('');
+    }
+
+    function renderUkBoard(data) {
+      const el = $('#uk-board');
+      const badge = $('#uk-badge');
+      if (!data || data.error) {
+        el.innerHTML = `<div class="empty-state">${esc(data?.error || 'No data')}</div>`;
+        badge.textContent = 'Unknown';
+        return;
+      }
+
+      const totals = data.totals || {};
+      const total = totals.total || 0;
+      const current = totals.current || 0;
+      const stale = totals.stale || 0;
+      const missing = totals.missing || 0;
+      const currentPct = totals.current_pct || 0;
+      badge.textContent = `${current} / ${total} current`;
+      badge.style.background = currentPct >= 60 ? 'var(--green-muted)' : 'var(--amber-muted)';
+      badge.style.color = currentPct >= 60 ? 'var(--green)' : 'var(--amber)';
+
+      const tracks = data.tracks || [];
+      const rows = tracks.map(track => {
+        const pages = (track.pages || []).map(page => `
+          <li class="uk-page-item">
+            ${ukChip(page.status)}
+            <span class="uk-page-path">${esc(page.rel)}</span>
+            <span class="uk-page-words">${page.uk_words || 0}/${page.en_words || 0} (${Number(page.ratio || 0).toFixed(2)})</span>
+          </li>`).join('');
+        return `<tbody>
+          <tr class="uk-track-row" data-track="${esc(track.track)}">
+            <td><strong>${esc(track.track)}</strong> <span class="uk-expand">▸ pages</span></td>
+            <td class="uk-num">${track.total || 0}</td>
+            <td class="uk-num">${track.current || 0}</td>
+            <td class="uk-num">${track.stale || 0}</td>
+            <td class="uk-num">${track.missing || 0}</td>
+            <td class="uk-num">${track.current_pct || 0}%</td>
+            <td><div class="uk-mini">${ukMiniBar(track)}</div></td>
+          </tr>
+          <tr class="uk-pages-row" data-track="${esc(track.track)}" hidden>
+            <td colspan="7" style="padding:0;border:0">
+              <ul class="uk-page-list">${pages}</ul>
+            </td>
+          </tr>
+        </tbody>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="uk-wrap">
+          <h2 class="uk-headline"><span>${currentPct}%</span> current</h2>
+          <div class="uk-subcounts">${current} current · ${stale} stale · ${missing} missing · ${total} pages</div>
+          <div class="uk-note">Currency measured by word-ratio (UK &lt; 60% of current EN = stale), not file existence.</div>
+          <div class="uk-table-wrap">
+            <table class="uk-table">
+              <thead>
+                <tr>
+                  <th>Track</th><th class="uk-num">Pages</th><th class="uk-num">Current</th>
+                  <th class="uk-num">Stale</th><th class="uk-num">Missing</th><th class="uk-num">Current%</th><th>Progress</th>
+                </tr>
+              </thead>
+              ${rows || '<tbody><tr><td colspan="7" class="empty-state">No tracks</td></tr></tbody>'}
+            </table>
+          </div>
+        </div>`;
+
+      for (const row of el.querySelectorAll('.uk-track-row')) {
+        row.addEventListener('click', () => {
+          const track = row.dataset.track;
+          const pagesRow = el.querySelector(`.uk-pages-row[data-track="${track}"]`);
+          if (!pagesRow) return;
+          const open = pagesRow.hidden;
+          pagesRow.hidden = !open;
+          const marker = row.querySelector('.uk-expand');
+          if (marker) marker.textContent = open ? '▾ pages' : '▸ pages';
+        });
+      }
+    }
+
+    let refreshing = false;
+    async function refresh() {
+      if (refreshing) return;
+      refreshing = true;
+      const btn = $('#refresh');
+      btn.classList.add('loading');
+      try {
+        const board = await fetchJson('/api/uk/board');
+        renderUkBoard(board);
+        setPollTs($('#last-updated'), board);
+        $('#last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        console.error('UK board refresh failed:', err);
+      } finally {
+        refreshing = false;
+        btn.classList.remove('loading');
+      }
+    }
+
+    $('#refresh').addEventListener('click', refresh);
+    refresh();
+    setInterval(refresh, 60000);
+"""
+
+
+def render_uk_board_page_html() -> str:
+    return f"""<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+  <title>Ukrainian Translation - KubeDojo Local Monitor</title>
+  {_design_system_link()}
+  <style>
+{_TOP_NAV_CSS}
+{_UK_BOARD_PAGE_CSS}
+{_poll_stale_css()}
+  </style>
+</head>
+<body>
+ {_render_top_nav("uk")}
+{_render_page_chrome()}
+<main class=\"main\">
+  <div class=\"page-head\">
+    <div>
+      <h1 class=\"page-title\">Ukrainian Translation</h1>
+      <div class=\"page-sub\">UK translation currency by word-ratio against current English sources.</div>
+    </div>
+    <div class=\"page-actions\">
+      <span class=\"status-pill\" id=\"conn-status\"><span class=\"dot\"></span> Connected</span>
+      <span class=\"status-pill\" id=\"last-updated\"></span>
+      <button class=\"refresh-btn\" id=\"refresh\">Refresh</button>
+    </div>
+  </div>
+
+  <div class=\"panel\">
+    <div class=\"panel-header\">
+      <div class=\"panel-title\">
+        <span class=\"panel-icon\" style=\"background:var(--green-muted);color:var(--green);\">UK</span>
+        Translation Board</div>
+      <span class=\"panel-badge\" id=\"uk-badge\" style=\"background:var(--green-muted);color:var(--green);\">&nbsp;</span>
+    </div>
+    <div class=\"panel-body-flush\" id=\"uk-board\"><div class=\"empty-state\">Loading&hellip;</div></div>
+  </div>
+</main>
+<script>
+{_UK_BOARD_PAGE_JS}
+</script>
+{_render_poll_stale_script()}
+</body>
+</html>"""
+
 
 _OPERATOR_PAGE_JS = """
     const $ = (sel) => document.querySelector(sel);
@@ -8819,6 +9059,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return serve_artifact_file(repo_root, path[len("/artifacts/"):], query)
     if path == "/quality":
         return 200, render_quality_board_page_html(), "text/html; charset=utf-8"
+    if path == "/uk":
+        return 200, render_uk_board_page_html(), "text/html; charset=utf-8"
     if path.startswith("/quality/"):
         module_key = _validate_module_key(repo_root, unquote(path[len("/quality/"):]).strip("/"))
         if not module_key:
@@ -9191,6 +9433,10 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_quality_scores(repo_root), "application/json; charset=utf-8"
     if path == "/api/quality/board":
         return 200, build_quality_board(repo_root), "application/json; charset=utf-8"
+    if path == "/api/uk/board":
+        from translation_v2 import build_translation_board
+
+        return 200, build_translation_board(repo_root), "application/json; charset=utf-8"
     if path == "/api/quality/upgrade-plan":
         try:
             target = float(query.get("target", ["4.0"])[0])
@@ -9288,6 +9534,22 @@ def _v_translation_db(repo_root: Path) -> tuple:
     return ("t2", _sqlite_version_key(repo_root / ".pipeline" / "translation_v2.db"))
 
 
+def _v_uk_board(repo_root: Path) -> tuple:
+    docs_root = repo_root / "src" / "content" / "docs"
+    sig = hashlib.sha1()
+    if docs_root.is_dir():
+        for path in sorted(docs_root.rglob("*")):
+            if not path.is_file() or path.suffix not in {".md", ".mdx"}:
+                continue
+            try:
+                rel = path.relative_to(docs_root).as_posix()
+                stat = path.stat()
+            except OSError:
+                continue
+            sig.update(f"{rel}:{stat.st_mtime_ns}:{stat.st_size}\n".encode())
+    return ("uk_board", sig.hexdigest())
+
+
 def _v_quality_board(repo_root: Path) -> tuple:
     docs_root = repo_root / "src" / "content" / "docs"
     state_dir = repo_root / ".pipeline" / "quality-pipeline"
@@ -9359,6 +9621,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/translation/v2/status": (5.0, _v_translation_db),
     "/api/labs/status": (10.0, None),
     "/api/quality/board": (30.0, _v_quality_board),
+    "/api/uk/board": (30.0, _v_uk_board),
     "/api/quality/upgrade-plan": (30.0, None),
     "/api/tracks/readiness": (5.0, _v_docs_frontmatter),
     "/api/citations/status": (30.0, None),
