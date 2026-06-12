@@ -3,7 +3,7 @@
 
 One tool for all Ukrainian translation work. Detects stale translations,
 finds missing files, translates new modules, and fixes incomplete ones.
-Uses Gemini + MCP RAG for translation with Ukrainian quality verification.
+Uses agy (gemini-3.1-pro-high) for translation with Ukrainian quality verification.
 
 Usage:
     .venv/bin/python scripts/uk_sync.py status                    # full report
@@ -38,10 +38,9 @@ REPORT_FILE = REPO_ROOT / ".pipeline" / "uk-sync-report.json"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from checks import ukrainian
-from dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry
+from dispatch import dispatch_agy_translate
 
 CHUNKED_THRESHOLD = 40_000  # chars — modules above this use section-by-section translation
-CHUNKED_MODEL = GEMINI_WRITER_MODEL  # pro for quality on section-by-section
 BATCH_LIMIT = 15_000  # chars — pack adjacent sections into batches up to this size
 
 
@@ -522,7 +521,7 @@ def _translate_chunked(en_path: Path, en_content: str, en_commit: str, en_file: 
         en_file=en_file,
     )
     print(f"    [1/{total_batches}] Preamble + {first_h2[:40]} ({len(merged_content)} chars)...")
-    ok, output = dispatch_gemini_with_retry(prompt, model=CHUNKED_MODEL, mcp=True, timeout=600)
+    ok, output = dispatch_agy_translate(prompt, timeout=600)
 
     if not ok or not output.strip():
         print("    ✗ Preamble translation failed")
@@ -584,7 +583,7 @@ def _translate_chunked(en_path: Path, en_content: str, en_commit: str, en_file: 
             section_heading=batch_keys[0],  # first heading for context
             section_body=batch_content,  # full batch content
         )
-        ok, output = dispatch_gemini_with_retry(prompt, model=CHUNKED_MODEL, mcp=True, timeout=300)
+        ok, output = dispatch_agy_translate(prompt, timeout=300)
 
         if not ok or not output.strip():
             print(f"    ✗ Batch failed: {batch_headings} — aborting module")
@@ -632,7 +631,7 @@ def translate_new_module(en_path: Path) -> bool:
             en_file=en_file,
         )
 
-        ok, output = dispatch_gemini_with_retry(prompt, mcp=True, timeout=600)
+        ok, output = dispatch_agy_translate(prompt, timeout=600)
 
         if not ok or not output.strip():
             print(f"  ✗ Translation failed")
