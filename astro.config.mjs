@@ -83,13 +83,15 @@ export default defineConfig({
       disable404Route: true,
       // GoatCounter — privacy-friendly analytics (no cookies). Injected into the
       // <head> of every page via the default Starlight Head (kept by our custom
-      // src/components/Head.astro override, which renders <Default>).
+      // src/components/Head.astro override, which renders <Default>). The loader is
+      // self-hosted at /count.js (public/count.js) to avoid a third-party CDN script
+      // dependency, matching the repo's posture for Mermaid and the content scripts.
       head: [
         {
           tag: 'script',
           attrs: {
             'data-goatcounter': 'https://kube-dojo.goatcounter.com/count',
-            src: '//gc.zgo.at/count.js',
+            src: '/count.js',
             async: true,
           },
         },
