@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 137 — UK translation: progress dashboard + agy lane proven</title>
+<style>
+  body { font: 15px/1.55 -apple-system, system-ui, sans-serif; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #1a2332; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #38bdf8; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.6rem; color: #0b5; }
+  code { background: #f0f3f7; padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #d0d7de; padding: 5px 9px; text-align: left; font-size: 13px; }
+  th { background: #f0f3f7; }
+  .ok { color: #0a7; } .warn { color: #b80; }
+  li { margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 137 — Ukrainian translation: progress dashboard + agy lane proven</h1>
+<p><strong>Date:</strong> 2026-06-12 · <strong>Epic:</strong>
+<a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1911">#1911</a> ·
+<strong>Branch:</strong> main · <strong>Pivot:</strong> user redirected from Wave 7 (Platform Foundations) to the
+UK translation epic, asking for (1) a <code>/quality</code>-style progress view and (2) translation done in curriculum order.</p>
+
+<h2>Outcomes</h2>
+<ul>
+<li><strong class="ok">UK progress dashboard live</strong> — <code>http://127.0.0.1:8768/uk</code> (new <em>Translation</em> nav tab).
+PRs <strong>#1912</strong> (board) + <strong>#1917</strong> (headline: "goal 100% / N to go / deferred-not-excluded note").
+Measures <strong>currency by word-ratio</strong> (UK &lt; 60% of current EN = stale), curriculum-ordered, per-track + per-page.
+Killed the "mirage": <strong>11% current</strong> (118/1083), not the 41% file-existence number. 965 to go (332 stale + 636 missing).</li>
+<li><strong class="ok">agy translation lane built + proven</strong> (epic AC #1) — PR <strong>#1915</strong>.</li>
+<li><strong class="ok">3 in-order prerequisites pages translated</strong> (PRs #1913, #1914, #1916), all RAG-verified.
+Prerequisites current 14 → <strong>17</strong>.</li>
+</ul>
+
+<h2>The lane — how agy works for translation (the hard-won knowledge)</h2>
+<p>Available gemini paths: CLI = user-retired; REST API key = deliberately <code>unset</code> in <code>.envrc</code>
+(free-OAuth billing); <strong>agy</strong> = the sanctioned lane. agy has two quirks, both handled:</p>
+<ul>
+<li><strong>Sandbox writes:</strong> for a <em>relative</em> output path agy ignores cwd and writes to
+<code>~/.gemini/antigravity-cli/scratch/&lt;repo&gt;/</code> (a workspace mirror). <code>--dangerously-skip-permissions</code>
+removes the prompt, NOT the mirror; <code>--add-dir &lt;dir&gt;</code> grants read. <strong>Fix:</strong> give agy an
+<strong>absolute</strong> output path inside an <code>--add-dir</code> dir → it writes in place. (User spotted this.)</li>
+<li><strong>~3,000-word output cap:</strong> a single agy call silently <em>abridges</em> larger content (8100w → 3004w,
+even with a hardened "≥7500 words" brief) and falsely claims completeness. <strong>Fix:</strong> chunk —
+<code>uk_sync.py</code> already splits sections into ≤2.2k-word batches under the cap.</li>
+</ul>
+<p>Implementation (PR #1915): <code>dispatch_agy_translate(prompt, *, timeout)</code> in <code>scripts/dispatch.py</code>
+wraps agy via <code>AgyAdapter</code> (temp-dir as <code>--add-dir</code> root, abs out-path, reads the file since agy
+returns a summary on stdout, returns <code>(ok, text)</code> to match the old gemini contract). The 3
+<code>dispatch_gemini_with_retry</code> call-sites in <code>scripts/uk_sync.py</code> now call it; chunking / truncation-guards /
+frontmatter / assembly unchanged. <strong>Validated:</strong> <code>translate modern-devops/1.5-platform-engineering</code>
+(7586w EN) → <strong>7557 UK words</strong> (ratio 1.00), 27/27 sections, 17 sections → 6 batches.</p>
+
+<h2>Quality — agy needs a context-aware calque pass</h2>
+<p>agy Ukrainian is good but produces occasional calques (e.g. «по мірі того як» → «у міру того як»), caught + fixed via
+the <code>mcp__sources__*</code> RAG. <strong>Nuance:</strong> «залежність» as a noun (software dependency / vendor lock-in)
+is legitimate — a naive «в залежності»→«залежно» fixer would corrupt it. The calque-fixer must be context-aware.
+<strong>→ Next tooling step.</strong></p>
+
+<h2>Git/PR hygiene this session</h2>
+<table>
+<tr><th>PR</th><th>What</th><th>State</th></tr>
+<tr><td>#1870</td><td>Dependabot actions/checkout 6.0.2→6.0.3 — SHA-verified vs upstream (annotated tag deref)</td><td>merged</td></tr>
+<tr><td>#1912</td><td>/uk translation board (currency by word-ratio)</td><td>merged</td></tr>
+<tr><td>#1913</td><td>uk prerequisites/index — re-translated</td><td>merged</td></tr>
+<tr><td>#1914</td><td>uk prerequisites/git-deep-dive/index — new</td><td>merged</td></tr>
+<tr><td>#1915</td><td>uk_sync.py dispatch → agy (AC #1)</td><td>merged</td></tr>
+<tr><td>#1916</td><td>uk modern-devops/1.5-platform-engineering — chunked agy</td><td>merged</td></tr>
+<tr><td>#1917</td><td>/uk headline: goal 100% / to go / deferred note</td><td>auto-merge</td></tr>
+<tr><td>#1871</td><td>Dependabot npm group (Starlight/astro) — <strong>HELD</strong>, needs local astro build (PR CI has none)</td><td>open</td></tr>
+</table>
+<p><span class="warn">Caught a near-miss:</span> a worktree branched off old main → <code>reset --soft</code> staged stale
+<em>reverts</em> of the dashboard + SHA-pins alongside the translation. Caught in <code>git status</code> before pushing;
+hard-reset to current main preserving only the verified file. (Also repeated the trailing-<code>&amp;</code>-in-background
+SIGHUP gotcha twice — dispatches survived, but stop doing it.)</p>
+
+<h2>NEXT</h2>
+<ul>
+<li><strong>Bulk in-order translation</strong> via <code>uk_sync.py</code> (lane works): prerequisites stale
+(zero-to-terminal 0.1–0.11 via <code>fix</code>) → cloud-native-101 → k8s-basics → philosophy-design → modern-devops →
+git-deep-dive, then linux → cloud → k8s certs (Phase A). RAG-verify each (Russicism/calque/glossary). AI/platform/on-prem
+deferred until their EN settles (Phase C). Watch the <code>/uk</code> board climb.</li>
+<li><strong>Build the context-aware calque-fixer</strong> (deterministic common-calque pass + RAG spot-check).</li>
+<li><strong>#1871</strong> npm/Starlight bump — local <code>npm run build</code> then merge.</li>
+<li><strong>Wave 7 — Engineering Leadership</strong> (Platform Foundations) still queued: verify-swept = 6 genuine T3 expands
+(1.1-incident-command … 1.6-mentorship); briefs/findings banked. Reusables: <code>logs/remediation/briefs/uk/</code>.</li>
+</ul>
+</body>
+</html>
