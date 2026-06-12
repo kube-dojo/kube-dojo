@@ -19,6 +19,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import UTC, datetime
@@ -26,6 +27,7 @@ from pathlib import Path
 
 import psutil
 
+from agent_runtime.adapters.agy import AgyAdapter
 from agent_runtime.env_sanitize import build_agent_env
 from agent_runtime.redact import redact_text
 from ai_agent_bridge._prompts import build_review_message
@@ -506,6 +508,80 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
         return False, output
 
     return False, output
+
+
+AGY_TRANSLATE_MODEL = "gemini-3.1-pro-high"
+
+_AGY_FILE_WRITE_SUFFIX = (
+    "\n\nWrite your COMPLETE Ukrainian translation as raw Markdown to this "
+    "absolute file path and write NOTHING to stdout: {out_path}. Do NOT abridge, "
+    "summarize, or omit any section — reproduce every paragraph, table row, "
+    "list item, and quiz Q&A. If the source has a `## Sources` section, "
+    "translate and include it."
+)
+
+
+def dispatch_agy_translate(prompt: str, *, timeout: int = 600) -> tuple[bool, str]:
+    """Translate via agy CLI; read Ukrainian output from a temp file, not stdout.
+
+    agy returns a prose summary on stdout. The caller contract matches
+    ``dispatch_gemini_with_retry``: ``(ok, translated_text)``.
+    """
+    adapter = AgyAdapter()
+
+    def _run_once() -> tuple[bool, str]:
+        with tempfile.TemporaryDirectory() as td:
+            out_path = os.path.join(td, "translation.md")
+            full_prompt = prompt + _AGY_FILE_WRITE_SUFFIX.format(out_path=out_path)
+            cwd = Path(td)
+            plan = adapter.build_invocation(
+                prompt=full_prompt,
+                mode="danger",
+                cwd=cwd,
+                model=AGY_TRANSLATE_MODEL,
+                task_id=None,
+                session_id=None,
+                tool_config=None,
+            )
+            env = build_agent_env(provider="agy", overrides=_AGENT_ENV_OVERRIDES)
+            t0 = time.time()
+            try:
+                result = subprocess.run(
+                    plan.cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(plan.cwd),
+                    env=env,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired:
+                elapsed = time.time() - t0
+                _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, "", False, elapsed, "TIMEOUT")
+                print(f"agy translation timed out after {timeout}s", file=sys.stderr)
+                return False, "TIMEOUT"
+            except FileNotFoundError:
+                elapsed = time.time() - t0
+                _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, "", False, elapsed, "CLI not found")
+                print("agy CLI not found.", file=sys.stderr)
+                return False, "agy CLI not found"
+
+            elapsed = time.time() - t0
+            out_file = Path(out_path)
+            if out_file.is_file():
+                text = out_file.read_text()
+                if text.strip():
+                    _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, text, True, elapsed)
+                    return True, text
+
+            err = redact_text((result.stderr or result.stdout or "no file written").strip())
+            _log("agy-translate", AGY_TRANSLATE_MODEL, prompt, "", False, elapsed, err)
+            return False, err or "no file written"
+
+    ok, output = _run_once()
+    if ok:
+        return True, output
+    print("agy translation failed — retrying once", file=sys.stderr)
+    return _run_once()
 
 
 _CLAUDE_TEXT_ONLY_DISALLOWED = (
