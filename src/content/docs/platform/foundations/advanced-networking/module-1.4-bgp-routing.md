@@ -12,7 +12,7 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
-### What You'll Be Able to Do
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
@@ -20,26 +20,29 @@ After completing this module, you will be able to:
 2. **Analyze** BGP hijack and route leak incidents by tracing AS path propagation and identifying where filtering failed
 3. **Implement** BGP security controls (RPKI/ROA, route filtering, prefix limits, ASPA) to protect against route hijacking and leaks
 4. **Design** multi-homed network architectures with BGP that balance redundancy, performance, and security considerations
+5. **Distinguish** eBGP from iBGP sessions and apply route reflectors or confederations when scaling internal BGP within a single autonomous system
 
 ---
 
 **April 24, 2018. Traffic destined for Amazon's Route53 DNS service suddenly takes an unexpected detour. For approximately two hours, a small ISP in Ohio called eNet (AS10297) announces BGP routes for Amazon's IP prefixes. Routers across the internet, following the fundamental trust model of BGP, accept these routes and begin forwarding traffic to eNet instead of Amazon.**
 
-The attacker's target was not Amazon itself, but cryptocurrency. By hijacking Route53's IP space, the attacker redirected DNS queries for MyEtherWallet.com to a server in Russia. Users who typed the correct URL, used the correct DNS resolver, and saw the correct domain name in their browser were silently sent to a phishing site. **Approximately $17 million in Ethereum was stolen in those two hours.**
+The attacker's target was not Amazon itself, but cryptocurrency. By hijacking Route53's IP space, the attacker redirected DNS queries for MyEtherWallet.com to a server in Russia. Users who typed the correct URL, used the correct DNS resolver, and saw the correct domain name in their browser were silently sent to a phishing site. **Reports from [ThousandEyes](https://www.thousandeyes.com/blog/amazon-route-53-dns-and-bgp-hijack) and [CyberScoop](https://cyberscoop.com/ether-dns-bgp-amazon-route-53-heist/) put the theft at about 215 ETH, roughly $152,000, during the two-hour incident.**
 
-The attack exploited a fundamental property of BGP that has existed since the protocol was designed in 1989: **BGP is built entirely on trust.** When a network announces "I can reach these IP addresses," other networks believe it. There is no built-in verification. No cryptographic proof. No central authority. Just trust between 75,000+ autonomous systems that collectively form the internet's routing fabric.
+The attack exploited a fundamental property of BGP that has existed since the protocol was designed in 1989: **BGP is built entirely on trust.** When a network announces "I can reach these IP addresses," other networks believe it. There is no built-in verification in the base protocol. No cryptographic proof accompanies a standard BGP UPDATE. No central authority validates announcements before propagation. Roughly 75,000 autonomous systems collectively form the internet's routing fabric by exchanging reachability information on faith, moderated only by voluntary filtering and increasingly by RPKI origin validation where deployed.
 
-This module explains how BGP works, why it's both the most critical and most vulnerable protocol on the internet, and how the industry is slowly — very slowly — adding the trust layer that was missing from the start.
+This module explains how BGP works, why it is both the most critical and most vulnerable protocol on the internet, and how the industry is slowly adding the trust layer that was missing from the start. You will learn to read AS-Paths, configure eBGP peering in a lab environment, evaluate RPKI and ASPA as defense layers, and recognize whether an outage symptom indicates hijack, leak, or internal policy failure.
 
 ---
 
 ## Why This Module Matters
 
-BGP (Border Gateway Protocol) is the routing protocol that holds the internet together. Every packet that crosses network boundaries — from your laptop to a server in another country, from one cloud region to another, from a CDN edge to your ISP — is routed by BGP. If DNS is the internet's phone book, BGP is its postal system.
+BGP (Border Gateway Protocol) is the routing protocol that holds the internet together. Every packet that crosses network boundaries — from your laptop to a server in another country, from one cloud region to another, from a CDN edge to your ISP — is routed by BGP. If DNS is the internet's phone book, BGP is its postal system. Unlike DNS, which resolves names to addresses at the application edge, BGP determines which autonomous systems carry packets between those addresses for every hop that leaves your network's administrative boundary.
 
-For platform engineers, BGP knowledge matters in several concrete ways. Cloud providers use BGP for Direct Connect / ExpressRoute / Cloud Interconnect, giving you dedicated paths between your datacenter and the cloud. Kubernetes networking (Calico, MetalLB) uses BGP to advertise pod and service IPs. CDNs rely on BGP Anycast for global load distribution. And when a BGP incident happens — a route leak, a hijack, or a misconfiguration — understanding what went wrong and what you can do about it is the difference between waiting helplessly and making informed decisions.
+Understanding BGP clarifies why your multi-cloud architecture behaves differently when one Direct Connect circuit flaps, why a CDN can absorb a DDoS attack that would overwhelm your origin, and why a routing incident on another continent can still affect your application's latency. The protocol is old, trust-based, and imperfect — but it is also the only mechanism that scales global routing to a million prefixes without a central coordinator.
 
-Most engineers never touch a BGP router directly. But understanding how BGP works changes how you think about internet reliability, cloud architecture, and the trust model underlying every network connection your application makes.
+For platform engineers, BGP knowledge matters in several concrete ways. Cloud providers use BGP for Direct Connect, ExpressRoute, and Cloud Interconnect — dedicated paths between your datacenter and the cloud that exchange routes over eBGP sessions rather than static routing. Kubernetes networking projects such as Calico, Cilium, and MetalLB use BGP to advertise pod CIDRs and LoadBalancer service IPs to the physical fabric, making cluster networks first-class citizens in the datacenter routing table. CDNs and anycast services rely on BGP to announce the same prefix from dozens of global locations, letting the internet's path selection deliver users to the nearest edge. When a BGP incident happens — a route leak, a hijack, or an internal policy error like Cloudflare's 2020 backbone misconfiguration — understanding what went wrong and what you can do about it is the difference between waiting helplessly and making informed decisions about failover, prefix filtering, and communication with transit providers.
+
+Most engineers never touch a BGP router directly. That is normal. But understanding how BGP works changes how you think about internet reliability, cloud architecture, and the trust model underlying every network connection your application makes. The sections that follow build from AS structure and peering economics through path selection, security mechanisms, and hands-on peering labs so you can read incident reports, design multi-homed connectivity, and participate credibly in routing discussions with network operations teams.
 
 > **The Postal System Analogy**
 >
@@ -47,22 +50,11 @@ Most engineers never touch a BGP router directly. But understanding how BGP work
 
 ---
 
-## What You'll Learn
-
-- What Autonomous Systems (ASNs) are and how they form the internet's structure
-- Internet peering: transit, peering, and the economics of connectivity
-- BGP path selection: Local Preference, AS-Path, MED, and the full decision process
-- eBGP vs iBGP: inter-domain and intra-domain routing
-- BGP security threats: route leaks, hijacks, and blackholing
-- RPKI and the push for route origin validation
-- Direct Connect, ExpressRoute, and private interconnection
-- Hands-on: eBGP peering between two Autonomous Systems using FRRouting
-
----
-
 ## Part 1: Autonomous Systems and Internet Structure
 
 ### 1.1 What is an Autonomous System?
+
+Every device on the internet reaches every other device through a chain of routing decisions made by autonomous systems. An AS is the unit of routing policy — a boundary where one organization's rules end and another's begin. When Google (AS15169) peers with Comcast (AS7922), they exchange BGP UPDATE messages listing which IP prefixes they can reach and through which paths. Neither party controls the other's internal topology; they only see the unified policy the peer presents at the border.
 
 ```text
 AUTONOMOUS SYSTEMS (AS)
@@ -113,6 +105,12 @@ HOW TO LOOK UP AN ASN
     AS15169 announces ~18,000 IPv4 prefixes
     AS16509 announces ~9,000 IPv4 prefixes
 ```
+
+An Autonomous System is not merely a label on a router configuration — it is a contract with the rest of the internet about how you will behave. When you receive an ASN from a Regional Internet Registry (RIR), you are declaring that every prefix you originate and every BGP session you maintain will follow a coherent routing policy. Platform engineers rarely configure BGP on day one, but they encounter ASNs constantly: in cloud interconnect documentation, in CDN anycast announcements, in incident postmortems that reference `AS13335` or `AS16509`, and in security advisories about route leaks. Learning to read an ASN the way you read a hostname — as identity, not just a number — is the first step toward understanding why a misconfigured customer session can redirect traffic across continents.
+
+Private ASNs exist precisely because not every network needs a public identity. When you peer with AWS Direct Connect or Azure ExpressRoute, you may use a private ASN (64512–65534 for 2-byte, or the 4-byte private range) on your side while the cloud provider presents its own ASN on theirs. The BGP session still follows identical path-selection rules; only the scope of propagation changes. Private ASNs must never appear in the global routing table, which is why transit providers filter them aggressively at the edge.
+
+Tools like [bgp.tools](https://bgp.tools), [BGPView](https://bgpview.io), and the RIPEstat looking-glass APIs let you inspect what any ASN announces in real time. When troubleshooting latency or investigating a suspected hijack, the question is never "is BGP broken?" but "which path did my traffic take, and who authorized that path?" A prefix that suddenly appears with a shorter AS-Path through an unfamiliar transit provider is often the first observable signal of a leak or hijack — hours before application-level alerts fire.
 
 ### 1.2 Internet Topology
 
@@ -200,6 +198,10 @@ graph TD
     G -. "peer" .- L1
 ```
 
+The Tier-1/2/3 model is a simplification, but it captures an essential economic truth: connectivity is purchased in layers. A Tier-3 ISP buys transit from a Tier-2; the Tier-2 buys from a Tier-1; and the Tier-1s peer with each other in a mesh that forms the default-free zone (DFZ). Inside the DFZ, routes propagate without further upstream payment because every Tier-1 already knows how to reach every other prefix through settlement-free peering or its own transit purchases. Content networks like Google and Netflix occupy a special position: they generate so much outbound traffic that ISPs actively seek peering agreements with them, sometimes paying for the privilege of direct connection rather than hauling traffic through expensive transit links.
+
+When you design multi-homed connectivity — two transit providers, Direct Connect plus VPN backup, or any architecture with more than one exit — you are navigating this hierarchy deliberately. Your LOCAL_PREF values, your prefix announcements, and your filtering policies determine which tier carries your traffic under normal conditions and which absorbs it during failure. The topology diagram is not academic decoration; it is the map your packets follow when nothing goes wrong, and the map you reconstruct when something goes very wrong.
+
 ### 1.3 Transit vs Peering
 
 ```text
@@ -253,6 +255,8 @@ WHERE PEERING HAPPENS
         (e.g., in the same Equinix datacenter)
 ```
 
+Peering economics explain why Netflix historically paid Comcast for paid peering while Google peers settlement-free with the same ISP. The difference is traffic ratio: Netflix sends far more bits to Comcast subscribers than it receives, so Comcast's transit costs would spike if it carried that traffic for free. Google operates services in both directions (search, YouTube upload/download, cloud APIs) and often caches content inside ISP networks via Google Global Cache, improving the balance. Platform teams choosing between "buy transit" and "get a cross-connect at an IXP" are making the same economic calculation at smaller scale.
+
 ```mermaid
 graph LR
     subgraph Transit [Transit]
@@ -275,9 +279,17 @@ graph LR
 
 > **Stop and think**: If peering is settlement-free (free), why wouldn't a Tier 3 ISP just peer with everyone instead of paying for transit?
 
+Settlement-free peering is never automatic. Tier-1 networks peer with each other because traffic ratios are roughly balanced and both parties save transit costs. A Tier-3 ISP with a few hundred customers generates almost no traffic that a Google or Lumen would want to carry for free — the ratio is overwhelmingly inbound to the content network. Peering agreements also require physical presence at exchange points or private interconnect facilities, operational maturity to maintain stable BGP sessions, and contractual terms about route filtering. Transit is the default path into the global routing table for anyone who cannot meet those bar.
+
+Internet Exchange Points (IXPs) democratize peering somewhat by colocating hundreds of networks in one facility, but they do not eliminate the economics. You still need to transport your traffic to the IXP, maintain redundant sessions, and negotiate each peering relationship individually. For most enterprise and platform teams, the practical model is one or two transit providers plus optional Direct Connect or ExpressRoute into cloud — not a DIY peering strategy.
+
 ---
 
 ## Part 2: How BGP Works
+
+BGP version 4, standardized in [RFC 4271](https://www.rfc-editor.org/rfc/rfc4271), is the only exterior gateway protocol used on the public internet today. Unlike interior protocols such as OSPF or IS-IS, which optimize for shortest physical path within a single administrative domain, BGP optimizes for policy. A longer AS-Path through a preferred transit provider may beat a shorter path through a congested peer because LOCAL_PREF says so. That policy-first design is why BGP scales to a million-prefix global table but also why a single misconfigured community or local-preference value can redirect traffic for millions of users.
+
+Every BGP speaker maintains a Routing Information Base (RIB) — the full set of candidate paths — and selects one best path per prefix using the deterministic algorithm described below. When the best path changes, the router installs it into the Forwarding Information Base (FIB) and may send UPDATE messages to its neighbors. Convergence time after a link failure depends on hold timers (typically 90–180 seconds), the number of prefixes affected, and how aggressively upstream providers filter your withdrawals. Platform teams feel this as "why did failover take three minutes?" when a Direct Connect circuit flaps.
 
 ### 2.1 BGP Basics
 
@@ -326,6 +338,8 @@ sequenceDiagram
     B->>A: UPDATE
 ```
 
+The TCP session on port 179 is worth emphasizing because everything else depends on it. BGP has no built-in encryption or authentication in the base protocol — operators rely on TCP-AO (TCP Authentication Option) or MD5 session passwords, IP allowlists, and physical or VLAN isolation for session security. Once established, neighbors exchange their full routing tables (or a subset filtered by policy), then send incremental UPDATE messages when paths change. A single UPDATE can add routes, withdraw routes, or modify attributes on existing routes. Monitoring UPDATE rates is a standard operational practice: a sudden flood of updates from a customer session often precedes a route leak.
+
 ```text
     Full internet routing table: ~1,000,000 IPv4 prefixes (2025)
                                  ~230,000 IPv6 prefixes
@@ -366,7 +380,68 @@ graph TD
     - Prevents routing loops within the AS
 ```
 
+## eBGP vs iBGP: Inter-Domain and Intra-Domain Routing
+
+Every organization that participates in global routing runs BGP in two distinct modes. **eBGP** (external BGP) connects your Autonomous System to other ASNs — your transit providers, your cloud Direct Connect peer, your CDN's anycast edge. **iBGP** (internal BGP) distributes the routes you learned from those external sessions to every router inside your own AS so that all edge routers agree on the same exit policy.
+
+The distinction matters because the protocols share a name but follow different rules. eBGP modifies the AS-Path by prepending your ASN when you advertise outward, changes the next-hop to your router's address, and uses a default TTL of 1 (directly connected peers unless multihop is configured). iBGP leaves the AS-Path untouched — the path reflects how traffic entered your network, not how it hops between your internal routers — and preserves the external next-hop so that internal routers know which edge to use for forwarding.
+
+### Why iBGP Does Not Re-Advertise iBGP Routes
+
+The most important iBGP rule for loop prevention: **a router will not advertise a route learned from one iBGP peer to another iBGP peer.** This split-horizon rule exists because the AS-Path does not grow inside your AS. If Router B learned `203.0.113.0/24` from edge Router A via iBGP, and Router B re-advertised it to edge Router C, Router C would have no way to know the route already passed through the AS. eBGP avoids this by rejecting any route whose AS-Path contains the local ASN.
+
+The consequence is architectural: every iBGP speaker must learn every external route. In a small network with two edge routers, a full mesh of iBGP sessions (each router peers with every other) is manageable. At ten edge routers, you need 45 sessions; at fifty, the number becomes operationally absurd. Two scaling patterns solve this:
+
+**Route reflectors** designate one or more routers as reflectors that re-advertise iBGP routes to clients, breaking the full-mesh requirement while preserving loop prevention through cluster IDs and originator IDs. **Confederations** split a large AS into sub-ASNs that run eBGP with each other internally but present a single AS to the outside world — useful for very large providers but rare in enterprise deployments.
+
+### next-hop-self and IGP Reachability
+
+When an edge router learns `203.0.113.0/24` via eBGP, the next-hop attribute points to the external peer's address — often not directly reachable from internal routers. Edge routers typically apply **next-hop-self**, rewriting the next-hop to their own address so internal routers forward traffic to the edge first. Internal routers must reach that next-hop via an IGP (OSPF, IS-IS) or static routes. A classic failure mode: eBGP sessions up, iBGP sessions up, but traffic black-holed because the IGP does not route to the edge loopback or peering address used as next-hop.
+
+### When Platform Engineers Touch iBGP
+
+You may not configure iBGP on a datacenter router, but you encounter its effects constantly. Cloud providers run massive iBGP meshes (or reflector hierarchies) inside their ASNs; your Direct Connect learns routes via eBGP at the edge, and those routes propagate internally via iBGP to every availability zone. Calico and Cilium in BGP mode speak **eBGP** to your ToR switches — they are edge speakers for a pod network that behaves like a small AS. MetalLB speakers similarly use eBGP to announce `/32` service IPs. Understanding iBGP explains why "the BGP session is Established" on one router does not guarantee every router in the building knows the route.
+
+```text
+eBGP vs iBGP — QUICK REFERENCE
+─────────────────────────────────────────────────────────────
+
+    eBGP (External BGP)
+    ─────────────────────────────────────────────
+    Between DIFFERENT Autonomous Systems.
+    Used for internet routing between organizations.
+
+    - TTL=1 by default (directly connected)
+    - AS-Path prepended when sending
+    - Next-hop changes to sender's address
+    - This is "the internet"
+
+    iBGP (Internal BGP)
+    ─────────────────────────────────────────────
+    Within the SAME Autonomous System.
+    Distributes external routes to internal routers.
+
+    - Full mesh required (or use route reflectors)
+    - AS-Path NOT modified
+    - Next-hop NOT changed (must be reachable via IGP)
+    - Prevents routing loops within the AS
+    - Does NOT re-advertise iBGP-learned routes to iBGP peers
+```
+
+```mermaid
+graph TD
+    subgraph AS65001 [AS 65001 — Internal iBGP mesh]
+        RR["Route Reflector"] <-->|"iBGP"| RA["Router-A (edge)"]
+        RR <-->|"iBGP"| RB["Router-B (edge)"]
+        RR <-->|"iBGP"| RC["Router-C (core)"]
+    end
+    AS65002["AS65002 (Transit ISP)"] <-->|"eBGP"| RA
+    RB <-->|"eBGP"| AS65003["AS65003 (Cloud DC)"]
+```
+
 ### 2.2 BGP Path Selection (The Decision Process)
+
+Path selection is deterministic within a router's configured policy and implementation family, but the exact ordered list varies by vendor. The table below uses a common Cisco-style decision process: Cisco `Weight` is first and local to one router, while the standardized attributes begin with `LOCAL_PREF`. That predictability is essential for debugging ("why is traffic exiting via ISP-B?") and for security ("why did this hijacked route win?"). Walk the algorithm top to bottom when analyzing a path — the first differing attribute decides the winner; attributes below it are irrelevant for that comparison.
 
 ```text
 BGP BEST PATH SELECTION — THE FULL ALGORITHM
@@ -442,7 +517,9 @@ STEP  ATTRIBUTE              PREFER        TYPICAL USE
                                            router IP IP wins.
 ```
 
-> **Stop and think**: If AS-Path length is the default way BGP determines the "shortest" route, how might an attacker manipulate this attribute to draw traffic toward their network without changing the origin ASN?
+> **Stop and think**: If AS-Path length helps BGP choose among equally specific routes, what path or prefix tricks can draw traffic toward an attacker?
+
+An attacker who wants to attract traffic must make the malicious route look **more preferred**, not longer. The most reliable tactic is a **more-specific prefix hijack**: announcing `203.0.113.0/25` beats a legitimate `203.0.113.0/24` because longest-prefix match happens before AS-Path comparison matters. If the competing routes have the same prefix length, a forged or unusually short AS-Path can also win when filters fail. **AS-Path prepending does the opposite**: adding repeated copies of your own ASN makes the path longer and less preferred, so legitimate operators use prepending to steer traffic away from one ingress path toward another.
 
 ```text
 MOST IMPORTANT IN PRACTICE
@@ -453,6 +530,10 @@ MOST IMPORTANT IN PRACTICE
 
     Everything else is tiebreaking.
 ```
+
+Weight (step 1) is Cisco-specific and local to the router — it never propagates to peers. Operators use it for hot standby on a single device. LOCAL_PREF (step 2) is the primary traffic-engineering knob for outbound traffic from your AS: set 200 on routes from cheap transit and 100 on expensive backup, and all routers in your AS prefer the cheaper exit. AS-Path length (step 4) is the default inbound tiebreaker from the internet's perspective — why hijackers use more-specific prefixes instead of fighting LOCAL_PREF they do not control. MED (step 6) only compares routes from the same neighbor ASN by default, preventing MED wars between unrelated peers.
+
+BGP communities deserve emphasis as the **policy API between networks**. [RFC 1997](https://www.rfc-editor.org/rfc/rfc1997) defines the standard Communities attribute as an optional transitive path attribute, not as a cryptographic command channel. When you attach community `3356:9999` to a prefix, you are attaching a policy tag that a peer may interpret according to its published local policy and your mutual agreement; intermediate ASes can append, strip, or modify communities by policy. Large providers publish community guides listing hundreds of values for blackholing, local-preference manipulation, geographic tagging, and DDoS mitigation. Mis-tagging a community during an incident — attaching a blackhole community to your entire `/16` instead of one `/32` host — is a recurring cause of self-inflicted outages. Treat community strings with the same change-control rigor as firewall rules.
 
 ### 2.3 BGP Communities
 
@@ -520,7 +601,11 @@ COMMON USES
 
 ## Part 3: BGP Security Threats
 
+BGP's trust model made sense in 1989 when the internet connected a few hundred research networks operated by people who knew each other. Today, with roughly 75,000 actively routing autonomous systems and a global routing table exceeding one million IPv4 prefixes, that same trust model means any participant can potentially redirect anyone else's traffic by announcing attractive routes. Security incidents fall into three mechanistic categories: **hijacks** (false origin or more-specific capture), **leaks** (unauthorized re-propagation of someone else's routes), and **blackholing** (intentional withdrawal or discard of reachability). Understanding the mechanism precedes choosing the right mitigation — RPKI stops many hijacks but not leaks; prefix limits stop leaks at your edge but not hijacks upstream.
+
 ### 3.1 Route Hijacking
+
+Route hijacking is the unauthorized announcement of IP prefixes with the intent — or effect — of attracting traffic away from the legitimate origin. Hijacks range from malicious (cryptocurrency theft via DNS redirection, as in the 2018 Route53 incident) to accidental (misconfigured prefix list on a customer router). The mechanism always exploits the same BGP property: if your route looks more attractive by longest-prefix match or shorter AS-Path, global routers will prefer it until someone filters or withdraws the announcement.
 
 ```text
 BGP ROUTE HIJACKING
@@ -542,6 +627,8 @@ HOW IT WORKS
     Even if AS15169 announces 8.8.8.0/24, the /25 wins
     for half the address space.
 ```
+
+Longest-prefix match is the first rule IP routers apply before BGP path selection even enters the picture. When your router receives both `8.8.8.0/24` from Google and `8.8.8.0/25` from an attacker, the `/25` wins for addresses in that half regardless of AS-Path length or LOCAL_PREF. Hijackers therefore often announce more-specific prefixes rather than competing on path length. Defense requires RPKI (INVALID if ROA says max length is /24), upstream filtering of prefixes longer than /24 from customers, and monitoring for unexpected more-specifics in routing registries. The 2018 Route53 hijack combined prefix capture with DNS redirection — BGP steered packets to the attacker's network, and DNS responses from that network sent users to a phishing site.
 
 ```mermaid
 graph LR
@@ -572,7 +659,7 @@ NOTABLE INCIDENTS
     ─────────────────────────────────────────────
     eNet (AS10297) announces Amazon DNS prefixes.
     MyEtherWallet DNS queries diverted to phishing server.
-    ~$17 million in Ethereum stolen.
+    About 215 ETH, roughly $152,000, stolen.
 
     2019: China Telecom re-routes European traffic
     ─────────────────────────────────────────────
@@ -586,6 +673,8 @@ NOTABLE INCIDENTS
     announced prefixes belonging to Twitter, Google,
     and Cloudflare. Duration: minutes. Impact: limited.
 ```
+
+These incidents share a mechanism: BGP propagated an attractive route that was not the intended path. Detection improved since 2008 — RIPE RIS, RouteViews, and public tools like bgp.tools provide near-real-time alerts — but propagation still outruns human response. Mean time to mitigation for global leaks remains measured in tens of minutes because filtering must happen at multiple tiers, and operators hesitate to drop routes that might be legitimate alternate paths. Your responsibility as a prefix holder includes ROA creation, IRR registration, and monitoring your prefixes from external vantage points.
 
 ### 3.2 Route Leaks
 
@@ -647,14 +736,27 @@ ROUTE LEAK vs HIJACK
              (malicious or accidental, you claim ownership)
 
     Leak:    Re-announce routes you received to networks
-             you shouldn't (always accidental, you're passing
-             through, not claiming ownership)
+             you shouldn't (often accidental, but RFC 7908
+             also allows malicious leaks; you're passing
+             routes through, not claiming ownership)
 
     Both cause traffic to flow through the wrong path.
     Leaks are FAR more common than hijacks.
 ```
 
+Route leaks dominate incident statistics because they often require no malicious intent — only a missing export filter, a wrong route-map, or a customer BGP session configured without `allowas-in` restrictions. [RFC 7908](https://www.rfc-editor.org/rfc/rfc7908) still defines route leaks broadly enough to include accidental and malicious policy violations. The 2019 Verizon/DQE leak through Allegheny Technologies (AS396531) propagated over 20,000 routes globally because Verizon did not filter what its customer re-advertised — a failure of provider-side prefix and AS-Path filtering that MANRS explicitly recommends. The 2008 Pakistan Telecom/YouTube incident illustrates the leak mechanism cleanly: an internal null route for censorship leaked externally via PCCW transit, making Pakistan's internal policy the world's routing policy for YouTube prefixes for roughly two hours.
+
+### 3.2.1 Cloudflare July 2020: Configuration as Routing Policy
+
+On July 17, 2020, Cloudflare experienced a 27-minute partial outage affecting edge locations connected to its private backbone — including San Jose, Dallas, Chicago, London, Amsterdam, Frankfurt, and São Paulo. Network traffic across Cloudflare's network dropped by roughly half during the incident. This was not a hijack, a leak to the public internet, or an attack; it was an **internal BGP policy error** on a backbone router in Atlanta.
+
+Engineers were responding to unrelated congestion on the Newark–Chicago backbone segment. To reduce traffic through Atlanta, they modified a router configuration — but instead of removing Atlanta routes from the backbone, a one-line change removed a prefix-list condition from a route policy. The Atlanta router began leaking **all** BGP routes into the backbone with LOCAL_PREF 200. Compute-node routes inside each PoP typically carried LOCAL_PREF 100. Because higher local preference wins, traffic meant for local compute nodes in dozens of cities was attracted to Atlanta, overwhelming that router and causing connected PoPs to fail.
+
+Cloudflare disabled the Atlanta router at 21:39 UTC (approximately 27 minutes after the change at 21:12) and restored normal forwarding. Post-incident changes included adjusting LOCAL_PREF for local server routes so one location could not attract another's traffic, and adding maximum-prefix limits on backbone BGP sessions. For platform engineers, the lesson is structural: **BGP policy is code**. A single omitted prefix-list condition had the same blast radius as a bad deployment — and propagated at routing speed, not application rollout speed. Internal backbone BGP deserves the same review, testing, and rollback discipline as external peering.
+
 > **Stop and think**: Why are route leaks often harder to automatically detect and drop than basic route hijacks?
+
+Leaks often propagate **valid origin ASNs** along an invalid path. RPKI Route Origin Validation checks whether the announcing ASN is authorized for the prefix — a leaked Verizon route still shows origin AS7018 (Verizon), which matches the ROA. Heuristic filters may not trigger because the AS-Path looks plausible and the prefix is legitimately owned. Detection relies on path anomaly monitoring (bgp.tools, Cloudflare Radar, RIPE RIS) comparing observed paths against historical baselines. Hijacks that claim a wrong origin are easier to catch with RPKI INVALID state; leaks require relationship-aware filtering (ASPA aims to solve this) or provider-side max-prefix and customer cone enforcement.
 
 ### 3.3 BGP Blackholing
 
@@ -706,6 +808,8 @@ graph LR
 
 > **Pause and predict**: If you use BGP blackholing for a single IP under attack, what happens to legitimate traffic trying to reach that specific IP during the mitigation?
 
+Legitimate and attack traffic share the same fate for that `/32`. RTBH is a blunt instrument chosen when link saturation threatens the entire prefix. FlowSpec ([RFC 8955](https://www.rfc-editor.org/rfc/rfc8955)) offers finer control by matching source/destination ports, protocols, and packet sizes, but requires provider support and pre-provisioned templates — not something to invent during an active attack. Many organizations maintain pre-approved FlowSpec rules for common amplification vectors (DNS, NTP, SSDP) alongside RTBH runbooks that name the exact community strings each transit provider expects.
+
 ```text
 FLOWSPEC — SURGICAL BLACKHOLING
 ─────────────────────────────────────────────────────────────
@@ -726,6 +830,8 @@ FLOWSPEC — SURGICAL BLACKHOLING
 ---
 
 ## Part 4: BGP Security — RPKI and Route Origin Validation
+
+Resource Public Key Infrastructure (RPKI) addresses the most glaring gap in BGP's trust model: anyone can claim to originate your prefix, but only you (via your RIR) can cryptographically authorize which ASN may announce it. RPKI does not sign AS-Paths — only origin validation — which is why route leaks remain possible even with full RPKI deployment. The industry has accepted this tradeoff because origin validation alone would have prevented the majority of high-profile hijacks, including the 2018 Route53 incident where eNet (AS10297) claimed Amazon's prefixes.
 
 ### 4.1 RPKI (Resource Public Key Infrastructure)
 
@@ -757,18 +863,21 @@ graph TD
     ARIN["ARIN<br>ROA: AS16509 -> 52.0.0.0/10"] --> Validator
     Validator -- "RTR Protocol" --> Router["BGP Router"]
     Router -. "Receives 8.8.8.0/24 from AS15169" .-> Valid["Matches ROA -> VALID ✓"]
-    Router -. "Receives 8.8.8.0/24 from AS666" .-> Invalid["No ROA Match -> INVALID ✗"]
+    Router -. "Receives 8.8.8.0/24 from AS666" .-> Invalid["Covered ROA, wrong AS -> INVALID ✗"]
+    Router -. "Receives 203.0.113.0/24 with no covering ROA" .-> NotFound["No covering VRP -> NOT FOUND ?"]
 ```
 
 ```text
 VALIDATION STATES
 ─────────────────────────────────────────────────────────────
-    VALID:     Route matches a ROA (correct AS, correct prefix)
-    INVALID:   Route conflicts with a ROA (wrong AS or too specific)
-    NOT FOUND: No ROA exists for this prefix (unknown)
+    VALID:     At least one VRP covers the prefix and matches the origin ASN and maxLength
+    INVALID:   At least one VRP covers the prefix, but none matches because the ASN is wrong or the prefix is too specific
+    NOT FOUND: No VRP covers the route prefix (also called Unknown in some tools)
 ```
 
 > **Pause and predict**: If a major Tier 1 provider drops all "INVALID" routes but accepts "NOT FOUND" routes, what happens to traffic destined for an organization that has never created a ROA?
+
+Traffic continues to flow normally for NOT FOUND prefixes — the router treats them as unverified but acceptable. Only INVALID routes (wrong ASN or prefix longer than ROA maxLength) are dropped. This is why creating ROAs for your own space matters: until you do, your legitimate announcements look identical to hijacks from networks that enforce drop-invalid-only policy. Gradual adoption is intentional; sudden drop-unknown would partition the internet between RPKI-enrolled and legacy networks.
 
 ```text
 RPKI ADOPTION (2025)
@@ -790,6 +899,8 @@ RPKI ADOPTION (2025)
     But "NOT FOUND" is still treated as acceptable
     (otherwise ~48% of the internet would be unreachable).
 ```
+
+RPKI validators such as [Routinator](https://github.com/NLnetLabs/routinator) download signed ROA objects from all five RIRs, validate the certificate chain, and serve results to routers via the RPKI-to-Router (RTR) protocol defined in [RFC 8210](https://www.rfc-editor.org/rfc/rfc8210). Routers tag each received route as VALID, INVALID, or NOT FOUND. Operator policy typically drops INVALID routes immediately while accepting NOT FOUND — a conservative default that improves security without breaking reachability to unregistered prefixes. Creating ROAs for your own address space is free at your RIR and should be standard practice before any prefix is announced to transit.
 
 ### 4.2 Other BGP Security Mechanisms
 
@@ -839,9 +950,26 @@ PREFIX FILTERING BEST PRACTICES
     7. Deploy MANRS (Mutually Agreed Norms for Routing Security)
 ```
 
+[MANRS](https://www.manrs.org/) codifies operational norms — filtering, anti-spoofing, coordination, and global validation — that complement RPKI with relationship-aware practices. [RFC 9582](https://www.rfc-editor.org/rfc/rfc9582) is the current ROA profile: it defines the signed object used for Route Origin Authorizations, not ASPA. ASPA (Autonomous System Provider Authorization) is still specified by the IETF SIDROPS drafts for the [ASPA object profile](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/) and [AS_PATH verification](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-verification/): your AS publishes which transit providers may carry your routes, enabling detection when a route appears via an unauthorized upstream. ASPA adoption is earlier-stage than ROV but directly targets route leaks like the Verizon/DQE incident. BGPsec ([RFC 8205](https://www.rfc-editor.org/rfc/rfc8205)) remains largely undeployed due to per-hop signing overhead and the requirement that every AS in a path participate.
+
 ---
 
 ## Part 5: Cloud Interconnection
+
+Dedicated cloud connectivity replaces best-effort internet transit with private fiber (or partner cross-connects) and BGP sessions that exchange routes between your datacenter and the cloud provider's edge. The durable pattern is identical across AWS Direct Connect, Azure ExpressRoute, and Google Cloud Interconnect: you establish a Layer 2 circuit, configure an eBGP session with MD5 authentication, advertise your on-premises prefixes, and learn cloud VPC/VNet prefixes in return. Traffic flows without traversing the public internet, which reduces exposure to DDoS, improves latency consistency, and often lowers data transfer cost for sustained high-volume workloads.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Capability | AWS Direct Connect | Azure ExpressRoute | Google Cloud Interconnect |
+> |---|---|---|---|
+> | Dedicated port speeds | 1 / 10 / 100 / 400 Gbps | 50 Mbps – 100 Gbps | 10 / 100 / 400 Gbps (Dedicated) |
+> | Hosted/partner option | 50 Mbps – 25 Gbps via partners | Via ExpressRoute partners | Partner Interconnect VLAN attachments 50 Mbps – 100 Gbps where offered |
+> | Default provider ASN | 7224 (7224 or 64512 for GovCloud) | 12076 (Microsoft peering) | 16550 |
+> | Private + public peering split | Private VIF + Public VIF + Transit VIF | Private peering + Microsoft peering | VLAN attachment per VPC |
+> | Typical provisioning lead time | Weeks (physical cross-connect) | Weeks | Weeks |
+> | Redundancy recommendation | Two connections, different locations | Two connections required for SLA | Two attachments, different edge domains |
+
+The table captures product shapes, not rankings. Each provider implements the same durable idea — private L2 + eBGP — with different naming, ASN defaults, and virtual interface models. Always confirm current limits in official documentation before designing a production architecture.
 
 ### 5.1 Direct Connect / ExpressRoute / Cloud Interconnect
 
@@ -867,7 +995,7 @@ graph LR
         VPC["AWS VPC<br>(us-east-1)"]
     end
 
-    Router <-->|"Dedicated 1/10/100 Gbps Fiber"| DX
+    Router <-->|"Dedicated 1/10/100/400 Gbps Fiber"| DX
     Router -. "eBGP Session" .- DX
     DX --- VPC
 ```
@@ -875,8 +1003,8 @@ graph LR
 ```text
     Types:
     ─────────────────────────────────────────────
-    Dedicated Connection: 1/10/100 Gbps physical port
-    Hosted Connection:    50 Mbps - 10 Gbps (via partner)
+    Dedicated Connection: 1/10/100/400 Gbps physical port
+    Hosted Connection:    50 Mbps - 25 Gbps (via partner)
 
     BGP Configuration:
     ─────────────────────────────────────────────
@@ -905,8 +1033,8 @@ AZURE EXPRESSROUTE
 
 GOOGLE CLOUD INTERCONNECT
 ─────────────────────────────────────────────────────────────
-    Dedicated Interconnect: 10/100 Gbps (your own fiber)
-    Partner Interconnect:   50 Mbps - 50 Gbps (via partner)
+    Dedicated Interconnect: 10/100/400 Gbps circuits (your own fiber)
+    Partner Interconnect:   50 Mbps - 100 Gbps VLAN attachments where offered by the partner
     Cross-Cloud Interconnect: Connect to other clouds
 
     BGP: Your ASN ↔ Google ASN (16550 for peering)
@@ -914,8 +1042,9 @@ GOOGLE CLOUD INTERCONNECT
 WHY USE PRIVATE INTERCONNECT?
 ─────────────────────────────────────────────────────────────
     ✓ Consistent latency (no internet congestion)
-    ✓ Higher bandwidth (up to 100 Gbps dedicated)
-    ✓ Lower cost per GB (no data transfer charges)
+    ✓ Higher bandwidth (up to 400 Gbps dedicated ports)
+    ✓ Lower or more predictable per-GB pricing for sustained egress
+      (outbound data transfer over private interconnect is still billed)
     ✓ Compliance (traffic doesn't traverse public internet)
     ✓ Reduced attack surface (no DDoS from internet)
 
@@ -924,6 +1053,8 @@ WHY USE PRIVATE INTERCONNECT?
     ✗ Monthly port fees ($200-$6,000+ depending on speed)
     ✗ Need colocation in same facility or partner
 ```
+
+Multi-homed cloud connectivity follows the same BGP principles as internet multi-homing. Advertise the same prefixes over both Direct Connect circuits with identical MED or AS-Path attributes unless you want active/standby behavior. Set LOCAL_PREF higher on the primary circuit so outbound traffic prefers the dedicated path. Keep a Site-to-Site VPN as tertiary backup with lower LOCAL_PREF — it rides the public internet but preserves connectivity when both physical circuits fail. Test failover quarterly by withdrawing routes on one session and verifying convergence time meets your RTO.
 
 ### 5.2 BGP in Kubernetes
 
@@ -958,9 +1089,9 @@ graph TD
     C2 -- "eBGP peering" --> ToR
 ```
 
-```text
-    Physical network can route to pods directly!
+In Calico's BGP mode, each node runs a BIRD or FRR instance that peers eBGP with the ToR switch, announcing only that node's pod CIDR (typically `/24` or `/26`). The ToR aggregates or installs host routes depending on your design. This eliminates kube-proxy hairpin for pod-to-pod traffic across nodes when the fabric supports direct routing. The Kubernetes control plane still manages endpoints and policies; BGP only replaces overlay tunneling for the data plane path. On bare-metal clusters, this is the standard pattern for performance-sensitive workloads.
 
+```text
 METALLB BGP MODE
 ─────────────────────────────────────────────────────────────
 
@@ -984,6 +1115,57 @@ graph TD
 
 > **Stop and think**: If MetalLB in BGP mode announces a `/32` address to the top-of-rack switch, what must the physical network infrastructure support for external users to reach that service?
 
+The ToR switch must accept the `/32` host route via eBGP and install it in its routing table with a next-hop pointing to the announcing node. Upstream routers must either accept `/32` advertisements or aggregate them — many enterprise networks filter anything longer than `/24` on external sessions, which breaks MetalLB unless you coordinate filtering policy. ECMP across multiple MetalLB speakers announcing the same `/32` requires all speakers to be reachable and the upstream to support equal-cost multipath for host routes. For platform teams, the actionable checklist is: confirm ToR BGP peering config, confirm prefix length filters, confirm next-hop reachability from the L3 gateway, then deploy speakers.
+
+---
+
+## Patterns & Anti-Patterns
+
+| Pattern | When to Use | Why It Works |
+|---|---|---|
+| Dual transit with LOCAL_PREF primary/backup | Multi-homed enterprise or platform egress | Policy-based failover without waiting for AS-Path convergence; primary path wins even if backup has shorter path |
+| Route reflectors for iBGP scaling | More than four edge routers in one AS | Eliminates O(n²) iBGP mesh while preserving loop prevention via cluster/ originator IDs |
+| RPKI ROV drop-invalid at edge | Any network originating or transiting routes | Stops wrong-ASN hijacks at the border before propagation; low false-positive rate when ROAs exist |
+| RTBH with FlowSpec fallback | DDoS on single host or narrow attack signature | RTBH protects uplink immediately; FlowSpec preserves legitimate traffic when attack is protocol-specific |
+| max-prefix limits on customer sessions | Transit provider or enterprise accepting BGP from tenants | Session shuts down before a route leak floods your RIB — fail-safe over availability |
+
+| Anti-Pattern | Why Teams Fall Into It | Better Alternative |
+|---|---|---|
+| iBGP full mesh beyond six routers | "BGP requires full connectivity" myth from small-lab configs | Deploy route reflectors from day one of multi-site iBGP |
+| AS-Path prepending as only traffic engineering | Easy to configure, no provider coordination | LOCAL_PREF for outbound, MED agreements with peers, communities for inbound |
+| Accepting full table from customer BGP | Customer asks for "full routes" for troubleshooting | Default route plus specific prefixes; max-prefix at 110% of expected count |
+| RPKI ROV drop-unknown (not-found) | Aggressive security posture without impact analysis | Drop INVALID only until ROA coverage justifies stricter policy |
+| Single Direct Connect, no VPN backup | Cost savings on dedicated circuit | Second circuit in different facility + VPN with lower LOCAL_PREF |
+| Announcing pod CIDRs wider than /24 to internet | Calico auto-aggregates per-node /24s | Summarize at edge or use eBGP per-node only within datacenter |
+
+## Decision Framework
+
+Use this flowchart when choosing connectivity and BGP security posture for a new deployment:
+
+```mermaid
+flowchart TD
+    A["Need cloud/on-prem private connectivity?"] -->|Yes| B["Latency/compliance requires dedicated path?"]
+    A -->|No| C["Internet transit + VPN only"]
+    B -->|Yes| D["Provision dual private interconnect<br>different facilities"]
+    B -->|No| E["Site-to-Site VPN with BGP<br>lower LOCAL_PREF"]
+    D --> F["Configure eBGP: MD5 auth,<br>prefix filters both directions"]
+    F --> G["Originating public prefixes?"]
+    G -->|Yes| H["Create ROAs at RIR<br>Enable ROV drop-invalid"]
+    G -->|No| I["Learn routes only:<br>filter bogon + max-prefix"]
+    H --> J["Multi-homed to two transit?"]
+    I --> J
+    J -->|Yes| K["LOCAL_PREF primary/backup<br>MED agreement with peers"]
+    J -->|No| L["Single provider:<br>monitor route count + path"]
+    K --> M["DDoS mitigation tier?"]
+    L --> M
+    M -->|Volumetric| N["RTBH community ready<br>FlowSpec if supported"]
+    M -->|Low risk| O["Document communities<br>test blackhole quarterly"]
+```
+
+The decision tree separates **connectivity** (private vs VPN, dual vs single), **security** (RPKI for originators, filtering for listeners), and **resilience** (multi-homing policy, DDoS tier). Revisit when you add a new region, acquire IP space, or change transit providers — each event triggers a BGP policy review.
+
+When designing multi-homed platform egress, start from business requirements: active/active vs active/standby, acceptable convergence time, and whether you originate prefixes or only consume routes. Originating prefixes obligates ROA creation, IRR maintenance, and coordination with both transit providers on prefix filters. Consuming routes only (typical cloud Direct Connect) still requires filtering what you accept — bogons, default routes, and maximum prefix counts — and documenting which communities trigger blackholing before an attack rather than during one.
+
 ---
 
 ## Did You Know?
@@ -993,6 +1175,8 @@ graph TD
 - **A single BGP misconfiguration can affect the entire internet.** In June 2019, a route leak through a small Pennsylvania ISP (AS33154, via Allegheny Technologies) caused major routing disruptions for services including Cloudflare, Amazon, and Fastly. The leak propagated because Verizon, one of the world's largest networks, failed to filter routes from their customer — a basic best practice that many networks still skip.
 
 - **BGP was designed over lunch on two napkins.** In 1989, engineers Yakov Rekhter (IBM) and Kirk Lougheed (Cisco) sketched the initial BGP protocol design on the back of napkins at an IETF meeting. The protocol they designed — fundamentally based on trust between networks — is still what runs the internet 36 years later, handling over a million routes across 75,000+ autonomous systems.
+
+- **RPKI invalid routes are dropped by major transit networks, but ROA coverage remains incomplete.** According to [NIST RPKI Monitor](https://rpki-monitor.antd.nist.gov/) and RIPE NCC statistics, roughly half of IPv4 routes have valid ROAs as of 2025–2026, meaning the other half still relies on trust alone. Networks that drop NOT FOUND would isolate large portions of the internet — the gradual adoption curve is a policy compromise, not a technical limitation.
 
 ---
 
@@ -1012,6 +1196,8 @@ graph TD
 ---
 
 ## Quiz
+
+These questions test whether you can apply BGP concepts to operational scenarios — not merely recite the path-selection order. Read each scenario carefully; the answer explains the mechanism, not just the conclusion. Scenario-based troubleshooting is how network operations teams actually use BGP knowledge during live incidents, weekly reviews, and formal postmortems.
 
 1. **Your team is designing a multi-region network for a new datacenter. One engineer suggests using eBGP between all routers inside the datacenter to ensure paths are properly tracked. Why might this approach be flawed, and how does the standard iBGP approach handle routing loops without modifying the AS-Path?**
    <details>
@@ -1060,6 +1246,8 @@ graph TD
 ## Hands-On Exercise
 
 **Objective**: Set up eBGP peering between two Autonomous Systems using FRRouting (FRR) containers and observe route propagation, path selection, and failure behavior.
+
+This lab uses three Docker containers as three separate ASNs with full mesh eBGP peering — the simplest topology to observe AS-Path propagation, LOCAL_PREF override, and failover without iBGP complexity. FRRouting (FRR) implements the same BGP state machine as production routers; commands you run in `vtysh` transfer directly to Cisco/Juniper/Arista concepts with syntax differences only. The exercise deliberately uses private ASNs 65001–65003, which must never be announced to real transit providers.
 
 **Environment**: Docker containers running FRRouting
 
@@ -1309,38 +1497,38 @@ docker network rm link-as1-as2 link-as1-as3 link-as2-as3
 **Success Criteria**:
 - [ ] Three BGP sessions established (AS1-AS2, AS1-AS3, AS2-AS3)
 - [ ] Each AS learns routes to all three /24 prefixes
-- [ ] Observed BGP preferring shorter AS-Path (direct over indirect)
 - [ ] Used LOCAL_PREF to override AS-Path length preference
 - [ ] Simulated link failure and observed automatic failover to alternate path
-- [ ] Observed BGP session recovery after link restoration
-- [ ] Understood the relationship between AS-Path, LOCAL_PREF, and path selection
 
 ---
 
-## Further Reading
+## Sources
 
-- **"BGP: Building Reliable Networks with the Border Gateway Protocol"** — Iljitsch van Beijnum. The most accessible book-length treatment of BGP for practitioners.
-
-- **bgp.tools** — Real-time BGP routing data, route leak detection, and RPKI status for any ASN or prefix. Essential for monitoring.
-
-- **"Internet Routing Registries and RPKI" (MANRS)** — The Mutually Agreed Norms for Routing Security initiative provides best practices for network operators.
-
-- **Cloudflare Blog: "How Verizon and a BGP Optimizer Knocked Large Parts of the Internet Offline"** — Detailed analysis of the 2019 route leak that shows exactly how BGP incidents propagate.
-
----
-
-## Key Takeaways
-
-Before moving on, ensure you understand:
-
-- [ ] **Autonomous Systems are the building blocks of internet routing**: Each AS is an independently administered network that uses BGP to exchange reachability information with other ASNs
-- [ ] **BGP path selection follows a strict hierarchy**: LOCAL_PREF (your outbound policy) beats AS-Path length, which beats MED (neighbor's inbound preference)
-- [ ] **BGP is built on trust with no built-in verification**: Any AS can announce any prefix, and neighbors will believe it unless they explicitly filter
-- [ ] **Route hijacks steal traffic, route leaks misroute it**: Hijacks claim false origin; leaks propagate routes through unauthorized paths. Leaks are more common
-- [ ] **RPKI validates origin but not path**: ROAs prove which AS may originate a prefix but cannot prevent route leaks or path manipulation
-- [ ] **BGP blackholing sacrifices one IP to save the rest**: During DDoS, announcing a /32 with a blackhole community drops all traffic at the transit edge
-- [ ] **Direct Connect / ExpressRoute use BGP for private cloud connectivity**: Dedicated links with BGP peering provide consistent latency and reduced attack surface
-- [ ] **Kubernetes uses BGP via Calico and MetalLB**: Pod CIDRs and LoadBalancer IPs can be announced to the physical network via BGP
+- [RFC 4271 — A Border Gateway Protocol 4 (BGP-4)](https://www.rfc-editor.org/rfc/rfc4271)
+- [RFC 6480 — An Infrastructure to Support Secure Internet Routing (RPKI)](https://www.rfc-editor.org/rfc/rfc6480)
+- [RFC 1997 — BGP Communities Attribute](https://www.rfc-editor.org/rfc/rfc1997)
+- [RFC 6811 — BGP Prefix Origin Validation](https://www.rfc-editor.org/rfc/rfc6811)
+- [RFC 7908 — Problem Definition and Classification of BGP Route Leaks](https://www.rfc-editor.org/rfc/rfc7908)
+- [RFC 8210 — The RPKI-Router Protocol (RTR)](https://www.rfc-editor.org/rfc/rfc8210)
+- [RFC 9582 — A Profile for Route Origin Authorizations (ROAs)](https://www.rfc-editor.org/rfc/rfc9582)
+- [IETF SIDROPS Draft — ASPA Object Profile](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-profile/)
+- [IETF SIDROPS Draft — ASPA-based AS_PATH Verification](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-verification/)
+- [RFC 8205 — BGPsec Protocol Specification](https://www.rfc-editor.org/rfc/rfc8205)
+- [Cloudflare Blog — Today's outage and what happened (July 17, 2020)](https://blog.cloudflare.com/todays-outage/)
+- [MANRS — Mutually Agreed Norms for Routing Security](https://www.manrs.org/)
+- [ThousandEyes — Anatomy of a BGP Hijack on Amazon's Route 53 DNS Service](https://www.thousandeyes.com/blog/amazon-route-53-dns-and-bgp-hijack)
+- [CyberScoop — Internet infrastructure server hijacked for $152,000 Ether theft](https://cyberscoop.com/ether-dns-bgp-amazon-route-53-heist/)
+- [AWS Direct Connect — Connection Options](https://docs.aws.amazon.com/directconnect/latest/UserGuide/connection_options.html)
+- [AWS Direct Connect — What is Direct Connect?](https://docs.aws.amazon.com/directconnect/latest/UserGuide/Welcome.html)
+- [AWS Direct Connect — BGP Peering Configuration](https://docs.aws.amazon.com/directconnect/latest/UserGuide/WorkingWithVirtualInterfaces.html)
+- [Azure ExpressRoute — BGP with ExpressRoute](https://learn.microsoft.com/en-us/azure/expressroute/expressroute-routing)
+- [Google Cloud — Cloud Interconnect Overview](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/overview)
+- [Google Cloud — Cloud Interconnect Quotas and Limits](https://cloud.google.com/network-connectivity/docs/interconnect/quotas)
+- [Google Cloud — Cloud Interconnect Pricing](https://cloud.google.com/network-connectivity/docs/interconnect/pricing)
+- [Google SRE Book — Addressing Cascading Failures (load balancing and routing context)](https://sre.google/sre-book/addressing-cascading-failures/)
+- [Cloudflare Learning — What is BGP?](https://www.cloudflare.com/learning/security/glossary/what-is-bgp/)
+- [NLnet Labs Routinator — RPKI Validator](https://github.com/NLnetLabs/routinator)
+- [FRRouting Documentation — BGP Configuration](https://docs.frrouting.org/en/latest/bgp.html)
 
 ---
 

@@ -12,27 +12,25 @@ sidebar:
 >
 > **Track**: Foundations — Advanced Networking
 
-### What You'll Be Able to Do
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
 1. **Compare** L4 and L7 load balancers by explaining their architectural differences and selecting the right tier for a given workload.
 2. **Design** health check configurations, connection draining, and cross-zone settings that ensure graceful failover during outages.
 3. **Diagnose** load balancer issues, such as uneven distribution, connection reuse problems, and TLS termination latency, using connection-level metrics and access logs.
-4. **Evaluate** proxy protocols and routing mechanisms to guarantee client IP preservation across multi-hop ingress architectures.
-5. **Implement** advanced load balancing patterns including weighted routing, session affinity, and Global Server Load Balancing (GSLB) across multiple geographic regions.
+4. **Evaluate** proxy protocols, session affinity strategies, and global routing mechanisms to guarantee client IP preservation and regional failover across multi-hop ingress architectures.
+5. **Implement** advanced load balancing patterns including health-aware algorithm selection, consistent hashing, and Global Server Load Balancing (GSLB) across multiple geographic regions.
 
 ---
 
-### Why This Module Matters
+## Why This Module Matters
 
-On December 7, 2021, an automated process in AWS's US-East-1 region triggered an unexpected scaling event within their internal network.
-This caused a massive surge of connection attempts to internal routing devices, effectively overwhelming them.
-Within minutes, thousands of external customers, including global streaming platforms and major ticketing agencies, experienced severe degradation.
-The financial impact was staggering, with some estimates suggesting enterprise companies lost upwards of $100 million in revenue during the multi-hour window.
-But in the post-incident analysis, a curious pattern emerged across the industry.
-Applications with properly configured health checks and connection draining experienced near-zero user-visible errors during failover.
-Applications without them dropped thousands of in-flight requests and suffered catastrophic application lockups.
+**Hypothetical scenario:** Your team runs a regional API behind a cloud load balancer at roughly ten thousand requests per minute.
+A rolling deployment removes half the backend pool while traffic holds steady.
+Cross-zone load balancing is disabled, and autoscaler placement left two pods in one AZ and eight in another.
+Within minutes, the smaller zone's pods absorb a disproportionate share of new connections.
+CPU saturates on those backends, and in-flight requests on draining pods return connection resets when deregistration delay is shorter than your slowest endpoint.
 
 The difference between graceful degradation and catastrophic failure during network turbulence almost always comes down to load balancing architecture.
 Load balancers are the fundamental gatekeepers of your infrastructure.
@@ -86,10 +84,8 @@ sequenceDiagram
     B-->>C: Direct Response (Bypasses LB)
 ```
 
-- **Advantage:** Massive throughput, as the load balancer only processes inbound traffic.
-- **Advantage:** The load balancer does not become a bandwidth bottleneck for large outbound responses (like video streaming).
-- **Disadvantage:** The load balancer cannot inspect or modify server responses.
-- **Disadvantage:** Backend servers must be Layer 2-adjacent to the load balancer and configured to accept traffic destined for the load balancer's IP.
+- **Advantage:** Massive throughput, as the load balancer only processes inbound traffic, and it does not become a bandwidth bottleneck for large outbound responses like video streaming or file downloads. The asymmetry of DSR — where the load balancer sees only the inbound request while the backend's response flows directly to the client — makes it the architecture of choice for bandwidth-heavy workloads.
+- **Disadvantage:** The load balancer cannot inspect or modify server responses, and backend servers must be Layer 2-adjacent to the load balancer, configured to accept traffic destined for the load balancer's IP address. This Layer 2 adjacency requirement makes DSR impractical in most cloud environments where virtual machines in different subnets cannot share a broadcast domain.
 
 **Method 2: DNAT (Destination Network Address Translation)**
 DNAT is a more common approach in cloud environments where Layer 2 adjacency is impossible.
@@ -107,15 +103,18 @@ sequenceDiagram
     L-->>C: Forward (SNAT)
 ```
 
-- **Advantage:** Works seamlessly across Layer 3 routed networks.
-- **Advantage:** The load balancer sees all bidirectional traffic, enabling sophisticated health tracking and connection state management.
-- **Disadvantage:** The load balancer must handle both inbound and outbound bandwidth, requiring significantly more processing power.
-- **Disadvantage:** Requires the load balancer to maintain a massive connection tracking table in memory.
+- **Advantage:** Works seamlessly across Layer 3 routed networks, and because the load balancer sees all bidirectional traffic, it can perform sophisticated health tracking and connection state management that would be impossible in a one-way forwarding architecture.
+- **Disadvantage:** The load balancer must handle both inbound and outbound bandwidth, requiring significantly more processing power and memory to maintain a massive connection tracking table. For high-throughput applications, the load balancer's network interface becomes the ceiling on total throughput, unlike DSR where outbound traffic bypasses the balancer entirely.
 
-**Method 3: Tunneling (IP-in-IP / GUE)**
-Modern hyper-scale load balancers, such as AWS Network Load Balancer and Google Maglev, utilize encapsulation.
-The load balancer wraps the entire original packet inside a new outer IP header destined for the backend server.
-The backend server decapsulates the packet and, similar to DSR, can often respond directly to the client.
+**Method 3: Flow Hashing and Encapsulation**
+L4 load balancers do not all share the same internal forwarding model.
+AWS Network Load Balancer is a Hyperplane-based flow-hash load balancer.
+It tracks TCP and UDP flows by 5-tuple and forwards packets to targets.
+It preserves client source IP when configured (for example via Proxy Protocol).
+NLB does not use GENEVE encapsulation — that pattern belongs to AWS Gateway Load Balancer (GWLB), which wraps traffic for inline network appliances such as firewalls and IDS sensors.
+
+Separately, software load balancers at hyper-scale — such as Google Maglev — may encapsulate the original packet inside a new outer IP header (GRE/GUE) destined for the backend.
+The backend decapsulates the packet and, similar to DSR, can often respond directly to the client.
 
 ```mermaid
 sequenceDiagram
@@ -128,12 +127,24 @@ sequenceDiagram
 ```
 
 **L4 Load Balancing Algorithms**
-Choosing the right backend server involves applying a load balancing algorithm:
-- **Round Robin**: Distributes connections sequentially. Simple but ignores server capacity.
-- **Weighted Round Robin**: Assigns more connections to servers with higher configured weights.
-- **Least Connections**: Routes the next packet to the server with the fewest active TCP connections.
-- **Source IP Hash (Consistent Hashing)**: Calculates a hash of the client's IP address modulo the number of servers, ensuring a specific client always hits the same backend.
-- **Maglev Hashing**: A Google-designed consistent hashing algorithm that minimizes disruption when backend servers are added or removed.
+
+Choosing the right backend server involves applying a load balancing algorithm, and the choice has profound implications for cache efficiency, connection distribution fairness, and resilience to membership changes. Below are the core algorithms, grouped by their operational characteristics.
+
+**Simple distribution algorithms** work well when backends are homogeneous and sessions are short-lived:
+
+- **Round Robin** distributes connections sequentially across the server pool. It is the simplest possible algorithm and imposes near-zero computational overhead, but it ignores server capacity entirely — a backend with half the CPU of its peers receives the same connection load, creating dangerous imbalances in heterogeneous clusters.
+- **Weighted Round Robin** addresses this by assigning a weight to each backend, distributing more connections to higher-capacity servers. This works well when capacity differences are static, but it cannot adapt to runtime conditions like CPU saturation or memory pressure.
+- **Least Connections** routes each new connection to the backend with the fewest active TCP connections. Slow backends hold connections longer and accumulate more of them, so this algorithm sends them fewer new requests. Faster backends stay lighter and receive the overflow. This makes least-connections the default choice for workloads with widely varying request processing times, such as mixed read/write API traffic.
+
+**Affinity-based algorithms** preserve a relationship between a specific client or resource and a specific backend:
+
+- **Source IP Hash** computes a hash of the client's IP address modulo the number of servers, ensuring a specific client always reaches the same backend. This is stateless — any load balancer instance can independently compute the same mapping — but it breaks down when the server pool changes. Adding or removing a backend changes the modulus, reassigning roughly 90% of all clients to different backends and invalidating any per-backend caches.
+- **Consistent Hashing** (ring-based implementations such as **ketama**) solves the reshuffling problem by placing both backends and hash outputs onto a conceptual ring. When a backend is added or removed, only the clients assigned to the affected region of the ring are remapped — typically a small fraction of the total. This makes consistent hashing the foundation of distributed caching systems (like CDN edge caches and Memcached clusters), where cache locality directly determines hit rate and tail latency.
+- **Rendezvous hashing (Highest Random Weight / HRW)** is a separate minimal-reshuffle scheme — not a ring — that assigns each key to the backend with the highest computed weight among all candidates. Like consistent hashing, it limits remapping when membership changes, but uses a different mathematical structure.
+
+**Power-of-two-choices** (also called "best of two") improves on purely random distribution through a remarkably simple mechanism: when a new connection arrives, the load balancer randomly selects two backends and routes the connection to the one with fewer active connections. This small amount of deliberate comparison drives the distribution toward near-optimal balance without requiring the load balancer to track the state of every backend. The theoretical result, proven by Mitzenmacher in 1996, shows that the maximum load with two choices is exponentially lower than with pure random selection — O(log log n) versus O(log n). Envoy and HAProxy both implement variants of this approach under names like "least request" or "power of two random choices."
+
+**Maglev Hashing** is Google's consistent hashing variant, designed for the extreme case where every packet must be independently hashed at line rate on commodity hardware. Unlike traditional consistent hashing, Maglev precomputes a fixed-size lookup table on every load balancer machine. A connection's 5-tuple is hashed into this table, and table lookups are O(1) with no modulo operation. When a backend fails, only the table entries pointing to that backend are reassigned — the rest of the table stays unchanged, preserving connection affinity for the vast majority of active traffic. The Maglev design was published at NSDI 2016 and has since been adopted by Envoy and other open-source proxies, making it accessible beyond Google's infrastructure.
 
 ### 1.2 Layer 7 Load Balancing (Application Layer)
 
@@ -246,11 +257,35 @@ lifecycle:
 ```
 
 **Draining Timeout Guidelines**
-Selecting the correct deregistration delay requires understanding your application's traffic profile:
-- Fast API endpoints: 30 seconds
-- Standard web applications: 60 seconds
-- Persistent WebSocket connections: 300 seconds (5 minutes)
-- Large file upload endpoints: 600 seconds (10 minutes)
+Selecting the correct deregistration delay requires understanding your application's traffic profile. For fast API endpoints with sub-second response times, 30 seconds is usually sufficient to drain any in-flight requests. Standard web applications handling page renders and form submissions benefit from 60 seconds to accommodate slower network clients. Persistent WebSocket connections — which may remain open for hours carrying intermittent messages — require much longer draining windows, typically 300 seconds (5 minutes), to allow natural connection teardown. Large file upload endpoints, where a single request can span minutes of data transfer across a slow client link, demand the longest draining windows, often 600 seconds (10 minutes), to avoid truncating uploads mid-stream. The guiding principle is that the deregistration delay must exceed the maximum expected request duration for the workload served by that backend pool.
+
+---
+
+## Health Checks
+
+Health checks are the load balancer's mechanism for determining whether a backend server is capable of serving traffic. Without accurate health checking, a load balancer will happily forward requests to dead, degraded, or hung backends — producing user-facing errors that could have been avoided entirely.
+
+### Active vs Passive Health Checks
+
+**Active health checks** are out-of-band probes that the load balancer periodically sends to each backend. These probes can range from simple TCP connection attempts (did the port accept?) to HTTP requests against a dedicated health endpoint (did `/healthz` return 200?) to application-level checks that verify deeper dependencies like database connectivity or cache warmth. Active checks provide the fastest detection of backend failure because the load balancer is constantly probing, but they add overhead: a fleet of 1,000 backends probed every 5 seconds generates 200 requests per second just for health checking, and each probe consumes a small amount of CPU and memory on the backend.
+
+**Passive health checks** observe the results of real production traffic to infer backend health. If a backend returns a string of 5xx errors or consistently times out, the load balancer marks it unhealthy without ever sending a dedicated probe. Passive checks add zero overhead but detect failure more slowly — you must accumulate enough failing requests to cross the unhealthy threshold, and during that accumulation window, real users are experiencing errors. The most resilient architectures combine both: active checks provide a fast baseline signal while passive checks catch subtle degradation (high latency, intermittent errors) that a simple `/healthz` might miss.
+
+### Liveness vs Readiness: The Kubernetes Model
+
+Kubernetes formalizes a critical distinction that applies to all load-balanced systems, not just container orchestration. A **liveness probe** answers "is the process running?" — if it fails, the container is restarted. A **readiness probe** answers "can this pod accept traffic?" — if it fails, the pod is removed from the Service endpoints but the container keeps running.
+
+The classic mistake is conflating the two. A pod might be alive (the process hasn't crashed) but not ready: it could be warming a cache, replaying a write-ahead log, or operating with a saturated thread pool that cannot accept new work. If your health check only confirms liveness, the load balancer will route traffic to pods that are alive but incapable of serving requests, generating latency spikes and errors. The readiness probe must verify the application's actual ability to process work — not just its continued existence.
+
+### Tuning Health Check Parameters
+
+Three parameters control the speed-versus-stability tradeoff of health checking:
+
+- **Check interval**: How frequently the load balancer probes each backend. Shorter intervals (5 seconds) detect failure faster but generate more load on both the load balancer and the backends. Longer intervals (30 seconds) are more economical but leave unhealthy backends in rotation for longer, exposing users to errors.
+- **Unhealthy threshold**: How many consecutive failures must accumulate before the backend is evicted from rotation. A threshold of 2 provides fast failover but risks evicting a backend due to a single transient network glitch. A threshold of 5 is more stable but delays eviction by up to 5 × the check interval.
+- **Healthy threshold**: How many consecutive successes before a recovering backend is placed back into rotation. Setting this too low can reintroduce a flapping backend before it has truly stabilized, triggering another eviction cycle.
+
+The most dangerous failure mode is **health check flapping**, where a backend oscillates between healthy and unhealthy because the threshold is too low relative to the check interval. Every flap triggers a connection-draining cycle: existing connections are drained, the backend is evicted, and then it recovers, re-enters rotation, receives traffic, and fails again. The system enters a destructive cycle of eviction-reentry-eviction that degrades the entire service — not just the troubled backend. The fix is to widen the unhealthy threshold, add a healthy threshold that requires sustained success, or introduce an initial delay before a newly healthy backend receives full traffic.
 
 ---
 
@@ -282,7 +317,7 @@ If a traffic spike triggers an autoscaling event that adds five new servers, the
 However, all *existing* users will remain permanently glued to the original, overloaded servers.
 The new servers will sit practically idle while the old servers crash under the weight of their sticky traffic.
 
-Furthermore, if a server crashes, all users pinned to it lose their local session state completely.
+Furthermore, if a server crashes, all users pinned to it lose their local session state completely, and the load balancer cannot redirect them to a healthy server without breaking the very session continuity that affinity was supposed to provide.
 
 **The Cloud-Native Solution**
 To build truly resilient architectures, you must decouple session state from the compute tier.
@@ -321,7 +356,7 @@ flowchart LR
     NLB -- TCP --> Backend
 ```
 
-This catastrophic loss of data breaks access logging, geographic traffic analysis, rate limiting algorithms, and compliance auditing.
+This catastrophic loss of data breaks access logging, geographic traffic analysis, rate limiting algorithms, and compliance auditing — every downstream system that depends on knowing who made the request becomes effectively blind. Without knowing the true client IP, you cannot enforce per-user rate limits, geolocate traffic for regional compliance, or trace an attack back to its source.
 
 **The Solution: Proxy Protocol**
 To solve this, the industry adopted the Proxy Protocol, originally authored by the creators of HAProxy.
@@ -398,7 +433,8 @@ Enterprise cloud environments deploy infrastructure across multiple isolated dat
 A critical architectural decision is determining whether traffic should be allowed to cross these zone boundaries.
 
 **Without Cross-Zone Load Balancing (Zone-Isolated)**
-When cross-zone load balancing is disabled, DNS resolves traffic evenly between the regional load balancer nodes, and each node only forwards traffic to backend servers residing in its own AZ.
+When cross-zone load balancing is disabled, each per-AZ load balancer node forwards traffic only to backend servers in its own AZ.
+As a simplified teaching model, assume each AZ's node receives roughly half of regional traffic — actual splits vary with DNS resolver behavior, client-to-AZ affinity, and NLB per-AZ endpoint selection.
 
 Consider a scenario where an autoscaler provisions resources unevenly: AZ-A receives 2 pods, while AZ-B receives 8 pods.
 Because the load balancer nodes receive 50% of the traffic each, the two pods in AZ-A must process half of the entire region's workload.
@@ -469,7 +505,7 @@ For this reason, AWS Application Load Balancers enable cross-zone by default, wh
 
 ### 6.1 AWS Load Balancers
 
-Amazon Web Services dominates the cloud load balancing landscape with two primary offerings, each backed by radically different internal architectures.
+Amazon Web Services offers two primary load balancer types, each backed by radically different internal architectures.
 
 **Network Load Balancer (NLB)**
 Operating at Layer 4, the NLB is engineered for extreme performance, capable of sustaining millions of requests per second with latency measured in the single-digit microseconds.
@@ -555,17 +591,12 @@ Cloud providers surface several critical metrics that provide direct insight int
 - **TCP_Client_Reset_Count**: Measures the volume of TCP RST (Reset) packets sent by the client. High values typically mean users are abandoning the application—closing their browsers or terminating their scripts—because the backend is taking too long to respond.
 - **TCP_Target_Reset_Count**: Measures RST packets originating from your backend servers. This is almost always a configuration flaw, commonly triggered by mismatched idle timeouts.
 
-**War Story: The Silent Idle Timeout Mismatch**
-A classic, elusive production outage occurs when load balancer timeouts drift out of sync with application timeouts.
-Consider a scenario where an AWS ALB has an idle connection timeout configured to 350 seconds, but the upstream Node.js backend server defaults to a strict 120-second idle timeout.
+**Hypothetical scenario: The Silent Idle Timeout Mismatch**
+A classic, elusive production outage occurs when load balancer timeouts drift out of sync with application timeouts. As a teaching scenario, consider a setup where a cloud L7 load balancer has an idle connection timeout configured to 350 seconds, but the upstream backend server defaults to a strict 120-second idle timeout.
 
-A client opens a persistent connection, executes an API call, and goes idle.
-At the 120-second mark, the Node.js server decides the connection is stale and silently drops it internally.
-However, the ALB remains blissfully unaware, keeping its side of the connection open to the client.
-At 200 seconds, the client attempts to reuse the connection and fires a new HTTP request.
-The ALB forwards this request down the existing socket, but the Node.js server rejects it immediately with a TCP RST, as it believes the socket is closed.
-The load balancer, receiving the reset, generates an immediate 502 Bad Gateway error to the client.
-The fix is absolute rule of infrastructure engineering: Your backend application's idle timeout must always be explicitly configured to be strictly longer than the load balancer's idle timeout.
+A client opens a persistent connection, executes an API call, and goes idle. At the 120-second mark, the backend server decides the connection is stale and silently drops it internally. However, the load balancer remains unaware, keeping its side of the connection open to the client. At roughly the 200-second mark, the client attempts to reuse the connection and fires a new HTTP request. The load balancer forwards this request down the existing socket, but the backend server rejects it immediately with a TCP RST, as it believes the socket is closed.
+
+The load balancer, receiving the reset, generates an immediate 502 Bad Gateway error to the client. If your service handles thousands of concurrent persistent connections, this timeout mismatch can silently cause a failure rate of several percent — enough to degrade user experience without triggering any obvious alert. The fix is an absolute rule of infrastructure engineering: your backend application's idle timeout must always be explicitly configured to be strictly longer than the load balancer's idle timeout.
 
 ---
 
@@ -596,6 +627,122 @@ If replication fails, the region must proactively declare itself unhealthy, forc
 
 ---
 
+## Load Balancing Failure Modes
+
+Load balancers solve distribution problems but introduce their own failure modes. Understanding these patterns — and the mitigation strategies — separates reliable systems from brittle ones.
+
+### Thundering Herd
+
+A thundering herd occurs when many clients simultaneously discover that a cached resource has expired or a backend has recovered, and they all rush to the same backend at once. The sudden spike in connections overwhelms the backend before it can stabilize.
+
+Consider a CDN edge cache that expires a popular asset. Hundreds of edge nodes simultaneously forward requests to the origin server, which was sized for steady-state traffic — not a flash flood. The origin collapses under the combined load, the CDN cannot refresh the cache because the origin is down, and the asset remains unavailable even though the underlying server is fundamentally healthy. The load balancer itself becomes the funnel through which the stampede reaches the backend.
+
+Mitigation strategies include **request collapsing** (the load balancer coalesces identical concurrent requests and fans out a single upstream request, distributing the result to all waiting clients), **consistent hashing** (which naturally pins the same resource to the same backend, containing the blast radius to one backend rather than all of them), and **staggered TTLs** on caches (adding a small random jitter to expiry times so they don't all expire simultaneously).
+
+### Retry Storms
+
+When a backend starts returning errors, well-intentioned clients often retry — and when their retries also fail, they retry again. Each retry multiplies the load on an already-struggling system. A single failed request can cascade into a flood if every layer in the stack (client SDK, service mesh sidecar, ingress proxy) independently retries, turning a 1× failure into a 9× or 27× amplification of the original request rate.
+
+The fix is **exponential backoff with jitter**. Rather than retrying immediately, the client waits: 100 ms, then 200 ms, then 400 ms, then 800 ms, with a small random component added to each interval. This spreads retries across time rather than concentrating them into synchronized bursts that recreate the thundering herd problem at a different layer. Additionally, **circuit breaking** at the load balancer layer stops forwarding requests to a backend that consistently fails, giving it time to recover rather than drowning it in the very retries meant to restore service.
+
+### The Load Balancer as a Single Point of Failure
+
+There is a deep irony in load balancing: the component designed to eliminate single points of failure can itself become the most dangerous one. A single load balancer instance, no matter how powerful or well-engineered, is a failure domain of size one.
+
+The standard mitigations require explicit architectural commitment. Deploy load balancers in **high-availability pairs** using protocols like VRRP (Virtual Router Redundancy Protocol) to float a virtual IP between active and standby instances — if the active fails, the standby assumes the IP within seconds. At cloud scale, use **Anycast** to announce the same load balancer IP from multiple independent instances in different physical locations; if one instance fails, BGP withdraws its route and traffic automatically shifts to the survivors without any client-side reconfiguration. Within Kubernetes, running multiple ingress controller replicas with pod anti-affinity across nodes and availability zones prevents a single rack or power feed failure from taking down all ingress capacity.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Patterns
+
+1. **L4 at the edge, L7 inside** — Deploy a high-throughput L4 load balancer (handling TCP, static IPs, DDoS absorption) at the network boundary, forwarding to L7 proxies inside the trusted network that handle HTTP routing, TLS termination, and header manipulation. This layering gives you the strengths of both tiers without forcing either tier to do everything.
+
+2. **Stateless backends with external session storage** — Decouple user session state from compute instances by storing sessions in Redis, Memcached, or a database. Any backend can serve any request, eliminating the need for sticky sessions and enabling seamless horizontal scaling without the uneven load distribution that affinity creates.
+
+3. **Deep health checks for global routing** — A health check that merely confirms the web server process is running is dangerously insufficient for multi-region deployments. The health endpoint must verify that the local persistence tier is reachable, replication is current, and critical downstream dependencies are healthy. A region with a severed database link should declare itself unhealthy and voluntarily exit the GSLB rotation.
+
+4. **Graceful shutdown with connection draining** — Every backend should implement a shutdown sequence that stops accepting new connections, completes in-flight requests, and only then exits. Paired with load balancer deregistration delay, this ensures zero-downtime deployments where no user request is dropped during a rollout.
+
+5. **Circuit breaking at every hop** — Every service-to-service call should be wrapped in a circuit breaker that opens when the downstream error rate exceeds a threshold. This prevents cascading failures where a slow dependency saturates thread pools across the entire call chain, turning a localized outage into a system-wide collapse.
+
+### Anti-Patterns
+
+1. **Sticky sessions as a substitute for state management** — Pinning users to specific backends masks the absence of a shared session store. The moment that backend fails, all pinned users lose their state. Sticky sessions create uneven load distribution and defeat horizontal scaling by trapping existing users on overloaded instances.
+
+2. **Identical health check and liveness probe** — Using the same endpoint for both conflates "the process is alive" with "the process can serve traffic." A saturated thread pool, a cold cache, or a disconnected database all produce a living process that should not receive requests. Separate the two checks.
+
+3. **No idle timeout coordination** — Configuring the load balancer's idle timeout independently of the backend's keepalive timeout creates a gap where the backend has already closed the socket but the load balancer still forwards requests down it, generating 502 errors for otherwise healthy traffic. Always ensure backend timeout exceeds load balancer timeout.
+
+4. **Single load balancer instance in production** — A lone load balancer instance, regardless of vendor reliability claims, represents an unacceptable single point of failure. Always deploy at least two instances with automated failover, whether through VRRP, Anycast, or cloud-provider managed high availability.
+
+---
+
+## Decision Framework
+
+Choosing the right load balancing strategy requires evaluating your workload across several dimensions. The flowchart below walks through the key decisions, from protocol type through algorithm selection to global routing strategy:
+
+```mermaid
+flowchart TD
+    Start["New workload: what LB tier?"] --> Proto{"Protocol?"}
+    Proto -->|"Non-HTTP\n(DB, SMTP, DNS)"| L4["Use L4 LB"]
+    Proto -->|"HTTP / gRPC / WS"| Content{"Content-aware\nrouting needed?"}
+    Content -->|"No — simple\ndistribution"| L4
+    Content -->|"Yes — path / header /\nhost-based routing"| L7["Use L7 LB"]
+    
+    L4 --> Algo{"Traffic pattern?"}
+    Algo -->|"Uniform, stateless,\nshort connections"| RR["Round Robin or\nWeighted RR"]
+    Algo -->|"Long-lived connections\n(WebSocket, gRPC streams)"| LC["Least Connections"]
+    Algo -->|"Cache affinity matters\n(CDN, session store)"| CH["Consistent Hashing\nor Rendezvous/HRW"]
+    
+    L7 --> Global{"Multi-region?"}
+    Global -->|"Single region"| Region["Regional L7 LB\n+ health checks"]
+    Global -->|"Multi-region"| GSLB["GSLB with latency /\nhealth-aware DNS\n+ regional L7 pools"]
+    
+    Region --> Affinity{"Stateful sessions?"}
+    Affinity -->|"Yes, unavoidable"| Sticky["Cookie affinity\n+ Redis session backup"]
+    Affinity -->|"No — stateless"| Stateless["No affinity —\nany backend serves\nany request"]
+    
+    GSLB --> Health{"Health check depth"}
+    Health --> Deep["Verify DB + replication\nstatus in health endpoint"]
+```
+
+The dimensional matrix below captures the tradeoffs for the three major LB tiers:
+
+| Dimension | L4 (TCP/UDP) | L7 (HTTP/gRPC) | GSLB (DNS) |
+|-----------|-------------|----------------|------------|
+| **Throughput** | Millions CPS | Thousands RPS | N/A (resolution only) |
+| **Latency added** | <1 ms | 1–5 ms | Tens to hundreds of ms (DNS lookup, cache miss, TTL) |
+| **Content routing** | None | Full (path, header, cookie) | Region-level only |
+| **Health granularity** | TCP connect / port | HTTP status, body match | Deep application health |
+| **Session affinity** | Source IP hash | Cookie injection | Region pinning |
+| **Failure scope** | Per-backend | Per-backend + per-path | Per-region |
+| **Cost** | Lower | Medium | Medium–High (probes) |
+
+---
+
+## Landscape Snapshot — as of 2026-06
+
+> **This changes fast; verify against vendor docs before relying on specifics.** This snapshot maps durable load balancing capabilities to current (mid-2026) vendor implementations. It is a starting point for product selection, not a permanent reference.
+
+### Cross-Vendor Rosetta Table
+
+| Capability | AWS | GCP | Azure | Open Source |
+|-----------|-----|-----|-------|-------------|
+| **L4 LB (TCP/UDP)** | NLB (Hyperplane-based, static EIPs, cross-zone optional) | External TCP/UDP Network LB (Maglev-backed, global or regional) | Azure Load Balancer (Basic/Standard SKU, HA ports) | HAProxy (TCP mode), Envoy (TCP proxy), IPVS, BIRD |
+| **L7 LB (HTTP/gRPC)** | ALB (path/host/header routing, OIDC, WAF integration) | External HTTP(S) LB (global, URL map routing, Cloud Armor) | Application Gateway v2 (WAF, path/host routing, cookie affinity, autoscaling) | Envoy, NGINX, HAProxy, Traefik, Caddy |
+| **Global LB** | Global Accelerator (Anycast, static IPs) + Route 53 (latency/geo/weighted routing) | Global external HTTP(S) LB (single Anycast IP, cross-region) | Front Door (Anycast, global HTTP routing, WAF) + Traffic Manager (DNS) | BIRD/FRRouting + Anycast (DIY), PowerDNS + Lua records |
+| **Algorithm options** | NLB: flow hash (5-tuple). ALB: round robin, least outstanding requests | Round robin (configurable session affinity via client IP or cookie) | Source IP hash (default), session persistence (client IP / protocol) | HAProxy: RR, leastconn, source, URI, random. Envoy: RR, least request, ring hash, Maglev, random |
+| **Health check types** | TCP, HTTP, HTTPS, gRPC (ALB); TCP, HTTP, HTTPS (NLB target groups) | TCP, HTTP, HTTPS, HTTP/2, gRPC | TCP, HTTP, HTTPS | HAProxy: TCP, HTTP, MySQL, PostgreSQL, Redis, LDAP, script. Envoy: HTTP, gRPC, TCP, custom |
+| **Proxy Protocol** | NLB supports PP v2 on target groups | Supported on external TCP proxy LB | Not natively supported on Azure LB; Application Gateway uses X-Forwarded-For | HAProxy (v1/v2 send + receive), NGINX (receive), Envoy (receive via listener filter) |
+| **Connection draining** | Deregistration delay (1–3,600 s) + termination grace (ALB) | Connection draining timeout (0–3,600 s) | Drain timeout on backend pool removal | HAProxy: `hard-stop-after`, Envoy: drain listeners, NGINX: `worker_shutdown_timeout` |
+| **Idle timeout (default)** | NLB: 350 s (TCP/TLS; TCP configurable 60–6000 s). UDP: 120 s (fixed). ALB: 60 s | TCP LB: 600 s. HTTP LB: 600 s (backend), configurable frontend | Azure LB: 4 min (default), 4–30 min configurable. App Gateway: 20 s (frontend), 30 s (backend) | Envoy: 1 h (default stream). HAProxy: `timeout client`/`timeout server`. NGINX: `keepalive_timeout` 75 s |
+
+> **Key volatility points (2026-06):** GCP recently introduced regional external proxy Network LB with support for Proxy Protocol. Azure Front Door still does not support Proxy Protocol natively — rely on X-Forwarded-For at the L7 layer. Envoy 1.32+ includes an improved Maglev implementation from the original Google NSDI paper. AWS Gateway Load Balancer (GWLB) with GENEVE encapsulation is the newest tier, designed for inline network appliance insertion (firewalls, IDS/IPS) — it does not compete with NLB/ALB for application traffic routing.
+
+---
+
 ## Did You Know?
 
 - **Google's Maglev handles all of Google's external traffic** — every search query, YouTube video, Gmail message, and Cloud Platform API call passes through Maglev. At peak, this is millions of packets per second per machine, across hundreds of machines at each of Google's edge PoPs. The design was published in a 2016 NSDI paper that has become a reference for building software load balancers.
@@ -609,15 +756,13 @@ If replication fails, the region must proactively declare itself unhealthy, forc
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| No connection draining configured | Active requests dropped during deployments | Set deregistration delay (300s for most apps) |
-| Proxy Protocol mismatch | Backend expects PP but LB doesn't send (or vice versa) → connection failures | Enable/disable on BOTH sides simultaneously |
-| NLB health checks failing with Proxy Protocol | NLB health checks don't send PP headers | Use separate health check port or HTTP health check |
-| Sticky sessions hiding backend failures | Unhealthy server keeps receiving sticky traffic | Always combine stickiness with health checks |
-| Using ALB when you need static IPs | ALB IPs change; firewall allowlists break | Use NLB (static EIPs) in front of ALB, or use Global Accelerator |
-| Cross-zone off with uneven target distribution | Some targets get 4x more traffic than others | Either enable cross-zone or ensure equal targets per AZ |
-| Not setting `externalTrafficPolicy: Local` | Client IP lost due to SNAT on the second hop | Set to Local (but ensure pods exist on all receiving nodes) |
-| Ingress controller without readiness gates | Pods receive traffic before they're ready | Use pod readiness gates tied to LB target health |
-| Ignoring NLB connection idle timeout | Long-lived connections (WebSocket) silently dropped at 350s | Set idle timeout appropriately; use TCP keepalive |
+| No connection draining configured | Active requests dropped during deployments | Set deregistration delay (at least 30s for API, 60s for web apps, 300s for WebSockets) |
+| Proxy Protocol mismatch | Backend expects PP but LB doesn't send (or vice versa) → connection failures | Enable/disable on BOTH sides simultaneously; use a separate health check port if NLB health probes don't send PP |
+| Sticky sessions hiding backend failures | Unhealthy server keeps receiving sticky traffic | Always combine stickiness with health checks; prefer shared session store over affinity |
+| Cross-zone off with uneven target distribution | Some targets get 3-4x more traffic than others, creating hotspots | Either enable cross-zone or ensure equal targets per AZ through topology-aware scheduling |
+| Not setting `externalTrafficPolicy: Local` | Client IP lost due to SNAT on the second hop | Set to Local (but ensure pods exist on all receiving nodes, or use pod anti-affinity) |
+| Ingress controller without readiness gates | Pods receive traffic before they're ready | Use pod readiness gates tied to LB target group health |
+| Ignoring idle timeout configuration | Long-lived connections (WebSocket, SSE) silently dropped at default timeout | Set idle timeout appropriately for your workload; always keep backend timeout > LB timeout |
 
 ---
 
@@ -655,7 +800,11 @@ If replication fails, the region must proactively declare itself unhealthy, forc
    <details>
    <summary>Answer</summary>
 
-   With cross-zone load balancing disabled, the load balancer distributes incoming traffic evenly between the two Availability Zones at the DNS level, meaning AZ-A and AZ-B each receive 50% of the total traffic. Because there are only 2 pods in AZ-A, each of those pods must handle 25% of the overall traffic load. In contrast, the 6 pods in AZ-B share their 50% evenly, meaning each pod in AZ-B handles roughly 8.3% of the traffic. This immense imbalance forced the pods in AZ-A to process three times the traffic volume of their counterparts in AZ-B, rapidly exhausting their CPU resources and causing the cascading failure.
+   With cross-zone load balancing disabled, each AZ's load balancer node forwards only to targets in its own zone.
+   In the simplified teaching model from Part 5, AZ-A and AZ-B each receive roughly 50% of regional traffic — actual splits vary with resolver behavior and client affinity.
+   Because there are only 2 pods in AZ-A, each of those pods must handle about 25% of the overall traffic load.
+   In contrast, the 6 pods in AZ-B share their 50% evenly, meaning each pod in AZ-B handles roughly 8.3% of the traffic.
+   This immense imbalance forced the pods in AZ-A to process three times the traffic volume of their counterparts in AZ-B, rapidly exhausting their CPU resources and causing the cascading failure.
    </details>
 
 6. **You configure a NodePort service in your cluster to receive external traffic, but a security audit reveals that the application logs show all requests coming from internal node IPs rather than the actual external client IPs. You apply `externalTrafficPolicy: Local` to fix this, but now some connections are being completely refused. Explain the original "double-hop" mechanism that hid the IPs, how the new policy fixed it, and why connections are now failing.**
@@ -669,9 +818,11 @@ If replication fails, the region must proactively declare itself unhealthy, forc
 
 ## Hands-On Exercise
 
-**Objective**: Set up an L4 load balancer with Proxy Protocol forwarding to a Kubernetes Ingress controller, and verify that the real client IP is preserved in application logs.
+**Objective**: Deploy nginx Ingress on a kind cluster, verify client IP preservation via `X-Forwarded-For`, observe load balancing across replicas, and test connection draining and session affinity.
 
-**Environment**: kind cluster + MetalLB (L4 LB simulation) + nginx Ingress
+**Environment**: kind cluster + ingress-nginx (in-cluster ClusterIP access from test pods)
+
+> **Note on Proxy Protocol**: Production L4→L7 stacks often place an NLB or HAProxy in front of ingress-nginx with Proxy Protocol enabled. This lab uses direct ingress access inside the cluster — the standard path for kind — so you observe `X-Forwarded-For` propagation without an L4 PROXY sender. The Proxy Protocol mechanics from Part 4 apply when you add an external NLB later.
 
 ### Part 1: Create the Cluster (10 minutes)
 
@@ -681,6 +832,19 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
   - role: worker
   - role: worker
 EOF
@@ -688,10 +852,10 @@ EOF
 kind create cluster --name lb-lab --config /tmp/lb-lab-cluster.yaml --image=kindest/node:v1.35.0
 ```
 
-### Part 2: Deploy nginx Ingress with Proxy Protocol Support (15 minutes)
+### Part 2: Deploy nginx Ingress Controller (15 minutes)
 
 ```bash
-# Install nginx Ingress Controller
+# Install nginx Ingress Controller (kind manifest exposes NodePort on the control-plane node)
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/kind/deploy.yaml
 
 # Wait for ingress controller to be ready
@@ -700,7 +864,15 @@ kubectl wait --namespace ingress-nginx \
   --selector=app.kubernetes.io/component=controller \
   --timeout=120s
 
-# Configure nginx to accept Proxy Protocol
+# Wait for the admission webhook bootstrap jobs before creating any Ingress objects
+kubectl wait --namespace ingress-nginx \
+  --for=condition=complete job/ingress-nginx-admission-create \
+  --timeout=120s
+kubectl wait --namespace ingress-nginx \
+  --for=condition=complete job/ingress-nginx-admission-patch \
+  --timeout=120s
+
+# Enable forwarded-client-IP handling (no Proxy Protocol — nothing in this lab sends PROXY headers)
 cat <<'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -708,7 +880,6 @@ metadata:
   name: ingress-nginx-controller
   namespace: ingress-nginx
 data:
-  use-proxy-protocol: "true"
   compute-full-forwarded-for: "true"
   use-forwarded-headers: "true"
   proxy-real-ip-cidr: "0.0.0.0/0"
@@ -717,6 +888,11 @@ EOF
 # Restart the ingress controller to pick up the config
 kubectl rollout restart deployment ingress-nginx-controller -n ingress-nginx
 kubectl rollout status deployment ingress-nginx-controller -n ingress-nginx
+kubectl wait --namespace ingress-nginx \
+  --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller \
+  --timeout=120s
+sleep 10
 ```
 
 ### Part 3: Deploy Backend Application with IP Logging (10 minutes)
@@ -774,6 +950,9 @@ spec:
         - name: app
           image: python:3.12-slim
           command: ["python", "/app/server.py"]
+          volumeMounts:
+            - name: code
+              mountPath: /app
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -782,6 +961,10 @@ spec:
               port: 8080
             initialDelaySeconds: 3
             periodSeconds: 5
+      volumes:
+        - name: code
+          configMap:
+            name: ip-logger-code
 ---
 apiVersion: v1
 kind: Service
@@ -798,8 +981,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ip-logger
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-set-headers: "ingress-nginx/custom-headers"
 spec:
   ingressClassName: nginx
   rules:
@@ -814,73 +995,114 @@ spec:
                 port:
                   number: 80
 EOF
+
+kubectl wait --for=condition=available deployment/ip-logger --timeout=120s
+kubectl wait --for=jsonpath='{.status.readyReplicas}'=3 deployment/ip-logger --timeout=120s
 ```
 
 ### Part 4: Test Client IP Preservation (15 minutes)
 
 ```bash
-# Get the ingress controller's cluster IP
-INGRESS_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.clusterIP}')
+# Run a disposable client pod with curl and jq. The pod targets the in-cluster
+# ingress-nginx Service DNS name, so no local INGRESS_IP variable has to cross
+# into the container environment. Logs are collected after completion so this
+# block can be pasted into a noninteractive shell without stdin being consumed.
+kubectl delete pod test-client --ignore-not-found
+kubectl run test-client --image=nicolaka/netshoot:v0.15 --restart=Never --command -- sh -c '
+set -eu
+URL="http://ingress-nginx-controller.ingress-nginx.svc.cluster.local/"
+HOST_HEADER="ip-test.local"
+CLIENT_IP=$(hostname -i | cut -d" " -f1)
 
-# Deploy test client
-kubectl run test-client --image=curlimages/curl:8.11.1 --rm -it -- sh
-
-# Test 1: Request through Ingress (with Proxy Protocol support)
 echo "=== Test 1: Via Ingress ==="
-curl -s -H "Host: ip-test.local" http://${INGRESS_IP}/ | python3 -m json.tool
+curl -fsS -H "Host: ${HOST_HEADER}" "${URL}" | tee /tmp/response.json | jq .
+XFF=$(jq -r ".x_forwarded_for" /tmp/response.json)
+case "${XFF}" in
+  *"${CLIENT_IP}"*) echo "X-Forwarded-For includes client pod IP ${CLIENT_IP}" ;;
+  *) echo "Expected X-Forwarded-For to include ${CLIENT_IP}; got ${XFF}" >&2; exit 1 ;;
+esac
 
-# Observe:
-# - x_forwarded_for should contain the test client's pod IP
-# - x_real_ip should contain the test client's pod IP
-# - remote_addr is the ingress controller's IP
-
-# Test 2: Multiple requests — observe load balancing
 echo "=== Test 2: Load Balancing Distribution ==="
-for i in $(seq 1 12); do
-  POD=$(curl -s -H "Host: ip-test.local" http://${INGRESS_IP}/ | python3 -c "import sys,json; print(json.load(sys.stdin)['pod_name'])")
-  echo "Request $i → $POD"
+: > /tmp/seen-pods.txt
+for i in $(seq 1 18); do
+  POD=$(curl -fsS -H "Host: ${HOST_HEADER}" "${URL}" | jq -r ".pod_name")
+  echo "Request ${i} -> ${POD}"
+  echo "${POD}" >> /tmp/seen-pods.txt
 done
+UNIQUE_PODS=$(sort -u /tmp/seen-pods.txt | wc -l | tr -d " ")
+test "${UNIQUE_PODS}" -eq 3
+echo "Observed all ${UNIQUE_PODS} backend replicas"
 
-# You should see requests distributed across all 3 replicas
-
-# Test 3: Check X-Forwarded-* headers
 echo "=== Test 3: Header Inspection ==="
-curl -s -H "Host: ip-test.local" \
+curl -fsS -H "Host: ${HOST_HEADER}" \
   -H "X-Custom-Header: test-value" \
-  http://${INGRESS_IP}/ | python3 -m json.tool
+  "${URL}" | jq .
+'
+if ! kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/test-client --timeout=120s; then
+  kubectl logs test-client || true
+  kubectl delete pod test-client --ignore-not-found
+  exit 1
+fi
+kubectl logs test-client
+kubectl delete pod test-client
 ```
 
 ### Part 5: Observe Connection Draining (15 minutes)
 
 ```bash
-# In one terminal: continuous requests
-kubectl run load-gen --image=curlimages/curl:8.11.1 --rm -it -- sh -c '
-  while true; do
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ip-test.local" http://ip-logger/)
-    echo "$(date +%H:%M:%S) HTTP $STATUS"
-    sleep 0.5
-  done
+# Start a finite load generator through the ingress, then scale down while it runs.
+kubectl run load-gen --image=nicolaka/netshoot:v0.15 --restart=Never --command -- sh -c '
+URL="http://ingress-nginx-controller.ingress-nginx.svc.cluster.local/"
+for i in $(seq 1 40); do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ip-test.local" "${URL}" || echo "000")
+  echo "$(date +%H:%M:%S) HTTP ${STATUS}"
+  sleep 0.5
+done
 '
+kubectl wait --for=condition=Ready pod/load-gen --timeout=120s
+sleep 2
 
-# In another terminal: scale down to 1 replica
+# Scale down to 1 replica while requests are in flight.
 kubectl scale deployment ip-logger --replicas=1
+kubectl rollout status deployment/ip-logger --timeout=120s
 
-# Watch the load-gen output:
-# - You should see continuous 200 responses
-# - No 502 or 503 errors during scale-down
-# - This is connection draining in action
+kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/load-gen --timeout=90s
+kubectl logs load-gen | tee /tmp/load-gen-scale1.log
+if grep -E "HTTP (502|503|000)" /tmp/load-gen-scale1.log; then
+  echo "Unexpected ingress errors during scale-down" >&2
+  exit 1
+fi
+kubectl delete pod load-gen --ignore-not-found
 
 # Scale back up
 kubectl scale deployment ip-logger --replicas=3
+kubectl wait --for=jsonpath='{.status.readyReplicas}'=3 deployment/ip-logger --timeout=120s
 
 # Scale to 0 (all pods removed)
 kubectl scale deployment ip-logger --replicas=0
+kubectl wait --for=delete pod -l app=ip-logger --timeout=120s
 
-# Now watch load-gen — should see 503 errors
-# (no backends available)
+kubectl delete pod no-backends-check --ignore-not-found
+kubectl run no-backends-check --image=nicolaka/netshoot:v0.15 --restart=Never --command -- sh -c '
+URL="http://ingress-nginx-controller.ingress-nginx.svc.cluster.local/"
+for i in $(seq 1 3); do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ip-test.local" "${URL}" || true)
+  echo "HTTP ${STATUS}"
+done
+'
+if ! kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/no-backends-check --timeout=120s; then
+  kubectl logs no-backends-check || true
+  kubectl delete pod no-backends-check --ignore-not-found
+  exit 1
+fi
+kubectl logs no-backends-check | tee /tmp/no-backends.log
+kubectl delete pod no-backends-check
+grep -q "HTTP 503" /tmp/no-backends.log
 
 # Restore
 kubectl scale deployment ip-logger --replicas=3
+kubectl wait --for=condition=available deployment/ip-logger --timeout=120s
+kubectl wait --for=jsonpath='{.status.readyReplicas}'=3 deployment/ip-logger --timeout=120s
 ```
 
 ### Part 6: Test Session Affinity (10 minutes)
@@ -912,22 +1134,46 @@ spec:
                   number: 80
 EOF
 
-# Test without cookie (different pods)
+sleep 5
+
+kubectl delete pod test-client-2 --ignore-not-found
+kubectl run test-client-2 --image=nicolaka/netshoot:v0.15 --restart=Never --command -- sh -c '
+set -eu
+URL="http://ingress-nginx-controller.ingress-nginx.svc.cluster.local/"
+HOST_HEADER="ip-test.local"
+
 echo "=== Without Session Cookie ==="
-for i in $(seq 1 6); do
-  POD=$(curl -s -H "Host: ip-test.local" http://${INGRESS_IP}/ | python3 -c "import sys,json; print(json.load(sys.stdin)['pod_name'])")
-  echo "Request $i → $POD"
+: > /tmp/no-cookie-pods.txt
+for i in $(seq 1 12); do
+  POD=$(curl -fsS -H "Host: ${HOST_HEADER}" "${URL}" | jq -r ".pod_name")
+  echo "Request ${i} -> ${POD}"
+  echo "${POD}" >> /tmp/no-cookie-pods.txt
 done
+NO_COOKIE_UNIQUE=$(sort -u /tmp/no-cookie-pods.txt | wc -l | tr -d " ")
+test "${NO_COOKIE_UNIQUE}" -ge 2
+echo "Observed ${NO_COOKIE_UNIQUE} pods without a session cookie"
 
-# Test with cookie (same pod every time)
 echo "=== With Session Cookie ==="
-COOKIE=$(curl -s -c - -H "Host: ip-test.local" http://${INGRESS_IP}/ | grep SERVERID | awk '{print $NF}')
+: > /tmp/sticky-pods.txt
+FIRST_POD=$(curl -fsS -c /tmp/cookies.txt -H "Host: ${HOST_HEADER}" "${URL}" | jq -r ".pod_name")
+echo "Initial sticky pod -> ${FIRST_POD}"
+echo "${FIRST_POD}" >> /tmp/sticky-pods.txt
 for i in $(seq 1 6); do
-  POD=$(curl -s -b "SERVERID=$COOKIE" -H "Host: ip-test.local" http://${INGRESS_IP}/ | python3 -c "import sys,json; print(json.load(sys.stdin)['pod_name'])")
-  echo "Request $i → $POD (sticky)"
+  POD=$(curl -fsS -b /tmp/cookies.txt -c /tmp/cookies.txt -H "Host: ${HOST_HEADER}" "${URL}" | jq -r ".pod_name")
+  echo "Request ${i} -> ${POD} (sticky)"
+  echo "${POD}" >> /tmp/sticky-pods.txt
 done
-
-# All sticky requests should hit the same pod!
+STICKY_UNIQUE=$(sort -u /tmp/sticky-pods.txt | wc -l | tr -d " ")
+test "${STICKY_UNIQUE}" -eq 1
+echo "Cookie affinity kept all sticky requests on ${FIRST_POD}"
+'
+if ! kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/test-client-2 --timeout=120s; then
+  kubectl logs test-client-2 || true
+  kubectl delete pod test-client-2 --ignore-not-found
+  exit 1
+fi
+kubectl logs test-client-2
+kubectl delete pod test-client-2
 ```
 
 ### Clean Up
@@ -936,7 +1182,7 @@ done
 kind delete cluster --name lb-lab
 ```
 
-**Success Criteria**:
+**Success Criteria**: Verify your work against the following checkpoints:
 - [ ] nginx Ingress controller deployed and accepting connections
 - [ ] Client IP visible in X-Forwarded-For header in application response
 - [ ] Observed load balancing across 3 replicas (roughly even distribution)
@@ -947,28 +1193,21 @@ kind delete cluster --name lb-lab
 
 ---
 
-## Further Reading
+## Sources
 
-- **"Maglev: A Fast and Reliable Software Network Load Balancer"** (Google, NSDI 2016) — The paper describing Google's L4 load balancer architecture. Required reading for anyone building software load balancers.
-- **AWS Elastic Load Balancing documentation** — Detailed deep dives on NLB, ALB, and Gateway LB architecture, particularly the "How Elastic Load Balancing Works" section.
-- **"HAProxy Architecture Guide"** — The HAProxy documentation includes excellent explanations of L4 vs L7 load balancing, connection management, and Proxy Protocol.
-- **"Proxy Protocol Specification"** (HAProxy) — The official specification for Proxy Protocol v1 and v2, including TLV extension format.
-
----
-
-## Key Takeaways
-
-Before moving on, ensure you understand:
-
-- [ ] **L4 load balancers forward connections, L7 load balancers proxy requests**: L4 is faster (microseconds, millions of CPS) but cannot inspect HTTP content; L7 terminates TLS and parses HTTP for rich routing.
-- [ ] **Connection draining prevents dropped requests**: Configure deregistration delay to match your longest expected request duration; 300 seconds is a safe default.
-- [ ] **Sticky sessions create operational complexity**: Prefer external session storage (Redis); use sticky sessions only when refactoring is impractical.
-- [ ] **Proxy Protocol preserves client IP through L4 proxies**: Both LB and backend must be configured; mismatch causes connection failures.
-- [ ] **Cross-zone load balancing trades cost for evenness**: On by default for ALB, off for NLB. Uneven target distribution without cross-zone creates hotspots.
-- [ ] **NLB + Ingress Controller is a powerful pattern**: NLB provides static IPs and Proxy Protocol; Ingress provides HTTP routing and TLS termination.
-- [ ] **Kubernetes `externalTrafficPolicy: Local` preserves client IP**: But requires pods on all nodes receiving traffic, or health checks must exclude empty nodes.
-- [ ] **Maglev consistent hashing enables stateless L4 LBs**: Any LB machine produces the same backend selection for the same flow, no shared state needed.
-- [ ] **Global Server Load Balancing requires deep health checking**: Simple TCP checks are insufficient to prevent split-brain routing in multi-region deployments.
+- [RFC 4271 — A Border Gateway Protocol 4 (BGP-4)](https://datatracker.ietf.org/doc/html/rfc4271)
+- [RFC 1035 — Domain Names — Implementation and Specification](https://datatracker.ietf.org/doc/html/rfc1035)
+- [Maglev: A Fast and Reliable Software Network Load Balancer](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/44824.pdf) — Eisenbud et al., NSDI 2016
+- [Proxy Protocol Specification](https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt) — Willy Tarreau, HAProxy
+- [Cloudflare Learning Center — What Is Load Balancing?](https://www.cloudflare.com/learning/performance/what-is-load-balancing/)
+- [AWS Elastic Load Balancing — How Elastic Load Balancing Works](https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/how-elastic-load-balancing-works.html)
+- [Google Cloud — Load Balancing Overview](https://cloud.google.com/load-balancing/docs/load-balancing-overview)
+- [Azure Load Balancer Documentation](https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-overview)
+- [Envoy Proxy — Load Balancing Architecture Overview](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancing)
+- [HAProxy — Load Balancing Algorithms](https://docs.haproxy.org/2.9/configuration.html#4-balance)
+- [Kubernetes — Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/service/)
+- [Chapter 20: Load Balancing in the Datacenter — Google SRE Book](https://sre.google/sre-book/load-balancing-datacenter/)
+- [NIST SP 800-189 — Secure Interdomain Traffic Exchange: BGP Robustness and Security](https://csrc.nist.gov/pubs/sp/800/189/final)
 
 ---
 
