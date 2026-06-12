@@ -568,7 +568,7 @@ kubectl get lease kube-controller-manager -n kube-system -o yaml
 
 # Note leaseDurationSeconds, renewTime, and holderIdentity
 # Re-run after ~30 seconds and compare renewTime
-kubectl get lease kube-controller-manager -n kube-system -o jsonpath='{.spec.holderIdentity}{"\n"}{.spec.leaseDurationSeconds}{"\n"}{.status.renewTime}{"\n"}'
+kubectl get lease kube-controller-manager -n kube-system -o jsonpath='{.spec.holderIdentity}{"\n"}{.spec.leaseDurationSeconds}{"\n"}{.spec.renewTime}{"\n"}'
 ```
 
 <details>
@@ -584,7 +584,7 @@ Readiness and liveness probes are another form of timeout policy. They decide wh
 # Pick any running pod in your cluster
 kubectl get pods -A | head -5
 
-# Replace with a pod name from your cluster
+# Dump probe config across all kube-system pods (no name needed — this lists them)
 kubectl get pod -n kube-system -o yaml | rg -n "livenessProbe|readinessProbe|timeoutSeconds|periodSeconds|failureThreshold" -A2
 ```
 
@@ -646,7 +646,7 @@ Before moving on, ensure you understand:
 
 ---
 
-## Further Reading
+## Sources
 
 - Martin Kleppmann, [Designing Data-Intensive Applications](https://dataintensive.net/) - replication, consistency, fault tolerance, and the design trade-offs behind reliable data systems.
 - AWS Builders Library, [Timeouts, retries, and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) - practical guidance on timeout selection, idempotency, retry amplification, and jitter.
@@ -666,12 +666,13 @@ Before moving on, ensure you understand:
 
 Partial failure is the foundation for the remaining distributed-systems mental models. When you see a remote call time out, think in terms of uncertainty, delivery semantics, idempotency, retry budgets, and overload protection. These habits apply directly to platform operations: Kubernetes controllers retry reconciliation, service meshes enforce deadlines, queues redeliver messages, and user-facing APIs must protect downstream systems when the tail gets slow.
 
-Continue into the Platform Disciplines tracks when you want to apply these mental models to SRE, platform engineering, GitOps, and observability practice.
+The next module turns from *whether* a remote call succeeded to *when* events actually happened. [Module 5.5: Clock Skew and Ordering](../module-5.5-clock-skew-and-ordering/) explains why wall-clock timestamps are untrustworthy across machines, and how logical clocks recover a usable ordering of events without a shared "now."
 
 ### Key Links
 
 - [Module 5.1: What Makes Systems Distributed](../module-5.1-what-makes-systems-distributed/)
 - [Module 5.2: Consensus and Coordination](../module-5.2-consensus-and-coordination/)
 - [Module 5.3: Eventual Consistency](../module-5.3-eventual-consistency/)
+- [Module 5.5: Clock Skew and Ordering](../module-5.5-clock-skew-and-ordering/)
 - [SRE Discipline](/platform/disciplines/core-platform/sre/)
 - [Platform Engineering Discipline](/platform/disciplines/core-platform/platform-engineering/)

@@ -12,9 +12,9 @@ sidebar:
 >
 > **Track**: Foundations
 
-### What You'll Be Able to Do
+## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to apply consensus theory to production architecture reviews, evaluate coordination stores under failure, and debug leader-election behavior using the durable outcomes below.
 
 1. **Explain** how Raft and Paxos achieve consensus and why the FLP impossibility theorem constrains all consensus protocols
 2. **Evaluate** consensus-based systems (etcd, ZooKeeper, Consul) by analyzing their quorum requirements, failure tolerance, and split-brain prevention
@@ -23,40 +23,17 @@ After completing this module, you will be able to:
 
 ---
 
-**November 24, 2014. A routine database migration at a major financial services company triggers one of the most expensive consensus failures in banking history.**
-
-The company operated a distributed trading system with five database nodes using Paxos-based replication. During the migration, a network misconfiguration caused three nodes to become unreachable from each other—but each could still reach some of the remaining two nodes. The Paxos implementation had a subtle bug: under this specific partition pattern, two different nodes each believed they had achieved quorum.
-
-**For 45 minutes, the trading system had two leaders accepting conflicting writes.** One leader processed $127 million in buy orders. The other processed $89 million in sell orders for the same securities. When the partition healed and the nodes attempted to reconcile, the conflict was irreconcilable—the audit log showed trades that couldn't have both happened.
-
-**The total cost: $23 million in immediate losses from voided trades, $31 million in regulatory fines for order book integrity violations, and $180 million in customer lawsuit settlements.** The root cause wasn't the network—it was a consensus algorithm implementation that hadn't been tested against byzantine partition scenarios.
-
-This module teaches consensus: how distributed systems reach agreement, why it's deceptively hard, and why getting it wrong can cost more than most companies earn in a year.
-
----
-
 ## Why This Module Matters
 
-How do you get multiple computers to agree on something? It sounds simple—until network partitions split them, messages get lost, and nodes crash mid-decision. Yet agreement is essential: which node is the leader? Is this transaction committed? What's the current configuration?
+How do you get multiple computers to agree on something? The question sounds simple until a network partition splits them, messages get lost, and nodes crash mid-decision. Agreement still matters: which node is the leader, whether a transaction committed, and what the current configuration is. **Consensus** is the foundation of reliable distributed systems. Without it, you cannot run consistent replicated databases, reliable leader election, or fault-tolerant coordination in production.
 
-**Consensus** is the foundation of reliable distributed systems. Without it, you can't have consistent replicated databases, reliable leader election, or fault-tolerant coordination. Understanding consensus helps you choose the right tools and understand their limitations.
+This module explores how distributed systems reach agreement, which algorithms engineers use, where the trade-offs live, and when consensus is worth its cost. You will learn why Paxos and Raft exist, how quorums prevent split brain, why distributed locks need fencing tokens, and when a lease or optimistic concurrency check is the better tool. The goal is not to memorize protocol steps, but to recognize consensus problems in architecture reviews and choose coordination mechanisms that match your consistency needs.
 
-This module explores how distributed systems reach agreement—the algorithms, the trade-offs, and where you'll encounter consensus in practice.
+Strong coordination shows up in places that are easy to overlook. Service meshes elect control-plane leaders. Databases elect primaries. CI systems elect build executors. Each case needs an answer to the same question: who may mutate shared state right now? Weak coordination hides in caches and analytics pipelines where duplicates or delay are tolerable. Learning to classify workloads into those buckets keeps platforms fast without sacrificing safety on the metadata path.
 
 > **The Committee Analogy**
 >
-> Imagine a committee that must vote on decisions, but members are in different cities and can only communicate by mail. Letters get lost. Some members don't respond. The committee must still make decisions. How do they ensure everyone agrees on what was decided? This is the consensus problem—made harder because there's no chairperson everyone trusts.
-
----
-
-## What You'll Learn
-
-- What consensus means and why it's hard
-- Key consensus algorithms (Paxos, Raft)
-- How leader election works
-- Distributed locks and coordination
-- How etcd and ZooKeeper implement consensus
-- When you need consensus (and when you don't)
+> Imagine a committee that must vote on decisions, but members are in different cities and can only communicate by mail. Letters get lost, some members do not respond, and the committee must still make decisions. How do they ensure everyone agrees on what was decided when there is no chairperson everyone trusts? That is the consensus problem, and every production control plane faces a version of it.
 
 ---
 
@@ -64,21 +41,11 @@ This module explores how distributed systems reach agreement—the algorithms, t
 
 ### 1.1 What is Consensus?
 
-```
-CONSENSUS DEFINITION
-═══════════════════════════════════════════════════════════════
+**Consensus** means getting multiple nodes to agree on a single value or on an ordered log of values. Formally, a consensus protocol aims for three properties. **Agreement** requires that all non-faulty nodes decide on the same value. **Validity** requires that the decided value was proposed by some node rather than invented by the protocol. **Termination** requires that every non-faulty node eventually decides rather than waiting forever.
 
-Consensus: Getting multiple nodes to agree on a single value.
+These three properties sound modest, yet they are difficult to satisfy together when networks are unreliable and nodes fail independently. Consensus is not about one RPC succeeding; it is about a group converging on one outcome despite partial failure. That distinction matters when you design Kubernetes control planes, payment ledgers, or configuration stores.
 
-REQUIREMENTS
-─────────────────────────────────────────────────────────────
-1. AGREEMENT: All non-faulty nodes decide on the same value
-2. VALIDITY: The decided value was proposed by some node
-3. TERMINATION: All non-faulty nodes eventually decide
-
-SOUNDS SIMPLE, BUT...
-─────────────────────────────────────────────────────────────
-```
+Single-value consensus decides one proposal, such as which node is primary. Replicated log consensus decides an ordered sequence of operations, which is what state machines require. Database replication, configuration stores, and distributed locks all reduce to ordered logs sooner or later. When someone says "we need strong consistency," translate that statement into whether they need one agreed value now or a durable history forever.
 
 ```mermaid
 flowchart TD
@@ -86,114 +53,48 @@ flowchart TD
     B[Node B proposes Y] --> N
     N --> DA{Node A<br>decides ?}
     N --> DB{Node B<br>decides ?}
-    
+
     classDef note fill:#f9f9f9,stroke:#333,stroke-width:1px;
     Note[What if A doesn't hear from B?<br>What if B crashes mid-decision?<br>What if the network partitions?]:::note
 ```
 
+When Node A and Node B propose different values, the network may deliver some messages and drop others. A may decide while B still waits, or both may decide differently if the protocol is wrong. Correct consensus algorithms eliminate those outcomes by requiring majorities, monotonic terms, or prepared proposal numbers before any decision becomes binding.
+
+Engineers sometimes confuse "everyone received the message" with "everyone agreed on the same decision." Broadcast alone is insufficient because recipients may process messages in different orders or miss retries. Consensus protocols add voting rounds, persistent promises, and leader serialization so that agreement survives retransmissions and crashes.
+
 ### 1.2 Why Consensus is Hard
 
-```
-THE FLP IMPOSSIBILITY RESULT
-═══════════════════════════════════════════════════════════════
+In 1985, Fischer, Lynch, and Paterson published the **FLP impossibility result**. They proved that in a fully asynchronous model, where messages can take arbitrarily long and there are no reliable timeouts, no deterministic algorithm can guarantee consensus if even one process may crash. The proof exposes a cruel ambiguity: when you stop hearing from a peer, you cannot tell whether the peer crashed or is merely slow.
 
-Fischer, Lynch, and Paterson proved (1985):
+If you wait forever for the missing vote, you may violate termination because a crashed peer never responds. If you proceed without the missing vote, you may violate agreement because the slow peer might still be alive and decide differently. If you use a timeout, you are no longer in a purely asynchronous model; you are making a timing bet. FLP does not say consensus is impossible in practice. It says you cannot have a protocol that guarantees termination in every possible schedule without stepping outside strict asynchrony.
 
-    In an asynchronous system where even ONE node might crash,
-    there is NO algorithm that guarantees consensus.
+Real systems sidestep the theorem with partial synchrony assumptions, randomized backoff, and failure detectors implemented as timeouts. Paxos, Raft, and Zab all rely on those practical ingredients. They prioritize safety first: they would rather stop accepting writes than accept conflicting ones. Liveness returns when the network stabilizes and enough nodes can talk again.
 
-ASYNCHRONOUS = No timing assumptions
-    - Messages can take arbitrarily long
-    - You can't tell if a node crashed or is just slow
+Partial synchrony does not mean synchronized clocks across datacenters. It means there exists some period after an unknown but finite time when messages arrive within predictable bounds long enough for leaders to renew authority and for majorities to respond. Consensus implementations exploit those stable windows. During severe instability they pause, which operators experience as elevated latency or write unavailability rather than as corrupted state.
 
-THE PROBLEM
-─────────────────────────────────────────────────────────────
-You're waiting for Node B's vote. No response.
+> **Stop and think**: If consensus cannot be guaranteed in all situations, how do systems like Kubernetes run reliably every day? What assumptions do they make that the FLP theorem does not?
 
-Option 1: Wait forever
-    Problem: If B crashed, you never decide (no termination)
+### 1.3 Quorums and Fault Tolerance
 
-Option 2: Proceed without B
-    Problem: B might be alive and decide differently (no agreement)
+Most consensus systems use **quorums**: any two quorums overlap, so two different majorities cannot make independent decisions. For `n` nodes, a quorum is typically `floor(n/2) + 1`. A cluster of three nodes tolerates one failure because the remaining two form a majority. A cluster of five tolerates two failures because three nodes still form a majority.
 
-Option 3: Use timeouts
-    Problem: You might timeout a live node, or wait for a dead one
+Engineers often choose odd-sized clusters because even sizes waste a node without increasing fault tolerance. Four nodes still require three for a quorum, same as three nodes, but you pay for an extra machine. The rule of thumb for tolerating `f` simultaneous failures is `2f + 1` nodes. That formula appears in etcd sizing guides, ZooKeeper deployment notes, and every Raft implementation review.
 
-There's no perfect solution. Every algorithm makes trade-offs.
+Quorums also define what happens during partitions. A minority partition cannot commit new writes because it cannot assemble a quorum. That behavior feels like an outage to clients pinned to the minority side, but it prevents split brain. Availability and consistency trade off here: the majority partition stays writable while the minority stops, which is the safe choice for coordination stores.
 
-PRACTICAL IMPLICATIONS
-─────────────────────────────────────────────────────────────
-FLP says: Can't guarantee consensus in all cases.
-Reality: Consensus is highly probable with good algorithms.
+When you size a cluster, count failure domains rather than only node counts. Three nodes in one rack tolerate one machine failure but not rack power loss. Five nodes spread across three zones tolerate zone loss only if quorums cannot form inside a lost zone alone. Placement and quorum math must be designed together, otherwise you will discover gaps during the first real partition instead of during a tabletop exercise.
 
-Algorithms like Paxos and Raft work in practice because:
-- True asynchrony is rare (most messages arrive quickly)
-- Random backoff prevents live-lock
-- Timing assumptions usually hold
-```
+### 1.4 Consensus Use Cases
 
-> **Stop and think**: If it's mathematically impossible to guarantee consensus in all situations, how do systems like Kubernetes run reliably in production every day? What assumptions do they make that the FLP theorem doesn't?
+Consensus shows up wherever a group must pick one answer. **Leader election** asks which node is authoritative right now. **Distributed locks** ask which client may enter a critical section. **Replicated state machines** ask which operation happened in which order across replicas. **Atomic commit** asks whether a distributed transaction should commit or abort as a unit.
 
-### 1.3 Consensus Use Cases
+Kubernetes uses etcd, a Raft-backed store, to record desired cluster state. Controller-manager and scheduler components elect leaders through Lease objects so only one active controller mutates shared resources at a time. Kafka and Hadoop historically relied on ZooKeeper, which uses the Zab protocol, for similar coordination. The tool names differ, but the underlying need is the same: strong agreement under failure.
 
-```
-WHERE YOU NEED CONSENSUS
-═══════════════════════════════════════════════════════════════
-
-LEADER ELECTION
-─────────────────────────────────────────────────────────────
-"Who is the leader?"
-
-Only one node should be leader at a time.
-All nodes must agree on who it is.
-If leader fails, elect a new one.
-
-    Examples:
-    - Kubernetes controller-manager
-    - Database primary
-    - Message queue broker
-
-DISTRIBUTED LOCKS
-─────────────────────────────────────────────────────────────
-"Who holds the lock?"
-
-Only one client can hold a lock at a time.
-All nodes must agree on current holder.
-If holder crashes, lock must be released.
-
-    Examples:
-    - Preventing duplicate processing
-    - Coordinating batch jobs
-    - Resource allocation
-
-REPLICATED STATE MACHINES
-─────────────────────────────────────────────────────────────
-"What is the current state?"
-
-All replicas apply the same operations in the same order.
-Must agree on operation ordering.
-
-    Examples:
-    - etcd (Kubernetes configuration)
-    - Replicated databases
-    - Configuration management
-
-ATOMIC COMMIT
-─────────────────────────────────────────────────────────────
-"Should this transaction commit?"
-
-All participants must agree: commit or abort.
-Can't have some commit and some abort.
-
-    Examples:
-    - Distributed transactions
-    - Two-phase commit
-    - Saga coordination
-```
+Atomic commit across microservices is another face of consensus. Two-phase commit asks every participant to prepare and then commit or abort together. Saga patterns relax all-or-nothing guarantees with compensating transactions. The consensus question still appears at the coordinator: did everyone agree on the outcome? If your business cannot tolerate divergent commit decisions, you need either consensus or a human reconciliation process.
 
 > **Try This (2 minutes)**
 >
-> Think of systems you use. Where is consensus happening?
+> Think of systems you use. Where is consensus happening, and what breaks if it fails?
 >
 > | System | Consensus For | What if it Fails? |
 > |--------|---------------|-------------------|
@@ -207,34 +108,9 @@ Can't have some commit and some abort.
 
 ### 2.1 Paxos: The Original
 
-```
-PAXOS (Leslie Lamport, 1989)
-═══════════════════════════════════════════════════════════════
+Leslie Lamport introduced **Paxos** in the late 1980s as the first proven solution to consensus in asynchronous networks with crash failures. Paxos is famous for being correct and for being difficult to teach. Many production systems borrow Paxos ideas even when engineers implement Raft instead for clarity.
 
-The first proven consensus algorithm.
-Famous for being difficult to understand.
-Basis for many production systems.
-
-ROLES
-─────────────────────────────────────────────────────────────
-PROPOSERS: Suggest values (can be multiple)
-ACCEPTORS: Vote on values (majority must agree)
-LEARNERS: Learn the decided value
-
-BASIC PAXOS (Single Value)
-─────────────────────────────────────────────────────────────
-Phase 1: PREPARE
-    Proposer → Acceptors: "Prepare proposal number N"
-    Acceptors → Proposer: "Promise to not accept < N"
-                          (plus any already-accepted value)
-
-Phase 2: ACCEPT
-    If majority promised:
-    Proposer → Acceptors: "Accept value V with number N"
-    Acceptors → Learners: "Accepted V"
-
-    If majority accept: Consensus reached!
-```
+Paxos assigns three roles. **Proposers** suggest values. **Acceptors** vote on proposals and remember promises. **Learners** observe the chosen value once acceptors agree. Basic Paxos decides a single value in two phases. In the prepare phase, a proposer sends a proposal number and collects promises from a majority of acceptors not to accept older numbers. In the accept phase, the proposer sends a value with that number; if a majority accepts, consensus is reached.
 
 ```mermaid
 sequenceDiagram
@@ -259,40 +135,15 @@ sequenceDiagram
     Note over L: Consensus: X
 ```
 
-```
-WHY IT'S COMPLEX
-─────────────────────────────────────────────────────────────
-- Multiple proposers can conflict
-- Must handle old proposals
-- Single-decree Paxos decides ONE value
-- Multi-Paxos for sequences (even more complex)
-```
+Multi-Paxos extends the idea to a sequence of log entries, which is what databases need, but the bookkeeping grows quickly. Competing proposers, stale proposal numbers, and learner notification all add operational complexity. That complexity is one reason Diego Ongaro and John Ousterhout designed Raft as an understandable alternative with equivalent safety properties for replicated logs.
+
+Lamport's later paper [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf) reframed the algorithm for practitioners, yet operational teams still prefer implementations with clear leader roles and explicit logs. Google Chubby, Spanner's Paxos groups, and numerous legacy systems prove Paxos at scale, but onboarding cost remains high. When you read about "Paxos-based" storage, ask whether the system uses single-decree Paxos, Multi-Paxos, or a derivative such as Zab that borrows Paxos-style quorums with different messaging shapes.
 
 ### 2.2 Raft: Understandable Consensus
 
-```
-RAFT (Diego Ongaro, 2014)
-═══════════════════════════════════════════════════════════════
+**Raft**, published in 2014, reorganizes consensus around a strong leader. Instead of symmetric proposers competing at all times, Raft elects one leader that orders client requests and replicates them to followers. Consensus decomposes into leader election, log replication, and safety rules that keep logs consistent.
 
-Designed for understandability.
-Equivalent to Paxos but easier to implement.
-Used by etcd, Consul, CockroachDB.
-
-KEY INSIGHT
-─────────────────────────────────────────────────────────────
-Instead of symmetric nodes, use a leader.
-Leader orders all decisions.
-Consensus becomes: "elect leader" + "follow leader"
-
-THREE SUB-PROBLEMS
-─────────────────────────────────────────────────────────────
-1. LEADER ELECTION: Choose a leader
-2. LOG REPLICATION: Leader replicates log to followers
-3. SAFETY: Ensure consistency despite failures
-
-NODE STATES
-─────────────────────────────────────────────────────────────
-```
+Raft nodes are followers by default. If followers stop receiving heartbeats from a leader, they start an election. A candidate requests votes; if it wins a majority, it becomes the new leader. The leader accepts client writes, appends them to its log, and replicates entries to followers. Under Raft §5.4.2, a leader may commit an entry from its **current term** directly once a majority has replicated it; entries from **prior terms** become committed only **indirectly**, when a current-term entry at a higher index commits and pulls them along — a leader cannot treat a replicated-on-majority old-term entry as safely committed on its own. Only then may the leader treat an operation as durable.
 
 ```mermaid
 stateDiagram-v2
@@ -304,58 +155,33 @@ stateDiagram-v2
     Candidate --> Follower: discovers higher term
 ```
 
-**State Transitions:**
-- **Start**: All nodes are Followers
-- **Timeout**: Follower becomes Candidate, requests votes
-- **Majority**: Candidate becomes Leader
-- **Failure**: Leader times out, new election
+This state machine is easier to teach than Paxos because there is one obvious writer at a time. etcd, Consul, CockroachDB, and many other systems implement Raft or a close variant for replicated logs.
 
-### 2.3 Raft Deep Dive
+Followers are passive except during elections. Candidates gather votes. Leaders accept client traffic and replicate entries. The simplicity is intentional: most engineering time goes into snapshotting, compaction, and operational tooling rather than into proving liveness for exotic proposer races. When you debug Raft, ask which role a node believes it holds and whether its term matches the cluster majority.
 
-```
-RAFT: LEADER ELECTION
-═══════════════════════════════════════════════════════════════
+### 2.3 Raft Deep Dive: Leader Election
 
-TERMS
-─────────────────────────────────────────────────────────────
-Time divided into terms (epochs).
-Each term has at most one leader.
-Term number increases monotonically.
+Raft divides time into **terms**, numbered monotonically. Each term has at most one leader. When a follower times out, it increments its term, votes for itself, and asks peers for votes. Peers grant at most one vote per term and refuse candidates whose logs lag behind theirs. That log-completeness rule prevents a stale node from winning leadership with missing entries.
 
-    Term 1: Node A is leader
-    Term 2: Node A fails, Node B elected
-    Term 3: Node B fails, Node C elected
-```
+Split votes happen when multiple candidates start elections simultaneously. Raft mitigates split votes with **randomized election timeouts**, typically spread across a few hundred milliseconds. Randomness makes it likely that one candidate wins before others restart the race. Fixed identical timeouts across nodes can cause election storms where no candidate reaches a majority for minutes.
 
-> **Pause and predict**: If a network partition splits a 5-node cluster into a group of 3 and a group of 2, what will happen to the leader if it was in the group of 2?
+Log completeness voting prevents a lagging node from truncating committed history if it wins an election. The rule compares the last log term and index between candidate and voter. Operators who restore old snapshots without understanding index continuity can accidentally elect nodes that force large reconciliations or reject valid candidates.
 
-```
-ELECTION PROCESS
-─────────────────────────────────────────────────────────────
-1. Follower doesn't hear from leader (timeout)
-2. Increments term, becomes candidate
-3. Votes for itself, requests votes from others
-4. Others vote if:
-   - Haven't voted this term
-   - Candidate's log is at least as up-to-date
-5. Majority votes → becomes leader
-6. No majority → timeout, new election with random delay
+During a partition, only the side with a quorum can elect a leader and commit entries. A stale leader on the minority side may still append incoming client requests to its own local log, but it cannot replicate them to a majority, so it never commits or acknowledges them. Clients talking only to the minority see timeouts, errors, or uncertainty rather than durable success, and those uncommitted entries are discarded when the partition heals. That behavior is safety working as designed, not a random glitch.
 
-SPLIT VOTE PREVENTION
-─────────────────────────────────────────────────────────────
-Random election timeouts (150-300ms).
-Unlikely two candidates timeout simultaneously.
-If they do, random backoff ensures one wins next round.
+Heartbeats are empty **AppendEntries** RPCs — they carry no log entries and are not written to the log — sent periodically to suppress unnecessary elections. Operators who set extremely aggressive election timeouts to "fail over faster" sometimes trigger flapping leadership during normal latency spikes. Tune timeouts against measured round-trip times inside the cluster, not against developer laptop benchmarks.
 
-RAFT: LOG REPLICATION
-═══════════════════════════════════════════════════════════════
+> **Pause and predict**: If a network partition splits a five-node cluster into groups of three and two, what happens to the leader if it lands in the group of two?
 
-Leader receives client requests.
-Appends to local log.
-Replicates to followers.
-Once majority acknowledge, entry is "committed."
-Leader notifies followers of commit.
-```
+### 2.4 Raft Deep Dive: Log Replication and Safety
+
+The leader serializes all writes. For each client request, the leader appends an entry to its local log, sends AppendEntries RPCs to followers, and waits for acknowledgments from a quorum. Once a quorum stores an entry from the leader's **current term**, the leader marks it committed and applies it to its state machine; older-term entries replicated on a majority commit only indirectly when a current-term entry above them commits (Raft §5.4.2). Followers learn commit indexes from the leader and apply the same entries in order.
+
+Raft's safety argument rests on two ideas. First, committed entries appear in every future leader's log because leaders are elected by majorities and majorities overlap. Second, if two logs diverge, the leader forces followers to discard uncommitted suffixes and match its log before accepting new entries. That reconciliation is why a rejoining node with stale data cannot overwrite the authoritative history.
+
+The **commit index** separates "stored on some nodes" from "safe to expose." Clients should not treat a write as durable until the leader commits it. Many outages trace back to clients ignoring that boundary or talking to endpoints that are not fault-aware.
+
+Snapshot and compaction are operational extensions of the same log model. etcd periodically snapshots state so logs do not grow without bound. Compaction deletes superseded entries while preserving safety for new leaders. Those maintenance operations still respect quorum rules; running them during unhealthy clusters can stall recovery if operators skip health checks.
 
 ```mermaid
 sequenceDiagram
@@ -369,47 +195,25 @@ sequenceDiagram
     L->>F2: Append X
     F1-->>L: ACK
     F2-->>L: ACK
-    Note over L: COMMITTED! (majority)
+    Note over L: COMMITTED (majority)
     L-->>C: Success
     L->>F1: Commit notify X
     L->>F2: Commit notify X
 ```
 
-```
-LOG CONSISTENCY
-─────────────────────────────────────────────────────────────
-Leader's log is authoritative.
-Followers must match leader.
-If mismatch, leader sends earlier entries until sync.
-```
+### 2.5 Membership Changes
 
-> **War Story: The $4.2 Million etcd Split-Brain**
->
-> **June 2019. A fintech startup's Kubernetes cluster loses $4.2 million in a single weekend due to an etcd misconfiguration.**
->
-> The company ran a payment processing platform on Kubernetes. Their 3-node etcd cluster sat in a single availability zone—violating every high-availability best practice. When the network switch serving Node A failed, the cluster split: Node A was isolated, while Nodes B and C remained connected.
->
-> **The timeline of disaster:**
-> - **Friday 6:42 PM**: Network switch fails, partitioning Node A
-> - **Friday 6:42 PM**: Nodes B and C detect missing heartbeat, start election
-> - **Friday 6:43 PM**: Node B wins election with term 42 (majority: B+C = 2/3)
-> - **Friday 6:43 PM - Sunday 2:00 AM**: System operates normally on B+C
-> - **Friday 6:42 PM - Sunday 2:00 AM**: Node A continues receiving writes from misconfigured clients
->
-> **The critical failure**: Some microservices had been configured with Node A's IP directly, bypassing the load balancer. These services kept writing to Node A, which accepted writes despite having no quorum—**the etcd version had a bug where stale leaders accepted reads but not writes, except through a deprecated API the microservices used**.
->
-> **When the network healed Sunday morning:**
-> - Node A rejoined with term 41 (stale)
-> - Node A's 33 hours of writes were rejected—term 42 > term 41
-> - 142,000 payment records existed only on Node A
-> - Node A's data was overwritten by B+C's authoritative log
->
-> **The cost:**
-> - $3.1 million in customer refunds for lost payment confirmations
-> - $1.2 million in emergency engineering (weekend rates, consultants)
-> - $400,000 in regulatory penalties for payment processing failures
->
-> **The fix**: The company moved to 5-node etcd across 3 availability zones, enforced all traffic through a load balancer with health checks, and implemented etcd endpoint monitoring that alerts on quorum loss within 30 seconds.
+Changing cluster membership is dangerous because overlapping majorities from old and new configurations could decide different values. Raft handles this with **joint consensus**: a transitional configuration requires majorities of both old and new sets before committing membership changes. After the joint phase completes, the cluster shrinks to the new configuration alone.
+
+Operators feel this during etcd scale-up and scale-down events. Rushing node removal without following the documented steps can shrink quorums unexpectedly. Treat membership changes as planned operations with verified quorum health, not as casual autoscaling.
+
+Read paths deserve the same skepticism as write paths during partitions. A stale member may serve lagging data unless the client requests linearizable reads through the leader or uses verified indexes. Many "mystery bugs" after failover are stale reads rather than lost writes. Document which APIs guarantee linearizability and which tolerate lagging followers so application teams do not guess under pressure.
+
+> **Hypothetical scenario:** Imagine a three-node etcd cluster running in a single availability zone for a Kubernetes platform. A top-of-rack switch failure isolates one node while the other two remain connected. The pair detects missed heartbeats, holds an election, and elects a new leader at term N+1 with a quorum of two. The isolated node still believes it is leader at the older term N and may append client requests to its local log from clients configured with its IP directly instead of the cluster endpoint list, but it cannot replicate those entries to a majority, so it never commits or acknowledges them.
+
+When the partition heals, the stale node rejoins and discovers the higher term N+1. Raft discards the uncommitted entries from term N because they never reached a quorum. Operators see "lost" configuration changes that existed only on the minority side. The lesson is twofold: minority partitions must not be treated as writable, and clients must use fault-aware endpoints rather than pinning to a single member IP. The term numbers here are illustrative, but the mechanics match real Raft behavior documented in etcd operations guides.
+
+Monitoring should alert when etcd loses quorum or when clients bypass endpoint lists. Healthy servers cannot fix misconfigured writers that keep sending traffic to an isolated member. Include client configuration verification in consensus incident runbooks alongside server health checks.
 
 ---
 
@@ -417,115 +221,56 @@ If mismatch, leader sends earlier entries until sync.
 
 ### 3.1 Why Leaders?
 
-```
-WHY USE LEADERS?
-═══════════════════════════════════════════════════════════════
-
-LEADERLESS (all nodes equal)
-─────────────────────────────────────────────────────────────
-    Every request needs coordination
-    Complex conflict resolution
-    Higher latency (wait for quorum)
-    No single point of failure
-
-LEADER-BASED
-─────────────────────────────────────────────────────────────
-    Leader orders all operations
-    Simple decision making
-    Lower latency (leader decides alone)
-    Must handle leader failure
-
-COMPARISON
-─────────────────────────────────────────────────────────────
-```
+Leaderless designs allow any replica to accept writes, which can improve availability during partitions at the cost of conflict resolution. Leader-based designs route writes through one node, which simplifies ordering and shrinks the coordination problem to "who is leader?" rather than "how do we merge every write?"
 
 | Feature | Leaderless | Leader-based |
 |---------|------------|--------------|
 | **Writes** | Any node | Leader only |
 | **Coordination** | Every write | Leader election |
-| **Latency** | Higher | Lower |
-| **Availability** | Higher | Lower (election) |
+| **Latency** | Depends on consistency level, quorum size, and locality | Often lower for single-leader steady-state writes |
+| **Availability** | Higher | Lower during election |
 | **Complexity** | Complex reads | Complex failover |
 | **Examples** | Cassandra | etcd, ZooKeeper |
 
+Latency is not a universal ordering: leaderless designs may win on local quorum-one writes or tunable consistency, while leader-based paths pay round trips to one coordinator but simplify ordering. Compare designs using your consistency target, quorum layout, conflict handling, and geographic placement — not a blanket "leaderless is always slower" rule.
+
+Leader election introduces a brief unavailability window when the leader fails, but it makes steady-state performance predictable. For control planes and metadata stores, that trade-off is usually correct.
+
+Dual leaders on a minority partition are prevented by quorum voting, not by good intentions. Application-level "leader flags" stored in local memory do not participate in consensus and can lie after partitions heal. Always anchor leadership in a quorum-backed lease or log entry.
+
 ### 3.2 Leader Election Mechanisms
 
-```
-LEADER ELECTION APPROACHES
-═══════════════════════════════════════════════════════════════
+Simple algorithms like **bully election** pick the highest numeric ID and work on LANs with stable membership. They are not partition tolerant: split groups may each declare a leader. Consensus-based election through Raft or Zab elects leaders with quorum support, which prevents dual leaders in minority partitions.
 
-BULLY ALGORITHM
-─────────────────────────────────────────────────────────────
-Highest ID wins. Simple but not partition-tolerant.
+**Lease-based leadership** adds time bounds. A leader must renew a lease periodically; if renewal stops, others may take over. Leases convert "leader died" into "leader failed to prove liveness within N seconds." That pattern appears in Kubernetes Lease objects and in Chubby-style lock services.
 
-    Node 1 (ID=1): "I want to be leader"
-    Node 2 (ID=2): "I have higher ID, step aside"
-    Node 3 (ID=3): "I have highest ID, I'm leader"
+External coordination stores let application components delegate hard consensus to etcd or ZooKeeper. Your service watches a key or lease, runs leader callbacks, and exits cleanly on loss of leadership. That separation keeps application code simpler while benefiting from battle-tested replication.
 
-CONSENSUS-BASED (Raft/Paxos)
-─────────────────────────────────────────────────────────────
-Nodes vote. Majority wins. Partition-tolerant.
-
-    - Requires quorum for election
-    - Leader has "lease" (term)
-    - New election on leader failure
-
-LEASE-BASED
-─────────────────────────────────────────────────────────────
-Leader holds time-limited lease. Must renew.
-
-    Leader acquires lease (e.g., 15 seconds)
-    Leader renews every 5 seconds
-    If leader crashes, lease expires
-    Others can acquire after expiry
-
-    # Kubernetes leader election uses leases
-    kubectl get leases -n kube-system
-
-EXTERNAL COORDINATION
-─────────────────────────────────────────────────────────────
-Use external system (etcd, ZooKeeper) for coordination.
-
-    Component → etcd: "I'm leader" (with lease)
-    etcd: "OK, you're leader until lease expires"
-    Other components: Watch etcd for current leader
-```
+Compare bully election only in teaching exercises or strictly trusted LANs. In cloud environments, partitions happen during routine maintenance. Consensus-backed leases cost more latency but buy the property you actually need: at most one acknowledged leader at a time for a given term.
 
 ### 3.3 Kubernetes Leader Election
 
-```
-KUBERNETES LEADER ELECTION
-═══════════════════════════════════════════════════════════════
+Kubernetes components such as kube-controller-manager and kube-scheduler use **Lease** objects in the `coordination.k8s.io/v1` API. The active leader creates or renews a Lease; followers watch the Lease and attempt takeover when renewals stop. Lease duration, renew deadline, and retry period define how quickly failover happens versus how sensitive the cluster is to short pauses.
 
-HOW IT WORKS
-─────────────────────────────────────────────────────────────
-Uses Lease objects in etcd.
-Leader creates/renews lease.
-Others watch lease, take over if expired.
-
-EXAMPLE: CONTROLLER-MANAGER
-─────────────────────────────────────────────────────────────
-# View current leader
+```bash
 kubectl get lease kube-controller-manager -n kube-system -o yaml
+```
 
+```yaml
 apiVersion: coordination.k8s.io/v1
 kind: Lease
 metadata:
   name: kube-controller-manager
   namespace: kube-system
 spec:
-  holderIdentity: master-1_abc123    # Current leader
-  leaseDurationSeconds: 15           # Lease validity
-  renewTime: "2024-01-15T10:30:00Z"  # Last renewal
+  holderIdentity: control-plane-node-1_abc123
+  leaseDurationSeconds: 15
+  renewTime: "2026-01-15T10:30:00Z"
+```
 
-IMPLEMENTATION FOR YOUR APPS
-─────────────────────────────────────────────────────────────
-# Using client-go leader election
+Application controllers can use client-go leader election with the same Lease mechanism. Callbacks separate **OnStartedLeading** work from **OnStoppedLeading** cleanup, which prevents split-brain writes if your process continues after losing the lease.
 
-import (
-    "k8s.io/client-go/tools/leaderelection"
-)
-
+```go
 leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
     Lock: &resourcelock.LeaseLock{
         LeaseMeta: metav1.ObjectMeta{
@@ -538,14 +283,18 @@ leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
     RetryPeriod:   2 * time.Second,
     Callbacks: leaderelection.LeaderCallbacks{
         OnStartedLeading: func(ctx context.Context) {
-            // I'm the leader, do leader work
+            // Leader work here
         },
         OnStoppedLeading: func() {
-            // I'm no longer leader
+            // Stop writers; release resources
         },
     },
 })
 ```
+
+Treat leader loss as a normal event. Long garbage-collection pauses or network blips can delay renewal; your process must stop mutating shared state when leadership ends even if it still feels healthy locally.
+
+In Kubernetes 1.35, Lease-based leader election remains the standard path for in-tree and custom controllers. The coordination API is stable, but your callbacks must still be non-blocking enough to renew before `renewTime` drifts past `leaseDurationSeconds`. Watch dashboards for rising workqueue depth during leader transitions; those spikes often indicate controllers that assume leadership is permanent.
 
 ---
 
@@ -553,35 +302,11 @@ leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
 
 ### 4.1 Distributed Locks
 
-```
-DISTRIBUTED LOCKS
-═══════════════════════════════════════════════════════════════
+A local mutex protects in-process critical sections because the operating system releases locks when a process exits. A **distributed lock** protects shared resources across machines, but there is no shared OS to clean up after crashes. Lock services must combine consensus with time bounds so locks eventually expire when holders die.
 
-PURPOSE
-─────────────────────────────────────────────────────────────
-Ensure only one process does something at a time.
-Coordinate access to shared resources.
+The naive pattern stores a lock key in etcd or Redis with a TTL. That helps, but TTL alone does not make locks safe. If a holder pauses longer than the TTL, another client can acquire the lock while the first still believes it holds exclusivity.
 
-LOCAL LOCK (single machine)
-─────────────────────────────────────────────────────────────
-    mutex.Lock()
-    // Critical section
-    mutex.Unlock()
-
-    Simple. Process crashes → OS releases lock.
-
-DISTRIBUTED LOCK (multiple machines)
-─────────────────────────────────────────────────────────────
-    // Acquire lock from coordination service
-    lock.Acquire("resource-x")
-    // Critical section
-    lock.Release("resource-x")
-
-    Complex. Process crashes → Who releases lock?
-
-THE PROBLEM WITH DISTRIBUTED LOCKS
-─────────────────────────────────────────────────────────────
-```
+Lock granularity matters as much as correctness. One global lock for an entire batch pipeline creates an availability bottleneck. Fine-grained locks per shard reduce contention but multiply fencing requirements. Prefer idempotent shard workers with lease-based claim keys when possible, and reserve exclusive locks for resources that truly cannot be shared.
 
 ```mermaid
 sequenceDiagram
@@ -596,131 +321,50 @@ sequenceDiagram
     B->>S: Acquire lock
     S-->>B: Lock granted
     Note over A: GC pause ends
-    Note over A, B: Client A thinks it still has lock!<br>Both A and B in critical section!
+    Note over A, B: Both may enter critical section
 ```
 
-> **Stop and think**: Why does a distributed lock need a TTL (time-to-live) in the first place? What would happen if a client acquired a lock without a TTL and then crashed permanently before releasing it?
+Martin Kleppmann's analysis of Redlock explains why fencing is required for correctness. A lock service can only hint at exclusivity; the storage layer must reject stale writers.
 
-```
-SOLUTION: FENCING TOKENS
-─────────────────────────────────────────────────────────────
-Lock server issues incrementing token with each acquisition.
-Resource checks token, rejects stale tokens.
+### 4.2 Fencing Tokens
 
-    Client A gets lock with token 33
-    Client A pauses
-    Lock expires, Client B gets lock with token 34
-    Client A wakes, tries to write with token 33
-    Resource rejects: 33 < 34 (stale)
-```
+**Fencing tokens** are monotonically increasing numbers issued with each lock acquisition. Writers attach the token to every mutating request. The shared resource rejects requests whose token is older than the highest token it has seen. Even if Client A wakes late and still believes it holds the lock, its stale token cannot corrupt data.
 
-### 4.2 Coordination Patterns
+This pattern shifts correctness from the unreliable client to the storage layer, which you control. Databases and object stores can store the latest fencing token alongside each record. Any payment, inventory, or shard migration API that relies on distributed locks should understand fencing before production load arrives.
 
-```
-COORDINATION PATTERNS
-═══════════════════════════════════════════════════════════════
+Redlock-style designs attempt to survive Redis node failures by quorum acquisition across independent Redis masters, but Kleppmann's critique shows that without fencing at the resource, clock drift and long pauses still break safety. If you cannot plumb fencing tokens into the storage layer, treat the lock as a performance hint rather than a correctness guarantee and choose idempotent workflows instead.
 
-DISTRIBUTED QUEUE
-─────────────────────────────────────────────────────────────
-Multiple workers, one task at a time.
+### 4.3 Coordination Patterns
 
-    /tasks/task-001 → Worker A claims
-    /tasks/task-002 → Worker B claims
-    /tasks/task-003 → Worker C claims
+Beyond locks, coordination services implement **queues**, **barriers**, and **service discovery**. Workers claim tasks by creating ephemeral nodes or conditional keys. Barriers let N workers signal readiness before a batch step proceeds. Service registration publishes instance endpoints that disappear automatically when sessions end.
 
-    Workers watch for new tasks, claim by creating ephemeral node.
+These patterns reuse the same primitives: consistent writes, watches or long polls, and ephemeral keys tied to session lifetime. The difference is semantics, not infrastructure. Choosing the wrong pattern, such as using a lock where a queue suffices, adds latency without improving correctness.
 
-BARRIER (RENDEZVOUS)
-─────────────────────────────────────────────────────────────
-Wait until N nodes are ready, then proceed.
+Barriers coordinate phased work such as rolling restarts or batch ETL starts. Queues decouple producers and consumers while preserving at-most-one claim semantics when implemented with compare-and-swap or ephemeral nodes. Service discovery publishes membership that should disappear automatically when processes crash. Each pattern maps cleanly to watches in etcd or ZooKeeper, but the error handling differs when sessions expire during long-running jobs.
 
-    Worker 1: Create /barrier/worker-1
-    Worker 2: Create /barrier/worker-2
-    Worker 3: Create /barrier/worker-3
+### 4.4 etcd and ZooKeeper
 
-    All watch /barrier. When count = N, all proceed.
-
-    Use case: Coordinated restart, batch processing start.
-
-SERVICE DISCOVERY
-─────────────────────────────────────────────────────────────
-Services register, clients find them.
-
-    Service A: Create /services/api/instance-1 (ephemeral)
-    Service A: Create /services/api/instance-2 (ephemeral)
-
-    Client: List /services/api → [instance-1, instance-2]
-
-    If service crashes, ephemeral node deleted automatically.
-
-CONFIGURATION DISTRIBUTION
-─────────────────────────────────────────────────────────────
-Central config, all nodes watch.
-
-    Admin: Write /config/feature-flags = {"new-ui": true}
-    All nodes: Watch /config/feature-flags
-    Change detected → All nodes update simultaneously
-```
-
-### 4.3 etcd and ZooKeeper
-
-```
-etcd vs ZooKeeper
-═══════════════════════════════════════════════════════════════
-
-SIMILARITIES
-─────────────────────────────────────────────────────────────
-Both provide:
-- Distributed key-value store
-- Strong consistency (linearizable)
-- Watch mechanism (change notifications)
-- TTL/leases (automatic expiration)
-- Used for coordination, not data storage
-
-DIFFERENCES
-─────────────────────────────────────────────────────────────
-```
+Both etcd and ZooKeeper provide strongly consistent coordination stores with watch mechanisms and lease support. They are optimized for small, critical metadata rather than application data volumes.
 
 | Feature | etcd | ZooKeeper |
 |---------|------|-----------|
 | **Protocol** | gRPC | Custom binary |
-| **Consensus** | Raft | Zab (Paxos-like) |
-| **Data model** | Flat key-value | Hierarchical (tree) |
-| **API** | Simple KV | ZNodes (like files) |
-| **Watches** | Efficient (stream) | One-time triggers |
-| **Typical use** | Kubernetes | Kafka, Hadoop |
-| **Language** | Go | Java |
+| **Consensus** | Raft | Zab (atomic broadcast) |
+| **Data model** | Flat key-value | Hierarchical znodes |
+| **API** | Simple KV + watches | Tree operations |
+| **Typical use** | Kubernetes | Kafka, Hadoop legacy stacks |
 
-```
-etcd EXAMPLE
-─────────────────────────────────────────────────────────────
-# Set a key
+```bash
 etcdctl put /myapp/config '{"version": 2}'
-
-# Get a key
 etcdctl get /myapp/config
-
-# Watch for changes
 etcdctl watch /myapp/config
-
-# Set with TTL (lease)
 etcdctl lease grant 60
 etcdctl put /myapp/leader "node-1" --lease=<lease-id>
-
-ZOOKEEPER EXAMPLE
-─────────────────────────────────────────────────────────────
-# Create a znode
-create /myapp/config '{"version": 2}'
-
-# Get a znode
-get /myapp/config
-
-# Watch (one-time)
-get /myapp/config -w
-
-# Ephemeral node (deleted when session ends)
-create -e /myapp/leader "node-1"
 ```
+
+ZooKeeper clients create ephemeral znodes that disappear when sessions expire, which is how early Hadoop ecosystems implemented leader election and membership. Modern Kubernetes stacks standardize on etcd, but ZooKeeper remains relevant where ecosystems already embed it.
+
+Consul uses Raft internally and targets service mesh and multi-datacenter discovery scenarios. The comparison table is not a winner-take-all ranking; it is a map of which protocol and data model your ecosystem already expects. Migrating Kafka off ZooKeeper toward KRaft, for example, changes operational assumptions that used to hide inside znode hierarchies.
 
 ---
 
@@ -728,152 +372,104 @@ create -e /myapp/leader "node-1"
 
 ### 5.1 Consensus is Expensive
 
-```
-THE COST OF CONSENSUS
-═══════════════════════════════════════════════════════════════
+Every committed write in Raft crosses the leader and a quorum of followers. That implies at least two network round trips and serializes writes through one node. Geographic distribution amplifies latency; a quorum spanning regions may measure hundreds of milliseconds per write.
 
-LATENCY
-─────────────────────────────────────────────────────────────
-Every write requires:
-    1. Client → Leader
-    2. Leader → Followers (parallel)
-    3. Followers → Leader (acknowledgments)
-    4. Leader → Client (commit confirmation)
+Throughput also caps out earlier than in leaderless stores. A single Raft leader might sustain tens of thousands of small writes per second on good hardware, while an in-memory cache without consensus can exceed that by an order of magnitude. You pay for linearizable agreement with latency, throughput, and operational complexity.
 
-    Minimum: 2 round trips
-    With geographic distribution: 100s of milliseconds
+Availability requires quorum maintenance. A three-node cluster survives one failure; a five-node cluster survives two. Adding nodes increases fault tolerance but also increases coordination work. Even-sized clusters should be avoided unless you have a documented reason.
 
-THROUGHPUT
-─────────────────────────────────────────────────────────────
-All writes go through leader.
-Leader is bottleneck.
-Can't horizontally scale writes.
-
-    Single leader: ~10,000-50,000 writes/second typical
-    Compare to Redis: ~100,000+ writes/second (no consensus)
-
-AVAILABILITY
-─────────────────────────────────────────────────────────────
-Requires quorum (majority).
-3 nodes: 1 can fail
-5 nodes: 2 can fail
-7 nodes: 3 can fail
-
-    More nodes = better fault tolerance
-    More nodes = slower consensus (more coordination)
-
-COMPLEXITY
-─────────────────────────────────────────────────────────────
-Consensus algorithms are hard to implement correctly.
-Subtle bugs can cause data loss.
-Use battle-tested implementations (etcd, ZooKeeper).
-```
+Benchmark claims about writes per second vary with value size, fsync policy, and network latency. Treat numbers as order-of-magnitude guidance. The enduring lesson is structural: consensus writes are serialized through a leader and acknowledged by majorities, so they will not behave like horizontally sharded application databases no matter how fast the hardware becomes.
 
 ### 5.2 When You Need Consensus
 
-```
-YOU NEED CONSENSUS WHEN
-═══════════════════════════════════════════════════════════════
+Reach for consensus when mistakes are expensive and ordering must be global. Leader election, strongly consistent configuration, distributed locks with fencing, and atomic commit decisions fit that profile. If two leaders or two lock holders would corrupt user data or violate regulation, consensus or an equivalent strong coordination layer belongs in the design.
 
-[YES] LEADER ELECTION
-    Only one leader at a time, all must agree.
-    Alternative: Live with multiple (might cause duplicates)
+Platform metadata is the classic sweet spot. Kubernetes object counts stay far smaller than application payload volumes, yet errors propagate cluster-wide. That asymmetry justifies etcd on the control plane while application data lives elsewhere. Copy the pattern before you copy the tool.
 
-[YES] DISTRIBUTED LOCKS (if correctness matters)
-    Only one holder, must be certain.
-    Alternative: Optimistic locking with conflicts
+When in doubt, prototype failure modes before benchmarking happy-path throughput. A system that survives leader loss and partition recovery usually beats a faster system that corrupts state silently during the first maintenance window.
 
-[YES] CONFIGURATION CHANGES
-    All nodes must see same config.
-    Alternative: Eventual propagation (brief inconsistency)
+Document quorum layout and client endpoints in the same runbook entry so on-call engineers do not rediscover placement math during an outage. Include expected election pause duration so product owners understand brief write unavailability during controlled failover.
 
-[YES] TRANSACTION COMMIT
-    All participants agree: commit or abort.
-    Alternative: Sagas (compensating transactions)
+You probably do not need consensus for caches, metrics, high-volume event streams, or shopping carts where business rules tolerate merge and retry. Eventual consistency, CRDTs, and idempotent workers often deliver better user experience at lower cost for those workloads.
 
-[YES] TOTAL ORDERING
-    All nodes process operations in same order.
-    Alternative: Partial ordering or eventual consistency
-
-YOU PROBABLY DONT NEED CONSENSUS WHEN
-═══════════════════════════════════════════════════════════════
-
-[NO] CACHING
-    Stale data is acceptable.
-    Use TTLs instead.
-
-[NO] METRICS/LOGGING
-    Approximate counts are fine.
-    Eventual consistency is enough.
-
-[NO] USER PREFERENCES
-    Minor inconsistency is tolerable.
-    Conflict-free data types (CRDTs) work well.
-
-[NO] SHOPPING CART
-    Merge conflicts on checkout.
-    Eventual consistency with conflict resolution.
-```
+The test is whether two concurrent writers can create an irreconcilable business state. If the worst case is a duplicated metric point or a cart line merged at checkout, consensus is overkill. If the worst case is two leaders mutating the same shard or two payments capturing the same invoice, consensus or fencing belongs on the critical path.
 
 ### 5.3 Alternatives to Consensus
 
+**Leases** grant temporary authority without a full round of replication for every decision, as long as holders renew promptly. **Optimistic concurrency** reads a version, computes an update, and writes only if the version unchanged, retrying on conflict. **CRDTs** merge concurrent updates without coordination for data types that support commutative operations. **Single-writer sharding** assigns each key range to one authoritative node, avoiding cross-shard consensus for the common case.
+
+Optimistic concurrency appears in Kubernetes resource updates through resourceVersion checks. A controller reads an object, computes a patch, and submits it expecting the same resourceVersion. If another writer changed the object first, the API rejects the patch and the controller retries. That pattern provides safety without a global lock as long as conflicts are rare enough that retries stay cheap.
+
+These alternatives trade strict global ordering for performance and availability. The design task is to match the tool to the business invariant, not to default to etcd because it is familiar.
+
+Martin Kleppmann's treatment of consensus in *Designing Data-Intensive Applications* emphasizes that coordination is a scarce resource. Every strong decision consumes time on a critical path shared by the entire system. Platform teams should publish guidance about which namespaces may create Lease objects, which services may hold global locks, and which data belongs in eventually consistent stores instead. Without that guardrail, every new microservice adds another hidden dependency on the coordination layer.
+
+---
+
+## Patterns
+
+1. **Quorum-first sizing** — Run odd-sized clusters across failure domains so losing one zone still leaves a majority; document `2f+1` capacity before deployment.
+2. **Endpoint lists, not member IPs** — Clients talk to load-balanced or DNS-backed etcd endpoints so partitions do not pin traffic to an isolated member that can append locally but never commit or acknowledge writes.
+3. **Term-aware leadership** — Treat higher terms as authoritative; automate stale leader detection instead of trusting local role flags after network heals.
+4. **Fenced writes** — Pair distributed locks with monotonic fencing tokens checked by the storage layer, not only by clients.
+5. **Joint membership changes** — Expand or shrink consensus clusters using documented joint-configuration flows rather than abrupt node removal.
+
+Each pattern above addresses a failure mode that appears repeatedly in postmortems. Quorum sizing fights split brain. Endpoint lists fight misconfigured clients. Term awareness fights stale leaders. Fencing fights pause-induced double writers. Joint configuration fights overlapping majorities during membership churn. Adopting one pattern without the others still leaves holes.
+
+---
+
+## Anti-Patterns
+
+| Anti-Pattern | Why It Fails | Better Approach |
+|--------------|--------------|-----------------|
+| Consensus for telemetry | Writes bottleneck on the leader | Use metrics pipelines with eventual consistency |
+| Even-sized etcd clusters | Pay for a node without extra fault tolerance | Prefer 3, 5, or 7 members |
+| TTL locks without fencing | Paused clients corrupt shared state after expiry | Issue fencing tokens validated by resources |
+| Fixed election timeouts | Split votes stall failover for minutes | Randomize timeouts per node within a safe band |
+| Rolling your own Raft | Subtle bugs cause silent data loss | Use etcd, Consul, or proven libraries |
+| Cross-region quorum on every write | Latency and partitions dominate uptime | Regional consensus with async replication for data plane |
+
+Anti-patterns often arrive as reasonable shortcuts. A team stores high-volume metrics in etcd because it is already there. Another pins automation to node IP addresses because DNS once failed in staging. Another skips fencing because TTL locks worked in demos. Each shortcut removes a guardrail that consensus systems assume, and production load eventually finds the gap.
+
+---
+
+## Decision Framework
+
+Choosing coordination machinery is a design decision, not a default import. Start from the invariant you must protect, then map that invariant to consensus, leases, or nothing. The flowchart below summarizes the most common branch points platform engineers use when reviewing service proposals.
+
+Use this flowchart when choosing coordination mechanisms for a new service, and validate the chosen path with failure-mode questions before implementation begins.
+
+```mermaid
+flowchart TD
+    Start([Need coordination?]) --> Q1{Must all nodes agree<br>on one order or leader?}
+    Q1 -->|Yes| Q2{Write volume low<br>and latency OK?}
+    Q1 -->|No| Q3{Can merges or retries<br>fix conflicts?}
+    Q2 -->|Yes| Consensus[Use consensus store<br>etcd / ZooKeeper / Consul]
+    Q2 -->|No| Reshard[Reshard or regionalize;<br>consensus only for metadata]
+    Q3 -->|Yes| Eventual[Eventual consistency,<br>CRDTs, or queues]
+    Q3 -->|No| Q4{Need exclusive access<br>to a resource?}
+    Q4 -->|Yes| Lock[Lease + fencing token<br>on the resource]
+    Q4 -->|No| Local[Local locks or<br>single-writer shard]
 ```
-ALTERNATIVES TO CONSENSUS
-═══════════════════════════════════════════════════════════════
 
-EVENTUAL CONSISTENCY
-─────────────────────────────────────────────────────────────
-Changes propagate asynchronously.
-All nodes converge to same state... eventually.
+Ask three questions in design reviews: What invariant breaks if two actors proceed at once? What is the cost of a wrong decision versus a delayed decision? Can we prove liveness with our timeout and quorum layout? Honest answers route you to consensus, leases, or nothing.
 
-    Pro: Higher availability, lower latency
-    Con: Temporary inconsistency
+Document the decision in architecture notes so future teams do not optimize away etcd without understanding which invariant they are weakening. Many outages begin when a faster datastore replaces a coordination store but nobody updates the failure model.
 
-CONFLICT-FREE REPLICATED DATA TYPES (CRDTs)
-─────────────────────────────────────────────────────────────
-Data structures that merge automatically.
-No coordination needed.
-
-    Examples:
-    - G-Counter: Only grows (add, never subtract)
-    - LWW-Register: Last-write-wins by timestamp
-    - OR-Set: Observed-remove set
-
-    Pro: No coordination, always available
-    Con: Limited operations, eventual consistency
-
-OPTIMISTIC CONCURRENCY
-─────────────────────────────────────────────────────────────
-Assume no conflicts. Detect and retry if wrong.
-
-    Read record with version V
-    Make changes
-    Write "if version still V"
-    If version changed, retry
-
-    Pro: No locks, high concurrency
-    Con: Retries under contention
-
-SINGLE LEADER (NO CONSENSUS)
-─────────────────────────────────────────────────────────────
-One designated leader (not elected).
-Simple but single point of failure.
-
-    Pro: Simple, no consensus needed
-    Con: Manual failover, downtime during failure
-```
+When you present this framework to stakeholders, translate technical branches into business language. "Must all nodes agree" becomes "would duplicate leaders corrupt money or safety?" "Write volume low" becomes "is this metadata or customer traffic?" Shared vocabulary prevents teams from accidentally shipping strong-consistency requirements into high-throughput paths.
 
 ---
 
 ## Did You Know?
 
-- **Paxos was rejected twice** by academic journals because reviewers found it too hard to understand. Lamport eventually published it as a "part-time parliament" allegory to make it more accessible.
+- **Paxos publication history**: Leslie Lamport's Paxos work was initially considered difficult to review; his later "Paxos Made Simple" paper reframed the algorithm for broader audiences and remains a standard reference.
+- **Raft's design goal**: Diego Ongaro and John Ousterhout designed Raft for understandability and evaluated it with user studies comparing comprehension against Paxos in the 2014 USENIX ATC paper.
+- **Chubby's blast radius**: Google's Chubby lock service influenced many coordination designs; the original OSDI paper describes how widespread dependencies on a lock service can amplify outages.
+- **etcd's Kubernetes role**: etcd became Kubernetes' backing store for cluster state; its Raft-backed API is on the critical path for nearly every control-plane change in modern clusters.
 
-- **Raft's name** comes from "Reliable, Replicated, Redundant, And Fault-Tolerant." It was specifically designed to be understandable—the paper includes a user study showing people learn Raft faster than Paxos.
+Leslie Lamport's work on logical clocks and ordering underpins many coordination designs even when teams implement Raft instead of Paxos directly. Understanding happens-before relationships helps you interpret why consensus logs are append-only authorities rather than mutable shared files.
 
-- **Google's Chubby** (Paxos-based lock service) was so critical that when it went down for 15 minutes, more Google services failed than when a major datacenter lost power. Dependencies on coordination services can be dangerous.
-
-- **etcd started at CoreOS** in 2013 as a simple key-value store for CoreOS's distributed init system. When Kubernetes adopted it as its brain, etcd became one of the most critical pieces of infrastructure in cloud-native computing—now running in production at virtually every major tech company.
+The next module explores what to do when you deliberately choose weaker consistency. Keep the consensus mental model in mind: eventual consistency is not "no rules," it is a different set of guarantees with different recovery tools.
 
 ---
 
@@ -881,94 +477,82 @@ Simple but single point of failure.
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| Using consensus for everything | Slow, complex, bottleneck | Consensus only when needed |
-| Wrong quorum size | 2 of 4 nodes isn't majority | Use odd numbers (3, 5, 7) |
-| Ignoring leader election time | Brief unavailability on failover | Design for election pauses |
-| Distributed locks without fencing | Stale clients corrupt data | Use fencing tokens |
-| Rolling your own consensus | Subtle bugs, data loss | Use battle-tested implementations |
-| Consensus across datacenters | High latency, frequent elections | Prefer regional consensus |
+| Using consensus for everything | Slow writes and leader bottlenecks | Reserve consensus for metadata and strong invariants |
+| Wrong quorum size | Even counts waste nodes without gain | Size clusters as odd `2f+1` groups |
+| Ignoring election pauses | Failover looks like mysterious unavailability | Budget leader transition time in SLOs |
+| Distributed locks without fencing | Stale holders write after lease expiry | Validate monotonic fencing tokens at storage |
+| Pinning clients to one etcd member | Isolated member appends locally but never commits or acknowledges without a quorum | Use endpoint lists and health-aware routing |
+| Rolling your own consensus | Rare edge cases lose data silently | Adopt etcd, ZooKeeper, or mature libraries |
+| Global quorum for app data | Cross-region latency dominates | Keep consensus regional; replicate data asynchronously |
+| Skipping joint configuration | Membership changes create dual majorities | Follow Raft joint-consensus procedures |
 
 ---
 
 ## Quiz
 
-1. **Scenario**: You are tasked with building a highly reliable distributed database where three nodes must agree on the order of transactions. During testing, you notice that if the network becomes heavily congested, the system completely halts and refuses to commit new transactions. Why is this behavior actually expected rather than a bug?
+1. **Scenario**: You are building a replicated database where three nodes must agree on transaction order. Under heavy network congestion the system halts and refuses new commits. Why is that expected rather than a bug?
    <details>
    <summary>Answer</summary>
-
-   This behavior is expected due to the constraints of the FLP impossibility theorem, which states that in an asynchronous system where even one node might fail, no algorithm can guarantee consensus. Because the system cannot distinguish between a node that has crashed and one that is simply slow to respond due to network congestion, it must make a trade-off. In this scenario, the database has prioritized safety (agreement and validity) over liveness (termination). Practical consensus algorithms like Raft and Paxos accept that they cannot guarantee termination in all possible faulty states, choosing instead to pause operations rather than risk data corruption or split-brain scenarios.
+   This behavior reflects the FLP impossibility result and the safety-first design of practical consensus. In an asynchronous network you cannot distinguish a crashed node from a slow one, so algorithms like Raft prioritize agreement and validity over guaranteed termination. Halting commits prevents split brain or conflicting orders. When congestion clears and quorums can form again, liveness typically returns without sacrificing the safety properties you relied on when choosing consensus.
    </details>
 
-2. **Scenario**: In a 5-node etcd cluster powering a production Kubernetes environment, the current leader node suffers a hardware failure and abruptly dies. Walk through the exact mechanism the remaining four nodes use to recover and agree on the cluster's next state.
+2. **Scenario**: A five-node etcd cluster loses its leader to hardware failure. Describe how the remaining nodes elect a replacement and resume safe replication.
    <details>
    <summary>Answer</summary>
-
-   When the leader dies, the remaining follower nodes will eventually stop receiving heartbeat messages, triggering an election timeout on one or more of them. The first node to time out increments its current term number and transitions to a candidate state, voting for itself and sending request-vote messages to the other nodes. The remaining nodes will grant their vote if they haven't voted in this term and if the candidate's log is at least as up-to-date as their own. Once the candidate receives a majority of votes, it assumes the role of leader and immediately begins sending heartbeats to establish its authority. This process ensures the cluster safely transitions to a new leader without any single point of failure disrupting the overall consensus.
+   Followers stop receiving heartbeats and eventually exceed their election timeouts. One follower increments its term, becomes a candidate, votes for itself, and requests votes from peers. Peers grant votes if they have not voted in the new term and if the candidate's log is at least as up to date as theirs. When the candidate receives a majority, it becomes leader, sends heartbeats to establish authority, and resumes AppendEntries replication. Committed entries from the old leader remain safe because majorities overlap across terms.
    </details>
 
-3. **Scenario**: You are implementing a distributed lock using a simple Redis key with a TTL. A developer asks why you can't just delete the key when the process finishes instead of worrying about fencing tokens. Explain the fundamental flaw in relying solely on TTLs and deletion for distributed locks.
+3. **Scenario**: A developer proposes Redis TTL locks without fencing for inventory updates. Explain the flaw and the fix.
    <details>
    <summary>Answer</summary>
-
-   Relying solely on a TTL and deletion is fundamentally flawed because it assumes a perfectly synchronous environment where processes never freeze and networks never delay. If a process acquires a lock but experiences a massive garbage collection pause, the TTL will expire on the server while the process is completely unaware. When a second process inevitably acquires the now-free lock, both processes will eventually attempt to execute their critical sections concurrently, leading to silent data corruption. Fencing tokens are required because they shift the ultimate validation from the unreliable client processes to the storage layer itself. By ensuring the resource rejects any writes from a client holding a stale, older token, the system remains safe even when distributed lock guarantees temporarily break down.
+   TTL locks assume holders always run forward in real time. Garbage collection pauses, VM freezes, or long network partitions can expire a lock while the holder still believes it is exclusive. A second client then acquires the lock and both mutate inventory. Fencing tokens fix this by requiring the storage layer to reject writes with tokens older than the highest token it has seen, even if a stale client wakes up late.
    </details>
 
-4. **Scenario**: A junior engineer proposes using etcd (which relies on Raft consensus) to store the high-volume clickstream events and real-time user metrics for a popular e-commerce website, arguing that "we need to ensure we never lose a click." Explain why this architectural choice will fail in production and what pattern should be used instead.
+4. **Scenario**: A team wants etcd for high-volume clickstream ingestion because they "cannot lose clicks." Why will that fail, and what should they use?
    <details>
    <summary>Answer</summary>
-
-   Using a consensus-based system like etcd for high-volume clickstream data will quickly bottleneck the system and lead to severe performance degradation. Every write in a Raft cluster must go through the single leader node and be replicated to a majority of followers before it can be acknowledged, which introduces significant latency and caps the maximum throughput. Consensus algorithms prioritize strict linearizability and correctness over high availability and write throughput, making them entirely unsuited for transient, high-volume data like metrics. Instead, the team should use an eventually consistent system or a distributed message queue designed for high throughput. In these alternative systems, occasional data loss or reordering in clickstream analytics is an acceptable trade-off for the massive performance gains required at e-commerce scale.
+   etcd optimizes for consistent metadata, not firehose ingestion. Every write traverses a single Raft leader and waits for quorum acknowledgment, capping throughput and adding latency unsuitable for click volumes. Losing an occasional analytic event is usually acceptable compared to losing payment metadata. Use a partitioned log or stream processor with at-least-once delivery and idempotent consumers instead of a consensus store for telemetry.
    </details>
 
-5. **Scenario**: You are configuring a new Raft-based service and set the election timeout to a fixed 200ms across all 5 nodes. During a network blip that drops the leader, the cluster completely fails to elect a new leader for several minutes, continuously timing out. What configuration error caused this cascading failure, and how does the protocol natively solve this?
+5. **Scenario**: All five Raft nodes use an identical 200 ms election timeout. After a leader failure, elections loop for minutes. What went wrong and how does Raft mitigate it?
    <details>
    <summary>Answer</summary>
-
-   Setting a fixed, identical election timeout across all nodes virtually guarantees a persistent split-vote scenario during recovery. When the leader fails, all followers will time out at exactly the same moment, transition to candidates, and vote for themselves, preventing anyone from achieving a majority. This cycle will repeat indefinitely because they will all restart their candidate timers simultaneously, completely halting cluster operations. The Raft protocol natively solves this by requiring randomized election timeouts (for example, a random value between 150ms and 300ms) for each individual node. This randomness ensures that one node will reliably time out before the others, allowing it to request and win the necessary votes before competing candidates can even emerge.
+   Identical timeouts synchronize candidates so they split votes repeatedly and nobody wins a majority. Raft requires randomized election timeouts spread across a range so one follower times out first, wins votes, and becomes leader before others restart competing elections. Operators should never copy one timeout value to every node without jitter.
    </details>
 
-6. **Scenario**: Your global infrastructure team deploys a 7-node etcd cluster spread evenly across three datacenters: 3 nodes in US-East, 2 in EU-West, and 2 in AP-South. The transatlantic fiber cable is cut, completely isolating the US-East datacenter from the other two. Will the Kubernetes control planes in any of these regions continue to function, and why?
+6. **Scenario**: A seven-node etcd cluster spans three datacenters with three, two, and two nodes. Transatlantic links fail, isolating the three-node site. Which partitions remain writable and why?
    <details>
    <summary>Answer</summary>
-
-   Yes, the cluster will continue to function, but only the partition containing EU-West and AP-South will be able to accept writes and make progress. A 7-node cluster requires a quorum of 4 nodes to achieve consensus and confirm any state changes. The US-East datacenter only has 3 nodes, so it cannot form a quorum and will degrade to a read-only state, safely rejecting all new configuration changes to prevent a split-brain. However, the connected partition of EU-West and AP-South contains 4 nodes in total, giving them the exact majority needed to elect a new leader and continue processing writes. This demonstrates why careful distribution of nodes across fault domains is critical; if US-East had contained 4 nodes instead, the loss of a single datacenter would have taken down the entire global cluster.
+   A seven-node cluster needs four nodes for a quorum. The isolated site of three cannot commit writes because it lacks a majority and should reject new mutations to stay safe. The remaining four nodes can elect a leader and continue because they still form a quorum. This layout shows why node placement across fault domains must be counted against quorum math, not just total node count.
    </details>
 
-7. **Scenario**: A distributed lock has a 15-second TTL and a 5-second renewal heartbeat. Client A acquires the lock, but exactly 2 seconds later experiences a severe 20-second garbage collection pause. Walk through the exact timeline of events that leads to a split-brain state, and explain how a fencing token neutralizes this specific timeline.
+7. **Scenario**: Client A holds a fifteen-second lock with five-second renewals but enters a twenty-second GC pause at second two. Trace the split-brain timeline and how fencing neutralizes it.
    <details>
    <summary>Answer</summary>
-
-   At T=0, Client A acquires the lock and begins processing, but at T=2 it enters a severe 20-second garbage collection pause. Because Client A is frozen, it cannot send the required 5-second renewal heartbeats, causing the lock server to expire the lock at T=15. At T=16, Client B acquires the newly available lock and begins legitimately writing to the shared resource. When Client A wakes up at T=22, it has no knowledge of the pause and still believes it holds the exclusive lock, resulting in both clients actively mutating the resource. A fencing token neutralizes this exact timeline because the shared resource would reject Client A's writes at T=22, recognizing that its associated token is older than the token currently being used by Client B.
+   Client A stops renewing during the pause, so the lock expires around second fifteen. Client B acquires the lock and receives a higher fencing token. Client A resumes at second twenty-two believing it still holds the lock, but the resource rejects A's stale token while accepting B's writes. Fencing makes the storage layer authoritative instead of trusting client clocks or lock memory.
    </details>
 
-8. **Scenario**: Your organization is migrating a legacy Java-based Hadoop data lake and a modern Go-based Kubernetes microservices platform into a unified architecture. The architecture board wants to standardize on a single coordination service—either ZooKeeper or etcd—for both platforms to reduce operational overhead. Defend why standardizing on a single tool might be a mistake in this specific context.
+8. **Scenario**: An organization wants one coordination service for Hadoop on ZooKeeper and Kubernetes on etcd. Argue against forced unification.
    <details>
    <summary>Answer</summary>
-
-   Standardizing on a single coordination service in this mixed environment ignores the native integrations and architectural assumptions of the respective ecosystems. The legacy Hadoop and Java stack relies heavily on ZooKeeper's hierarchical znode data model and has deep, battle-tested client libraries specifically built around those semantics. Conversely, the modern Kubernetes ecosystem is fundamentally designed around etcd's flat key-value store and highly efficient gRPC watch streams. Forcing Hadoop to use etcd, or Kubernetes to use ZooKeeper, would require building complex translation layers that introduce latency and significantly increase the risk of consensus-related outages. The operational overhead of running both services is far lower than the engineering cost and operational risk of fighting the native design patterns of these two major platforms.
+   Hadoop ecosystems embed ZooKeeper's hierarchical znode semantics and session models, while Kubernetes integrates deeply with etcd's gRPC watches and Lease-based leader election. Forcing either stack to emulate the other adds translation layers, latency, and failure modes without removing operational components. Running both coordination systems is often cheaper than fighting each platform's native integration points and risk profile.
    </details>
 
 ---
 
 ## Hands-On Exercise
 
-**Task**: Explore consensus and coordination in Kubernetes.
+This exercise connects Raft terminology to objects you can inspect in a Kubernetes lab cluster. You will read etcd health and leadership signals, observe Lease renewals used for control-plane leader election, and compare strong coordination with weaker configuration propagation delays.
 
-**Part 1: Observe etcd Consensus (10 minutes)**
+**Part 1 — etcd cluster state (10 minutes).** Run the commands below against a kind, minikube, or other cluster where etcd is reachable. Replace the pod name if your control plane uses a different identifier.
 
 ```bash
-# If you have etcd access (e.g., kind cluster)
-# List etcd members
-kubectl exec -it -n kube-system etcd-<node> -- etcdctl member list
-
-# Check etcd health
-kubectl exec -it -n kube-system etcd-<node> -- etcdctl endpoint health
-
-# Watch etcd statistics
-kubectl exec -it -n kube-system etcd-<node> -- etcdctl endpoint status --write-out=table
+kubectl exec -it -n kube-system etcd-control-plane -- etcdctl member list
+kubectl exec -it -n kube-system etcd-control-plane -- etcdctl endpoint health
+kubectl exec -it -n kube-system etcd-control-plane -- etcdctl endpoint status --write-out=table
 ```
 
-Record cluster status:
+Fill in the table from `endpoint status` output so you can explain which member is leader, which Raft term is active, and how far the log index has progressed during your session.
 
 | Node | Is Leader | Raft Term | Raft Index |
 |------|-----------|-----------|------------|
@@ -976,25 +560,16 @@ Record cluster status:
 | | | | |
 | | | | |
 
-**Part 2: Observe Leader Election (10 minutes)**
+**Part 2 — Lease-based leader election (10 minutes).** Kubernetes control-plane components renew Lease objects instead of embedding custom Raft clients. Inspect renew timestamps to see liveness in action.
 
 ```bash
-# View current leaders
 kubectl get leases -n kube-system
-
-# Watch leader lease for controller-manager
 kubectl get lease kube-controller-manager -n kube-system -o yaml
-
-# Observe holder identity and renew time
-# Note: renewTime updates regularly while leader is healthy
 ```
 
-**Part 3: Implement Simple Coordination (15 minutes)**
-
-Create a ConfigMap that multiple pods watch:
+**Part 3 — Configuration propagation (15 minutes).** The manifest below creates a shared ConfigMap and a watcher pod. Patching the ConfigMap shows that not every Kubernetes object provides etcd-linearizable watch semantics with instant delivery.
 
 ```yaml
-# coordination-config.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1022,20 +597,13 @@ spec:
 ```
 
 ```bash
-# Create the resources
 kubectl apply -f coordination-config.yaml
-
-# Watch the output
 kubectl logs -f watcher-1
-
-# In another terminal, update the config
 kubectl patch configmap shared-config -p '{"data":{"feature-flag":"true"}}'
-
-# Observe: Does the watcher see the change?
-# (Note: ConfigMap volume updates have propagation delay)
 ```
 
-**Success Criteria**:
+**Success Criteria** — confirm each item before closing the exercise:
+
 - [ ] Observed etcd cluster state and leader
 - [ ] Understood lease-based leader election
 - [ ] Saw configuration propagation delay
@@ -1043,31 +611,38 @@ kubectl patch configmap shared-config -p '{"data":{"feature-flag":"true"}}'
 
 ---
 
-## Further Reading
+## Key Takeaways
 
-- **"In Search of an Understandable Consensus Algorithm"** - Diego Ongaro. The Raft paper, specifically designed to be readable.
+Before moving on, confirm that you can explain each bullet below without peeking at notes, because the next modules assume you can reason about consistency trade-offs confidently.
 
-- **"Designing Data-Intensive Applications"** - Martin Kleppmann. Chapters 8-9 cover consensus, distributed transactions, and coordination.
-
-- **"The Raft Visualization"** - raft.github.io. Interactive visualization of Raft consensus.
+- [ ] **Consensus properties**: Agreement, validity, and termination define the problem; FLP limits pure asynchronous guarantees
+- [ ] **Quorum math**: Majorities overlap; use `2f+1` odd-sized clusters for `f` failures
+- [ ] **Raft mechanics**: Terms, leader election, log replication, and commit indexes enforce one authoritative history
+- [ ] **Partition behavior**: Minorities cannot commit or acknowledge writes; clients need fault-aware endpoints
+- [ ] **Lock safety**: TTL alone is insufficient; fencing tokens protect shared resources from stale holders
+- [ ] **Cost awareness**: Consensus serializes writes; use it for metadata and invariants, not firehose data
+- [ ] **Alternatives**: Leases, optimistic concurrency, CRDTs, and sharding reduce coordination when strong global order is unnecessary
 
 ---
 
-## Key Takeaways
+## Sources
 
-Before moving on, ensure you understand:
-
-- [ ] **Consensus fundamentals**: Getting nodes to agree on a single value with agreement (same value), validity (proposed value), and termination (eventual decision)
-- [ ] **FLP impossibility**: In asynchronous systems, consensus can't be guaranteed with even one failure. Practical algorithms work because true asynchrony is rare
-- [ ] **Raft mechanics**: Leader election via majority vote, log replication to followers, terms to prevent split-brain, random timeouts to break ties
-- [ ] **Quorum math**: Majority = floor(n/2) + 1. For 5 nodes, need 3. For 7 nodes, need 4. Use odd numbers to avoid ties
-- [ ] **Leader election trade-offs**: Leader-based is simpler and faster but requires failover. Leaderless is more available but more complex
-- [ ] **Distributed lock dangers**: GC pauses, network delays can cause client to think it holds expired lock. Fencing tokens are essential
-- [ ] **Consensus cost**: Every write requires 2 round trips through leader. Limited to ~10-50K writes/sec. Don't use for high-throughput data
-- [ ] **When to avoid consensus**: Caching, metrics, logs, shopping carts—anywhere eventual consistency is acceptable. Save consensus for leader election, strong locks, transaction commits
+- Diego Ongaro and John Ousterhout, [In Search of an Understandable Consensus Algorithm (Raft)](https://raft.github.io/raft.pdf)
+- Raft project, [Raft consensus website](https://raft.github.io/)
+- Leslie Lamport, [Paxos Made Simple](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf)
+- Fischer, Lynch, and Paterson, [Impossibility of Distributed Consensus with One Faulty Process](https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/flp.pdf) — see also [Lamport publications index](https://lamport.azurewebsites.net/pubs/pubs.html) for related work
+- Martin Kleppmann, [Designing Data-Intensive Applications](https://dataintensive.net/)
+- Martin Kleppmann, [How to do distributed locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)
+- etcd documentation, [etcd.io docs](https://etcd.io/docs/latest/)
+- Apache ZooKeeper, [ZooKeeper Internals (Zab)](https://zookeeper.apache.org/doc/current/zookeeperInternals.html)
+- Mike Burrows et al., [The Chubby lock service for loosely-coupled distributed systems](https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf)
+- Kyle Kingsbury, [Jepsen: etcd 3.4.3 analysis](https://jepsen.io/analyses/etcd-3.4.3)
+- Kubernetes documentation, [Leases](https://kubernetes.io/docs/concepts/architecture/leases/)
+- Kubernetes API reference, [Lease (coordination.k8s.io/v1)](https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/lease-v1/)
+- Kubernetes documentation, [Control plane node communication](https://kubernetes.io/docs/concepts/architecture/control-plane-node-communication/)
 
 ---
 
 ## Next Module
 
-[Module 5.3: Eventual Consistency](../module-5.3-eventual-consistency/) - When you don't need strong consistency, and how to make eventual consistency work.
+[Module 5.3: Eventual Consistency](../module-5.3-eventual-consistency/) — When you do not need strong consistency, and how to make eventual consistency work in production.

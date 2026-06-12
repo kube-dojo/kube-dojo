@@ -446,7 +446,7 @@ This is the final distributed-systems foundation lesson currently available in t
 
 ---
 
-## Further Reading
+## Sources
 
 - **[Leslie Lamport, "Time, Clocks, and the Ordering of Events in a Distributed System"](https://lamport.azurewebsites.net/pubs/time-clocks.pdf)** - The foundational paper for happens-before, logical clocks, and why distributed ordering cannot start with physical clock assumptions.
 - **[Martin Kleppmann, "Designing Data-Intensive Applications"](https://dataintensive.net/)** - The clearest practitioner treatment of replication, clocks, consistency guarantees, and the hazards of timestamp-based conflict resolution.
