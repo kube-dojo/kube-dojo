@@ -81,6 +81,19 @@ export default defineConfig({
       title: 'KubeDojo',
       tagline: 'Free, comprehensive cloud native education',
       disable404Route: true,
+      // GoatCounter — privacy-friendly analytics (no cookies). Injected into the
+      // <head> of every page via the default Starlight Head (kept by our custom
+      // src/components/Head.astro override, which renders <Default>).
+      head: [
+        {
+          tag: 'script',
+          attrs: {
+            'data-goatcounter': 'https://kube-dojo.goatcounter.com/count',
+            src: '//gc.zgo.at/count.js',
+            async: true,
+          },
+        },
+      ],
       expressiveCode: {
         shiki: {
           langAlias: {
