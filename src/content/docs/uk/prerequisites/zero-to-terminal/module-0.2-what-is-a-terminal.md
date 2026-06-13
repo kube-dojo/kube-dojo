@@ -6,6 +6,12 @@ sidebar:
 revision_pending: false
 en_commit: "e75b3670185808314327c0642a490984a327c752"
 en_file: "src/content/docs/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal.md"
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v1"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "b4acb9b17115a769fce0880b1d5430eba72d70a90ef211cdf5092451e8733065"
 ---
 > **Складність**: `[ШВИДКО]` - Абсолютний новачок
 >
