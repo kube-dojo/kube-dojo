@@ -6,6 +6,12 @@ sidebar:
   order: 5
 en_commit: "5ee13345d430fca2c51cdca6f3de6caf01de22a4"
 en_file: "src/content/docs/prerequisites/modern-devops/module-1.4-observability.md"
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "0ad4ee5c609d2354c9f0856229e12a0709768c2ef78d6c90d81116999820a36f"
 ---
 
 

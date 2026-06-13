@@ -5,6 +5,12 @@ sidebar:
   label: "Основи"
 en_file: src/content/docs/prerequisites/index.md
 en_commit: 949f2490b61af26f23e8ca83f18f688fc8c4d4dd
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "reviewed"
+  flags_resolved: 1
+  content_sha: "a9afda5fec7bfd433097bc5406070514da26c21ccf6667d023d782f3028ed784"
 ---
 
 **Почніть звідси, якщо ви шукаєте найкоротший шлях від основ для початківців до Kubernetes та платформної інженерії.**
@@ -165,7 +171,7 @@ en_commit: 949f2490b61af26f23e8ca83f18f688fc8c4d4dd
 
 ## Пов'язані основи
 
-Ці теми не знаходяться в розділі `prerequisites/`, але вони є поширеними наступними кроками:
+Ці теми не містяться в розділі `prerequisites/`, але вони є поширеними наступними кроками:
 
 | Шлях | Чому це важливо |
 |------|----------------|

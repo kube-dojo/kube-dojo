@@ -5,6 +5,12 @@ sidebar:
 en_commit: "c9a99e2ca834bdfe1de9c508b9fd6fd93cded9aa"
 en_file: "src/content/docs/prerequisites/philosophy-design/index.md"
 slug: "uk/prerequisites/philosophy-design"
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "0953ec5d9f317b43e61ca50478abc42d951551472dc7694da70cfd88b1eb6c4a"
 ---
 
 Перш ніж занурюватися в технічні деталі Kubernetes, важливо зрозуміти, чому він існує та який фундаментальний зсув у мисленні він вимагає. Цей розділ досліджує історичний контекст оркестрації контейнерів та конкретні архітектурні рішення, які зробили Kubernetes беззаперечним галузевим стандартом. 
