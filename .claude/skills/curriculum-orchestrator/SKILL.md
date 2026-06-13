@@ -86,7 +86,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 | Mechanical / deterministic | cursor or codex (cheap tier) | self-verify | gate/link fixes, batched edits |
 | External primary-source fetch | `mcp__claude-in-chrome__*` | hermes grok-4.3 (x.com only) | Browser BEFORE writer brief ([[feedback_chrome_for_primary_source_fetch]]) |
 
-**Cross-family map:** OpenAI=codex · Anthropic=opus · Google=agy+gemini · DeepSeek=deepseek · xAI=cursor(composer)+grok (cursor==grok-composer, can't co-review; grok-4.x is a distinct line).
+**Cross-family map:** OpenAI=codex · Anthropic=opus · Google=agy+gemini · DeepSeek=deepseek · **Cursor Composer=cursor (composer-2.5, built on Kimi K2.5/Moonshot — its OWN family, NOT xAI)** · xAI=grok-build/grok-4.x. cursor(composer) and `grok-composer-2.5` are the SAME model (xAI serves Cursor's Composer) → can't co-review; grok-build is a distinct line. Soft caution: cursor(Kimi) vs deepseek = different labs but both Chinese-origin (prefer a Western-lab reviewer for top-stakes). (Corrected s140 — see `feedback_cursor_composer_base_is_kimi_not_xai`.)
 
 **During Anthropic throttle window** (2026-05-23/24 instance, recurs):
 - CUT sonnet headless (review/edit/draft/judge1) to preserve shared cap for opus orchestrator.
