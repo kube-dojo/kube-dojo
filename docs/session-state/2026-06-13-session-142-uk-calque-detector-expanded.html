@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 142 — UK calque reframe: prereqs 51/51 + detector expanded (знаходиться)</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.6rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.2rem;margin-top:1.8rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}
+  ul{margin:.4rem 0}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 142 — UK calque reframe: prerequisites 51/51, detector expanded to <span class="mono">знаходиться</span></h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-13 · <strong>Epic:</strong> #1911 · <strong>Issue:</strong> #1934 · <strong>PRs merged:</strong> #1944 (222 reframes) + #1945 (12 naturalness fixes) · <strong>Board:</strong> 5/51 → <strong>51/51</strong> calque-reviewed (43 reviewed + 8 clean, detector <code>v2</code>), zero stale.</p>
+
+<h2>What shipped — the prerequisites calque-review milestone is COMPLETE</h2>
+<p>Executed the s141b detector-driven plan to completion: grep-flag calque classes across all 51 prereqs → reframe only flagged sentences (sentence-level, MCP-validated, not token-swap) → stamp. <strong>222 reframes / 209 changed lines / 51 files</strong>, then <code>calque_review</code>-stamped all 51 → board <strong>51/51</strong>.</p>
+<table>
+<tr><th>Class</th><th>Count</th><th>Reframe</th></tr>
+<tr><td>Active participles <span class="mono">-учий/-ючий</span></td><td>84</td><td>→ relative clause / proper adjective. <span class="mono">існуючий→наявний</span>, <span class="mono">конкуруючий→конкурентний</span>, <span class="mono">працюючий→запущений/робочий</span>, <span class="mono">конфліктуючий→суперечливий</span>, <span class="mono">оточуючий→зовнішній</span>, <span class="mono">лякаючий→страшний</span>. <strong>User chose "reframe all"</strong> (the dictionary-valid forms are stylistic, not errors).</td></tr>
+<tr><td><span class="mono">знаходиться</span> (RU <em>находиться</em>)</td><td>128</td><td>→ <span class="mono">міститься</span> (containment) / <span class="mono">перебуває</span> (state·person) / <span class="mono">бути</span></td></tr>
+<tr><td>"the following" <span class="mono">наступні→такі</span></td><td>5</td><td>only where pointing at a list/code block</td></tr>
+<tr><td>lexical: <span class="mono">співпадати·співставляти·дану мить</span></td><td>3</td><td>→ <span class="mono">однакові·зіставляти·цю мить</span></td></tr>
+</table>
+
+<h2 class="warn-h">⚠️ Key finding — the s141b detector was MATERIALLY incomplete</h2>
+<div class="warn">
+<p>The s141b worklist swept only <strong>list A (participles)</strong> + <strong>list B (the following)</strong>. A broader russicism sweep this session found a third confirmed class it missed entirely:</p>
+<ul>
+<li><strong><span class="mono">знаходиться</span></strong> — calque of RU <em>находиться</em>, <strong>UA-GEC-confirmed</strong> (<span class="mono">F/Collocation</span>, 10 native-author corrections → розташована/міститься/перебуває). <strong>128 occurrences on 34/51 pages, including the already-"stamped" 0.3</strong> → the prior 5/51 board count was itself <em>partly a mirage</em>. Detector stamp bumped <strong>v1→v2</strong>.</li>
+</ul>
+<p><strong>Lesson (for the remaining-corpus AC):</strong> "the detector IS the coverage" only holds if the detector is complete. A "clean" stamp must be backed by a <em>broad</em> GEC/style-guide-grounded sweep, not just A+B. The v2 pattern-set (participles + the-following + знаходиться + the lexical trio) is the new floor for any future page stamp.</p>
+</div>
+
+<h2>Verify-don't-assume — false positives left untouched (no over-editing)</h2>
+<ul>
+<li><span class="mono">являється</span> ×91 — all substrings of <span class="mono">з'являється</span>/<span class="mono">проявляється</span>/<span class="mono">виявляється</span> (the <span class="mono">вірний</span>-trap; zero copula calques).</li>
+<li><span class="mono">в якості</span> — literal "in the quality of [a signal]", not the "as/in the capacity of" calque.</li>
+<li><span class="mono">діючи</span> — adverbial participle (дієприслівник), and <span class="mono">не конфліктуючи</span> likewise — both normative, kept.</li>
+<li><span class="mono">задача</span> ×14 — legit "task/problem"; <span class="mono">даний</span> ×12 — mostly <span class="mono">дані</span> (data), only one real <span class="mono">у дану мить</span>.</li>
+</ul>
+
+<h2>Cross-family review outcome</h2>
+<p>Reframer = orchestrator-inline opus (MCP-grounded — the epic's designated primary reviewer). Cross-family second-opinion: <strong>agy returned empty</strong> (known flake) → re-routed to <strong>codex</strong> (gpt-5.5, 15-min run). Codex landed <strong>12 real naturalness improvements + 1 false positive</strong>: my знаходиться classifier over-applied <span class="mono">міститься</span> (=<em>contained</em>) to <strong>abstract/process subjects</strong> (a problem, a gap, a shell, a point-in-time, a network address) where <span class="mono">перебуває/є/криється/виконується</span> reads better. The FP (#160) was an intentional <span class="mono">status: "clean"</span> frontmatter stamp. Fixed all 12 in <strong>#1945</strong>, re-stamped the 9 affected pages (sha-refreshed → not stale).</p>
+<p class="warn"><strong>Process note:</strong> #1944 was merged on a green-CI + complete-MCP-review basis <em>before</em> the 15-min codex review landed (timing miss). Nothing incorrect shipped — the 12 items were naturalness refinements, not errors — and #1945 cleaned them up. Lesson: for a 200+-item content PR, wait for the slow cross-family verdict even when CI is green and the inline review is done.</p>
+
+<h2>Gates (both PRs)</h2>
+<ul>
+<li><span class="ok">✓</span> <span class="mono">npm run build</span> — 2169 pages, 0 schema errors (worktree + node_modules symlink, grep-not-Read the log).</li>
+<li><span class="ok">✓</span> UK gate <span class="mono">check_uk_changed.py</span> green.</li>
+<li><span class="ok">✓</span> All PR CI green incl. the automated <strong>Ukrainian Russicism check</strong>, incident-dedup, site-health, CodeQL.</li>
+<li><span class="ok">✓</span> Every replacement form VESUM-validated; classes GEC/style-guide-grounded.</li>
+<li><span class="ok">✓</span> Board verified <span class="mono">build_translation_board</span> → <strong>prerequisites: reviewed 51/51</strong>, zero stale. API restarted.</li>
+</ul>
+
+<h2>Open / next</h2>
+<ul>
+<li><strong>Prereqs calque-review is DONE (51/51).</strong> Issue #1934's last AC ("remaining UK corpus 100% reviewed") is <strong>blocked on translation currency</strong> — per the locked scope, only the 51 prereqs are current; the rest of the UK corpus is untranslated/stale, so there is nothing to calque-review there yet. The v2 detector runs on <em>new</em> pages as bulk-translation produces them. Issue left OPEN with a status comment + the detector-completeness finding.</li>
+<li><strong>Separate (coverage, not calque):</strong> <span class="mono">cloud-native-101/module-1.4-cloud-native-ecosystem.md</span> is heavily under-translated (security/audit/workflow/declarative/reconciliation/pipelines/credentials left in English) → needs re-translation (agy), not calque review.</li>
+<li><strong>Cheap follow-up:</strong> consider a CI guard from the v2 detector (participles + знаходиться + the-following + dup-heading + mojibake) so these classes can't recur on new translations.</li>
+<li><span class="mono">g2-craft</span> worktree (unmerged s104) left untouched per git discipline.</li>
+<li><strong>Standing/deferred:</strong> Platform-Foundations Wave 7 (#1897), Disciplines/Toolkits, AI-history book (#1876). Non-Platform EN curriculum is done.</li>
+</ul>
+
+<h2>Reusable method (v2)</h2>
+<ol>
+<li>Fresh worktree off main. Run the <strong>v2 detector</strong> grep over the page-set: participles (<span class="mono">існуюч|працююч|конкуруюч|конфліктуюч|взаємодіюч|…</span>), <span class="mono">знаход(иться|яться|итеся|итесь|итися)</span>, "the following" <span class="mono">наступн-</span>+list-noun, lexical (<span class="mono">співпада|співстав|тим не менш|по замовчуванн|приймати участь</span>).</li>
+<li><strong>Disambiguate false positives</strong> (substring traps: <span class="mono">являється</span>=<span class="mono">з'являється</span>; <span class="mono">діючи</span>=gerund; <span class="mono">в якості</span>=quality-of; <span class="mono">даний</span>=<span class="mono">дані</span>).</li>
+<li>Source-ground ambiguous classes (UA-GEC <span class="mono">search_ua_gec_errors</span>, <span class="mono">search_style_guide</span>); VESUM-validate every replacement form (<span class="mono">verify_words</span>).</li>
+<li>Edit via a python edit-manifest (assert each <span class="mono">old</span> unique; avoid apostrophes/backticks in match strings) — <strong>never the Read tool on worktree files</strong>.</li>
+<li>Stamp (<span class="mono">calque_review_stamp.py stamp &lt;f&gt; --flags N --status reviewed|clean --detector-version v2</span>); build; UK gate; ONE PR with <span class="mono">## Learner check</span>; rebase-merge; ff-only; restart api.</li>
+<li><strong>Wait for the slow cross-family verdict before merging a large content PR.</strong></li>
+</ol>
+
+</body>
+</html>
