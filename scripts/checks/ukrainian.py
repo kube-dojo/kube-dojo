@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 from .structural import CheckResult
@@ -33,7 +32,6 @@ RUSSICISMS = {
     "короче": "коротше / загалом (in short)",
     "тіпа": "типу / наче (like/sort of)",
     "пока": "поки / бувай (bye/while)",
-    "нормально": "гаразд / добре (OK/fine) — contextual",
     "відноситися": "стосуватися (to relate to)",
     "в цілому": "загалом (in general)",
     "рахувати": "вважати (to consider) — рахувати is only for counting numbers",
@@ -44,6 +42,26 @@ RUSSICISMS = {
     "остановка": "зупинка (stop)",
     "строїти": "будувати (to build)",
 }
+
+# Standard Ukrainian words that are only *sometimes* register-marked (e.g. as a
+# colloquial filler). VESUM-confirmed real words — surfaced as an advisory for
+# human review, but NEVER a hard CI failure. Keeps the gate from false-failing
+# every translation batch that legitimately uses them.
+CONTEXTUAL_RUSSICISMS = {
+    "нормально": (
+        "standard for 'normally/properly' and «це нормально» (that's fine); "
+        "prefer гаразд / добре only as a colloquial 'OK' filler"
+    ),
+}
+
+# Word-boundary character class: Ukrainian letters + apostrophe variants. Ukrainian
+# joins morphemes with an apostrophe — ASCII ' (U+0027), typographic ’ (U+2019) and
+# modifier ʼ (U+02BC) all appear in real text (з’являється, п’ять). Including them
+# in the boundary class means a Russicism is matched only as a standalone token, so
+# e.g. «являється» inside «з’являється» (correct Ukrainian "appears") is not flagged.
+_UA_LETTERS = "а-яґєіїА-ЯҐЄІЇ"
+_APOSTROPHES = "'’ʼ"  # ' ’ ʼ
+_WORD_CHAR = _UA_LETTERS + _APOSTROPHES
 
 # Russian-only characters (never appear in proper Ukrainian)
 RUSSIAN_CHARS = {
@@ -87,8 +105,9 @@ def check_russicisms(content: str) -> list[CheckResult]:
 
     found = []
     for russian, fix in RUSSICISMS.items():
-        # Word boundary: surrounded by non-Cyrillic characters
-        pattern = rf"(?<![а-яґєіїА-ЯҐЄІЇ']){re.escape(russian.lower())}(?![а-яґєіїА-ЯҐЄІЇ'])"
+        # Word boundary: not adjacent to Ukrainian letters or apostrophes, so
+        # apostrophe-joined morphemes are treated as a single token.
+        pattern = rf"(?<![{_WORD_CHAR}]){re.escape(russian.lower())}(?![{_WORD_CHAR}])"
         matches = re.findall(pattern, content_lower)
         if matches:
             # Subtract false positives from context-aware patterns
@@ -110,6 +129,18 @@ def check_russicisms(content: str) -> list[CheckResult]:
             ))
     else:
         results.append(CheckResult("RUSSICISM", True, "No known Russicisms found"))
+
+    # Contextual/advisory words — standard Ukrainian that is only register-marked.
+    # Surfaced for human review (severity INFO) but never a hard CI failure.
+    for russian, note in CONTEXTUAL_RUSSICISMS.items():
+        pattern = rf"(?<![{_WORD_CHAR}]){re.escape(russian.lower())}(?![{_WORD_CHAR}])"
+        count = len(re.findall(pattern, content_lower))
+        if count:
+            results.append(CheckResult(
+                "RUSSICISM_CONTEXTUAL", True,
+                f"Contextual (advisory, not a failure): '{russian}' ({count}x) — {note}",
+                severity="INFO",
+            ))
 
     return results
 

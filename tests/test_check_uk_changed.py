@@ -107,3 +107,52 @@ def test_check_uk_changed_clean_file_passes(tmp_path: Path) -> None:
     result = _run([path])
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+def test_zyavlyayetsya_typographic_apostrophe_not_flagged(tmp_path: Path) -> None:
+    # «з’являється» (U+2019 apostrophe) is correct Ukrainian ("appears") and must
+    # NOT trip the standalone «являється» bureaucratic-calque rule.
+    path = tmp_path / "module.md"
+    path.write_text(
+        """# Переклад
+
+Коли з’являється зв’язок, клієнт синхронізує дані з сервером.
+""",
+        encoding="utf-8",
+    )
+
+    result = _run([path])
+    assert result.returncode == 0, result.stdout
+    assert "являється" not in result.stdout
+
+
+def test_normalno_is_contextual_not_a_failure(tmp_path: Path) -> None:
+    # «нормально» is standard Ukrainian (VESUM adverb); it is advisory-only and
+    # must never hard-fail the gate.
+    path = tmp_path / "module.md"
+    path.write_text(
+        """# Переклад
+
+Ваша версія може відрізнятися, і це нормально. Сервер може працювати нормально.
+""",
+        encoding="utf-8",
+    )
+
+    result = _run([path])
+    assert result.returncode == 0, result.stdout
+
+
+def test_standalone_yavlyayetsya_still_flagged(tmp_path: Path) -> None:
+    # The genuine standalone bureaucratic calque «являється» (= "is") must still fail.
+    path = tmp_path / "module.md"
+    path.write_text(
+        """# Переклад
+
+Цей підхід являється найкращим рішенням для команди.
+""",
+        encoding="utf-8",
+    )
+
+    result = _run([path])
+    assert result.returncode == 1
+    assert "являється" in result.stdout
