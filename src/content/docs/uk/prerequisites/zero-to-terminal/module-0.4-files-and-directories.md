@@ -17,7 +17,7 @@ calque_review:
   detector_version: "v2"
   status: "reviewed"
   flags_resolved: 8
-  content_sha: "ad2ffb956aaca301ae557563c6f0fcd63a3599ff42605abf1da701db3bb0777c"
+  content_sha: "85e46c020005c344723929348ef1663893d6802f36476d69b823315fb5fa81cf"
 ---
 > **Складність**: `[ШВИДКО]` - Абсолютний новачок
 >
@@ -190,7 +190,7 @@ pwd
 Documents/report.txt
 ```
 
-Ось те саме місце призначення, досягнуте двома різними способами. Абсолютний шлях називає весь маршрут від `/`, тоді як відносний шлях працює лише тому, що shell уже міститься в `/home/yourname`. Якби ваш поточний робочий каталог був `/tmp`, команда `cd Documents` шукала б `/tmp/Documents`, а не `/home/yourname/Documents`.
+Ось те саме місце призначення, досягнуте двома різними способами. Абсолютний шлях називає весь маршрут від `/`, тоді як відносний шлях працює лише тому, що shell уже перебуває в `/home/yourname`. Якби ваш поточний робочий каталог був `/tmp`, команда `cd Documents` шукала б `/tmp/Documents`, а не `/home/yourname/Documents`.
 
 ```bash
 pwd
