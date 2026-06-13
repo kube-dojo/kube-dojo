@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 143 — Platform Foundations Wave 7a + grok review/coding trials</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:940px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.55rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.18rem;margin-top:1.7rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}.mono{font-family:ui-monospace,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 143 — Platform Foundations Wave 7a (Engineering Leadership) + grok review/coding trials</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Issue:</strong> #1897 · <strong>PRs merged:</strong> #1947 (Wave 7a content) + #1948 (UK calque CI-guard, grok-authored) · <strong>Board:</strong> eng-leadership 1.1/1.2/1.3 → <strong>done</strong> (score 5.0). Continues the same session as the UK calque work (s142, prereqs 51/51, #1944/#1945/#1946).</p>
+
+<h2>Pivot: translation done → "finish the other stream" (Platform)</h2>
+<p>Per user: UK prereqs calque-review complete → translation is now lesser priority → drive the Platform Engineering stream (the last non-<code>done</code> curriculum). Wave 7 = Engineering Leadership; this session shipped <strong>Wave 7a (1.1–1.3)</strong>.</p>
+<table>
+<tr><th>Module</th><th>Was→Now</th><th>Author</th><th>Review</th></tr>
+<tr><td>1.1-incident-command</td><td>2159→5190w</td><td>cursor</td><td>grok-build + grok-4.x (A/B)</td></tr>
+<tr><td>1.2-postmortems</td><td>2633→5643w</td><td>codex</td><td>grok-build APPROVE</td></tr>
+<tr><td>1.3-oncall</td><td>1398→5498w</td><td>cursor</td><td>codex (P1 + 6 P2, all fixed)</td></tr>
+</table>
+<p>All de-fabbed (<code>$</code> figures + War Stories → <code>Hypothetical</code>), <code>###</code>→<code>##</code> outcomes, <code>## Sources</code> ≥10, removed <code>47</code>. <strong>verify_module T0 all three; build green; board finalized → done/5.0</strong> (reset-stage COMMITTED + review records; <code>.pipeline/</code> is gitignored so no commit).</p>
+<p><strong>Real bugs caught + web-verified:</strong> 1.3 rotation-math P1 ("4-5 engineers → ≤25% on-call" is false; Google SRE needs <strong>8 single-site / 6 per-site</strong>, load = 2/N) + Opsgenie EOL (2025-06-04 / 2027-04-05 → Jira Service Management/Compass); 1.1 three dead/blocked source links (FEMA 403, USENIX 404, Etsy 403) replaced; 1.1 Uptime Institute stat (54%/20%) web-verified accurate.</p>
+
+<h2>grok trials (user directives this session)</h2>
+<div class="warn">
+<p><strong>Directive 1 — "use grok-build + cursor more; A/B the two grok lanes; always review until trusted."</strong> Directive 2 — after the 1.1 A/B: <strong>"i dont care about speed but quality so grok build it is for reviewing."</strong> Directive 3 — <strong>"will you test coding and writing as well with grok?"</strong></p>
+</div>
+<table>
+<tr><th>Activity</th><th>Lane</th><th>s143 result</th></tr>
+<tr><td><strong>Review</strong></td><td><span class="mono">grok-build</span> (DECIDED)</td><td>2 reviews, both cross-validated against my ground-checks. 1.1: caught 3 dead links grok-4.x's fast APPROVE <em>missed</em>. 1.2: HEAD-checked 14/14 links → all 200, <strong>exactly matching my independent curl</strong>. Real verification, not fabricated. <strong>grok-build is the grok review lane</strong> (quality > speed); grok-4.x is NOT a review lane.</td></tr>
+<tr><td><strong>Coding</strong></td><td><span class="mono">grok-build</span></td><td><span class="ok">✅ SUCCESS (PR #1948 merged).</span> Authored the v2 UK calque CI-guard <span class="mono">scripts/checks/uk_calque_v2.py</span> + tests from a spec → ruff-clean, <strong>10/10 pytest</strong>, functionally correct, zizmor clean. Caveat: hermes-inline returns code in ```fences and grok's code contains a literal ` ``` ` → extract by exact-line bare-``` fences, not regex.</td></tr>
+<tr><td><strong>Writing</strong></td><td><span class="mono">grok-4.x reasoning</span></td><td>NOT yet trialed → <strong>queued for Wave 7b: grok-4.x authors 1.6-mentorship</strong> (heavy ground-check + grok-build review). grok-4.x's only data so far is the 1.1 review (fast but missed links).</td></tr>
+</table>
+<p>All grok output ground-checked; trust is accumulating but the rule stands — verify every finding, ignore grok's "Verified/ran X" provenance claims.</p>
+
+<h2>Bonus shipped — UK calque CI-guard (#1948, grok-authored)</h2>
+<p>Detection-only guard on changed <span class="mono">uk/**/*.md</span>: participles, <span class="mono">знаходиться</span>, "the following", with the learned false-positive guards (gerund <span class="mono">-ючи</span>, temporal <span class="mono">наступне питання</span>, <span class="mono">з'являється</span> substring). Structural bugs (dup headings, mojibake) <strong>FAIL</strong>; calque classes advisory. Wired into <span class="mono">uk-quality-checks.yml</span>. This closes the "cheap follow-up" flagged in #1934 — new translations can't regress on these classes.</p>
+
+<h2>Open / next</h2>
+<ul>
+<li><strong>Wave 7b — Engineering Leadership 1.4-adrs / 1.5-stakeholders / 1.6-mentorship</strong> (all T3, score 1.5, board <span class="mono">needs_rewrite</span>). Same loop. <strong>WRITING TRIAL: grok-4.x reasoning authors 1.6-mentorship</strong>; cursor/codex author 1.4/1.5; reviews = grok-build (the lane) + codex/cursor mix; ground-check everything. Then finalize → eng-leadership 6/6 done.</li>
+<li><strong>Then Platform Disciplines (45 critical) → Toolkits (36 critical)</strong>, curriculum order. Same loop. This is the bulk of "finish the other stream."</li>
+<li>Standing/deferred: AI-history book review (#1876). UK bulk translation is now LESSER priority (resume after Platform); the v2 CI-guard (#1948) will keep new translations calque-clean as they land.</li>
+<li><span class="mono">g2-craft</span> worktree (unmerged s104) left untouched per git discipline.</li>
+</ul>
+
+<h2>Reusables</h2>
+<p>Brief: <span class="mono">logs/remediation/briefs/pf-eng-leadership/_shared-expand-rules-el.md</span> (Engineering-Leadership expand rules — durable-vendor, de-fab, density). Per-module hints reusable for 7b. grok dispatch: <span class="mono">dispatch_smart review --agent hermes --model grok-build-0.1</span> (review) / inline code-gen (coding) / <span class="mono">--model grok-4.20-0309-reasoning</span> (content authoring trial).</p>
+</body>
+</html>
