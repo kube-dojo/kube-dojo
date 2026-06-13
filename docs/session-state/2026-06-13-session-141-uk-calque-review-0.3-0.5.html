@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 141 — UK calque review: prereqs 0.3 / 0.4 / 0.5 (board 2→5/51)</title>
+<style>
+body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.6rem;border-bottom:2px solid #2563eb;padding-bottom:.3rem}
+h2{font-size:1.2rem;margin-top:1.8rem;color:#1e40af}
+code{background:#f1f5f9;padding:.1em .35em;border-radius:3px;font-size:.9em}
+.box{background:#f8fafc;border-left:3px solid #2563eb;padding:.6rem 1rem;margin:1rem 0}
+.warn{border-left-color:#d97706;background:#fffbeb}
+.ok{border-left-color:#16a34a;background:#f0fdf4}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92em}
+th,td{border:1px solid #e2e8f0;padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:#f1f5f9}
+</style>
+</head>
+<body>
+<h1>Session 141 — UK calque review: prereqs 0.3 / 0.4 / 0.5</h1>
+<p><strong>Date:</strong> 2026-06-13 · <strong>Epic:</strong> #1911 · <strong>Issue:</strong> #1934 · <strong>Branch:</strong> main (all work in worktrees) · <strong>PRs:</strong> #1939 (0.3+0.4), #1940 (0.5)</p>
+
+<div class="box ok">
+<strong>Board: prerequisites calque-reviewed 2 / 51 → 5 / 51 (10%).</strong> Three live zero-to-terminal pages full-read-reviewed end-to-end this session — the top of the s140-stated ≈2–3 large-pages/session throughput. Continued the s140 lane unchanged: orchestrator-inline (opus), MCP-grounded, sentence-level reframing (not grep-replace), <code>calque_review</code> frontmatter stamp, build + UK gate, batch PR with <code>## Learner check</code>, merge, restart api.
+</div>
+
+<h2>Pages reviewed</h2>
+<table>
+<tr><th>Page</th><th>PR</th><th>Status</th><th>Reframes</th></tr>
+<tr><td><code>0.3-first-commands</code></td><td>#1939</td><td>reviewed (3)</td><td><code>наступні навички</code>→<code>такі</code>; <code>Оточуючий його редактор</code>→<code>Редактор, у який його вбудовано</code> (+ <code>не скасовує потребу</code>→<code>потреби</code>, gen. of negation); <code>на зростаючій глибині</code>→<code>на дедалі більшій глибині</code></td></tr>
+<tr><td><code>0.4-files-and-directories</code></td><td>#1939</td><td>reviewed (1) + 2 defects</td><td><code>на працюючій кухні</code>→<code>на робочій кухні</code>; <strong>mojibake</strong> <code>повся&lt;Bengali&gt;енного</code>→<code>повсякденного</code>; removed a <strong>duplicated <code>## Джерела</code></strong> heading</td></tr>
+<tr><td><code>0.5-editing-files</code></td><td>#1940</td><td>reviewed (6)</td><td><code>існуючий файл</code>×2→<code>наявний файл</code>; <code>розчаровуючій звичці</code>→<code>прикрій звичці</code>; <code>наступні три рядки</code>/<code>Введіть наступне</code>/<code>наступні п'ять рядків</code>→<code>такі</code>/<code>наведене нижче</code></td></tr>
+</table>
+
+<h2>Dominant calque class this batch: active present participles (<code>-ючий/-учий</code>)</h2>
+<p>The recurring real defect across all three pages was the <strong>active present participle</strong> — <code>оточуючий</code>, <code>зростаючий</code>, <code>працюючий</code>, <code>існуючий</code>, <code>розчаровуючий</code> — a codified non-normative form in standard Ukrainian (a calque of Russian <code>-ающий/-ующий</code>). Fix = relative clause / adjective / nominalization (<code>навколишній</code>, <code>наявний</code>, <code>робочий</code>, <code>дедалі більший</code>, <code>прикрий</code>). This is bedrock <em>Український правопис</em> grammar, not a corpus-lookup matter — high-confidence, fixed on sight. The secondary class was <code>наступн-</code> used as a pointing-word for content reproduced immediately below ("type the following…" → <code>такі</code>/<code>наведене нижче</code>, the <em>следующі</em>-calque); EN-source-grounded before editing.</p>
+
+<div class="box">
+<strong>Verified-and-left (don't over-edit good prose):</strong> all <code>являється</code> grep hits were substrings of <code>з'являється</code> (correct UA — the documented #1922 gate FP); all <em>sequential</em> <code>наступн-</code> uses ("the next command/reader/module"); <code>при копіюванні</code>/<code>при видаленні</code> (borderline, acceptable modern usage). The s139 translations remain strong — the full read mostly certifies and surfaces a small number of genuine reframes per page.</p>
+</div>
+
+<h2>Defects beyond calques (fixed in-scope, senior-dev rule)</h2>
+<ul>
+<li><strong>0.4 mojibake</strong>: <code>повся[Bengali glyphs দ্দ]енного</code> → <code>повсякденного</code> — was rendering as garbage on the live site. Caught by a non-Cyrillic/non-ASCII glyph scan, not the calque pass.</li>
+<li><strong>0.4 duplicate heading</strong>: two consecutive <code>## Джерела</code> lines → one.</li>
+</ul>
+
+<h2>Verification (every page)</h2>
+<ul>
+<li>UK gate <code>scripts/quality/check_uk_changed.py</code> — clean (exit 0); 0 hard Russicism letters (ы/ё/ъ/э).</li>
+<li>Full astro build green in the worktree (<code>ln -s ../../node_modules</code>) — <strong>2169 pages, Complete!</strong> each PR.</li>
+<li>Both required CI checks (Site health link check + Incident dedup gate) green; rebase-merged; primary fast-forwarded ff-only (no git mishaps); merged worktrees removed; <code>./services.sh restart api</code> → board ticks.</li>
+</ul>
+
+<h2>Git hygiene done</h2>
+<p>Pruned 2 merged/upstream-gone worktrees+branches flagged by the briefing (<code>s113-cons</code> / <code>s113/devsecops-security-currency</code>, <code>uk-bulk</code> / <code>uk/s139-quality-plan</code> — both clean, no uncommitted work). <code>g2-craft</code> (gap-fill-g2-engineering-craft, session-104 in-flight, unmerged) left untouched per git discipline.</p>
+
+<h2>Throughput &amp; the standing scaling decision</h2>
+<p>3 large pages this session (7.5k / 8.6k / 7.1k words each) — confirms the s140 estimate: ≈2–3 large pages/session ⇒ the 51 live prereqs ≈ <strong>15–18 sessions</strong> at this rate. <strong>Scope remains LOCKED (user, s140):</strong> the 51 LIVE prereqs only; reassess at 51/51. No bulk/scalable lane until then. Per-page cost is dominated by the full read + per-suspect MCP/grammar judgement, which is the point (quality before coverage).</p>
+
+<h2>Lane (unchanged, for the next session)</h2>
+<ol>
+<li>Fresh worktree off <code>origin/main</code>; <code>fix_uk_calques.py scan &lt;file&gt;</code> as the detector assist (note: it found 0 hits on all 3 pages this batch — the full read is the coverage mechanism, the tool is a backstop).</li>
+<li>Backstop greps that earned their keep this batch: active participles <code>(уюч|оюч|аюч|еюч|ююч)(ий…)</code>, mojibake (non-Cyrillic/non-ASCII glyph scan), duplicate <code>## </code> headings, hard Russicism letters, <code>наступн-</code> occurrences.</li>
+<li>Read every sentence; MCP-check each suspect (GEC/style-guide/idioms/shadow/VESUM); for "the following X" patterns, ground the <code>наступн-</code>→<code>такі</code> call in the EN source first.</li>
+<li><code>calque_review_stamp.py stamp &lt;file&gt; --flags N --status reviewed|clean</code>; build; UK gate; batch PR with a verbatim <code>## Learner check</code> blockquote (a ≥30-char prose sentence from the file — the hook matches against the pushed commit); rebase-merge; <code>git pull --ff-only</code>; <code>./services.sh restart api</code>.</li>
+</ol>
+
+<h2>Open / next</h2>
+<ul>
+<li><strong>Resume: full-read review prereq 0.6 onward</strong> (zero-to-terminal 0.6–0.11 → cloud-native-101 → kubernetes-basics → philosophy-design → modern-devops → git-deep-dive). Board target 51/51, currently <strong>5/51</strong>.</li>
+<li>Pre-existing worktree untouched: <code>g2-craft</code> (carries unmerged session-104 commits — leave per git discipline).</li>
+<li>Coverage (linux/new translation) remains PAUSED until the 51 live prereqs reach the review bar (user priority: quality before coverage).</li>
+<li>Standing, deferred: Wave 7 Platform-Foundations Engineering Leadership (#1897, 6 expands), Platform Disciplines 45 / Toolkits 36 critical, AI-history book review (#1876). The whole non-Platform curriculum is <code>done</code>.</li>
+</ul>
+</body>
+</html>
