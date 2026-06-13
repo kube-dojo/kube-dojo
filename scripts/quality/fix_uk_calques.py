@@ -40,10 +40,6 @@ FLAG_ONLY = [
         "→ «відповідно до» + GENITIVE — case of the following noun changes; fix by hand",
     ),
     (
-        r"в\s+залежності\s+(?:з|із)\b",
-        "→ «відповідно до» + GENITIVE — case of the following noun changes; fix by hand",
-    ),
-    (
         r"в\s+залежності(?!\s+від)",
         "ambiguous noun-vs-adverb; «перебувати в залежності» → «залежати»; bare noun «залежність» is fine",
     ),
