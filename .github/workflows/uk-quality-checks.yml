@@ -40,3 +40,15 @@ jobs:
           done
 
           python3 scripts/quality/check_uk_changed.py "${CHANGED_FILES[@]}"
+
+      - name: Run calque detector (v2 — structural FAIL, calque advisory)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          mapfile -t CHANGED_FILES < <(git diff --name-only "origin/${BASE_REF}"...HEAD -- 'src/content/docs/uk/**/*.md')
+          if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
+            echo "No changed UK files; skipping calque detector."
+            exit 0
+          fi
+          python3 scripts/checks/uk_calque_v2.py "${CHANGED_FILES[@]}"
