@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 141b — UK calque review: method pivot to detector-driven + bulk bug fixes</title>
+<style>
+body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.6rem;border-bottom:2px solid #2563eb;padding-bottom:.3rem}
+h2{font-size:1.2rem;margin-top:1.8rem;color:#1e40af}
+code{background:#f1f5f9;padding:.1em .35em;border-radius:3px;font-size:.9em}
+pre{background:#0f172a;color:#e2e8f0;padding:.8rem 1rem;border-radius:6px;overflow-x:auto;font-size:.82em;line-height:1.45}
+.box{background:#f8fafc;border-left:3px solid #2563eb;padding:.6rem 1rem;margin:1rem 0}
+.warn{border-left-color:#d97706;background:#fffbeb}
+.ok{border-left-color:#16a34a;background:#f0fdf4}
+.dec{border-left-color:#7c3aed;background:#faf5ff}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92em}
+th,td{border:1px solid #e2e8f0;padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:#f1f5f9}
+</style>
+</head>
+<body>
+<h1>Session 141b — UK calque review: METHOD PIVOT (detector-driven) + bulk structural-bug fixes</h1>
+<p><strong>Date:</strong> 2026-06-13 · <strong>Epic:</strong> #1911 · <strong>Issue:</strong> #1934 · <strong>PR merged:</strong> #1942 · <strong>Board:</strong> 5/51 (unchanged — bug fixes don't earn a calque stamp)</p>
+
+<div class="box warn">
+<strong>User pivot (emphatic, twice): the s140 "cold-read every sentence, page by page" lane is a token waste.</strong> "reading all line is not a good idea. finding a sentence with a bad word then reframing that sentence is the right way." Also corrected my standing error: <strong>"1083" is the total EN page <em>target</em>, NOT existing translations</strong> — only the ~51 live prereqs are <em>ready/current</em> UK translations, so the calque-review universe is just those 51 (no phantom 1083 backlog; the tooling runs on NEW pages AFTER translation, not as a retroactive 1083-scan). Memory <code>feedback_uk_calque_review_sentence_reframe_not_grep</code> rewritten to the corrected method.
+</div>
+
+<h2>Corrected method (locked) — detector-driven, targeted</h2>
+<ol>
+<li><strong>Grep ALL 51 pages at once</strong> for bad-word/calque patterns + structural bugs → per-file hit list. The detector IS the coverage; you read only the flagged sentences, never whole pages.</li>
+<li>For each hit: pull the sentence, <strong>reframe that sentence</strong> to natural UA (reframe, not token-swap), MCP-validate only the ambiguous ones, drop false positives.</li>
+<li>Stamp a page <code>calque_review</code> once ALL its detector classes are resolved → board ticks.</li>
+<li><strong>Execution efficiency (the waste this session exposed):</strong> edit via <strong>Bash/python against worktree files</strong> (or the primary path) — do NOT use the Read tool on worktree files (it re-injects the whole CLAUDE.md+rules bundle, ~15-20K tokens each); <strong>ONE batched PR</strong> per pass; minimal CI polling.</li>
+</ol>
+
+<div class="box ok">
+<strong>Shipped this session — PR #1942 (merged, <code>d4a528c93</code>): 12 deterministic structural bugs across the corpus, found by one grep sweep.</strong>
+<ul>
+<li><strong>10 duplicated consecutive <code>## </code> headings</strong> (rendered twice live): cloud-native-101/1.3, git-deep-dive/2, kubernetes-basics/1.1·1.4·1.7·1.8, modern-devops/1.2, philosophy-design/1.1, zero-to-terminal/0.7·0.8.</li>
+<li><strong>2 mojibake corruptions</strong> (garbage glyphs live): cloud-native-101/1.4 <code>audit ціদ্দreal,</code>→<code>audit є реальними,</code>; philosophy-design/1.3 <code>свою酌 чергу</code>→<code>свою чергу</code>.</li>
+</ul>
+These are bugs the per-page cold-read would've taken many sessions to even find; the grep found them in seconds — the case for the pivot.
+</div>
+
+<h2>NEXT SESSION — ready-to-execute calque worklist</h2>
+<p>Regenerate the full hit list in one command (fresh worktree off main):</p>
+<pre>F=$(find src/content/docs/uk/prerequisites -name '*.md' | sort)
+# A. active participles (curated calque stems — high precision)
+grep -rnE 'існуюч|працююч|оточуюч|конкуруюч|конфліктуюч|взаємодіюч|відволікаюч|простоююч|лякаюч|блимаюч|відкриваюч|закриваюч|бракуюч|наступаюч|деградуюч|домінуюч' $F
+# B. "the following" calque (наступн- pointing at a list/code below)
+grep -rnoE '[Нн]аступн[іеє] [^.:]{0,30}(рядк|команд|пункт|елемент|приклад|крок|вимог|файл)[а-яіїєґ]*' $F
+# C. structural bugs (should now be 0 after #1942 — re-run as a guard)
+python3 -c "import glob;[print(f,i+1,L[i]) for f in glob.glob('src/content/docs/uk/prerequisites/**/*.md',recursive=True) for i,L in [(0,open(f).read().split(chr(10)))] for i in range(1,len(L)) if L[i].startswith('## ') and L[i]==L[i-1]]"</pre>
+
+<p><strong>Scope as of this sweep:</strong> ~85 participle-calque hits across 33 pages (list A); 8 "the following" hits (list B); structural bugs (list C) = 0 (fixed in #1942).</p>
+
+<div class="box dec">
+<strong>DECISION NEEDED before mass-reframing the participles — how aggressively to apply the active-participle rule?</strong>
+<ul>
+<li><strong>Context:</strong> active present participles (<code>-ючий/-учий</code>) are non-normative in standard UA, but modern usage is <em>split</em> — some are heavily lexicalized (<code>існуючий</code>, <code>працюючий</code>, <code>домінуючий</code>, <code>вражаючий</code>) and read fine; others are genuinely awkward (<code>оточуючий редактор</code>, fixed in 0.3). <strong>s140's full read of 0.2 stamped it "clean" while 0.2 contains 7 participles</strong> — i.e. s140 either deemed them acceptable or missed them.</li>
+<li><strong>Option A (recommended): fix all as calques</strong> — consistent with s140/s141 precedent (which fixed оточуючий/існуючий/працюючий/зростаючий/розчаровуючий). Clean drop-in swaps are scriptable safely (<code>існуючий→наявний</code>, <code>конкуруючий→конкурентний</code>); clause-reworks (<code>оточуючий→що оточує/навколишній</code>) need per-sentence edits. ~85 edits, ~1 focused session.</li>
+<li><strong>Option B: fix only the genuinely-awkward ones</strong>, leave lexicalized forms — honours "don't over-edit good prose", far fewer edits, but subjective per-instance and inconsistent with the 0.3/0.5 fixes already shipped.</li>
+<li>The 8 "the following" (<code>наступні команди/рядки</code> → <code>такі</code>/<code>наведені нижче</code>) are clear regardless — do them in either option.</li>
+</ul>
+</div>
+
+<h2>Execution recipe for the reframe pass (next session)</h2>
+<ol>
+<li>Fresh worktree off main. Regenerate lists A+B above.</li>
+<li>Read each flagged sentence via <code>grep -n</code> (NOT the Read tool on worktree files). Reframe via a single <code>python</code> edit-manifest script (list of <code>(file, old, new)</code>, assert each <code>old</code> occurs once) — bulk, no per-file Read.</li>
+<li>Process pages fully (A+B for that page) → <code>calque_review_stamp.py stamp &lt;file&gt; --flags N --status reviewed|clean</code> → board ticks. Target the remaining 46 (5/51 done: 0.1–0.5).</li>
+<li>Build (<code>ln -s ../../node_modules</code>; grep the log, never Read it), UK gate (<code>check_uk_changed.py</code>), ONE PR with a <code>## Learner check</code> verbatim blockquote, rebase-merge, <code>git pull --ff-only</code>, <code>./services.sh restart api</code>.</li>
+</ol>
+
+<div class="box warn">
+<strong>Separate finding (not a calque):</strong> <code>cloud-native-101/module-1.4-cloud-native-ecosystem.md</code> is heavily <em>under-translated</em> — <code>security</code>/<code>audit</code>/<code>workflow</code>/<code>declarative</code>/<code>reconciliation</code>/<code>pipelines</code>/<code>credentials</code>/<code>controller</code>/<code>desired state</code> left in English beyond the glossary's allowed tool names. Needs re-translation (agy), not calque review. Flag for the coverage pass.
+</div>
+
+<h2>Open / next</h2>
+<ul>
+<li><strong>Calque reframe pass on the remaining 46 prereqs</strong> (board 5/51 → 51/51): lists A+B above, decision A vs B first. ~1-2 focused sessions.</li>
+<li>Consider a CI guard from the detector (dup-heading + mojibake scan) so these structural bugs can't recur — cheap follow-up.</li>
+<li>1.4-cloud-native-ecosystem under-translation → coverage/re-translation queue.</li>
+<li><code>g2-craft</code> worktree (unmerged s104) left untouched per git discipline.</li>
+<li>Standing/deferred: Platform-Foundations Wave 7 (#1897), Disciplines/Toolkits, AI-history book (#1876). Non-Platform curriculum is <code>done</code>.</li>
+</ul>
+</body>
+</html>
