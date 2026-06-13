@@ -31,7 +31,16 @@ curriculum order, fixed the CI gate that was false-blocking it, and learned the 
 <code>http://127.0.0.1:8768/uk</code>.</li>
 <li>6 content PRs + 1 docs PR merged; 1 tracking issue filed; primary stayed on <code>main</code> throughout
 (all work in <code>.worktrees/uk-bulk</code>).</li>
+<li><strong class="ok">LIVE-confirmed</strong> — "Deploy to GitHub Pages" succeeded at HEAD <code>171e7722</code>; spot-checked 4 UK
+pages on <code>kube-dojo.github.io</code> (0.5/kubectl-basics/git-internals/gitops), all serving the full current
+re-translations (7.7k–12k words), not the old stubs. A real user (Ukrainian K8s learner) is being pointed at it.</li>
 </ul>
+<p class="warn"><strong>Quality caveat (carry when sharing):</strong> these are <strong>agy/Gemini machine
+translations + automated verification</strong> (Russicism-letter scan, calque checks, glossary, length-parity) — NOT
+human translation. Complete and gate-clean, but a native speaker will spot stiff phrasing and calques the gate misses
+(hand-fixed this session: <code>в цілому</code>→<code>загалом</code>, <code>рахувати</code>(count)→<code>підраховувати</code>,
+adverbial <code>в залежності</code>→<code>залежно</code>). Native-speaker corrections are high-leverage: feed them into
+the glossary + the planned calque-fixer to lift quality across all ~900 remaining pages.</p>
 
 <h2>Sections completed (curriculum order)</h2>
 <table>
@@ -92,17 +101,30 @@ fabricated war-stories (e.g. philosophy-design 1.1 "$340,000 / 47 terminals"; cl
 2002 Bezos API-mandate story, which is fine). The translation faithfully mirrors EN — fixing these belongs to an EN
 de-fabrication pass, not a translation PR (changing them would desync <code>en_commit</code>). Worth a follow-up sweep.</p>
 
-<h2>NEXT</h2>
-<ul>
-<li><strong>Continue bulk translation in curriculum order — next track is <code>linux</code></strong> (Linux Deep Dive +
-Everyday Use), then <code>cloud</code>, then k8s certs (Phase A). Same lane:
-<code>fix-section &lt;section&gt; --strict-commit</code> per section, RAG-verify, build, PR <em>with a
-<code>## Learner check</code></em>, merge, pull, watch the <code>/uk</code> board. Hold platform/on-prem/AI (Phase C)
-until their EN settles.</li>
-<li>Build the context-aware <strong>calque-fixer</strong> (encode the recurring patterns above).</li>
-<li><strong>#1871</strong> npm/Starlight Dependabot bump (needs a local astro build). Wave 7 — Engineering Leadership
-(Platform Foundations, 6 genuine T3 expands; briefs banked) if the user redirects off translation.</li>
+<h2>NEXT — user-agreed plan (2026-06-13)</h2>
+<p>The user runs <strong>two API streams</strong>: <code>/uk</code> (translations) and <code>/quality</code> (curriculum
+review). Agreed sequence:</p>
+<ol>
+<li><strong>Translations — finish the UK Fundamentals learner path first:</strong> (a) <code>linux</code> track (Deep
+Dive + Everyday Use — "Everyday Linux" is the Fundamentals tab's last piece), then (b) <strong>root / top-level pages</strong>
+(track index pages, what's-new/changelog; the homepage already has a <code>uk</code> variant). Same lane:
+<code>fix-section &lt;section&gt; --strict-commit</code> (translate missing pages via <code>translate</code>/<code>translate-section</code>),
+RAG-verify, build, PR <em>with a <code>## Learner check</code></em>, merge, pull, watch the <code>/uk</code> board.</li>
+<li><strong>Then pivot to the <code>/quality</code> stream and continue Wave 7 where s135 left off.</strong> Quality is
+<strong>701/828 done (~85%)</strong>; ALL 127 remaining are in <strong>Platform Engineering</strong> (everything else —
+prereqs, linux, ai, cloud, all certs, on-prem — is 100% done). Order: <strong>Wave 7 Engineering Leadership</strong>
+(foundations/engineering-leadership, verify-swept = <strong>6 genuine T3 expands</strong>: 1.1-incident-command 2159w,
+1.2-postmortems 2633w, 1.3-oncall 1398w, 1.4-adrs 1866w, 1.5-stakeholders 2549w, 1.6-mentorship 2344w — briefs NOT
+banked, write from module + floor) → Disciplines (60) → Toolkits (60, infrastructure-networking is the 27-module
+cluster). Tracking issue <strong>#1897</strong> (open). Proven expand-to-floor loop: ≤3 authors in own worktrees
+(cursor/codex/deepseek), mixed-pool cross-family review NO gemini (agy = Google seat; opus review = orchestrator INLINE
+in-session), ground-check + web-verify every finding, <code>revision_pending:false</code>, consolidated PR, reset-stage
+COMMITTED + review record. <strong>The 73-chapter AI History BOOK (#1876, ~365K words) stays DEFERRED — reviewing it is
+its own epic.</strong></li>
+<li>Build the context-aware <strong>calque-fixer</strong> (encode the recurring patterns above); consider a
+"report a translation issue" path so the native-speaker learner's corrections land somewhere useful.</li>
+<li><strong>#1871</strong> npm/Starlight Dependabot bump (needs a local astro build).</li>
 <li>Optional: EN de-fabrication sweep of prerequisites war-story openers (separate from translation currency).</li>
-</ul>
+</ol>
 </body>
 </html>
