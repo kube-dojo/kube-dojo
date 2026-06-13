@@ -5,6 +5,12 @@ sidebar:
   order: 0
 en_commit: "1f32dfaa0e1af846c42c775fc53fd755491a795b"
 en_file: "src/content/docs/prerequisites/zero-to-terminal/index.md"
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "8c1169d6b593f33c9184c1daabc90d6f72a46f86c93fad5bd52652598a1ac760"
 ---
 
 > **Від «Я ніколи не користувався терміналом» до «Я розгорнув вебсайт, використовуючи лише командний рядок»**

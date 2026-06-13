@@ -5,6 +5,12 @@ sidebar:
   order: 0
 en_commit: "1f67dd117306859631bb39120369c415649400c4"
 en_file: "src/content/docs/prerequisites/kubernetes-basics/index.md"
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "2a265971fee141eaf2b83a53881b07fca5cda9932a3737810b364b7610a37554"
 ---
 
 Ласкаво просимо до «Основ Kubernetes». У цьому розділі ви зануритеся у фундаментальні концепції та практичні навички, необхідні для роботи з середовищами Kubernetes та управління ними. Незалежно від того, чи переходите ви з традиційної інфраструктури, чи з окремих контейнеризованих рішень, розуміння цих базових примітивів є критично важливим для сучасного хмарного (cloud-native) розгортання.

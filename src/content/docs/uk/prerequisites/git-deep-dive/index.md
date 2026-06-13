@@ -4,6 +4,12 @@ sidebar:
   order: 0
 en_file: src/content/docs/prerequisites/git-deep-dive/index.md
 en_commit: 6f688de7e85908368014e1663436941bebdca220
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "883db563fec2b350c7273a0afd273d12d48800055a2decd97def522b5026eb3e"
 ---
 
 **Опануйте інструмент, який кожен інженер використовує щодня, але мало хто дійсно розуміє.**

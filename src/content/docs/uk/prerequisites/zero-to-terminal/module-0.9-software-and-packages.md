@@ -12,6 +12,12 @@ lab:
   environment: "ubuntu"
 en_commit: "f921a10f56a4b03ab9747904218dbe846aff367a"
 en_file: "src/content/docs/prerequisites/zero-to-terminal/module-0.9-software-and-packages.md"
+calque_review:
+  reviewed_at: "2026-06-13"
+  detector_version: "v2"
+  status: "clean"
+  flags_resolved: 0
+  content_sha: "d4e937eb19edbe90d5c1ecd28bb572dc15e7c9d116b653faf7c96c53951ca808"
 ---
 > **Складність**: `[QUICK]` - Абсолютний новачок
 >
