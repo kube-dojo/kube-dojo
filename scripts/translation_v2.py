@@ -22,6 +22,7 @@ from pipeline_v2.control_plane import (
     DEFAULT_BUDGETS_PATH,
     ControlPlane,
 )
+from quality.calque_review_stamp import read_status as read_calque_review_status
 from uk_sync import fix_module as uk_fix_module
 from uk_sync import translate_new_module as uk_translate_new_module
 
@@ -240,6 +241,12 @@ def _classify_page_status(
     return "current", en_words, uk_words, round(ratio, 2)
 
 
+def _is_calque_reviewed(review: dict[str, Any] | None) -> bool:
+    if review is None:
+        return False
+    return review.get("status") in {"reviewed", "clean"} and not review.get("stale", True)
+
+
 def build_translation_board(repo_root: Path) -> dict[str, Any]:
     """Per-page UK translation currency board keyed by EN docs-relative paths.
 
@@ -248,12 +255,21 @@ def build_translation_board(repo_root: Path) -> dict[str, Any]:
     """
     docs_root = repo_root / "src" / "content" / "docs"
     track_pages: dict[str, list[dict[str, Any]]] = {}
-    totals = {"total": 0, "current": 0, "stale": 0, "missing": 0, "current_pct": 0}
+    totals = {
+        "total": 0,
+        "current": 0,
+        "stale": 0,
+        "missing": 0,
+        "current_pct": 0,
+        "reviewed": 0,
+        "reviewed_pct": 0,
+    }
 
     for en_path in _iter_en_pages(repo_root):
         rel = en_path.relative_to(docs_root).as_posix()
         uk_path = docs_root / "uk" / rel
         status, en_words, uk_words, ratio = _classify_page_status(repo_root, en_path, uk_path, rel)
+        review = read_calque_review_status(uk_path) if uk_path.exists() else None
         track = _track_for_rel(rel)
         page = {
             "rel": rel,
@@ -261,10 +277,13 @@ def build_translation_board(repo_root: Path) -> dict[str, Any]:
             "en_words": en_words,
             "uk_words": uk_words,
             "ratio": ratio,
+            "calque_review": review,
         }
         track_pages.setdefault(track, []).append(page)
         totals["total"] += 1
         totals[status] += 1
+        if _is_calque_reviewed(review):
+            totals["reviewed"] += 1
 
     tracks: list[dict[str, Any]] = []
     for track in sorted(track_pages, key=_track_sort_key):
@@ -273,6 +292,7 @@ def build_translation_board(repo_root: Path) -> dict[str, Any]:
         current = sum(1 for p in pages if p["status"] == "current")
         stale = sum(1 for p in pages if p["status"] == "stale")
         missing = sum(1 for p in pages if p["status"] == "missing")
+        reviewed = sum(1 for p in pages if _is_calque_reviewed(p.get("calque_review")))
         tracks.append(
             {
                 "track": track,
@@ -281,12 +301,15 @@ def build_translation_board(repo_root: Path) -> dict[str, Any]:
                 "stale": stale,
                 "missing": missing,
                 "current_pct": round(100 * current / track_total) if track_total else 0,
+                "reviewed": reviewed,
+                "reviewed_pct": round(100 * reviewed / track_total) if track_total else 0,
                 "pages": pages,
             }
         )
 
     total = totals["total"]
     totals["current_pct"] = round(100 * totals["current"] / total) if total else 0
+    totals["reviewed_pct"] = round(100 * totals["reviewed"] / total) if total else 0
 
     return {
         "generated_at": int(time.time()),
