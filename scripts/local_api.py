@@ -6852,6 +6852,11 @@ _UK_BOARD_PAGE_CSS = """
     .uk-chip.current { background: var(--green-muted); color: var(--green); }
     .uk-chip.stale { background: var(--amber-muted); color: var(--amber); }
     .uk-chip.missing { background: var(--red-muted); color: var(--red); }
+    .uk-calque { font-size: 11px; white-space: nowrap; font-weight: 600; }
+    .uk-calque small { font-weight: 500; opacity: 0.85; margin-left: 4px; }
+    .uk-calque.pending { color: var(--text-dim); }
+    .uk-calque.stale { color: var(--amber); }
+    .uk-calque.reviewed { color: var(--green); }
     .empty-state { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
     @media (max-width: 900px) {
       .page-head { flex-direction: column; }
@@ -6876,6 +6881,14 @@ _UK_BOARD_PAGE_JS = r"""
 
     function ukChip(status) {
       return `<span class="uk-chip ${esc(status)}">${esc(status)}</span>`;
+    }
+
+    function ukCalqueReview(page) {
+      const review = page.calque_review;
+      if (!review) return '<span class="uk-calque pending">⏳ pending</span>';
+      if (review.stale) return '<span class="uk-calque stale">⚠ stale</span>';
+      const version = review.detector_version ? `<small>${esc(review.detector_version)}</small>` : '';
+      return `<span class="uk-calque reviewed">✓ reviewed${version}</span>`;
     }
 
     function ukMiniBar(track) {
@@ -6907,8 +6920,10 @@ _UK_BOARD_PAGE_JS = r"""
       const stale = totals.stale || 0;
       const missing = totals.missing || 0;
       const currentPct = totals.current_pct || 0;
+      const reviewed = totals.reviewed || 0;
+      const reviewedPct = totals.reviewed_pct || 0;
       const toGo = stale + missing;
-      badge.textContent = `${current} / ${total} current`;
+      badge.textContent = `${current} / ${total} current · ${reviewed} / ${total} calque-reviewed`;
       badge.style.background = currentPct >= 60 ? 'var(--green-muted)' : 'var(--amber-muted)';
       badge.style.color = currentPct >= 60 ? 'var(--green)' : 'var(--amber)';
 
@@ -6919,6 +6934,7 @@ _UK_BOARD_PAGE_JS = r"""
             ${ukChip(page.status)}
             <span class="uk-page-path">${esc(page.rel)}</span>
             <span class="uk-page-words">${page.uk_words || 0}/${page.en_words || 0} (${Number(page.ratio || 0).toFixed(2)})</span>
+            ${ukCalqueReview(page)}
           </li>`).join('');
         return `<tbody>
           <tr class="uk-track-row" data-track="${esc(track.track)}">
@@ -6928,10 +6944,12 @@ _UK_BOARD_PAGE_JS = r"""
             <td class="uk-num">${track.stale || 0}</td>
             <td class="uk-num">${track.missing || 0}</td>
             <td class="uk-num">${track.current_pct || 0}%</td>
+            <td class="uk-num">${track.reviewed || 0}</td>
+            <td class="uk-num">${track.reviewed_pct || 0}%</td>
             <td><div class="uk-mini">${ukMiniBar(track)}</div></td>
           </tr>
           <tr class="uk-pages-row" data-track="${esc(track.track)}" hidden>
-            <td colspan="7" style="padding:0;border:0">
+            <td colspan="9" style="padding:0;border:0">
               <ul class="uk-page-list">${pages}</ul>
             </td>
           </tr>
@@ -6941,18 +6959,20 @@ _UK_BOARD_PAGE_JS = r"""
       el.innerHTML = `
         <div class="uk-wrap">
           <h2 class="uk-headline"><span>${currentPct}%</span> current — goal 100%</h2>
-          <div class="uk-subcounts">${current} current · ${stale} stale · ${missing} missing · ${total} pages · ${toGo} to go</div>
+          <div class="uk-subcounts">${current} current · ${stale} stale · ${missing} missing · ${total} pages · ${toGo} to go · calque-reviewed: ${reviewed} / ${total} (${reviewedPct}%)</div>
           <div class="uk-note">Currency measured by word-ratio (UK &lt; 60% of current EN = stale), not file existence.</div>
+          <div class="uk-note">Calque review tracks human-reviewed calque fixes via frontmatter stamp; stale when page body changes after review.</div>
           <div class="uk-note">Nothing is excluded — every page will be translated. The AI tracks (ai / ai-ml-engineering / ai-history) and parts of platform / on-premises are translated LAST, after their English stabilizes, to avoid immediate re-staleness.</div>
           <div class="uk-table-wrap">
             <table class="uk-table">
               <thead>
                 <tr>
                   <th>Track</th><th class="uk-num">Pages</th><th class="uk-num">Current</th>
-                  <th class="uk-num">Stale</th><th class="uk-num">Missing</th><th class="uk-num">Current%</th><th>Progress</th>
+                  <th class="uk-num">Stale</th><th class="uk-num">Missing</th><th class="uk-num">Current%</th>
+                  <th class="uk-num">Calque rev.</th><th class="uk-num">Calque%</th><th>Progress</th>
                 </tr>
               </thead>
-              ${rows || '<tbody><tr><td colspan="7" class="empty-state">No tracks</td></tr></tbody>'}
+              ${rows || '<tbody><tr><td colspan="9" class="empty-state">No tracks</td></tr></tbody>'}
             </table>
           </div>
         </div>`;
@@ -7016,7 +7036,7 @@ def render_uk_board_page_html() -> str:
   <div class=\"page-head\">
     <div>
       <h1 class=\"page-title\">Ukrainian Translation</h1>
-      <div class=\"page-sub\">UK translation currency by word-ratio against current English sources.</div>
+      <div class=\"page-sub\">UK translation currency by word-ratio and calque-review coverage against current English sources.</div>
     </div>
     <div class=\"page-actions\">
       <span class=\"status-pill\" id=\"conn-status\"><span class=\"dot\"></span> Connected</span>
