@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 140 — UK calque review: proper sentence-aware system + /uk dashboard</title>
+<style>
+body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}
+h1{font-size:1.6rem;border-bottom:2px solid #2563eb;padding-bottom:.3rem}
+h2{font-size:1.2rem;margin-top:1.8rem;color:#1e40af}
+code{background:#f1f5f9;padding:.1em .35em;border-radius:3px;font-size:.9em}
+.box{background:#f8fafc;border-left:3px solid #2563eb;padding:.6rem 1rem;margin:1rem 0}
+.warn{border-left-color:#d97706;background:#fffbeb}
+.ok{border-left-color:#16a34a;background:#f0fdf4}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92em}
+th,td{border:1px solid #e2e8f0;padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:#f1f5f9}
+</style>
+</head>
+<body>
+<h1>Session 140 — UK calque review: proper sentence-aware system + <code>/uk</code> dashboard</h1>
+<p><strong>Date:</strong> 2026-06-13 · <strong>Epic:</strong> #1911 · <strong>Issue:</strong> #1934 · <strong>Branch:</strong> main (all work in worktrees)</p>
+
+<div class="box warn">
+<strong>Mid-session pivot (user correction).</strong> Started on s139 Plan A (a context-aware calque <em>fixer</em>) — built it (#1932/PR #1933, merged: <code>scripts/quality/fix_uk_calques.py</code>, 17 tests, MCP-validated dict, back-filled 2 live prereq pages). The user then stopped me: <em>"you can't just grep and replace, this is educational content — if a sentence is affected it needs to be correctly reframed. you cannot make sample… we need proper 100% coverage… and /uk must show which UK translations were properly reviewed against russian calque."</em> Pivoted to a proper review <strong>system</strong>.
+</div>
+
+<h2>Locked design (user, 3 AskUserQuestion decisions)</h2>
+<table>
+<tr><th>Axis</th><th>Decision</th></tr>
+<tr><td>Coverage bar</td><td><strong>Detector-flagged + full read</strong> — a reviewer reads <em>every sentence</em> in context, reframing flagged AND unlisted calques, MCP-validating each fix, then stamps the page. Not sampling.</td></tr>
+<tr><td>Reframer</td><td><strong>Orchestrator inline (opus), MCP-grounded</strong> — cross-family to agy (which authored the s139 translations). Each fix validated via <code>verify_word</code>/<code>search_ua_gec_errors</code>/<code>search_style_guide</code>/<code>check_russian_shadow</code>.</td></tr>
+<tr><td>Status store</td><td><strong><code>calque_review</code> frontmatter stamp</strong> (reviewed_at, detector_version, status, flags_resolved, content_sha) → board derives ✓ reviewed / ⏳ pending / ⚠ stale.</td></tr>
+</table>
+
+<h2>Delivered</h2>
+<ul>
+<li><strong>#1932 / PR #1933 (merged):</strong> <code>fix_uk_calques.py</code> — MCP-validated calque dictionary (UA-GEC native F/Calque pairs + VESUM-confirmed replacements; <code>check_russian_shadow</code> confirmed <code>залежність</code> is legit UA so only the adverbial <code>+від</code> phrase is touched). Caught + fixed a bug in my own brief (nonsensical <code>залежності-з</code> flag rule). Back-filled 2 live prereq pages (<code>у відповідності до → відповідно до</code>). <strong>Now an assistant/detector, not the coverage mechanism.</strong></li>
+<li><strong>#1934 / PR #1935 (merged):</strong> the tracking + dashboard infra. <code>scripts/quality/calque_review_stamp.py</code> (stamp/read_status, surgical frontmatter insert, content-hash staleness, 5 tests); <code>translation_v2.build_translation_board</code> adds <code>calque_review</code> + <code>reviewed</code>/<code>reviewed_pct</code> per track+totals; <code>/uk</code> board (<code>local_api.py</code>) renders a <strong>Calque review</strong> column + "X / Y calque-reviewed" headline + ⚠ stale. <strong>Live on http://127.0.0.1:8768/uk.</strong></li>
+<li><strong>PR #1935 + #1936 (merged):</strong> first 2 prereq pages full-read-reviewed. <strong>0.1</strong> what-is-a-computer: 1 reframe (<code>дружньої → привітної до новачків</code>, harmonizing with the page's own <code>зрозумілий для новачків</code>). <strong>0.2</strong> what-is-a-terminal: <strong>clean</strong> — the one candidate (<code>скопіювати один в один</code>) was MCP-verified as a <em>legitimate Ukrainian idiom</em> (Фразеологічний словник, literary citations) → left untouched (avoid over-editing).</li>
+</ul>
+
+<div class="box ok">
+<strong>Board now: prerequisites calque-reviewed 2 / 51.</strong> The dashboard certifies each page was actually read sentence-by-sentence.
+</div>
+
+<h2>Key finding — the s139 prereq translations are strong</h2>
+<p>Both reviewed pages already use the <em>correct</em> forms (<code>в міру того, як</code> not <code>по мірі</code>; <code>зіставляти</code> not <code>співставляти</code>) — they were hand-fixed during s139 re-translation. The full read mostly <strong>certifies clean</strong> and occasionally catches a real calque (0.1's <code>дружній до</code>). The scary-looking <code>вірний ×95</code> grep was a <em>false alarm</em> — all substring matches inside legit words (<code>достовірний</code>, <code>перевірити</code>); word-boundary matching matters.</p>
+
+<h2>⚠ Throughput reality — a scaling decision the user should weigh</h2>
+<p>Full-read by opus inline is ~2–3 large pages per session (each ~7–8k words + context cost). At that rate: <strong>51 live prereqs ≈ 15–20 sessions; the full 1083-page corpus ≈ 100+ sessions.</strong> Options to raise next session: (a) keep opus-inline for the LIVE/high-traffic pages only (prereqs, fundamentals) and use a scalable lane — detector pre-filter → a cross-family reviewer with MCP-validated corrections in the brief, orchestrator validates — for the bulk; or (b) accept the slow rate for quality. <strong>DECIDED (user, s140): scope = the 51 LIVE prereqs ONLY for now</strong> — opus-inline full read → 51/51 (≈15-20 sessions), then stop and reassess. No bulk/scalable lane yet; the wider 1083-page corpus is out of scope until prereqs are done.</p>
+
+<h2>Lane (per page)</h2>
+<ol>
+<li>Fresh worktree off main (<code>.worktrees/uk-review</code>, branch <code>uk/prereq-review</code>); <code>ln -s ../../node_modules</code>.</li>
+<li>Read the full UK page; run <code>fix_uk_calques.py scan</code> as an assist.</li>
+<li>Read every sentence; for each suspect → MCP-check (GEC/style-guide/idioms/shadow/VESUM) → reframe the sentence (not a token swap) or confirm legit.</li>
+<li><code>calque_review_stamp.py stamp &lt;file&gt; --flags N --status reviewed|clean</code>.</li>
+<li>Build green; UK gate exit 0; commit; batch PR with a <code>## Learner check</code> blockquote (merge-hook requirement); merge; refresh API (<code>./services.sh restart api</code>) so the board ticks.</li>
+</ol>
+
+<h2>Open / next</h2>
+<ul>
+<li><strong>Resume: full-read review prereq 0.3 onward</strong> (curriculum order: zero-to-terminal 0.3–0.11 → cloud-native-101 → kubernetes-basics → philosophy-design → modern-devops → git-deep-dive). Board target 51/51.</li>
+<li>Open worktree <code>.worktrees/uk-review</code> (branch merged via #1936 — can be removed; recreate off main next session).</li>
+<li>Task #8 (broader detector set + shadow morphology in <code>fix_uk_calques.py</code>) — optional; the full read is the real coverage, detector is the assist.</li>
+<li>Pre-existing worktrees untouched: <code>g2-craft</code>, <code>s113-cons</code>, <code>uk-bulk</code> (carry unmerged commits — leave per git discipline).</li>
+<li>Coverage paused on linux/new translation until the live prereqs reach the review bar (user priority: quality before coverage).</li>
+</ul>
+</body>
+</html>
