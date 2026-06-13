@@ -723,7 +723,6 @@ rm -r "$DEMO_DIR"
 
 
 ## Джерела
-## Джерела
 
 - [Збій у Cloudflare 21 червня 2022 року](https://blog.cloudflare.com/cloudflare-outage-on-june-21-2022/)
 - [Принципи OpenGitOps](https://opengitops.dev/)
