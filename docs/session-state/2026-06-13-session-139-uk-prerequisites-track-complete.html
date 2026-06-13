@@ -101,15 +101,34 @@ fabricated war-stories (e.g. philosophy-design 1.1 "$340,000 / 47 terminals"; cl
 2002 Bezos API-mandate story, which is fine). The translation faithfully mirrors EN — fixing these belongs to an EN
 de-fabrication pass, not a translation PR (changing them would desync <code>en_commit</code>). Worth a follow-up sweep.</p>
 
-<h2>NEXT — user-agreed plan (2026-06-13)</h2>
+<h2>NEXT — user-agreed plan (2026-06-13, REVISED: A→B, quality-pass first)</h2>
 <p>The user runs <strong>two API streams</strong>: <code>/uk</code> (translations) and <code>/quality</code> (curriculum
-review). Agreed sequence:</p>
+review). Fundamentals UK is LIVE and a real Ukrainian learner (a teacher) is using it, so the user chose to
+<strong>raise translation quality before adding more coverage</strong>, leveraging the learn-ukrainian
+<code>mcp__sources__*</code> toolset (the lane had been using only a thin slice — a Russicism-letter scan). Revised
+sequence (<strong>do a fresh session for this</strong> — the s139 context is translation-saturated and large):</p>
 <ol>
-<li><strong>Translations — finish the UK Fundamentals learner path first:</strong> (a) <code>linux</code> track (Deep
+<li><strong>A — Build the tool-backed UK quality pass, then back-fill the 51 live Fundamentals pages.</strong> Build
+<code>scripts/quality/fix_uk_calques.py</code>: a deterministic <strong>context-aware calque dictionary</strong> in two
+tiers — <em>auto-fix</em> (high-confidence: <code>в цілому→загалом</code>, <code>в залежності від→залежно від</code>,
+<code>по мірі того як→у міру того як</code>, …) and <em>flag-only</em> (context-dependent: count-sense <code>рахувати</code>
+→ <code>підраховувати</code> for "count" / <code>вважати</code> for "consider"; ambiguous <code>залежність</code>).
+<strong>Seed/validate every rule via the learn-ukrainian MCP tools</strong> (orchestrator-only — a dispatched agent can't
+call them): <code>search_ua_gec_errors</code> (UA-GEC corpus, native-annotated F/Calque corrections), <code>check_russian_shadow</code>
+(Russian morphology), <code>verify_words</code> (VESUM — catch MT hallucinations + confirm the replacement is a real form).
+<strong>Evidence (tested s139):</strong> GEC returned 10 native pairs <code>в цілому→загалом</code> (F/Calque);
+<code>verify_words</code> validated <code>загалом/підраховувати/залежно</code> and rejected a fake form. <strong>Honest
+limits:</strong> GEC + Антоненко style guide are NOT exhaustive (GEC missed <code>приймати участь</code>, <code>в
+залежності</code>; style guide ~46% indexed) → the curated dict carries the long tail; <code>search_ua_gec_errors</code>
+has a <code>tag_filter</code> SQL bug (learn-ukrainian repo, worth a fix); <code>translate_en_uk</code> is a Балла
+<em>dictionary</em> (term lookup), NOT a sentence translator — agy stays the translation engine. Reuse/extend the
+RUSSICISMS map in <code>scripts/checks/ukrainian.py</code>. Then run the pass over the 51 live prereq pages → apply fixes
+→ gate + build green → PR (with Learner check) → merge → live. <strong>File a tracking issue with ACs first.</strong></li>
+<li><strong>B — Resume coverage with the quality pass baked into the lane:</strong> (a) <code>linux</code> track (Deep
 Dive + Everyday Use — "Everyday Linux" is the Fundamentals tab's last piece), then (b) <strong>root / top-level pages</strong>
 (track index pages, what's-new/changelog; the homepage already has a <code>uk</code> variant). Same lane:
 <code>fix-section &lt;section&gt; --strict-commit</code> (translate missing pages via <code>translate</code>/<code>translate-section</code>),
-RAG-verify, build, PR <em>with a <code>## Learner check</code></em>, merge, pull, watch the <code>/uk</code> board.</li>
+RAG-verify + run the quality pass, build, PR <em>with a <code>## Learner check</code></em>, merge, pull, watch the <code>/uk</code> board.</li>
 <li><strong>Then pivot to the <code>/quality</code> stream and continue Wave 7 where s135 left off.</strong> Quality is
 <strong>701/828 done (~85%)</strong>; ALL 127 remaining are in <strong>Platform Engineering</strong> (everything else —
 prereqs, linux, ai, cloud, all certs, on-prem — is 100% done). Order: <strong>Wave 7 Engineering Leadership</strong>
@@ -121,8 +140,8 @@ cluster). Tracking issue <strong>#1897</strong> (open). Proven expand-to-floor l
 in-session), ground-check + web-verify every finding, <code>revision_pending:false</code>, consolidated PR, reset-stage
 COMMITTED + review record. <strong>The 73-chapter AI History BOOK (#1876, ~365K words) stays DEFERRED — reviewing it is
 its own epic.</strong></li>
-<li>Build the context-aware <strong>calque-fixer</strong> (encode the recurring patterns above); consider a
-"report a translation issue" path so the native-speaker learner's corrections land somewhere useful.</li>
+<li>Optional follow-up: a "report a translation issue" path so the native-speaker learner's corrections land somewhere
+useful (feed them into the curated calque dict from A).</li>
 <li><strong>#1871</strong> npm/Starlight Dependabot bump (needs a local astro build).</li>
 <li>Optional: EN de-fabrication sweep of prerequisites war-story openers (separate from translation currency).</li>
 </ol>
