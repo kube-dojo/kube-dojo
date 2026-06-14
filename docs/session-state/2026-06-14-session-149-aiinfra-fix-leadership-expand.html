@@ -77,5 +77,13 @@
 <li><strong>#1965</strong> still open: only the "make <code>Unit tests (vitest)</code> a required check" branch-protection admin toggle remains (user action).</li>
 <li><strong>#1876</strong> AI-history book review, <strong>#1911</strong> UK currency — still queued.</li>
 </ul>
+
+<h2>3. Telemetry subsystem ported from learn-ukrainian (#1973, user-requested mid-session)</h2>
+<p>User asked to lift LU's telemetry feature into KubeDojo with API + UI; chose the <strong>full subsystem</strong>. Mapped both sides (LU has module-builds + tool-timings + runtime-usage; KubeDojo already had review-outcome telemetry via <code>agent_telemetry.py</code>/<code>/agents</code> + <code>logs/smart_dispatch.jsonl</code>). Adaptation port into KubeDojo's custom <code>local_api.py</code> (not LU's FastAPI). Filed <strong>#1973</strong> with phased ACs; built in 2 PRs, both rebased + all CI green + cursor-built/opus-ground-checked live:</p>
+<ul>
+<li><strong>PR #1974 (P1 — module-builds):</strong> <code>scripts/telemetry_store.py</code> (SQLite <code>.pipeline/telemetry/module_builds.db</code>, gitignored; LU <code>level</code>→KubeDojo <code>track</code>), CLI <code>agent_telemetry.py record-build</code> + <code>POST /api/telemetry/module-builds</code> (validated→400), GET rollup + per-module, <code>scripts/module_build_telemetry_page.py</code>, <code>Telemetry</code> nav tab, 9 tests.</li>
+<li><strong>PR #1975 (P2+P3 — tool-timings + runtime):</strong> <code>tool_timings.db</code> + <code>POST/GET /api/telemetry/tool-timings</code> (windowed p50/p95/p99/mean/failure, linear-interp); <code>scripts/runtime_usage.py</code> + <code>GET /api/telemetry/runtime/usage|recent</code> over <code>logs/smart_dispatch.jsonl</code> (calls/ok/failed/elapsed by agent — no fabricated tokens/cost, that source has none); both as new sections on <code>/telemetry</code>; +8 tests (17 total).</li>
+</ul>
+<p><strong>Deployed + dogfooded:</strong> recorded this session's 11 real builds (6 ai-infra fixes + 5 leadership expands) into PRIMARY's DB, seeded tool-timings, restarted the API → <code>/telemetry</code> live with all 3 sections rendering real data (module-builds 11/23-participants/2.2M-tok; tool-timings 4 tools; runtime 332 calls/7 agents from the real dispatch log). Browser-verified. <code>/agents</code> + <code>annotate/report</code> untouched. <strong>#1973 CLOSED.</strong> The <code>record-build</code> CLI is the orchestrator's finalize-time path — record a build right after each module flip going forward.</p>
 </body>
 </html>
