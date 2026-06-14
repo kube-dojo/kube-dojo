@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 146 — Platform Disciplines opened (epic #1953) + FinOps section 6/6 done</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:940px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.55rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.18rem;margin-top:1.7rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}.mono{font-family:ui-monospace,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 146 — Platform Disciplines opened (epic #1953) + FinOps section 6/6 done</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Epic:</strong> #1953 (Platform Disciplines, NEW) · <strong>PRs merged:</strong> #1954 (FinOps 1.1/1.2/1.3) + #1955 (FinOps 1.4/1.5/1.6) · <strong>Board:</strong> FinOps section <strong>6/6 done</strong>; platform/disciplines 31→<strong>37/91</strong>. Continues s145 (which closed Platform Foundations epic #1897). The "other stream" (Platform Engineering) is the last non-<code>done</code> curriculum track.</p>
+
+<h2>What shipped — FinOps (Platform Disciplines wave 1)</h2>
+<p>All 6 FinOps modules were genuine T3 sub-floor expands (swept first: body_words 180–1203, 0 sources each). Two batches of 3 authors (HARD CAP), each module cross-family reviewed by opus inline (NO gemini), every finding ground-checked + web-verified.</p>
+<table>
+<tr><th>Module</th><th>Was→Now</th><th>Author</th><th>Review → outcome</th></tr>
+<tr><td>1.1 finops-fundamentals</td><td>1104→5028w</td><td>cursor</td><td>opus <span class="ok">APPROVE</span> — durable-content exemplary</td></tr>
+<tr><td>1.2 k8s-cost-allocation</td><td>1203→5401w</td><td>codex</td><td>cursor R1 NEEDS_CHANGES → fixed (P1 + 3 P2)</td></tr>
+<tr><td>1.3 rightsizing</td><td>897→5004w</td><td>deepseek</td><td>opus <span class="ok">APPROVE</span> — VPA/HPA/PromQL ground-checked</td></tr>
+<tr><td>1.4 compute-optimization</td><td><strong>180w stub</strong>→5002w</td><td>cursor</td><td>opus <span class="ok">APPROVE</span> — Karpenter facts verified</td></tr>
+<tr><td>1.5 storage-network-costs</td><td>874→5658w</td><td>codex</td><td>opus <span class="ok">APPROVE</span> — strongest durable-content</td></tr>
+<tr><td>1.6 finops-culture</td><td>809→5013w</td><td>deepseek</td><td>opus R1 NEEDS_CHANGES → fixed (de-fab)</td></tr>
+</table>
+<p>All <strong>T0</strong>, density gates green, ≥12 sources (12–20) reachable, quiz 7–8, DYK 4, 0 anti-leak (every <code>47</code> + the 1.6 emoji removed), <code>revision_pending:false</code>. Build green PRIMARY (2169 pages); site-health 0 errors. Board finalized (reset-stage COMMITTED + <code>.pipeline/reviews</code> APPROVE records; <code>.pipeline/</code> gitignored).</p>
+
+<h2>Real review findings (ground-checked + web-verified both ways)</h2>
+<ul>
+<li><strong>1.2 P1 — verifier-blind lab-breaker (cursor caught):</strong> the OpenCost lab installed <code>prometheus-community/prometheus</code> without OpenCost's required <code>extraScrapeConfigs.yaml</code> → Prometheus never scrapes OpenCost's <code>/metrics</code> (port 9003) → <code>/allocation</code> queries return empty (a silent failure that looks like a working install). Added the <code>-f …/extraScrapeConfigs.yaml</code> flag. <strong>Verified vs OpenCost's official Prometheus install doc.</strong> <strong>Rejected cursor's DNS-target sub-claim as a false positive</strong> — the lab port-forwards to <code>127.0.0.1:9003</code>, namespace is already <code>opencost-system</code>.</li>
+<li><strong>1.6 — deepseek de-fab (opus caught):</strong> a <strong>banned market-share claim</strong> ("Infracost is the most widely adopted tool" → peer framing, per <code>durable-vendor-content.md</code>) and an <strong>invented precise ratio</strong> ("FinOps is roughly 30% technology and 70% culture" → qualitative). Its Infracost GitHub Actions YAML was ground-checked correct.</li>
+<li><strong>1.5 currency (codex, verified accurate):</strong> "K8s 1.35 <code>trafficDistribution</code> <code>PreferSameZone</code>/<code>PreferSameNode</code> GA, <code>PreferClose</code> deprecated" — web-verified against KEP-3015 (correct; PreferClose renamed to PreferSameZone, kept for back-compat).</li>
+<li><strong>1.4 (cursor, verified):</strong> Karpenter facts correct — vendor-neutral <code>kubernetes-sigs/karpenter</code> under SIG Autoscaling, EC2 Fleet API. The 180-word stub became a full T0 module.</li>
+</ul>
+
+<h2>Process notes / what to carry forward</h2>
+<ul>
+<li><strong>verify_module <code>body_words</code> = FLOWING PROSE ONLY</strong> (confirmed by reading <code>extract_body_paragraphs</code>): it excludes code, the Sources block, tables, lists, blockquotes, HTML by design — so the 5000 floor cannot be padded with bullets/tables. The sweep is reliable; trust the live-file <code>body_words</code> to split expand-vs-flip. (This also corrected the s145 "1.6-zero-trust under-count" note in #1952 — not a tooling bug.)</li>
+<li><strong>Durable-content rule paid off hard in FinOps:</strong> every module quarantined prices/tool-maturity into a dated Landscape snapshot + a capability Cost-Tooling Rosetta with explicit "not a ranking" framing. The two de-fab fixes this wave were both durable-content slips (a market-share claim + an invented ratio) — exactly what the rule targets.</li>
+<li><strong>deepseek</strong> was a pleasant surprise on the methodology-heavy 1.3 (VPA/HPA/PromQL all correct) but slipped on the culture-heavy 1.6 (market-share + ratio) — its fab-risk shows more on narrative/claims than on technical config. Keep the strong review + ground-check.</li>
+<li><strong>Loop mechanics held:</strong> ≤3 authors/batch in own worktrees (no commit-race); opus inline = the Claude reviewer seat (main quota, per s135) — valid cross-family for all 3 author families (cursor/Kimi, codex/OpenAI, deepseek/DeepSeek); consolidated PR per batch; auto-merge (rebase) + a bounded merge-poller; finalize = reset-stage COMMITTED + review record.</li>
+</ul>
+
+<h2>NEXT — Platform Disciplines, 54 modules remain (curriculum order)</h2>
+<p>Epic <strong>#1953</strong> tracks the whole track. Sweep each section's LIVE files first to split expand-vs-flip — note several sections are <code>needs_rewrite</code> at <strong>score 5.0</strong> (core-platform/sre 1.1/1.3/1.4/1.5/1.6) or <code>shipped_unreviewed</code> at 5.0 (data-ai/ai-infrastructure 1.1–1.6), which are likely <strong>already-dense FLIPS</strong> (review-only, not expands) — confirm with the sweep before authoring.</p>
+<ul>
+<li><strong>core-platform/leadership</strong> (5, needs_rewrite 1.5) → <strong>core-platform/platform-engineering</strong> (2) → <strong>core-platform/sre</strong> (5, score 5.0 → likely flips) → <strong>data-ai/ai-infrastructure</strong> (6, shipped_unreviewed 5.0 → likely flips) → <strong>data-ai/aiops</strong> (3) → <strong>data-ai/data-engineering</strong> (8) → <strong>data-ai/mlops</strong> (1) → <strong>delivery-automation/gitops</strong> (2) → <strong>iac</strong> (5) → <strong>release-engineering</strong> (5) → <strong>reliability-security/chaos-engineering</strong> (5) → <strong>devsecops</strong> (2) → <strong>networking</strong> (5).</li>
+<li>Then <strong>Platform Toolkits</strong> (36 critical). Platform Engineering is the last non-<code>done</code> curriculum track.</li>
+</ul>
+<p>Reusable briefs: <code>logs/remediation/briefs/pf-finops/</code> (shared expand-rules adaptable per section + review template). Standing/deferred: <strong>#1952</strong> (advanced-networking/1.6-zero-trust — last Platform Foundations straggler, a genuine expand+review); AI-history book review (#1876); UK bulk translation (lesser priority).</p>
+</body>
+</html>
