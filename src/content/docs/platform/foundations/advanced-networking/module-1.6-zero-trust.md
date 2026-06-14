@@ -25,7 +25,7 @@ After completing this module, you will be able to design, evaluate, implement, a
 
 ---
 
-In 2020, the SolarWinds supply-chain compromise allowed attackers to move laterally across 18,000 customer networks for months — not by breaking firewalls, but by exploiting implicit trust once inside. <!-- incident-xref: solarwinds-2020 --> For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
+In 2020, the SolarWinds supply-chain compromise reached nearly 18,000 organizations that received the compromised Orion updates; the attackers then selected a much smaller, high-value subset (around 100) for active follow-on intrusion — not by breaking firewalls at scale, but by exploiting implicit trust once inside selected targets. <!-- incident-xref: solarwinds-2020 --> For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
 The SolarWinds breach was not the first time the perimeter model failed catastrophically, but it became the definitive case study for why "trust the network" is a fundamentally broken security model. It accelerated a shift that had been building for years: the move to **Zero Trust**, where no user, device, or network location is inherently trusted, and every access request must be explicitly verified.
 
@@ -45,7 +45,7 @@ That world is gone. Your developers work from home, coffee shops, and co-working
 
 Zero Trust is not a product you buy. It's an architectural principle: **never trust, always verify**. [Every request is authenticated and authorized regardless of network location](https://csrc.nist.gov/pubs/sp/800/207/final). Every connection is encrypted. Every access decision considers user identity, device health, application context, and risk signals — not just "are you on the corporate network?"
 
-For platform engineers, Zero Trust changes how you architect access to Kubernetes dashboards, internal tools, databases, and cloud consoles. It replaces VPNs with identity-aware proxies. It replaces network segmentation with application-level authorization. And it provides better security with a better user experience when implemented as a coherent program rather than a single product purchase.
+For platform engineers, Zero Trust changes how you architect access to Kubernetes dashboards, internal tools, databases, and cloud consoles. It replaces VPNs with identity-aware proxies. It augments network segmentation with application-level authorization. And it provides better security with a better user experience when implemented as a coherent program rather than a single product purchase.
 
 The same engineering discipline that makes load balancers and DNS policies auditable applies here: every allow decision should cite a policy version, every deny should log enough context to replay in an incident review, and every exception should expire automatically. Zero Trust is not less convenient than VPN by necessity—it is less convenient only when teams skip the SSO integration work and bolt a proxy onto legacy basic-auth applications without cleaning up the trust assumptions underneath.
 
@@ -88,7 +88,7 @@ flowchart TD
     end
 ```
 
-The perimeter failures include two canonical case studies: the [2013 Target breach](../security-principles/module-4.2-defense-in-depth/)<!-- incident-xref: target-2013 --> and the [2017 Equifax breach](../../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/)<!-- incident-xref: equifax-2017 --> — both covered in depth in their canonical modules. Those incidents share a structural lesson with SolarWinds and Colonial Pipeline: attackers did not need novel zero-day exploits at the perimeter if interior systems accepted connections without re-authenticating the client. Retail POS networks, credit bureau web tiers, build pipelines, and fuel-distribution SCADA interfaces each trusted network placement more than cryptographic identity.
+The perimeter failures repeat across retail breaches, credit bureau exposures, supply-chain compromises, and ransomware incidents where attackers never needed to defeat TLS at the edge because the interior never challenged them. A major retailer was breached via a third-party HVAC vendor's network access; a credit bureau was compromised through an unpatched internet-facing web framework; a fuel pipeline operator was hit by credential-based ransomware after remote-access VPN trust extended too far inside the network. Those patterns share a structural lesson with SolarWinds: attackers did not need novel zero-day exploits at the perimeter if interior systems accepted connections without re-authenticating the client. Retail POS networks, credit bureau web tiers, build pipelines, and fuel-distribution SCADA interfaces each trusted network placement more than cryptographic identity.
 
 Documenting your own interior trust assumptions is the first deliverable in any Zero Trust program. Walk a single user journey—from laptop browser to Kubernetes API to etcd backup bucket—and note every hop that checks only source IP or VPC ID. Those hops are where IAP, mTLS, or signed service tokens pay off first because they remove implicit trust without waiting for a full VPN decommission project to finish.
 
@@ -99,9 +99,10 @@ WHY THIS FAILS
     1. LATERAL MOVEMENT
     ─────────────────────────────────────────────
     Once inside, attacker moves freely between systems.
-    SolarWinds: 9 months of undetected lateral movement.
-    Colonial Pipeline: One compromised VPN credential
-    → ransomware shut down US fuel supply.
+    SolarWinds: months of undetected lateral movement in
+    actively compromised targets.
+    Credential-based ransomware: one stolen VPN credential
+    → operational shutdown of critical infrastructure.
 
     2. VPN = FULL NETWORK ACCESS
     ─────────────────────────────────────────────
@@ -122,14 +123,20 @@ WHY THIS FAILS
     10 employees in one office: trust works.
     10,000 employees in 50 countries with BYOD: trust breaks.
 
-BREACHES CAUSED BY PERIMETER TRUST
+BREACHES CAUSED BY PERIMETER TRUST (PATTERNS)
 ─────────────────────────────────────────────────────────────
-    2013: Target — third-party vendor access contributed to a major retail breach affecting tens of millions of customers
-    2017: Equifax — an internet-facing web application flaw exposed personal data for well over 100 million people
-    2020: SolarWinds — a supply-chain compromise reached multiple government and private-sector networks
-    2021: Colonial Pipeline — a remote-access compromise and ransomware incident disrupted fuel distribution
-    2023: MGM Resorts — social engineering triggered a disruptive cyber incident with major operational and financial consequences
-    2023: Okta — Employee laptop → customer support systems
+    Third-party vendor access → major retail breach affecting
+    tens of millions of customers
+    Unpatched internet-facing web application → credit bureau
+    exposure of well over 100 million personal records
+    Supply-chain compromise → trojanized updates reaching
+    thousands of downstream organizations
+    Stolen remote-access credentials → ransomware disrupting
+    fuel distribution operations
+    Social engineering against IT help desk → disruptive
+    cyber incident with major operational and financial impact
+    Compromised employee laptop → lateral movement into
+    customer-facing support systems
 ```
 
 The perimeter model treats the corporate network as a single trust zone. Once a packet crosses the firewall, routing and application layers often assume the sender is legitimate. That assumption made sense when every employee sat at a desk on a managed LAN and every server lived in the same datacenter rack. It collapses the moment your attack surface spans SaaS logins, contractor laptops, CI runners in ephemeral cloud VMs, and Kubernetes API servers reachable from half a dozen ingress paths.
@@ -395,7 +402,7 @@ Inside the cluster, complement north-south IAP controls with east-west defaults 
 | Primary layer | HTTP/TCP application proxy | Edge-terminated HTTP/SSH/TCP | L3/L4 mesh VPN with ACLs | Load-balancer-integrated HTTP |
 | Typical deployment | Kubernetes or VM in your VPC | Agent (`cloudflared`) + edge PoPs | Agent on each device/server | GCP LB policy attachment |
 | Identity integration | OIDC/SAML from any IdP | OIDC/SAML from any IdP | SSO + ACL tags | Google/Cloud Identity |
-| Best fit when | You need data sovereignty and per-route YAML policies | You want zero ingress ports and global edge auth | You need arbitrary TCP/UDP between many hosts | You already run services on GCP |
+| Best fit when | You need data sovereignty and per-route YAML policies | You want zero ingress ports and global edge auth | You need arbitrary TCP between many hosts | You already run services on GCP |
 
 The comparison table captures **capabilities**, not rankings. Teams frequently run more than one column simultaneously: mesh overlay for engineer SSH, managed SSE for SaaS-like internal tools, and mesh mTLS inside the cluster.
 
@@ -425,7 +432,7 @@ CLOUDFLARE ACCESS (Managed)
     Auth:           OIDC, SAML, GitHub, Google, Okta, Azure AD
     Deployment:     Cloudflare edge (managed) + Tunnel agent
     Device Trust:   Cloudflare WARP client
-    Protocol:       HTTP, SSH, RDP, arbitrary TCP/UDP
+    Protocol:       HTTP, SSH, RDP, arbitrary TCP
     Pricing:        Free (up to 50 users), then per-seat
 
     Strengths:
@@ -463,14 +470,16 @@ TAILSCALE (WireGuard-Based)
     Auth:           SSO integration (Google, Microsoft, Okta)
     Deployment:     Agent on each device/server
     Protocol:       Any IP traffic (full network layer)
-    Device Trust:   Tailscale manages device identity
+    Device Trust:   Tailscale coordinates device identity
     Pricing:        Free personal tier, then per-seat plans
 
     Architecture:
     ─────────────────────────────────────────────
     Every device runs Tailscale agent.
-    Devices connect peer-to-peer via WireGuard.
-    Coordination server (hosted or self-hosted) manages keys.
+    Devices connect peer-to-peer via WireGuard when possible.
+    Coordination server distributes public keys and helps
+    endpoints discover each other (private keys never leave
+    the device).
 ```
 
 ```mermaid
@@ -497,7 +506,9 @@ flowchart LR
       ]
     }
 
-    [+] True peer-to-peer (no traffic through central server)
+    [+] Peer-to-peer WireGuard when direct paths exist (DERP
+        relay servers carry encrypted traffic when NAT or
+        firewall rules block a direct connection)
     [+] Works for ANY protocol (not just HTTP)
     [+] NAT traversal built-in (works from any network)
     [+] MagicDNS (hostname resolution for all devices)
@@ -566,11 +577,10 @@ sequenceDiagram
     participant Client
     participant Server
     
-    Client->>Server: "Hello"
-    Server-->>Client: Certificate (server.crt)
+    Client->>Server: ClientHello (key shares)
+    Server-->>Client: ServerHello + certificate
     Note over Client: Verify server cert<br/>(Is it signed by trusted CA?)
-    Client->>Server: Generate session key
-    Note over Server: Decrypt with private key
+    Note over Client,Server: (EC)DHE key agreement<br/>derives shared traffic secrets
     Note over Client,Server: ─── Encrypted communication begins ───
 ```
 
@@ -629,10 +639,13 @@ WHERE mTLS IS USED
     Cloudflare → [client cert] → Your Origin
     (Prevents direct-to-origin attacks bypassing CDN/WAF)
 
-    4. DIRECT CONNECT / PRIVATE INTERCONNECTION
+    4. SERVICE-TO-SERVICE mTLS (INTERNAL APIs)
     ─────────────────────────────────────────────
-    Cloud provider and customer authenticate each other
-    on dedicated interconnect links.
+    Internal microservices present client certificates to
+    each other or to an API gateway that enforces mTLS.
+
+    payments-svc → [client cert] → ledger-api
+    Gateway verifies cert is signed by your private CA.
 
     5. ZERO TRUST SERVICE-TO-SERVICE
     ─────────────────────────────────────────────
@@ -679,7 +692,7 @@ Meshless mTLS is viable when you cannot justify a full Istio control plane. Side
 
 For machine identity, treat certificates like API keys that expire quickly. A one-year TLS cert on an internal service is a latent breach window; a twenty-four-hour cert limits attacker utility and forces you to build the automation you needed anyway for GitOps-driven clusters. Auditors and incident responders also benefit: every issuance event in Vault or SPIRE logs maps to a service account or namespace, making blast-radius analysis faster than grep-ing nginx access logs for mystery IPs.
 
-Service meshes remain the most common on-ramp to mTLS inside Kubernetes, but they are not mandatory. Teams allergic to sidecars can terminate mTLS at ingress gateways and enforce client certificates on admin APIs while keeping stateless microservices on plain HTTP behind NetworkPolicy. The wrong choice is skipping machine identity entirely because Istio feels heavyweight—pick SPIRE, cert-manager with Let's Encrypt private CAs, or cloud KMS-backed issuers that match your operational maturity, then grow into full mesh when east-west traffic justifies the control-plane cost.
+Service meshes remain the most common on-ramp to mTLS inside Kubernetes, but they are not mandatory. Teams allergic to sidecars can terminate mTLS at ingress gateways and enforce client certificates on admin APIs while keeping stateless microservices on plain HTTP behind NetworkPolicy. The wrong choice is skipping machine identity entirely because Istio feels heavyweight—pick SPIRE, cert-manager with a private CA issuer (Vault PKI or an internal CA), or cloud KMS-backed issuers that match your operational maturity, then grow into full mesh when east-west traffic justifies the control-plane cost.
 
 ---
 
@@ -821,7 +834,7 @@ VPN REPLACEMENT PATTERNS
 PATTERN 1: IDENTITY-AWARE PROXY FOR WEB APPS
 ─────────────────────────────────────────────────────────────
 Replace: VPN → Internal web applications
-With:    IAP (Pomerium/Cloudflare Access) in front of apps
+With:    Identity-aware proxy (IAP) in front of apps
 
     Before:
     User → VPN → Corporate network → App (http://internal-app:8080)
@@ -839,46 +852,47 @@ With:    IAP (Pomerium/Cloudflare Access) in front of apps
 PATTERN 2: TUNNEL FOR NON-HTTP SERVICES
 ─────────────────────────────────────────────────────────────
 Replace: VPN → SSH to servers, database access
-With:    Tailscale/Cloudflare Tunnel + ACLs
+With:    Mesh overlay or managed tunnel + ACLs
 
     Before:
     User → VPN → ssh jump-host → ssh prod-server
     User → VPN → psql -h db.internal:5432
 
-    After (Tailscale):
-    User → ssh prod-server.tailnet.ts.net
-    User → psql -h db.tailnet.ts.net:5432
-
+    After (mesh overlay):
+    User → encrypted overlay hostname for prod-server
+    User → encrypted overlay hostname for database
     ACLs control who can reach which services.
     No jump hosts. No VPN. Direct encrypted access.
 
-    After (Cloudflare Tunnel):
-    User → cloudflared access ssh --hostname ssh.company.com
-    User → cloudflared access tcp --hostname db.company.com:5432
+    After (managed SSE tunnel):
+    User → identity-verified SSH or TCP tunnel to hostname
+    Gateway verifies identity before establishing the tunnel.
 
-    Cloudflare Access verifies identity before
-    establishing the tunnel to the service.
+    (See the landscape snapshot in Part 3.2 for current
+    vendor-specific tunnel and mesh commands.)
 
 PATTERN 3: KUBERNETES ACCESS WITHOUT VPN
 ─────────────────────────────────────────────────────────────
 Replace: VPN → kubectl to private API server
 With:    Multiple options:
 
-    Option A: Teleport (with Kubernetes support)
+    Option A: Certificate-based access broker
     ─────────────────────────────────────────────
-    tsh kube login --cluster=prod
-    kubectl get pods  # Authenticated via SSO
+    SSO-authenticated kubectl via a broker that issues
+    short-lived credentials mapped to RBAC.
 
-    Option B: Tailscale Operator for Kubernetes
+    Option B: Mesh operator for Kubernetes
     ─────────────────────────────────────────────
-    Install Tailscale operator in cluster.
-    API server exposed on Tailscale network.
-    kubectl access with Tailscale ACLs.
+    Expose API server on an encrypted overlay network.
+    kubectl access governed by overlay ACLs.
 
-    Option C: IAP + kubectl proxy
+    Option C: IAP + OIDC kubeconfig
     ─────────────────────────────────────────────
-    Pomerium/Cloudflare Access in front of K8s API.
+    Identity-aware proxy in front of K8s API.
     Requires kubeconfig with OIDC auth.
+
+    (See the landscape snapshot in Part 3.2 for current
+    Teleport, Tailscale, and IAP integration patterns.)
 
 PATTERN 4: THIRD-PARTY/CONTRACTOR ACCESS
 ─────────────────────────────────────────────────────────────
@@ -1058,7 +1072,7 @@ Executive sponsorship matters because Zero Trust crosses organizational silos. N
    Zero Trust treats location as one context signal among many; passing device posture does not override an explicit geofence when production API access is high risk. The durable rationale is deny-by-default with auditable exceptions rather than implicit trust based on historical VPN convenience. A minimum break-glass process issues a time-boxed policy exception recorded in your change system, requires secondary approval from on-call security, forces hardware MFA for the session, and expires automatically—never a standing "travel VPN profile" that bypasses IAP policy permanently.
    </details>
 
-8. **Scenario: After deploying OAuth2 Proxy in front of an internal dashboard in kind, you verify that unauthenticated requests receive HTTP 403 while authenticated engineers reach the app. NetworkPolicy allows ingress only from the proxy pod. A teammate asks why you still need RBAC on the Kubernetes API server if NetworkPolicy already blocks lateral movement. What layered defense argument do you give?**
+8. **Scenario: After deploying OAuth2 Proxy with Dex in front of an internal dashboard in kind, you verify that unauthenticated requests receive HTTP 403 (or a redirect to SSO) while authenticated engineers reach the app with a valid session cookie. NetworkPolicy allows ingress only from the proxy pod. A teammate asks why you still need RBAC on the Kubernetes API server if NetworkPolicy already blocks lateral movement. What layered defense argument do you give?**
    <details>
    <summary>Answer</summary>
 
@@ -1069,9 +1083,11 @@ Executive sponsorship matters because Zero Trust crosses organizational silos. N
 
 ## Hands-On Exercise
 
-**Objective**: Deploy Pomerium as an Identity-Aware Proxy to protect a Kubernetes Dashboard with SSO authentication, demonstrating Zero Trust access without VPN.
+**Objective**: Deploy OAuth2 Proxy with an in-cluster Dex OIDC provider to protect an internal dashboard, demonstrating Zero Trust access without VPN.
 
-**Environment**: kind cluster with OAuth2 Proxy simulating IAP behavior and a mock OIDC provider workflow—sufficient to validate policy layering without provisioning a production IdP tenant for this exercise.
+**Environment**: kind cluster with Dex (minimal OIDC IdP), OAuth2 Proxy as the identity-aware proxy, and a programmatic test that completes the OIDC login flow to obtain a session cookie.
+
+**Lab credentials**: `engineer@company.com` / `demo` (static Dex user for this exercise only).
 
 ### Part 1: Create the Cluster (5 minutes)
 
@@ -1152,12 +1168,84 @@ spec:
 EOF
 ```
 
-### Part 3: Deploy OAuth2 Proxy as IAP Simulation (20 minutes)
+### Part 3: Deploy Dex as In-Cluster OIDC Provider (15 minutes)
+
+OAuth2 Proxy's OIDC provider requires a real `client-id`, `client-secret`, and issuer URL — `htpasswd_file` does not replace OIDC. For this lab, deploy Dex with a static password user and a static OAuth client so the full login flow runs without an external IdP.
 
 ```bash
-# Since we can't use a real IdP in a local lab, we'll deploy
-# OAuth2 Proxy with a built-in test provider to simulate IAP behavior.
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex-config
+data:
+  config.yaml: |
+    issuer: http://dex:5556/dex
+    storage:
+      type: memory
+    web:
+      http: 0.0.0.0:5556
+    staticClients:
+      - id: oauth2-proxy
+        redirectURIs:
+          - 'http://iap-proxy/oauth2/callback'
+        name: oauth2-proxy
+        secret: lab-client-secret-32chars!
+    enablePasswordDB: true
+    staticPasswords:
+      - email: engineer@company.com
+        hash: "$2y$10$plHR9N7dMGAm11oy3oAYqO8wpUN.rloPqfBIfjmbETxkfosG5wlq."
+        username: engineer
+        userID: "08a8684b-db88-4b73-90a9-dda7459c5ba7"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  labels:
+    app: dex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+    spec:
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex:v2.41.1
+          args: ["dex", "serve", "/etc/dex/config.yaml"]
+          ports:
+            - containerPort: 5556
+          volumeMounts:
+            - name: dex-config
+              mountPath: /etc/dex
+      volumes:
+        - name: dex-config
+          configMap:
+            name: dex-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+spec:
+  selector:
+    app: dex
+  ports:
+    - port: 5556
+      targetPort: 5556
+EOF
 
+kubectl wait --for=condition=available deployment/dex --timeout=120s
+```
+
+### Part 4: Deploy OAuth2 Proxy as IAP (20 minutes)
+
+```bash
 cat <<'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -1165,47 +1253,22 @@ metadata:
   name: oauth2-proxy-config
 data:
   oauth2-proxy.cfg: |
-    # OAuth2 Proxy configuration
-    # In production, replace with real OIDC provider
-
-    # Listen address
     http_address = "0.0.0.0:4180"
-
-    # Upstream (the protected application)
     upstreams = ["http://internal-dashboard:80"]
-
-    # Use a built-in test provider for local demo
     provider = "oidc"
-    provider_display_name = "Company SSO (Simulated)"
-
-    # Cookie settings
+    provider_display_name = "Lab SSO (Dex)"
+    oidc_issuer_url = "http://dex:5556/dex"
+    client_id = "oauth2-proxy"
+    client_secret = "lab-client-secret-32chars!"
+    redirect_url = "http://iap-proxy/oauth2/callback"
     cookie_name = "_zero_trust_session"
     cookie_secret = "dGhpc2lzYXZlcnlzZWN1cmVzZWNyZXQ="
-    cookie_secure = false  # Only for lab! Use true in production
-
-    # In a real deployment, these would point to your IdP:
-    # client_id = "your-client-id"
-    # client_secret = "your-client-secret"
-    # oidc_issuer_url = "https://accounts.google.com"
-
-    # For this lab, we'll use htpasswd for local auth
-    # to demonstrate the proxy pattern
-    htpasswd_file = "/etc/oauth2-proxy/htpasswd"
-
-    # Headers passed to upstream (simulating IAP headers)
+    cookie_secure = false
+    email_domains = ["*"]
     set_xauthrequest = true
     pass_access_token = false
-
-    # Email domain restriction (simulating group-based access)
-    email_domains = ["*"]
-
-    # Skip the OIDC provider for local testing
-    skip_provider_button = true
-  htpasswd: |
-    # user: engineer@company.com, password: demo
-    engineer@company.com:$2y$10$xGj.FYiT0o8fPKSy.tXnZeN0Jl0VxQhHhGxxU7e/8.0.hGUq.iuy
-    # user: auditor@company.com, password: readonly
-    auditor@company.com:$2y$10$xGj.FYiT0o8fPKSy.tXnZeN0Jl0VxQhHhGxxU7e/8.0.hGUq.iuy
+    skip_provider_button = false
+    insecure_oidc_skip_issuer_verification = true
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -1228,12 +1291,6 @@ spec:
           image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
           args:
             - --config=/etc/oauth2-proxy/oauth2-proxy.cfg
-            - --skip-oidc-discovery
-            - --login-url=http://localhost:4180/sign_in
-            - --redeem-url=http://localhost:4180/sign_in
-            - --oidc-jwks-url=http://localhost:4180
-            - --htpasswd-user-group=engineer@company.com:engineering
-            - --htpasswd-user-group=auditor@company.com:audit
           ports:
             - containerPort: 4180
           volumeMounts:
@@ -1255,12 +1312,15 @@ spec:
     - port: 80
       targetPort: 4180
 EOF
+
+kubectl wait --for=condition=available deployment/iap-proxy --timeout=120s
 ```
 
-### Part 4: Demonstrate the Zero Trust Access Pattern (15 minutes)
+### Part 5: Demonstrate the Zero Trust Access Pattern (15 minutes)
+
+The test pod uses `curl` to show the difference between unauthenticated and authenticated access. Unauthenticated requests hit the IAP sign-in challenge; authenticated requests complete the Dex OIDC flow (login + consent approval) and reuse the resulting session cookie.
 
 ```bash
-# Deploy a test client to demonstrate the access pattern
 cat <<'EOF' | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -1269,6 +1329,9 @@ metadata:
 data:
   test.sh: |
     #!/bin/sh
+    set -e
+    COOKIE_JAR=/tmp/cookies.txt
+
     echo "============================================"
     echo "  Zero Trust Access Pattern Demonstration"
     echo "============================================"
@@ -1277,37 +1340,44 @@ data:
     echo "=== Test 1: Direct access to internal dashboard ==="
     echo "    (Simulates: attacker on the network)"
     echo ""
-    STATUS=$(wget -q -O /dev/null -S http://internal-dashboard 2>&1 | grep "HTTP/" | awk '{print $2}')
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://internal-dashboard/ || echo "000")
     echo "    Direct access: HTTP $STATUS"
-    echo "    WARNING: In production, internal-dashboard would NOT be"
-    echo "    accessible without going through the IAP."
-    echo "    NetworkPolicy would block direct access."
+    echo "    In production, NetworkPolicy blocks direct access."
     echo ""
 
-    echo "=== Test 2: Access through IAP without credentials ==="
+    echo "=== Test 2: IAP access without credentials ==="
     echo "    (Simulates: unauthenticated user)"
     echo ""
-    STATUS=$(wget -q -O /dev/null -S http://iap-proxy 2>&1 | grep "HTTP/" | awk '{print $2}')
-    echo "    IAP without auth: HTTP $STATUS"
-    echo "    Expected: 403 or redirect to login"
+    UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" http://iap-proxy/)
+    echo "    IAP without session cookie: HTTP $UNAUTH"
+    echo "    Expected: 403 sign-in challenge or 302 redirect to SSO"
+    case "$UNAUTH" in 403|302|401) echo "    Result: blocked as expected" ;; *) echo "    WARNING: unexpected status"; exit 1 ;; esac
     echo ""
 
-    echo "=== Test 3: IAP with valid credentials ==="
+    echo "=== Test 3: IAP with valid OIDC session ==="
     echo "    (Simulates: authenticated engineer)"
     echo ""
-    RESPONSE=$(wget -q -O - http://iap-proxy/ 2>/dev/null || echo "Authentication required")
-    echo "    Response: $(echo $RESPONSE | head -c 100)..."
+    rm -f "$COOKIE_JAR"
+    curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -D /tmp/oauth-start.hdr -o /dev/null \
+      "http://iap-proxy/oauth2/start?rd=%2F"
+    DEX_AUTH=$(grep -i "^location:" /tmp/oauth-start.hdr | tr -d '\r' | awk '{print $2}')
+    curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -o /tmp/dex-login.html -L --max-redirs 2 "$DEX_AUTH"
+    LOGIN_ACTION=$(grep -o 'action="[^"]*"' /tmp/dex-login.html | head -1 | sed 's/action="//;s/"$//;s/&amp;/\&/g')
+    case "$LOGIN_ACTION" in /*) LOGIN_ACTION="http://dex:5556$LOGIN_ACTION";; esac
+    curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -D /tmp/dex-post.hdr -o /dev/null --max-redirs 0 \
+      -X POST "$LOGIN_ACTION" -d "login=engineer@company.com&password=demo"
+    APPROVAL_URL=$(grep -i "^location:" /tmp/dex-post.hdr | tr -d '\r' | awk '{print $2}')
+    case "$APPROVAL_URL" in /*) APPROVAL_URL="http://dex:5556$APPROVAL_URL";; esac
+    curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -D /tmp/dex-approve.hdr -o /dev/null --max-redirs 0 \
+      -X POST "$APPROVAL_URL" -d "approval=approve"
+    CALLBACK_URL=$(grep -i "^location:" /tmp/dex-approve.hdr | tr -d '\r' | awk '{print $2}')
+    curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L --max-redirs 3 -o /dev/null "$CALLBACK_URL"
+    AUTH_BODY=$(curl -s -b "$COOKIE_JAR" http://iap-proxy/)
+    echo "$AUTH_BODY" | grep -q "Internal Kubernetes Dashboard" && echo "    Authenticated access: OK" || { echo "    Authenticated access: FAILED"; exit 1; }
     echo ""
 
     echo "=== Architecture Summary ==="
-    echo ""
-    echo "    Traditional (VPN):"
-    echo "    User → VPN → Network → Dashboard (anyone on network can access)"
-    echo ""
-    echo "    Zero Trust (IAP):"
-    echo "    User → IAP → (auth + device + policy) → Dashboard"
-    echo "    (only authenticated, authorized users with trusted devices)"
-    echo ""
+    echo "    Zero Trust (IAP): User → IAP → (OIDC auth) → Dashboard"
     echo "============================================"
 ---
 apiVersion: v1
@@ -1317,7 +1387,7 @@ metadata:
 spec:
   containers:
     - name: demo
-      image: busybox:1.37
+      image: curlimages/curl:8.11.1
       command: ["/bin/sh", "/scripts/test.sh"]
       volumeMounts:
         - name: scripts
@@ -1330,12 +1400,12 @@ spec:
         defaultMode: 0755
 EOF
 
-# View the demonstration output
-kubectl wait --for=condition=complete pod/zt-demo --timeout=60s 2>/dev/null
+kubectl wait --for=condition=Ready pod/zt-demo --timeout=120s
+kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/zt-demo --timeout=120s
 kubectl logs zt-demo
 ```
 
-### Part 5: Deploy NetworkPolicy (True Zero Trust) (15 minutes)
+### Part 6: Deploy NetworkPolicy (True Zero Trust) (15 minutes)
 
 ```bash
 # In true Zero Trust, the dashboard is ONLY accessible through the IAP.
@@ -1400,7 +1470,7 @@ echo "Note: NetworkPolicy enforcement requires a CNI that supports it"
 echo "(Calico, Cilium, etc.). kind's default CNI (kindnet) has limited support."
 ```
 
-### Part 6: Examine the Zero Trust Architecture (10 minutes)
+### Part 7: Examine the Zero Trust Architecture (10 minutes)
 
 ```bash
 # Review the full architecture
@@ -1457,8 +1527,10 @@ kind delete cluster --name zero-trust-lab
 **Success Criteria**: Complete each checkpoint below to confirm the lab demonstrated identity-aware access rather than merely deploying containers—the distinction matters when you translate the pattern to production IAP policy.
 
 - [ ] Internal dashboard deployed and serving content
-- [ ] IAP proxy deployed as the authentication gateway
-- [ ] Understood that unauthenticated requests are rejected by the IAP
+- [ ] Dex OIDC provider deployed with static lab user
+- [ ] OAuth2 Proxy deployed and connected to Dex
+- [ ] Unauthenticated requests blocked by IAP (403 or SSO redirect)
+- [ ] Authenticated session reaches dashboard after OIDC login
 - [ ] NetworkPolicy deployed to restrict direct dashboard access
 - [ ] Understood the architectural difference between VPN and IAP patterns
 - [ ] Recognized that the IAP sets identity headers (X-Auth-User, JWT) for the backend
@@ -1475,7 +1547,7 @@ Before moving on, ensure you understand:
 - [ ] **The perimeter model fails because there is no perimeter**: Cloud, remote work, SaaS, and mobile devices make "inside the network" meaningless as a trust signal
 - [ ] **Zero Trust verifies every request**: Identity, device, application, context, and risk are evaluated for every access decision, not just at the gate
 - [ ] **Identity-Aware Proxies replace VPNs for web apps**: Users get SSO access to specific applications without network-level access. Better security AND better UX
-- [ ] **Tailscale/WireGuard replaces VPN for non-HTTP**: When you need TCP/UDP access (databases, SSH), mesh VPN with ACLs provides per-service access control
+- [ ] **Mesh VPN overlays replace VPN for non-HTTP**: When you need TCP access (databases, SSH), encrypted mesh overlays with ACLs provide per-service access control
 - [ ] **mTLS authenticates machines, not just humans**: Service-to-service communication must be authenticated and encrypted even on "internal" networks
 - [ ] **Device posture is part of access decisions**: An authenticated user on a compromised device is still a risk. OS version, encryption, and EDR status matter
 - [ ] **Conditional access creates tiered trust**: High-risk operations require managed devices + MFA + hardware keys; documentation access can be lighter
