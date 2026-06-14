@@ -37,9 +37,11 @@ Whole-GPU allocation is the safest starting point because it gives each workload
 
 The basic waste pattern is easiest to see when you separate allocation from utilization. Allocation answers "who owns the resource right now," while utilization answers "how much useful work is the device performing." A cluster can be over-allocated and underutilized at the same time because reservations are coarse and demand is bursty. That is the reason GPU sharing is a platform discipline rather than a simple cost optimization: the scheduler needs better resource shapes, and the platform needs guardrails so density does not turn into instability.
 
+Hypothetical scenario:
+
 ```
 Cluster: 8 nodes x 4 A100-80GB GPUs = 32 GPUs total
-Cost: $3.06/GPU/hr x 32 GPUs x 730 hr/month = $71,482/month
+Cost: ~$3/GPU/hr x 32 GPUs x 730 hr/month = ~$70,000/month
 
 Workloads:
   - 4 training jobs using 4 GPUs each (fully utilizing GPUs)     -> 16 GPUs
@@ -47,8 +49,8 @@ Workloads:
   - 8 Jupyter notebooks using 1 GPU each (avg 5% utilization)    ->  8 GPUs
 
 Total allocated: 36 GPUs (exceeds capacity, so 4 workloads queue)
-Effective utilization: (16x95% + 12x15% + 8x5%) / 36 = 48%
-Money wasted: ~$37,000/month
+Effective utilization: (16x95% + 12x15% + 8x5%) / 36 = ~50%
+Money wasted: ~$35,000/month
 ```
 
 The important lesson in that model is not the exact cost number, because every cloud contract and hardware purchase looks different. The lesson is that "allocated" is not the same as "busy." When teams use a full accelerator as the scheduling unit for every workload class, the queue grows even while the devices have idle compute, free memory, and unserved demand. GPU sharing exists to create smaller or more flexible scheduling units, but every sharing method gives up some isolation in exchange.
@@ -166,7 +168,7 @@ data:
             "1g.10gb": 1
 ```
 
-Changing a node's MIG layout is disruptive because workloads using the device must leave before the hardware profile changes. The label command is simple, but the procedure around it matters more than the command. A safe runbook cordons the node, drains GPU workloads that can move, verifies there are no important local artifacts, applies the label, watches the MIG Manager, and then confirms the device plugin advertises the expected resources. If your platform reconfigures MIG profiles casually during business hours, users will experience surprise evictions and Pending Pods.
+Changing a node's MIG layout is disruptive because workloads using the device must leave before the hardware profile changes. The label command is simple, but the procedure around it matters more than the command. A safe runbook cordons the node, drains user GPU workloads that can move, verifies there are no important local artifacts, applies the label, watches the MIG Manager, and then confirms the device plugin advertises the expected resources. MIG Manager is not a substitute for `kubectl drain`: NVIDIA's runbook expects the administrator to cordon and drain user GPU Pods first. After the label change, MIG Manager stops and restarts GPU Operator-managed Pods on the node and fails the reconfiguration if user GPU workloads are still active. If your platform reconfigures MIG profiles casually during business hours, users will experience surprise evictions and Pending Pods.
 
 MIG reconfiguration should also be treated as a capacity event. When one node leaves service for repartitioning, the remaining pool must absorb both new scheduling demand and any workloads evicted from the changing node. If the platform has only one node with a particular profile, the maintenance window is effectively a service outage for that resource class. Mature teams model this before applying labels, then use PodDisruptionBudgets, queue controls, and tenant communication to keep the change predictable.
 
@@ -174,8 +176,8 @@ MIG reconfiguration should also be treated as a capacity event. When one node le
 # Apply the "all-balanced" configuration
 kubectl label node gpu-worker-01 nvidia.com/mig.config=all-balanced --overwrite
 
-# The GPU Operator will:
-# 1. Drain GPU workloads from the node
+# After you cordon and drain user GPU workloads, the GPU Operator will:
+# 1. Stop and restart GPU Operator-managed Pods on the node (MIG Manager)
 # 2. Disable MIG mode
 # 3. Enable MIG mode with new profiles
 # 4. Restart the device plugin
@@ -241,7 +243,7 @@ The memory point deserves extra attention because Kubernetes resource limits do 
 | Compute isolation | **None**: all containers share all SMs |
 | Memory isolation | **None**: all containers share all VRAM |
 | Overcommit factor | Configurable (for example, 4x means 4 virtual GPUs per physical GPU) |
-| Context switching | About 1ms overhead per switch |
+| Context switching | Context-switch overhead depends on driver quantum settings (often 100ms-class by default) |
 | Failure blast radius | One container's OOM can affect all containers on that GPU |
 | GPU support | Any NVIDIA GPU supported by the device plugin |
 
@@ -370,9 +372,9 @@ gantt
 | Property | Time-Slicing | MPS |
 |----------|-------------|-----|
 | Compute sharing | Temporal (round-robin) | Spatial (simultaneous) |
-| Context overhead | About 1ms per switch | Near zero |
+| Context overhead | Driver quantum settings (often 100ms-class by default) | Near zero |
 | Memory isolation | None | Configurable per-client limits |
-| Max clients | Limited by driver | 48 clients per GPU |
+| Max clients | Limited by driver | Up to 48–60 depending on driver/CUDA version |
 | Failure isolation | None | Partial (client failures can be contained) |
 | Best for | Interactive, bursty workloads | Steady-state inference |
 
@@ -396,14 +398,13 @@ data:
         resources:
           - name: nvidia.com/gpu
             replicas: 8
-            devices: all
 ```
 
 Which approach would you choose here and why: four production inference services with fixed 8 GiB memory footprints on an H100, or twenty exploratory notebooks on older T4 nodes? The first case points toward MIG if the device supports it, because production memory isolation and predictable latency are more valuable than maximum density. The second case points toward time-slicing, because the workloads are interactive, bursty, and less likely to justify hardware partitioning.
 
 ## Dynamic Resource Allocation and Topology
 
-Dynamic Resource Allocation is the Kubernetes 1.35 stable direction for expressing device needs as claims rather than as simple integer counts. The older device-plugin model is easy to schedule but weak at describing attributes: a Pod asks for `nvidia.com/gpu: 1`, then node labels, affinity, and human convention do the rest. DRA introduces DeviceClasses, ResourceClaims, ResourceClaimTemplates, ResourceSlices, and scheduler integration so workloads can request devices through structured objects. It is conceptually similar to how storage moved from "mount something on this node" to PersistentVolumeClaims with classes and binding rules.
+Dynamic Resource Allocation is the Kubernetes direction for expressing device needs as claims rather than as simple integer counts. Core DRA GA'd in Kubernetes 1.34 and is always enabled in 1.35. The older device-plugin model is easy to schedule but weak at describing attributes: a Pod asks for `nvidia.com/gpu: 1`, then node labels, affinity, and human convention do the rest. DRA introduces DeviceClasses, ResourceClaims, ResourceClaimTemplates, ResourceSlices, and scheduler integration so workloads can request devices through structured objects. It is conceptually similar to how storage moved from "mount something on this node" to PersistentVolumeClaims with classes and binding rules.
 
 ```mermaid
 flowchart TD
@@ -423,6 +424,7 @@ DRA does not remove the need for platform policy; it gives you a better place to
 The adoption path should be incremental because DRA changes both user workflow and operator mental models. A team that understands `resources.limits.nvidia.com/gpu: 1` will need to learn claims, classes, and how those claims bind to Pods. Operators will need dashboards and runbooks that explain why a ResourceClaim is pending or allocated. Start where the old model is visibly painful, such as a heterogeneous training pool where label combinations have become fragile, and keep the first DeviceClasses narrow.
 
 ```yaml
+# Illustrative example — requires the NVIDIA DRA driver and a matching DeviceClass on the cluster.
 # Define a GPU class
 apiVersion: resource.k8s.io/v1
 kind: DeviceClass
@@ -431,7 +433,7 @@ metadata:
 spec:
   selectors:
     - cel:
-        expression: "device.driver == 'gpu.nvidia.com' && device.attributes['memory'] >= 40000"
+        expression: "device.driver == 'gpu.nvidia.com' && device.capacity['gpu.nvidia.com'].memory.isGreaterThan(quantity('40Gi'))"
 ---
 # Claim a GPU
 apiVersion: resource.k8s.io/v1
@@ -443,8 +445,9 @@ spec:
   devices:
     requests:
       - name: gpu
-        deviceClassName: gpu-large
-        count: 1
+        exactly:
+          deviceClassName: gpu-large
+          count: 1
 ---
 # Use the claim in a Pod
 apiVersion: v1
@@ -470,7 +473,7 @@ spec:
 | Fractional allocation | Indirect through MIG, time-slicing, or MPS | Expressed through driver-supported DRA models |
 | Topology awareness | Mostly external labels and kubelet hints | Integrated with ResourceSlices and scheduler decisions |
 | Admin policies | Convention, admission, quotas, and node pools | DeviceClasses define allowed device sets |
-| API maturity | Stable device plugin pattern | Stable DRA feature in Kubernetes 1.35 |
+| API maturity | Stable device plugin pattern | DRA GA in Kubernetes 1.34; always enabled in 1.35 |
 | NVIDIA support | Mature GPU Operator and device plugin | NVIDIA DRA driver available for modern clusters |
 
 Topology is the other half of advanced GPU scheduling. Multi-GPU training does not only need the correct count of devices; it needs devices that communicate efficiently with each other and with local CPU and memory. On one server, two GPUs might share an NVSwitch fabric, while another pair might communicate across PCIe switches or even across CPU sockets. For collective operations such as gradient all-reduce, those differences can dominate runtime.
@@ -502,10 +505,10 @@ flowchart TD
     NVS --- G6
     NVS --- G7
 
-    SW0["PCIe Switch 0 (16 GB/s)"]
-    SW1["PCIe Switch 1 (16 GB/s)"]
-    SW2["PCIe Switch 2 (16 GB/s)"]
-    SW3["PCIe Switch 3 (16 GB/s)"]
+    SW0["PCIe Switch 0 (~32 GB/s unidirectional)"]
+    SW1["PCIe Switch 1 (~32 GB/s unidirectional)"]
+    SW2["PCIe Switch 2 (~32 GB/s unidirectional)"]
+    SW3["PCIe Switch 3 (~32 GB/s unidirectional)"]
 
     G0 --- SW0
     G1 --- SW0
@@ -517,7 +520,7 @@ flowchart TD
     G7 --- SW3
 ```
 
-The `nvidia-smi topo -m` command gives you the fast first look. It will not make a scheduling decision for Kubernetes by itself, but it tells you whether the hardware layout matches the assumptions in your node pool design. A topology-aware platform records this output during node qualification, labels nodes by hardware family, uses kubelet Topology Manager where appropriate, and avoids mixing very different interconnect layouts behind one generic GPU resource name.
+The `nvidia-smi topo -m` command gives you the fast first look. It will not make a scheduling decision for Kubernetes by itself, but it tells you whether the hardware layout matches the assumptions in your node pool design. On PCIe Gen4 x16 links, each switch hop is roughly 32 GB/s unidirectional (about 64 GB/s bidirectional), which is much slower than NVSwitch paths between GPUs on the same fabric. A topology-aware platform records this output during node qualification, labels nodes by hardware family, uses kubelet Topology Manager where appropriate, and avoids mixing very different interconnect layouts behind one generic GPU resource name.
 
 When you debug a slow training job, topology checks should happen before deep framework tuning. It is tempting to start with batch size, dataloader workers, NCCL environment variables, or image versions because those are familiar to ML engineers. Those knobs matter, but they cannot overcome a placement decision that sends gradient traffic over a weak path. First prove that the job received the intended hardware arrangement, then tune the training stack inside that known-good envelope.
 
@@ -575,7 +578,8 @@ For multi-node jobs, think in two rings of topology. The inner ring is inside on
 
 ```bash
 gcloud compute resource-policies create group-placement training-compact \
-  --collocation=COLLOCATED \
+  --region=us-central1 \
+  --collocation=collocated \
   --vm-count=8
 
 gcloud container node-pools create gpu-training \
@@ -585,7 +589,26 @@ gcloud container node-pools create gpu-training \
   --placement-policy=training-compact
 ```
 
+In Karpenter v1, kubelet configuration moved out of `NodePool` and into provider-specific node classes. On AWS, set Topology Manager policy in an `EC2NodeClass` — for Bottlerocket, use `userData` under `[settings.kubernetes]`:
+
 ```yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: gpu-training
+spec:
+  amiFamily: Bottlerocket
+  role: "KarpenterNodeRole-${CLUSTER_NAME}"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "${CLUSTER_NAME}"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "${CLUSTER_NAME}"
+  userData: |
+    [settings.kubernetes]
+    topology-manager-policy = "restricted"
+---
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -593,12 +616,14 @@ metadata:
 spec:
   template:
     spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu-training
       requirements:
         - key: node.kubernetes.io/instance-type
           operator: In
           values: ["p5.48xlarge"]
-      kubelet:
-        topologyManagerPolicy: restricted
 ```
 
 Exercise scenario: a four-GPU PyTorch job usually finishes in one evening on a validated NVSwitch node, but it takes much longer after moving into a general GPU node pool. The first checks are not the Python training loop or the container image. Inspect the Pod events, confirm which node was chosen, run `nvidia-smi topo -m` on that node, and compare the assigned GPU locality with the node pool's intended topology policy. Only after placement is verified should you tune NCCL, batch size, or framework settings.
@@ -610,6 +635,31 @@ Advanced GPU scheduling fails when it is treated as a bag of independent feature
 Fairness starts with names and quotas. A namespace that can request unlimited `nvidia.com/gpu.shared` will eventually consume every shared slot, even if each slot maps to a tiny fraction of real capacity. A team that can request `nvidia.com/mig-1g.10gb` but not `nvidia.com/gpu` cannot accidentally starve training jobs. PriorityClasses and preemption can protect urgent workloads, but they should be reserved for clear service tiers because preemption is disruptive. The goal is to make the scheduler enforce policy before humans have to negotiate every incident.
 
 Quota design should follow the resource catalog. For example, a research namespace might receive generous `nvidia.com/gpu.shared` quota, a small number of `nvidia.com/mig-1g.10gb` instances, and no full-GPU quota. A training namespace might receive full GPUs and access to topology-aligned nodes, but no shared development replicas. Those boundaries reduce accidental misuse and make capacity conversations concrete. When a team asks for more, they are asking for a named service tier with known tradeoffs.
+
+The following example ties quota limits to a training PriorityClass so urgent jobs can preempt lower-priority work when the scheduler allows it:
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ml-training-gpu-quota
+  namespace: ml-training
+spec:
+  hard:
+    nvidia.com/gpu: "16"
+    nvidia.com/mig-1g.10gb: "0"
+    nvidia.com/gpu.shared: "0"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: gpu-training-high
+value: 100000
+globalDefault: false
+description: "High-priority distributed training jobs that may preempt lower tiers"
+```
+
+Pair the PriorityClass with Pod specs in the training namespace and keep preemption scoped to namespaces or tiers where disruption is acceptable.
 
 Observability must also reflect the sharing model. DCGM metrics show device utilization, memory use, temperature, health, and error conditions, but they do not automatically explain tenant fairness. Combine DCGM with Kubernetes data: which Pod requested which resource name, which namespace owns it, which node profile is active, and whether a Pending Pod is blocked by capacity, affinity, taints, topology admission, or quota. A useful GPU dashboard separates exclusive, MIG, time-sliced, and MPS capacity instead of presenting one blended utilization line.
 
@@ -678,7 +728,7 @@ Revisit the decision whenever demand changes. A notebook tier that begins as a s
 
 ## Did You Know?
 
-1. **Kubernetes Dynamic Resource Allocation reached stable status in Kubernetes 1.35.** That matters because DRA moves device selection toward claims, classes, and scheduler-visible attributes instead of relying only on extended resource counts and node labels.
+1. **Kubernetes Dynamic Resource Allocation reached GA in Kubernetes 1.34 and is always enabled in 1.35.** That matters because DRA moves device selection toward claims, classes, and scheduler-visible attributes instead of relying only on extended resource counts and node labels.
 2. **An A100-80GB can expose seven `1g.10gb` MIG instances from one physical GPU.** That turns one expensive accelerator into several hardware-isolated scheduling units when the workload profile fits the memory and compute shape.
 3. **NVIDIA GPU time-slicing intentionally provides no memory or fault isolation between replicas.** It improves access for bursty workloads, but a process that consumes too much VRAM can still affect its neighbors on the same physical device.
 4. **Topology Manager has been stable since Kubernetes 1.27, but it is a kubelet admission feature rather than a global optimizer.** It can reject poorly aligned Pods on a node, yet you still need correct node pools, labels, and scheduling policy.
@@ -770,7 +820,7 @@ GPU_NODE=$(kubectl get nodes -l nvidia.com/gpu.present=true -o jsonpath='{.items
 kubectl label node $GPU_NODE nvidia.com/device-plugin.config=timeslice-4 --overwrite
 
 # Update the ClusterPolicy to reference the ConfigMap
-kubectl patch clusterpolicy cluster-policy --type=merge -p '{
+kubectl patch clusterpolicies.nvidia.com cluster-policy --type=merge -p '{
   "spec": {
     "devicePlugin": {
       "config": {
