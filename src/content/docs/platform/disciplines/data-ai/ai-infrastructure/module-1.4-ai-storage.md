@@ -27,23 +27,38 @@ After completing this module, you will be able to:
 
 Hypothetical scenario: your platform team has just delivered a clean GPU pool for the machine learning group. The nodes have modern accelerators, the scheduler can place GPU jobs, and the team has confidence in quota enforcement because earlier modules covered provisioning and sharing. Then the first serious image-training job lands, eight GPUs light up for a few seconds, and the utilization graph flattens around forty percent because the workers spend most of each step waiting for the next batch to arrive from storage.
 
-Meta's Llama 3 training run is the same lesson at industrial scale. Meta reported that its storage system served **240 PB over 54 days**, which works out to about **4.4 PB per day** or **51 GB/s sustained**. That number is memorable because it is not a burst benchmark; it is the rate a training platform had to keep feeding the job for weeks so the accelerators did not starve.
+Meta's Llama 3 training run is the same lesson at industrial scale. In the Llama 3 paper, Meta describes a Tectonic-based storage fabric with **240 PB of capacity** across **7,500 SSD-equipped servers**, supporting **2 TB/s sustainable** and **7 TB/s peak** throughput for pre-training I/O and highly bursty checkpoint writes. The **54-day** figure in that paper is a fault-analysis snapshot window for training interruptions, not a total data-served duration, and Meta does not report a single derived average read rate across the full run. The takeaway is structural: industrial LLM training needs storage that can sustain terabyte-scale throughput and absorb checkpoint bursts without starving accelerators for weeks.
 
 That situation is frustrating because it looks like a GPU problem from a distance, but it is usually a data path problem. A training loop cannot compute on examples it has not loaded, decoded, shuffled, transferred, and staged, so storage design directly determines how much expensive accelerator time turns into useful gradient updates. If the platform exposes only a generic network filesystem or a direct object-store mount, the job may be correct yet still waste more money than a scheduling bug would.
 
 This module teaches storage as an operational design problem rather than a shopping list of tools. You will start by recognizing the I/O shape of different AI workloads, then build up the storage tiers that Kubernetes can expose: local NVMe for hot data, distributed filesystems for shared warm data, object storage for durable cold data, and caching systems that move bytes closer to the GPUs. The goal is not to memorize one preferred product; the goal is to choose a path that matches the dataset, checkpoint cadence, fault-tolerance needs, and Kubernetes scheduling constraints in front of you.
 
-The performance gap explains why the storage layer deserves its own module. GPU memory and GPU compute move at speeds that storage systems cannot approach, so the platform has to hide latency through locality, batching, prefetching, and parallelism. The exact numbers vary by hardware and cloud provider, but the relative order is stable enough to use as a design compass.
+The performance gap explains why the storage layer deserves its own module. GPU memory and GPU compute move at speeds that storage systems cannot approach, so the platform has to hide latency through locality, batching, prefetching, and parallelism. The relative order is stable enough to use as a design compass: GPU memory and compute sit closest to the accelerator, local NVMe is the fastest node-local tier, shared filesystems trade latency for sharing semantics, and object storage trades per-request latency for durability and cost at scale.
 
-| Component | Throughput | Latency |
-|-----------|-----------|---------|
-| GPU compute (A100 BF16) | 312 TFLOPS | nanoseconds |
-| GPU memory (HBM3) | 2 TB/s | nanoseconds |
-| NVMe SSD (local) | 7 GB/s | 10-100 us |
-| Network storage (CephFS) | 1-5 GB/s | 0.5-5 ms |
-| Object storage (S3) | 100-500 MB/s | 10-100 ms |
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Layer | Indicative throughput / latency |
+> |-------|----------------------------------|
+> | GPU compute (A100 BF16) | ~312 TFLOPS |
+> | GPU memory (HBM3) | ~2 TB/s |
+> | Local NVMe SSD | ~7 GB/s read; 10–100 µs latency |
+> | Network filesystem (e.g., CephFS) | ~1–5 GB/s; 0.5–5 ms latency |
+> | Object storage (e.g., S3) | ~100–500 MB/s per prefix; 10–100 ms per request |
+>
+> **Workload I/O profiles (indicative):**
+>
+> | Workload | Data size | Access pattern | Typical read size | Throughput need |
+> |----------|-----------|----------------|-------------------|-----------------|
+> | Image classification (ImageNet) | ~150 GB | Random small files | 100–500 KB | ~2–5 GB/s |
+> | Object detection (COCO) | ~20 GB | Random medium files | 200 KB–5 MB | ~1–3 GB/s |
+> | NLP pre-training (C4) | ~800 GB | Sequential shards | 1–100 MB | ~5–20 GB/s |
+> | Video training | 5–50 TB | Sequential large files | 50–500 MB | ~10–50 GB/s |
+> | LLM fine-tuning (tokenized) | 10–100 GB | Sequential | 1–10 MB | ~1–5 GB/s |
+> | Checkpoint save | 1–50 GB per save | Sequential write burst | Full model state | ~5–20 GB/s burst |
+>
+> **Dataset-cache tooling (peer capabilities):** Fluid (CNCF Incubating since 2026-01-08) coordinates cache engines such as Alluxio, JuiceFS, and JindoFS with dataset-aware scheduling; JuiceFS exposes POSIX over object storage with local cache; Alluxio tiers memory and disk cache in front of under-storage.
 
-The table is not a promise that every NVMe disk, CephFS cluster, or S3 bucket will hit those values. It is a reminder that storage sits far away from the compute unit in both latency and throughput, especially when the training workload issues millions of small reads. A platform that ignores this gap can buy more GPUs and still deliver slower training, while a platform that respects the gap can improve utilization with a cache, a packaging change, or a different checkpoint strategy.
+These figures are not promises that every disk, cluster, or bucket will match them on your hardware. They are a reminder that storage sits far away from the compute unit in both latency and throughput, especially when the training workload issues millions of small reads. A platform that ignores this gap can buy more GPUs and still deliver slower training, while a platform that respects the gap can improve utilization with a cache, a packaging change, or a different checkpoint strategy.
 
 ## The I/O Bottleneck in ML Workloads
 
@@ -60,16 +75,7 @@ flowchart LR
 
 The diagram deliberately separates storage reads from GPU transfer because they fail in different ways. A PCIe transfer bottleneck often shows up after the batch is already resident in host memory, while a storage bottleneck shows up before the CPU workers can produce the batch. That distinction matters when you decide whether to tune `DataLoader` workers, pre-stage data onto local disks, package small files into larger records, or change the filesystem entirely.
 
-Different ML workloads have radically different I/O profiles, and platform teams get into trouble when they treat all training jobs as if they were the same. Image training often reads a huge count of tiny objects in random order, which punishes object storage and metadata-heavy network filesystems. Tokenized language-model training is usually friendlier because it can read larger sequential shards, but the required throughput may be much higher because the GPUs consume tokens quickly.
-
-| Workload | Data Size | Access Pattern | Read Size | Throughput Need |
-|----------|-----------|---------------|-----------|-----------------|
-| Image classification (ImageNet) | 150 GB | Random, small files | 100-500 KB | 2-5 GB/s |
-| Object detection (COCO) | 20 GB | Random, medium files | 200 KB - 5 MB | 1-3 GB/s |
-| NLP pre-training (C4) | 800 GB | Sequential, large files | 1-100 MB | 5-20 GB/s |
-| Video training | 5-50 TB | Sequential, very large | 50-500 MB | 10-50 GB/s |
-| LLM fine-tuning (tokenized) | 10-100 GB | Sequential | 1-10 MB | 1-5 GB/s |
-| Checkpoint save | 1-50 GB per save | Sequential write | Full model | 5-20 GB/s burst |
+Different ML workloads have radically different I/O profiles, and platform teams get into trouble when they treat all training jobs as if they were the same. Image training often reads a huge count of tiny objects in random order, which punishes object storage and metadata-heavy network filesystems. Tokenized language-model training is usually friendlier because it can read larger sequential shards, but the required aggregate throughput may be much higher because the GPUs consume tokens quickly. Video workloads favor large sequential reads; checkpointing flips the problem from reads to write bursts. See the **Landscape snapshot** above for indicative size and throughput ranges by workload type.
 
 The key design move is to translate the workload into read size, randomness, concurrency, and write burst requirements before choosing storage. Image classification against millions of JPEG files may need local caching or dataset repackaging even when the total dataset is modest. Video training may tolerate higher latency per file because each read is large, but it can saturate network links if several jobs stream at once. Checkpointing flips the problem from reads to writes, and a fast read cache does not automatically make checkpoint saves safe or durable.
 
@@ -83,8 +89,8 @@ Before optimizing, measure the job that is actually slow. GPU utilization tells 
 # Monitor GPU utilization during training
 # If GPU util is < 80% and you're not memory-bound, you're IO-bound
 
-# Quick check: watch nvidia-smi during training
-kubectl exec -it training-pod -- watch -n 1 'nvidia-smi --query-gpu=utilization.gpu,utilization.memory --format=csv,noheader'
+# Quick check: poll nvidia-smi during training (minimal GPU images often lack watch)
+kubectl exec -it training-pod -- bash -c 'while true; do nvidia-smi --query-gpu=utilization.gpu,utilization.memory --format=csv,noheader; sleep 1; done'
 
 # Better: check PyTorch DataLoader timing
 # Add this to your training script:
@@ -108,10 +114,10 @@ AI platforms usually need multiple storage tiers because no single tier gives pe
 
 ```mermaid
 flowchart TD
-    A["GPU VRAM (training)\n2 TB/s, us latency\nManaged by framework"]
-    B["Local NVMe (hot cache)\n3-14 GB/s, 10-100 us\nTopoLVM, OpenEBS LVM"]
-    C["Distributed FS (warm)\n1-10 GB/s, 0.5-5 ms\nCephFS, GlusterFS, JuiceFS"]
-    D["Object Storage (cold)\n100 MB-5 GB/s, 10-100 ms\nS3, GCS, MinIO"]
+    A["GPU VRAM (training)\nClosest to compute\nManaged by framework"]
+    B["Local NVMe (hot cache)\nNode-local; lowest remote latency\nTopoLVM, OpenEBS LVM"]
+    C["Distributed FS (warm)\nShared POSIX; network path\nCephFS, GlusterFS, JuiceFS"]
+    D["Object Storage (cold)\nDurable; request-oriented API\nS3, GCS, MinIO"]
     E["Tape/Archive\nArchival\nGlacier, Coldline"]
 
     A -->|"Cost $, Speed $$$$"| B
@@ -200,14 +206,13 @@ spec:
 OpenEBS LVM LocalPV offers a similar local-volume pattern with a different operational footprint. It is attractive when you want a simpler local-provisioning story and already manage node volume groups outside the storage driver. As with TopoLVM, the key is not the product name but the combination of local disk performance, CSI lifecycle management, and delayed binding so the scheduler does not make impossible placement decisions.
 
 ```bash
-# Install OpenEBS LVM LocalPV
+# Install OpenEBS (default chart enables Local PV LVM; disable Mayastor if not needed)
 helm repo add openebs https://openebs.github.io/openebs
 helm repo update
 
 helm install openebs openebs/openebs \
   --namespace openebs \
   --create-namespace \
-  --set lvm-localpv.enabled=true \
   --set engines.replicated.mayastor.enabled=false
 ```
 
@@ -219,7 +224,7 @@ metadata:
 provisioner: local.csi.openebs.io
 parameters:
   storage: "lvm"
-  vgPattern: "nvme-vg"          # LVM volume group pattern
+  vgpattern: "nvme-vg"          # LVM volume group pattern (regex)
   fsType: "xfs"                  # XFS recommended for large files
 volumeBindingMode: WaitForFirstConsumer
 ```
@@ -378,6 +383,8 @@ The mount options show where performance choices become explicit. A larger cache
 Caching becomes most valuable when the same data is read repeatedly by many jobs. Without a cache, each run pays the object-store request latency and network transfer cost again, even if another pod on the same node just read the same files. With a cache, the first read is still cold, but later reads can be served from local disk or memory, and the platform can stop treating every training run as a brand-new download.
 
 ```text
+Hypothetical scenario: fifty engineers each run a training job that downloads 500 GB from S3.
+
 Engineer 1 training job: Downloads 500GB from S3 -> 30 min
 Engineer 2 training job: Downloads 500GB from S3 -> 30 min
 ...
@@ -387,6 +394,8 @@ Total: 25 TB downloaded, 25 hours of wait time, $50+ in S3 egress
 ```
 
 ```text
+Hypothetical scenario: the same fifty engineers reuse a warm node-local cache.
+
 Engineer 1 training job: Downloads 500GB from S3 -> 30 min (cold)
 Engineer 2 training job: Reads from cache -> 2 min (warm)
 ...
@@ -401,7 +410,7 @@ Those numbers are illustrative, but the direction is real: repeated reads turn n
 >
 > **Answer:** Include GPU idle time, experiment turnaround, network contention, cache disk cost, operational overhead, and the risk of stale data.
 
-Fluid is a CNCF sandbox project that brings dataset-aware scheduling to Kubernetes. Instead of treating a dataset as just another PVC, Fluid models the dataset as a resource and coordinates cache engines such as Alluxio, JuiceFS, or JindoFS under the hood. That resource model lets the platform track cache placement and influence pod scheduling so jobs prefer nodes where the needed data is already warm.
+Fluid brings dataset-aware scheduling to Kubernetes as a CNCF Incubating project (see the **Landscape snapshot** for current maturity). Instead of treating a dataset as just another PVC, Fluid models the dataset as a resource and coordinates cache engines such as Alluxio, JuiceFS, or JindoFS under the hood. That resource model lets the platform track cache placement and influence pod scheduling so jobs prefer nodes where the needed data is already warm.
 
 ```bash
 # Install Fluid
@@ -444,9 +453,14 @@ spec:
   replicas: 3                    # 3 cache workers
   tieredstore:
     levels:
+      - mediumtype: MEM
+        path: /dev/shm
+        quota: 100Gi              # RAM cache per worker
+        high: "0.95"
+        low: "0.7"
       - mediumtype: SSD
-        path: /dev/shm,/var/cache/alluxio
-        quota: 100Gi,400Gi       # 100GB RAM + 400GB SSD cache per worker
+        path: /var/cache/alluxio
+        quota: 400Gi              # SSD cache per worker
         high: "0.95"
         low: "0.7"
   fuse:
@@ -516,10 +530,10 @@ spec:
 Alluxio can also be deployed independently when a team wants more control over the cache layer. That may be appropriate in an environment with multiple compute platforms or a mature storage team that already operates Alluxio outside Kubernetes. The cost is that you now own more of the integration and scheduling behavior yourself, so the operational model should be chosen deliberately rather than by habit.
 
 ```bash
-helm repo add alluxio https://alluxio-charts.storage.googleapis.com/openSource
+helm repo add alluxio-charts https://alluxio-charts.storage.googleapis.com/openSource/2.9.5
 helm repo update
 
-helm install alluxio alluxio/alluxio \
+helm install alluxio alluxio-charts/alluxio \
   --namespace alluxio \
   --create-namespace \
   --set master.count=1 \
@@ -573,25 +587,26 @@ thread.start()
 # Training continues immediately
 ```
 
-Sharded checkpoints match the distributed shape of modern training. Instead of one worker writing the entire model state, each rank writes its own shard in parallel, which reduces wall-clock save time and avoids funneling every byte through one process. The storage target must still handle the aggregate write burst, so sharding helps most when the filesystem or object-backed layer can accept parallel writes without turning metadata into the next bottleneck.
+Sharded checkpoints match the distributed shape of modern training. Instead of one worker writing the entire model state, each rank writes its own shard in parallel, which reduces wall-clock save time and avoids funneling every byte through one process. The storage target must still handle the aggregate write burst, so sharding helps most when the filesystem or object-backed layer can accept parallel writes without turning metadata into the next bottleneck. Hypothetical scenario: eight GPUs each writing an 87.5 GB shard at 2 GB/s completes in about 44 seconds wall-clock versus roughly 350 seconds for one serial 700 GB write.
 
 ```python
-# Each GPU saves its own shard in parallel
-# 8 GPUs writing 87.5 GB each at 2 GB/s = 44 seconds (vs 350 seconds serial)
+# Requires torch.distributed init and FSDP or model-parallel setup.
 from torch.distributed.checkpoint import save
-save(model.state_dict(), checkpoint_id=f"/checkpoints/step_{step}")
+
+state_dict = {"model": model.state_dict()}
+save(state_dict, checkpoint_id=f"/checkpoints/step_{step}")
 ```
 
 > **Pause and predict:** What is the risk of using asynchronous checkpointing if the node crashes exactly while the background thread is writing the checkpoint?
 >
 > **Answer:** The write may leave a partial or corrupt checkpoint that looks usable unless the design uses temporary paths, completion markers, atomic promotion, validation, and a durable source of truth.
 
-| Storage Type | Write Speed | Best For |
-|-------------|-------------|----------|
-| Local NVMe (TopoLVM) | 5-7 GB/s | Fastest saves; risk of data loss on node failure |
-| CephFS / GlusterFS (RWX) | 1-5 GB/s | Shared access, multi-node distributed saves |
-| JuiceFS (NVMe cache + S3) | 3-7 GB/s local, async to S3 | Best of both: fast writes, durable storage |
-| NFS | 0.5-2 GB/s | Simple, widely available; potential bottleneck |
+| Storage Type | Write profile | Best For |
+|-------------|---------------|----------|
+| Local NVMe (TopoLVM) | Highest node-local sequential bandwidth | Fastest saves; risk of data loss on node failure |
+| CephFS / GlusterFS (RWX) | Shared parallel writes across nodes | Shared access, multi-node distributed saves |
+| JuiceFS (NVMe cache + S3) | Fast local landing with async object flush | Fast writes with durable object-store backend |
+| NFS | Moderate shared throughput; metadata-sensitive | Simple, widely available; benchmark before large checkpoints |
 
 The table is a decision aid, not a universal ranking. Local NVMe may be the right first landing zone for very frequent checkpoints if a separate process quickly copies completed checkpoints to durable storage. A shared filesystem may be better when many ranks need a common path and the platform can provision enough throughput. NFS remains useful for small teams and modest jobs, but it should be benchmarked under checkpoint-like writes before it becomes the default for large models.
 
@@ -1081,8 +1096,10 @@ You have completed this exercise when:
 - [JuiceFS CSI Driver introduction](https://juicefs.com/docs/csi/introduction/)
 - [JuiceFS Helm charts](https://juicedata.github.io/charts/)
 - [Fluid — CNCF dataset orchestration & caching for AI](https://fluid-cloudnative.github.io/)
+- [Fluid CNCF project page](https://www.cncf.io/projects/fluid/)
 - [Fluid GitHub repository](https://github.com/fluid-cloudnative/fluid)
-- [Alluxio on Kubernetes](https://docs.alluxio.io/os/user/stable/en/kubernetes/Running-Alluxio-On-Kubernetes.html)
+- [The Llama 3 Herd of Models (arXiv:2407.21783)](https://arxiv.org/abs/2407.21783)
+- [Alluxio on Kubernetes (Helm deployment)](https://documentation.alluxio.io/os-en/kubernetes/running-alluxio-on-kubernetes)
 - [Alluxio Kubernetes integration (Helm chart in repo)](https://github.com/Alluxio/alluxio)
 - [PyTorch distributed checkpoint API](https://pytorch.org/docs/stable/distributed.checkpoint.html)
 - [MinIO Kubernetes documentation](https://min.io/docs/minio/kubernetes/upstream/index.html)
