@@ -6,35 +6,39 @@ the agents telemetry page pattern.
 """
 from __future__ import annotations
 
+# Dark-theme: consume the shared design-system tokens (static/design-system.css,
+# loaded via ds_link) so this page matches the rest of the Local Monitor. The old
+# hardcoded light-theme hex (#fff cards, #1e3a8a headings, #64748b text) rendered
+# dark-on-dark and was unreadable — kube-dojo/kube-dojo.github.io#1976.
 _PAGE_CSS = """
 .mb-main{max-width:1180px;margin:0 auto;padding:1.2rem}
-.mb-head h1{font-size:1.4rem;margin:0 0 .2rem}
-.mb-sub{color:#64748b;font-size:.9rem;margin-bottom:1rem}
+.mb-head h1{font-size:1.4rem;margin:0 0 .2rem;color:var(--text)}
+.mb-sub{color:var(--text-secondary);font-size:.9rem;margin-bottom:1rem}
 .mb-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin:1rem 0 1.4rem}
-.mb-card{background:#fff;border:1px solid #e2e8f0;border-radius:.5rem;padding:.65rem .75rem}
-.mb-card .label{color:#64748b;font-size:.75rem;text-transform:uppercase;letter-spacing:.03em}
-.mb-card .value{font-size:1.15rem;font-weight:700;color:#1e3a8a;margin-top:.15rem}
+.mb-card{background:var(--surface-0);border:1px solid var(--border);border-radius:.5rem;padding:.65rem .75rem}
+.mb-card .label{color:var(--text-dim);font-size:.75rem;text-transform:uppercase;letter-spacing:.03em}
+.mb-card .value{font-size:1.15rem;font-weight:700;color:var(--accent);margin-top:.15rem}
 .mb-section{margin:1.6rem 0}
-.mb-section h2{font-size:1.05rem;color:#1e3a8a;margin:0 0 .5rem}
+.mb-section h2{font-size:1.05rem;color:var(--text);margin:0 0 .5rem}
 .mb-section-head{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .mb-section-head h2{margin:0}
 .mb-win-btns{display:flex;gap:.35rem}
-.mb-win-btns button{font-size:.75rem;padding:.2rem .45rem;border:1px solid #cbd5e1;background:#fff;border-radius:.25rem;cursor:pointer;color:#334155}
-.mb-win-btns button.active{background:#eff6ff;border-color:#93c5fd;color:#1e3a8a;font-weight:600}
-.mb-note{color:#64748b;font-size:.82rem;margin:.35rem 0 .6rem}
-.mb-note a{color:#2563eb}
-table.mb{border-collapse:collapse;width:100%;font-size:.84rem;background:#fff}
-table.mb th,table.mb td{border:1px solid #e2e8f0;padding:.35rem .5rem;text-align:right;vertical-align:top}
+.mb-win-btns button{font-size:.75rem;padding:.2rem .45rem;border:1px solid var(--border);background:var(--surface-1);border-radius:.25rem;cursor:pointer;color:var(--text-secondary)}
+.mb-win-btns button.active{background:var(--accent-muted);border-color:var(--accent);color:var(--accent);font-weight:600}
+.mb-note{color:var(--text-secondary);font-size:.82rem;margin:.35rem 0 .6rem}
+.mb-note a{color:var(--accent)}
+table.mb{border-collapse:collapse;width:100%;font-size:.84rem;background:var(--surface-0);color:var(--text)}
+table.mb th,table.mb td{border:1px solid var(--border);padding:.35rem .5rem;text-align:right;vertical-align:top}
 table.mb th:first-child,table.mb td:first-child,
 table.mb th:nth-child(2),table.mb td:nth-child(3),
 table.mb td.meta{text-align:left}
-table.mb th{background:#eff6ff;color:#1e293b;font-weight:600}
+table.mb th{background:var(--surface-1);color:var(--text-secondary);font-weight:600}
 table.mb td.k{font-weight:600;text-align:left}
-table.mb td.meta{color:#64748b;font-size:.8rem}
-table.mb td.yes{color:#047857;font-weight:600}
-table.mb td.no{color:#64748b}
-.mb-legend{color:#64748b;font-size:.8rem;margin-top:1.2rem;border-top:1px solid #e2e8f0;padding-top:.6rem}
-.empty{color:#94a3b8;font-style:italic;padding:.5rem}
+table.mb td.meta{color:var(--text-secondary);font-size:.8rem}
+table.mb td.yes{color:var(--green);font-weight:600}
+table.mb td.no{color:var(--text-dim)}
+.mb-legend{color:var(--text-secondary);font-size:.8rem;margin-top:1.2rem;border-top:1px solid var(--border);padding-top:.6rem}
+.empty{color:var(--text-dim);font-style:italic;padding:.5rem}
 """
 
 _PAGE_JS = """
