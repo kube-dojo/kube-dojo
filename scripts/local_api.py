@@ -4337,6 +4337,7 @@ def _render_top_nav(active: str) -> str:
         ("activity", "/activity", "Activity"),
         ("benchmarks", "/benchmarks", "Benchmarks"),
         ("agents", "/agents", "Agents"),
+        ("telemetry", "/telemetry", "Telemetry"),
         ("channels", "/channels", "Channels"),
         ("decisions", "/decisions", "Decisions"),
         ("health", "/health", "Health"),
@@ -9122,6 +9123,53 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             except (TypeError, ValueError):
                 since_val = None
         return 200, build_agent_telemetry(repo_root, since=since_val), "application/json; charset=utf-8"
+    if path == "/telemetry":
+        from module_build_telemetry_page import render_module_builds_page_html
+
+        return 200, render_module_builds_page_html(
+            top_nav=_render_top_nav("telemetry"),
+            nav_css=_TOP_NAV_CSS,
+            ds_link=_design_system_link(),
+        ), "text/html; charset=utf-8"
+    if path == "/api/telemetry/module-builds":
+        from telemetry_store import build_module_build_payload
+
+        track_raw = query.get("track", [None])[0]
+        slug_raw = query.get("slug", [None])[0]
+        swarm_raw = query.get("swarm_used", [None])[0]
+        limit_raw = query.get("limit", ["100"])[0]
+        swarm_used = None
+        if swarm_raw is not None:
+            swarm_used = str(swarm_raw).strip().lower() in {"1", "true", "yes"}
+        try:
+            limit_val = int(limit_raw)
+        except (TypeError, ValueError):
+            limit_val = 100
+        return 200, build_module_build_payload(
+            repo_root,
+            track=track_raw,
+            slug=slug_raw,
+            swarm_used=swarm_used,
+            limit=limit_val,
+        ), "application/json; charset=utf-8"
+    if path.startswith("/api/telemetry/module-builds/"):
+        from telemetry_store import build_module_build_detail_payload
+
+        remainder = path[len("/api/telemetry/module-builds/") :].strip("/")
+        if not remainder or "/" not in remainder:
+            return 404, {"error": "not_found", "path": path}, "application/json; charset=utf-8"
+        track_part, slug_part = remainder.rsplit("/", 1)
+        limit_raw = query.get("limit", ["20"])[0]
+        try:
+            limit_val = int(limit_raw)
+        except (TypeError, ValueError):
+            limit_val = 20
+        return 200, build_module_build_detail_payload(
+            repo_root,
+            track=track_part,
+            slug=slug_part,
+            limit=limit_val,
+        ), "application/json; charset=utf-8"
     decision_page = _DECISION_ROUTES.route_decision_page_request(
         repo_root,
         path,
@@ -9534,6 +9582,20 @@ def route_post_request(
     )
     if channel_post is not None:
         return channel_post
+    if path == "/api/telemetry/module-builds":
+        from telemetry_store import upsert_run
+
+        if not body_bytes:
+            return 400, {"error": "empty body"}, "application/json; charset=utf-8"
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return 400, {"error": "invalid JSON"}, "application/json; charset=utf-8"
+        try:
+            run_id = upsert_run(repo_root, payload)
+        except ValueError as exc:
+            return 400, {"error": str(exc)}, "application/json; charset=utf-8"
+        return 200, {"ok": True, "run_id": run_id}, "application/json; charset=utf-8"
     return 404, {"error": "not_found", "path": path}, "application/json; charset=utf-8"
 
 

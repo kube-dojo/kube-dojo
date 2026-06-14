@@ -29,6 +29,7 @@ import json
 import time
 from collections import defaultdict
 from pathlib import Path
+from uuid import uuid4
 
 PRIMARY_REPO = Path(__file__).resolve().parent.parent
 DISPATCH_LOG = PRIMARY_REPO / "logs" / "smart_dispatch.jsonl"
@@ -221,6 +222,62 @@ def _print_table(title: str, key_name: str, rows: list[dict]) -> None:
         )
 
 
+def _parse_participant(raw: str) -> dict:
+    parts: dict[str, str] = {}
+    for chunk in raw.split(","):
+        chunk = chunk.strip()
+        if not chunk or "=" not in chunk:
+            continue
+        key, value = chunk.split("=", 1)
+        parts[key.strip()] = value.strip()
+    if "role" not in parts or "agent" not in parts:
+        raise ValueError("each --participant must include role= and agent=")
+    participant: dict = {
+        "role": parts["role"],
+        "agent": parts["agent"],
+        "token_source": parts.get("token_source", "unavailable"),
+    }
+    for key in ("model", "effort", "label", "notes"):
+        if key in parts:
+            participant[key] = parts[key]
+    for key in ("calls", "prompt_tokens", "response_tokens", "total_tokens"):
+        if key in parts:
+            participant[key] = int(parts[key])
+    if "cost_usd_est" in parts:
+        participant["cost_usd_est"] = float(parts["cost_usd_est"])
+    return participant
+
+
+def record_build(args: argparse.Namespace) -> int:
+    from telemetry_store import upsert_run
+
+    payload = {
+        "run_id": args.run_id or f"mbt-{uuid4().hex}",
+        "track": args.track,
+        "slug": args.slug,
+        "module_title": args.module_title,
+        "branch": args.branch,
+        "commit_sha": args.commit,
+        "pr_number": args.pr,
+        "pr_url": args.pr_url,
+        "status": args.status,
+        "swarm_used": args.swarm,
+        "swarm_label": args.swarm_label,
+        "swarm_note": args.swarm_note,
+        "wall_clock_minutes": args.wall_clock_min,
+        "source": args.source,
+        "notes": args.notes,
+        "participants": [_parse_participant(item) for item in args.participant],
+    }
+    try:
+        run_id = upsert_run(PRIMARY_REPO, payload)
+    except ValueError as exc:
+        print(f"error: {exc}")
+        return 2
+    print(f"recorded module build: {run_id} [{args.track}/{args.slug}]")
+    return 0
+
+
 def report(args: argparse.Namespace) -> int:
     data = build_agent_telemetry(since=args.since)
     print(f"Agent performance — {data['dispatch_total']} dispatches, "
@@ -258,6 +315,33 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--by", choices=("lane", "harness", "model", "all"), default="lane")
     r.add_argument("--since", type=int, help="unix ts lower bound")
     r.set_defaults(func=report)
+
+    b = sub.add_parser("record-build", help="record module-build token telemetry (#1973)")
+    b.add_argument("--run-id", help="stable run id (default: generated mbt-…)")
+    b.add_argument("--track", required=True)
+    b.add_argument("--slug", required=True)
+    b.add_argument("--module-title")
+    b.add_argument("--branch")
+    b.add_argument("--commit")
+    b.add_argument("--pr", type=int)
+    b.add_argument("--pr-url")
+    b.add_argument("--status", default="recorded")
+    swarm = b.add_mutually_exclusive_group()
+    swarm.add_argument("--swarm", dest="swarm", action="store_true")
+    swarm.add_argument("--no-swarm", dest="swarm", action="store_false")
+    b.set_defaults(swarm=False)
+    b.add_argument("--swarm-label", default="none")
+    b.add_argument("--swarm-note", required=True)
+    b.add_argument("--wall-clock-min", type=float)
+    b.add_argument("--source", required=True)
+    b.add_argument("--notes")
+    b.add_argument(
+        "--participant",
+        action="append",
+        default=[],
+        help="role=...,agent=...,model=...,total_tokens=...,cost_usd_est=...,label=...,token_source=...",
+    )
+    b.set_defaults(func=record_build)
 
     args = p.parse_args(argv)
     return args.func(args)
