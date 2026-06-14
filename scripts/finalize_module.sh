@@ -110,6 +110,9 @@ run git add -f "$REVIEW_ABS"
 # --- Step 3: board flip ---
 run "$PY" -m scripts.quality.pipeline reset-stage "$STAGE_SLUG" COMMITTED
 # --- Step 4: telemetry (record-build) ---
-run "$PY" -m scripts.agent_telemetry record-build "$@"
+# Run as a SCRIPT, not `-m scripts.agent_telemetry`: agent_telemetry.py uses flat
+# sibling imports (`from telemetry_store import …`), which need scripts/ on sys.path.
+# The `-m` form puts repo-root on the path instead → ModuleNotFoundError (#1978 dogfood).
+run "$PY" "$REPO_ROOT/scripts/agent_telemetry.py" record-build "$@"
 
 echo "finalize_module: done ($([ "$DRY_RUN" -eq 1 ] && echo dry-run || echo committed)) — $STAGE_SLUG"
