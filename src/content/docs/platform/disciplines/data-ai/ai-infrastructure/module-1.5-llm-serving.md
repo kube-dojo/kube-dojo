@@ -27,19 +27,29 @@ After completing this module, you will be able to:
 
 Hypothetical scenario: your team has just moved a useful internal assistant from a notebook into a shared Kubernetes service. The demo looked fast with one user, but the first real traffic spike creates a confusing failure pattern: GPUs are full, CPU dashboards look calm, scale-up takes several minutes, and users see either a blank spinner or a response that stops halfway through. Nothing about that incident looks like a normal REST outage, because the bottleneck is not a saturated web thread pool. It is the interaction between model weights, KV cache memory, decode bandwidth, request queues, cold starts, and Kubernetes lifecycle behavior.
 
-Training a model is an investment, but serving it is where the operational bill arrives every hour. A typical CRUD endpoint might complete in a few milliseconds and release its connection quickly. An LLM request can hold a GPU reservation for many seconds while it streams tokens, and the cost of each token depends on how efficiently the serving engine keeps the GPU occupied. If a single A100 is rented for several dollars per hour, then a deployment that handles five requests per second and a deployment that handles dozens of requests per second can have the same hardware cost but radically different unit economics.
+Training a model is an investment, but serving it is where the operational bill arrives every hour. A typical CRUD endpoint might complete in a few milliseconds and release its connection quickly. An LLM request can hold a GPU reservation for many seconds while it streams tokens, and the cost of each token depends on how efficiently the serving engine keeps the GPU occupied. When the same rented accelerator produces more useful tokens per minute for the same workload class, the platform has improved unit economics without changing the model.
 
 This module teaches the production mechanics that make LLM serving practical on Kubernetes 1.35 and newer clusters. You will start by separating inference from training, then examine why engines such as vLLM and Hugging Face Text Generation Inference use PagedAttention and continuous batching. From there, you will connect those engine-level ideas to Kubernetes decisions: how to request GPUs, how to choose model length and tensor parallelism, how to scale on queue depth instead of CPU, and how to drain long-running requests during rollouts. The goal is not to memorize flags. The goal is to reason from workload physics to deployment design.
 
 ```
-1 A100 at $3/hr serving Llama-3-8B:
-  - Without optimization: 5 requests/second -> $0.17 per 1K requests
-  - With vLLM + continuous batching: 40 requests/second -> $0.02 per 1K requests
-
-That's an 8x cost difference from software optimization alone.
+Hypothetical scenario:
+  - Same GPU, same model, same prompt mix, same user-facing SLO.
+  - A naive script processes a small trickle because it admits work one request at a time.
+  - A production serving engine keeps the GPU busier with continuous batching and cache-aware scheduling.
+  - The unit cost falls because the fixed GPU-hour is amortized across more useful tokens.
 ```
 
-The simple cost sketch above is intentionally rough, but it captures the important lesson: serving efficiency is a first-class platform concern. If you treat an LLM server like a normal stateless HTTP app, you will probably scale late, terminate useful work during rollouts, and waste GPU memory on empty KV cache reservations. If you understand why those failures happen, the fixes become concrete: better serving engines, realistic sequence limits, request-aware batching, cached model weights, careful probes, and autoscaling signals that reflect what users are waiting on.
+The simple cost sketch above is intentionally illustrative, but it captures the important lesson: serving efficiency is a first-class platform concern. If you treat an LLM server like a normal stateless HTTP app, you will probably scale late, terminate useful work during rollouts, and waste GPU memory on empty KV cache reservations. If you understand why those failures happen, the fixes become concrete: better serving engines, realistic sequence limits, request-aware batching, cached model weights, careful probes, and autoscaling signals that reflect what users are waiting on.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Surface | Snapshot value | Operational note |
+> |---------|----------------|------------------|
+> | vLLM examples | `vllm/vllm-openai:v0.23.0` | The upstream release and Docker tag were live-checked for this module; older 2024-era tags are stale. |
+> | TGI example | `ghcr.io/huggingface/text-generation-inference:3.3.7` | Hugging Face documents TGI as maintenance-mode, so treat it as a peer runtime for suitable workflows rather than a default future bet. |
+> | KEDA lab | Helm chart `2.20.1` | The chart release is current for the 2.20 line; cluster operators may still pin CRDs separately. |
+> | vLLM metric names | `vllm:num_requests_waiting`, `vllm:request_time_per_output_token_seconds`, `vllm:request_success`, `vllm:kv_cache_usage_perc` | Metrics are versioned API surface; verify names after every engine upgrade. |
+> | Llama 3.1 8B cache math | 32 layers, 32 attention heads, 8 KV heads, head dimension 128 | Grouped-query attention means KV-cache estimates use KV heads, not the full hidden dimension. |
 
 ## Inference and Training Have Different Operating Shapes
 
@@ -47,7 +57,7 @@ Training and inference both use GPUs, but they stress the platform in different 
 
 | Property | Training | Inference |
 |----------|----------|-----------|
-| GPU utilization | 95%+ (constant compute) | 10-80% (bursty, depends on traffic) |
+| GPU utilization | High and steady when the job is well tuned | Bursty and traffic-shaped; high utilization can still hide queueing |
 | Batch size | Large (64-4096) | Small (1-64, depends on concurrency) |
 | Memory pattern | Predictable, static | Dynamic (KV cache grows with sequence) |
 | Latency requirement | None (throughput matters) | Strict (users wait for responses) |
@@ -61,8 +71,8 @@ LLM inference also has two phases with different performance characteristics. In
 
 ```mermaid
 flowchart LR
-    Prefill["<b>Prefill Phase</b><br><br>Process entire prompt in parallel<br>Compute-bound (matrix multiplications)<br>Duration: 100-500ms<br><br><i>TTFT (Time to First Token)</i>"]
-    Decode["<b>Decode Phase</b><br><br>Generate tokens one at a time<br>Memory-bandwidth-bound (KV cache)<br>Duration: 2-30s<br><br><i>TPOT (Time Per Output Token)</i>"]
+    Prefill["<b>Prefill Phase</b><br><br>Process entire prompt in parallel<br>Compute-bound (matrix multiplications)<br>Usually shorter for short prompts<br><br><i>TTFT (Time to First Token)</i>"]
+    Decode["<b>Decode Phase</b><br><br>Generate tokens one at a time<br>Memory-bandwidth-bound (KV cache)<br>Often dominates long streamed answers<br><br><i>TPOT (Time Per Output Token)</i>"]
     
     Prefill --> Decode
 ```
@@ -75,20 +85,20 @@ Pause and predict: if a normal web request holds a connection for 30 millisecond
 
 The inference engine is the part of the stack that decides how prompts become GPU work. A basic Python script can load a model and generate text, but it will usually waste memory and leave throughput on the table because it lacks a production scheduler. Production engines add request admission, batching, KV cache management, metrics, OpenAI-compatible APIs, model parallelism, and health endpoints. Kubernetes decides where the Pod runs; the engine decides how well that Pod uses the GPU once requests arrive.
 
-vLLM is widely deployed because it combines a familiar OpenAI-compatible API with a scheduler built around PagedAttention. Hugging Face Text Generation Inference, often shortened to TGI, provides similar production features and fits naturally into the Hugging Face model ecosystem. NVIDIA Triton Inference Server and TensorRT-LLM are important when teams need a broader inference platform or highly optimized NVIDIA-specific execution. You do not have to choose one engine forever, but you do need to choose one deliberately because its metrics, flags, batching model, and failure modes become part of your platform contract.
+vLLM combines a familiar OpenAI-compatible API with a scheduler built around PagedAttention. Hugging Face Text Generation Inference, often shortened to TGI, provides similar production features and fits naturally into the Hugging Face model ecosystem. NVIDIA Triton Inference Server and TensorRT-LLM are important when teams need a broader inference platform or highly optimized NVIDIA-specific execution. You do not have to choose one engine forever, but you do need to choose one deliberately because its metrics, flags, batching model, and failure modes become part of your platform contract.
 
 The KV cache problem explains why purpose-built engines matter. During generation, each new token attends to previous tokens, so the server stores key and value tensors for each layer and each generated position. That cache grows with sequence length and concurrency. If the engine reserves the maximum sequence length for every request up front, short prompts waste enormous amounts of VRAM, and the deployment reaches its concurrency limit even though most reserved cache slots are empty.
 
 ```
 Llama-3-8B, sequence length 4096:
-  KV cache per request = 2 x num_layers x hidden_dim x seq_len x 2 bytes
-                       = 2 x 32 x 4096 x 4096 x 2
-                       = ~2 GB per request
+  KV cache per request = 2 x layers x num_key_value_heads x head_dim x seq_len x bytes
+                       = 2 x 32 x 8 x 128 x 4096 x 2
+                       = 536,870,912 bytes, or 512 MiB per request
 
-With 40GB GPU: max ~20 concurrent requests
+With a 40 GB GPU: this cache estimate is one capacity input, not the full concurrency limit
 ```
 
-Pause and predict: if every request reserves cache for the maximum possible context window, what happens when most users send short prompts and ask for short answers? The GPU appears full, but much of the fullness is reserved capacity that cannot be used by other requests. That is why a serving configuration copied from a model card's theoretical context length can be much worse than a configuration based on observed product traffic.
+The important correction is the `num_key_value_heads` term. Llama 3.1 8B uses grouped-query attention, so the cache stores keys and values for the smaller KV-head set rather than for every query head. Using `hidden_dim` directly in this example treats all attention heads as KV heads and overstates the cache requirement by the query-to-KV-head ratio. Pause and predict: if every request reserves cache for the maximum possible context window, what happens when most users send short prompts and ask for short answers? The GPU appears full, but much of the fullness is reserved capacity that cannot be used by other requests. That is why a serving configuration copied from a model card's theoretical context length can be much worse than a configuration based on observed product traffic.
 
 PagedAttention, introduced by the vLLM project, treats KV cache more like virtual memory than like one large contiguous allocation per request. The engine breaks cache into blocks and maps logical token positions to physical blocks. A request receives more blocks as it grows, and only the final partially filled block is likely to waste space. This does not make memory free, but it changes the dominant failure mode from huge static reservations to much smaller fragmentation.
 
@@ -99,7 +109,7 @@ flowchart TD
         TR1["Request 1: 400 slots used, 3696 wasted"]
         TR2["Request 2: 800 slots used, 3296 wasted"]
         TR3["Request 3: 200 slots used, 3896 wasted"]
-        TR4["WASTED: 88% of allocated memory"]
+        TR4["WASTED: most allocated slots"]
         TR1 ~~~ TR2 ~~~ TR3 ~~~ TR4
     end
 
@@ -107,7 +117,7 @@ flowchart TD
         direction TB
         PA1["Physical Pages: R1, R1, R2, R2, R2, R3, Free"]
         PA2["                R2, R2, R1, Free, Free, Free"]
-        PA3["WASTED: 4% (Fragmentation only in last page)"]
+        PA3["WASTED: mostly final-page fragmentation"]
         PA1 ~~~ PA2 ~~~ PA3
     end
 ```
@@ -132,7 +142,7 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.6.5
+          image: vllm/vllm-openai:v0.23.0
           args:
             - --model=meta-llama/Llama-3.1-8B-Instruct
             - --tensor-parallel-size=1
@@ -140,7 +150,7 @@ spec:
             - --max-model-len=8192
             - --max-num-seqs=64
             - --enable-chunked-prefill
-            - --disable-log-stats=false
+            - --shutdown-timeout=180
             - --port=8000
           ports:
             - containerPort: 8000
@@ -181,7 +191,7 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 8Gi
-      terminationGracePeriodSeconds: 120   # Allow in-flight requests to finish
+      terminationGracePeriodSeconds: 210   # Must exceed vLLM shutdown timeout
 ---
 apiVersion: v1
 kind: Service
@@ -206,7 +216,7 @@ The most dangerous vLLM flags are the ones that look harmless because they are j
 | `--max-num-seqs` | Maximum concurrent requests | Start with 64, tune based on TPOT requirements |
 | `--tensor-parallel-size` | Number of GPUs for tensor parallelism | 1 for 8B models; 2 for 70B; 4-8 for 405B |
 | `--enable-chunked-prefill` | Process long prompts in chunks, interleaved with decode | Enable for mixed-length traffic |
-| `--quantization` | Weight quantization (awq, gptq, fp8) | Use AWQ/GPTQ for 2x memory savings, ~5% quality loss |
+| `--quantization` | Weight quantization (awq, gptq, fp8) | Memory and quality impact are model- and workload-specific; benchmark before rollout |
 | `--enforce-eager` | Disable CUDA graph caching | Use for debugging; disable in production |
 | `--swap-space` | CPU RAM for swapping KV cache (GB) | 4-16 for handling burst traffic |
 
@@ -230,7 +240,7 @@ spec:
     spec:
       containers:
         - name: tgi
-          image: ghcr.io/huggingface/text-generation-inference:2.4
+          image: ghcr.io/huggingface/text-generation-inference:3.3.7
           args:
             - --model-id=meta-llama/Llama-3.1-8B-Instruct
             - --max-input-tokens=4096
@@ -262,7 +272,7 @@ spec:
             sizeLimit: 8Gi
 ```
 
-The practical comparison is less about which engine is universally better and more about the workload you have to operate. vLLM is a strong default for OpenAI-compatible serving, high-throughput scheduling, prefix caching, and multi-LoRA patterns. TGI is attractive for teams already invested in Hugging Face deployment workflows. Triton and TensorRT-LLM become compelling when an organization wants standardized NVIDIA inference operations, model repositories, or deeper graph optimization. Whichever path you choose, keep the SLO written in user terms: TTFT, TPOT, error rate, and cost per useful token.
+The practical comparison is less about which engine is universally better and more about the workload you have to operate. vLLM is a useful fit for OpenAI-compatible serving, high-throughput scheduling, prefix caching, and multi-LoRA patterns. TGI remains relevant for teams already invested in Hugging Face deployment workflows, but the snapshot above matters because maintenance-mode projects should be adopted with a clearer upgrade and migration plan. Triton and TensorRT-LLM become compelling when an organization wants standardized NVIDIA inference operations, model repositories, or deeper graph optimization. Whichever path you choose, keep the SLO written in user terms: TTFT, TPOT, error rate, and cost per useful token.
 
 | Feature | vLLM | TGI |
 |---------|------|-----|
@@ -272,9 +282,9 @@ The practical comparison is less about which engine is universally better and mo
 | Quantization | AWQ, GPTQ, FP8, GGUF | AWQ, GPTQ, BitsAndBytes |
 | OpenAI-compatible API | Yes (native) | Yes (via flag) |
 | Speculative decoding | Yes | Yes |
-| Prefix caching | Yes | No |
+| Prefix caching | Yes | Yes, with v3 optimized caching |
 | LoRA serving | Yes (multi-LoRA) | Yes |
-| Community | Larger, faster-moving | Hugging Face ecosystem |
+| Operational fit | General OpenAI-compatible serving, multi-LoRA, and high-throughput scheduling | Existing Hugging Face serving workflows where maintenance-mode status is acceptable |
 
 ## Batching, Memory, and Multi-GPU Serving
 
@@ -350,15 +360,17 @@ spec:
       labels:
         app: vllm-llama3-70b
     spec:
+      terminationGracePeriodSeconds: 210
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.6.5
+          image: vllm/vllm-openai:v0.23.0
           args:
             - --model=meta-llama/Llama-3.1-70B-Instruct
             - --tensor-parallel-size=2    # Split across 2 GPUs
             - --gpu-memory-utilization=0.92
             - --max-model-len=8192
             - --max-num-seqs=32
+            - --shutdown-timeout=180
             - --port=8000
           resources:
             limits:
@@ -373,7 +385,8 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 16Gi
-      # Ensure both GPUs are on the same node with NVLink
+      # Coarse capacity filter plus an explicit operator-managed topology label.
+      # The GPU count alone does not prove NVLink or any other interconnect.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -382,6 +395,9 @@ spec:
                   - key: nvidia.com/gpu.count
                     operator: In
                     values: ["2", "4", "8"]
+                  - key: topology.kubedojo.io/gpu-interconnect
+                    operator: In
+                    values: ["nvlink"]
 ```
 
 Pipeline parallelism splits layers across GPUs sequentially. It may help when model weights cannot fit otherwise or when interconnect bandwidth is weaker, but it often increases token latency because activations must move through stages. For serving, tensor parallelism is usually preferred inside one machine with fast GPU links, while pipeline parallelism is a fallback for larger models, constrained topologies, or specialized serving stacks. The right decision comes from measuring TTFT, TPOT, and cost per generated token rather than from choosing the largest model that can be made to start.
@@ -429,7 +445,7 @@ helm repo update
 helm install keda kedacore/keda \
   --namespace keda \
   --create-namespace \
-  --version 2.16.0
+  --version 2.20.1
 ```
 
 The ScaledObject below scales a vLLM Deployment based on average waiting requests. The polling interval and cooldown are intentionally conservative because LLM Pods are expensive and slow to start. Scaling up one Pod at a time prevents a sudden burst from consuming all available GPU nodes, while the longer scale-down window avoids removing capacity during short pauses in traffic. These values should be tuned against cold-start time, budget, and SLO, not copied blindly.
@@ -494,35 +510,34 @@ spec:
         serverAddress: http://kube-prometheus-prometheus.monitoring:9090
         query: |
           histogram_quantile(0.95,
-            sum(rate(vllm:time_per_output_token_seconds_bucket{namespace="inference"}[2m]))
+            sum(rate(vllm:request_time_per_output_token_seconds_bucket{namespace="inference"}[2m]))
             by (le)
           )
         threshold: "0.060"        # Scale up when P95 TPOT exceeds 60ms
         activationThreshold: "0.040"
 ```
 
-Scale-to-zero is tempting for development models and rarely used internal tools, but it has a painful first-request cost. An LLM Pod may need to schedule onto a GPU node, mount or download weights, load them into VRAM, warm kernels, and pass readiness before it can answer. That can take minutes for large models. Scale-to-zero works best when callers can tolerate cold starts, when a queue protects the user experience, or when a warm pool handles interactive requests while dormant replicas serve batch or experimental traffic.
+Scale-to-zero is tempting for development models and rarely used internal tools, but it has a painful first-request cost. An LLM Pod may need to schedule onto a GPU node, mount or download weights, load them into VRAM, warm kernels, and pass readiness before it can answer. That can take minutes for large models. If your scaling signal is emitted by the target Pod itself, keep at least one warm replica because a zero-replica Deployment emits no vLLM metrics. True scale-to-zero needs an external signal such as the KEDA HTTP add-on, a gateway queue, Redis, Kafka, or another source that exists while the model Pods are absent.
 
 ```yaml
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: vllm-dev-scaler
+  name: vllm-dev-warm-floor-scaler
   namespace: inference
 spec:
   scaleTargetRef:
     name: vllm-dev-model
-  minReplicaCount: 0               # Scale to zero!
+  minReplicaCount: 1               # Keep one warm emitter for target-side metrics
   maxReplicaCount: 2
-  idleReplicaCount: 0              # Idle = 0 replicas
-  cooldownPeriod: 900              # Wait 15 min before scaling to zero
+  cooldownPeriod: 900              # Wait 15 min before scaling down
   triggers:
     - type: prometheus
       metadata:
         serverAddress: http://kube-prometheus-prometheus.monitoring:9090
         query: |
-          sum(rate(vllm:request_success_total{namespace="inference",pod=~"vllm-dev.*"}[5m]))
-        threshold: "0.1"           # Scale up on any traffic
+          avg(vllm:num_requests_waiting{namespace="inference",pod=~"vllm-dev.*"})
+        threshold: "1"             # Add the second warm Pod when work waits
 ```
 
 Lifecycle behavior is just as important as scale-up behavior. During a rollout or scale-down, Kubernetes removes a Pod from Service endpoints and sends SIGTERM, but existing connections and upstream retries can still create visible user impact. For a normal web server, a default termination grace period may be enough. For an LLM server producing a long answer, the default can kill the response before completion. That turns a routine image update into a user-facing reliability event.
@@ -531,24 +546,26 @@ Lifecycle behavior is just as important as scale-up behavior. During a rollout o
 1. KEDA decides to scale down (or rolling update begins)
 2. Kubernetes removes Pod from Service endpoints (no new traffic)
 3. Kubernetes sends SIGTERM to Pod
-4. vLLM catches SIGTERM:
-   a. Stops accepting new requests
-   b. Continues processing in-flight requests
-   c. Waits until all in-flight requests complete
+4. vLLM receives SIGTERM:
+   a. With the default shutdown timeout, the process aborts quickly
+   b. With a positive --shutdown-timeout, it can wait for in-flight work
+   c. Readiness and upstream routing still need to stop new requests
 5. vLLM exits cleanly
 6. If terminationGracePeriodSeconds expires: SIGKILL (forced)
 ```
 
-The shutdown flow above only works if the serving process handles SIGTERM, the readiness path stops admitting new traffic, and the grace period matches realistic generation time. A Pod that advertises Ready while it is draining will receive new work during shutdown. A grace period shorter than long generations will still cut off users. A load balancer timeout shorter than the model's normal answer time can create retries that double the work. Draining is therefore an end-to-end design, not a single Kubernetes field.
+The shutdown flow above only works if the serving process is configured to wait, the readiness path stops admitting new traffic, and the grace period matches realistic generation time. Current vLLM documents `--shutdown-timeout` with a default of zero, so graceful waiting is not something to assume from the image alone. A Pod that advertises Ready while it is draining will receive new work during shutdown. A grace period shorter than long generations will still cut off users. A load balancer timeout shorter than the model's normal answer time can create retries that double the work. Draining is therefore an end-to-end design, not a single Kubernetes field.
 
 ```yaml
 spec:
   template:
     spec:
-      terminationGracePeriodSeconds: 180   # 3 minutes for in-flight requests
+      terminationGracePeriodSeconds: 210   # Must exceed vLLM shutdown timeout
       containers:
         - name: vllm
-          # vLLM handles SIGTERM gracefully by default
+          args:
+            - --shutdown-timeout=180
+          # A positive shutdown timeout asks vLLM to wait during termination.
           lifecycle:
             preStop:
               exec:
@@ -556,9 +573,8 @@ spec:
                   - sh
                   - -c
                   - |
-                    # Stop accepting new requests via readiness probe
-                    # vLLM's /health endpoint will return 503 after SIGTERM
-                    # Wait for in-flight requests to drain
+                    # Give endpoint removal and gateway routing a short head start.
+                    # Verify readiness behavior against your pinned vLLM version.
                     sleep 5
 ```
 
@@ -593,7 +609,7 @@ Anti-pattern four is hiding multiple model variants behind one service without c
 
 ## Decision Framework
 
-Start by asking what the user is waiting for, because that decides the first SLO. If the product is interactive chat, TTFT and streaming cadence matter more than absolute batch throughput. If the workload is offline summarization, throughput per dollar may matter more than low first-token latency. If the model is a developer tool, long prompts and long outputs may dominate cache usage. The best engine and scaling policy are downstream of that workload shape, so the decision process should begin with traffic, not with a preferred serving project.
+Start by asking what the user is waiting for, because that decides the first SLO. If the product is interactive chat, TTFT and streaming cadence matter more than absolute batch throughput. If the workload is offline summarization, throughput per dollar may matter more than low first-token latency. If the model is a developer tool, long prompts and long outputs may dominate cache usage. The engine and scaling policy are downstream of that workload shape, so the decision process should begin with traffic, not with a preferred serving project.
 
 Next, choose the smallest model and context policy that satisfies the product requirement. Smaller models often have better operational characteristics because they fit on one GPU, recover faster, and leave more room for KV cache. If a larger model is required, decide whether tensor parallelism on one node is available; if not, evaluate whether the added latency and operational complexity are acceptable. Quantization should be tested whenever memory is the limiting factor, but it should be promoted only after quality checks match the product domain.
 
@@ -633,7 +649,7 @@ done
 wait
 
 # Check vLLM metrics
-curl -s http://localhost:8000/metrics | grep -E "vllm:(num_requests|avg_generation|gpu_cache)"
+curl -s http://localhost:8000/metrics | grep -E "vllm:(num_requests|request_time_per_output_token|kv_cache_usage_perc)"
 ```
 
 When you read the benchmark results, resist the urge to optimize one number in isolation. A very high throughput result may be unacceptable if TTFT is poor for interactive users. A low latency result may be too expensive if it comes from underfilled GPUs. A long context limit may look safe in a functional test and then collapse concurrency in production. The skill is to connect the numbers back to the product's tolerance for waiting, the platform's budget, and the model's memory behavior.
@@ -727,6 +743,12 @@ A smoke test only proves that the endpoint responds; it does not prove that quan
 First, measure the startup path so you know how much time is spent scheduling, loading weights, moving them into VRAM, and warming the engine. Pre-cache model weights on predictable storage and avoid downloading them from external services during scale-up. Trigger scale-up earlier by using queue depth thresholds that account for cold-start time, and keep a warm minimum replica count for interactive models. Also verify readiness probes so traffic is not routed until the model can actually answer.
 </details>
 
+<details>
+<summary>Question 8: You need to serve three variants: an 8B assistant that fits on one GPU, a 70B assistant that fits only when split across two GPUs on one node, and a larger model that cannot fit within one node's GPU memory. Which serving shape should you evaluate first for each case?</summary>
+
+Use a single-GPU serving Pod for the 8B model because the simpler shape has fewer topology, communication, and rollout failure modes. Evaluate tensor parallelism first for the 70B model when the node has a fast local GPU interconnect, because every token step can use both GPUs together without crossing nodes. For the model that cannot fit on one node, evaluate pipeline parallelism or a serving stack designed for larger multi-stage layouts, then measure whether the added latency and operational complexity are acceptable for the product. The decision is not based only on parameter count; it depends on weight memory, KV-cache headroom, interconnect topology, TTFT, TPOT, and the route's SLO.
+</details>
+
 ## Hands-On Exercise: vLLM Serving with KEDA Autoscaling
 
 In this exercise you will deploy vLLM, expose the OpenAI-compatible completions endpoint, configure KEDA to scale on request queue depth, and observe how the deployment behaves under concurrent load. The manifest uses TinyLlama so the workflow is practical on smaller GPUs, but the same structure applies to larger models after you adjust memory, model cache, and parallelism settings. Treat this as a controlled lab rather than a production template, because real clusters differ in storage class, GPU topology, Prometheus labels, and model access rules.
@@ -740,7 +762,7 @@ helm repo update
 helm install keda kedacore/keda \
   --namespace keda \
   --create-namespace \
-  --version 2.16.0
+  --version 2.20.1
 
 kubectl -n keda wait --for=condition=Ready pods --all --timeout=120s
 ```
@@ -811,15 +833,16 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
-      terminationGracePeriodSeconds: 120
+      terminationGracePeriodSeconds: 150
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.6.5
+          image: vllm/vllm-openai:v0.23.0
           args:
             - --model=TinyLlama/TinyLlama-1.1B-Chat-v1.0
             - --gpu-memory-utilization=0.85
             - --max-model-len=2048
             - --max-num-seqs=32
+            - --shutdown-timeout=120
             - --port=8000
           ports:
             - containerPort: 8000
@@ -854,10 +877,13 @@ kind: Service
 metadata:
   name: vllm-serve
   namespace: inference
+  labels:
+    app: vllm-serve
 spec:
   ports:
     - port: 8000
       targetPort: 8000
+      name: http
   selector:
     app: vllm-serve
 EOF
@@ -1039,14 +1065,23 @@ You have completed this exercise when:
 - [Kubernetes Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
 - [Kubernetes GPU scheduling](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/)
 - [vLLM documentation](https://docs.vllm.ai/)
+- [vLLM v0.23.0 release](https://github.com/vllm-project/vllm/releases/tag/v0.23.0)
 - [vLLM serving OpenAI-compatible server](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html)
-- [vLLM metrics documentation](https://docs.vllm.ai/en/latest/usage/metrics.html)
+- [vLLM engine arguments](https://docs.vllm.ai/en/stable/configuration/engine_args/)
+- [vLLM production metrics](https://docs.vllm.ai/en/v0.14.0/usage/metrics/)
 - [Hugging Face Text Generation Inference documentation](https://huggingface.co/docs/text-generation-inference/index)
+- [Hugging Face TGI maintenance notice](https://huggingface.co/docs/text-generation-inference/en/index)
+- [Hugging Face TGI v3 caching and chunking](https://huggingface.co/docs/text-generation-inference/en/conceptual/chunking)
+- [Hugging Face TGI v3.3.7 release](https://github.com/huggingface/text-generation-inference/releases/tag/v3.3.7)
 - [NVIDIA Triton Inference Server documentation](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/)
 - [NVIDIA TensorRT-LLM documentation](https://nvidia.github.io/TensorRT-LLM/)
 - [KEDA documentation](https://keda.sh/docs/)
+- [KEDA chart releases](https://github.com/kedacore/charts/releases)
+- [KEDA 2.20 deployment documentation](https://keda.sh/docs/2.20/deploy/)
 - [KEDA Prometheus scaler](https://keda.sh/docs/latest/scalers/prometheus/)
 - [Prometheus querying basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
+- [Meta Llama 3.1 model card](https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/MODEL_CARD.md)
+- [Llama 3.1 8B configuration mirror](https://huggingface.co/NousResearch/Meta-Llama-3.1-8B-Instruct/blob/main/config.json)
 - [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)
 
 ## Next Module
