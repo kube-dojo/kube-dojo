@@ -10,6 +10,8 @@ revision_pending: false
 > **Time to Complete**: 3 hours
 >
 > **Prerequisites**: [Module 1.1: GPU Provisioning & Device Plugins](../module-1.1-gpu-provisioning/), [Module 1.5: Serving LLMs at Scale](../module-1.5-llm-serving/), Kubernetes autoscaling concepts, and basic cloud billing familiarity
+>
+> **Content current as of 2026-06.** Volatile pricing, spot availability, and queue-controller versions are quarantined in dated Landscape snapshots below; verify against your provider's current docs before relying on specifics.
 
 ---
 
@@ -32,6 +34,8 @@ The goal is not to make every workload cheap. Production inference may justify o
 
 AI infrastructure is the most expensive line item in many organizations' cloud bills. The numbers are staggering:
 
+> **Landscape snapshot — as of 2026-06. GPU pricing changes frequently; verify against your cloud provider's current pricing page before relying on specifics.**
+
 | GPU Instance | Cloud Cost (on-demand) | Yearly Cost (1 node) |
 |-------------|----------------------|---------------------|
 | AWS p5.48xlarge (8x H100) | $98.32/hr | $861,283 |
@@ -50,6 +54,8 @@ Cost anatomy also exposes why utilization alone is not enough. A production infe
 Pause and predict: if your dashboard shows low GPU utilization across the fleet, what extra label would you need before deciding whether to terminate nodes, reduce replicas, or move jobs to spot capacity? The useful answer is usually a workload label such as `training`, `inference`, or `development`, because the same metric means different things under different service expectations. A cost dashboard without workload identity is like a power meter without room labels: it tells you electricity is being used, but not whether the refrigerator, the heater, or a forgotten lamp is responsible.
 
 Break down a typical AI team's GPU spending:
+
+> **Landscape snapshot — as of 2026-06. GPU pricing changes frequently; verify against your cloud provider's current pricing page before relying on specifics.**
 
 ```mermaid
 graph TD
@@ -95,6 +101,8 @@ The basic economic question is whether the cost of lost work is smaller than the
 Pause and predict: if spot instances can be terminated with only a short warning, what specific training behavior makes a multi-day run economically safe on spot capacity? The answer is frequent, validated checkpointing to durable storage, combined with job logic that resumes from the newest complete checkpoint after eviction. Without that behavior, spot pricing turns into a gamble. With it, spot pricing becomes a controlled interruption model where lost work is bounded and measurable.
 
 Cloud providers sell excess GPU capacity at large discounts as spot instances, preemptible VMs, or equivalent discounted capacity. The catch is that they can reclaim the instance with limited notice, and availability varies by region, zone, instance type, and time. For cost planning, this means you should diversify instance types where the workload allows it, keep capacity requirements flexible, and reserve on-demand fallback for workloads that cannot safely wait.
+
+> **Landscape snapshot — as of 2026-06. GPU pricing changes frequently; verify against your cloud provider's current pricing page before relying on specifics.**
 
 | Provider | GPU Instance | On-Demand | Spot Price | Savings |
 |----------|-------------|-----------|------------|---------|
@@ -421,8 +429,15 @@ The architecture introduces three operational handles. A `ResourceFlavor` descri
 
 Install Kueue:
 
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Item | Value tested in this module |
+> |------|----------------------------|
+> | Kueue release | v0.18.1 |
+> | Kueue API | `kueue.x-k8s.io/v1beta2` |
+
 ```bash
-kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.9.1/manifests.yaml
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.18.1/manifests.yaml
 
 # Verify
 kubectl -n kueue-system get pods
@@ -431,7 +446,7 @@ kubectl -n kueue-system get pods
 The first configuration step is to define resource flavors. These labels must line up with node labels produced by your GPU device plugin, cloud provider integration, or autoscaler. If labels are wrong, Kueue can admit a workload to capacity that Kubernetes cannot actually provide. Treat label design as part of your cost model because it determines whether a job uses spot, on-demand, A100, T4, or another accelerator class.
 
 ```yaml
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
   name: gpu-a100-spot
@@ -440,7 +455,7 @@ spec:
     nvidia.com/gpu.product: NVIDIA-A100-SXM4-80GB
     karpenter.sh/capacity-type: spot
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
   name: gpu-a100-ondemand
@@ -449,7 +464,7 @@ spec:
     nvidia.com/gpu.product: NVIDIA-A100-SXM4-80GB
     karpenter.sh/capacity-type: on-demand
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
   name: gpu-t4-spot
@@ -462,12 +477,12 @@ spec:
 The ClusterQueue is where budget policy becomes scheduling behavior. In this example, spot A100 capacity has a large nominal quota and a borrowing limit, on-demand A100 capacity is smaller and protected, and T4 spot capacity is available for workloads that can use it. Borrowing lets one team use another team's idle share, but preemption policies make sure borrowed resources can be reclaimed when the owner needs them back. This is how a shared GPU platform can be both efficient and fair.
 
 ```yaml
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
 metadata:
   name: gpu-cluster-queue
 spec:
-  cohort: ai-platform              # Cohort for borrowing
+  cohortName: ai-platform              # Cohort for borrowing
   preemption:
     reclaimWithinCohort: Any
     borrowWithinCohort:
@@ -510,7 +525,7 @@ spec:
 LocalQueues keep team submission paths clean. A research namespace submits to its local queue, a platform namespace submits to its queue, and production has its own queue. The platform team can change the backing ClusterQueue policy without forcing every training script to learn the entire cluster budget. That is important for adoption because cost controls fail when they require every user to become a scheduler expert.
 
 ```yaml
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: ml-research-queue
@@ -518,7 +533,7 @@ metadata:
 spec:
   clusterQueue: gpu-cluster-queue
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: ml-platform-queue
@@ -526,7 +541,7 @@ metadata:
 spec:
   clusterQueue: gpu-cluster-queue
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: ml-production-queue
@@ -962,10 +977,10 @@ After applying the manifests, inspect the NodePool and NodeClass with `kubectl g
 
 ### Step 2: Install Kueue
 
-Kueue provides the admission controller and queue APIs used by the rest of the lab. The exercise uses the preserved upstream manifest URL from the original module, so review compatibility with your cluster policy before applying it in a managed environment. In production, you would pin versions through your normal deployment system rather than applying directly from a release URL.
+Kueue provides the admission controller and queue APIs used by the rest of the lab. The exercise installs Kueue v0.18.1 with the `kueue.x-k8s.io/v1beta2` API, matching the manifests in the Priority, Queues, and Fair GPU Sharing section above. Review compatibility with your cluster policy before applying a release URL in a managed environment. In production, pin versions through your normal deployment system rather than applying directly from GitHub.
 
 ```bash
-kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.9.1/manifests.yaml
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.18.1/manifests.yaml
 kubectl -n kueue-system wait --for=condition=Ready pods --all --timeout=120s
 ```
 
@@ -1003,7 +1018,7 @@ EOF
 
 # ResourceFlavor
 cat <<'EOF' | kubectl apply -f -
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
   name: gpu-spot
@@ -1014,12 +1029,12 @@ EOF
 
 # ClusterQueue
 cat <<'EOF' | kubectl apply -f -
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
 metadata:
   name: gpu-exercise-queue
 spec:
-  cohort: exercise
+  cohortName: exercise
   preemption:
     withinClusterQueue: LowerPriority
     reclaimWithinCohort: Any
@@ -1038,7 +1053,7 @@ EOF
 
 # LocalQueues
 cat <<'EOF' | kubectl apply -f -
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: team-alpha-queue
@@ -1046,7 +1061,7 @@ metadata:
 spec:
   clusterQueue: gpu-exercise-queue
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: team-beta-queue
@@ -1170,7 +1185,7 @@ echo "=== Team Beta workloads ==="
 kubectl -n team-beta get workloads
 echo ""
 echo "=== All pods ==="
-kubectl get pods -n team-alpha -n team-beta
+kubectl get pods -A | grep -E 'team-alpha|team-beta'
 ```
 
 <details>
@@ -1235,7 +1250,7 @@ You have completed this exercise when:
 ## Sources
 
 - [AWS EKS charts for AWS Node Termination Handler](https://aws.github.io/eks-charts)
-- [Kueue release manifest used in the exercise](https://github.com/kubernetes-sigs/kueue/releases/download/v0.9.1/manifests.yaml)
+- [Kueue v0.18.1 release manifest used in the exercise](https://github.com/kubernetes-sigs/kueue/releases/download/v0.18.1/manifests.yaml)
 - [Karpenter documentation](https://karpenter.sh/docs/)
 - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/)
 - [Karpenter NodeClasses](https://karpenter.sh/docs/concepts/nodeclasses/)
