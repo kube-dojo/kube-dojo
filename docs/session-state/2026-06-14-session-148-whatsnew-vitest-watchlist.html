@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 148 — What's New catch-up + vitest gate + watchlist + dep bump</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:940px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.55rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.18rem;margin-top:1.7rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}.mono{font-family:ui-monospace,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 148 — "What's New" catch-up + vitest gate + watchlist + dep bump</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Type:</strong> continuous-improvement + CI hygiene (no curriculum content) · <strong>Merged:</strong> #1967 (changelog catch-up, #1959 D1) · #1968 (vitest gate + red-test fix, #1965) · #1969 (watchlist script, #1959 D2) · #1966 (Dependabot npm minor/patch group). <strong>Closed:</strong> #1959 (both deliverables). <strong>Still open:</strong> #1965 (code done; only the "make <code>Unit tests (vitest)</code> a required check" admin toggle remains). <strong>DO FIRST next session:</strong> resume the content streams — <strong>#1953 Platform Disciplines</strong> (the bulk; ai-infra fix wave #1957 + #1952 closes Platform Foundations 100%) and <strong>#1911 UK</strong>. #1876 AI-history book review remains queued.</p>
+
+<h2>Session shape</h2>
+<p>Fresh standalone session. Cold-start clean (the new #1962 freshness gate fetched origin/main → behind 0). The s147 handoff explicitly queued <strong>#1959 "What's New" catch-up for a fresh session</strong> → did that end-to-end, then cleared the remaining bounded items (red-<code>main</code> test #1965, open Dependabot PR). All four PRs gated by the new DoD CI (astro-build render + the new vitest gate). User check-ins this session were process-health ("are you using the new DoD stuff?", "am I starting the session correctly?") — both answered yes with evidence; no redirect off the work.</p>
+
+<h2>1. #1959 Deliverable 1 — "What's New" catch-up (PR #1967, MERGED)</h2>
+<p>The EN "What's New" tab was last updated 2026-06-07, months behind Platform Engineering shipping.</p>
+<ul>
+<li><strong>EN <code>changelog.md</code></strong> (3 bullets under <code>## June 2026</code>): Platform Engineering Foundations (7 sections, each linked, descriptions <em>grounded in the actual shipped module titles</em> — not invented), FinOps (6 modules), and a <strong>currency-based</strong> UK status note (~14% current, 51-page calque-reviewed core; per the measure-staleness-not-existence rule).</li>
+<li><strong>UK <code>uk/changelog.md</code></strong> (new dated section, in Ukrainian): how translation is measured (currency, not existence) + current state + the new EN content queued for translation. UA terms VESUM-validated (<code>спостережуваність</code>, <code>розподілені</code>, <code>нейромереж</code> confirmed; dropped the non-standard <code>інференс</code> → "інфраструктуру для запуску моделей").</li>
+<li>Numbers pulled live from <code>/api/uk/board</code> (total 1083 · current 152/14% · reviewed 51/5% · stale 297). Foundations counts pulled from the live files, not the issue's rounded "30".</li>
+</ul>
+<p class="warn"><strong>Real defect caught + fixed in-flight:</strong> Site-health link-check flagged <code>changelog.md -&gt; /uk/</code> as a hard error — there is <strong>no <code>/uk/</code> landing route</strong> (no <code>uk/index.md</code>). Repointed to <code>/uk/changelog/</code> (resolves; matches the established absolute <code>/uk/...</code> link convention used 8+ times elsewhere). Local re-check: 0 errors.</p>
+
+<h2>2. #1965 — red <code>npm test</code> on <code>main</code> + vitest CI gate (PR #1968, MERGED)</h2>
+<p>Owner had recorded decision <strong>(a)</strong> in the issue: accept EN fallback for untranslated tracks. Executed it.</p>
+<ul>
+<li><strong>Test fix:</strong> <code>tests/homepage-i18n.test.ts</code> asserted every UK <code>whereRows</code> href starts with <code>/uk/</code>. Relaxed with a documented <code>UK_EN_FALLBACK_HREFS</code> allowlist. <span class="warn">The issue listed only <code>/ai/</code>; the test surfaced the sibling <code>/ai-ml-engineering/</code> too → allowlisted <strong>both</strong> (sibling-grep). Both UK dirs verified absent; both EN targets verified present.</span> <code>npm test</code> now green on main (51 passed).</li>
+<li><strong>vitest CI gate:</strong> new <code>.github/workflows/vitest-check.yml</code> mirrors <code>build-check.yml</code> exactly (SHA-pinned, <code>persist-credentials:false</code>, <code>contents:read</code>, no path filter → stable required check, fork-safe, <code>esbuild</code> rebuild for vitest's TS transform). zizmor clean. Self-verified on its own PR.</li>
+</ul>
+<p class="warn"><strong>Latent footgun found:</strong> <code>.gitignore</code> has a broad <code>test-*</code> pattern that silently swallows any <code>test-*</code> basename — it ate the first <code>test-check.yml</code> (it never staged). Renamed to <code>vitest-check.yml</code> to dodge it. <strong>Anyone adding a <code>test-*</code> workflow/source file will hit this.</strong> Not fixed here (narrowing the pattern risks un-ignoring intended scratch dirs) — flagged for a future cleanup.</p>
+<p><strong>Remaining (admin):</strong> making <code>Unit tests (vitest)</code> a <em>required</em> check is a branch-protection toggle (affects everyone's merges) — flagged for the user, not done unilaterally. #1965 left open until then.</p>
+
+<h2>3. #1959 Deliverable 2 — watchlist staleness script (PR #1969, MERGED → #1959 CLOSED)</h2>
+<p><code>scripts/quality/watchlist_staleness.py</code> — greps every dated <code>as of YYYY[-MM]</code> marker under <code>src/content/docs</code>, ages it, flags stale (default ≥4 months ≈ K8s release cycle). Table or <code>--json</code>; <code>--stale-months</code>, <code>--now YYYY-MM</code> (reproducible). Marks <code>Landscape snapshot</code> callouts vs inline mentions. Refresh cadence + key-projects watchlist documented in the docstring. Current: <strong>134 markers / 76 files / 15 stale</strong> (Gitpod/Codespaces 2024 pricing, Lambda invocation stats 2025, BGP ASN count 2025, Azure Front Door PoP count 2025…). ruff clean. A few historical-fact false positives (e.g. a ResNet citation) are expected — the output is a human worklist, not an auto-edit.</p>
+<p>The continuous-improvement stream now has its <strong>anchor</strong> (dated snapshots, mandated by <code>durable-vendor-content.md</code>) + <strong>dashboard</strong> (this script) + <strong>channel</strong> (changelog). Refresh loop = re-verify a stale snapshot → edit the dated cell → add a "currency refresh" changelog entry.</p>
+
+<h2>4. Dependabot #1966 — npm minor/patch group (MERGED)</h2>
+<p>Bumps: <code>@astrojs/starlight</code> 0.39.2→0.39.3 (incl. a content-collection file-path refactor), <code>astro</code> 6.4.2→6.4.4, <code>@typescript-eslint/eslint-plugin</code> 8.60.0→8.60.1, <code>happy-dom</code> 20.9→20.10.2, <code>vitest</code> 4.1.7→4.1.8. Per the build-local-before-merge rule for Astro/Starlight bumps: tested the bumped deps on current <code>main</code> in a throwaway worktree → <strong>build green (2169 pages, no schema/render errors) + npm test 51 passed</strong>. Then <code>gh pr update-branch</code> (its CI was stale from before today's 3 merges) → fresh CI green incl. the new gates → merged. Primary <code>node_modules</code> resynced (<code>npm ci</code>).</p>
+
+<h2>Git/PR discipline (user's standing instruction)</h2>
+<ul>
+<li>Every change via a dedicated worktree (<code>.worktrees/changelog-1959</code>, <code>vitest-gate-1965</code>, <code>watchlist-1959</code>, <code>dep-1966</code>) — <strong>never branched in primary</strong>; primary stayed on <code>main</code>, restored clean after each push; ff-only syncs.</li>
+<li>Conventional commits with <code>#N</code> refs + Co-Authored-By. Squash-merges (fixup commits folded). Worktrees removed + temp branches/refs cleaned after each merge.</li>
+<li>Left the pre-existing <code>gap-fill-g2-engineering-craft</code> worktree (open #1623) untouched — not mine.</li>
+</ul>
+
+<h2>Next</h2>
+<p>All bounded/queued work cleared. Remaining = the multi-session content streams (curriculum order):</p>
+<ul>
+<li><strong>#1953 Platform Disciplines</strong> — the bulk / last non-done curriculum track. <strong>#1957</strong> ai-infrastructure FIX wave (6 defective gemini-authored modules) + <strong>#1952</strong> advanced-networking/1.6-zero-trust (closes Platform Foundations 100%). Sweep LIVE files first to split expand-vs-flip; ≤3 authors → mixed-pool review (NO gemini) → ground-check + web-verify → consolidated PR → build PRIMARY → finalize.</li>
+<li><strong>#1911 UK</strong> — translation currency (14% current); detector-driven calque review runs on new pages as bulk-translation lands.</li>
+<li><strong>#1876</strong> AI-history book review (queued). <strong>#1965</strong> required-check admin toggle (user).</li>
+</ul>
+</body>
+</html>
