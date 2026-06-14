@@ -1400,7 +1400,6 @@ spec:
         defaultMode: 0755
 EOF
 
-kubectl wait --for=condition=Ready pod/zt-demo --timeout=120s
 kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/zt-demo --timeout=120s
 kubectl logs zt-demo
 ```
