@@ -10,24 +10,28 @@ markup.
 """
 from __future__ import annotations
 
+# Dark-theme: consume the shared design-system tokens (static/design-system.css,
+# loaded via ds_link) so this page matches the rest of the Local Monitor. The old
+# hardcoded light-theme hex rendered dark-on-dark and was unreadable —
+# kube-dojo/kube-dojo.github.io#1976.
 _PAGE_CSS = """
 .tel-main{max-width:1180px;margin:0 auto;padding:1.2rem}
-.tel-head h1{font-size:1.4rem;margin:0 0 .2rem}
-.tel-sub{color:#64748b;font-size:.9rem;margin-bottom:1rem}
+.tel-head h1{font-size:1.4rem;margin:0 0 .2rem;color:var(--text)}
+.tel-sub{color:var(--text-secondary);font-size:.9rem;margin-bottom:1rem}
 .tel-section{margin:1.6rem 0}
-.tel-section h2{font-size:1.05rem;color:#1e3a8a;margin:0 0 .1rem}
-.tel-section .hint{color:#64748b;font-size:.82rem;margin-bottom:.5rem}
-table.tg{border-collapse:collapse;width:100%;font-size:.88rem;background:#fff}
-table.tg th,table.tg td{border:1px solid #e2e8f0;padding:.35rem .55rem;text-align:right}
+.tel-section h2{font-size:1.05rem;color:var(--text);margin:0 0 .1rem}
+.tel-section .hint{color:var(--text-secondary);font-size:.82rem;margin-bottom:.5rem}
+table.tg{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--surface-0);color:var(--text)}
+table.tg th,table.tg td{border:1px solid var(--border);padding:.35rem .55rem;text-align:right}
 table.tg th:first-child,table.tg td:first-child,
 table.tg th:nth-child(2),table.tg td.dim{text-align:left}
-table.tg th{background:#eff6ff;color:#1e293b;font-weight:600}
+table.tg th{background:var(--surface-1);color:var(--text-secondary);font-weight:600}
 table.tg td.k{font-weight:600;text-align:left}
-table.tg td.dim{color:#64748b;font-size:.82rem}
-table.tg td.bad{color:#dc2626;font-weight:700;background:#fef2f2}
-table.tg td.warn{color:#b45309;font-weight:600}
-.tel-legend{color:#64748b;font-size:.8rem;margin-top:1.2rem;border-top:1px solid #e2e8f0;padding-top:.6rem}
-.empty{color:#94a3b8;font-style:italic;padding:.5rem}
+table.tg td.dim{color:var(--text-secondary);font-size:.82rem}
+table.tg td.bad{color:var(--red);font-weight:700;background:var(--red-muted)}
+table.tg td.warn{color:var(--amber);font-weight:600}
+.tel-legend{color:var(--text-secondary);font-size:.8rem;margin-top:1.2rem;border-top:1px solid var(--border);padding-top:.6rem}
+.empty{color:var(--text-dim);font-style:italic;padding:.5rem}
 """
 
 # DOM is built with createElement + textContent only (no innerHTML) — values are
