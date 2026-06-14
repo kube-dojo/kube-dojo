@@ -65,6 +65,28 @@ scripts/services-up >&2 || true
 
 echo "--- kubedojo:workspace ---"
 git status --short || true
+# Read-only freshness check (#1961): a session that cold-starts from a primary
+# behind origin/main can re-fire already-merged work (the learn-ukrainian
+# Session-28/29 re-collision). Fetch is read-only and NEVER auto-pulls — we only
+# warn (destructive/auto git on the user's tree is banned, see
+# feedback_never_destructive_git_on_user_files). `|| true` keeps cold-start
+# working offline.
+# Bound the fetch so a stalled network can't hang cold-start (review: cursor R1).
+# `timeout` is GNU coreutils (Linux); on macOS it's `gtimeout` if present, else
+# run unbounded — `|| true` still keeps cold-start alive.
+FETCH_TIMEOUT="${KUBEDOJO_FETCH_TIMEOUT:-10}"
+if command -v timeout >/dev/null 2>&1; then
+  timeout "$FETCH_TIMEOUT" git fetch --quiet origin main 2>/dev/null || true
+elif command -v gtimeout >/dev/null 2>&1; then
+  gtimeout "$FETCH_TIMEOUT" git fetch --quiet origin main 2>/dev/null || true
+else
+  git fetch --quiet origin main 2>/dev/null || true
+fi
+behind=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+if [[ "${behind:-0}" -gt 0 ]]; then
+  echo "⚠ primary is ${behind} commit(s) BEHIND origin/main — STATUS/handoff below may be stale."
+  echo "  sync first (non-destructive): git pull --ff-only origin main"
+fi
 echo ""
 
 echo "--- kubedojo:pending-decisions ---"
