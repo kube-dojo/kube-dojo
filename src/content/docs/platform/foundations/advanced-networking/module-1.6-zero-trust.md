@@ -25,7 +25,7 @@ After completing this module, you will be able to design, evaluate, implement, a
 
 ---
 
-In 2020, the SolarWinds supply-chain compromise reached nearly 18,000 organizations that received the compromised Orion updates; the attackers then selected a much smaller, high-value subset (around 100) for active follow-on intrusion — not by breaking firewalls at scale, but by exploiting implicit trust once inside selected targets. <!-- incident-xref: solarwinds-2020 --> For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
+In 2020, the SolarWinds supply-chain compromise <!-- incident-xref: solarwinds-2020 --> spread a backdoored software update to nearly 18,000 organizations; the attackers then moved freely inside the much smaller set they chose to exploit, because interior systems trusted network location over verified identity. For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
 That breach was not the first time the perimeter model failed catastrophically, but it became the definitive case study for why "trust the network" is a fundamentally broken security model. It accelerated a shift that had been building for years: the move to **Zero Trust**, where no user, device, or network location is inherently trusted, and every access request must be explicitly verified.
 
