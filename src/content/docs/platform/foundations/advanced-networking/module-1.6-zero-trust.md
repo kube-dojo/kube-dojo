@@ -27,7 +27,7 @@ After completing this module, you will be able to design, evaluate, implement, a
 
 In 2020, the SolarWinds supply-chain compromise reached nearly 18,000 organizations that received the compromised Orion updates; the attackers then selected a much smaller, high-value subset (around 100) for active follow-on intrusion — not by breaking firewalls at scale, but by exploiting implicit trust once inside selected targets. <!-- incident-xref: solarwinds-2020 --> For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
-The SolarWinds breach was not the first time the perimeter model failed catastrophically, but it became the definitive case study for why "trust the network" is a fundamentally broken security model. It accelerated a shift that had been building for years: the move to **Zero Trust**, where no user, device, or network location is inherently trusted, and every access request must be explicitly verified.
+That breach was not the first time the perimeter model failed catastrophically, but it became the definitive case study for why "trust the network" is a fundamentally broken security model. It accelerated a shift that had been building for years: the move to **Zero Trust**, where no user, device, or network location is inherently trusted, and every access request must be explicitly verified.
 
 This module covers the principles, architectures, and practical implementations of Zero Trust networking — the model that replaces VPNs, firewalls-as-security, and the assumption that "inside the network" means "safe." You will learn durable patterns that survive vendor churn: identity-aware proxies, mutual TLS for workloads, device posture gates, and the policy layering that makes deny-by-default operational rather than theoretical.
 
@@ -88,7 +88,7 @@ flowchart TD
     end
 ```
 
-The perimeter failures repeat across retail breaches, credit bureau exposures, supply-chain compromises, and ransomware incidents where attackers never needed to defeat TLS at the edge because the interior never challenged them. A major retailer was breached via a third-party HVAC vendor's network access; a credit bureau was compromised through an unpatched internet-facing web framework; a fuel pipeline operator was hit by credential-based ransomware after remote-access VPN trust extended too far inside the network. Those patterns share a structural lesson with SolarWinds: attackers did not need novel zero-day exploits at the perimeter if interior systems accepted connections without re-authenticating the client. Retail POS networks, credit bureau web tiers, build pipelines, and fuel-distribution SCADA interfaces each trusted network placement more than cryptographic identity.
+The perimeter failures repeat across retail breaches, credit bureau exposures, supply-chain compromises, and ransomware incidents where attackers never needed to defeat TLS at the edge because the interior never challenged them. A major retailer was breached via a third-party HVAC vendor's network access; a credit bureau was compromised through an unpatched internet-facing web framework; a fuel pipeline operator was hit by credential-based ransomware after remote-access VPN trust extended too far inside the network. Those patterns share a structural lesson with that campaign: attackers did not need novel zero-day exploits at the perimeter if interior systems accepted connections without re-authenticating the client. Retail POS networks, credit bureau web tiers, build pipelines, and fuel-distribution SCADA interfaces each trusted network placement more than cryptographic identity.
 
 Documenting your own interior trust assumptions is the first deliverable in any Zero Trust program. Walk a single user journey—from laptop browser to Kubernetes API to etcd backup bucket—and note every hop that checks only source IP or VPC ID. Those hops are where IAP, mTLS, or signed service tokens pay off first because they remove implicit trust without waiting for a full VPN decommission project to finish.
 
@@ -99,7 +99,7 @@ WHY THIS FAILS
     1. LATERAL MOVEMENT
     ─────────────────────────────────────────────
     Once inside, attacker moves freely between systems.
-    SolarWinds: months of undetected lateral movement in
+    Supply-chain compromise: months of undetected lateral movement in
     actively compromised targets.
     Credential-based ransomware: one stolen VPN credential
     → operational shutdown of critical infrastructure.
@@ -1562,8 +1562,8 @@ Continue the Advanced Networking track with [Module 1.7: IPv6 Fundamentals](../m
 
 ## Sources
 
-- [CISA Advisory AA20-352A: Advanced Persistent Threat Compromise of Government Agencies, Critical Infrastructure, and Private Sector Organizations](https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-352a) — Documents the SolarWinds campaign, including the compromise timeline and U.S. attribution to Russia's SVR.
-- [FBI/CISA Joint Statement on SolarWinds](https://www.cisa.gov/news-events/news/joint-statement-federal-bureau-investigation-fbi-cybersecurity-and-infrastructure-security-agency-0) — Summarizes the scope of affected SolarWinds customers and the narrower set of follow-on compromise victims.
+- [CISA Advisory AA20-352A: Advanced Persistent Threat Compromise of Government Agencies, Critical Infrastructure, and Private Sector Organizations](https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-352a) — Documents the 2020 Orion supply-chain campaign, including the compromise timeline and U.S. attribution to Russia's SVR.
+- [FBI/CISA Joint Statement on the 2020 supply-chain compromise](https://www.cisa.gov/news-events/news/joint-statement-federal-bureau-investigation-fbi-cybersecurity-and-infrastructure-security-agency-0) — Summarizes the scope of affected organizations and the narrower set of follow-on compromise victims.
 - [NIST SP 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final) — Defines zero-trust terminology, principles, and reference deployment models in the primary standards document.
 - [Google Cloud Identity-Aware Proxy Documentation](https://cloud.google.com/iap/docs) — Describes Google Cloud IAP as a context-aware access layer for services such as Cloud Run, App Engine, Compute Engine, and GKE.
 - [RFC 8446: TLS 1.3](https://www.rfc-editor.org/rfc/rfc8446.html) — Specifies TLS 1.3 handshake behavior, including server authentication and optional client-certificate authentication.
