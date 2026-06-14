@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 144 — Platform Foundations Wave 7b (Engineering Leadership complete) + grok writing A/B</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:940px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.55rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.18rem;margin-top:1.7rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}.mono{font-family:ui-monospace,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 144 — Platform Foundations Wave 7b (Engineering Leadership complete) + grok writing A/B</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Issue:</strong> #1897 · <strong>PR merged:</strong> #1950 (squash <span class="mono">07fe4c824</span>) · <strong>Board:</strong> Engineering Leadership now <strong>6/6 done</strong> (all <span class="mono">done / approve / COMMITTED / score 5.0</span>). Continues the Platform stream from s143 (Wave 7a 1.1–1.3).</p>
+
+<h2>What shipped — Wave 7b (Engineering Leadership 1.4 / 1.5 / 1.6)</h2>
+<table>
+<tr><th>Module</th><th>Was→Now</th><th>Author</th><th>Cross-family review → fix</th></tr>
+<tr><td>1.4-adrs</td><td>1866→5512w</td><td>cursor</td><td>codex R1 NEEDS_CHANGES (9 findings) → cursor fixed all + <strong>+512w</strong> to hold floor after de-fab</td></tr>
+<tr><td>1.5-stakeholders</td><td>2549→5603w</td><td>codex</td><td>cursor R1 NEEDS_CHANGES → orchestrator fixed</td></tr>
+<tr><td>1.6-mentorship</td><td>2344→5397w</td><td><strong>grok-4.x reasoning (writing trial)</strong></td><td>opus structural polish + codex R1 NEEDS_CHANGES → fixed</td></tr>
+</table>
+<p>All three: <strong>T0</strong>, sources ≥10 reachable (0 dead after fixes), density gates pass, de-fabbed, <code>revision_pending:false</code>. Build green (2169 pages, 0 schema errors); site-health 0 errors; all CI required checks (Incident-dedup, Site-health, CodeQL) passed. Board finalized via review-record APPROVE entries + <code>reset-stage COMMITTED</code> (<code>.pipeline/</code> gitignored, no commit).</p>
+
+<h2>Real review findings caught + web-verified (both directions)</h2>
+<ul>
+<li><strong>1.4 (codex):</strong> removed invented "engineering proverb" + unverifiable Ralph Johnson quote; dropped unsourced "industry surveys" framing; renamed "Real-World ADR Examples" → worked hypotheticals with literal <code>Hypothetical scenario:</code> labels; corrected Google/Abseil <strong>"readability review"</strong> (code-readability knowledge-sharing ≠ design-doc/RFC stage); reframed managed-Kafka cost (no <code>$/hour</code>); moved AWS SLA into dated snapshot; sourced Amazon memo culture.</li>
+<li><strong>1.5 (cursor):</strong> labeled Hands-On <code>Hypothetical scenario:</code>; dropped fabricated "tens of millions ARR" figure; swapped two weak/off-topic sources (adr.github.io, Crucial Learning catalog) for stakeholder-relevant ones (Atlassian stakeholder mgmt, Crucial Conversations book).</li>
+<li><strong>1.6 (codex):</strong> added <code>Hypothetical scenario:</code> labels; <strong>updated DORA to the current 5-metric model</strong> — deployment frequency, change lead time, change fail rate, <strong>failed deployment recovery time</strong> (replaced MTTR), <strong>deployment rework rate</strong> — verified live at dora.dev, quarantined in a dated snapshot; fixed dead Fowler <code>pairProgramming</code> URL (→ <code>/bliki/</code>), staffeng→lethain, MADR→eng-practices; reworded Backstage overclaim; softened a blameless overclaim; fixed broken <code>../README.md</code> Next-Module link → section-overview slug (caught by site-health CI).</li>
+</ul>
+
+<h2>grok WRITING A/B — the headline experiment (user asked: "how can grok-build write?")</h2>
+<div class="warn"><p>Both grok models authored the <strong>same</strong> module (1.6-mentorship) from the <strong>same</strong> brief. User hypothesis was grok-build &gt; grok-4.x. <strong>Result: grok-4.x is the stronger long-form writer.</strong></p></div>
+<table>
+<tr><th>Axis</th><th>grok-4.x (grok-4.20-reasoning)</th><th>grok-build (grok-build-0.1)</th></tr>
+<tr><td>Transport reliability</td><td class="ok">✅ one-shot, 99s</td><td>❌ broke pipe 1st try; ok retry, <strong>310s</strong></td></tr>
+<tr><td>Body words ≥5000 floor</td><td class="ok">✅ 5289</td><td>❌ <strong>4824 (under floor)</strong></td></tr>
+<tr><td>Density short-para ≤20%</td><td class="ok">✅ 10.7%</td><td>❌ 21.3%</td></tr>
+<tr><td>Sources all reachable</td><td class="ok">✅ 11, 0 dead</td><td>❌ 12, <strong>1 dead (404)</strong></td></tr>
+<tr><td>Outcomes aligned to quiz</td><td class="ok">✅ True</td><td>❌ False</td></tr>
+<tr><td>Anti-fab / leak tokens</td><td class="ok">✅ clean</td><td class="ok">✅ clean</td></tr>
+<tr><td>Shared quirks (both)</td><td colspan="2">6 outcomes vs 4–5 house style; scrambled section order (DYK after Hands-On) — a <strong>grok-family trait</strong>, both needed structural fixes</td></tr>
+</table>
+<p><strong>Conclusion:</strong> grok-4.x passed its first writing trial and is a viable content-author lane (heavy ground-check still required — it shipped a dead Fowler URL + stale DORA + unlabeled hypotheticals, all caught by codex R1). <strong>grok-build stays the review/code lane</strong> (disciplined, no-fab) — it is NOT a long-form writer: under the word floor, a dead link, transport unreliable for full-module output over hermes-inline. Both grok models scramble section order + over-count outcomes; budget a structural fix-pass when either authors.</p>
+
+<h2>Process notes / gotchas this session</h2>
+<ul>
+<li><strong>hermes inline transport:</strong> grok via hermes <code>-p</code> has no file tools → returns the module inline between sentinels; orchestrator writes + commits. <code>--mode read-only</code> needed (workspace-write demands a worktree it can't use). <strong>Full-module output is near the transport limit</strong> — grok-build broke pipe once; retry worked. Smaller outputs (scripts, reviews) are fine.</li>
+<li><strong>Worktree reads re-inject the CLAUDE.md+rules bundle (~18K tok each)</strong> — edited worktree files via Python string-replace (Edit tool requires a prior Read). Confirmed the token-efficiency lesson from the UK calque work.</li>
+<li><strong>Stale <code>index.lock</code></strong> in the 1.6 worktree after the codex review ran there with <code>--worktree</code> — verified no live holder via <code>lsof</code>, removed, committed.</li>
+<li><strong>Self-inflicted detach:</strong> a stray <code>&amp;</code> inside a <code>run_in_background</code> dispatch detached codex from harness tracking → re-established with a background poll-waiter. Avoid <code>&amp;</code> inside backgrounded Bash.</li>
+<li><strong>Board finalize recipe (confirmed):</strong> append <code>## &lt;ts&gt; — `REVIEW` — `APPROVE`</code> to <code>.pipeline/reviews/&lt;__-joined-path&gt;.md</code> + <code>python -m scripts.quality.pipeline reset-stage &lt;dash-slug&gt; COMMITTED</code> → board recomputes <code>done</code>/5.0 from verdict+stage+score. Slug form: <code>platform-foundations-engineering-leadership-module-1.6-mentorship</code>.</li>
+</ul>
+
+<h2>Open / next</h2>
+<ul>
+<li><strong>#1897 still OPEN — Wave 1 (Systems Thinking 1.1–1.4) remains</strong> (4 expands: 1.1-what-is-systems-thinking 1886w, 1.2-feedback-loops 1609w, 1.3-mental-models 1668w, 1.4-complexity-and-emergent-behavior 1972w; several flag <code>War Story</code> + <code>47</code>). Same loop. That closes Platform Foundations (the 28-expand epic).</li>
+<li><strong>Then Platform Disciplines (45 critical) → Toolkits (36 critical)</strong>, curriculum order — the bulk of "finish the other stream."</li>
+<li>Standing/deferred: AI-history book review (#1876). UK bulk translation = lesser priority (resume after Platform); the v2 CI-guard (#1948) keeps new translations calque-clean as they land.</li>
+<li><span class="mono">g2-craft</span> worktree (unmerged s104) left untouched per git discipline.</li>
+</ul>
+
+<h2>Reusables</h2>
+<p>Brief: <span class="mono">logs/remediation/briefs/pf-eng-leadership/_shared-expand-rules-el.md</span> + per-module <span class="mono">_addendum-*.md</span> (reusable shape for Wave 1 Systems Thinking). Author dispatch (inline, hermes no file tools): <span class="mono">dispatch_smart draft --agent hermes --model grok-4.20-0309-reasoning --mode read-only</span> with a <code>===BEGIN/END MODULE FILE===</code> sentinel output override. Review: <span class="mono">dispatch_smart review --agent codex --worktree &lt;wt&gt;</span> (cross-family). Consolidate via a worktree off <code>origin/main</code>, <code>git checkout &lt;branch&gt; -- &lt;file&gt;</code> per module, build in PRIMARY (copy-in → <code>npm run build</code> → revert).</p>
+</body>
+</html>
