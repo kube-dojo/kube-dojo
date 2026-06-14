@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session 150 — telemetry CSS fix + finalize record-build wiring + platform-engineering 2.3/2.4</title>
+  <link rel="stylesheet" href="/static/design-system.css">
+  <style>
+    .wrap{max-width:1000px;margin:0 auto;padding:32px 24px 64px}
+    h1{font-size:24px;margin:0 0 4px} .sub{color:var(--text-secondary);margin-bottom:24px}
+    h2{font-size:18px;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    code{background:var(--surface-1);padding:1px 5px;border-radius:4px;font-size:.9em}
+    .pr{color:var(--accent)} .ok{color:var(--green)} .warn{color:var(--amber)}
+    li{margin:5px 0} table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}
+    th,td{border:1px solid var(--border);padding:6px 9px;text-align:left;vertical-align:top}
+    th{background:var(--surface-1);color:var(--text-secondary)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Session 150 — telemetry CSS fix + finalize record-build wiring + platform-engineering 2.3/2.4</h1>
+    <div class="sub">2026-06-15 · standalone orchestrator session · 4 PRs merged (#1977, #1979, #1980, #1981)</div>
+
+    <h2>TL;DR</h2>
+    <p>Started on the s149-queued DO-FIRST items; a mid-session user interrupt ("telemetry impossible to read, bad css colors … agents as well") took priority. Net: fixed the unreadable Monitor pages, wired <code>record-build</code> into a reusable finalize helper, drove the next #1953 content section (platform-engineering 2.3/2.4) to <span class="ok">done</span>, and fixed a real bug the dogfood surfaced. Every change behind a GitHub issue with ACs, worktree-only, rebase-merged, build-green.</p>
+
+    <h2>1 · <span class="pr">#1976 → PR #1977</span> — /telemetry + /agents CSS unreadable (user interrupt)</h2>
+    <ul>
+      <li><b>Root cause:</b> the Local Monitor shell is the dark design-system theme (<code>static/design-system.css</code>: <code>--bg:#0a0f1a</code>, <code>body{background:var(--bg)}</code>), but both telemetry pages embedded hardcoded <b>light-theme</b> CSS. Section headings (<code>#1e3a8a</code> dark-navy) rendered nearly invisible on the dark body; slate text (<code>#64748b</code>) low-contrast; white (<code>#fff</code>) cards/tables jarring islands with light-gray-on-white values.</li>
+      <li><b>Fix:</b> rewrote both <code>_PAGE_CSS</code> blocks (<code>module_build_telemetry_page.py</code> + <code>agent_telemetry_page.py</code>) to consume design-system <code>var(--*)</code> tokens, like every other Monitor page. <code>yes</code>→green, <code>bad</code>→red, <code>warn</code>→amber accents preserved. No JS/markup change.</li>
+      <li><b>Verified:</b> ruff + py_compile clean, both pages render, all CI green, <b>live before/after screenshots</b> confirm readability. Issue closed.</li>
+      <li><b>Lesson:</b> new Monitor pages MUST use design-system <code>var(--*)</code> tokens — never hardcoded hex. Two pages shipped in #1973 with this bug.</li>
+    </ul>
+
+    <h2>2 · <span class="pr">#1978 → PR #1979</span> — wire record-build into finalize (DO-FIRST, user-approved s149)</h2>
+    <ul>
+      <li>Added <code>scripts/finalize_module.sh</code> — the canonical per-module finalize unit. It <b>GUARDS</b> that the latest <code>.pipeline/reviews</code> verdict is <code>APPROVE</code> (header-only check, so prose "NEEDS_CHANGES → fixed" doesn't false-fail), then <code>git add</code> + <code>reset-stage COMMITTED</code> + <code>record-build</code> (telemetry) together — so <code>/telemetry</code> auto-populates every wave.</li>
+      <li><code>curriculum-orchestrator</code> skill Operational-rules updated to mandate it. <code>--dry-run</code> + guard tests all pass.</li>
+    </ul>
+
+    <h2>3 · <span class="pr">#1953 → PR #1980</span> — platform-engineering 2.3 IDPs + 2.4 Golden Paths → done (2 expands)</h2>
+    <table>
+      <tr><th>Module</th><th>Author</th><th>Before→After</th><th>Review</th></tr>
+      <tr><td>2.3 Internal Developer Platforms</td><td>codex gpt-5.5</td><td>712 → <b>5336</b> w · 0 → <b>32</b> src</td><td>opus-inline APPROVE; CNCF maturity web-verified vs <code>landscape.yml</code> (Crossplane graduated, Backstage incubating, Score/OpenChoreo sandbox — all accurate)</td></tr>
+      <tr><td>2.4 Golden Paths</td><td>cursor</td><td>1501 → <b>5019</b> w · 3 → <b>16</b> src</td><td>opus-inline APPROVE; <b>curl sweep caught 2 dead links the verifier passed</b> (score.dev/docs/en/latest→docs.score.dev; dead CNCF blog→Backstage scaffolder) → fixed</td></tr>
+    </table>
+    <ul>
+      <li>Both genuine T3→T0 expands (verifier-swept LIVE files). Durable-content rule applied hard on 2.3 (dated 2026-06 snapshot + Rosetta, no market-share claims). War Story → <code>Hypothetical scenario:</code> both; Knight-Capital-2012 xref preserved in 2.4; <code>order-service</code>→<code>nginx:1.27</code>.</li>
+      <li>All 48 source URLs curl-200. Full astro build green (2169p). Both <span class="ok">done</span>/COMMITTED/5.0 on the board; 2 telemetry records added (13 total).</li>
+      <li><b>Lesson (reconfirms s149):</b> always run a curl dead-link sweep on every expand — verifier reachability false-passes dead links (caught 2 here that the verifier counted as reachable).</li>
+    </ul>
+
+    <h2>4 · <span class="pr">#1978 → PR #1981</span> — finalize_module.sh record-build bug (dogfood-caught)</h2>
+    <ul>
+      <li>Dogfooding the new helper on the wave surfaced a real bug: <code>python -m scripts.agent_telemetry record-build</code> → <code>ModuleNotFoundError: telemetry_store</code>. <code>agent_telemetry.py</code> uses flat sibling imports needing <code>scripts/</code> on <code>sys.path</code>; the <code>-m</code> form puts repo-root there instead.</li>
+      <li>Fix: invoke as a script (<code>python scripts/agent_telemetry.py record-build</code>). Same wrong <code>-m</code> form also corrected in the <code>/telemetry</code> page legend. The guard + reset-stage steps were fine; only telemetry broke. The wave's 2 modules were finalized + recorded directly with the correct command.</li>
+    </ul>
+
+    <h2>State / hygiene</h2>
+    <ul>
+      <li>4 PRs merged via rebase; all worktrees + branches cleaned; primary fast-forwarded to <code>d285ef0e9</code>; only long-standing <code>g2-craft</code> worktree remains (untouched).</li>
+      <li>Reusables: <code>logs/remediation/briefs/pf-platform-engineering/</code> (shared expand rules + per-module addenda + <code>_finalize.sh</code> — now using <code>finalize_module.sh</code>).</li>
+    </ul>
+
+    <h2>NEXT (curriculum order, #1953)</h2>
+    <ul>
+      <li><b>core-platform/sre</b> (5: 1.1/1.3/1.4/1.5/1.6) — s146 noted these are genuine EXPANDS (~700–845w), not flips; sweep LIVE files to confirm → expand wave (same loop, finalize via <code>finalize_module.sh</code>).</li>
+      <li>Then <b>data-ai/aiops</b> (3) → data-engineering (8) → mlops (1) → gitops (2) → iac (5) → release-engineering (5) → chaos-engineering (5) → devsecops (2) → networking (5) → <b>Toolkits (36)</b>.</li>
+      <li>Standing: <b>#1911 UK</b> (translation currency); <b>#1876</b> AI-history book review; <b>#1965</b> make <code>Unit tests (vitest)</code> a required check (branch-protection admin toggle — user).</li>
+    </ul>
+  </div>
+</body>
+</html>
