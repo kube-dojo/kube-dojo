@@ -117,6 +117,7 @@ test_script.sh
 .pipeline/teaching-audit/
 .pipeline/quality-pipeline/
 .pipeline/runs/
+.pipeline/telemetry/*.db
 .cache/
 
 # Quality progress ledger lock (the .tsv itself IS committed as the audit trail)
