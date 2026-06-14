@@ -266,7 +266,8 @@ def render_module_builds_page_html(*, top_nav: str = "", nav_css: str = "", ds_l
 
     <div class="mb-legend">
       Module builds: record finalize-time token rollups with
-      <code>python -m scripts.agent_telemetry record-build</code> or
+      <code>scripts/finalize_module.sh</code> (which calls
+      <code>python scripts/agent_telemetry.py record-build</code>) or
       <code>POST /api/telemetry/module-builds</code>.
       Tool timings: ingest via <code>POST /api/telemetry/tool-timings</code>.
     </div>
