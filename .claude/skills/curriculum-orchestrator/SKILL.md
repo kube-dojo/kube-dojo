@@ -118,6 +118,7 @@ Per user policy refinement: every shipped module must carry a composer-2.5 cross
 ## Operational rules
 
 - Quality-gate numbers live in `scripts/quality/verify_module.py` and `scripts/config.py`. Change the test fixture in the same commit as the gate ([[feedback_three_way_rule_agreement]]).
+- **Finalize a module with `scripts/finalize_module.sh`** (the standard finalize unit, #1978) — after writing the bespoke `.pipeline/reviews/<__path>.md` APPROVE record, run `scripts/finalize_module.sh <dash-slug> <review-record-path> -- <record-build args…>`. It GUARDS that the latest review verdict is APPROVE, then `reset-stage COMMITTED` **and** `record-build` (telemetry) together — so `/telemetry` is auto-populated every wave instead of `record-build` being a forgotten manual step. `--dry-run` to preview; `--help` for the worked example. Per-wave `_finalize.sh` scripts call this once per module.
 - `STATUS.md` is an INDEX, not a log. Full handoffs go in `docs/session-state/YYYY-MM-DD-<topic>.html` per HTML-first artifact policy ([[feedback_html_over_markdown_for_artifacts]]).
 - HTML artifacts MUST be served via `http://127.0.0.1:8768/`, never `open <file>` or `file://` ([[feedback_html_artifacts_via_local_api]]).
 - Briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from STATUS.md. Keep those headings populated.
