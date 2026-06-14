@@ -19,7 +19,7 @@
 </head>
 <body>
 <h1>Session 148 — "What's New" catch-up + vitest gate + watchlist + dep bump</h1>
-<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Type:</strong> continuous-improvement + CI hygiene (no curriculum content) · <strong>Merged:</strong> #1967 (changelog catch-up, #1959 D1) · #1968 (vitest gate + red-test fix, #1965) · #1969 (watchlist script, #1959 D2) · #1966 (Dependabot npm minor/patch group). <strong>Closed:</strong> #1959 (both deliverables). <strong>Still open:</strong> #1965 (code done; only the "make <code>Unit tests (vitest)</code> a required check" admin toggle remains). <strong>DO FIRST next session:</strong> resume the content streams — <strong>#1953 Platform Disciplines</strong> (the bulk; ai-infra fix wave #1957 + #1952 closes Platform Foundations 100%) and <strong>#1911 UK</strong>. #1876 AI-history book review remains queued.</p>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Type:</strong> continuous-improvement + CI hygiene (no curriculum content) · <strong>Merged:</strong> #1967 (changelog catch-up, #1959 D1) · #1968 (vitest gate + red-test fix, #1965) · #1969 (watchlist script, #1959 D2) · #1966 (Dependabot npm minor/patch group) · <strong>#1970 (zero-trust expand T3→T0, #1952)</strong>. <strong>Closed:</strong> #1959 (both deliverables) · <strong>#1952 → Platform Foundations is now 100% (39/39)</strong>. <strong>Still open:</strong> #1965 (code done; only the "make <code>Unit tests (vitest)</code> a required check" admin toggle remains). <strong>DO FIRST next session:</strong> <strong>#1957 ai-infrastructure FIX wave</strong> (6 defective gemini-authored modules — the user-chosen pairing with #1952) → then the rest of <strong>#1953 Platform Disciplines</strong> and <strong>#1911 UK</strong>. #1876 AI-history book review remains queued.</p>
 
 <h2>Session shape</h2>
 <p>Fresh standalone session. Cold-start clean (the new #1962 freshness gate fetched origin/main → behind 0). The s147 handoff explicitly queued <strong>#1959 "What's New" catch-up for a fresh session</strong> → did that end-to-end, then cleared the remaining bounded items (red-<code>main</code> test #1965, open Dependabot PR). All four PRs gated by the new DoD CI (astro-build render + the new vitest gate). User check-ins this session were process-health ("are you using the new DoD stuff?", "am I starting the session correctly?") — both answered yes with evidence; no redirect off the work.</p>
@@ -56,10 +56,19 @@
 <li>Left the pre-existing <code>gap-fill-g2-engineering-craft</code> worktree (open #1623) untouched — not mine.</li>
 </ul>
 
-<h2>Next</h2>
-<p>All bounded/queued work cleared. Remaining = the multi-session content streams (curriculum order):</p>
+<h2>5. #1952 — advanced-networking 1.6-zero-trust → T0 (PR #1970) → Platform Foundations 100%</h2>
+<p>User chose the bounded "#1952 + #1957" pairing. Executed #1952 end-to-end this session. The module was the only non-`done` Platform Foundations module (gemini-authored 2026-04, never reviewed, ~2.8k prose words under the 5000 floor; verifier T3 vs stale board score 5.0).</p>
 <ul>
-<li><strong>#1953 Platform Disciplines</strong> — the bulk / last non-done curriculum track. <strong>#1957</strong> ai-infrastructure FIX wave (6 defective gemini-authored modules) + <strong>#1952</strong> advanced-networking/1.6-zero-trust (closes Platform Foundations 100%). Sweep LIVE files first to split expand-vs-flip; ≤3 authors → mixed-pool review (NO gemini) → ground-check + web-verify → consolidated PR → build PRIMARY → finalize.</li>
+<li><strong>Expand (cursor):</strong> 643→<strong>5149 body_words</strong>; tail cleanup (removed <code>## Series Complete</code> + duplicate <code>## Further Reading</code> → one <code>## Sources</code>, 10 links) so the verifier parses <strong>sources=10</strong> (was 0).</li>
+<li><strong>codex R1</strong> (cross-family to cursor): 4 P1 + 7 P2, all ground-checked real, all fixed — SolarWinds scope, genericized named-incident narratives, TLS 1.3 (EC)DHE, Let's-Encrypt-is-public, Tailscale DERP, interconnect=MACsec not mTLS, "augments" not "replaces" segmentation, volatile claims into the dated snapshot. <strong>codex R2 ran the redesigned Dex+OAuth2 Proxy lab in kind</strong> — auth flow works end-to-end (unauth 403, authed reaches app); fixed a redundant Ready-wait on the completing zt-demo pod.</li>
+<li><strong>Board:</strong> reset-stage UNAUDITED→COMMITTED + APPROVE review record → <code>done</code>/5.0. <strong>Platform Foundations 39/39 = 100%.</strong></li>
+</ul>
+<p class="warn"><strong>incident-dedup gotchas (cost 2 CI cycles — record these):</strong> (1) the <code>&lt;!-- incident-xref: slug --&gt;</code> marker must sit within <strong>200 chars of the incident NAME</strong>, not just somewhere in the paragraph — a marker at a long opener sentence's end failed <code>has_xref_near</code>. (2) Run the gate from the <strong>worktree's own script path</strong> (<code>cd wt &amp;&amp; python scripts/quality/incident_dedup_gate.py</code>) — it resolves repo-root from the script location, so <code>../../scripts/</code> scans PRIMARY and gives a false pass. (3) <code>verify_module sources=0</code> when both <code>## Further Reading</code> and <code>## Sources</code> exist — the parser reads the first SOURCES_HEADINGS match; consolidate to one <code>## Sources</code>.</p>
+
+<h2>Next</h2>
+<p>Platform Foundations is closed (100%). Remaining = the multi-session content streams (curriculum order):</p>
+<ul>
+<li><strong>#1957 ai-infrastructure FIX wave (DO FIRST)</strong> — 6 defective gemini-authored modules (data-ai/ai-infrastructure 1.1–1.6) with verifier-blind P1s (stale GPU Operator/Karpenter/DRA APIs, wrong PCIe/NCCL, invalid YAML, misstated Llama figures). Sweep LIVE files first; ≤3 authors → mixed-pool review (NO gemini) → ground-check + web-verify → consolidated PR → build PRIMARY → finalize. Then the rest of <strong>#1953 Platform Disciplines</strong> (curriculum order).</li>
 <li><strong>#1911 UK</strong> — translation currency (14% current); detector-driven calque review runs on new pages as bulk-translation lands.</li>
 <li><strong>#1876</strong> AI-history book review (queued). <strong>#1965</strong> required-check admin toggle (user).</li>
 </ul>
