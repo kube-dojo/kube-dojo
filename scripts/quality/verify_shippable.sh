@@ -24,6 +24,16 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# Prefer the repo venv interpreter (worktrees may lack a venv → fall back to the
+# primary repo's, then to PATH `python`). Mirrors scripts/ops/* (review: cursor R1).
+if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+  PYTHON="${REPO_ROOT}/.venv/bin/python"
+elif [[ -x "$(git -C "$REPO_ROOT" rev-parse --git-common-dir 2>/dev/null)/../.venv/bin/python" ]]; then
+  PYTHON="$(cd "$(git -C "$REPO_ROOT" rev-parse --git-common-dir)/.." && pwd)/.venv/bin/python"
+else
+  PYTHON="python"
+fi
+
 RUN_DENSITY=1
 FILES=()
 for arg in "$@"; do
@@ -43,7 +53,7 @@ if [[ "$RUN_DENSITY" -eq 1 && "${#FILES[@]}" -gt 0 ]]; then
   echo "==> [1/2] density / tier gates (verify_module.py)"
   for f in "${FILES[@]}"; do
     echo "    --- $f"
-    if ! python scripts/quality/verify_module.py "$f"; then
+    if ! "$PYTHON" scripts/quality/verify_module.py "$f"; then
       echo "    DENSITY/TIER FAIL: $f" >&2
       fail=1
     fi
