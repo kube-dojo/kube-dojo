@@ -212,18 +212,32 @@ flowchart TD
     Controller --> GFD["GPU Feature Discovery DaemonSet"]
 ```
 
-For a first installation, keep the configuration explicit even when defaults would work. The values below enable the major stack components, turn on DCGM-Exporter, select a MIG strategy, and install NFD. In a managed Kubernetes environment, you may disable driver management if the node image already includes the correct driver, but do that intentionally and document the owner of driver upgrades.
+For a first installation, keep the configuration explicit even when defaults would work. The values below enable the major stack components, turn on DCGM-Exporter, select a MIG strategy, and install NFD. In a managed Kubernetes environment, you may disable driver management if the node image already includes the correct driver, but do that intentionally and document the owner of driver upgrades. Version pins belong in a short-lived release plan, not scattered through teaching prose, because the Operator, driver branch, container toolkit, device plugin, and exporter move on their own release schedules.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Volatile item | Verified value | Why it is quarantined |
+> |---------------|----------------|-----------------------|
+> | GPU Operator Helm chart | `v26.3.2` is the current patch release in the NVIDIA install docs | Chart releases change quickly, and old pins can silently pull unsupported operands |
+> | GPU Operator support window | `26.3.x` is supported; `25.10.x` is deprecated; `25.3.x` and older are end of support | Support status changes with the Operator lifecycle rather than with Kubernetes itself |
+> | v26.3.2 default or recommended operands | Driver `580.126.20` default, driver `580.159.04` recommended, Container Toolkit `1.19.1`, device plugin and GPU Feature Discovery `0.19.2`, DCGM Exporter `v4.5.3-4.8.2`, Node Feature Discovery `v0.18.3`, MIG Manager `0.14.2` | These are release-matrix facts; let the chart defaults carry them unless your upgrade test plan pins specific operands |
+> | H100 power envelope | H100 SXM lists maximum TDP up to `700W`; H100 NVL in PCIe form factor lists `350-400W`, configurable by SKU | Power and cooling plans must use the exact SKU and server BOM, not a generic H100 statement |
+> | CUDA sample images used below | `nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0` and `nvcr.io/nvidia/k8s/cuda-sample:nbody` resolved with registry manifest inspection | Public sample tags can appear or disappear; production validation should pin a verified digest in your own runbook |
 
 ```bash
 # Add the NVIDIA Helm repository
 helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
 helm repo update
 
+# Pin the chart release you have tested; refresh this against NVIDIA docs before reuse.
+RELEASE_TAG=v26.3.2
+
 # Install the GPU Operator
 helm install gpu-operator nvidia/gpu-operator \
+  --wait \
   --namespace gpu-operator \
   --create-namespace \
-  --version v24.9.0 \
+  --version "${RELEASE_TAG}" \
   --set driver.enabled=true \
   --set toolkit.enabled=true \
   --set dcgmExporter.enabled=true \
@@ -231,7 +245,7 @@ helm install gpu-operator nvidia/gpu-operator \
   --set nfd.enabled=true
 ```
 
-The `ClusterPolicy` is the declarative contract for the Operator. Read it the same way you would read a CNI or storage operator configuration: each field names an operational responsibility that must be owned somewhere. Driver version controls compatibility with CUDA user-space expectations, toolkit version controls runtime injection behavior, device plugin version controls resource advertisement, DCGM version controls metric availability, and MIG strategy controls whether partitioned GPU instances are exposed in a consistent way across the node.
+The `ClusterPolicy` is the declarative contract for the Operator. Read it the same way you would read a CNI or storage operator configuration: each field names an operational responsibility that must be owned somewhere. Driver policy controls compatibility with CUDA user-space expectations, toolkit policy controls runtime injection behavior, device plugin policy controls resource advertisement, DCGM policy controls metric availability, and MIG strategy controls whether partitioned GPU instances are exposed in a consistent way across the node. Leave operand versions on the chart's supported defaults unless you have a documented compatibility reason to pin them, and keep any pins in a dated release note that can be refreshed as a unit.
 
 ```yaml
 apiVersion: nvidia.com/v1
@@ -243,23 +257,19 @@ spec:
     defaultRuntime: containerd
   driver:
     enabled: true
-    version: "550.127.08"
     repository: nvcr.io/nvidia
     image: driver
     licensingConfig:
       configMapName: ""
   toolkit:
     enabled: true
-    version: v1.16.2-ubuntu22.04
   devicePlugin:
     enabled: true
-    version: v0.16.2
     config:
       name: device-plugin-config
       default: default
   dcgmExporter:
     enabled: true
-    version: 3.3.8-3.6.0-ubuntu22.04
     serviceMonitor:
       enabled: true         # Create ServiceMonitor for Prometheus
   mig:
@@ -283,7 +293,7 @@ kubectl get pods -n gpu-operator
 # nvidia-cuda-validator-gpu-worker-01                   0/1     Completed
 # nvidia-dcgm-exporter-5k2j8                           1/1     Running
 # nvidia-device-plugin-daemonset-lr4nt                 1/1     Running
-# nvidia-driver-daemonset-550.127.08-gpu-worker-01     1/1     Running
+# nvidia-driver-daemonset-<driver-version>-gpu-worker-01  1/1     Running
 # nvidia-node-feature-discovery-master-6c4b8f7-m9xj2  1/1     Running
 # nvidia-node-feature-discovery-worker-7g8x4           1/1     Running
 # nvidia-operator-validator-gpu-worker-01               1/1     Running
@@ -323,11 +333,11 @@ GPU utilization needs careful interpretation. A training job may show bursty uti
 | `DCGM_FI_DEV_GPU_TEMP` | GPU temperature (C) | Thermal throttling? |
 | `DCGM_FI_DEV_POWER_USAGE` | Power draw (W) | Energy cost tracking |
 | `DCGM_FI_DEV_SM_CLOCK` | Streaming multiprocessor clock (MHz) | Is the GPU at full speed? |
-| `DCGM_FI_DEV_XID_ERRORS` | Xid error count | Hardware problems? |
+| `DCGM_FI_DEV_XID_ERRORS` | Last Xid error code/value | Hardware or driver fault event? |
 | `DCGM_FI_DEV_PCIE_TX_THROUGHPUT` | PCIe TX throughput (KB/s) | Data transfer bottleneck? |
 | `DCGM_FI_PROF_GR_ENGINE_ACTIVE` | Ratio of time the GPU was active | More precise than utilization |
 
-DCGM-Exporter can be configured to expose the counters your team actually uses. More metrics are not always better because cardinality, scrape volume, and dashboard noise can hide the signals that matter. Start with utilization, memory, temperature, power, PCIe throughput, Xid errors, and profiling engine activity; add specialized counters when you have a concrete question about tensor cores, NVLink, ECC behavior, or application-level performance.
+DCGM-Exporter can be configured to expose the counters your team actually uses. More metrics are not always better because cardinality, scrape volume, and dashboard noise can hide the signals that matter. Start with utilization, memory, temperature, power, PCIe throughput, the last Xid error code, and profiling engine activity; add specialized counters when you have a concrete question about tensor cores, NVLink, ECC behavior, or application-level performance.
 
 ```yaml
 apiVersion: v1
@@ -345,12 +355,12 @@ data:
     DCGM_FI_DEV_POWER_USAGE,      gauge, Power draw (W).
     DCGM_FI_DEV_PCIE_TX_THROUGHPUT, gauge, PCIe TX throughput (KB/s).
     DCGM_FI_DEV_PCIE_RX_THROUGHPUT, gauge, PCIe RX throughput (KB/s).
-    DCGM_FI_DEV_XID_ERRORS,       gauge, Value of the last XID error.
+    DCGM_FI_DEV_XID_ERRORS,       gauge, Value of the last Xid error.
     DCGM_FI_PROF_GR_ENGINE_ACTIVE, gauge, Ratio of time the graphics engine is active.
     DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge, Ratio of time the tensor cores are active.
 ```
 
-The original NVIDIA DCGM Grafana dashboard is useful for a first view, but production teams should add panels that map metrics to decisions. Show per-node and per-Pod utilization together, because a node-level graph without workload labels does not tell you who owns the waste. Show VRAM used and free together, because compute utilization alone misses memory-bound failures. Show Xid errors as events rather than only averages, because one severe hardware fault deserves immediate investigation even when the aggregate rate looks tiny.
+The original NVIDIA DCGM Grafana dashboard is useful for a first view, but production teams should add panels that map metrics to decisions. Show per-node and per-Pod utilization together, because a node-level graph without workload labels does not tell you who owns the waste. Show VRAM used and free together, because compute utilization alone misses memory-bound failures. Show Xid codes as latest-event signals rather than counters or rates, because one severe hardware fault deserves immediate investigation even when an aggregate dashboard looks quiet.
 
 ```mermaid
 xychart-beta
@@ -394,7 +404,7 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: "GPU {{ $labels.gpu }} Xid error {{ $value }} — check dmesg"
+            summary: "GPU {{ $labels.gpu }} reported last Xid code {{ $value }} — check dmesg"
 
         - alert: GPUUnderutilized
           expr: DCGM_FI_DEV_GPU_UTIL < 10
@@ -497,7 +507,7 @@ For mature platforms, the decision framework should feed a service catalog. User
 
 ## Did You Know?
 
-1. **A single NVIDIA H100 SXM5 accelerator can draw up to 700 watts (PCIe variants top out at ~350 watts).** An eight-GPU server can therefore demand several kilowatts before you count CPUs, memory, networking, and cooling overhead, which is why power and thermal metrics belong in the same conversation as scheduling.
+1. **H100 power and cooling plans are SKU-specific, not generic.** A high-density SXM accelerator and a PCIe-form-factor H100 NVL do not have the same thermal design target, so use the dated hardware snapshot and your vendor BOM before sizing rack power, cooling, or autoscaling boundaries.
 
 2. **The Kubernetes Device Plugin API became stable in Kubernetes 1.26, but the operational pattern remains important in Kubernetes 1.35 and newer.** Stability means the API contract is mature; it does not mean every vendor plugin, driver version, and runtime integration is interchangeable without testing.
 
@@ -574,8 +584,14 @@ You need a Kubernetes cluster with at least one GPU node. Cloud options include 
 ```bash
 # Verify you have a GPU node (look for NVIDIA PCI device)
 kubectl get nodes -o wide
-kubectl debug node/<gpu-node-name> -it --image=ubuntu -- lspci | grep -i nvidia
+kubectl debug node/<gpu-node-name> -it --profile=sysadmin --image=ubuntu:24.04 -- bash -lc '
+  apt-get update >/dev/null
+  apt-get install -y pciutils >/dev/null
+  lspci | grep -i nvidia
+'
 ```
+
+The debug command uses the `sysadmin` profile because Kubernetes mounts the node root filesystem at `/host` for node debugging, but the default debug Pod is not privileged enough for every host inspection pattern. Installing `pciutils` inside the temporary Ubuntu debug container makes `lspci` available without assuming the node image already carries that troubleshooting package.
 
 ### Task 1: Install Prometheus Stack
 
@@ -608,11 +624,15 @@ Install the GPU Operator with DCGM ServiceMonitor creation enabled. The wait com
 helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
 helm repo update
 
+# Pin the chart release you have tested; refresh this against NVIDIA docs before reuse.
+RELEASE_TAG=v26.3.2
+
 # Install GPU Operator with DCGM-Exporter ServiceMonitor enabled
 helm install gpu-operator nvidia/gpu-operator \
+  --wait \
   --namespace gpu-operator \
   --create-namespace \
-  --version v24.9.0 \
+  --version "${RELEASE_TAG}" \
   --set dcgmExporter.serviceMonitor.enabled=true \
   --set dcgmExporter.serviceMonitor.additionalLabels.release=kube-prometheus
 
@@ -665,8 +685,9 @@ spec:
       restartPolicy: Never
       containers:
         - name: gpu-burn
-          image: nvcr.io/nvidia/k8s/cuda-sample:nbody-cuda12.5.0
-          args: ["-benchmark", "-numbodies=1024000", "-iterations=50"]
+          image: nvcr.io/nvidia/k8s/cuda-sample:nbody
+          command: ["nbody"]
+          args: ["-gpu", "-benchmark", "-numbodies=1024000", "-iterations=50"]
           resources:
             limits:
               nvidia.com/gpu: 1
@@ -714,19 +735,9 @@ Import the NVIDIA DCGM dashboard or build an equivalent internal dashboard. The 
 ```bash
 # Port-forward to Grafana
 kubectl port-forward -n monitoring svc/kube-prometheus-grafana 3000:80 &
-
-# Login: admin / kubedojo
-# Import dashboard ID 12239 (NVIDIA DCGM Exporter Dashboard)
-# Or use the API:
-curl -X POST http://admin:kubedojo@127.0.0.1:3000/api/dashboards/import \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "dashboard": {"id": 12239},
-    "overwrite": true,
-    "inputs": [{"name": "DS_PROMETHEUS", "type": "datasource", "pluginId": "prometheus", "value": "Prometheus"}],
-    "folderId": 0
-  }'
 ```
+
+Log in with `admin` and the password from your Helm values, then use Grafana's dashboard import UI with ID `12239` and select your Prometheus data source. If you automate this later, download or export the full dashboard JSON first and post a complete dashboard body; a stub payload that contains only the dashboard ID is not a valid import request and will fail because Grafana has no title, panels, or datasource mapping to import.
 
 <details>
 <summary>Solution notes</summary>
@@ -757,18 +768,24 @@ kubectl delete namespace ai-lab
 
 ## Sources
 
-- https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/
-- https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-- https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/
-- https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/
-- https://docs.nvidia.com/datacenter/cloud-native/gpu-telemetry/latest/dcgm-exporter.html
-- https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/
-- https://docs.nvidia.com/deploy/cuda-compatibility/
-- https://github.com/NVIDIA/k8s-device-plugin
-- https://github.com/kubernetes-sigs/node-feature-discovery
-- https://github.com/cncf-tags/container-device-interface
-- https://prometheus-operator.dev/docs/developer/getting-started/
-- https://grafana.com/grafana/dashboards/12239-nvidia-dcgm-exporter-dashboard/
+- [Kubernetes Device Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/)
+- [Kubernetes Resource Management for Pods and Containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- [Kubernetes Node Debugging with kubectl](https://kubernetes.io/docs/tasks/debug/debug-cluster/kubectl-node-debug/)
+- [NVIDIA GPU Operator Installation Guide](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/getting-started.html)
+- [NVIDIA GPU Operator Platform Support and Component Matrix](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/platform-support.html)
+- [NVIDIA Container Toolkit Documentation](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/)
+- [NVIDIA DCGM Exporter Documentation](https://docs.nvidia.com/datacenter/cloud-native/gpu-telemetry/latest/dcgm-exporter.html)
+- [NVIDIA DCGM Field Identifiers](https://docs.nvidia.com/datacenter/dcgm/latest/dcgm-api/dcgm-api-field-ids.html)
+- [NVIDIA DCGM User Guide](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/)
+- [NVIDIA CUDA Compatibility Documentation](https://docs.nvidia.com/deploy/cuda-compatibility/)
+- [NVIDIA H100 Tensor Core GPU](https://www.nvidia.com/en-us/data-center/h100/)
+- [NVIDIA CUDA Samples on NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/k8s/containers/cuda-sample)
+- [NVIDIA Kubernetes Device Plugin](https://github.com/NVIDIA/k8s-device-plugin)
+- [Kubernetes SIG Node Feature Discovery](https://github.com/kubernetes-sigs/node-feature-discovery)
+- [Container Device Interface Specification](https://github.com/cncf-tags/container-device-interface)
+- [Prometheus Operator Getting Started](https://prometheus-operator.dev/docs/developer/getting-started/)
+- [Grafana NVIDIA DCGM Exporter Dashboard](https://grafana.com/grafana/dashboards/12239-nvidia-dcgm-exporter-dashboard/)
+- [Grafana Dashboard APIs](https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/dashboard/)
 
 ## Next Module
 
