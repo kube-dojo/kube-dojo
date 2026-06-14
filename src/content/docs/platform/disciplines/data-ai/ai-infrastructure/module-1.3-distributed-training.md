@@ -241,8 +241,12 @@ NCCL_MAX_NCHANNELS=12          # Maximum parallel channels
 NCCL_BUFFSIZE=8388608          # Buffer size per channel (8MB)
 
 # GPUDirect
-NCCL_NET_GDR_LEVEL=5           # GPUDirect RDMA level (5 = across PCIe switches)
-NCCL_P2P_LEVEL=5               # Peer-to-peer level (intra-node)
+NCCL_NET_GDR_LEVEL=SYS         # GPUDirect RDMA across SMP interconnect (always enabled)
+NCCL_P2P_LEVEL=SYS             # P2P across NUMA nodes via SMP interconnect (always enabled)
+
+# Note: Use STRING identifiers (LOC, PIX, PXB, PHB, SYS) rather than legacy integer
+# values. Integer values are discouraged by the NCCL docs — path-type IDs can change
+# across NCCL releases. Values above 4 (e.g., 5) are treated as SYS regardless.
 
 # Debugging
 NCCL_DEBUG=INFO                # Logging: WARN, INFO, TRACE
@@ -337,17 +341,19 @@ spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "type": "ib-sriov",
-      "pkey": "0x00FF",
+      "type": "sriov",
       "link_state": "enable",
-      "rdmaIsolation": true,
-      "ibKubernetesEnabled": true,
       "ipam": {
         "type": "whereabouts",
         "range": "192.168.20.0/24"
       }
     }
 ```
+
+For InfiniBand fabrics, plugins such as `ib-sriov-cni` (Mellanox/NVIDIA) add InfiniBand-specific
+fields — partition keys, RDMA isolation, and IB-address management — on top of the standard SR-IOV
+CNI. Consult your fabric vendor's CNI plugin documentation when deploying on InfiniBand; the standard
+`sriov` CNI shown here is a valid starting point for RoCE-over-Ethernet environments.
 
 The host-device style is the most direct of the examples because a specific host device is attached into the pod. It can be useful for controlled environments and diagnostics, but it reduces scheduling flexibility because the pod now depends on a particular local device name. If you use this model, node labels and admission controls should prevent jobs from landing on nodes that cannot satisfy the device assumption.
 
@@ -411,6 +417,14 @@ You should also decide how secondary networks are requested by tenants. Letting 
 ## Training Operators, Placement, and Failure Recovery
 
 Kubeflow Training Operator turns distributed training from a hand-managed set of pods into declarative job resources. It does not remove the need to understand PyTorch, MPI, NCCL, or networking, but it gives Kubernetes a controller that can create the right launcher, master, and worker pods for each framework style. That controller becomes the place where restart policy, replica counts, clean-up behavior, and framework-specific launch conventions are expressed consistently.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> The examples in this section use **Kubeflow Training Operator v1.8.1**, which is the legacy API.
+> The project has been renamed `kubeflow/trainer`; v2.x (latest: v2.2.0, March 2026) introduces
+> breaking changes: `nprocPerNode` is removed from the Torch API, and `ElasticPolicy` is removed
+> entirely. The v1 PyTorchJob and MPIJob examples still work on v1.8.1, but new deployments should
+> use the v2 Trainer API. See the [v2 migration guide](https://github.com/kubeflow/trainer#kubeflow-training-operator-v1).
 
 | CRD | Framework | Communication |
 |-----|-----------|---------------|
@@ -663,7 +677,11 @@ Failure recovery is not optional for multi-day training because the probability 
 
 > **Pause and predict**: If one node fails in a 128-node training group, can the remaining workers keep training immediately, or do they need a new rendezvous and checkpoint decision?
 
-| Failure | Frequency (per 1000 GPU-hours) | Impact |
+> Representative ranges observed across large GPU operators; your cluster hardware,
+> workload profile, and maintenance practices will produce different values.
+> Use these as order-of-magnitude reference, not as a prediction for any specific cluster.
+
+| Failure | Typical Observed Range (per 1000 GPU-hours) | Impact |
 |---------|-------------------------------|--------|
 | GPU Xid errors (recoverable) | 2-5 | Training step fails, retry |
 | GPU fallen off bus (Xid 79) | 0.5-1 | Node reboot required |
@@ -709,10 +727,10 @@ kind: PyTorchJob
 metadata:
   name: elastic-training
 spec:
+  maxRestarts: 10           # Total restart budget (spec-level field)
   elasticPolicy:
     minReplicas: 2        # Minimum workers to continue training
     maxReplicas: 8        # Maximum workers if available
-    maxRestarts: 10       # Total restart budget
     rdzvBackend: c10d
   pytorchReplicaSpecs:
     Worker:
@@ -1221,6 +1239,7 @@ You have completed this exercise when:
 - [SR-IOV Network Device Plugin](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin)
 - [Kubeflow Training Operator](https://www.kubeflow.org/docs/components/training/)
 - [Kubeflow PyTorchJob guide](https://www.kubeflow.org/docs/components/training/user-guides/pytorch/)
+- [Kubeflow Trainer v2 migration guide](https://github.com/kubeflow/trainer#kubeflow-training-operator-v1)
 - [PyTorch torchrun elastic launch](https://pytorch.org/docs/stable/elastic/run.html)
 - [PyTorch distributed package](https://pytorch.org/docs/stable/distributed.html)
 - [AWS EC2 placement groups](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/placement-groups.html)
