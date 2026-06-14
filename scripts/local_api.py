@@ -9170,6 +9170,44 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             slug=slug_part,
             limit=limit_val,
         ), "application/json; charset=utf-8"
+    if path == "/api/telemetry/tool-timings":
+        from telemetry_store import build_tool_timing_payload
+
+        window_raw = query.get("window", ["1h"])[0] or "1h"
+        tool_raw = query.get("tool", [None])[0]
+        return 200, build_tool_timing_payload(
+            repo_root,
+            window=str(window_raw),
+            tool=tool_raw,
+        ), "application/json; charset=utf-8"
+    if path == "/api/telemetry/runtime/usage":
+        from runtime_usage import build_runtime_usage_payload
+
+        days_raw = query.get("days", ["7"])[0]
+        agent_raw = query.get("agent", [None])[0]
+        task_class_raw = query.get("task_class", [None])[0]
+        try:
+            days_val = int(days_raw)
+        except (TypeError, ValueError):
+            days_val = 7
+        return 200, build_runtime_usage_payload(
+            repo_root,
+            days=days_val,
+            agent=agent_raw or None,
+            task_class=task_class_raw or None,
+        ), "application/json; charset=utf-8"
+    if path == "/api/telemetry/runtime/recent":
+        from runtime_usage import build_runtime_recent_payload
+
+        limit_raw = query.get("limit", ["50"])[0]
+        try:
+            limit_val = int(limit_raw)
+        except (TypeError, ValueError):
+            limit_val = 50
+        return 200, build_runtime_recent_payload(
+            repo_root,
+            limit=limit_val,
+        ), "application/json; charset=utf-8"
     decision_page = _DECISION_ROUTES.route_decision_page_request(
         repo_root,
         path,
@@ -9596,6 +9634,20 @@ def route_post_request(
         except ValueError as exc:
             return 400, {"error": str(exc)}, "application/json; charset=utf-8"
         return 200, {"ok": True, "run_id": run_id}, "application/json; charset=utf-8"
+    if path == "/api/telemetry/tool-timings":
+        from telemetry_store import ingest_tool_timing
+
+        if not body_bytes:
+            return 400, {"error": "empty body"}, "application/json; charset=utf-8"
+        try:
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return 400, {"error": "invalid JSON"}, "application/json; charset=utf-8"
+        try:
+            ingest_tool_timing(repo_root, payload)
+        except ValueError as exc:
+            return 400, {"error": str(exc)}, "application/json; charset=utf-8"
+        return 200, {"ok": True}, "application/json; charset=utf-8"
     return 404, {"error": "not_found", "path": path}, "application/json; charset=utf-8"
 
 
