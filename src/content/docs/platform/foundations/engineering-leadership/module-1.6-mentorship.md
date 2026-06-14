@@ -526,5 +526,5 @@ All sources were selected for their focus on durable principles rather than tran
 
 ## Next Module
 
-Return to the [Engineering Leadership README](../README.md) for the full module index and learning path.
+This is the final module in the Engineering Leadership section. Return to the [Engineering Leadership overview](/platform/foundations/engineering-leadership/) for the full module index and to continue your Platform Foundations learning path.
 
