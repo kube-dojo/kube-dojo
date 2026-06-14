@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 149 — #1957 ai-infra fix wave + leadership expand wave</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:940px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.55rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.18rem;margin-top:1.7rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}.mono{font-family:ui-monospace,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 149 — #1957 ai-infra fix wave + leadership expand wave</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Type:</strong> curriculum content (two full waves) · <strong>Merged:</strong> <strong>#1971</strong> (ai-infrastructure 6-module fix wave, all CI green) · <strong>#1972</strong> (core-platform/leadership 5-module expand T3→T0, all CI green) · <strong>Closed:</strong> <strong>#1957</strong> (ai-infrastructure fix wave) · <strong>Advanced:</strong> <strong>#1953</strong> (Platform Disciplines — 2 sections now done: data-ai/ai-infrastructure + core-platform/leadership). <strong>DO FIRST next session:</strong> continue #1953 in curriculum order → <code>core-platform/platform-engineering</code> (2: modules 2.3, 2.4), then <code>core-platform/sre</code> (5 — sweep to confirm flips-vs-expands), then data-ai/aiops (3)… Then #1911 UK, #1876 AI-history review.</p>
+
+<h2>Session shape</h2>
+<p>Fresh standalone orchestrator session. Cold-start clean. The s148 handoff queued <strong>#1957 ai-infrastructure as DO-FIRST</strong>; did that end-to-end, then continued straight into the next #1953 section (leadership) on the user's "keep working" signal. Two complete author→review→fix→consolidate→build→finalize waves shipped this session. 11 modules touched total (6 fixed + 5 expanded).</p>
+
+<h2>1. #1957 — ai-infrastructure FIX wave (PR #1971, MERGED → #1957 CLOSED)</h2>
+<p>6 <code>data-ai/ai-infrastructure</code> modules (1.1–1.6) were <code>shipped_unreviewed</code> at score 5.0 / verifier T0 — but all 6 (gemini-3.1-pro authored, never reviewed) carried multiple verifier-blind P1 defects (the cross-family reviews ran in s146; this session collected the verdicts, ground-checked, fixed). Treated as a FIX wave, not flips.</p>
+<table>
+<tr><th>Module</th><th>Fixer</th><th>Key fixes (ground-checked vs live APIs)</th></tr>
+<tr><td>1.1 gpu-provisioning</td><td>codex</td><td>GPU Operator v24.9.0→dated snapshot+RELEASE_TAG v26.3.2; non-runnable <code>cuda-sample:nbody-cuda12.5.0</code> (NGC <strong>404</strong>)→<code>:nbody</code> (verified 200); lspci→pciutils; Grafana stub import; XID field desc; H100 SKU power</td></tr>
+<tr><td>1.2 gpu-scheduling</td><td>cursor</td><td>PCIe Gen4 16→32 GB/s; MIG admin-drains-first; gcloud <code>collocated</code>; Karpenter v1 EC2NodeClass; MPS <code>devices:all</code>; DRA <code>resource.k8s.io/v1</code>; time-slicing 100ms; DRA GA-1.34</td></tr>
+<tr><td>1.3 distributed-training</td><td>deepseek</td><td>maxRestarts→PyTorchJobSpec level; NCCL_*_LEVEL→SYS string IDs; Training-Operator v1→v2 legacy callout; ib-sriov→sriov</td></tr>
+<tr><td>1.4 ai-storage</td><td>cursor</td><td>Llama-3 figures (240PB capacity+2TB/s); Fluid sandbox→Incubating 2026-01-08; AlluxioRuntime MEM/SSD tiers; dated snapshot</td></tr>
+<tr><td>1.5 llm-serving</td><td>codex</td><td>KV-cache GQA formula; vLLM v0.6.5→<strong>v0.23.0</strong> (tag 200); <code>--shutdown-timeout</code>; scale-to-zero external signal; ServiceMonitor labels; TGI maintenance-mode; 13 P1 total</td></tr>
+<tr><td>1.6 ai-cost</td><td>cursor+orch</td><td>Kueue v0.9.1→<strong>v0.18.1</strong> + v1beta1→<strong>v1beta2</strong> (live-verified); pricing date-stamps; double <code>-n</code> kubectl</td></tr>
+</table>
+<p class="warn"><strong>Catch of the wave (1.6):</strong> the Kueue <code>v1beta1→v1beta2</code> bump is NOT a pure apiVersion swap — <code>ClusterQueue.spec.cohort</code> was <strong>renamed to <code>cohortName</code> in v1beta2</strong> (confirmed against the live v0.18.1 CRD, which ships both version blocks: <code>.spec.cohort</code> vs <code>.spec.cohortName</code>). cursor's first pass left <code>cohort:</code> → would CRD-error under v1beta2. Caught at orchestrator ground-check, corrected (2 lines). <strong>Lesson: every API-version bump needs a field-schema diff vs the live CRD, not just a string swap.</strong></p>
+<p>Method: collected the 6 s146 review verdicts from <code>logs/dispatch_responses/</code>; ≤3 concurrent fix dispatches (3 families); each finding ground-checked against live registry/CRD/release APIs (NGC manifest, Docker Hub tags, GitHub releases, Kueue CRD); opus-inline R2 (cross-family to each fixer); consolidated PR; <strong>required Astro build pass 4m58s</strong>; board → COMMITTED. Frontmatter byte-identical to main (Zod-safe).</p>
+
+<h2>2. core-platform/leadership — expand wave (PR #1972, MERGED, #1953 advanced)</h2>
+<p>Next #1953 section in curriculum order. All 5 were T3 stubs (~1700–2000 prose words, median_wpp 8.5–18, short-para 48–63%) → expanded to <strong>T0</strong> (5017–5462 words) on the durable spine, cross-family reviewed, ground-checked.</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>R2 (≠author, no gemini)</th></tr>
+<tr><td>1.1 platform-team-building</td><td>cursor</td><td>deepseek NEEDS_CHANGES (3 dead links) → fixed</td></tr>
+<tr><td>1.2 developer-experience</td><td>codex</td><td>cursor APPROVE (5 P2)</td></tr>
+<tr><td>1.3 platform-as-product</td><td>deepseek</td><td>cursor NEEDS_CHANGES (CNCF attr + dead SPACE DOI + Netflix link) → fixed</td></tr>
+<tr><td>1.4 adoption-migration</td><td>cursor</td><td>opus-inline APPROVE</td></tr>
+<tr><td>1.5 scaling-platform-org</td><td>codex</td><td>cursor APPROVE (6 P2)</td></tr>
+</table>
+<p class="warn"><strong>Catch of the wave:</strong> a comprehensive <code>curl</code> dead-link sweep across all 5 modules' source URLs caught <strong>3 dead URLs in 1.1</strong> (teamtopologies <code>key-concept-interaction-modes</code>, martinfowler <code>articles/team-topologies.html</code>, a thoughtworks article — all 404) and a <strong>malformed SPACE DOI</strong> (<code>10.1145/3454124</code> → <code>10.1145/3454122.3454124</code>) + <strong>generic-homepage Netflix link</strong> in 1.3. The verifier counts links/reports "reachable" but did not deep-check these. Fixed with curl-verified live replacements, <strong>dup-avoided</strong> in the Sources lists (e.g. dead <code>key-concept-interaction-modes</code> → <code>key-concepts</code> inline but <code>book</code> in Sources to stay distinct). Site-health CI then passed. <strong>Lesson: run a full curl sweep of every source URL on expand modules — don't trust the verifier's link count.</strong></p>
+<p>Durable spine taught: Team Topologies / Conway (1.1); DevEx framework·SPACE·DORA·golden-paths (1.2); platform-as-product·Bottcher·CNCF White Paper·JTBD (1.3); pull-vs-push·strangler-fig·Cartwright-Horn-Lewis·ADKAR (1.4); platform-of-platforms·federation·governance (1.5). Anti-fab clean across all (the org domain invites fake case studies — none found; all attributions real + web-verified).</p>
+
+<h2>Process notes / lessons</h2>
+<ul>
+<li><strong>Dead-link sweep is now a must-do on expand modules.</strong> Both waves had dead/wrong source URLs the verifier passed. A one-line <code>grep -hoE 'https?://…' | curl</code> loop catches them in seconds. Worth a CI guard or a verify_module enhancement.</li>
+<li><strong>API-version bumps need a CRD field-schema diff</strong> (Kueue cohort→cohortName). Don't sed apiVersion strings blindly.</li>
+<li><strong>opus-inline R2 economics:</strong> for cursor/codex-authored expands, reading via <code>git show HEAD:path</code> (stdout, no worktree CLAUDE.md re-injection) lets opus review without the ~50–150× subagent token cost. Used for 1.4.</li>
+<li><strong>deepseek review-harness flakiness:</strong> the 1.4 deepseek review landed in a browser-only harness with NO file access (couldn't read the worktree path) and bailed asking for the file — re-routed to opus-inline. deepseek's 1.1 review worked fine (found the real dead links). Inconsistent; prefer cursor/codex/opus for reviews when the verdict is load-bearing.</li>
+<li><strong>Reviewers read worktree files by absolute path</strong> (read-only, cwd=PRIMARY, TARGET=<code>.worktrees/…</code> abs path) — no need to push the branch first.</li>
+<li>Both waves: frontmatter byte-identical to main except <code>revision_pending:false</code> → Zod-safe; confirmed before push. fences/details balance checked.</li>
+</ul>
+
+<h2>Git/PR discipline</h2>
+<ul>
+<li>Every change via a dedicated worktree (<code>aifix-1.1…1.6</code>+<code>aifix-consolidate</code>, <code>ldr-1.1…1.5</code>+<code>ldr-consolidate</code>) — never branched in primary; primary stayed on <code>main</code>. All 14 worktrees + temp branches removed after merge. ff-only syncs.</li>
+<li>Two consolidated PRs (#1971, #1972), rebase-merged after full CI green (incl. the s147 required Astro build). Conventional commits with <code>#N</code> refs.</li>
+<li>Review records appended to <code>.pipeline/reviews/*.md</code> (gitignored — local board state; durable evidence is in the PRs + issues + this handoff). Stages reset UNAUDITED→COMMITTED via <code>scripts.quality.pipeline reset-stage</code>.</li>
+<li><code>.worktrees/g2-craft</code> (branch <code>gap-fill-g2-engineering-craft</code>, 1 unmerged research-brief commit #1623, no PR, from a prior session) left UNTOUCHED — not mine to clean.</li>
+</ul>
+
+<h2>Open items / next session</h2>
+<ul>
+<li><strong>#1953 next (curriculum order):</strong> <code>core-platform/platform-engineering</code> (2: modules 2.3, 2.4) → <code>core-platform/sre</code> (5 — board says needs_rewrite at score 5.0, likely already-dense FLIPS, sweep the LIVE files to confirm) → data-ai/aiops (3) → data-engineering (8) → mlops (1) → gitops (2) → iac (5) → release-engineering (5) → chaos-engineering (5) → devsecops (2) → networking (5). Then Toolkits (36).</li>
+<li><strong>P2 polish (optional, recorded on review records):</strong> leadership 1.2 (DORA 5th-metric currency note, quiz-answer phrasing) + 1.5 (maturity-model attribution clarifications). Not blocking; pick up in a continuous-improvement pass.</li>
+<li><strong>Consider a CI dead-link guard</strong> from this session's sweep (curl every source URL on changed content modules) — both waves needed it.</li>
+<li><strong>#1965</strong> still open: only the "make <code>Unit tests (vitest)</code> a required check" branch-protection admin toggle remains (user action).</li>
+<li><strong>#1876</strong> AI-history book review, <strong>#1911</strong> UK currency — still queued.</li>
+</ul>
+</body>
+</html>
