@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 147 — Git/GitHub hygiene + DoD render gate + esbuild security</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:940px;margin:2rem auto;padding:0 1rem;color:#1a1a2e}
+  h1{font-size:1.55rem;border-bottom:3px solid #4a7;padding-bottom:.4rem}
+  h2{font-size:1.18rem;margin-top:1.7rem;color:#2a5}
+  code{background:#f0f2f5;padding:.1em .35em;border-radius:3px;font-size:.9em}
+  .tldr{background:#eef7f0;border-left:4px solid #4a7;padding:.8rem 1rem;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid #d0d5dd;padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#f0f7f2}
+  .warn{background:#fff6e9;border-left:4px solid #e8a33d;padding:.7rem 1rem;border-radius:4px}
+  .ok{color:#2a7}.mono{font-family:ui-monospace,Menlo,monospace;font-size:.86rem}
+</style>
+</head>
+<body>
+<h1>Session 147 — Git/GitHub hygiene + DoD render gate + esbuild security</h1>
+<p class="tldr"><strong>Date:</strong> 2026-06-14 · <strong>Type:</strong> infra/hygiene (no curriculum content) · <strong>Merged:</strong> #1962 (DoD render gate, #1961) + #1964 (esbuild security, #1963) · <strong>Filed:</strong> #1965 (red i18n test + vitest-not-in-CI) · <strong>Branches:</strong> 48 local + 8 remote stale branches deleted. <strong>DO FIRST next session:</strong> <strong>#1959 'What's New' changelog catch-up</strong> (user chose a FRESH session for the public copy — still queued, untouched). Then resume the streams: quality (#1953 Platform Disciplines — ai-infra fix wave #1957 + #1952) and UK (#1911).</p>
+
+<h2>What this session did (user-directed: "maintain git and github hygiene")</h2>
+<p>User redirected from the queued #1959 to a hygiene pass, then shared the learn-ukrainian "declared ready while CI red" autopsy and asked whether KubeDojo had the same Definition-of-Done gaps. It did. Three threads, all closed:</p>
+
+<h2>1. Stale branch cleanup</h2>
+<p>Repo uses consolidated PRs from worktrees → working branches were never deleted. Verified every branch's content was actually in <code>main</code> (file-identity check vs <code>origin/main</code>, since squash-merges defeat <code>git branch --merged</code>) before deleting.</p>
+<ul>
+<li><strong>48 local deleted:</strong> <code>ai-ml/*</code> (10, #1842 CLOSED), <code>ckad-*</code> (20) + <code>cks-*</code> (8) (cert tracks done), <code>onprem-*</code> (6, #1881 CLOSED), <code>s113/devsecops-*</code> (3, #1821 CLOSED; main had the Miasma content + newer SHA pins), <code>pr-1813</code> (1, PR #1813 MERGED via a different branch).</li>
+<li><strong>8 remote deleted:</strong> <code>chore-gitignore-dotgemini</code> (PR #1838 closed; <code>.gemini/</code> already gitignored) + <code>onprem-sec-6.{1,2,3,5,6,7,8}</code> (all landed). Pruned orphaned <code>refs/remotes/local/</code>.</li>
+<li><strong>Kept:</strong> <code>main</code>, <code>gap-fill-g2-engineering-craft</code> (worktree, open #1623), <code>origin/dependabot/...</code> (open #1871). SHAs recorded in <code>/tmp/kubedojo-deleted-branches-20260614.txt</code>.</li>
+</ul>
+
+<h2>2. Definition-of-Done render gate (#1961 → PR #1962, MERGED)</h2>
+<p>Confirmed the same gap as the learn-ukrainian autopsy: <code>astro build</code> (full render + content-collection Zod schema validation) ran <strong>only in <code>deploy.yml</code> on <code>push:main</code></strong> (post-merge), so a frontmatter/schema or render break merged clean and broke <code>main</code> silently. It already bit once (CKS 5.2 <code>lab.difficulty: medium</code>). Required PR checks were only Incident-dedup + Site-health; <code>verify_module.py</code> checks density/tier, never the Zod schema.</p>
+<ul>
+<li><strong><code>.github/workflows/build-check.yml</code></strong> — full <code>npm ci</code> + <code>npm run build</code> on every PR. Fork-safe (no secrets, <code>contents: read</code>, <code>persist-credentials:false</code>), SHA-pinned, de-path-filtered (stable required check). Mirrors deploy.yml incl. <code>npm rebuild esbuild sharp --ignore-scripts=false</code>.</li>
+<li><strong><code>scripts/quality/verify_shippable.sh</code></strong> — one-command local DoD: density gate → astro build → green/red. Uses <code>.venv/bin/python</code> with fallback.</li>
+<li><strong><code>scripts/cold-start.sh</code></strong> — read-only <code>git fetch origin main</code> + behind-warn (never auto-pulls); bounded by <code>timeout</code>/<code>gtimeout</code> when present.</li>
+<li>Cross-family review: <strong>composer-2.5 (cursor) APPROVE</strong> with a full verified checklist + 2 P2s (both fixed: venv-python + portable fetch-timeout). <code>zizmor</code> clean. The PR's own build job self-tested (6m).</li>
+<li><strong>Branch protection updated:</strong> <code>Astro build (render + schema)</code> is now a <strong>required, blocking</strong> status check on <code>main</code> (alongside Incident-dedup + Site-health).</li>
+</ul>
+<p class="warn"><strong>Cost note:</strong> the build gate adds ~6 min to content-PR CI on a cold runner (npm ci + 1,999-page build). Acceptable for the safety; the <code>cache: 'npm'</code> warms it on repeats.</p>
+
+<h2>3. esbuild security override (#1963 → PR #1964, MERGED)</h2>
+<p>Two Dependabot alerts on transitive <strong>esbuild 0.27.4</strong> (<code>astro→vite→esbuild</code>): HIGH (Deno <code>NPM_CONFIG_REGISTRY</code> RCE) + LOW (Windows dev-server file read), both fixed only in <strong>0.28.1</strong>. Practical risk low (no Deno; Windows-only; build-time only) but fixed properly.</p>
+<ul>
+<li><strong>No upstream fix path</strong> (latest vite@7.3.5 still pins <code>esbuild ^0.27.0</code>) → npm <code>overrides</code> is the correct, sanctioned mechanism (repo already overrides <code>uuid</code>). esbuild 0.28's "breaking change" is only the install-path integrity check (the fix itself); the transform/build API vite uses is unchanged (web-verified vs changelog).</li>
+<li>Validated: <code>esbuild@0.28.1</code> everywhere (0× 0.27.x left); <code>astro build</code> green (2169 pages); new build gate green on the PR. Primary <code>node_modules</code> resynced (<code>npm ci</code> + rebuild).</li>
+<li><strong>Removal condition:</strong> drop the override once vite/astro's graph allows esbuild ≥0.28.1 natively.</li>
+</ul>
+
+<h2>Findings filed for next session</h2>
+<ul>
+<li><strong>#1965 — <code>npm test</code> is RED on <code>main</code> + vitest not in CI.</strong> While validating #1964, found <code>tests/homepage-i18n.test.ts</code> fails: UK <code>whereRows</code> (<code>src/i18n/homepage.ts:341</code>) links the AI track to <code>/ai/</code> (EN) because there is no <code>uk/ai</code> content; the test requires every UK href to start with <code>/uk/</code>. Pre-existing (fails identically on main pre-esbuild). It sat undetected because <strong>CI never runs vitest</strong> — same class as #1961. Needs an owner decision (allow EN-fallback for untranslated tracks vs hide vs translate) + a vitest PR gate.</li>
+<li class="warn"><strong>Dependabot PR #1871</strong> (npm-minor-patch group: astro 6.4.2→6.4.3, starlight 0.39.2→0.39.3, vitest, +shiki) is open and does NOT touch esbuild. Needs a local build before merge (Astro/Starlight bump → see <code>feedback_pr_ci_has_no_full_astro_build</code>); now also gated by the new CI build check. No auto-merge.</li>
+</ul>
+
+<h2>DO NEXT (unchanged streams + the queued #1959)</h2>
+<ol>
+<li><strong>#1959 — 'What's New' changelog catch-up (DO FIRST, FRESH session per the issue).</strong> EN <code>changelog.md</code> (Platform Foundations 7-section campaign + FinOps 6, since the 2026-06-07 entry, + a UK translation-status note) AND UK <code>uk/changelog.md</code> in Ukrainian (translation status + incoming EN content); cross-reference each other; tone-match. Stretch: software-watchlist staleness script.</li>
+<li><strong>#1953 Platform Disciplines</strong> — 54 modules remain (curriculum order). Next: <strong>ai-infrastructure FIX wave #1957</strong> (6 defective gemini-authored modules, verifier-blind P1s) + core-platform/leadership (5) → sre (5 expands) → … See the s146 handoff for the per-section order and the loop (≤3 authors → opus-inline review NO gemini → ground-check + web-verify → consolidated PR → build PRIMARY → reset-stage). Then Toolkits (36).</li>
+<li><strong>#1965</strong> — fix the red i18n test + add a vitest CI gate (sibling of the #1961 DoD work).</li>
+<li><strong>#1911 UK</strong> stream; <strong>#1876</strong> AI-history book review stays deferred.</li>
+</ol>
+
+<h2>Process notes / lessons</h2>
+<ul>
+<li>Cross-family review dispatch hit the <em>empty-response</em> failure mode on cursor once (re-routed to codex, which orphaned via a nested <code>&amp; | tail</code> inside a backgrounded Bash — avoid nesting backgrounding). The late-arriving cursor verdict landed in the redirect file (the redirect-banner trap: first read caught only the banner).</li>
+<li>Reading any file inside <code>.worktrees/</code> re-injects the whole CLAUDE.md+rules bundle (~15–20K tokens) — edit worktree files blind where possible (I used a python textual replace for package.json).</li>
+<li>Memory <code>feedback_pr_ci_has_no_full_astro_build</code> updated (its headline was now FALSE — the gate exists) + MEMORY.md index line.</li>
+</ul>
+</body>
+</html>

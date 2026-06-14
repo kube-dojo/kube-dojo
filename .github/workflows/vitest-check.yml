@@ -1,0 +1,48 @@
+name: Unit tests (vitest)
+
+# THE TEST GATE (#1965). `npm test` (vitest) ran nowhere in CI, so a red test
+# sat on `main` undetected (the homepage-i18n /ai/ EN-fallback assertion). Same
+# class as the render gate (#1961, build-check.yml): a gate that does not run
+# lets breaks land silently. This job runs the vitest suite as a PR check.
+#
+# No `paths:` filter — a path-filtered required check never reports on PRs that
+# miss those paths, leaving them permanently BLOCKED (the CodeQL/PR #1742
+# deadlock; see build-check.yml / link-check.yml). Tests guard cross-cutting
+# invariants (i18n parity, Russicisms), so always-on is correct. It needs NO
+# secrets and NO write scope, so it runs safely on fork PRs too.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  vitest:
+    name: Unit tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # .npmrc sets ignore-scripts=true (supply-chain hardening, #1812). vitest
+      # transforms the TypeScript test imports via esbuild, whose native binary
+      # is a no-op stub under ignore-scripts — re-enable scripts for JUST this
+      # audited native dep so the suite can run. Mirrors build-check.yml.
+      - name: Rebuild allow-listed native deps
+        run: npm rebuild esbuild --ignore-scripts=false
+
+      - name: Run tests (vitest)
+        run: npm test

@@ -56,8 +56,16 @@ describe('Homepage translations', () => {
     expect(translations.en.langSwitchHref).toBe('/uk/');
   });
 
-  it('uk whereRows hrefs include /uk/ prefix', () => {
+  // EN-fallback allowlist: tracks with no uk/ translation yet. Linking these to
+  // /uk/<track>/ would 404 (no content exists), so the UK homepage intentionally
+  // points them at the EN page until a translation lands. Starlight serves the EN
+  // page under the same URL. Remove an entry here once uk/<track> content exists.
+  // See #1965 (owner decision: accept EN fallback for untranslated tracks).
+  const UK_EN_FALLBACK_HREFS = ['/ai/', '/ai-ml-engineering/'];
+
+  it('uk whereRows hrefs include /uk/ prefix (except documented EN-fallback tracks)', () => {
     for (const row of translations.uk.whereRows) {
+      if (UK_EN_FALLBACK_HREFS.includes(row[2])) continue; // documented untranslated track — EN fallback
       expect(row[2], `UK href "${row[2]}" should start with /uk/`).toMatch(/^\/uk\//);
     }
   });
