@@ -1346,5 +1346,5 @@ Return to the [Chaos Engineering README]() to review the complete discipline, ex
 - [Google SRE Workbook — Canarying Releases](https://sre.google/workbook/canarying-releases/) — Chapter on canarying and progressive delivery, including how analysis steps can incorporate resilience verification.
 - [Argo Rollouts — Analysis and Progressive Delivery](https://argo-rollouts.readthedocs.io/en/stable/features/analysis/) — How Argo Rollouts analysis templates can run Prometheus queries to gate canary promotion, relevant to chaos-as-analysis integration.
 - [Chaos Engineering (book)](https://www.oreilly.com/library/view/chaos-engineering/9781492043850/) — O'Reilly book by Casey Rosenthal and Nora Jones; the chapter on automation covers CI/CD integration and continuous verification.
-- [Chaos Engineering (Wikipedia)](https://en.wikipedia.org/wiki/Chaos_engineering) — Overview of the discipline, its history, and Netflix's Chaos Monkey origins.
+- [Chaos Engineering (Wikipedia)](https://en.wikipedia.org/wiki/Chaos_engineering) — Overview of the discipline, its history, and Netflix's Chaos Monkey<!-- incident-xref: netflix-chaos-monkey --> origins.
 - [Chaos Mesh GitHub](https://github.com/chaos-mesh/chaos-mesh) — Source repository for Chaos Mesh; CNCF incubating project.
