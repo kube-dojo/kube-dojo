@@ -3,287 +3,156 @@ title: "Module 1.2: Apache Kafka on Kubernetes (Strimzi)"
 slug: platform/disciplines/data-ai/data-engineering/module-1.2-kafka
 sidebar:
   order: 3
+revision_pending: false
 ---
 > **Discipline Module** | Complexity: `[COMPLEX]` | Time: 3.5 hours
-
-## Prerequisites
-
-Before starting this module:
-- **Required**: [Module 1.1 — Stateful Workloads & Storage Deep Dive](../module-1.1-stateful-workloads/) — StatefulSets, Operators, storage fundamentals
-- **Required**: Understanding of distributed systems concepts (replication, partitioning, consensus)
-- **Recommended**: Experience with any messaging or event system (RabbitMQ, SQS, Pub/Sub, etc.)
-- **Recommended**: Familiarity with TLS certificates and mutual authentication concepts
-
----
 
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
-- **Implement Apache Kafka on Kubernetes using Strimzi operator with proper broker and ZooKeeper configuration**
+- **Implement Apache Kafka on Kubernetes using Strimzi with proper broker, controller, storage, and KRaft configuration**
 - **Design Kafka cluster topologies that balance throughput, durability, and availability requirements**
 - **Configure topic partitioning, replication, and retention policies for production streaming workloads**
-- **Diagnose Kafka performance issues — consumer lag, under-replicated partitions, broker imbalance — in Kubernetes**
+- **Diagnose Kafka performance issues including consumer lag, under-replicated partitions, broker imbalance, and Kubernetes placement failures**
+
+You should already understand the StatefulSet and storage ideas from [Module 1.1: Stateful Workloads & Storage Deep Dive](../module-1.1-stateful-workloads/). Kafka is a stateful distributed system, so the same primitives matter here: stable identity, persistent volumes, predictable scheduling, and careful recovery behavior. Familiarity with replication, partitioning, and basic event-driven architecture will help, but the module rebuilds the Kafka-specific mental model from first principles before it asks you to operate anything.
 
 ## Why This Module Matters
 
-Every modern data platform has Kafka at its center. Not sometimes — virtually always.
+Kafka is easy to describe badly as "a message broker," but that description hides the thing that makes it important to data platforms. A queue usually treats a message as a work item that disappears after successful processing. Kafka treats events as an ordered, replayable log, which means many independent consumers can read the same history at their own pace, rebuild derived state, recover after outages, and add new downstream systems without asking every producer to change. That replay property is why Kafka shows up beside streaming analytics, change data capture, lakehouse ingestion, audit trails, machine learning feature pipelines, and event-driven service integration.
 
-LinkedIn built Kafka in 2011 to solve a specific problem: connecting hundreds of microservices without point-to-point spaghetti. Today, over 80% of Fortune 100 companies run Kafka. Netflix processes 7 million events per second through it. The New York Times uses it to deliver articles in real time. Uber routes every trip through Kafka.
+Hypothetical scenario: imagine a platform team that starts with one order service writing directly to one warehouse loader. The design feels simple until fraud detection, billing reconciliation, customer notifications, and a data science feature job all need the same order changes. Point-to-point integrations turn one producer into a traffic coordinator, and every downstream outage becomes a producer-side concern. A log-based design changes the shape of the problem: the producer records what happened once, and each consumer owns its pace, offset, retry policy, and failure handling.
 
-Running Kafka well is hard. Running Kafka on Kubernetes is harder — but also better, because Kubernetes solves Kafka's most painful operational challenges: broker replacement, rolling upgrades, certificate rotation, and configuration management.
+Running Kafka on Kubernetes is valuable for the same reason it is dangerous: Kubernetes is very good at replacing failed Pods, but Kafka brokers are not interchangeable stateless replicas. A broker owns partition replicas on disk, participates in leader election, exposes an identity that clients and peer brokers use, and must not lose its local storage just because a container restarted. Kubernetes can provide those guarantees through StatefulSets, persistent volumes, Pod disruption controls, anti-affinity, and declarative reconciliation, but only when the Kafka operator maps Kafka's failure model onto Kubernetes deliberately.
 
-The Strimzi Operator is the CNCF-incubating project that makes Kafka on Kubernetes a first-class experience. It manages the entire Kafka lifecycle through Kubernetes Custom Resources, turning what used to be weeks of manual work into a single YAML file.
+Strimzi is the running example in this module because it is a Kubernetes operator built specifically for Kafka lifecycle management. The durable lesson is not "always run this exact version of this exact operator." The durable lesson is that Kafka needs an operator-aware control plane that can coordinate brokers, topics, users, certificates, listeners, node pools, rolling upgrades, rebalances, and storage without treating every restart as a disposable Deployment rollout. Strimzi gives us concrete custom resources to inspect while we learn those operational boundaries.
 
-This module teaches you to deploy, configure, secure, and operate a production-grade Kafka cluster on Kubernetes using Strimzi.
+Operationally, Kafka also forces a platform team to connect infrastructure work with data ownership. A broker restart, a topic retention change, a schema compatibility mode, and a consumer offset reset can all change what downstream teams observe. That means Kafka cannot be owned only as "the cluster" and ignored as "the data." Healthy platforms define who owns each topic, which consumers are allowed to replay, how breaking schema changes are reviewed, what retention means for recovery, and how incident responders decide whether to preserve availability or reject unsafe writes.
 
----
+> **The Library Ledger Analogy**
+>
+> Think of Kafka as a library ledger rather than a delivery truck. A delivery truck hands one package to one recipient and then the package is gone. A ledger records a durable sequence of entries, and many readers can independently keep bookmarks in that same sequence. Partitions are separate ledger books, offsets are bookmarks, replicas are copies of each book, and consumer groups are teams that divide the reading work without changing the ledger itself.
 
-## Did You Know?
+## The Log Abstraction
 
-- **Kafka was named after the author Franz Kafka** because Jay Kreps, its creator, thought a system optimized for writing deserved a writer's name. The name has no deeper connection to Kafka's literary themes.
-- **A single Kafka broker can sustain 800 MB/s of throughput** on appropriate hardware. That is roughly 2.8 TB per hour, per broker. Most performance problems are caused by misconfiguration, not Kafka's limits.
-- **KRaft mode eliminates ZooKeeper entirely.** Since Kafka 3.3, the metadata quorum runs inside the brokers themselves using the Raft consensus protocol. Strimzi fully supports KRaft, and ZooKeeper-based deployments are now deprecated.
+Jay Kreps' canonical writing on "the log" describes an append-only sequence as a unifying abstraction for real-time data systems. Kafka takes that idea and distributes it: producers append records to topic partitions, brokers store those partitions on disk, consumers read records by offset, and retention policies decide how long old records remain available. The important point is not that Kafka has files on disk. The important point is that the append-only structure lets systems separate "record the fact that something happened" from "decide every possible use for that fact today."
 
----
+A Kafka topic is a named stream, but the topic itself is not the unit of ordering or parallelism. A topic is split into partitions, and each partition is an ordered, immutable log. Within one partition, offsets increase as records are appended, so a consumer can say, "I have processed through offset N." Across partitions, Kafka does not provide a single total order. That tradeoff is intentional: one global order would make the log simpler to reason about, but it would also turn the topic into a single serialization point.
 
-## Kafka Architecture: The 10-Minute Version
+Records normally have a key, value, timestamp, and headers. The key matters because producers use it to choose the partition unless you override the partitioner. If all events for `customer-123` use the same key, they land in the same partition and preserve per-customer order. If keys are missing or poorly chosen, Kafka can spread records more evenly, but the application loses entity-level ordering. Good Kafka design starts with the question "what must be ordered together?" rather than "how many partitions can I create?"
 
-### Core Concepts
+Offsets are not acknowledgments stored inside the record. They are positions in a partition, and consumer groups commit their progress separately. That separation is powerful because two consumer groups can read the same topic independently. The fraud detector can be caught up, the warehouse loader can be behind, and a new backfill job can start from the beginning without changing producer behavior. It is also why lag is such an important signal: lag tells you the distance between the latest produced offsets and the offsets a consumer group has committed.
 
-Kafka is a **distributed commit log**. Producers append messages to the end of the log. Consumers read from the log at their own pace. The log is durable, ordered, and replayable.
+Retention makes Kafka different from a traditional queue. With delete retention, records age out by time or size. With compaction, Kafka keeps the latest value for each key and may remove older values for the same key. Delete retention fits event histories such as orders, clicks, or telemetry. Compaction fits changelog-like topics such as user profiles, feature flags, or table snapshots where the current value by key matters more than every intermediate update. Many production platforms use both patterns side by side.
 
-```mermaid
-flowchart TD
-    Producers -->|Network| Cluster
-    Cluster -->|Network| Consumers
-    
-    subgraph Cluster[Kafka Cluster]
-        direction LR
-        subgraph B0[Broker 0]
-            T0_P0["Topic A<br>Part 0 ★"]
-            T0_P1["Topic A<br>Part 1"]
-        end
-        subgraph B1[Broker 1]
-            T1_P1["Topic A<br>Part 1 ★"]
-            T1_P2["Topic A<br>Part 2"]
-        end
-        subgraph B2[Broker 2]
-            T2_P2["Topic A<br>Part 2 ★"]
-            T2_P0["Topic A<br>Part 0"]
-        end
-    end
-    
-    classDef leader fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724;
-    class T0_P0,T1_P1,T2_P2 leader;
-```
+The log abstraction also explains why Kafka is useful even when no consumer is ready at the moment an event is produced. A new team can add a consumer tomorrow and read retained history. A broken consumer can restart and resume from its committed offset. A stream processor can rebuild state after a redeploy by replaying input topics. This is the platform engineering reason to treat Kafka as shared infrastructure: the value is not just high throughput, but controlled decoupling between producers, consumers, and time.
 
-*(★ indicates the Partition Leader; unmarked boxes are follower replicas)*
+## Landscape Snapshot
 
-**Key terms:**
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> Apache Kafka's documentation site exposes 4.3 docs, while Strimzi's latest operator documentation is 1.0.0 and its example manifests use Kafka 4.2.0 images. Kafka 4.0 and later run in KRaft mode without ZooKeeper integration, and Strimzi removed support for ZooKeeper-based Kafka clusters starting with the 0.46 line. The durable lesson is to design for KRaft controller quorums and node pools; the exact Kafka and Strimzi versions belong in release notes, platform standards, and upgrade runbooks.
 
-| Concept | What It Is | Analogy |
-|---------|-----------|---------|
-| **Broker** | A Kafka server process | A librarian managing shelves |
-| **Topic** | A named stream of records | A bookshelf for one subject |
-| **Partition** | An ordered, immutable log within a topic | A single shelf on the bookshelf |
-| **Replica** | A copy of a partition on another broker | A backup copy of that shelf |
-| **Leader** | The replica that handles reads/writes | The primary librarian for that shelf |
-| **Consumer Group** | A set of consumers sharing work | A reading club splitting chapters |
-| **Offset** | Position in the partition log | A bookmark |
+| Capability | Durable Meaning | Illustrative Options |
+|------------|-----------------|----------------------|
+| Streaming log | Replayable ordered partitions with offsets and retention | Apache Kafka, Redpanda-compatible APIs, cloud-managed Kafka offerings |
+| Lightweight messaging | Low-latency pub/sub or work dispatch with simpler operations | NATS, NATS JetStream, cloud queue services |
+| Stream processing | Stateful computation over event time and processing time | Flink, Kafka Streams, Spark Structured Streaming |
+| Schema governance | Compatibility checks between producers and consumers | Apicurio Registry, Confluent-compatible registries, cloud registries |
+| Cross-cluster replication | Disaster recovery, migration, or regional read copies | MirrorMaker 2, vendor-native replication features |
 
-### Why Partitions Matter
+This module uses Kafka and Strimzi as the worked example because they expose the core semantics clearly. The Rosetta view matters because platform engineers must avoid turning a curriculum module into vendor advocacy. If a workload only needs a small work queue, Kafka may be unnecessary operational weight. If a workload needs replayable partitions, independent consumer groups, long retention, and stream processing integration, Kafka's log model may be the right primitive even when a managed service runs the brokers for you.
 
-Partitions are Kafka's unit of parallelism. A topic with 12 partitions can be consumed by up to 12 consumers in a group simultaneously. More partitions = more throughput, but also more overhead.
+## Partitioning, Ordering, and Parallelism
 
-```mermaid
-flowchart LR
-    subgraph Topic[Topic: user-events]
-        direction TB
-        P0["Partition 0: [msg1] [msg2] [msg3] [msg4] [msg5]"]
-        P1["Partition 1: [msg6] [msg7] [msg8] [msg9]"]
-        P2["Partition 2: [msg10] [msg11] [msg12]"]
-    end
+Partitioning is Kafka's central design lever. A partition is the smallest unit that a consumer group can assign to one consumer at a time, which means a topic with six partitions can keep at most six consumers in one group busy. Adding more consumers than partitions can still help with rolling deploys or standby capacity, but it does not increase active read parallelism. Increasing partitions can improve throughput, yet it also increases metadata, file handles, leader election work, client connections, and rebalance complexity.
 
-    subgraph CG[Consumer Group 'analytics']
-        direction TB
-        CA["Consumer A reads ← Partition 0"]
-        CB["Consumer B reads ← Partition 1"]
-        CC["Consumer C reads ← Partition 2"]
-    end
+The hardest partitioning decisions are not arithmetic; they are semantic. If an order service emits `order-created`, `order-paid`, and `order-cancelled` events, the processor that builds an order timeline needs those events in order for each order. Keying by `order_id` gives that processor a coherent per-order stream. Keying by customer might preserve a broader customer timeline but concentrate heavy customers into hot partitions. Random keys spread load but break entity ordering. A platform standard should make teams state their ordering key explicitly during topic design.
 
-    P0 --> CA
-    P1 --> CB
-    P2 --> CC
-```
+Hot partitions are the common failure mode behind "Kafka is slow" reports. The cluster may have many brokers and the topic may have many partitions, but one key or one small key range can dominate write volume. Because all records for that key must remain in one partition to preserve order, the overloaded partition becomes the bottleneck while other partitions look healthy. The fix is rarely "add consumers." If the hot partition is still one partition, adding consumers to the same group cannot split it.
 
-> **Stop and think**: If a topic has 12 partitions, and your application scales up to 15 pods sharing the same consumer group, what happens to the remaining 3 pods?
+You can respond to skew in several ways, but each response changes semantics. You can choose a better key, such as `merchant_id` instead of a constant event type. You can shard a hot entity key by adding a suffix, such as `merchant_id + shard`, but then downstream consumers must reconstruct order carefully or accept weaker ordering. You can split the workload into separate topics so high-volume event families do not crowd out lower-volume ones. The correct answer depends on which order the business actually requires.
 
-Messages within a partition are strictly ordered. Messages across partitions have no ordering guarantee. If you need ordering for a specific entity (e.g., all events for user-123), use a partition key — Kafka hashes the key to determine the partition.
+Partition count also affects future operations. Kafka can increase a topic's partition count, but doing so changes key-to-partition mapping for many keys and can surprise consumers that assumed a stable mapping. Kafka cannot simply shrink a topic's partition count in place because offsets and ordering histories are partition-specific. That asymmetry makes initial partition planning important. Pick enough partitions for credible growth, but avoid using enormous counts as a substitute for understanding throughput, ordering, and operational overhead.
 
-### KRaft: Kafka Without ZooKeeper
+## Producers and Delivery Semantics
 
-Until Kafka 3.3, every Kafka cluster required a separate ZooKeeper ensemble to manage metadata (broker registration, topic configuration, partition leadership). This doubled operational complexity.
+Producer settings express the tradeoff between speed, durability, and duplicate handling. With `acks=0`, the producer does not wait for broker acknowledgment, so loss can be invisible. With `acks=1`, the leader acknowledges after writing locally, but a leader failure before followers catch up can still lose acknowledged records. With `acks=all`, the leader waits for the configured in-sync replica requirement before acknowledging, so the producer participates in the topic's durability policy. Critical event streams should treat `acks=all` as the normal starting point, not as a luxury.
 
-KRaft (Kafka Raft) moves metadata management inside the Kafka brokers themselves:
+`min.insync.replicas` is the broker-side partner to `acks=all`. A topic with replication factor three and `min.insync.replicas=2` can continue accepting acknowledged writes when one replica is unavailable, but it will reject writes if too few replicas remain in sync. That rejection is not Kafka being broken. It is Kafka choosing availability loss over acknowledged data loss. Platform teams need to explain this to application owners because the visible symptom is often producer errors during maintenance, while the real benefit is preserving the durability contract.
 
-```mermaid
-flowchart TD
-    subgraph Before[BEFORE: ZooKeeper mode]
-        direction TB
-        subgraph ZK[ZooKeeper Cluster]
-            direction LR
-            Z1[ZK] --- Z2[ZK] --- Z3[ZK]
-        end
-        subgraph K1[Kafka Cluster]
-            direction LR
-            B0_1[B0] --- B1_1[B1] --- B2_1[B2]
-        end
-        ZK --> K1
-    end
+Idempotent producers reduce duplicates caused by retries. Kafka assigns producer sequence information so the broker can detect retried sends for a partition and avoid appending duplicates from the same producer session. Transactions extend the idea across multiple partitions and offset commits, allowing a consume-process-produce pipeline to write output records and commit input offsets atomically. This is what people usually mean when they say Kafka supports exactly-once processing, but the phrase deserves caution.
 
-    subgraph After[AFTER: KRaft mode]
-        direction TB
-        subgraph K2[Kafka Cluster]
-            direction TB
-            CQ["Controller Quorum (KRaft)<br>Built into brokers"]
-            subgraph Brokers[Brokers]
-                direction LR
-                B0_2[B0] --- B1_2[B1] --- B2_2[B2]
-            end
-            CQ --- Brokers
-        end
-    end
-```
+"Exactly-once" in distributed systems is effectively-once behavior within a defined boundary, not magic removal of all duplicate risk everywhere. Kafka transactions can make Kafka-to-Kafka processing atomic when producers, consumers, brokers, and stream processors use the transaction protocol correctly. They do not automatically make an external payment API, email sender, or database write exactly-once. Once side effects leave Kafka, the application still needs idempotent writes, deduplication keys, transactional outbox patterns, or compensating logic.
 
-**KRaft advantages:**
-- Simpler operations (no ZooKeeper to babysit)
-- Faster controller failover (seconds vs. minutes)
-- Better scalability (millions of partitions)
-- Unified security model
+Batching and compression are the producer-side performance levers that most teams touch first. `batch.size` controls how much data a producer tries to batch per partition, `linger.ms` allows a small wait to fill batches, and compression reduces network and disk bytes at the cost of CPU. High-throughput analytics streams often benefit from larger batches and compression. Low-latency interactive workflows may choose smaller batches and lower linger. The platform standard should describe the tradeoff rather than mandate one universal setting.
 
-> **Pause and predict**: If a controller node fails in KRaft mode versus ZooKeeper mode, which one recovers faster and why?
+## Replication, ISR, and Durability
 
-Strimzi supports KRaft as the default deployment mode. All examples in this module use KRaft.
+Kafka replication happens at the partition level. Each partition has one leader replica that handles client reads and writes, plus follower replicas that fetch from the leader. The in-sync replica set, usually shortened to ISR, contains replicas that are caught up enough to be eligible for safe leadership and acknowledgment decisions. When a follower falls behind or disappears, it leaves the ISR. When it catches up, it can rejoin. This small piece of state drives many operational outcomes.
 
----
+Replication factor sets how many broker copies exist for a partition, but replication factor alone does not define durability. A topic with three replicas can still lose recently acknowledged records if producers use weak acknowledgments and the cluster elects a stale replica as leader after failure. The safer production pattern is replication factor three, `acks=all`, and `min.insync.replicas=2`, paired with careful broker placement across nodes or zones. That combination says, "do not acknowledge the write unless at least two in-sync replicas have it."
 
-## Strimzi: Kafka's Kubernetes Operator
+Unclean leader election is the availability-versus-durability emergency lever. If all in-sync replicas are unavailable, Kafka can either wait for an in-sync replica to return or elect an out-of-sync replica and risk losing acknowledged records. For critical data, unclean leader election should stay disabled so the cluster refuses unsafe leadership. For disposable telemetry where freshness matters more than perfect retention, a team might make a different choice deliberately. The key is that the choice belongs in a data classification policy, not in a copied default.
 
-### What Strimzi Manages
+Kubernetes placement directly affects Kafka durability. If three broker Pods land on the same worker node, a single node failure can remove every replica of some partitions. If brokers share one storage failure domain, persistent volumes can fail together. If PodDisruptionBudgets allow too many brokers to be evicted at once, maintenance can push topics below their ISR requirement. Kafka durability therefore depends on Kubernetes scheduling, storage classes, disruption policies, and node maintenance processes as much as it depends on Kafka configuration.
 
-Strimzi is not just a Helm chart that deploys Kafka. It is a full lifecycle manager that handles:
+Replication also has a cost. Followers fetch data from leaders, reassignments copy partition data between brokers, and recovery after a broker outage can create heavy network and disk traffic. A platform engineer should monitor under-replicated partitions, offline partitions, leader distribution, disk usage, and replication throughput. If a cluster is constantly catching up, the issue may be storage latency, network limits, overloaded brokers, aggressive rebalancing, or too many large partitions moving at the same time.
 
-| Lifecycle Phase | What Strimzi Does |
-|----------------|-------------------|
-| **Deployment** | Creates StatefulSets, Services, ConfigMaps, NetworkPolicies |
-| **Configuration** | Generates broker configs, validates settings, applies rolling changes |
-| **Security** | Auto-generates and rotates TLS certificates, manages SASL/SCRAM users |
-| **Scaling** | Adds/removes brokers, triggers partition rebalancing |
-| **Upgrades** | Rolling broker upgrades with automatic protocol version negotiation |
-| **Monitoring** | Deploys JMX exporters, creates Prometheus ServiceMonitors |
-| **Connectivity** | Configures external access via NodePort, LoadBalancer, Ingress, or Route |
+## Consumers, Groups, Offsets, and Lag
 
-### Strimzi Custom Resources
+Consumers read by polling partitions, and a consumer group coordinates multiple consumers so each partition is assigned to only one active consumer in that group. This is the mechanism that lets a Deployment with several Pods share work horizontally. If a Pod dies, the group rebalances and assigns its partitions elsewhere. If a new Pod joins, the group may rebalance again to spread partitions. Rebalancing is useful, but it is not free; it interrupts assignment and can cause duplicate processing if offset commits and processing are not designed carefully.
 
-Strimzi introduces several CRDs:
+Offset commits are the consumer's record of progress. Auto-commit is convenient because the client commits periodically, but it can commit before the application has durably finished processing a record. Manual commits give the application control, but they require discipline. For at-least-once processing, the usual pattern is process records first, make side effects idempotent, and commit offsets after success. If the consumer crashes after processing but before committing, it will process some records again after restart. That duplicate is the price of not losing work.
 
-```
-Kafka                    ─── The Kafka cluster itself
-KafkaNodePool            ─── Groups of broker nodes with distinct configs
-KafkaTopic               ─── Managed Kafka topics
-KafkaUser                ─── Managed Kafka users with ACLs
-KafkaConnect             ─── Kafka Connect clusters
-KafkaConnector           ─── Individual connectors within a Connect cluster
-KafkaMirrorMaker2        ─── Cross-cluster replication
-KafkaBridge              ─── HTTP bridge for REST-based access
-KafkaRebalance           ─── Cruise Control rebalancing proposals
-```
+At-most-once processing commits before processing or otherwise accepts that a crash can skip records. It can be appropriate for disposable metrics or cache warming, but it is wrong for financial, inventory, compliance, and state-building streams. At-least-once processing avoids skipping records but may duplicate them. Effectively-once processing combines Kafka transactions, idempotent sinks, or deterministic updates so repeated delivery does not corrupt results. The platform should name these semantics plainly because "the consumer reads Kafka" tells you almost nothing about correctness.
 
-### Deploying Strimzi
+Lag is the primary health signal for consumer groups, but it needs context. Offset lag counts how many records behind a group is; time lag estimates how old the unprocessed records are. A low-volume topic can have small offset lag but old data if no new records arrive, while a high-volume topic can have a large offset lag that represents only a short delay. Good dashboards show lag by group, topic, and partition, and they separate producer spikes from consumer failures. A single hot partition can hide behind healthy-looking group averages.
 
-```bash
-# Install Strimzi Operator (latest stable)
-kubectl create namespace kafka
-kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+Partition assignment strategy also shapes behavior. Eager rebalancing can revoke many partitions during membership changes, while cooperative strategies try to move fewer partitions incrementally. Static membership can reduce churn for stable Kubernetes Pods if the application gives each member a stable identity. These details are client-specific, but the durable lesson is broader: consumer group design is part of application architecture. Scaling Pods without understanding assignment, processing time, and offset policy can make lag worse rather than better.
 
-# Wait for the operator to be ready
-kubectl -n kafka wait --for=condition=Available \
-  deployment/strimzi-cluster-operator --timeout=180s
-```
+## Kafka on Kubernetes with Strimzi
 
-### A Production-Grade Kafka Cluster
+Kafka maps naturally to StatefulSets because brokers need stable names, stable network identity, and stable storage. A broker called `my-cluster-broker-0` must be able to return with the same persistent volume after a restart, because its local logs contain partition replicas. A headless service and StatefulSet identity let peer brokers and operators reason about the broker as a stable member rather than a disposable Pod. This is the same reason databases and consensus systems usually use StatefulSets instead of Deployments.
+
+Strimzi raises the abstraction from raw StatefulSets to Kafka-specific custom resources. A `Kafka` resource defines the cluster, listeners, security, common configuration, and optional components. A `KafkaNodePool` resource defines groups of nodes with broker and controller roles, storage, replicas, and resource requests. A `KafkaTopic` resource lets the Topic Operator reconcile topic partitions, replicas, and retention. A `KafkaUser` resource lets the User Operator manage credentials and ACLs. The operator turns those resources into StatefulSets, Services, Secrets, ConfigMaps, and rolling operations.
+
+KRaft mode changes the deployment mental model because Kafka's metadata quorum lives inside Kafka rather than ZooKeeper. Controller nodes manage cluster metadata and broker nodes serve partition data. Small development clusters may use dual-role nodes, where the same Pods act as controllers and brokers. Production clusters often separate controller and broker pools to isolate control-plane work from data-plane load. The exact node pool design depends on workload size and operational maturity, but every design must protect the controller quorum and broker storage.
+
+The Strimzi examples are intentionally declarative. You describe what the Kafka cluster should look like, and the operator reconciles toward that state. That does not mean every change is harmless. Changing storage, listener exposure, node pool roles, broker counts, or metadata versions can trigger rolling restarts, reassignments, or upgrade workflows. The operator removes a lot of manual shell work, but it does not remove the need to understand Kafka's failure domains. Declarative infrastructure is still infrastructure.
+
+Here is a compact lab-sized Strimzi cluster that follows the current CRD shape while keeping the deployment small enough to inspect. Production clusters need stronger resource sizing, storage classes, rack awareness, monitoring, backup planning, and change management, but the core resources are the same.
 
 ```yaml
-# kafka-cluster.yaml
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaNodePool
 metadata:
-  name: broker
-  namespace: kafka
+  name: dual-role
   labels:
-    strimzi.io/cluster: production
-spec:
-  replicas: 3
-  roles:
-    - broker
-  storage:
-    type: persistent-claim
-    size: 100Gi
-    class: fast-ssd
-    deleteClaim: false
-  resources:
-    requests:
-      cpu: "2"
-      memory: 8Gi
-    limits:
-      memory: 8Gi
-  template:
-    pod:
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  strimzi.io/cluster: production
-                  strimzi.io/kind: Kafka
-              topologyKey: kubernetes.io/hostname
----
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaNodePool
-metadata:
-  name: controller
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: production
+    strimzi.io/cluster: lab
 spec:
   replicas: 3
   roles:
     - controller
+    - broker
   storage:
-    type: persistent-claim
-    size: 20Gi
-    class: fast-ssd
-    deleteClaim: false
-  resources:
-    requests:
-      cpu: "1"
-      memory: 4Gi
-    limits:
-      memory: 4Gi
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 10Gi
+        kraftMetadata: shared
+        deleteClaim: false
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: Kafka
 metadata:
-  name: production
-  namespace: kafka
-  annotations:
-    strimzi.io/kraft: enabled
-    strimzi.io/node-pools: enabled
+  name: lab
 spec:
   kafka:
-    version: 3.9.0
-    metadataVersion: "3.9"
+    version: 4.2.0
+    metadataVersion: 4.2-IV1
     listeners:
       - name: plain
         port: 9092
@@ -293,387 +162,76 @@ spec:
         port: 9093
         type: internal
         tls: true
-        authentication:
-          type: tls
-      - name: external
-        port: 9094
-        type: nodeport
-        tls: true
-        authentication:
-          type: scram-sha-512
     config:
-      # Replication settings
       default.replication.factor: 3
       min.insync.replicas: 2
-      # Performance tuning
-      num.network.threads: 8
-      num.io.threads: 16
-      socket.send.buffer.bytes: 102400
-      socket.receive.buffer.bytes: 102400
-      socket.request.max.bytes: 104857600
-      # Log settings
-      log.retention.hours: 168            # 7 days
-      log.segment.bytes: 1073741824       # 1 GB segments
-      log.retention.check.interval.ms: 300000
-      # Topic defaults
-      num.partitions: 12
-      auto.create.topics.enable: false    # Explicit topic creation only
-    metricsConfig:
-      type: jmxPrometheusExporter
-      valueFrom:
-        configMapKeyRef:
-          name: kafka-metrics
-          key: kafka-metrics-config.yml
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      auto.create.topics.enable: false
   entityOperator:
-    topicOperator:
-      resources:
-        requests:
-          cpu: 250m
-          memory: 512Mi
-        limits:
-          memory: 512Mi
-    userOperator:
-      resources:
-        requests:
-          cpu: 250m
-          memory: 512Mi
-        limits:
-          memory: 512Mi
+    topicOperator: {}
+    userOperator: {}
 ```
 
-**Key configuration decisions explained:**
+Notice what this YAML does and does not promise. It gives each broker persistent storage and KRaft metadata, disables accidental topic creation, and sets safer replication defaults for internal and application topics. It does not promise zone spreading, external access, TLS client authentication, schema governance, or operational dashboards. Those are separate platform decisions. A common mistake is to call a cluster "production" as soon as it has three replicas. Three replicas are a starting point, not an operating model.
 
-| Setting | Value | Why |
-|---------|-------|-----|
-| `default.replication.factor: 3` | 3 copies of every partition | Survives loss of 1 broker without data loss |
-| `min.insync.replicas: 2` | At least 2 replicas must acknowledge writes | Prevents data loss when one replica is down |
-| `auto.create.topics.enable: false` | Topics must be created explicitly | Prevents typos from silently creating garbage topics |
-| `log.retention.hours: 168` | 7-day retention | Balance between replay capability and disk usage |
-| `num.partitions: 12` | Default 12 partitions per topic | Reasonable parallelism without excessive overhead |
+## Topics, Retention, and Schemas as Contracts
 
----
-
-## High Throughput vs Low Latency Configuration
-
-Kafka can be tuned for throughput or latency. These are opposing forces.
-
-### High Throughput Configuration
-
-When you need maximum messages per second (log aggregation, analytics pipelines):
+Topics should be treated as platform contracts. A topic name tells producers where to write, but partition count, replication factor, retention, compaction, schema compatibility, and ownership tell everyone what reliability and evolution behavior to expect. If teams can create topics accidentally through producer typos, the platform has no review point for those decisions. Disabling automatic topic creation and managing topics as code forces the right conversation before data starts flowing.
 
 ```yaml
-# In the Kafka CR spec.kafka.config
-config:
-  # Producer-side (configure in producer clients)
-  # batch.size: 65536              # 64 KB batches
-  # linger.ms: 50                  # Wait 50ms to fill batches
-  # compression.type: lz4          # Compress for throughput
-
-  # Broker-side
-  num.network.threads: 8           # Handle more concurrent connections
-  num.io.threads: 16               # More disk I/O threads
-  socket.send.buffer.bytes: 1048576    # 1 MB send buffer
-  socket.receive.buffer.bytes: 1048576 # 1 MB receive buffer
-  log.flush.interval.messages: 50000   # Batch disk flushes
-  replica.fetch.max.bytes: 10485760    # 10 MB replica fetch
-```
-
-### Low Latency Configuration
-
-When you need sub-10ms end-to-end latency (payment processing, real-time bidding):
-
-```yaml
-config:
-  # Producer-side (configure in producer clients)
-  # batch.size: 16384             # Small batches
-  # linger.ms: 0                  # Send immediately
-  # acks: 1                       # Acknowledge after leader write only
-  # compression.type: none        # No compression overhead
-
-  # Broker-side
-  num.network.threads: 16         # More threads for responsiveness
-  num.io.threads: 8               # Fewer I/O threads, less contention
-  socket.send.buffer.bytes: 65536
-  socket.receive.buffer.bytes: 65536
-  log.flush.interval.messages: 1  # Flush every message (if durability needed)
-```
-
-### The Tradeoff Spectrum
-
-```mermaid
-flowchart LR
-    HT([HIGH THROUGHPUT]) <--> LL([LOW LATENCY])
-```
-
-| Setting | High Throughput | Low Latency |
-|---------|-----------------|-------------|
-| **Batching** | Large batches | Small/no batches |
-| **linger.ms** | 50-200 | 0 |
-| **Compression** | lz4 / zstd | No compression |
-| **acks** | 1 | all |
-| **Buffers** | Bigger buffers | Smaller buffers |
-| **Requests** | Fewer, larger requests | Many, smaller requests |
-
-> **Stop and think**: If your trading application requires sub-millisecond response times, why might enabling `lz4` compression actually hurt your performance?
-
----
-
-## Schema Management
-
-### Why Schemas Matter
-
-Without schemas, producers and consumers are in a trust-based relationship. Producer sends JSON with field `user_id`. Consumer expects `userId`. Things break silently.
-
-Schemas enforce a contract between producers and consumers:
-
-```mermaid
-flowchart TD
-    P[Producer] -->|"Does my message match?"| SR[Schema Registry]
-    C[Consumer] -->|"What format should I expect?"| SR
-    SR -.->|"Is this compatible with v1?"| SR
-    P -->|"Message Payload"| C
-```
-
-### Apicurio Registry on Kubernetes
-
-Apicurio Registry is the open-source schema registry that works with Kafka (alternative to Confluent Schema Registry):
-
-```yaml
-# apicurio-registry.yaml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
 metadata:
-  name: apicurio-registry
-  namespace: kafka
+  name: orders.events
+  labels:
+    strimzi.io/cluster: lab
 spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: apicurio-registry
-  template:
-    metadata:
-      labels:
-        app: apicurio-registry
-    spec:
-      containers:
-        - name: registry
-          image: apicurio/apicurio-registry:3.0.4
-          ports:
-            - containerPort: 8080
-          env:
-            - name: APICURIO_STORAGE_KIND
-              value: kafkasql
-            - name: APICURIO_KAFKASQL_BOOTSTRAP_SERVERS
-              value: production-kafka-bootstrap.kafka.svc.cluster.local:9092
-          resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              memory: 512Mi
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: 8080
-            initialDelaySeconds: 15
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: apicurio-registry
-  namespace: kafka
-spec:
-  selector:
-    app: apicurio-registry
-  ports:
-    - port: 8080
-      targetPort: 8080
-```
-
-### Compatibility Modes
-
-| Mode | Rule | When To Use |
-|------|------|-------------|
-| **BACKWARD** | New schema can read old data | Default. Consumers upgrade first |
-| **FORWARD** | Old schema can read new data | Producers upgrade first |
-| **FULL** | Both backward and forward compatible | Most restrictive, safest |
-| **NONE** | No compatibility check | Never in production |
-
-> **Pause and predict**: If you choose `FORWARD` compatibility, which side of the stream (producers or consumers) must be upgraded with the new schema first?
-
----
-
-## Kafka Connect: Moving Data In and Out
-
-Kafka Connect is the framework for streaming data between Kafka and external systems without writing code.
-
-### Deploying Kafka Connect with Strimzi
-
-```yaml
-# kafka-connect.yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaConnect
-metadata:
-  name: data-connect
-  namespace: kafka
-  annotations:
-    strimzi.io/use-connector-resources: "true"  # Enable KafkaConnector CRs
-spec:
-  version: 3.9.0
+  partitions: 6
   replicas: 3
-  bootstrapServers: production-kafka-bootstrap:9093
-  tls:
-    trustedCertificates:
-      - secretName: production-cluster-ca-cert
-        pattern: "*.crt"
   config:
-    group.id: data-connect-cluster
-    offset.storage.topic: connect-offsets
-    config.storage.topic: connect-configs
-    status.storage.topic: connect-status
-    offset.storage.replication.factor: 3
-    config.storage.replication.factor: 3
-    status.storage.replication.factor: 3
-    key.converter: org.apache.kafka.connect.json.JsonConverter
-    value.converter: org.apache.kafka.connect.json.JsonConverter
-    key.converter.schemas.enable: false
-    value.converter.schemas.enable: false
-  build:
-    output:
-      type: docker
-      image: my-registry.io/kafka-connect:latest
-      pushSecret: registry-credentials
-    plugins:
-      - name: debezium-postgres
-        artifacts:
-          - type: tgz
-            url: https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz
-      - name: camel-s3
-        artifacts:
-          - type: tgz
-            url: https://repo1.maven.org/maven2/org/apache/camel/kafkaconnector/camel-aws-s3-sink-kafka-connector/4.8.2/camel-aws-s3-sink-kafka-connector-4.8.2-package.tar.gz
-  resources:
-    requests:
-      cpu: "1"
-      memory: 2Gi
-    limits:
-      memory: 2Gi
+    retention.ms: 604800000
+    cleanup.policy: delete
+    min.insync.replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: users.profile.current
+  labels:
+    strimzi.io/cluster: lab
+spec:
+  partitions: 6
+  replicas: 3
+  config:
+    cleanup.policy: compact
+    min.cleanable.dirty.ratio: 0.5
+    delete.retention.ms: 86400000
+    min.insync.replicas: 2
 ```
 
-### Example: CDC with Debezium
+The first topic is an event history. It uses delete retention because downstream consumers may need the sequence of changes for a bounded time window. The second topic is a compacted state topic. It preserves the latest value per key so consumers can rebuild the current user profile table without replaying every historical mutation. Neither policy is universally better. The retention policy should match the data product's semantics: history, state, audit, replay, recovery, or temporary buffering.
 
-Change Data Capture (CDC) streams database changes to Kafka in real time:
+Schema management protects consumers from accidental producer changes. Without a schema registry or compatibility process, one team can rename `customer_id` to `customerId`, change a numeric field to a string, or remove a field that a downstream consumer still requires. Kafka will happily store bytes either way. The registry's job is not to make data modeling bureaucratic. Its job is to make compatibility explicit, so a producer deployment cannot silently corrupt the data contract for every reader.
+
+Compatibility mode is a rollout strategy in disguise. Backward compatibility means new consumers can read old data, which supports upgrading consumers before producers. Forward compatibility means old consumers can read new data, which supports upgrading producers first. Full compatibility constrains both directions and is safer for heavily shared streams, but it may slow evolution. The platform should define defaults by topic class rather than leaving every service team to rediscover schema evolution during an incident.
+
+Kafka Connect and Debezium-style change data capture are common ways to move data into Kafka, while sink connectors move data out to warehouses, search indexes, object storage, and lakehouse tables. Connect is useful because connector workers, offsets, and task status become part of a managed runtime rather than custom application code in every team. It is still not "free integration." Connectors need schemas, secrets, capacity planning, dead-letter handling, and upgrade testing just like any other production workload.
+
+## Security and Access Boundaries
+
+Kafka security has several layers, and they solve different problems. TLS encrypts network traffic so records and credentials are not exposed in transit. Authentication proves which client is connecting, commonly through TLS client certificates, SASL/SCRAM, or OAuth integrations. Authorization controls which authenticated principal can read, write, describe, create, or administer resources. NetworkPolicies and listener choices control which network paths even reach the brokers. A secure platform uses all of these layers deliberately.
+
+Strimzi can generate cluster and client certificates and store them as Kubernetes Secrets. That default is convenient because the operator can rotate certificates and roll affected components as part of reconciliation. Some organizations require externally managed certificate authorities, and Strimzi can be configured for that kind of integration. The design question is operational ownership: whichever system issues certificates must also support rotation, expiry monitoring, emergency revocation, and clear responsibilities during broker or client failures.
 
 ```yaml
-# debezium-connector.yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaConnector
-metadata:
-  name: postgres-cdc
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: data-connect
-spec:
-  class: io.debezium.connector.postgresql.PostgresConnector
-  tasksMax: 1
-  config:
-    database.hostname: postgres.default.svc.cluster.local
-    database.port: 5432
-    database.user: debezium
-    database.password: "${file:/opt/kafka/external-configuration/db-credentials/password}"
-    database.dbname: orders
-    topic.prefix: cdc
-    plugin.name: pgoutput
-    publication.autocreate.mode: filtered
-    slot.name: debezium_slot
-    table.include.list: "public.orders,public.customers"
-    transforms: unwrap
-    transforms.unwrap.type: io.debezium.transforms.ExtractNewRecordState
-    transforms.unwrap.drop.tombstones: false
-    heartbeat.interval.ms: 10000
-```
-
-This creates topics `cdc.public.orders` and `cdc.public.customers` with every INSERT, UPDATE, and DELETE streamed in real time.
-
----
-
-## Securing Kafka: TLS, mTLS, and SCRAM
-
-### Security Layers
-
-```mermaid
-flowchart TD
-    subgraph Stack[KAFKA SECURITY STACK]
-        direction TB
-        A["Authorization (ACLs: who can do what)"]
-        B["Authentication (TLS, SCRAM, OAuth)"]
-        C["Encryption (TLS for data in transit)"]
-        D["Network (NetworkPolicies)"]
-        
-        D --- C --- B --- A
-    end
-```
-
-### Strimzi TLS: Automatic Certificate Management
-
-Strimzi automatically generates a CA and issues certificates:
-
-```mermaid
-flowchart LR
-    subgraph Strimzi[Strimzi Certificate Chain]
-        direction TB
-        CCA[Cluster CA] --> BC[Broker Certificates]
-        CCA --> CC[Controller Certificates]
-        CCA --> EOC[Entity Operator Cert]
-        
-        ClientCA[Client CA] --> KUC[KafkaUser Certificates]
-    end
-```
-
-Certificates are stored as Kubernetes Secrets and automatically rotated by the operator.
-
-### Creating Authenticated Users with ACLs
-
-```yaml
-# kafka-user-producer.yaml
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser
 metadata:
-  name: events-producer
-  namespace: kafka
+  name: orders-reader
   labels:
-    strimzi.io/cluster: production
-spec:
-  authentication:
-    type: scram-sha-512
-  authorization:
-    type: simple
-    acls:
-      - resource:
-          type: topic
-          name: user-events
-          patternType: literal
-        operations:
-          - Write
-          - Describe
-        host: "*"
-      - resource:
-          type: topic
-          name: user-events
-          patternType: literal
-        operations:
-          - Create
-        host: "*"
----
-# kafka-user-consumer.yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaUser
-metadata:
-  name: analytics-consumer
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: production
+    strimzi.io/cluster: lab
 spec:
   authentication:
     type: tls
@@ -682,972 +240,249 @@ spec:
     acls:
       - resource:
           type: topic
-          name: user-events
+          name: orders.events
           patternType: literal
         operations:
-          - Read
           - Describe
+          - Read
         host: "*"
       - resource:
           type: group
-          name: analytics-
-          patternType: prefix
+          name: orders-analytics
+          patternType: literal
         operations:
           - Read
         host: "*"
 ```
 
-Strimzi creates a Secret for each user containing the credentials:
-- **SCRAM**: Secret contains `password` and `sasl.jaas.config`
-- **TLS**: Secret contains `user.crt`, `user.key`, and `ca.crt`
-
-### mTLS Client Configuration
-
-```yaml
-# Application Pod mounting mTLS credentials
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: analytics-consumer
-  namespace: kafka
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: analytics-consumer
-  template:
-    metadata:
-      labels:
-        app: analytics-consumer
-    spec:
-      containers:
-        - name: consumer
-          image: my-registry.io/analytics-consumer:v1.4.0
-          env:
-            - name: KAFKA_BOOTSTRAP_SERVERS
-              value: production-kafka-bootstrap.kafka.svc.cluster.local:9093
-            - name: KAFKA_SECURITY_PROTOCOL
-              value: SSL
-            - name: KAFKA_SSL_TRUSTSTORE_LOCATION
-              value: /etc/kafka/certs/ca.p12
-            - name: KAFKA_SSL_TRUSTSTORE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: production-cluster-ca-cert
-                  key: ca.password
-            - name: KAFKA_SSL_KEYSTORE_LOCATION
-              value: /etc/kafka/certs/user.p12
-            - name: KAFKA_SSL_KEYSTORE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: analytics-consumer
-                  key: user.password
-          volumeMounts:
-            - name: kafka-certs
-              mountPath: /etc/kafka/certs
-              readOnly: true
-      volumes:
-        - name: kafka-certs
-          projected:
-            sources:
-              - secret:
-                  name: production-cluster-ca-cert
-                  items:
-                    - key: ca.p12
-                      path: ca.p12
-              - secret:
-                  name: analytics-consumer
-                  items:
-                    - key: user.p12
-                      path: user.p12
-```
-
----
-
-## Managing Topics as Code
-
-```yaml
-# kafka-topics.yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaTopic
-metadata:
-  name: user-events
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: production
-spec:
-  partitions: 24
-  replicas: 3
-  config:
-    retention.ms: 604800000         # 7 days
-    cleanup.policy: delete
-    min.insync.replicas: 2
-    compression.type: lz4
-    max.message.bytes: 1048576      # 1 MB max message
-    segment.bytes: 536870912        # 512 MB segments
----
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaTopic
-metadata:
-  name: user-events-dlq
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: production
-spec:
-  partitions: 6
-  replicas: 3
-  config:
-    retention.ms: 2592000000        # 30 days (DLQ gets longer retention)
-    cleanup.policy: delete
-    min.insync.replicas: 2
----
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaTopic
-metadata:
-  name: user-profiles
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: production
-spec:
-  partitions: 12
-  replicas: 3
-  config:
-    cleanup.policy: compact          # Keep latest value per key
-    min.cleanable.dirty.ratio: 0.5
-    delete.retention.ms: 86400000    # 1 day tombstone retention
-    min.insync.replicas: 2
-```
-
-**Topic naming conventions** that prevent chaos:
-
-| Pattern | Example | When |
-|---------|---------|------|
-| `domain.entity.event` | `payments.order.completed` | Domain events |
-| `source.table` | `cdc.public.orders` | CDC topics |
-| `topic-name-dlq` | `user-events-dlq` | Dead letter queues |
-| `connect-offsets` | `connect-offsets` | Internal Connect topics |
-
----
-
-## MirrorMaker2 for DR and Multi-Region
-
-MirrorMaker2 (MM2) is Kafka's cross-cluster replication engine, built on Kafka Connect and managed in Strimzi via the `KafkaMirrorMaker2` CRD. Unlike the original MirrorMaker 1, MM2 tracks consumer group offsets bidirectionally, handles topic renaming to prevent message loops in active-active configurations, and uses three internal connectors: a **source connector** (replicates records), a **checkpoint connector** (translates consumer group offsets), and a **heartbeat connector** (monitors pipeline liveness).
-
-### KafkaMirrorMaker2 CRD Configuration
-
-A production MM2 deployment replicating from a `us-east` cluster to `us-west`:
-
-```yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaMirrorMaker2
-metadata:
-  name: mm2-east-to-west
-  namespace: kafka
-spec:
-  version: 3.9.0
-  replicas: 2
-  connectCluster: "us-west"      # The cluster that hosts the Connect worker pods
-  clusters:
-    - alias: "us-east"
-      bootstrapServers: east-kafka-bootstrap.kafka-east.svc.cluster.local:9093
-      tls:
-        trustedCertificates:
-          - secretName: east-cluster-ca-cert
-            pattern: "*.crt"
-      authentication:
-        type: scram-sha-512
-        username: mm2-east-user
-        passwordSecret:
-          secretName: mm2-east-user
-          password: password
-    - alias: "us-west"
-      bootstrapServers: west-kafka-bootstrap.kafka-west.svc.cluster.local:9093
-      tls:
-        trustedCertificates:
-          - secretName: west-cluster-ca-cert
-            pattern: "*.crt"
-      authentication:
-        type: scram-sha-512
-        username: mm2-west-user
-        passwordSecret:
-          secretName: mm2-west-user
-          password: password
-  mirrors:
-    - sourceCluster: "us-east"
-      targetCluster: "us-west"
-      topicsPattern: "payments\\..*|orders\\..*|user-events"
-      groupsPattern: "analytics-.*|reporting-.*"
-      sourceConnector:
-        config:
-          replication.factor: 3
-          offset-syncs.topic.replication.factor: 3
-          sync.topic.acls.enabled: "false"
-      checkpointConnector:
-        config:
-          checkpoints.topic.replication.factor: 3
-          sync.group.offsets.enabled: "true"          # Write translated offsets to __consumer_offsets on target
-          sync.group.offsets.interval.seconds: "60"
-      heartbeatConnector:
-        config:
-          heartbeats.topic.replication.factor: 3
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      memory: 1Gi
-```
-
-`connectCluster` must match one of the `alias` values. The MM2 Connect workers run inside the target cluster — the cluster receiving the replicated data.
-
-### Topic Naming: Default Prefix vs. Identity Policy
-
-By default, MM2 prepends the source cluster alias to every replicated topic name to prevent infinite loops in active-active configurations:
-
-- `user-events` on `us-east` → `us-east.user-events` on `us-west`
-
-MM2 also creates three internal bookkeeping topics on the target cluster:
-
-| Internal Topic | Purpose |
-|---------------|---------|
-| `mm2-offset-syncs.us-east.internal` | Maps source partition offsets to target offsets |
-| `us-east.checkpoints.internal` | Stores translated consumer group committed offsets |
-| `us-east.heartbeats` | 1-second heartbeat confirming the pipeline is live |
-
-To replicate without renaming — for strictly one-directional DR where consumer code should be identical on both clusters — use the `IdentityReplicationPolicy`:
-
-```yaml
-sourceConnector:
-  config:
-    replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
-```
-
-> **Trade-off:** `IdentityReplicationPolicy` simplifies consumer configuration but makes bidirectional active-active setups dangerous — both sides would replicate the same topics endlessly. Use it only when you guarantee replication runs in one direction only.
-
-### Offset Translation and Consumer Failover
-
-With `sync.group.offsets.enabled: true`, the checkpoint connector continuously writes translated consumer group offsets to the target cluster's `__consumer_offsets` topic. A consumer group that was reading from `us-east` can reconnect to `us-west` and resume from the correct position with no code changes.
-
-```bash
-# Verify all three MM2 connectors are in RUNNING state
-kubectl -n kafka get kafkamirrormaker2 mm2-east-to-west \
-  -o jsonpath='{.status.connectors[*].connector.state}'
-
-# Confirm checkpoint topic created on target
-kubectl -n kafka exec -it west-kafka-0 -- \
-  bin/kafka-topics.sh --bootstrap-server localhost:9092 \
-    --list | grep checkpoints
-
-# Inspect translated consumer group offsets on target cluster
-kubectl -n kafka exec -it west-kafka-0 -- \
-  bin/kafka-consumer-groups.sh \
-    --bootstrap-server localhost:9092 \
-    --group analytics-orders \
-    --describe
-```
-
-### Monitoring Replication Lag
-
-MM2 exposes JMX metrics through the Connect worker. With Strimzi's JMX Prometheus Exporter configured, these key metrics surface:
-
-| Metric | What It Measures | Alert Threshold |
-|--------|-----------------|-----------------|
-| `kafka_connect_mirror_source_connector_replication_latency_ms` | End-to-end lag from source produce to target produce | `> 30000` ms |
-| `kafka_connect_worker_connector_count` | Active connectors (expect 3: source, checkpoint, heartbeat) | `< 3` |
-| `kafka_connect_worker_task_count` | Active tasks across all connectors | Sustained drop from baseline |
-| `kafka_connect_mirror_source_connector_record_count` | Records replicated per second | `= 0` for more than 1 min |
-
-A PromQL alert:
-
-```yaml
-- alert: KafkaMirrorMaker2ReplicationLag
-  expr: kafka_connect_mirror_source_connector_replication_latency_ms > 30000
-  for: 5m
-  labels:
-    severity: critical
-  annotations:
-    summary: "MM2 replication lag exceeds 30s — DR readiness degraded"
-    description: "kubectl -n kafka get kafkamirrormaker2 to inspect connector states"
-```
-
-### Topology Patterns
-
-| Topology | Description | Use When |
-|----------|-------------|----------|
-| **Active-Passive** | Source cluster handles all writes; target is a read-only replica | Simple DR — RPO in minutes, RTO via manual cutover |
-| **Active-Active** | Both clusters accept writes; MM2 replicates bidirectionally using the default prefix policy | Multi-region writes where local-latency matters more than operational simplicity |
-| **Hub-and-Spoke** | Edge clusters replicate to a central hub in one direction only | IoT regional clusters feeding a central analytics platform |
-
-### Regional Outage Recovery Procedure
-
-1. Confirm the source is unreachable and the heartbeat topic has gone stale on the target:
-   ```bash
-   kubectl -n kafka get kafkamirrormaker2 mm2-east-to-west \
-     -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}'
-   ```
-2. Scale consumer Deployments to point at the target cluster bootstrap servers.
-3. If `sync.group.offsets.enabled` was set, consumer groups resume at the translated offset automatically on reconnect. Otherwise, reset offsets by timestamp:
-   ```bash
-   kubectl -n kafka exec -it west-kafka-0 -- \
-     bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
-       --group analytics-orders --reset-offsets \
-       --to-datetime 2026-05-22T00:00:00.000 --execute --all-topics
-   ```
-4. After source recovery, replay messages produced to the target during the outage back to the source using a short-lived MM2 deployment in the reverse direction with a time-bounded `topicsPattern`.
-
----
-
-## Partition Reassignment
-
-Kafka's partition assignment is fixed at topic creation time. Over a cluster's lifetime, this assignment drifts: brokers are added or decommissioned, traffic patterns shift, rack-awareness requirements are added retroactively. Partition reassignment realigns replicas and leaders across brokers to restore balance.
-
-### When to Reassign
-
-| Trigger | Symptom | Goal |
-|---------|---------|------|
-| **Broker decommission** | Target broker still holds partition leaders | Move all replicas off before draining the node |
-| **Capacity imbalance** | One broker at 90%+ while others idle | Redistribute replicas and leaders evenly |
-| **Rack-awareness retrofit** | Replicas of the same partition share one AZ | Regenerate assignment with rack constraints |
-| **New broker added** | New broker shows 0 partitions | Move a subset of partitions to the new broker |
-
-### kafka-reassign-partitions.sh: Generate, Execute, Verify
-
-The tool runs in three distinct phases. Always save the "current assignment" output from `--generate` before executing — it is your rollback plan.
-
-**Phase 1 — Generate a plan** (moving topics off broker 0 during decommission):
-
-```bash
-# Describe which topics to reassign
-cat > /tmp/topics-to-move.json <<'EOF'
-{"topics": [{"topic": "user-events"}, {"topic": "payments.order.completed"}], "version": 1}
-EOF
-
-# Generate a plan targeting brokers 1, 2, 3
-kubectl -n kafka exec -it production-kafka-0 -- \
-  bin/kafka-reassign-partitions.sh \
-    --bootstrap-server localhost:9092 \
-    --topics-to-move-json-file /tmp/topics-to-move.json \
-    --broker-list "1,2,3" \
-    --generate
-```
-
-The tool prints two JSON blocks: the current assignment (save it for rollback) and the proposed assignment. Save the proposed block as `reassignment.json`:
-
-```json
-{
-  "version": 1,
-  "partitions": [
-    {"topic": "user-events", "partition": 0, "replicas": [1, 2, 3], "log_dirs": ["any","any","any"]},
-    {"topic": "user-events", "partition": 1, "replicas": [2, 3, 1], "log_dirs": ["any","any","any"]}
-  ]
-}
-```
-
-**Phase 2 — Execute with a bandwidth throttle** (50 MB/s prevents the replication burst from saturating inter-broker links):
-
-```bash
-kubectl -n kafka exec -it production-kafka-0 -- \
-  bin/kafka-reassign-partitions.sh \
-    --bootstrap-server localhost:9092 \
-    --reassignment-json-file /tmp/reassignment.json \
-    --execute \
-    --throttle 52428800    # 50 MB/s in bytes
-```
-
-The throttle sets `leader.replication.throttled.rate` and `follower.replication.throttled.rate` on every affected broker and topic. To adjust mid-reassignment, re-run `--execute` with the same JSON and a new `--throttle` value.
-
-**Phase 3 — Verify and release the throttle:**
-
-```bash
-kubectl -n kafka exec -it production-kafka-0 -- \
-  bin/kafka-reassign-partitions.sh \
-    --bootstrap-server localhost:9092 \
-    --reassignment-json-file /tmp/reassignment.json \
-    --verify
-```
-
-> **Critical:** Running `--verify` after completion automatically removes the throttle configuration from broker configs. If you skip this step, the throttle persists and silently caps all future intra-cluster replication until you clear it manually with `kafka-configs.sh`. Always run `--verify` to clean up.
-
-### KafkaRebalance CRD vs kafka-reassign-partitions.sh
-
-| Approach | Use When | Avoid When |
-|----------|----------|------------|
-| **`kafka-reassign-partitions.sh`** | Precise, one-off decommissions; exact control of final partition placement; small numbers of topics | Many topics and partitions — manual JSON planning is error-prone at scale |
-| **`KafkaRebalance` (Cruise Control)** | Routine load balancing; adding or removing brokers at scale; ongoing cluster health | Clusters with ≤ 3 brokers, or when exact deterministic partition placement is required |
-
-### Reading Partition-Leader Skew
-
-Diagnose the distribution before deciding whether to reassign:
-
-```bash
-# Per-partition leader, replicas, and ISR state
-kubectl -n kafka exec -it production-kafka-0 -- \
-  bin/kafka-topics.sh \
-    --bootstrap-server localhost:9092 \
-    --topic user-events \
-    --describe
-
-# Example skewed output — broker 0 leads every partition:
-# Topic: user-events  Partition: 0  Leader: 0  Replicas: 0,1,2  Isr: 0,1,2
-# Topic: user-events  Partition: 1  Leader: 0  Replicas: 0,2,1  Isr: 0,2,1
-# Topic: user-events  Partition: 2  Leader: 0  Replicas: 0,1,2  Isr: 0,1,2
-
-# Count leader assignments per broker across all topics
-kubectl -n kafka exec -it production-kafka-0 -- \
-  bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe \
-  | awk '/^\tTopic:/ {print $6}' | sort | uniq -c | sort -rn
-```
-
-The `KafkaTopic` status also reflects partition state after the Topic Operator reconciles it:
-
-```bash
-kubectl -n kafka get kafkatopic user-events -o jsonpath='{.status.replicasChange}'
-```
-
-### Validating In-Sync Replicas During Reassignment
-
-A reassignment temporarily adds a new replica that is not yet in-sync, raising the under-replicated partition count. Monitor this — if the count stays elevated, the throttle is too aggressive or a replica is not catching up:
-
-```bash
-# Stream under-replicated partitions during the operation
-watch -n 5 'kubectl -n kafka exec -it production-kafka-0 -- \
-  bin/kafka-topics.sh --bootstrap-server localhost:9092 \
-    --describe --under-replicated-partitions'
-```
-
-> **Stop and think**: With `min.insync.replicas: 2` and a 3-replica topic, if a reassignment temporarily adds a 4th replica (now in-progress) and one of the 3 original replicas goes offline mid-move, how many in-sync replicas remain and can producers with `acks=all` still write?
-
----
-
-## Cruise Control for Continuous Rebalancing
-
-Manual reassignment fixes specific, one-off problems. Cruise Control solves the ongoing problem: even after careful initial deployment, Kafka clusters drift toward imbalance as traffic patterns change, topics are added, and producer volumes shift. Cruise Control models your cluster continuously and generates rebalancing proposals — and can execute them automatically — to maintain broker health without manual intervention.
-
-### Architecture
-
-Cruise Control runs as a separate Pod alongside your Kafka cluster. You enable it by adding `cruiseControl: {}` to the `Kafka` CR:
-
-```yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: Kafka
-metadata:
-  name: production
-  namespace: kafka
-spec:
-  kafka:
-    # ... existing config ...
-  cruiseControl:
-    config:
-      num.metric.fetchers: 1
-      metric.sampler.class: com.linkedin.kafka.cruisecontrol.monitor.sampling.CruiseControlMetricsReporterSampler
-    jvmOptions:
-      -Xms: "512m"
-      -Xmx: "1g"
-    resources:
-      requests:
-        cpu: 250m
-        memory: 512Mi
-      limits:
-        memory: 1Gi
-```
-
-The five components of the Cruise Control pipeline:
+ACL design should follow least privilege. Producers usually need `Write` and `Describe` on specific topics, while consumers need `Read` and `Describe` on topics plus `Read` on their consumer group. Administrative permissions should be rare and auditable. Prefix ACLs can reduce toil for controlled naming schemes, but they can also grant more than intended if topic names are loose. A platform team should pair naming standards with ACL standards so permissions remain understandable after the number of topics grows.
+
+## MirrorMaker, Rebalancing, and Operational Drift
+
+Cross-cluster replication is useful for migrations, disaster recovery drills, regional reads, and platform transitions. MirrorMaker 2 is Kafka's Kafka Connect-based replication system, and Strimzi can manage it through custom resources. The durable concept is offset-aware replication between clusters, not the belief that a second cluster automatically creates a simple active-active system. Replicated topics need naming policy, loop prevention, group offset handling, network capacity, schema availability, security on both sides, and failover runbooks.
+
+MirrorMaker's default topic prefixing protects bidirectional replication from loops by marking where a topic came from. Identity replication policies can keep names unchanged for one-way disaster recovery, but that convenience becomes dangerous if someone later turns on reverse replication without understanding the topology. This is a good example of a broader Kafka lesson: the easiest local configuration can create the hardest global failure mode. Regional designs should be reviewed as dataflow graphs, not as isolated YAML snippets.
+
+Kafka clusters drift over time. New topics appear, old topics grow unevenly, brokers are added, nodes are replaced, and traffic shifts as product behavior changes. Initial partition placement that looked balanced in a test environment may become skewed under real keys and real consumers. Manual partition reassignment can move replicas for a precise decommission or repair. Cruise Control, which Strimzi can integrate through `KafkaRebalance`, can generate optimization proposals based on goals such as disk balance, leader distribution, and rack awareness.
+
+Rebalancing should be treated as a controlled maintenance operation. Moving replicas consumes disk, network, CPU, and broker I/O. If you move too much at once, you can cause the very latency and lag symptoms you were trying to fix. Throttles, concurrent movement limits, proposal review, and metrics windows matter. On a fresh cluster, there may not be enough workload history to generate a useful proposal. On a busy cluster, the proposal can become stale while you are reviewing it. Automation helps, but observability and judgment still matter.
+
+## When Not Kafka
+
+Kafka is a strong fit when you need replayable event history, independent consumer groups, partitioned ordering, large fan-out, retention-based backfills, and integration with stream processors. It is a weaker fit when you need a simple task queue, low operational overhead for a small service, request-response RPC, or short-lived messages with no replay value. Choosing Kafka for every asynchronous interaction creates heavy platform dependencies, complex local development, and operational expectations that many teams do not need.
+
+NATS and NATS JetStream illustrate the lighter-messaging side of the tradeoff. Core NATS focuses on fast pub/sub, while JetStream adds persistence, retention, and durable consumers. Cloud queue and pub/sub services may also be a better fit when the team wants provider-managed operations and accepts provider-specific semantics. None of these options is universally better. The durable question is what the workload needs: replay length, ordering scope, consumer independence, throughput, retention, operational control, and ecosystem integration.
+
+Use [Module 1.9: NATS JetStream](../module-1.9-nats-jetstream/) as the counterpoint after you learn Kafka. The comparison is healthy because it prevents tool monoculture. A platform team should be able to say, "this stream needs Kafka because replay and partitioned consumer groups are central," and also, "this workflow should not use Kafka because a lighter queue meets the reliability requirement with less operational surface."
+
+## Patterns & Anti-Patterns
+
+Kafka designs succeed when teams make the data contract visible. Topics are not just pipes; they are shared APIs with reliability, ordering, schema, and ownership commitments. The patterns below are less about memorizing settings than about making those commitments explicit before production traffic depends on them.
+
+| Pattern | Why It Works | Practice Signal |
+|---------|--------------|-----------------|
+| Log-first integration | Producers record facts once and consumers own independent offsets | New consumers can be added without producer redeploys |
+| Keyed ordering by entity | Related events share a partition, preserving local order | Topic design names the required ordering key |
+| Topics as code | Partition, retention, replication, and ownership are reviewed | `KafkaTopic` resources live beside application manifests |
+| Idempotent consumers | Retries and duplicate delivery do not corrupt state | Sinks use deterministic keys or deduplication tables |
+| KRaft-aware node pools | Controllers and brokers have explicit roles and storage | `KafkaNodePool` design is part of the runbook |
+
+Anti-patterns usually come from treating Kafka like a transparent transport layer. Kafka can move bytes quickly, but bytes without ownership, schema, retention, and failure semantics become a long-lived liability. The table names the smell, the damage, and the correction.
+
+| Anti-Pattern | Why It Hurts | Better Approach |
+|--------------|--------------|-----------------|
+| One topic for everything | Consumers cannot reason about ownership, retention, or schema | Split by domain event stream and data contract |
+| Random partition keys for ordered data | Entity timelines arrive out of order | Key by the entity that must be ordered |
+| Auto-created production topics | Typos create silent data loss paths | Disable auto-create and manage topics declaratively |
+| Offsets committed before side effects | Crashes can skip unprocessed records | Commit after successful idempotent processing |
+| Kafka for every async need | Small workflows inherit broker complexity | Use lighter queues or NATS when replay is not required |
+
+### Decision Framework
+
+Use this framework during design reviews. It is intentionally simple because the goal is to force the right questions before a team selects an implementation. A "yes" answer does not automatically mandate Kafka, but several yes answers together indicate that a replayable partitioned log is probably the right primitive.
+
+| Question | If Yes | If No |
+|----------|--------|-------|
+| Do multiple independent consumers need the same event history? | Kafka-style log is a strong candidate | A queue or direct integration may be enough |
+| Must consumers replay old events after code changes or outages? | Retention and offsets matter | Short-lived messaging may be simpler |
+| Is ordering needed for each entity but not globally? | Keyed partitions fit well | Global order or no order may point elsewhere |
+| Are stream processors or CDC pipelines central to the design? | Kafka ecosystem integration helps | Avoid adopting ecosystem weight without need |
+| Can the team operate broker storage, lag, schemas, and rebalances? | Self-managed or operator-managed Kafka can work | Prefer managed services or lighter primitives |
 
 ```mermaid
-flowchart LR
-    MR["Metrics Reporter\n(JAR on every broker)"]
-    LM["Load Monitor\n(workload model)"]
-    GO["Goal Optimizer\n(proposals)"]
-    EX["Executor\n(applies moves)"]
-    AD["Anomaly Detector\n(self-healing)"]
-
-    MR -->|"internal\nmetrics topic"| LM
-    LM --> GO
-    GO --> EX
-    AD --> GO
+flowchart TD
+    A[Need asynchronous data movement] --> B{Replayable history needed?}
+    B -- No --> C{Simple work dispatch?}
+    C -- Yes --> D[Use a queue or lightweight messaging]
+    C -- No --> E[Consider pub/sub or direct API]
+    B -- Yes --> F{Independent consumer groups?}
+    F -- No --> G[Consider event store or database log pattern]
+    F -- Yes --> H{Entity-level ordering enough?}
+    H -- Yes --> I[Kafka-style partitioned log]
+    H -- No --> J[Revisit data model; global order is expensive]
 ```
 
-- **Metrics Reporter** — a JAR Strimzi installs on every broker; samples JMX metrics (CPU, network in/out, disk, replication bytes) into an internal Kafka topic
-- **Load Monitor** — reads the metrics topic and builds a per-partition workload model, refreshed every 15 minutes by default
-- **Goal Optimizer** — evaluates the workload model against configured goals and generates partition-movement proposals; hard goals must be satisfied, soft goals are best-effort
-- **Executor** — applies approved proposals as a throttle-aware sequence of replica additions, removals, and leader elections
-- **Anomaly Detector** — monitors for broker failures, goal violations, disk failures, and metric anomalies; can trigger automatic self-healing proposals
+## Did You Know?
 
-### Rebalancing with the KafkaRebalance CRD
-
-Strimzi intentionally locks down Cruise Control's REST API — all rebalancing goes through the `KafkaRebalance` CRD and the `strimzi.io/rebalance` annotation:
-
-```yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaRebalance
-metadata:
-  name: full-cluster-rebalance
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: production
-spec:
-  mode: full
-  goals:
-    - RackAwareGoal
-    - ReplicaDistributionGoal
-    - LeaderReplicaDistributionGoal
-    - NetworkInboundUsageDistributionGoal
-    - NetworkOutboundUsageDistributionGoal
-    - DiskUsageDistributionGoal
-  concurrentPartitionMovementsPerBroker: 5
-  replicationThrottle: 52428800    # 50 MB/s
-```
-
-**Rebalance modes:**
-
-| Mode | What It Does |
-|------|-------------|
-| `full` | Reoptimize the entire cluster — leaders and replicas across all brokers |
-| `add-brokers` | Move partitions onto newly added brokers listed in `.spec.brokers` |
-| `remove-brokers` | Drain a broker before decommission — list it in `.spec.brokers` |
-| `rebalance-disks` | Balance partition data across disks on JBOD storage nodes |
-
-### The Rebalance State Machine
-
-```mermaid
-flowchart LR
-    A[New] --> B[PendingProposal]
-    B -->|"Cruise Control\ngenerates"| C[ProposalReady]
-    C -->|"annotate: approve"| D[Rebalancing]
-    D -->|complete| E[Ready]
-    C -->|"annotate: refresh"| B
-    D -->|"annotate: stop"| F[Stopped]
-    B --> G[NotReady]
-    D --> G
-```
-
-```bash
-# 1. Apply the KafkaRebalance CR
-kubectl apply -f rebalance.yaml
-
-# 2. Watch state progress (New → PendingProposal → ProposalReady)
-kubectl -n kafka get kafkarebalance full-cluster-rebalance -w
-
-# 3. Inspect the proposal summary before approving
-kubectl -n kafka describe kafkarebalance full-cluster-rebalance
-
-# 4. Approve and start execution
-kubectl -n kafka annotate kafkarebalance full-cluster-rebalance \
-  strimzi.io/rebalance=approve --overwrite
-
-# 5. Stop an in-progress rebalance
-kubectl -n kafka annotate kafkarebalance full-cluster-rebalance \
-  strimzi.io/rebalance=stop --overwrite
-
-# 6. Force a fresh proposal (after cluster state changes)
-kubectl -n kafka annotate kafkarebalance full-cluster-rebalance \
-  strimzi.io/rebalance=refresh --overwrite
-```
-
-> **Note:** Cruise Control needs at least one full 15-minute sampling window of broker metrics before generating a reliable proposal. On a fresh cluster, proposals generated before this window closes may be suboptimal or propose unnecessary partition moves.
-
-### Goal Selection
-
-Cruise Control maintains three tiers of goals. Hard goals form a hard constraint — a proposal that violates any of them is rejected outright. Soft goals are optimized on a best-effort basis:
-
-| Goal | Default Tier | What It Ensures |
-|------|-------------|-----------------|
-| `RackAwareGoal` | Hard | Replicas of each partition span multiple racks/AZs |
-| `ReplicaCapacityGoal` | Hard | No broker exceeds the configured maximum replica count |
-| `DiskCapacityGoal` | Hard | No broker disk exceeds configured maximum utilization |
-| `NetworkInboundCapacityGoal` | Hard | No broker network inbound exceeds capacity |
-| `NetworkOutboundCapacityGoal` | Hard | No broker network outbound exceeds capacity |
-| `ReplicaDistributionGoal` | Soft | Replica count evenly distributed across brokers |
-| `LeaderReplicaDistributionGoal` | Soft | Partition leaders evenly distributed (reduces CPU and connection skew) |
-| `DiskUsageDistributionGoal` | Soft | Disk utilization balanced across brokers |
-
-`skipHardGoalCheck: true` bypasses hard goal validation — use only when an imbalanced cluster needs emergency relief and hard goals cannot currently be satisfied (e.g., not enough brokers to satisfy rack-awareness after a failure).
-
-### Self-Healing via Anomaly Detection
-
-Configure Cruise Control to auto-remediate cluster anomalies:
-
-<!-- code-verified-against: cruise-control@e30eaf352c31511241f4dfae457fbcb77022a9c6
-     SelfHealingNotifier.java line 60: BROKER_FAILURE_SELF_HEALING_THRESHOLD_MS_CONFIG = "broker.failure.self.healing.threshold.ms"
-     AnomalyDetectorConfig.java line 111: ANOMALY_DETECTION_GOALS_CONFIG = "anomaly.detection.goals" (confirmed)
-     SelfHealingNotifier.java line 54: SELF_HEALING_BROKER_FAILURE_ENABLED_CONFIG = "self.healing.broker.failure.enabled" (confirmed)
-     Default auto-fix threshold is 30 min; 300000 ms = 5 min tightens the gate. -->
-```yaml
-spec:
-  cruiseControl:
-    config:
-      anomaly.detection.goals: >
-        com.linkedin.kafka.cruisecontrol.analyzer.goals.RackAwareGoal,
-        com.linkedin.kafka.cruisecontrol.analyzer.goals.ReplicaCapacityGoal
-      self.healing.enabled: "true"
-      self.healing.broker.failure.enabled: "true"
-      broker.failure.self.healing.threshold.ms: "300000"    # Wait 5 min before acting (default: 30 min)
-```
-
-| Anomaly | What Triggers It | Default Action |
-|---------|-----------------|---------------|
-| **Broker failure** | Broker becomes unreachable | Triggers a `remove-brokers` style rebalance |
-| **Goal violation** | Current assignment violates a hard goal | Generates a `full` rebalance proposal |
-| **Disk failure** | A JBOD disk becomes unavailable | Triggers a `rebalance-disks` proposal |
-| **Metric anomaly** | Unusual deviation in CPU/network/disk metrics | Alerts only — no auto-action by default |
-
-### Production Tuning
-
-| Parameter | Recommended | Why |
-|-----------|-------------|-----|
-| `concurrentPartitionMovementsPerBroker` | 2–5 | Limits network pressure on producers/consumers during rebalancing |
-| `replicationThrottle` | 50–100 MB/s | Prevents replication bursts from saturating inter-broker bandwidth |
-| Cruise Control `-Xmx` | 1–2 Gi | Required for clusters with 1000+ partitions; default 512 Mi causes GC pressure |
-
-Set the JVM heap in the `Kafka` CR:
-
-```yaml
-spec:
-  cruiseControl:
-    jvmOptions:
-      -Xms: "512m"
-      -Xmx: "1g"
-```
-
-### When NOT to Use Cruise Control
-
-- **Clusters with ≤ 3 brokers** — not enough variance to produce meaningful optimization proposals; overhead outweighs benefit.
-- **When exact deterministic partition placement is required** — Cruise Control optimizes toward goals, not toward a specific layout. Use `kafka-reassign-partitions.sh` when you need partition 5 of `payments` to land on broker 2 exactly.
-- **Before the first metrics window has closed** — proposals generated in the first 15 minutes of a cluster's life are based on incomplete data and may trigger unnecessary moves.
-- **When the `KafkaRebalance` state machine is not monitored** — a rebalance in `NotReady` state stops silently without notifying anyone. Alert on `.status.conditions[type=Ready].status != True` or you will believe you're rebalancing when execution has halted.
-
----
+- **Kafka's durable primitive is the partition log, not the topic name.** Topics organize streams, but ordering, offsets, leaders, replicas, and consumer assignment all happen at partition scope.
+- **KRaft moved Kafka metadata into Kafka's own control plane.** Modern Kafka operations should plan for controller quorums and metadata versions instead of a separate ZooKeeper ensemble.
+- **Compaction is not compression.** Compression shrinks bytes in record batches, while compaction removes older records for the same key after newer values exist.
+- **Lag is a symptom, not a diagnosis.** Growing lag can come from slow consumers, hot partitions, producer spikes, broker throttling, rebalance churn, or downstream sink failures.
 
 ## Common Mistakes
 
-| Mistake | Why It Happens | What To Do Instead |
-|---------|---------------|-------------------|
-| Setting partition count too low (1-3) | Underestimating future throughput | Start with 12-24 partitions. You can increase later but never decrease |
-| Using `auto.create.topics.enable: true` | Convenient for development | Disable in production. Use KafkaTopic CRs for explicit management |
-| Setting `acks=0` or `acks=1` for critical data | Chasing low latency | Use `acks=all` with `min.insync.replicas=2` for data you cannot afford to lose |
-| Ignoring consumer lag monitoring | "It seems to be working" | Monitor consumer group lag. Growing lag is the first sign of a failing pipeline |
-| Running Kafka with ZooKeeper in 2026 | Following outdated tutorials | Use KRaft mode. ZooKeeper is deprecated and will be removed |
-| Not setting `podAntiAffinity` | Trusting the scheduler | Always spread brokers across nodes. Two brokers on one node = two failures at once |
-| Using `replication.factor: 1` | Works fine in dev | In production, always replicate 3x with `min.insync.replicas: 2` |
-| Skipping dead letter queues | "We'll handle errors later" | Set up DLQs from day one. Unprocessable messages will corrupt your pipeline silently |
-
----
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Treating Kafka as a generic queue | Teams forget replay, retention, offsets, and duplicate delivery | Document stream semantics before implementation |
+| Choosing partition keys after coding | Ordering and skew problems become expensive to fix | Choose keys during topic design review |
+| Setting replication without ISR policy | Replicas exist but acknowledgments may still be weak | Pair replication factor with `acks=all` and `min.insync.replicas` |
+| Ignoring Kubernetes placement | Broker replicas can fail together on one node or zone | Use anti-affinity, topology spread, and disruption controls |
+| Enabling topic auto-creation in production | Typos silently create unmanaged topics | Disable auto-create and require `KafkaTopic` resources |
+| Relying on exactly-once as a slogan | External side effects can still duplicate or reorder | Use transactions only within their boundary and make sinks idempotent |
+| Watching only average consumer lag | One hot partition can hide behind healthy averages | Monitor lag by group, topic, and partition |
+| Rebalancing without throttles | Replica movement can overload brokers and worsen lag | Review proposals and limit movement concurrency |
 
 ## Quiz
 
-**Question 1:** You have a new topic `orders` with 4 partitions. Your `order-processor` application is deployed as a Kubernetes Deployment with 6 replicas, all sharing the same consumer group. During a high-traffic event, you notice that 2 of your pods are sitting completely idle while the other 4 are processing heavily. Why is this happening, and how can you fix it?
+**Question 1:** A team deploys an `orders-processor` with eight Pods in one consumer group, but the `orders.events` topic has four partitions. Four Pods are busy and four Pods stay idle during peak traffic. What is happening, and what design decision should the team revisit?
 
 <details>
-<summary>Show Answer</summary>
-This happens because Kafka's unit of parallelism is the partition, and a single partition can only be consumed by **one consumer within a given consumer group** at a time. Since there are only 4 partitions, Kafka can only assign work to 4 consumers; the remaining 2 consumers will sit idle. To fix this and utilize all 6 pods, you must increase the number of partitions on the `orders` topic to at least 6. Keep in mind that while you can always increase partition counts, you cannot decrease them later.
+<summary>Answer</summary>
+Kafka assigns each partition to only one active consumer inside a consumer group, so four partitions can keep only four consumers busy. The idle Pods are not broken; there is simply no partition work to assign to them. The team should revisit the topic's partition count and the ordering key, because increasing partitions can raise parallelism but may also change key-to-partition mapping. This answer probes the outcome about configuring topic partitioning for production streaming workloads.
 </details>
 
-**Question 2:** Your team is building a caching layer that needs to replay the current state of every user's profile on startup. Initially, they set the `user-profiles` topic to a 30-day retention policy. However, after a month, the service takes hours to start up, reading millions of outdated profile updates. What configuration change should you make to this topic to solve this issue?
+**Question 2:** During node maintenance, one broker in a three-broker cluster goes offline. A critical topic has replication factor three, `min.insync.replicas=2`, and producers use `acks=all`. Should producers continue to receive acknowledgments, and what happens if another in-sync replica disappears before the first broker returns?
 
 <details>
-<summary>Show Answer</summary>
-You should change the topic's cleanup policy from `delete` to `compact`. A `delete` policy retains all historical events until the retention window expires, meaning your application is forced to process every single update a user ever made. With a `compact` policy, Kafka actively scans the log and retains only the **latest value for each unique key** (e.g., the user ID). This dramatically reduces the log size and startup time, as your application will only read the final, current state of each profile rather than its entire history.
+<summary>Answer</summary>
+With one broker offline, two in-sync replicas can remain, so producers using `acks=all` can still receive acknowledgments if the leader and another replica are healthy. If a second in-sync replica disappears, the topic can fall below `min.insync.replicas`, and Kafka should reject writes rather than acknowledge records that do not meet the durability policy. That rejection is an intentional availability tradeoff. This answer probes the outcome about designing topologies that balance throughput, durability, and availability.
 </details>
 
-**Question 3:** Your production Kafka cluster has 3 brokers. A critical topic is configured with `replication.factor: 3` and `min.insync.replicas: 2`. During a scheduled node maintenance, Kubernetes gracefully evicts and terminates Broker 1. Your producers are configured with `acks=all`. Will the producers experience downtime or dropped messages during this maintenance?
+**Question 3:** A fraud detection service writes alerts to another Kafka topic after reading `orders.events`. The team wants exactly-once behavior and also writes each alert to an external case-management API. Which part can Kafka transactions protect, and which part still needs application-level idempotency?
 
 <details>
-<summary>Show Answer</summary>
-The producers will not experience downtime and writes will continue successfully. With `replication.factor: 3` and `min.insync.replicas: 2`, losing one broker leaves exactly 2 in-sync replicas available. Because 2 is greater than or equal to the `min.insync.replicas` requirement, the leader can still acknowledge writes to producers using `acks=all`. However, the cluster is now in a degraded state; if a second broker were to go down before Broker 1 recovers, writes would be rejected with a `NotEnoughReplicasException` to prevent data loss.
+<summary>Answer</summary>
+Kafka transactions can protect the Kafka-to-Kafka boundary: consuming input records, producing output records, and committing offsets atomically when the application uses the transaction protocol correctly. The external case-management API is outside that Kafka transaction, so retries can still duplicate side effects unless the API call uses idempotency keys or another deduplication mechanism. Exactly-once should be understood as effectively-once within a defined boundary. This answer probes the implementation and durability outcomes because producer transactions affect correctness as much as configuration.
 </details>
 
-**Question 4:** Your security team mandates that all TLS certificates must be managed centrally. They notice Strimzi automatically generates its own CA and certificates for broker communication and client authentication. They ask you to disable this and explain why Strimzi does this by default. What is the operational reason for Strimzi's default behavior?
+**Question 4:** A platform engineer sees growing lag for one consumer group, but only partition 0 of the topic is behind. Other partitions are current, and adding more consumer Pods does not help. What is the likely cause, and what options should the team evaluate?
 
 <details>
-<summary>Show Answer</summary>
-Strimzi manages its own CA by default to provide a zero-friction, out-of-the-box secure setup. It tightly integrates certificate generation with broker configuration, enabling automatic rotation and rolling restarts without requiring external dependencies like cert-manager. By handling this internally, Strimzi ensures that inter-broker communication and client authentication are secured from day one. However, if organizational policy strictly requires a centralized CA, Strimzi can be configured to use externally provided certificates or integrate directly with tools like cert-manager.
+<summary>Answer</summary>
+The likely cause is a hot partition, usually from a key distribution that sends too much traffic to one partition. Adding consumers does not help because one partition can still be assigned to only one consumer in the group. The team should evaluate whether the key matches the required ordering scope, whether a hot entity can be deliberately sharded, or whether the workload should be split into separate topics. This answer probes the diagnostic outcome around lag, partition skew, and consumer-group behavior.
 </details>
 
-**Question 5:** An application developer mistakenly configures their new microservice to write to `payment-processed` instead of the approved `payments-processed` topic. In your production environment, you have `auto.create.topics.enable` set to `true`. What are the immediate consequences of this typo, and what is the best practice to prevent it?
+**Question 5:** A team asks to run Kafka as a Kubernetes Deployment with an emptyDir volume because "Kubernetes will restart failed Pods anyway." Explain why that design is unsafe and which Kubernetes primitives Strimzi relies on instead.
 
 <details>
-<summary>Show Answer</summary>
-The immediate consequence is that Kafka will silently create the new `payment-processed` topic using the cluster's default settings, and the producer will start writing data there successfully. The intended downstream consumers will never see these messages, leading to silent data loss in your pipeline. Furthermore, the auto-created topic might have incorrect partition counts or retention policies for its workload. To prevent this, `auto.create.topics.enable` should always be set to `false` in production, forcing teams to explicitly declare their topics using Strimzi `KafkaTopic` Custom Resources.
+<summary>Answer</summary>
+A Kafka broker is not a disposable stateless replica because its local log contains partition replicas and its identity participates in cluster membership. If a restarted Pod loses storage or returns with a different identity, Kafka can lose replicas, trigger avoidable recovery, or violate operational assumptions. Strimzi relies on StatefulSet-style stable identity, persistent volume claims, Services, Secrets, and operator reconciliation to map Kafka's stateful model onto Kubernetes. This answer probes the outcome about implementing Kafka on Kubernetes with broker, controller, storage, and KRaft configuration.
 </details>
 
----
+**Question 6:** A product team wants to publish small notification jobs that do not need replay after delivery, do not need multiple independent consumer groups, and can tolerate provider-managed queue semantics. Should Kafka be the default choice? Defend your answer.
 
-## Hands-On Exercise: Multi-Broker Kafka with Strimzi + Producer/Consumer Benchmarks
+<details>
+<summary>Answer</summary>
+Kafka should not be the default just because the interaction is asynchronous. If the workload does not need replayable history, partitioned ordering, independent consumer groups, or stream-processing integration, a lighter queue, pub/sub system, or managed messaging service may satisfy the requirement with less operational surface. Kafka becomes attractive when the log semantics are part of the product or data-platform requirement. This answer probes the topology design outcome because good platform design includes knowing when not to use Kafka.
+</details>
 
-### Objective
+**Question 7:** A schema change removes a field used by a downstream warehouse loader. The producer team says the record still serializes correctly and Kafka accepted it. Why is that not enough, and what platform control should have caught the problem?
 
-Deploy a 3-broker Kafka cluster using Strimzi in KRaft mode, create topics, run producer and consumer performance benchmarks, and observe the impact of different configurations on throughput and latency.
+<details>
+<summary>Answer</summary>
+Kafka stores bytes and does not know whether removing a field breaks a consumer's data contract. Serialization success only proves the producer created a valid record in its own format; it does not prove compatibility with existing readers. A schema registry or equivalent compatibility gate should check whether the new schema is backward, forward, or fully compatible according to the topic's policy. This answer probes the outcome about configuring production streaming workloads because schema compatibility is part of topic governance.
+</details>
 
-### Environment Setup
+## Hands-On
+
+This lab deploys a small Strimzi-managed Kafka cluster, creates topics with explicit durability settings, produces and consumes records, and inspects consumer lag. It is meant for a local or disposable Kubernetes cluster with enough CPU and memory for three Kafka Pods. The commands use the Strimzi `latest` install URL and the Strimzi Kafka image tag that the current 1.0.0 docs list for Kafka 4.2.0; verify both against upstream docs before reusing them in a long-lived platform standard.
+
+### Step 1: Create a disposable cluster and install Strimzi
 
 ```bash
-# Create a kind cluster with enough resources
 kind create cluster --name kafka-lab
-
-# Install Strimzi Operator
 kubectl create namespace kafka
 kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
 kubectl -n kafka wait --for=condition=Available \
   deployment/strimzi-cluster-operator --timeout=180s
 ```
 
-### Step 1: Deploy the Kafka Cluster
+### Step 2: Apply the Kafka cluster manifest
 
-```yaml
-# kafka-lab-cluster.yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaNodePool
-metadata:
-  name: combined
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: lab
-spec:
-  replicas: 3
-  roles:
-    - controller
-    - broker
-  storage:
-    type: persistent-claim
-    size: 10Gi
-    deleteClaim: true
-  resources:
-    requests:
-      cpu: 500m
-      memory: 2Gi
-    limits:
-      memory: 2Gi
----
-apiVersion: kafka.strimzi.io/v1beta2
-kind: Kafka
-metadata:
-  name: lab
-  namespace: kafka
-  annotations:
-    strimzi.io/kraft: enabled
-    strimzi.io/node-pools: enabled
-spec:
-  kafka:
-    version: 3.9.0
-    metadataVersion: "3.9"
-    listeners:
-      - name: plain
-        port: 9092
-        type: internal
-        tls: false
-    config:
-      default.replication.factor: 3
-      min.insync.replicas: 2
-      auto.create.topics.enable: false
-      num.partitions: 6
-      offsets.topic.replication.factor: 3
-      transaction.state.log.replication.factor: 3
-      transaction.state.log.min.isr: 2
-  entityOperator:
-    topicOperator: {}
-```
+Save the cluster YAML from the Kafka on Kubernetes section as `kafka-lab.yaml`, then apply it in the `kafka` namespace.
 
 ```bash
-kubectl apply -f kafka-lab-cluster.yaml
-# Wait for all 3 brokers to be ready (this takes 3-5 minutes)
-kubectl -n kafka wait kafka/lab --for=condition=Ready --timeout=300s
+kubectl -n kafka apply -f kafka-lab.yaml
+kubectl -n kafka wait kafka/lab --for=condition=Ready --timeout=600s
+kubectl -n kafka get kafkanodepool,kafka,pod
 ```
 
-### Step 2: Create Benchmark Topics
+### Step 3: Create two topics with different retention semantics
 
-```yaml
-# benchmark-topics.yaml
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaTopic
-metadata:
-  name: benchmark-throughput
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: lab
-spec:
-  partitions: 12
-  replicas: 3
-  config:
-    retention.ms: 3600000
-    min.insync.replicas: 2
----
-apiVersion: kafka.strimzi.io/v1beta2
-kind: KafkaTopic
-metadata:
-  name: benchmark-latency
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: lab
-spec:
-  partitions: 6
-  replicas: 3
-  config:
-    retention.ms: 3600000
-    min.insync.replicas: 2
-```
+Save the topic YAML from the topics section as `kafka-topics.yaml`, then apply and inspect the resulting topics.
 
 ```bash
-kubectl apply -f benchmark-topics.yaml
+kubectl -n kafka apply -f kafka-topics.yaml
+kubectl -n kafka get kafkatopic
+kubectl -n kafka describe kafkatopic orders.events
 ```
 
-### Step 3: Run Producer Throughput Benchmark
+### Step 4: Produce and consume records with a shared consumer group
 
 ```bash
-# High throughput producer benchmark
-# 1 million messages, 1 KB each, batched
-kubectl -n kafka run producer-throughput --rm -it --restart=Never \
-  --image=quay.io/strimzi/kafka:latest-kafka-3.9.0 -- \
-  bin/kafka-producer-perf-test.sh \
-    --topic benchmark-throughput \
-    --throughput -1 \
-    --num-records 1000000 \
-    --record-size 1024 \
-    --producer-props \
-      bootstrap.servers=lab-kafka-bootstrap:9092 \
-      acks=all \
-      batch.size=65536 \
-      linger.ms=50 \
-      compression.type=lz4 \
-      buffer.memory=67108864
+kubectl -n kafka run kafka-client --restart=Never --image=quay.io/strimzi/kafka:1.0.0-kafka-4.2.0 -- sleep 3600
+kubectl -n kafka wait pod/kafka-client --for=condition=Ready --timeout=120s
 
-# Record the results:
-# - Messages/sec
-# - MB/sec
-# - Average latency (ms)
-# - P99 latency (ms)
+kubectl -n kafka exec kafka-client -- bash -lc \
+  'printf "order-1 created\norder-1 paid\norder-2 created\n" | bin/kafka-console-producer.sh --bootstrap-server lab-kafka-bootstrap:9092 --topic orders.events'
+
+kubectl -n kafka exec kafka-client -- bash -lc \
+  'bin/kafka-console-consumer.sh --bootstrap-server lab-kafka-bootstrap:9092 --topic orders.events --group orders-analytics --from-beginning --timeout-ms 10000'
 ```
 
-### Step 4: Run Low-Latency Producer Benchmark
+### Step 5: Inspect consumer-group position and partition health
 
 ```bash
-# Low latency producer benchmark — same message count, different config
-kubectl -n kafka run producer-latency --rm -it --restart=Never \
-  --image=quay.io/strimzi/kafka:latest-kafka-3.9.0 -- \
-  bin/kafka-producer-perf-test.sh \
-    --topic benchmark-latency \
-    --throughput -1 \
-    --num-records 100000 \
-    --record-size 1024 \
-    --producer-props \
-      bootstrap.servers=lab-kafka-bootstrap:9092 \
-      acks=all \
-      batch.size=16384 \
-      linger.ms=0 \
-      compression.type=none
+kubectl -n kafka exec kafka-client -- bash -lc \
+  'bin/kafka-consumer-groups.sh --bootstrap-server lab-kafka-bootstrap:9092 --group orders-analytics --describe'
 
-# Compare: throughput will be lower, but P99 latency should be better
+kubectl -n kafka exec kafka-client -- bash -lc \
+  'bin/kafka-topics.sh --bootstrap-server lab-kafka-bootstrap:9092 --topic orders.events --describe'
 ```
 
-### Step 5: Run Consumer Benchmark
+### Step 6: Clean up
 
 ```bash
-# Consumer benchmark — read 1 million messages
-kubectl -n kafka run consumer-bench --rm -it --restart=Never \
-  --image=quay.io/strimzi/kafka:latest-kafka-3.9.0 -- \
-  bin/kafka-consumer-perf-test.sh \
-    --bootstrap-server lab-kafka-bootstrap:9092 \
-    --topic benchmark-throughput \
-    --messages 1000000 \
-    --group benchmark-consumer-group
-
-# Record:
-# - Messages/sec consumed
-# - MB/sec consumed
-```
-
-### Step 6: Compare Results
-
-Create a comparison table from your benchmarks:
-
-| Metric | High Throughput | Low Latency |
-|--------|----------------|-------------|
-| Messages/sec | (your result) | (your result) |
-| MB/sec | (your result) | (your result) |
-| Avg Latency | (your result) | (your result) |
-| P99 Latency | (your result) | (your result) |
-
-### Step 7: Clean Up
-
-```bash
-kubectl delete kafkatopic benchmark-throughput benchmark-latency -n kafka
-kubectl delete kafka lab -n kafka
-kubectl delete kafkanodepool combined -n kafka
-kubectl delete -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
 kubectl delete namespace kafka
 kind delete cluster --name kafka-lab
 ```
 
 ### Success Criteria
 
-You have completed this exercise when you:
-- [ ] Deployed a 3-broker Kafka cluster in KRaft mode via Strimzi
-- [ ] Created topics with explicit partition and replication settings
-- [ ] Ran high-throughput producer benchmark and recorded results
-- [ ] Ran low-latency producer benchmark and recorded results
-- [ ] Compared throughput vs latency trade-offs with actual numbers
-- [ ] Ran a consumer benchmark and measured consumption throughput
-
----
+- [ ] Strimzi Cluster Operator reaches `Available` in the `kafka` namespace.
+- [ ] The `lab` Kafka resource reaches `Ready` with three dual-role KRaft nodes.
+- [ ] `orders.events` and `users.profile.current` exist as `KafkaTopic` resources with explicit replication and retention settings.
+- [ ] A producer writes sample order events and a consumer group reads them from the beginning.
+- [ ] `kafka-consumer-groups.sh --describe` shows committed progress for the `orders-analytics` group.
+- [ ] `kafka-topics.sh --describe` shows leaders, replicas, and ISR for the `orders.events` partitions.
 
 ## Sources
 
-**MirrorMaker2 and Cross-Cluster Replication:**
-- [KIP-382: MirrorMaker 2.0](https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0) — The Kafka Improvement Proposal that redesigned MirrorMaker on top of Kafka Connect, enabling active-active topologies and consumer group offset translation.
-- [Strimzi Blog: Introducing MirrorMaker 2](https://strimzi.io/blog/2020/03/30/introducing-mirrormaker2/) — Explains MM2's internal connector model, topic naming conventions, and offset tracking in a Strimzi context.
-- [Strimzi Docs: Deploying KafkaMirrorMaker2](https://strimzi.io/docs/operators/latest/full/deploying.html) — Official Strimzi operator reference for the `KafkaMirrorMaker2` CRD and connector configuration.
-
-**Partition Reassignment:**
-- [Apache Kafka Documentation: Expanding a Cluster](https://kafka.apache.org/documentation/#basic_ops_cluster_expansion) — Canonical reference for `kafka-reassign-partitions.sh`, JSON plan format, throttle configuration, and verification.
-
-**Cruise Control:**
-- [LinkedIn Engineering Blog: Introducing Kafka Cruise Control Frontend](https://www.linkedin.com/blog/engineering/open-source/introducing-kafka-cruise-control-frontend) — LinkedIn's original introduction of Cruise Control, covering its architecture (Load Monitor, Goal Optimizer, Executor, Anomaly Detector) and the motivation for continuous automated rebalancing at scale.
-- [Strimzi Blog: Cruise Control and Automated Rebalancing](https://strimzi.io/blog/2020/06/15/cruise-control/) — Explains the `KafkaRebalance` CRD, the annotation-driven state machine, and goal configuration within a Strimzi cluster.
-
-**KRaft and Kafka Internals:**
-- [KIP-500: Replace ZooKeeper with a Self-Managed Metadata Quorum](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum) — The proposal that eliminated ZooKeeper from Kafka by introducing the Raft-based controller quorum used in all modern Kafka deployments.
-- [KIP-227: Introduce Incremental FetchRequests to Increase Partition Scalability](https://cwiki.apache.org/confluence/display/KAFKA/KIP-227%3A+Introduce+Incremental+FetchRequests+to+Increase+Partition+Scalability) — The fetch protocol improvement that makes large partition counts (as used in multi-region MM2 setups) operationally feasible.
-
----
-
-## Key Takeaways
-
-1. **KRaft eliminates ZooKeeper** — Kafka manages its own metadata via the Raft consensus protocol, simplifying operations and improving failover speed.
-2. **Strimzi makes Kafka a Kubernetes-native workload** — Topics, users, and connectors are all managed via Custom Resources, enabling GitOps workflows.
-3. **Throughput and latency are opposing forces** — Batching increases throughput but adds latency. Choose based on your use case.
-4. **Security is not optional** — Use TLS for encryption, mTLS or SCRAM for authentication, and ACLs for authorization. Strimzi automates certificate management.
-5. **Schemas prevent pipeline corruption** — Always use a schema registry in production to enforce contracts between producers and consumers.
-
----
-
-## Further Reading
-
-**Books:**
-- **"Kafka: The Definitive Guide"** (2nd edition) — Gwen Shapira, Todd Palino, Rajini Sivaram, Krit Petty (O'Reilly)
-- **"Designing Event-Driven Systems"** — Ben Stopford (Confluent, free download)
-
-**Articles:**
-- **"Running Apache Kafka on Kubernetes"** — Strimzi documentation (strimzi.io/documentation)
-- **"KRaft: Kafka Without ZooKeeper"** — Apache Kafka KIP-500 (cwiki.apache.org)
-
-**Talks:**
-- **"Strimzi: Kafka on Kubernetes"** — Jakub Scholz, KubeCon EU 2024 (YouTube)
-- **"Kafka Performance Tuning"** — Tim Berglund, Confluent (YouTube)
-
----
-
-## Summary
-
-Apache Kafka is the backbone of modern data engineering, and Strimzi makes it a first-class Kubernetes citizen. By managing Kafka through Custom Resources, you get declarative configuration, automated security, rolling upgrades, and integration with the entire Kubernetes ecosystem.
-
-The key to running Kafka well is understanding the trade-offs: partitions vs overhead, throughput vs latency, replication vs performance. There is no single correct configuration — only the correct configuration for your specific workload.
-
----
+- [Apache Kafka 4.3 Introduction](https://kafka.apache.org/43/getting-started/introduction)
+- [Apache Kafka 4.3 Design: Message Delivery Semantics and Replication](https://kafka.apache.org/43/design/design/)
+- [Apache Kafka 4.3 Producer Configuration](https://kafka.apache.org/43/configuration/producer-configs/)
+- [Apache Kafka 4.3 Consumer Configuration](https://kafka.apache.org/43/configuration/consumer-configs/)
+- [Apache Kafka 4.3 KRaft Operations](https://kafka.apache.org/43/operations/kraft/)
+- [Apache Kafka 4.3 Basic Operations](https://kafka.apache.org/43/operations/basic-kafka-operations/)
+- [Strimzi Operator Deploying and Managing 1.0.0](https://strimzi.io/docs/operators/latest/deploying)
+- [Strimzi Operator Configuring 1.0.0](https://strimzi.io/docs/operators/latest/configuring.html)
+- [Strimzi Blog: Introducing MirrorMaker 2](https://strimzi.io/blog/2020/03/30/introducing-mirrormaker2/)
+- [Strimzi Blog: Cruise Control and Automated Rebalancing](https://strimzi.io/blog/2020/06/15/cruise-control/)
+- [Kubernetes StatefulSet Documentation](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)
+- [Kubernetes Persistent Volumes Documentation](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+- [The Log: What Every Software Engineer Should Know About Real-Time Data's Unifying Abstraction](https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying)
+- [NATS JetStream Concepts](https://docs.nats.io/nats-concepts/jetstream)
 
 ## Next Module
 
-Continue to [Module 1.3: Stream Processing with Apache Flink](../module-1.3-flink/) to learn how to process the data flowing through your Kafka topics in real time.
-
----
-
-*"Kafka is like a central nervous system for data. Every event that happens in your business flows through it."* — Jay Kreps, creator of Apache Kafka
----
+Continue to [Module 1.3: Stream Processing with Apache Flink](../module-1.3-flink/) to learn how event-time processing, windows, watermarks, checkpoints, and stateful stream computation build on the Kafka log.
