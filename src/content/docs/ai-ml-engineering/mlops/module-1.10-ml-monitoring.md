@@ -980,11 +980,11 @@ Monitoring earns its keep when it triggers action. Define explicit policies: if 
 
 1. The Population Stability Index (PSI), one of the most common drift metrics in production, comes from the credit-scoring industry, not modern MLOps: a PSI below 0.1 conventionally signals no significant shift, 0.1–0.25 a moderate shift worth investigating, and above 0.25 a population change large enough to justify rebuilding the model — thresholds that predate ML monitoring tooling and are still used as defaults today.
 
-2. The formal study of concept drift predates modern MLOps platforms; [Gama et al.'s 2014 survey](https://arxiv.org/abs/1410.5430) catalogs detection and adaptation strategies still referenced in production drift design today.
+2. The formal study of concept drift predates modern MLOps platforms; [Gama et al.'s 2014 survey](https://dl.acm.org/doi/10.1145/2523813) catalogs detection and adaptation strategies still referenced in production drift design today.
 
 3. [Google's "Data Validation for Machine Learning" paper](https://research.google/pubs/pub46555/) introduced schema-based validation patterns that evolved into TensorFlow Data Validation and influenced batch monitoring jobs across the ecosystem.
 
-4. [Underspecification research from Google](https://arxiv.org/abs/1907.10579) showed that models with identical test accuracy can behave differently in deployment — a reminder that monitoring must compare live behavior to baselines, not assume offline metrics guarantee production equivalence.
+4. [Underspecification research from Google](https://arxiv.org/abs/2011.03395) showed that models with identical test accuracy can behave differently in deployment — a reminder that monitoring must compare live behavior to baselines, not assume offline metrics guarantee production equivalence.
 
 ## Common Mistakes
 
@@ -1984,8 +1984,8 @@ Now that you have constructed mathematically rigorous observability around your 
 - [Grafana documentation](https://grafana.com/docs/grafana/latest/) — Dashboard visualization for Prometheus ML metrics.
 - [IBM — Model drift overview](https://www.ibm.com/think/topics/model-drift) — Durable taxonomy of data drift and concept drift.
 - [Microsoft — Monitor datasets in Azure ML](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-monitor-datasets) — Cloud-provider dataset drift monitoring patterns.
-- [Gama et al. — A Survey on Concept Drift Adaptation](https://arxiv.org/abs/1410.5430) — Academic reference for concept drift detection strategies.
-- [D'Amour et al. — Underspecification in ML pipelines](https://arxiv.org/abs/1907.10579) — Why identical test metrics can yield different production behavior.
+- [Gama et al. — A Survey on Concept Drift Adaptation](https://dl.acm.org/doi/10.1145/2523813) — Academic reference for concept drift detection strategies.
+- [D'Amour et al. — Underspecification in ML pipelines](https://arxiv.org/abs/2011.03395) — Why identical test metrics can yield different production behavior.
 - [SHAP — Lundberg & Lee (2017)](https://arxiv.org/abs/1705.07874) — Shapley-value feature attribution for model explanations.
 - [LIME — Ribeiro et al. (2016)](https://arxiv.org/abs/1602.04938) — Local surrogate explanations for individual predictions.
 - [Model Cards — Mitchell et al. (2019)](https://arxiv.org/abs/1810.03993) — Governance documentation pattern used in the module.

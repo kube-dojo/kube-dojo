@@ -1,0 +1,44 @@
+name: arXiv citation check
+
+# Catches "valid-but-wrong" arXiv citations (issue #1991): a link whose ID returns
+# HTTP 200 but points to the WRONG paper. `verify_module.py`'s sources_all_reachable,
+# the link checker, and the Astro Zod schema all pass these (the URL resolves) — only
+# an ID->title correspondence check catches them. Same blind-spot class as the
+# killercoda lab.url check (link-check.yml). Runs on changed *.md files only, needs no
+# secrets and no write scope, so it is safe on fork PRs. No `paths:` filter is needed
+# because the job no-ops cleanly when a PR changes no markdown.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  arxiv-citations:
+    name: arXiv citation check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0  # need the PR base commit for the changed-files diff
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Check arXiv citations in changed markdown
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files=$(git diff --name-only "$BASE_SHA" HEAD -- '*.md')
+          if [ -z "$files" ]; then
+            echo "No markdown changes — nothing to check."
+            exit 0
+          fi
+          echo "Changed markdown:"; echo "$files"
+          python scripts/quality/check_arxiv_citations.py $files
