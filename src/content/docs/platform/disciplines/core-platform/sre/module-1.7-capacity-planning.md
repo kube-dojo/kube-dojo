@@ -248,6 +248,22 @@ The exact threshold depends on workload shape and scaling speed. A stateless API
 | Streaming ingestion | Larger burst buffer | Backpressure can cascade into producers |
 | Machine-learning training jobs | Cost-optimized capacity | Reliability target is often completion time, not request latency |
 
+### The Queueing Theory Behind Headroom
+
+Queueing theory gives capacity planning its most important intuition: a system does not degrade linearly as utilization rises. The relationship between utilization (ρ, "rho") and response time follows a curve that stays flat for a long time, then bends sharply upward as the system approaches saturation. This is why a service running at 60% CPU can absorb a spike gracefully while the same service at 90% CPU cannot — the remaining capacity does not produce the same headroom for latency because every new request is more likely to find the server busy.
+
+Little's Law formalizes one piece of this picture. It states that the long-term average number of requests in a system (L) equals the arrival rate (λ) multiplied by the average time each request spends in the system (W): L = λW. This holds under remarkably general conditions and it makes a practical point for capacity planning: if response time rises while throughput stays constant, the number of in-flight requests must also rise, which consumes memory, connections, file descriptors, and other finite resources. A capacity plan that only watches throughput misses this compounding effect — a latency increase is also a resource consumption increase.
+
+The steep part of the utilization curve — often called the "knee" — depends on workload variability. A system handling uniform, predictable requests can operate closer to saturation than one serving bursty arrivals with variable service times. This is why headroom targets are not one-size-fits-all. A deployment that processes background jobs from a queue may run safely at 85% utilization because work can wait, while a user-facing checkout service with a strict latency SLO may target 50–60% to leave room for the burstiness that real users produce. Queueing theory does not prescribe a specific number, but it explains why the cost of the last few percentage points of utilization is paid in latency — and that trade-off belongs in the capacity plan, not in an incident review.
+
+### The USE Method for Finding the Constraining Resource
+
+Brendan Gregg's USE method — Utilization, Saturation, Errors — provides a systematic checklist for bottleneck discovery that complements the four golden signals. While the golden signals (latency, traffic, errors, saturation) answer "are users suffering?", the USE method answers "which resource is causing the suffering?" For every hardware or software resource in the system — CPU, memory, storage devices, network interfaces, file descriptors, connection pools, thread pools, and application-level queues — you check three questions: Is utilization high? Is saturation (queued work) present? Are errors occurring?
+
+The method's power comes from its exhaustiveness. When a team watches only CPU and memory, they may miss that TCP retransmits are climbing because the network interface is saturated, or that database connection pool waiters are growing because the pool size is configured for steady-state load rather than peak. A USE-based investigation during a load test walks every resource tier and asks all three questions, making it much harder for a bottleneck to hide in an unmonitored dimension.
+
+In capacity-planning terms, the USE method turns "find the bottleneck" from intuition into procedure. Before provisioning more of any resource, a team can run a load test, apply USE to every tier, and identify which resource's saturation signal correlates with latency degradation first. That resource becomes the capacity model's limiting factor, and the model can then express future demand in units of that resource — database connections, disk IOPS, or network bandwidth — rather than in generic replicas.
+
 ### Bottleneck Analysis
 
 The bottleneck question is: which resource fails first as load increases? The answer is rarely visible from one dashboard panel. You find it by increasing load gradually, watching every tier, and looking for the first saturation signal that correlates with latency or errors.
@@ -448,6 +464,10 @@ flowchart LR
     F --> G[Pods receive traffic]
 ```
 
+The size of this reaction lag determines how much baseline headroom the service must carry. If the total time from spike arrival to new pods receiving traffic is four minutes and traffic can double in one minute, then the service must already have enough static headroom to absorb three minutes of that spike before the first new pod contributes. This is not an argument against autoscaling — it is an argument against using autoscaling as the sole capacity strategy for services with sharp traffic shapes. The combination that works is baseline headroom sized for the reaction gap, autoscaling to handle sustained demand shifts, and pre-scaling for scheduled events whose arrival time and magnitude are known in advance.
+
+In Kubernetes, horizontal pod autoscaling is one dimension of the capacity puzzle. The Vertical Pod Autoscaler (VPA) adjusts resource requests based on observed usage, which helps prevent the over-requesting that wastes cluster capacity and the under-requesting that causes throttling. On the node side, the Cluster Autoscaler provisions nodes when pods cannot be scheduled, while Karpenter takes a different approach by provisioning nodes based on pending pod requirements and bin-packing efficiency rather than static node group sizing. Each of these controllers addresses a different part of the reaction-lag problem, and together they form a layered autoscaling strategy that a capacity plan should explicitly coordinate rather than leave to independent default settings.
+
 ### Predictive Scaling and Graceful Degradation
 
 Predictive scaling uses historical patterns, calendars, and leading indicators to add capacity before demand arrives. It is most useful when the pattern is stable enough to forecast and the cost of being late is high. The failure mode is overconfidence: a prediction system that silently drifts can waste money or miss a new traffic shape.
@@ -572,6 +592,8 @@ The curve is steep because the last increments of reliability require redundancy
 | Cost per job | Batch platform cost / completed jobs | Helps tune worker capacity and scheduling |
 | Idle capacity cost | Unused provisioned capacity * unit price | Makes headroom trade-offs explicit |
 | Error-budget risk cost | Estimated impact of capacity-related failures | Balances reliability investment against outage risk |
+
+Translating capacity into unit cost is what makes capacity decisions defensible to the business. When an SRE asks for additional headroom or a larger database tier, the request competes with every other spending priority. A capacity plan that expresses cost as "dollars per checkout" or "dollars per thousand API requests" invites a different conversation than one that shows only aggregate infrastructure spend. The FinOps discipline formalizes this framing: capacity becomes a unit-economic input rather than an overhead line item, and changes in cost per unit become signals that the capacity model, code efficiency, or request mix has shifted. This does not mean capacity decisions should be made by finance — it means SREs should present them in the language the business already uses to evaluate investment returns, so reliability trade-offs can be weighed against the value of the protected user experience alongside the cost of the infrastructure that delivers it.
 
 ### Right-Sizing and Resource Requests
 
@@ -920,8 +942,19 @@ Continue with [Platform Engineering Discipline](/platform/disciplines/core-platf
 
 ## Sources
 
-- [en.wikipedia.org: Queueing theory](https://en.wikipedia.org/wiki/Queueing_theory) — General lesson point for an illustrative rewrite.
+- [Wikipedia: Queueing theory](https://en.wikipedia.org/wiki/Queueing_theory) — Foundational mathematical framework for understanding how utilization, arrival rate, and service time interact to produce latency in systems under load.
+- [Wikipedia: Little's Law](https://en.wikipedia.org/wiki/Little%27s_law) — Formal statement and derivation of L = λW, the relationship between queue length, arrival rate, and sojourn time that holds under general conditions and underpins capacity headroom reasoning.
+- [Brendan Gregg: The USE Method](https://brendangregg.com/usemethod.html) — The canonical description of the Utilization-Saturation-Errors checklist for systematically identifying the constraining resource in a system.
+- [Google SRE Book: Software Engineering in SRE](https://sre.google/sre-book/software-engineering-in-sre/) — Covers capacity planning, load testing, and the operational responsibilities that SRE teams carry for production service capacity.
+- [Google SRE Book: Handling Overload](https://sre.google/sre-book/handling-overload/) — Strategies for graceful degradation, load shedding, and capacity management when demand exceeds provisioned capacity.
+- [Google SRE Workbook: Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/) — Chapter 5 of the SRE Workbook covering burn-rate alerting, multi-window multi-burn-rate thresholds, and the alerting philosophy that connects capacity headroom to paging policy.
 - [Kubernetes Docs: Horizontal Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/) — Primary source for reactive workload scaling in Kubernetes, including the HPA control loop, metric targets, scaling behavior, stabilization windows, and limits of resource-utilization-based autoscaling.
+- [Kubernetes Docs: Autoscaling Overview](https://kubernetes.io/docs/concepts/workloads/autoscaling/) — Broader Kubernetes autoscaling landscape covering HPA, VPA, Cluster Autoscaler, and their interaction in capacity management.
 - [Kubernetes Docs: Resource Management for Pods and Containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) — Primary source for Kubernetes compute-resource requests and limits, pod/container resource accounting, and the implementation details that underpin capacity models and scheduling assumptions in cluster-based systems.
-- [Kubernetes Docs: Node Autoscaling](https://kubernetes.io/docs/concepts/cluster-administration/node-autoscaling/) — Covers how node provisioning and consolidation interact with workload scaling and cluster-level capacity buffers.
+- [Kubernetes Docs: Cluster Autoscaling](https://kubernetes.io/docs/concepts/cluster-administration/cluster-autoscaling/) — Covers how node provisioning and consolidation interact with workload scaling and cluster-level capacity buffers, including the Cluster Autoscaler control loop.
+- [GitHub: Kubernetes Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) — The Kubernetes VPA project, which adjusts pod resource requests based on observed usage and complements horizontal scaling in capacity models.
+- [Karpenter Documentation](https://karpenter.sh/docs/) — Documentation for the Karpenter node autoscaler, which provisions nodes based on pending pod requirements and bin-packing efficiency rather than node group sizing.
 - [v1-35.docs.kubernetes.io: horizontal pod autoscale](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/) — The v1.35 HPA docs directly state that autoscaling/v2 supports scaling on memory and custom metrics, and the same page documents resource-metric scaling for CPU.
+- [Grafana k6 Documentation](https://grafana.com/docs/k6/latest/) — Primary documentation for k6, the open-source load testing tool used for capacity validation, including ramp-up scenarios, thresholds, and result analysis.
+- [DORA Research Program](https://dora.dev/research/) — The DevOps Research and Assessment program's metrics and findings on deployment frequency, change failure rate, MTTR, and lead time, which inform capacity investment trade-offs.
+- [Microsoft Azure Well-Architected Framework: Cost Optimization](https://learn.microsoft.com/en-us/azure/well-architected/cost/) — Cloud-agnostic cost optimization principles including right-sizing, reserved capacity, and connecting spend to business value, which inform the FinOps dimension of capacity planning.
