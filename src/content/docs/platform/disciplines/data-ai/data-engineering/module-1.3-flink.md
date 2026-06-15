@@ -195,7 +195,7 @@ The operator handles the following lifecycle concerns that are otherwise error-p
 
 ```bash
 # Add the Flink Helm repository
-helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.10.0/
+helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.15.0/
 helm repo update
 
 # Install the operator
@@ -843,7 +843,7 @@ kubectl -n cert-manager wait --for=condition=Available deployment --all --timeou
 
 # Install Flink Operator
 kubectl create namespace flink
-helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.10.0/
+helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.15.0/
 helm repo update
 helm install flink-kubernetes-operator flink-operator/flink-kubernetes-operator \
   --namespace flink \
