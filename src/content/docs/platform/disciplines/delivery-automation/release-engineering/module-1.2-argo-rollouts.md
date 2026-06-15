@@ -3,19 +3,9 @@ title: "Module 1.2: Advanced Canary Deployments with Argo Rollouts"
 slug: platform/disciplines/delivery-automation/release-engineering/module-1.2-argo-rollouts
 sidebar:
   order: 3
+revision_pending: false
 ---
 > **Discipline Module** | Complexity: `[COMPLEX]` | Time: 3 hours
-
-## Prerequisites
-
-Before starting this module:
-- **Required**: [Module 1.1: Release Strategies](../module-1.1-release-strategies/) — Canary concepts, blast radius, progressive delivery
-- **Required**: Prometheus basics — PromQL queries, metrics scraping, alerting fundamentals
-- **Required**: Kubernetes Services and Ingress — Traffic routing, selectors, ingress controllers
-- **Recommended**: Familiarity with Helm or Kustomize for templating
-- **Recommended**: Understanding of HTTP status codes and latency percentiles
-
----
 
 ## What You'll Be Able to Do
 
@@ -28,1116 +18,502 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In the previous module, you learned that canary deployments send a small percentage of traffic to a new version and gradually increase it. You did this manually — patching Services, eyeballing dashboards, making gut-feeling decisions about whether to proceed.
+Hypothetical scenario: a checkout API runs ten replicas behind a Service, and a new version passes readiness probes because it can answer `/healthz` even though one payment path now returns slow, misleading success responses. A standard Kubernetes `Deployment` can replace old Pods gradually, but it does not know that one business operation is degraded, it does not ask Prometheus whether the canary is violating an SLO, and it does not pause at a small traffic slice until a human or controller approves the next step. The Deployment controller is excellent at converging ReplicaSets; it is not a progressive-delivery decision engine.
 
-Now imagine doing that at 3 AM. Or for 50 services simultaneously. Or when the person who understands the metrics is on vacation.
+That distinction is the reason this module exists. Progressive delivery is not simply "roll out slowly"; it is a feedback control loop that changes production exposure only when evidence says the new version is healthy enough for the next blast-radius increase. The durable practice is older and broader than any one tool: define a safe exposure path, observe the right signals, decide before the blast radius grows, and make the rollback path faster than the incident path. Argo Rollouts is the worked example because its `Rollout`, `AnalysisTemplate`, and `AnalysisRun` resources make that loop visible inside Kubernetes objects.
 
-Manual canary deployments do not scale. They depend on a human watching dashboards, interpreting graphs, and making timely decisions. Humans get tired. Humans get distracted. Humans have slow reaction times compared to automated systems that can detect a spike in 5xx errors within 30 seconds and roll back within 60.
+This module assumes you already understand basic canary ideas from [Module 1.1: Release Strategies](../module-1.1-release-strategies/), Prometheus query basics, Kubernetes Services, and how an ingress controller or service mesh can split traffic. The focus here is the "why" behind the controller: when a rollout becomes a production risk decision, the platform needs more than a CI job that applies YAML. It needs a reconciler that can own rollout state, run analysis at the right time, preserve a stable version, and expose clear operations commands when people must intervene.
 
-**Argo Rollouts** transforms canary deployments from a manual art into an automated science. It watches your Prometheus metrics, evaluates them against thresholds you define, and makes promotion or rollback decisions faster and more reliably than any human operator.
+The important mental shift is that release automation should not ask, "Did the deployment command finish?" It should ask, "Is this version earning more exposure according to the reliability contract of this service?" When that contract is expressed as SLO-aligned metrics and tied to controller behavior, promotion becomes repeatable, rollback becomes rehearsable, and the release process stops depending on whoever happens to be watching a dashboard at the right moment.
 
-After this module, you will have a fully automated canary pipeline that promotes good releases and kills bad ones — without you lifting a finger.
+## Why a Rollout Controller Exists
 
----
+The stock Kubernetes Deployment controller solves a different problem from progressive delivery. A Deployment observes a desired Pod template, creates a new ReplicaSet when that template changes, and shifts replicas from the old ReplicaSet to the new one according to `RollingUpdate` or `Recreate` behavior. That is the right abstraction for many services because Kubernetes can make sure the desired number of Pods is available without forcing every team to manage ReplicaSets by hand. The controller's core job is convergence, not risk evaluation.
 
-## What is Argo Rollouts?
+Progressive delivery adds decisions that do not fit naturally into a Deployment. You may want five percent of user traffic to reach the new version while the canary has only one Pod. You may want the rollout to pause indefinitely until an operator approves promotion after a database migration check. You may want Prometheus, Datadog, CloudWatch, a Kubernetes Job, or another provider to report whether error rate, latency, saturation, and business success metrics are still inside safe bounds. Those are not merely replica-count changes; they are policy decisions about production exposure.
 
-> **Stop and think**: What happens to user traffic in a standard Kubernetes `Deployment` with the `RollingUpdate` strategy if the new pods start returning HTTP 500 errors but their readiness probes still pass?
+Argo Rollouts introduces a `Rollout` custom resource that replaces a Deployment for services that need those decisions. The Rollout still manages ReplicaSets, selectors, Pod templates, and replica counts, so it remains familiar to Kubernetes operators. The difference is that its strategy can describe canary and blue-green behavior directly: pause steps, traffic weights, analysis runs, preview services, active services, and rollback behavior become part of the desired state. The controller then reconciles both workload state and rollout state.
 
-### The Gap in Native Kubernetes
+Imagine the Rollout controller as a release airlock between "a new container image exists" and "all users depend on it." A Deployment opens the door as soon as readiness allows the next batch of Pods to become available. A progressive-delivery controller opens one chamber at a time, measures pressure before the next door unlocks, and returns everyone to the safe side if the pressure moves outside the expected range. The analogy is imperfect, but it captures the purpose: progressive delivery is controlled exposure, not slower deployment theater.
 
-Kubernetes Deployments support two strategies: `RollingUpdate` and `Recreate`. Neither gives you:
+In Flagger, the equivalent idea appears through a different ownership model. Flagger usually watches an existing `Deployment` referenced by a `Canary` custom resource, then creates or adjusts routing objects and runs metric checks around that workload. Argo Rollouts usually makes the Rollout itself the workload controller. Both approaches can implement metric-gated progressive delivery, but the operational surface differs: Argo asks teams to replace a Deployment with a Rollout, while Flagger often lets teams keep Deployment as the primary workload object and attach progressive-delivery orchestration beside it.
 
-- Fine-grained traffic percentage control (5%, then 10%, then 25%)
-- Metrics-driven promotion decisions
-- Automated rollback based on business metrics
-- Pause-and-verify steps between traffic increases
-- Integration with service meshes or ingress controllers for traffic splitting
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> Argo Rollouts is part of the Argo project family, and the CNCF project page lists Argo as Graduated. The Argo Rollouts documentation describes canary and blue-green strategies, analysis through multiple providers, and traffic routing through pluggable integrations such as ingress controllers, Gateway API implementations, service meshes, and SMI-compatible routing layers. Flagger documentation describes a `Canary` resource that orchestrates progressive delivery around workloads such as Deployments while integrating with service meshes, ingress controllers, Prometheus-style metrics, and other providers. Treat provider names, exact feature sets, and maturity statements as volatile; the durable point is that both controllers connect workload rollout state, traffic routing, and metric evaluation.
 
-Argo Rollouts fills this gap with a custom `Rollout` resource that replaces the standard `Deployment`.
+| Durable capability | Argo Rollouts worked example | Equivalent in Flagger |
+|---|---|---|
+| Workload ownership | `Rollout` replaces `Deployment` for the release-managed workload | `Canary` references a target workload such as a `Deployment` |
+| Traffic progression | Canary steps use `setWeight`, pauses, and traffic-routing integrations | Canary analysis defines progression intervals, thresholds, and routing updates |
+| Metric gate | `AnalysisTemplate` creates `AnalysisRun` instances during rollout | Metric templates and providers evaluate canary health during analysis |
+| Blue-green release | `activeService`, `previewService`, promotion, and scale-down delay | Blue-green style behavior is modeled through provider-specific routing and promotion patterns |
+| GitOps fit | The desired Rollout and templates live in Git; operators use CLI actions for promotion or abort | The desired workload, Canary, and provider resources live in Git; controller reconciles the delivery loop |
 
-### Architecture
+## Progressive Delivery as a Control Loop
 
-```mermaid
-flowchart TD
-    Controller["Argo Rollouts Controller\n(Watches CRDs, Manages ReplicaSets, Runs Analyses)"]
-    
-    Controller --> Rollout
-    Controller --> AnalysisTemplate
-    
-    Rollout["Rollout Resource\n- Canary strategy\n- Traffic weight steps\n- Analysis references\n- Rollback rules"]
-    AnalysisTemplate["AnalysisTemplate Resource\n- Prometheus queries\n- Success criteria\n- Failure thresholds\n- Measurement intervals"]
-    
-    Rollout --> RS["ReplicaSets\n- Stable (current live)\n- Canary (new version)"]
-    AnalysisTemplate --> ARun["AnalysisRun (instance)\n- Running metrics queries\n- Evaluating pass/fail\n- Reporting to controller"]
-```
+A useful rollout design starts with the control loop, not the tool syntax. First, the platform constrains exposure by deciding how much production traffic the new version may receive at each stage. Second, the platform observes signals that represent user harm, service health, and resource pressure. Third, it compares those signals with explicit success and failure conditions. Finally, it either increases exposure, pauses for human judgment, or aborts and returns traffic to the stable version. Argo Rollouts implements that loop with Rollout steps and AnalysisRuns, but the loop itself is the durable practice.
 
-### Core CRDs
+The exposure path should match the service's risk profile. A stateless internal API with strong automated tests might move from a small canary slice to a medium slice and then to full traffic in minutes. A payment path, authentication service, control-plane component, or state-changing worker often needs smaller steps, longer pauses, and more conservative failure conditions. The point is not to copy one universal weight sequence. The point is to make each step large enough to produce meaningful signal and small enough that rollback remains a business event rather than an incident.
 
-Argo Rollouts introduces four Custom Resource Definitions:
+The observation layer should include more than the easiest HTTP metric. Error rate is necessary, but it is rarely sufficient. Latency percentiles, saturation, restarts, OOM kills, queue lag, dependency failures, and domain-specific success ratios can all reveal different failure modes. If the service has an SLO, the rollout analysis should connect to the same reasoning you learned in the SRE material on [SLOs](../../core-platform/sre/module-1.2-slos/) and [error budgets](../../core-platform/sre/module-1.3-error-budgets/). A canary gate that ignores the service's reliability promise is only a prettier health check.
 
-| CRD | Purpose |
-|-----|---------|
-| **Rollout** | Replaces Deployment; defines the canary/blue-green strategy |
-| **AnalysisTemplate** | Defines what metrics to check and their success criteria |
-| **AnalysisRun** | A running instance of an AnalysisTemplate (created automatically) |
-| **Experiment** | Runs temporary ReplicaSets for A/B testing (advanced use) |
+The decision layer is where progressive delivery becomes concrete. A controller should know what "good enough to continue" means, what "bad enough to abort" means, and how much uncertainty is acceptable before it waits longer. That is why Argo AnalysisTemplates contain success conditions, failure conditions, intervals, counts, and failure limits. Those fields force the release engineer to turn vague dashboard-watching instincts into an executable policy. The quality of that policy determines whether automation protects users or merely automates false confidence.
 
----
+The rollback layer needs the same design care as the promotion layer. A rollback that relies on a tired operator reading a runbook after an alert fires is still manual incident response. A controller-managed abort can scale down the canary ReplicaSet, route traffic back to the stable ReplicaSet, and mark the Rollout as degraded while the failure is still small. That fast mechanical action does not replace diagnosis; it buys time for diagnosis by removing the new version from the user path.
 
-## Rollout Resource Deep Dive
+## Canary Rollouts with Explicit Steps
 
-### From Deployment to Rollout
+In Argo Rollouts, a canary strategy is written as a sequence of steps. `setWeight` changes the desired canary traffic weight, `pause` waits either for a duration or for manual promotion, and `analysis` runs an AnalysisTemplate before the controller proceeds. This turns release intent into state that the controller can reconcile. Instead of a CI pipeline sleeping for a fixed time and hoping nothing went wrong, the Rollout object declares the exposure plan and the conditions that govern movement through that plan.
 
-Converting a Deployment to a Rollout is straightforward. The key changes:
+The simplest canary uses replica-based splitting. If a Rollout has ten replicas and no traffic-routing integration, a twenty percent weight can be approximated by running two canary Pods and eight stable Pods behind the same Service. That is useful for development, internal systems, and low-risk services, but it has a precision limit: traffic share is tied to replica count and kube-proxy or load-balancer behavior. With a small replica count, one canary Pod can represent a large slice of traffic even when you ask for a cautious beginning.
+
+Traffic routing separates exposure from replica math. When Argo Rollouts integrates with an ingress controller, Gateway API implementation, service mesh, or SMI-compatible routing layer, the controller can adjust routing objects so five percent of requests reach the canary even if the canary and stable ReplicaSets have different Pod counts. The exact fields differ by provider, which is why provider details belong in a dated snapshot. The durable idea is that progressive delivery needs a traffic control plane when replica counts are not precise enough.
+
+Manual pauses and timed pauses serve different purposes. A timed pause gives the service enough time to produce measurements, warm caches, run through expected background jobs, or receive representative traffic. A manual pause creates a deliberate approval point for migrations, stakeholder checks, or risky releases where human judgment remains necessary. The anti-pattern is pretending that every pause is safety. A pause without the right signals merely delays risk; a pause connected to analysis and a clear promotion rule reduces risk.
+
+Here is a minimal Rollout that demonstrates the step structure with an official demo image. It is intentionally small so the release mechanics are visible before you add provider-specific routing or production analysis. In a real service, you would add traffic routing when replica-based splitting is too coarse and you would attach analysis steps that query production-quality metrics.
 
 ```yaml
-# Before: Standard Deployment
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
-  name: my-app
+  name: rollouts-demo
 spec:
   replicas: 5
-  strategy:
-    type: RollingUpdate
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app: my-app
+      app: rollouts-demo
   template:
-    # ... pod template ...
-```
-
-```yaml
-# After: Argo Rollout
-apiVersion: argoproj.io/v1alpha1      # ← Changed
-kind: Rollout                          # ← Changed
-metadata:
-  name: my-app
-spec:
-  replicas: 5
-  strategy:                            # ← Completely different
+    metadata:
+      labels:
+        app: rollouts-demo
+    spec:
+      containers:
+        - name: rollouts-demo
+          image: argoproj/rollouts-demo:blue
+          ports:
+            - name: http
+              containerPort: 8080
+  strategy:
     canary:
       steps:
-        - setWeight: 5
-        - pause: { duration: 5m }
         - setWeight: 20
-        - pause: { duration: 5m }
+        - pause:
+            duration: 2m
         - setWeight: 50
-        - pause: { duration: 10m }
-        - setWeight: 80
-        - pause: { duration: 5m }
+        - pause: {}
+        - setWeight: 100
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rollouts-demo
+spec:
+  selector:
+    app: rollouts-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+```
+
+Notice that this YAML does not ask CI to remember rollout state. The state lives in Kubernetes, where the controller can observe it, show it through status, and resume after temporary controller restarts. That is a major operational advantage over scripts that patch Deployments and sleep in a pipeline runner. A pipeline runner can be the trigger, but the cluster controller should own the long-running release state.
+
+## Traffic Management and Blast Radius
+
+Traffic management is the difference between "some new Pods exist" and "a controlled share of user requests reaches those Pods." Without a routing integration, Argo Rollouts can only influence traffic indirectly through how many stable and canary Pods are available behind a Service. With a routing integration, Argo can update the routing layer so a requested percentage, header match, or route rule sends traffic to the canary Service while the stable Service remains the default. This matters whenever the first safe canary slice is smaller than one Pod out of the total replica count.
+
+The stable and canary Services are not two separate applications. They are routing handles that the Rollouts controller can point at different ReplicaSets by managing selectors. The stable Service represents the known-good version, and the canary Service represents the version under evaluation. Traffic providers then split requests between those Services or between provider-specific subsets. This keeps the exposure decision outside the application code and lets the platform enforce rollout policy consistently across teams.
+
+Provider pluggability is useful, but it is also a source of fragile curriculum content. NGINX Ingress, ALB, Gateway API implementations, Istio, Traefik, SMI, and other integrations have different configuration surfaces, release cadences, and support details. Do not memorize a provider list as if it were the core skill. Learn the capability boundary: the Rollout controller decides the desired traffic weight, and the traffic provider applies that decision to real request routing. When provider support changes, that boundary remains the same.
+
+Header-based routing is a special case worth understanding because it changes who receives the canary, not just how many requests do. A team might route internal testers, synthetic traffic, or a partner tenant to the canary before exposing a percentage of ordinary users. That pattern is helpful when correctness depends on workflows that public traffic may not exercise early. It is not a replacement for percentage canaries, because testers rarely represent the full shape of production load, but it can catch obvious problems before the broader canary begins.
+
+Blast radius should be designed in user-impact terms, not only in percent terms. Five percent of global read traffic might be safe for a content service and risky for an endpoint that handles a small number of high-value transactions. A rollout serving one large enterprise tenant might create a larger business blast radius than a rollout serving many tiny anonymous requests. The controller can enforce weights, but release engineers must choose weights and route matches that reflect the real consequences of failure.
+
+The equivalent in Flagger is conceptually similar: Flagger updates provider-specific routing resources as the canary progresses, while the `Canary` resource describes intervals, thresholds, and routing behavior around a target workload. The operational decision remains the same regardless of controller. Decide whether your platform wants the release controller to own the workload object directly, as Argo Rollouts does with `Rollout`, or orchestrate around existing workload objects, as Flagger commonly does with a referenced Deployment.
+
+## AnalysisTemplates and Metric-Driven Promotion
+
+AnalysisTemplates are the heart of progressive delivery in Argo Rollouts because they turn "watch the dashboard" into executable policy. A template defines metrics, providers, arguments, intervals, success conditions, failure conditions, and limits. When a Rollout reaches an analysis step, the controller creates an AnalysisRun from the template. The AnalysisRun is the live execution record: it queries the provider, stores measurements, evaluates conditions, and reports success, failure, inconclusive, or error states back to the Rollout.
+
+That separation matters operationally. A template is reusable policy, while a run is evidence from one release attempt. If a canary fails, the AnalysisRun gives reviewers concrete measurement history instead of a vague memory that "latency looked bad." If a canary passes, the run documents what was checked and when. This makes progressive delivery auditable, and it also makes it easier to improve the gate after a near miss because the team can compare the failure mode with the exact metrics that were or were not evaluated.
+
+Prometheus is a clear worked example because PromQL makes the metric decision visible in the manifest. The same mental model applies to other providers: query a signal, evaluate a condition, and decide whether the rollout can continue. The query must be tested in the observability system before it is trusted in a Rollout. A syntactically valid query that returns an empty vector, mixes units, hides missing data, or aggregates stable and canary traffic together can make a bad release look safe.
+
+The example below uses `vector(1)` so the manifest is copy-runnable against any reachable Prometheus server for a smoke test of the analysis path. It is not a production health gate. Replace the query with a service-specific SLO signal only after you have verified that the query returns the expected shape and value in Prometheus for both stable and canary traffic.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: prometheus-analysis-smoke-test
+spec:
+  metrics:
+    - name: prometheus-reachable
+      interval: 30s
+      count: 3
+      successCondition: result[0] == 1
+      failureCondition: result[0] != 1
+      failureLimit: 0
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: vector(1)
+```
+
+For a real service, the query should answer a release question, not merely a monitoring question. "Are Pods up?" is weaker than "Is the canary preserving the service's request success SLO?" "Is CPU below a limit?" is weaker than "Is saturation rising in a way that will exhaust the error budget if this version reaches full traffic?" A mature AnalysisTemplate usually combines application health, user-facing latency, resource saturation, and at least one business or workflow metric that detects silent success failures.
+
+The exact success and failure conditions deserve careful thought. A success condition states when the controller has enough evidence to proceed. A failure condition states when the controller should stop waiting and protect users. `failureLimit` controls how many failed measurements are tolerated, while `count` and `interval` control how much time and evidence the analysis needs. Tight limits catch failures quickly but can abort on noisy metrics; loose limits reduce false aborts but increase the time users spend on a bad canary.
+
+Metric windows should be longer than the shortest traffic bursts but short enough to react before the blast radius grows. A one-minute rate over a low-volume service may be mostly noise. A long window may hide a sudden regression because old stable traffic dilutes the new canary signal. For low-traffic services, synthetic checks, header-routed test traffic, or business workflow probes may provide better evidence than waiting for random users to exercise the canary. The analysis design should fit the traffic shape of the service.
+
+Background analysis and inline analysis answer different needs. Background analysis runs across multiple rollout steps and can stop the rollout if health degrades between pauses. Inline analysis runs at a particular step and blocks the next step until it completes. A strong rollout often uses both: background analysis for continuous SLO protection and inline analysis for step-specific checks such as smoke tests, migration validation, or a synthetic workflow that should run after the canary first receives traffic.
+
+## Designing Rollback Around SLOs
+
+Rollback design should begin with the user promise. If a service has an SLO for successful requests, latency, freshness, or workflow completion, the rollout gate should be tied to that promise. Otherwise, the team can accidentally optimize for healthy infrastructure while violating the experience users actually rely on. A canary that returns `200 OK` while failing to persist a checkout, enqueue a job, or update a search index is still a failed release even if HTTP error rate is green.
+
+Hypothetical scenario: a payment team releases a new validation path that silently rejects one rare transaction shape while returning success to the caller. The HTTP error-rate gate passes, latency stays inside bounds, and CPU usage looks normal. The canary promotes because the analysis only measures transport health. A better gate also measures the ratio of accepted payments to completed ledger writes, or a synthetic transaction that exercises the edge case before broad promotion. The lesson is not that payment systems are special; the lesson is that every domain has failure modes below HTTP.
+
+Automatic rollback should be faster than human diagnosis because the controller is not trying to explain the bug. It is only trying to remove the new version from the user path when the evidence crosses a failure condition. After the abort, people can inspect the AnalysisRun, Rollout events, application logs, traces, and dashboards. Separating immediate protection from root-cause investigation reduces pressure on responders and prevents the common failure where a team spends too long debating whether the graph is "really bad enough" while the blast radius grows.
+
+Not every breach should trigger the same action. A hard failure in a critical business metric may deserve `failureLimit: 0`, because one bad measurement is enough to stop the release. A noisy latency percentile might allow one failed measurement before aborting, especially if the service has bursty traffic. An inconclusive result may call for a longer pause rather than an immediate rollback. Good rollout policy encodes the difference between "unsafe," "uncertain," and "safe enough to continue."
+
+Rollback also depends on traffic-provider correctness. If the Rollout controller believes it has returned traffic to stable but the ingress, service mesh, or gateway rule still points some users at canary, the rollback is incomplete. For that reason, production rollout readiness should include provider-specific smoke tests and observability that shows actual request distribution, not just the desired weight in the Rollout status. The controller's state is necessary evidence, but the real goal is traffic safety.
+
+Stateful workloads need extra caution because rolling back Pods may not roll back data shape, external side effects, or messages already emitted by the canary. A schema migration, queue consumer, or controller that mutates shared resources can create irreversible effects before metrics fail. For those systems, progressive delivery must be paired with backward-compatible migrations, feature flags, dual-read or dual-write strategies, and explicit rollback rehearsals. Argo Rollouts can manage exposure, but it cannot make irreversible application behavior reversible by itself.
+
+## Blue-Green Rollouts
+
+Canary is not the only progressive-delivery pattern Argo Rollouts supports. Blue-green delivery keeps a stable version serving production traffic while a preview version is created and validated behind a separate Service. In Argo Rollouts, the `activeService` points to the production version, and the `previewService` points to the version being prepared. Promotion switches the active Service to the preview version when the release is ready. This pattern is attractive when a team wants production-like validation before user exposure, or when the traffic switch should be abrupt after a controlled preflight.
+
+The strength of blue-green is its clean separation between preview and active traffic. You can run smoke tests, execute pre-promotion analysis, inspect the preview version, and keep users on the stable version until promotion. The weakness is that it can hide problems that require real production traffic shape. A preview service may pass synthetic tests and still fail under real concurrency, tenant mix, cache behavior, or dependency load. Blue-green reduces cutover uncertainty, but it does not eliminate the need for post-promotion observation.
+
+Argo Rollouts adds fields that make blue-green operations explicit. `activeService` identifies the Service receiving production traffic, `previewService` identifies the Service for the new version, `autoPromotionEnabled` controls whether promotion happens automatically, `prePromotionAnalysis` can block promotion until metrics or jobs pass, and `scaleDownDelaySeconds` can keep the previous ReplicaSet available briefly after promotion. The delay is useful because traffic providers and clients may need time to converge after the Service selector changes.
+
+Here is a compact blue-green Rollout using the same official demo image. The Services are separate because the controller updates their selectors as promotion state changes. The preview Service gives you a stable endpoint for checks before the active Service is moved.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: rollouts-demo-bluegreen
+spec:
+  replicas: 3
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app: my-app
+      app: rollouts-demo-bluegreen
   template:
-    # ... same pod template ...
-```
-
-### Canary Steps Explained
-
-The `steps` array defines the rollout progression:
-
-```yaml
-steps:
-  # Step 1: Send 5% of traffic to canary
-  - setWeight: 5
-
-  # Step 2: Wait 5 minutes (auto-proceed after duration)
-  - pause: { duration: 5m }
-
-  # Step 3: Run an analysis — metrics must pass to proceed
-  - analysis:
-      templates:
-        - templateName: success-rate
-      args:
-        - name: service-name
-          value: my-app
-
-  # Step 4: If analysis passed, increase to 20%
-  - setWeight: 20
-
-  # Step 5: Indefinite pause — requires manual approval
-  - pause: {}
-
-  # Step 6: After manual approval, go to 50%
-  - setWeight: 50
-
-  # Step 7: Another analysis check at higher traffic
-  - analysis:
-      templates:
-        - templateName: success-rate
-        - templateName: latency-check
-
-  # Step 8: Full rollout
-  - setWeight: 100
-```
-
-### Step Types
-
-| Step | Behavior |
-|------|----------|
-| `setWeight: N` | Route N% of traffic to canary |
-| `pause: {duration: 5m}` | Wait, then auto-proceed |
-| `pause: {}` | Wait indefinitely for manual promotion |
-| `analysis:` | Run AnalysisTemplate; proceed on success, rollback on failure |
-| `setCanaryScale:` | Set exact replica count for canary (instead of weight-based) |
-| `setHeaderRoute:` | Route by HTTP header (A/B testing) |
-
----
-
-## Traffic Routing
-
-### How Traffic Splitting Works
-
-Argo Rollouts supports multiple traffic routing mechanisms:
-
-**1. Replica-based splitting (default, no extra infra):**
-
-Traffic is split proportionally by pod count. If you have 10 replicas and set canary weight to 20%, Argo Rollouts runs 2 canary pods and 8 stable pods.
-
-```text
-Limitation: You can only achieve traffic splits that align with replica counts.
-With 5 replicas, your options are 20%, 40%, 60%, 80% — not 5% or 10%.
-```
-
-**2. Ingress-controller-based splitting (recommended):**
-
-Argo Rollouts integrates with NGINX Ingress, ALB, Istio, Traefik, and others to achieve precise traffic percentages regardless of replica count.
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
-metadata:
-  name: my-app
-spec:
+    metadata:
+      labels:
+        app: rollouts-demo-bluegreen
+    spec:
+      containers:
+        - name: rollouts-demo
+          image: argoproj/rollouts-demo:blue
+          ports:
+            - name: http
+              containerPort: 8080
   strategy:
-    canary:
-      canaryService: my-app-canary     # Service for canary pods
-      stableService: my-app-stable     # Service for stable pods
-      trafficRouting:
-        nginx:
-          stableIngress: my-app-ingress  # Your existing Ingress
-          additionalIngressAnnotations:
-            canary-by-header: X-Canary
-            canary-weight: "5"
-      steps:
-        - setWeight: 5
-        - pause: { duration: 5m }
-        - setWeight: 25
-        - pause: { duration: 5m }
-        - setWeight: 50
-        - pause: { duration: 10m }
-```
-
-This requires two Services:
-
-```yaml
-# Stable service (existing users)
+    blueGreen:
+      activeService: rollouts-demo-active
+      previewService: rollouts-demo-preview
+      autoPromotionEnabled: false
+      scaleDownDelaySeconds: 30
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: my-app-stable
+  name: rollouts-demo-active
 spec:
   selector:
-    app: my-app
+    app: rollouts-demo-bluegreen
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 8080
 ---
-# Canary service (canary traffic)
 apiVersion: v1
 kind: Service
 metadata:
-  name: my-app-canary
+  name: rollouts-demo-preview
 spec:
   selector:
-    app: my-app
+    app: rollouts-demo-bluegreen
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 8080
 ```
 
-Argo Rollouts manages the selectors on these Services automatically, pointing the stable Service to the stable ReplicaSet and the canary Service to the canary ReplicaSet.
+Blue-green and canary are not competing religions. They answer different release questions. Canary asks, "Can this version earn progressively larger real-user exposure?" Blue-green asks, "Can this version be prepared and validated before a deliberate traffic switch?" Some platforms use both: blue-green for services where a clean cutover is useful, canary for high-risk user-facing paths, and feature flags when deployment should be decoupled from release behavior inside the application.
 
-**3. Service Mesh integration (Istio):**
+## Argo Rollouts and Flagger
 
-```yaml
-trafficRouting:
-  istio:
-    virtualServices:
-      - name: my-app-vsvc
-        routes:
-          - primary
-    destinationRule:
-      name: my-app-destrule
-      canarySubsetName: canary
-      stableSubsetName: stable
-```
+It is tempting to frame Argo Rollouts versus Flagger as a winner-take-all tool comparison, but that is the wrong lesson. Both exist because native workload controllers do not provide the full progressive-delivery loop by themselves. Both connect workload state, routing state, and metric analysis. The durable decision is not "which tool is best"; it is "which ownership model and operational surface fit this platform's existing GitOps, traffic, and observability architecture?"
 
-### Traffic Routing Comparison
+Argo Rollouts is a strong fit when a platform team is comfortable making `Rollout` the workload primitive for release-managed services. That gives one object a clear view of Pod template changes, canary or blue-green strategy, analysis references, pause state, promotion, and abort behavior. The tradeoff is migration work: teams must convert Deployments to Rollouts, adjust health checks and GitOps behavior, and teach operators the Rollouts CLI and status model.
 
-| Method | Precision | Extra Infra | Best For |
-|--------|-----------|-------------|----------|
-| Replica-based | Low (limited to replica ratios) | None | Simple setups, development |
-| NGINX Ingress | High (any percentage) | NGINX Ingress Controller | Most production use cases |
-| Istio | Very High (percentage + headers + more) | Istio service mesh | Complex routing, header-based canaries |
-| AWS ALB | High | AWS ALB Ingress | AWS-native environments |
-| Traefik | High | Traefik | Traefik-based clusters |
+Flagger is a strong fit when a platform prefers to keep standard workload objects such as Deployments and attach progressive-delivery behavior around them. Its `Canary` resource references the target workload and provider configuration, then orchestrates traffic shifting and analysis. The tradeoff is that release state is split between the workload and the Canary orchestration object. That can be exactly what a platform wants when teams already have strong Deployment conventions and the platform layer owns delivery policy.
 
----
+GitOps integration looks slightly different under each model. With Argo Rollouts and Argo CD, the Rollout manifest lives in Git like any other resource, while operational actions such as promote, abort, and retry may happen through the Rollouts CLI or UI when a rollout is paused or degraded. With Flagger and Flux-family workflows, the workload, Canary, and provider resources are reconciled through GitOps controllers while Flagger handles delivery progression. In either case, the desired delivery policy belongs in version control, and emergency operations should leave an auditable trail.
 
-## AnalysisTemplates: Metrics-Driven Decisions
+The practical selection questions are boring in the best way. Which traffic providers does your platform already operate well? Which observability provider holds the metrics you trust for SLO decisions? Do application teams accept a custom workload kind, or would they rather keep Deployment? How will on-call engineers see rollout state, abort a bad release, and recover from degraded state? Which controller's failure modes can your team explain during an incident? Those questions survive vendor churn better than feature checklists.
 
-> **Pause and predict**: If your AnalysisTemplate checks an error rate metric every 60 seconds and requires 5 successful measurements to pass, what is the absolute minimum time this step will take to complete?
+## Operations and GitOps Integration
 
-### The Core Innovation
+The Rollouts CLI exists because rollout operations are stateful and time-sensitive. Operators need to watch a rollout, inspect pause state, abort a bad release, retry after a fix, promote a paused step, and view AnalysisRuns without reconstructing state from raw Kubernetes events. The plugin keeps those operations close to `kubectl`, which matters during incidents because responders should not have to remember a separate web console workflow before they can protect users.
 
-AnalysisTemplates are what make Argo Rollouts transformative. Instead of a human watching Grafana, you encode your promotion criteria as code:
+The most important commands are simple. `kubectl argo rollouts get rollout NAME --watch` shows progress and current step. `kubectl argo rollouts promote NAME` moves a paused rollout forward. `kubectl argo rollouts promote NAME --full` skips remaining steps and promotes fully, which should be treated as a deliberate override. `kubectl argo rollouts abort NAME` stops the rollout and returns traffic to the stable version. `kubectl argo rollouts retry NAME` retries a failed or aborted rollout after the underlying problem has been fixed.
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AnalysisTemplate
-metadata:
-  name: success-rate
-spec:
-  args:
-    - name: service-name
-  metrics:
-    - name: success-rate
-      # Check every 60 seconds
-      interval: 60s
-      # Need at least 3 measurements before deciding
-      count: 3
-      # All 3 must pass
-      successCondition: result[0] >= 0.95
-      # If any single measurement is below 0.90, fail immediately
-      failureCondition: result[0] < 0.90
-      failureLimit: 0
-      provider:
-        prometheus:
-          address: http://prometheus.monitoring:9090
-          query: |
-            sum(rate(
-              http_requests_total{
-                service="{{args.service-name}}",
-                status!~"5.."
-              }[5m]
-            )) /
-            sum(rate(
-              http_requests_total{
-                service="{{args.service-name}}"}[5m]
-              ))
-```
+Those commands should be embedded in runbooks with decision criteria, not memorized as magic incantations. A runbook should say when promotion is allowed, which dashboards confirm actual traffic distribution, which AnalysisRun fields matter, how to verify the active image after abort, and what evidence must be captured before retry. Progressive delivery reduces repetitive manual judgment, but it does not remove accountability for the cases where people override the controller or recover from a degraded state.
 
-This template says: "Query Prometheus every 60 seconds. The success rate (non-5xx / total) must be at least 95%. If it ever drops below 90%, fail immediately."
+Argo CD integration deserves a careful mental model. GitOps should declare the desired Rollout, AnalysisTemplate, Services, and provider resources. The Rollouts controller then manages child ReplicaSets, analysis runs, and rollout phase transitions. If a rollout pauses, Argo CD may show the resource as progressing rather than immediately healthy, depending on health customization and extension behavior. Platform teams should make that status understandable to application teams so a healthy intentional pause is not mistaken for a broken sync.
 
-### Multiple Metrics
+Promotion workflow design is where release engineering meets organizational design. Some services can auto-promote if analysis passes, because the metrics are trusted and the blast radius is low. Other services require a manual pause after a specific weight because the release crosses a regulatory, tenant, data, or operations boundary. The correct workflow may involve CI opening a pull request, Argo CD syncing the Rollout, Argo Rollouts pausing at a gate, and an on-call engineer promoting after reviewing AnalysisRun evidence. That workflow should be explicit, rehearsed, and visible.
 
-Real-world analysis checks multiple signals:
+Dashboards are helpful, but they should support the control loop rather than replace it. The Argo Rollouts dashboard can visualize rollout state and actions, while observability dashboards show service health and traffic distribution. A mature platform links these views so an operator can move from a degraded Rollout to the exact AnalysisRun, Prometheus query, trace sample, and stable-versus-canary comparison. The goal is not more screens; the goal is less ambiguity when deciding whether to continue, wait, or abort.
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AnalysisTemplate
-metadata:
-  name: canary-health
-spec:
-  args:
-    - name: service-name
-    - name: canary-hash
-  metrics:
-    # Metric 1: Error rate must stay below 5%
-    - name: error-rate
-      interval: 60s
-      count: 5
-      successCondition: result[0] < 0.05
-      failureLimit: 1
-      provider:
-        prometheus:
-          address: http://prometheus.monitoring:9090
-          query: |
-            sum(rate(
-              http_requests_total{
-                service="{{args.service-name}}",
-                rollouts_pod_template_hash="{{args.canary-hash}}",
-                status=~"5.."}[5m]
-            )) /
-            sum(rate(
-              http_requests_total{
-                service="{{args.service-name}}",
-                rollouts_pod_template_hash="{{args.canary-hash}}"}[5m]
-            ))
+## Failure Modes and Design Guardrails
 
-    # Metric 2: P99 latency must stay below 500ms
-    - name: latency-p99
-      interval: 60s
-      count: 5
-      successCondition: result[0] < 500
-      failureLimit: 1
-      provider:
-        prometheus:
-          address: http://prometheus.monitoring:9090
-          query: |
-            histogram_quantile(0.99,
-              sum(rate(
-                http_request_duration_milliseconds_bucket{
-                  service="{{args.service-name}}",
-                  rollouts_pod_template_hash="{{args.canary-hash}}"
-                }[5m]
-              )) by (le)
-            )
+The first failure mode is bad thresholds. A threshold copied from a dashboard without understanding traffic volume, metric units, or historical variance can either abort every release or let regressions pass. For example, a latency gate based on a p99 metric may be unstable for a low-volume service if there are too few requests in the measurement window. A success-rate gate may divide by a tiny denominator during quiet periods. Guard against this by replaying queries against historical data and by designing low-traffic fallback checks.
 
-    # Metric 3: No OOM kills
-    - name: no-oom-kills
-      interval: 120s
-      count: 3
-      successCondition: result[0] == 0
-      failureLimit: 0
-      provider:
-        prometheus:
-          address: http://prometheus.monitoring:9090
-          query: |
-            sum(increase(
-              kube_pod_container_status_last_terminated_reason{
-                reason="OOMKilled",
-                pod=~"my-app-.*-{{args.canary-hash}}-.*"
-              }[5m]
-            )) or vector(0)
-```
+The second failure mode is steps that move faster than evidence can accumulate. If a rollout changes weight every few seconds while the Prometheus query uses a multi-minute rate window, the analysis will be looking at a blended past while the controller is already increasing future exposure. The measurement window, interval, pause duration, and traffic volume must be aligned. Otherwise the release appears automated but the decision is effectively blind.
 
-### AnalysisRun Lifecycle
+The third failure mode is traffic-provider misconfiguration. A Rollout status can say the desired canary weight is small while an ingress annotation, mesh route, Gateway rule, or Service selector sends a different amount of traffic. This happens when teams forget required Services, use the wrong route name, let another controller overwrite routing resources, or fail to validate provider-specific objects. The guardrail is to observe actual request distribution from logs or metrics and to include provider checks in release readiness.
 
-When a Rollout step triggers an analysis, an AnalysisRun is created:
+The fourth failure mode is metric scope confusion. If a Prometheus query aggregates stable and canary traffic together, a small canary regression can be hidden by the stable version's healthy traffic. If labels do not distinguish ReplicaSets, versions, routes, or Pods, the analysis may answer a question about the whole service instead of the version under test. Rollout-aware metrics should preserve enough labels to compare stable and canary behavior or to isolate the canary's contribution.
+
+The fifth failure mode is assuming rollback is harmless for stateful behavior. A canary that writes incompatible rows, emits irreversible events, or modifies shared external state can damage production even if the controller quickly routes traffic back. Guardrails include expand-and-contract database migrations, idempotent consumers, feature flags around dangerous paths, synthetic checks before exposure, and release plans that separate schema changes from behavior changes. Progressive delivery controls traffic; it does not erase side effects.
+
+The sixth failure mode is manual override without evidence. Promotion commands are powerful because they can move a rollout past a pause or analysis gate. They are dangerous when used to silence pressure from a delayed release instead of responding to verified health. Mature teams require a reason, a ticket or incident reference, and post-release review for manual overrides. The controller can enforce mechanics, but only the organization can enforce judgment.
+
+## Patterns & Anti-Patterns
+
+One strong pattern is SLO-aligned analysis. The rollout gate should use the same reliability language the service uses after deployment: request success, latency, freshness, durability, queue drain time, or workflow completion. This alignment prevents the release system from passing a version that the SRE system would immediately treat as burning error budget. It also makes release conversations clearer because teams can discuss whether the release is spending acceptable risk, not whether one dashboard looked green enough.
+
+Another strong pattern is staged evidence. Start with cheap checks before exposure, then use small real-traffic canaries, then longer pauses or background analysis as exposure grows. This avoids wasting production blast radius on errors a pre-promotion check would have caught, while still acknowledging that only production traffic reveals some failures. Staged evidence is especially useful for services with caches, scheduled jobs, tenant-specific behavior, or dependencies that are hard to reproduce in staging.
+
+A third strong pattern is operator-visible state. Rollout status, AnalysisRuns, traffic weights, active images, and abort history should be easy for on-call engineers to inspect. If the platform hides release state behind a CI pipeline log, responders will lose time during the exact moments when time matters. Good release engineering makes the controller's reasoning inspectable, even when the controller is making fast automatic decisions.
+
+A common anti-pattern is dashboard theater. The team adds an automated rollout tool but still relies on a person to stare at graphs and decide whether the canary is healthy. That may be better than nothing for rare releases, but it does not scale across services, time zones, or night shifts. If the release requires a human to interpret routine metrics every time, the policy has not yet been encoded.
+
+A second anti-pattern is provider-driven design. The team starts with the ingress controller or mesh feature list and builds the rollout around whatever is easiest to configure. That reverses the decision order. The rollout should begin with blast radius, SLO risk, metric evidence, and rollback behavior; provider configuration should implement those decisions. Tool capabilities matter, but they should not decide the reliability policy by accident.
+
+A third anti-pattern is skipping rollback rehearsals. Many teams test the happy path because it is visible in demos, then discover during an incident that abort permissions, provider updates, dashboards, or runbook steps are broken. Progressive delivery is only trustworthy if the failed canary path is tested deliberately. A safe platform regularly proves that it can abort, recover, and retry without improvisation.
+
+| Decision question | Choose canary when... | Choose blue-green when... | Add feature flags when... |
+|---|---|---|---|
+| Exposure shape | You need gradual real-user evidence before full release | You need a prepared version and deliberate traffic switch | You need runtime control after deployment |
+| Metric confidence | You can isolate canary signals and evaluate them over time | You can validate before promotion and observe after cutover | You need user, tenant, or cohort-level behavior control |
+| Rollback complexity | Traffic rollback is enough for the main risk | Previous version can remain ready during cutover | Behavior rollback must happen without redeploying |
+| Operational model | Operators can watch steps and AnalysisRuns | Operators can validate preview and promote intentionally | Product or operations teams need kill switches |
 
 ```mermaid
 flowchart TD
-    Template["AnalysisTemplate (definition)"] --> Run["AnalysisRun (instance)"]
-    Run --> M1["Measurement 1: ✓ Pass (success rate: 0.98)"]
-    Run --> M2["Measurement 2: ✓ Pass (success rate: 0.97)"]
-    Run --> M3["Measurement 3: ✓ Pass (success rate: 0.96)"]
-    Run --> Result["Result: Successful → Rollout proceeds to next step"]
+    A["Start with release risk"] --> B{"Can users see a small slice safely?"}
+    B -->|Yes| C["Use canary steps and analysis"]
+    B -->|No| D{"Can preview validation prove enough before cutover?"}
+    D -->|Yes| E["Use blue-green with pre-promotion checks"]
+    D -->|No| F["Use flags, compatibility work, or split the change"]
+    C --> G{"Can metrics isolate canary health?"}
+    G -->|Yes| H["Automate promotion and rollback"]
+    G -->|No| I["Improve labels, synthetic checks, or route cohorts first"]
 ```
-
-If a measurement fails:
-
-```mermaid
-flowchart TD
-    Run["AnalysisRun (instance)"] --> M1["Measurement 1: ✓ Pass (success rate: 0.97)"]
-    Run --> M2["Measurement 2: ✗ Fail (success rate: 0.82)"]
-    Run --> Result["Result: Failed → Rollout automatically rolls back"]
-```
-
-### Supported Providers
-
-| Provider | Use Case |
-|----------|----------|
-| **Prometheus** | Most common; query any Prometheus metric |
-| **Datadog** | SaaS monitoring; native Datadog queries |
-| **New Relic** | NRQL queries for application metrics |
-| **Wavefront** | Wavefront ts() queries |
-| **CloudWatch** | AWS-native metrics |
-| **Kayenta** | Netflix's automated canary analysis |
-| **Web** | Generic HTTP endpoint (any JSON API) |
-| **Job** | Run a Kubernetes Job as the analysis |
-
----
-
-## Automated Rollback
-
-> **Stop and think**: Why does Argo Rollouts scale the canary ReplicaSet down to zero immediately after an AnalysisRun fails, rather than leaving the pods running for debugging?
-
-### How Rollback Works
-
-When an AnalysisRun fails, Argo Rollouts:
-
-1. Immediately scales the canary ReplicaSet to zero
-2. Sets the stable ReplicaSet to the desired replica count
-3. Updates the traffic routing to send 100% to stable
-4. Marks the Rollout as "Degraded"
-
-```text
-Before failure:
-  Stable (v1): 8 pods, 80% traffic
-  Canary (v2): 2 pods, 20% traffic
-
-After AnalysisRun failure:
-  Stable (v1): 10 pods, 100% traffic
-  Canary (v2): 0 pods, 0% traffic
-  Status: Degraded
-```
-
-### Rollback Timing
-
-The speed of automated rollback depends on your analysis configuration:
-
-```yaml
-metrics:
-  - name: error-rate
-    interval: 30s        # Check every 30 seconds
-    failureLimit: 0      # Fail immediately on first bad measurement
-```
-
-With this configuration, the worst-case detection time is 30 seconds (one interval). Total rollback time:
-
-```text
-Detection:  30 seconds (one interval)
-Decision:    ~1 second (controller processes failure)
-Scale down:  ~5 seconds (canary pods terminated)
-Traffic:     ~1 second (routing updated)
-─────────────────────────────────────
-Total:      ~37 seconds
-```
-
-Compare this to a human operator who has to: notice the alert (minutes), open the dashboard (seconds), analyze the data (minutes), decide to rollback (seconds to minutes), execute the rollback (seconds). Total: 5-30 minutes.
-
-### Abort vs Retry
-
-```bash
-# Manually abort a rollout (instant rollback)
-kubectl argo rollouts abort my-app
-
-# Retry a failed/aborted rollout
-kubectl argo rollouts retry my-app
-
-# Manually promote (skip remaining steps)
-kubectl argo rollouts promote my-app
-
-# Promote but only to the next step
-kubectl argo rollouts promote my-app --step 1
-```
-
----
-
-## Anti-Affinity Between Canary and Stable
-
-### Why It Matters
-
-If canary and stable pods run on the same node and the new version has a memory leak that crashes the node, both versions go down. Use anti-affinity to separate them:
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
-metadata:
-  name: my-app
-spec:
-  strategy:
-    canary:
-      antiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          weight: 100
-```
-
-This tells Kubernetes to prefer scheduling canary pods on different nodes than stable pods. A canary crashing its node will not take down the stable version.
-
----
-
-## Rollout Lifecycle & Status
-
-### Understanding Rollout Phases
-
-```mermaid
-flowchart LR
-    H1["Healthy\n(v1)"] --> P["Paused\n(canary)"]
-    P -->|"Promote"| Prog["Progressing\n(promote)"]
-    Prog --> H2["Healthy\n(v2)"]
-    P -->|"Analysis failure"| D["Degraded\n(rollback)"]
-```
-
-### Monitoring Rollouts
-
-```bash
-# Watch rollout status in real-time
-kubectl argo rollouts get rollout my-app --watch
-
-# Output:
-# Name:            my-app
-# Namespace:       default
-# Status:          ॥ Paused
-# Message:         CanaryPauseStep
-# Strategy:        Canary
-#   Step:          2/8
-#   SetWeight:     20
-#   ActualWeight:  20
-# Images:          my-app:v1 (stable)
-#                  my-app:v2 (canary)
-# Replicas:
-#   Desired:       10
-#   Current:       12
-#   Updated:       2
-#   Ready:         12
-#   Available:     12
-
-# List all AnalysisRuns
-kubectl get analysisrun
-
-# Check specific AnalysisRun results
-kubectl describe analysisrun my-app-abc123-2
-```
-
-### The Argo Rollouts Dashboard
-
-Argo Rollouts includes a web dashboard for visualization:
-
-```bash
-# Install the dashboard
-kubectl argo rollouts dashboard
-
-# Open in browser
-# http://localhost:3100
-```
-
-The dashboard shows:
-- Current rollout step and progress
-- Traffic weight distribution
-- AnalysisRun results with individual measurements
-- Rollout history
-- One-click promote/abort buttons
-
----
-
-## Advanced Patterns
-
-### Background Analysis
-
-Run analysis continuously during the entire rollout, not just at specific steps:
-
-```yaml
-strategy:
-  canary:
-    analysis:
-      templates:
-        - templateName: continuous-success-rate
-      startingStep: 1    # Start analysis after first weight change
-      args:
-        - name: service-name
-          value: my-app
-    steps:
-      - setWeight: 5
-      - pause: { duration: 5m }
-      - setWeight: 25
-      - pause: { duration: 10m }
-      - setWeight: 50
-      - pause: { duration: 10m }
-```
-
-The background analysis runs from step 1 until the rollout completes or fails. If the analysis fails at any point, the rollout rolls back regardless of which step it is on.
-
-### Inline Analysis (One-Off Checks)
-
-For step-specific checks that differ from the background analysis:
-
-```yaml
-steps:
-  - setWeight: 5
-  - pause: { duration: 2m }
-  - analysis:
-      templates:
-        - templateName: smoke-test   # Quick health check
-      args:
-        - name: url
-          value: http://my-app-canary/health
-  - setWeight: 50
-  - analysis:
-      templates:
-        - templateName: load-test    # Performance check at higher traffic
-      args:
-        - name: target-rps
-          value: "1000"
-```
-
-### Header-Based Routing
-
-Route specific users to the canary based on HTTP headers:
-
-```yaml
-strategy:
-  canary:
-    trafficRouting:
-      nginx:
-        stableIngress: my-app-ingress
-        additionalIngressAnnotations:
-          canary-by-header: X-Canary-Test
-    steps:
-      # First: Only internal testers (via header) see canary
-      - setHeaderRoute:
-          name: canary-header
-          match:
-            - headerName: X-Canary-Test
-              headerValue:
-                exact: "true"
-      - pause: {}    # Manual verification by testers
-
-      # Then: Percentage-based rollout to real users
-      - setWeight: 5
-      - analysis:
-          templates:
-            - templateName: success-rate
-      - setWeight: 50
-      - pause: { duration: 10m }
-```
-
-Internal testers add `X-Canary-Test: true` to their requests and see the canary. Everyone else sees stable. After testers approve, the percentage-based rollout begins.
-
----
 
 ## Did You Know?
 
-1. **Argo Rollouts was created by Intuit (the TurboTax company)** in 2019 because they needed automated canary deployments for their tax season releases — when a bad deployment could affect millions of taxpayers filing at deadline. They open-sourced it as part of the Argo project, and it is now a CNCF graduated project used by thousands of organizations.
-
-2. **Netflix's canary analysis system (Kayenta) compares statistical distributions, not just thresholds**. Instead of checking "is the error rate below 5%?", it asks "is the canary's error rate distribution statistically different from the baseline's?" This catches subtle performance degradations that simple threshold checks miss. Argo Rollouts can use Kayenta as an analysis provider.
-
-3. **Google reportedly deploys changes to a single cluster first and waits 24 hours before propagating globally**. Their "bake time" concept means that even after a canary passes metrics checks, it soaks in production for a full day cycle to catch time-dependent bugs (like a midnight cron job interaction or a timezone-specific issue). You can replicate this with Argo Rollouts pause steps.
-
-4. **The mean time to detect a bad canary with automated analysis is under 2 minutes in most implementations**, compared to 15-45 minutes for human-driven detection. In a 2023 survey by the CD Foundation, teams using automated canary analysis reported 73% fewer production incidents from deployments compared to teams using manual canary evaluation.
-
----
-
-## War Story: The Canary That Should Have Died
-
-A payment processing team deployed a new version with an edge-case bug: transactions over $10,000 would fail silently. Their canary analysis checked error rates — but the error rate looked fine because:
-
-1. Only 0.1% of transactions exceeded $10,000
-2. The 5xx error rate barely moved (from 0.3% to 0.35%)
-3. The failure was silent — the service returned 200 OK but did not process the payment
-
-The canary was promoted. The bug hit production at full scale. Hundreds of high-value transactions were lost over two hours.
-
-**What they learned:**
-
-1. **Check business metrics, not just HTTP metrics**. They added an analysis metric for `payment_completion_rate` (payments received vs. payments successfully processed).
-2. **Test at the extremes**. They added synthetic canary tests that specifically triggered edge cases.
-3. **Silent failures are the deadliest**. They changed the service to return 500 on processing failures instead of swallowing errors.
-
-Their updated AnalysisTemplate included:
-
-```yaml
-metrics:
-  - name: payment-completion-rate
-    successCondition: result[0] >= 0.999
-    provider:
-      prometheus:
-        query: |
-          sum(rate(payments_completed_total{...}[5m])) /
-          sum(rate(payments_received_total{...}[5m]))
-```
-
-**Lesson**: Your canary analysis is only as good as the metrics it watches. If you only check infrastructure metrics, you will miss business logic failures.
-
----
+1. **Argo Rollouts is part of the broader Argo project family**: CNCF tracks Argo as a Graduated project, while the Rollouts docs describe Rollouts as the controller for progressive delivery strategies inside that family.
+2. **AnalysisTemplates are reusable definitions, not live checks by themselves**: the controller creates AnalysisRuns from templates when a Rollout reaches the relevant analysis step.
+3. **Blue-green promotion can be manual**: a Rollout can hold a preview version behind a preview Service until an operator or workflow promotes it to the active Service.
+4. **Flagger and Argo Rollouts can teach the same practice through different APIs**: one commonly orchestrates around Deployments with a Canary resource, while the other commonly makes Rollout the workload resource.
 
 ## Common Mistakes
 
 | Mistake | Problem | Solution |
-|---------|---------|----------|
-| Using only error rate as the canary metric | Misses latency degradation, silent failures, resource issues | Check error rate AND p99 latency AND business metrics AND resource usage |
-| Setting failureLimit too high | Bad canary runs for too long before rollback | Use `failureLimit: 0` or `1` for critical metrics; detect fast |
-| Canary weight steps too large | Jumping from 5% to 50% loses the benefit of gradual rollout | Use increments: 5% → 10% → 25% → 50% → 75% → 100% |
-| Not using background analysis | Only checking metrics at step boundaries misses degradation between steps | Add background analysis from `startingStep: 1` to catch issues anytime |
-| Skipping anti-affinity | Canary crash takes down stable pods on the same node | Set `antiAffinity` in the Rollout spec |
-| Using Rollouts without traffic routing integration | Traffic split is approximate, limited by replica count | Integrate with NGINX Ingress, Istio, or ALB for precise control |
-| No bake time after metrics pass | Time-dependent bugs slip through | Add a long pause (1-24h) after final analysis before full promotion |
-| Forgetting to test rollback | Rollback mechanism itself might fail | Regularly trigger deliberate rollbacks; test the unhappy path |
+|---|---|---|
+| Measuring only HTTP error rate | Silent business failures and latency regressions can pass the gate | Combine error rate, latency, saturation, and domain success metrics |
+| Aggregating stable and canary metrics together | Stable traffic can hide a bad canary signal | Preserve labels that identify version, ReplicaSet, route, or canary traffic |
+| Moving steps faster than metrics can react | The controller increases exposure before evidence is meaningful | Align pause duration, query window, interval, and traffic volume |
+| Treating provider status as proof of safety | Desired weights may not match actual request distribution | Verify real traffic split through logs, metrics, or provider observability |
+| Using manual pauses without decision criteria | Operators guess whether to promote and decisions vary by person | Write promotion criteria and required evidence into the runbook |
+| Ignoring stateful side effects | Rollback cannot undo incompatible writes or emitted events | Use backward-compatible migrations, flags, idempotency, and staged changes |
+| Letting CI own long-running rollout state | Pipeline sleeps and timeouts become release-control mechanisms | Let the Rollouts controller own rollout state inside Kubernetes |
+| Never testing abort and retry | The failure path breaks during the first real incident | Rehearse abort, degraded-state inspection, retry, and full recovery |
 
----
-
-## Quiz: Check Your Understanding
+## Quiz
 
 ### Question 1
-Scenario: Your team wants to monitor the error rate of a new payment service during a canary deployment. You write the configuration to check Prometheus every 60 seconds and deploy it to the cluster, but nothing happens. The metrics aren't being checked until a rollout actually starts. Why does the evaluation only begin later, and what is the difference between what you created and what actually executes the checks?
+
+Scenario: A team replaces a Deployment with a Rollout and configures canary steps at twenty percent, fifty percent, and full traffic. The rollout pauses after the first step even though all Pods are Ready. Why is this pause useful, and what controller behavior makes it safer than a CI script that sleeps for two minutes?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-You created an **AnalysisTemplate**, which is essentially a blueprint or definition of what metrics to check, how often, and the success criteria. It does not actively evaluate anything on its own, which is why nothing happened immediately after you deployed it. When the rollout reaches a step that references this template, the Argo Rollouts controller automatically instantiates an **AnalysisRun**. The AnalysisRun is the actual execution instance that performs the live queries against Prometheus and records the pass/fail measurements based on the template's rules. You can think of the template as a class definition, and the run as an instantiated object performing the work.
+The pause is useful because progressive delivery needs time to collect evidence before increasing blast radius. Argo Rollouts stores that state in the Rollout object, so the controller can reconcile it, show it in status, and resume or abort based on the declared strategy rather than a pipeline runner's memory. This is part of how you **implement Argo Rollouts for canary and blue-green deployments with automated analysis**: the cluster controller owns the release state while CI only triggers the desired change. A sleep in CI can delay the next command, but it cannot by itself evaluate rollout state, create AnalysisRuns, or preserve a clear Kubernetes audit trail.
 
 </details>
 
 ### Question 2
-Scenario: A team manages a critical microservice that runs with 4 replicas in production. They want to implement a highly cautious canary rollout, exposing the new version to only 2% of live traffic initially before ramping up. However, without adding an ingress controller integration like NGINX or Istio, they find this configuration is impossible to achieve. Why does native Argo Rollouts without traffic routing integration fail to support this 2% requirement?
+
+Scenario: Your service has four replicas, but the first safe canary slice is only five percent of user traffic. You configure `setWeight: 5` without any ingress, Gateway API, SMI, or service-mesh traffic provider. Why might actual exposure be much larger than the desired weight, and what should the platform add?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-By default, Argo Rollouts uses replica-based traffic splitting, meaning user traffic is distributed proportionally based on the number of pods running. Because this team only has 4 replicas in their deployment, their minimum possible canary exposure is 1 pod, which equates to 25% of the total traffic (1 out of 4 pods). To achieve a 2% traffic split natively without external tools, they would need to run 50 total replicas (1 canary and 49 stable), which unnecessarily wastes compute resources. Integrating a service mesh or an advanced ingress controller solves this by separating the routing layer from the replica count, allowing exact percentage splits regardless of how many pods are running.
+Without a traffic-routing integration, the controller can only approximate traffic by changing the number of stable and canary Pods behind a Service. With four replicas, one canary Pod can represent a large share of requests, so the actual exposure may not match a five percent intent. The platform should add a supported traffic provider that can split requests independently from replica count. The same reasoning applies if you use Flagger: the controller needs a routing layer capable of enforcing the desired blast radius.
 
 </details>
 
 ### Question 3
-Scenario: During an automated rollout to a user-facing API, the canary version reaches 25% traffic weight. Suddenly, an `AnalysisRun` checking the P99 latency metric fails because the new database queries are unoptimized. Without any human intervention, the system automatically corrects itself within seconds. What exactly does the Argo Rollouts controller do behind the scenes to restore the service to a healthy state?
+
+Scenario: An AnalysisTemplate query checks that `vector(1)` returns one, and the rollout passes every time. The team wants to use this as the production promotion gate because it proves Prometheus is reachable. What is wrong with this analysis design?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-When an AnalysisRun fails, the Argo Rollouts controller immediately initiates an automated rollback sequence to protect the system. It quickly scales the canary ReplicaSet down to zero and ensures the stable ReplicaSet is scaled back up to the full desired replica count. Simultaneously, it updates the traffic routing configuration to instantly shift 100% of user traffic back to the known-good stable version. Finally, the controller marks the Rollout's status as "Degraded" and the AnalysisRun as "Failed," leaving a clear audit trail of the failing measurements for engineers to review. This entire sequence happens autonomously and typically completes in under a minute.
+The smoke query proves only that the analysis path can talk to Prometheus and evaluate a simple result. It does not measure user-facing health, latency, saturation, or business correctness for the canary version. To **configure analysis templates that evaluate metrics during progressive delivery rollouts**, the query must be replaced with service-specific SLO and domain signals that distinguish stable from canary behavior. A reachability check is useful during setup, but it is not a release safety gate.
 
 </details>
 
 ### Question 4
-Scenario: You are designing a rollout strategy for a checkout service. You want to ensure the CPU usage remains stable throughout the entire 2-hour deployment process. You also want to run a specific synthetic load test immediately after the canary receives its first 5% of traffic, before letting real users onto the new version. How should you structure your Argo Rollouts analysis steps to accommodate both the continuous monitoring and the one-off test?
+
+Scenario: A canary starts returning successful HTTP responses while failing to write completed orders to the ledger. Error rate, CPU, and Pod readiness stay green, so the rollout promotes. Which category of metric was missing, and how should the next AnalysisTemplate change?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-You must use a combination of **background analysis** and **inline analysis** to accommodate both requirements. The CPU usage check should be configured as a background analysis using the `startingStep` field in the Rollout strategy, ensuring it continuously monitors performance from that point until the rollout fully completes. Conversely, the synthetic load test should be configured as an inline analysis directly attached to the 5% weight step. The rollout will pause execution at that specific step, trigger the load test AnalysisRun, and strictly require it to pass before the controller allows the progression to higher traffic weights. This hybrid approach guarantees both point-in-time validation and continuous systemic health monitoring.
+The missing category was a domain or business correctness metric. The gate measured transport and infrastructure health, but it did not measure whether the workflow completed the operation users depend on. The next AnalysisTemplate should include a ratio or synthetic check that compares accepted orders with durable ledger writes, or another service-specific signal that detects the silent failure. This keeps the rollout aligned with the service's SLO and business contract rather than only the container's health.
 
 </details>
 
 ### Question 5
-Scenario: An e-commerce team configures their Argo Rollouts AnalysisTemplate to strictly monitor HTTP 5xx error rates and P99 response latency. During a Black Friday deployment, the canary version is successfully promoted to 100% traffic because both metrics remained perfectly green. However, they soon discover that the new version had a bug causing shopping carts to empty silently—returning a `200 OK` response but failing to save the data. What critical category of metrics did their analysis strategy miss, and how should they fix it?
+
+Scenario: A rollout's latency analysis fails at fifty percent traffic. The controller aborts, the stable version receives traffic again, and the Rollout status becomes degraded. What should operators inspect before retrying, and why is immediate retry risky?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-The team fundamentally missed monitoring **business metrics**, focusing entirely on infrastructure and HTTP-level health signals. Because the application gracefully handled the logic failure by returning a `200 OK` instead of throwing an exception, the HTTP error rate remained completely unaffected by the bug. To prevent this from recurring, their AnalysisTemplate must include domain-specific queries that validate actual business logic, such as the ratio of items added to carts versus successful checkouts. Canary analysis is only as effective as the metrics it evaluates, meaning a robust strategy must observe infrastructure, application, and core business KPIs simultaneously.
+Operators should inspect the failed AnalysisRun, the exact measurements, application logs, traces, and actual traffic distribution before retrying. Immediate retry is risky because it may reintroduce the same latency regression without changing the code, configuration, or threshold that caused the failure. A good rollback strategy is designed to **automatically revert failed deployments based on SLO violations**, but retry remains a human or workflow decision that needs evidence. The degraded state is a protective stop, not an inconvenience to clear as quickly as possible.
 
 </details>
 
 ### Question 6
-Scenario: A financial institution requires that any new transaction processing code runs in production for a full 24-hour cycle to catch issues related to end-of-day batch jobs. They want the new version to handle 100% of the traffic, but they want Argo Rollouts to automatically roll back to the previous version if any memory leaks or job failures occur during that 24-hour window. How can this "soak test" pattern be implemented using Argo Rollouts?
+
+Scenario: A service needs a preview version to be reachable for synthetic checks before any user traffic moves, and promotion must be approved manually after those checks pass. Which Argo Rollouts strategy fits best, and which fields make the pattern work?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-You can implement this soak test pattern by thoughtfully combining a 100% weight step, a long pause duration, and continuous background analysis. In the `steps` array, you would configure `- setWeight: 100` followed immediately by a step for `- pause: { duration: 24h }`. Crucially, you must also define a background analysis block with `startingStep: 1` that continuously evaluates metrics like memory consumption and batch job success rates. During the 24-hour pause, the new version handles all production traffic while the background analysis constantly monitors its health. If any critical metric breaches the failure threshold at any point—even at hour 23—the controller will instantly abort the rollout and shift 100% of traffic back to the older, stable ReplicaSet.
+Blue-green fits this requirement because it separates the active production Service from the preview Service. In Argo Rollouts, `activeService` points at the version serving users, `previewService` points at the version under validation, and `autoPromotionEnabled: false` creates a manual promotion point. Pre-promotion analysis can run checks before the active Service switches. Canary could still be useful later, but blue-green directly models "prepare, validate, then promote."
 
 </details>
 
----
+### Question 7
 
-## Hands-On Exercise: Automated Canary with Prometheus-Based Rollback
+Scenario: Your organization uses Argo CD for GitOps, and a Rollout pauses at a manual gate after syncing from Git. A teammate wants the CI pipeline to run `kubectl argo rollouts promote` automatically whenever the sync finishes. What workflow design question should you answer first?
 
-### Objective
+<details>
+<summary>Answer</summary>
 
-Deploy Argo Rollouts with Prometheus analysis that automatically promotes a healthy canary and rolls back a bad one.
+You should first decide what evidence is required before promotion and who or what is authorized to make that decision. To **build promotion workflows that integrate Argo Rollouts with existing CI/CD pipelines**, CI should not blindly skip the same gate that was added to control risk. The workflow might allow auto-promotion when AnalysisRuns pass for low-risk services, but require human approval and dashboard evidence for sensitive systems. GitOps declares the desired rollout policy, while operational commands should respect the policy's intent.
 
-### Setup
+</details>
+
+## Hands-On
+
+This exercise keeps the lab focused on controller behavior and manifest correctness. It uses the official `argoproj/rollouts-demo` image, installs the Rollouts controller, creates a canary Rollout, watches a pause, promotes it, and then validates a Prometheus AnalysisTemplate smoke check. For a production service, replace the smoke query with SLO-aligned queries that you have verified directly in Prometheus.
+
+Create a local cluster and install the controller first, because every later command depends on the Rollouts CRDs and controller deployment being available:
 
 ```bash
-# Create cluster
 kind create cluster --name argo-rollouts-lab
-
-# Install Argo Rollouts
 kubectl create namespace argo-rollouts
 kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
-
-# Install the kubectl plugin
-# macOS:
-brew install argoproj/tap/kubectl-argo-rollouts
-# Linux:
-# curl -LO https://github.com/argoproj/argo-rollouts/releases/latest/download/kubectl-argo-rollouts-linux-amd64
-# chmod +x kubectl-argo-rollouts-linux-amd64
-# sudo mv kubectl-argo-rollouts-linux-amd64 /usr/local/bin/kubectl-argo-rollouts
-
-# Install Prometheus (lightweight, for the lab)
-kubectl create namespace monitoring
-kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/main/manifests/setup/0namespace-namespace.yaml 2>/dev/null || true
-
-# For this lab, we'll use a minimal Prometheus deployment
-cat <<'EOF' | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus
-  namespace: monitoring
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: prometheus
-  template:
-    metadata:
-      labels:
-        app: prometheus
-    spec:
-      containers:
-        - name: prometheus
-          image: prom/prometheus:v2.53.0
-          ports:
-            - containerPort: 9090
-          args:
-            - "--config.file=/etc/prometheus/prometheus.yml"
-            - "--storage.tsdb.retention.time=1h"
-          volumeMounts:
-            - name: config
-              mountPath: /etc/prometheus
-      volumes:
-        - name: config
-          configMap:
-            name: prometheus-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus
-  namespace: monitoring
-spec:
-  selector:
-    app: prometheus
-  ports:
-    - port: 9090
-      targetPort: 9090
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: monitoring
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 10s
-    scrape_configs:
-      - job_name: 'apps'
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-            action: keep
-            regex: true
-          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-            action: replace
-            target_label: __address__
-            regex: ([^:]+)(?::\d+)?;(\d+)
-            replacement: ${1}:${2}
-EOF
-```
-
-Wait for Argo Rollouts and Prometheus to be ready:
-
-```bash
 kubectl -n argo-rollouts rollout status deployment argo-rollouts
-kubectl -n monitoring rollout status deployment prometheus
 ```
 
-### Step 1: Create the AnalysisTemplate
-
-```yaml
-# analysis-template.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AnalysisTemplate
-metadata:
-  name: success-rate-check
-spec:
-  args:
-    - name: service-name
-  metrics:
-    - name: success-rate
-      interval: 30s
-      count: 3
-      successCondition: result[0] >= 0.95
-      failureCondition: result[0] < 0.90
-      failureLimit: 0
-      provider:
-        prometheus:
-          address: http://prometheus.monitoring:9090
-          query: |
-            sum(rate(
-              http_requests_total{
-                app="{{args.service-name}}",
-                status!~"5.."
-              }[1m]
-            )) /
-            sum(rate(
-              http_requests_total{
-                app="{{args.service-name}}"
-              }[1m]
-            ))
-```
+Install the kubectl plugin using the method from the Argo Rollouts documentation for your workstation. On macOS with Homebrew, the command is:
 
 ```bash
-kubectl apply -f analysis-template.yaml
+brew install argoproj/tap/kubectl-argo-rollouts
+kubectl argo rollouts version
 ```
 
-### Step 2: Create the Rollout
-
-```yaml
-# rollout.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
-metadata:
-  name: demo-app
-spec:
-  replicas: 5
-  strategy:
-    canary:
-      steps:
-        - setWeight: 20
-        - pause: { duration: 30s }
-        - analysis:
-            templates:
-              - templateName: success-rate-check
-            args:
-              - name: service-name
-                value: demo-app
-        - setWeight: 50
-        - pause: { duration: 30s }
-        - setWeight: 80
-        - pause: { duration: 30s }
-  revisionHistoryLimit: 3
-  selector:
-    matchLabels:
-      app: demo-app
-  template:
-    metadata:
-      labels:
-        app: demo-app
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-    spec:
-      containers:
-        - name: demo-app
-          image: hashicorp/http-echo:0.2.3
-          args:
-            - "-text=Version 1 - Healthy"
-            - "-listen=:8080"
-          ports:
-            - containerPort: 8080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: demo-app
-spec:
-  selector:
-    app: demo-app
-  ports:
-    - port: 80
-      targetPort: 8080
-```
+Save the canary Rollout and Service from the earlier canary example to `rollouts-demo.yaml`, then apply it and watch the initial stable state:
 
 ```bash
-kubectl apply -f rollout.yaml
-kubectl argo rollouts get rollout demo-app --watch
+kubectl apply -f rollouts-demo.yaml
+kubectl argo rollouts get rollout rollouts-demo --watch
 ```
 
-Wait until the rollout is "Healthy" (all 5 pods running v1).
-
-### Step 3: Deploy a "Good" Canary
-
-Update the image to trigger a canary rollout:
+Trigger a canary by changing the image from the blue demo version to the yellow demo version, then watch the controller enter the canary steps:
 
 ```bash
-kubectl argo rollouts set image demo-app demo-app=hashicorp/http-echo:0.2.3 \
-  -- -text="Version 2 - Also Healthy" -listen=:8080
-
-# Watch the rollout progress
-kubectl argo rollouts get rollout demo-app --watch
+kubectl argo rollouts set image rollouts-demo rollouts-demo=argoproj/rollouts-demo:yellow
+kubectl argo rollouts get rollout rollouts-demo --watch
 ```
 
-You should see:
-1. Weight set to 20%
-2. Pause for 30 seconds
-3. AnalysisRun created and (assuming metrics pass) succeeding
-4. Weight progressing to 50%, 80%, then 100%
-5. Rollout status changes to "Healthy"
-
-### Step 4: Deploy a "Bad" Canary (Observe Rollback)
-
-To simulate a bad deployment, deploy a version that will produce errors. Since we are using http-echo for simplicity, we will manually fail the AnalysisRun to demonstrate the rollback mechanism:
+When the rollout reaches the indefinite pause, promote it deliberately and then confirm the final healthy state before moving on to failure handling:
 
 ```bash
-# Trigger a new rollout
-kubectl argo rollouts set image demo-app demo-app=hashicorp/http-echo:0.2.3 \
-  -- -text="Version 3 - Bad Version" -listen=:8080
-
-# Watch in one terminal
-kubectl argo rollouts get rollout demo-app --watch
-
-# In another terminal, when the AnalysisRun appears, abort to simulate failure
-# (In production, the Prometheus query would detect real errors)
-kubectl argo rollouts abort demo-app
+kubectl argo rollouts promote rollouts-demo
+kubectl argo rollouts get rollout rollouts-demo
 ```
 
-You should see:
-1. Weight set to 20%
-2. When aborted: canary pods immediately scale to zero
-3. All traffic goes back to stable
-4. Status shows "Degraded"
-
-### Step 5: Explore the AnalysisRun
+Save the Prometheus smoke AnalysisTemplate from the analysis section as `prometheus-analysis-smoke-test.yaml` only if your cluster has a Service named `prometheus` in the `monitoring` namespace. If your lab does not have Prometheus installed, keep this as a manifest validation exercise and do not attach it to the live Rollout.
 
 ```bash
-# List all AnalysisRuns
-kubectl get analysisrun
-
-# Describe the latest one
-LATEST_AR=$(kubectl get analysisrun --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
-kubectl describe analysisrun $LATEST_AR
+kubectl apply -f prometheus-analysis-smoke-test.yaml
+kubectl get analysistemplate prometheus-analysis-smoke-test
 ```
 
-### Step 6: Recover from Degraded State
+Practice the failure operation on the demo rollout by aborting a canary after triggering another image change, then inspect the degraded state:
 
 ```bash
-# Retry with a fix
-kubectl argo rollouts retry rollout demo-app
-
-# Or deploy a new (fixed) version
-kubectl argo rollouts set image demo-app demo-app=hashicorp/http-echo:0.2.3 \
-  -- -text="Version 4 - Fixed" -listen=:8080
+kubectl argo rollouts set image rollouts-demo rollouts-demo=argoproj/rollouts-demo:red
+kubectl argo rollouts abort rollouts-demo
+kubectl argo rollouts get rollout rollouts-demo
 ```
 
-### Clean Up
+Clean up the local cluster when you are finished so the Rollouts controller, demo workload, and temporary resources do not remain running:
 
 ```bash
 kind delete cluster --name argo-rollouts-lab
 ```
 
-### Success Criteria
+Use these success criteria to confirm that you exercised the control loop rather than merely applying manifests to a test cluster:
 
-You have completed this exercise when you can confirm:
+- [ ] The Argo Rollouts controller reaches a ready state in the `argo-rollouts` namespace.
+- [ ] The `rollouts-demo` Rollout progresses through at least one canary pause that you can explain.
+- [ ] You manually promote a paused rollout and can identify the stable and canary images in status output.
+- [ ] You apply or validate an AnalysisTemplate and can explain why `vector(1)` is only a smoke check.
+- [ ] You abort a rollout, inspect degraded status, and explain what evidence you would review before retrying.
+- [ ] You can state when this lab would need a traffic-routing provider instead of replica-based splitting.
 
-- [ ] Argo Rollouts controller is running in the `argo-rollouts` namespace
-- [ ] An AnalysisTemplate was created with Prometheus query configuration
-- [ ] A Rollout resource replaced the standard Deployment
-- [ ] A "good" canary progressed through all steps and was promoted
-- [ ] A "bad" canary was aborted/rolled back, returning traffic to stable
-- [ ] You inspected an AnalysisRun and understood its measurement results
-- [ ] The rollout recovered from Degraded state with a new version
-- [ ] You can explain the difference between background and inline analysis
+## Sources
 
----
-
-## Key Takeaways
-
-1. **Argo Rollouts replaces Deployment** with a `Rollout` CRD that supports fine-grained canary and blue-green strategies
-2. **AnalysisTemplates encode promotion criteria as code** — no more human dashboard-watching at 3 AM
-3. **Traffic routing integrations** (NGINX, Istio, ALB) enable precise traffic splitting independent of replica count
-4. **Background analysis catches problems between steps** — not just at step boundaries
-5. **Automated rollback is faster than any human** — detection to recovery in under 60 seconds
-6. **Check multiple metric layers** — infrastructure, application, AND business metrics
-7. **Anti-affinity protects stable from canary failures** — do not let a bad canary take down the working version
-
----
-
-## Further Reading
-
-**Documentation:**
-- **Argo Rollouts Official Docs** — argoproj.github.io/argo-rollouts
-- **Argo Rollouts Best Practices** — argoproj.github.io/argo-rollouts/best-practices/
-- **Analysis and Progressive Delivery** — argoproj.github.io/argo-rollouts/features/analysis/
-
-**Articles:**
-- **"Progressive Delivery with Argo Rollouts"** — Intuit Engineering Blog
-- **"Canary Deployments Made Easy"** — CNCF Blog
-- **"Automated Canary Analysis at Netflix"** — Netflix Tech Blog (Kayenta)
-
-**Talks:**
-- **"Argo Rollouts: Scalable Progressive Delivery"** — KubeCon (YouTube)
-- **"Lessons Learned from Argo Rollouts at Scale"** — ArgoCon (YouTube)
-
----
-
-## Summary
-
-Argo Rollouts transforms canary deployments from manual guesswork into automated, metrics-driven progressive delivery. By defining success criteria as AnalysisTemplates and integrating with Prometheus, your deployments promote themselves when healthy and roll back within seconds when they are not. Combined with traffic routing integration for precise control and background analysis for continuous monitoring, Argo Rollouts gives you confidence that bad code will never reach more users than necessary.
-
----
+- [Argo Rollouts documentation](https://argoproj.github.io/argo-rollouts/)
+- [Argo Rollouts canary strategy](https://argoproj.github.io/argo-rollouts/features/canary/)
+- [Argo Rollouts blue-green strategy](https://argoproj.github.io/argo-rollouts/features/bluegreen/)
+- [Argo Rollouts analysis feature](https://argoproj.github.io/argo-rollouts/features/analysis/)
+- [Argo Rollouts traffic management](https://argoproj.github.io/argo-rollouts/features/traffic-management/)
+- [Argo Rollouts NGINX traffic routing](https://argoproj.github.io/argo-rollouts/features/traffic-management/nginx/)
+- [Argo Rollouts Prometheus analysis provider](https://argoproj.github.io/argo-rollouts/analysis/prometheus/)
+- [Argo Rollouts kubectl plugin command reference](https://argoproj.github.io/argo-rollouts/generated/kubectl-argo-rollouts/kubectl-argo-rollouts/)
+- [Argo Rollouts dashboard documentation](https://argoproj.github.io/argo-rollouts/dashboard/)
+- [CNCF Argo project page](https://www.cncf.io/projects/argo/)
+- [Flagger how it works](https://docs.flagger.app/usage/how-it-works)
+- [Flagger progressive delivery concepts](https://docs.flagger.app/main/usage/deployment-strategies)
+- [Prometheus querying basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
+- [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/)
+- [Istio VirtualService reference](https://istio.io/latest/docs/reference/config/networking/virtual-service/)
+- [Argo CD resource health documentation](https://argo-cd.readthedocs.io/en/stable/operator-manual/health/)
 
 ## Next Module
 
 Continue to [Module 1.3: Feature Management at Scale](../module-1.3-feature-flags/) to learn how to decouple deployment from release using feature flags, enabling trunk-based development and instant kill switches.
-
----
-
-*"The best rollback is the one that happens before your users notice."* — Argo Rollouts philosophy
