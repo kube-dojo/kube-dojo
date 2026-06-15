@@ -259,7 +259,7 @@ When you review an architecture diagram that shows Kubernetes at the center and 
 
 ## Did You Know?
 
-- **Harbor graduated CNCF in November 2020.** The [CNCF Harbor project page](https://www.cncf.io/projects/harbor/) lists Harbor among graduated projects, which indicates a mature governance and adoption trajectory within the foundation—not a guarantee that every feature you need is enabled in your installation without configuration.
+- **Harbor reached CNCF Graduated status in June 2020 (graduation announced 2020-06-23).** The [CNCF Harbor project page](https://www.cncf.io/projects/harbor/) lists Harbor among graduated projects, which indicates a mature governance and adoption trajectory within the foundation—not a guarantee that every feature you need is enabled in your installation without configuration.
 - **Trivy replaced Clair as Harbor's default scanner path.** Harbor's administration documentation for [vulnerability scanning](https://goharbor.io/docs/2.11.0/administration/vulnerability-scanning/) describes pluggable scanners with Trivy as the common default, which matters when you size scanner workers and plan offline database updates.
 - **Tag deletion and blob deletion are different events.** Removing a tag does not immediately free storage; [garbage collection](https://goharbor.io/docs/2.11.0/administration/garbage-collection/) reclaims unreferenced layers after retention and delete operations have run.
 - **Harbor supports P2P preheat integrations.** The [P2P preheat](https://goharbor.io/docs/2.11.0/administration/p2p-preheat/) administration page documents how Harbor can seed Dragonfly or similar networks—useful when LAN fan-out, not registry storage, is the bottleneck.
