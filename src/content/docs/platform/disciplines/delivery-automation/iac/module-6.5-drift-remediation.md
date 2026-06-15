@@ -412,6 +412,8 @@ Small wording differences in module descriptions during audits often trace back 
 | Auto-reconciliation | apply in automation | Optional apply after detection | Optional tracked run after drift | Report-focused; remediate via IaC | Continuous reconcile by default |
 | Ignore / delegate fields | lifecycle ignore_changes | Same HCL patterns | Policy on drift runs | .driftignore exceptions | crossplane.io/paused annotation |
 
+> Maturity note (as of 2026-06): driftctl is open-source and functional but low-velocity — its last tagged release was v0.40.0 (Dec 2023) and the repository is not archived but sees little feature work. The drift-detection *concepts* here are durable; verify driftctl's maintenance status (and consider Terraform's own plan/`-detailed-exitcode`, cloud-native inventory, or your orchestrator's drift features) before standardizing on any single scanner.
+
 ## Patterns and Anti-Patterns
 
 ### Patterns
