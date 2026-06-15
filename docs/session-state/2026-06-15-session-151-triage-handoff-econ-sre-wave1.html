@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session 151 — issue triage + handoff-economics re-ground + SRE Wave 1</title>
+  <link rel="stylesheet" href="/static/design-system.css">
+  <style>
+    .wrap{max-width:1000px;margin:0 auto;padding:32px 24px 64px}
+    h1{font-size:24px;margin:0 0 4px} .sub{color:var(--text-secondary);margin-bottom:24px}
+    h2{font-size:18px;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    code{background:var(--surface-1);padding:1px 5px;border-radius:4px;font-size:.9em}
+    .ok{color:var(--green)} .pr{color:var(--accent)} li{margin:5px 0}
+    table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}
+    th,td{border:1px solid var(--border);padding:6px 9px;text-align:left;vertical-align:top}
+    th{background:var(--surface-1);color:var(--text-secondary)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Session 151 — issue triage + handoff-economics re-ground + SRE Wave 1</h1>
+    <div class="sub">2026-06-15 · continues s150 (same session) · 3 PRs merged (#1980 pe, #1981 fix, #1982 SRE) + 18 issues closed + policy re-ground</div>
+
+    <h2>TL;DR</h2>
+    <p>Continued from the s150 work (telemetry CSS fix + finalize wiring). This half: drove the platform-engineering 2.3/2.4 wave to done, ran a full GitHub issue triage (25→7 open), re-grounded the context-handoff threshold to ~820K against verified Opus 4.8 pricing, the user cleared the 2 admin blockers, and shipped SRE Wave 1 (3 modules). All worktree-only, rebase-merged, finalized via the new <code>finalize_module.sh</code>.</p>
+
+    <h2>1 · <span class="pr">#1953 → PR #1980</span> — platform-engineering 2.3/2.4 → done</h2>
+    <ul>
+      <li><b>2.3 Internal Developer Platforms</b> (codex): 712→5336w, 0→32 src; CNCF maturity web-verified vs <code>landscape.yml</code> (Crossplane graduated, Backstage incubating, Score/OpenChoreo sandbox).</li>
+      <li><b>2.4 Golden Paths</b> (cursor): 1501→5019w, 3→16 src; <b>curl sweep caught 2 dead links the verifier passed</b> (score.dev→docs.score.dev; dead CNCF blog→Backstage scaffolder) → fixed.</li>
+      <li>opus-inline R1 both; both done/5.0; finalized.</li>
+    </ul>
+
+    <h2>2 · <span class="pr">#1978 → PR #1981</span> — finalize_module.sh record-build bug (dogfood-caught)</h2>
+    <ul>
+      <li>First real use of <code>finalize_module.sh</code> on the pe wave surfaced a bug: <code>record-build</code> via <code>-m scripts.agent_telemetry</code> → <code>ModuleNotFoundError</code> (flat sibling import needs <code>scripts/</code> on path). Fixed to script-mode <code>python scripts/agent_telemetry.py</code> + same fix in the page legend. <b>Verified working end-to-end on the SRE wave finalize this session.</b></li>
+    </ul>
+
+    <h2>3 · GitHub issue triage — 25 → 7 open</h2>
+    <ul>
+      <li><b>Closed done/superseded:</b> #1934 (UK calque system shipped), #1620 (worktree-convention moot), #1299 (gap analysis resolved), #1587 (floor-expansion waves), #1812 (Miasma defense shipped), #1504 (388-review epic → wave-review supersedes), #393 (→#1876), #1634 (de-fab standard), #1827/#1829 (tool-access pilot concluded).</li>
+      <li><b>Pruned calibration/agent-infra side-quests</b> (standing directive): #1401/#1402/#1404/#1502 (calibration v1), #1614, #373.</li>
+      <li><b>Kept (7):</b> #1953 (active), #1911 (UK), #1876 (book), #1823 (mermaid), #1623 (g2-craft), #14 (monitoring tracker), #386 (lab audit).</li>
+    </ul>
+
+    <h2>4 · Handoff-economics re-grounded to ~820K (verified pricing)</h2>
+    <ul>
+      <li>Confirmed the user's analysis against the authoritative <code>claude-api</code> reference: Opus 4.8 = $5 in / $25 out /1M, cache read 0.1× ($0.50/1M), cache write 1.25× ($6.25/1M, 5-min TTL), and <b>NO long-context premium at 1M</b> (the headline — standard pricing all the way up). Every number checked out.</li>
+      <li>=> No price cliff + canary's no-rot finding ⇒ binding constraint is the <b>1M wall + handoff risk, not cost</b> ⇒ hand off LATE. Updated <code>~/.claude/context-check.sh</code> + <code>statusline.sh</code> tiers <code>500/600/700</code> → <b><code>650/750/820K</code></b> + memory + STATUS. Autocompact was already <code>=1000000</code> (the real wall), so 820K is reachable. <b>Real cost signal = cache-cold re-entry</b> (idle &gt;5-min TTL ⇒ ctx×$6.25/1M) → batch work around idle gaps rather than hand off early.</li>
+    </ul>
+
+    <h2>5 · Two admin blockers cleared (user) + closed</h2>
+    <ul>
+      <li><b>#1965</b> ✅ <code>Unit tests (vitest)</code> now a required check (verified via branch-protection API).</li>
+      <li><b>#1798</b> ✅ private-vuln-reporting on + CodeQL→security-extended + npm dependabot done; the 2 secret-scanning extras (non-provider patterns, validity checks) are GHAS-only → documented, closed.</li>
+    </ul>
+
+    <h2>6 · <span class="pr">#1953 → PR #1982</span> — SRE Wave 1 → done</h2>
+    <p>Live-file sweep corrected the stale board: <b>all 7 SRE modules are sub-floor</b> (not the 5 the handoff implied — 1.2 &amp; 1.7 also need sources/expansion). Shipped the 3 biggest expands:</p>
+    <table>
+      <tr><th>Module</th><th>Author</th><th>Before→After</th></tr>
+      <tr><td>1.1 What Is SRE</td><td>cursor</td><td>845→<b>5097</b>w · 0→23 src</td></tr>
+      <tr><td>1.3 Error Budgets</td><td>codex gpt-5.5</td><td>692→<b>5538</b>w · 0→15 src — <b>math hard-verified exact</b> (43.2min/30-day, 8.76h/yr, 43m49s/avg-month, burn rate 6×, SRE Workbook 14.4×/1h=2%·6×/6h=5%·1×/3d)</td></tr>
+      <tr><td>1.4 Toil &amp; Automation</td><td>deepseek</td><td>705→<b>5715</b>w · 0→12 src (recovered: deepseek dropped before commit)</td></tr>
+    </table>
+    <ul>
+      <li>opus-inline R1 all three; all 50 source URLs curl-200; War Stories → Hypothetical; all done/COMMITTED/5.0; finalized via <code>finalize_module.sh</code> (telemetry recorded, now 16 records).</li>
+    </ul>
+
+    <h2>State / hygiene</h2>
+    <ul>
+      <li>main at <code>c58e33016</code> (+ the upcoming handoff commit); all session worktrees + branches cleaned; only long-standing <code>g2-craft</code> remains.</li>
+      <li>Reusables: <code>logs/remediation/briefs/pf-sre/</code> (shared rules + addenda 1.1/1.3/1.4 + <code>_finalize-wave1.sh</code>).</li>
+    </ul>
+
+    <h2>NEXT</h2>
+    <ul>
+      <li><b>SRE Wave 2</b> (#1953): <b>1.5-incident-management</b> (841w/0src) + <b>1.6-postmortems</b> (714w/0src) = genuine expands; <b>1.2-slos</b> (4988w/6src) + <b>1.7-capacity-planning</b> (4136w/5src) = smaller source/expand fixes. Same loop; reuse <code>pf-sre/</code> scaffold (write addenda 1.5/1.6/1.2/1.7) → ≤3 authors → opus-inline review (no gemini) → curl dead-link sweep + ground-check → consolidated PR → req-CI build → finalize via <code>finalize_module.sh</code>. Closes core-platform/sre.</li>
+      <li>Then #1953 curriculum order: <b>data-ai/aiops</b> (3) → data-engineering (8) → mlops (1) → gitops (2) → iac (5) → release-engineering (5) → chaos-engineering (5) → devsecops (2) → networking (5) → <b>Toolkits (36)</b>.</li>
+      <li>Standing: <b>#1911</b> UK currency · <b>#1876</b> AI-history book review · <b>#1823</b> mermaid-parens campaign · <b>#1623</b> g2-craft.</li>
+    </ul>
+  </div>
+</body>
+</html>
