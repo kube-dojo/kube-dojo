@@ -598,7 +598,7 @@ You've completed this exercise when you can:
 - [Prometheus Query Functions](https://prometheus.io/docs/prometheus/latest/querying/functions/) — `rate()`, `predict_linear()`, and core PromQL building blocks
 - [scikit-learn IsolationForest](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html) — Unsupervised anomaly detection API used in metric pipelines
 - [Prophet Quick Start](https://facebook.github.io/prophet/docs/quick_start.html) — Seasonal time-series forecasting for operational capacity planning
-- [Isolation Forest (Liu, Ting, Zhou 2008)](https://arxiv.org/abs/0810.2371) — Original paper on isolation-based anomaly detection
+- [Isolation Forest (Liu, Ting, Zhou 2008)](https://cs.nju.edu.cn/zhouzh/zhouzh.files/publication/icdm08b.pdf) — Original ICDM 2008 paper on isolation-based anomaly detection (authors' copy)
 - [Dynatrace AIOps Platform](https://www.dynatrace.com/platform/aiops/) — Example commercial platform capability documentation
 - [Datadog Watchdog](https://docs.datadoghq.com/watchdog/) — Example automated anomaly and storyline documentation
 - [Splunk IT Service Intelligence](https://www.splunk.com/en_us/products/it-service-intelligence.html) — Example ITSI correlation and service analytics documentation
