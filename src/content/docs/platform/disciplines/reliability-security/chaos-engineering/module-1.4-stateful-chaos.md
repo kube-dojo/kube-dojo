@@ -1,4 +1,5 @@
 ---
+revision_pending: false
 title: "Module 1.4: Stateful Chaos \u2014 Databases & Storage"
 slug: platform/disciplines/reliability-security/chaos-engineering/module-1.4-stateful-chaos
 sidebar:
@@ -27,31 +28,77 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2017, GitLab lost 6 hours of production data after all five of their backup and recovery mechanisms failed simultaneously — a canonical lesson that untested backups are not backups and untested failover is not failover. <!-- incident-xref: gitlab-2017-db1 --> For the full case study, see [What Is a Terminal](../../../../prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal/).
+In 2017, GitLab lost six hours of production data after all five of their backup and recovery mechanisms failed simultaneously — a canonical lesson that untested backups are not backups and untested failover is not failover. <!-- incident-xref: gitlab-2017-db1 --> For the full case study, see [What Is a Terminal](../../../../prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal/).
 
-Stateless services are straightforward to test with chaos — kill a pod, it restarts, traffic reroutes, life goes on. Stateful systems are fundamentally different. When you kill a database pod, you don't just lose compute — you potentially lose data, corrupt indexes, break replication chains, and violate consistency guarantees. The blast radius of stateful chaos is inherently larger and the consequences more severe.
+Stateless services are straightforward to test with chaos: kill a pod, it restarts, traffic reroutes, and the experiment ends with a learning note rather than a data-loss incident. Stateful systems are fundamentally different because the pod is only the compute shell around durable identity and disk. When you kill a database pod, you do not merely lose a process — you potentially lose committed transactions, corrupt indexes, break replication chains, and violate consistency guarantees that your application assumed were true. The blast radius of stateful chaos is inherently larger, the safety bar is higher, and you must be able to restore to a known-good point before you ever touch production.
 
-This module teaches you to safely inject chaos into stateful workloads: databases, caches, message queues, and persistent storage. You'll learn to test failover mechanisms, verify backup integrity, and discover the hidden assumptions in your data layer — all without losing a single byte of production data.
+**Hypothetical scenario:** A platform team runs PodChaos against a three-replica PostgreSQL cluster in staging without checking replication lag first. The primary dies, Patroni promotes a replica that was thirty seconds behind, and roughly twelve thousand checkout rows vanish from the promoted database even though every health check turned green within twenty seconds. The team celebrates a fast failover while finance discovers mismatched order totals. The experiment succeeded at measuring speed and failed at measuring correctness — exactly the gap this module closes.
+
+This module teaches you to safely inject chaos into stateful workloads — databases, caches, message queues, and persistent storage — so you test failover mechanisms, verify backup integrity, and surface hidden assumptions in your data layer without losing production bytes. You will learn durable practice: how to bound blast radius, how to measure RPO and RTO as steady-state metrics, and how to prove that "it came back up" does not mean "no data was lost."
 
 ---
 
-## Did You Know?
+## Why Stateful Chaos Is Harder Than Stateless Chaos
 
-> **Split-brain incidents** (where two database nodes both believe they are the primary and accept writes) have caused data corruption at companies including LinkedIn, GitHub, <!-- incident-xref: github-2018-split-brain --> and multiple financial institutions. The Redis Sentinel documentation explicitly warns about split-brain during network partitions. Yet fewer than 15% of organizations regularly test their database clusters for split-brain resilience, according to a 2023 Percona survey. For the GitHub October 2018 split-brain case study, see [Advanced Merging](../../../../prerequisites/git-deep-dive/module-2-advanced-merging/).
+Stateful workloads on Kubernetes inherit constraints from [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/), [PersistentVolumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/), and often from operators that encode day-two logic such as failover, backup, and re-sync. A Deployment pod is interchangeable; a StatefulSet pod named `postgresql-0` is bound to PVC `data-postgresql-0` and stable network identity via a headless Service. Killing `postgresql-0` does not create a fresh empty database — Kubernetes reschedules the pod and reattaches the same volume, which may require crash recovery, WAL replay, or operator intervention before the instance accepts traffic again.
 
-> **IO latency of just 50ms on a database volume** can cause a 40x increase in query execution time for workloads with heavy random reads. This is because database engines like PostgreSQL and InnoDB use buffer pools that assume sub-millisecond storage access. When that assumption breaks, every page fault becomes 50ms instead of 0.1ms, and queries that normally read 200 pages go from 20ms to 10 seconds. IOChaos at even modest levels reveals whether your application handles slow storage gracefully.
+The failure modes you care about shift from "request failed once" to "data is wrong forever." Silent corruption, split-brain writes, and promotion of a stale replica are all scenarios where the system appears healthy while serving incorrect state. That is why stateful chaos experiments must always include post-recovery verification: row counts, checksums, sequence monotonicity, and application-level invariants — not just HTTP 200 responses and green readiness probes.
 
-> **The MTTR (Mean Time to Recovery) for database failover** varies wildly across technologies: PostgreSQL with Patroni typically fails over in 10-30 seconds, MySQL with Group Replication in 5-15 seconds, Redis Sentinel in 15-45 seconds, and MongoDB replica sets in 10-30 seconds. But these are vendor-claimed numbers. Real-world MTTR depends on network conditions, replication lag, client reconnection logic, and connection pool behavior — all of which can only be verified through chaos testing.
+Cross-reference the StatefulSet and storage fundamentals from [Kubernetes Basics — StatefulSets](/prerequisites/kubernetes-basics/) before running experiments. If you cannot explain how your PVC binds to a pod identity and what happens when the node disappears, you are not ready to inject faults into the primary.
 
-> **Amazon Aurora's storage layer** was designed specifically to tolerate the loss of an entire Availability Zone plus one additional node without data loss. AWS validated this through continuous chaos testing — they literally kill storage nodes in production regularly. This level of confidence in storage resilience is only possible because they test it constantly, not because they believe their architecture diagrams.
+Operators add another layer because they reconcile custom resources against cluster reality on a loop. When you delete a pod manually, you might expect Kubernetes to recreate it; when an operator owns the pod, recreation may include init logic, bootstrap from backup, or refusal to start if the CR status says the cluster is unhealthy. Chaos against stateful systems therefore requires reading operator documentation alongside Chaos Mesh docs — the experiment validates two control planes at once.
+
+Connection pools, ORMs, and retry middleware form the application half of the stateful story. A database can fail over perfectly while the application continues hammering a dead TCP socket until threads exhaust. Stateful chaos metrics must include client-side error rates, pool refresh events, and transaction retry counts, not only server-side replication lag. Teams that test only the data plane often ship applications that pass lab failover but fail real incidents because HikariCP or pgBouncer settings were never exercised under fault.
+
+---
+
+## Designing Safe Stateful Chaos Experiments
+
+Designing chaos for stateful systems begins with a written hypothesis and explicit abort criteria, not with a YAML file copied from a tutorial. Your hypothesis should state what steady-state behavior you expect under fault (for example, "writes fail fast with a clear error" or "failover completes within ninety seconds with zero lost transactions when lag is under one second"). Abort criteria tie to RPO and RTO thresholds you already agreed with stakeholders: if replication lag exceeds five seconds, if backup restore exceeds the RTO budget, or if any checksum mismatch appears, the experiment stops and you restore from backup rather than "seeing what happens."
+
+Safety controls stack in layers. First, run in non-production until the runbook is proven; production experiments require verified backups taken immediately before the window and a restore drill completed within the last quarter. Second, bound blast radius: target one replica before the primary, one broker before the controller, one partition before the whole cluster. Third, use [PodDisruptionBudgets](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) so Kubernetes and your chaos tooling cannot simultaneously evict more pods than your quorum allows. Fourth, keep a human on the abort switch who can delete Chaos Mesh CRDs and trigger operator-led failover manually if automation stalls.
+
+Every design should answer four questions before execution: What is the worst credible data loss if this goes wrong? Can we restore within RTO from backups or replicas? Who approves production scope? What verification queries prove correctness after recovery? If any answer is "unknown," the experiment belongs in a lab cluster with synthetic data, not in a shared staging environment that other teams treat as truth.
+
+Document the experiment like a production change: scope, rollback, observers, and communication channels. Notify downstream teams when staging holds shared datasets because a partition test on Redis may poison cache keys that batch jobs rely on overnight. Time-box duration fields on Chaos Mesh CRDs so faults self-heal if the engineer on abort duty loses connectivity. Pair every automated experiment with a manual runbook step that deletes CRDs and verifies CR status returns to normal — controllers occasionally need a reconcile nudge after aggressive fault injection.
+
+Production stateful chaos, when permitted at all, should resemble a surgical drill rather than exploration. One service, one fault type, one business hour window, executive sponsor, and pre-agreed customer communication if external impact appears. The goal is confidence accumulation, not novelty; repeating the same primary-kill quarterly with improved measurements beats inventing exotic faults that nobody interprets.
+
+---
+
+## RPO, RTO, and Consistency Under Failure
+
+Recovery Point Objective (RPO) is the maximum acceptable age of recovered data — how far back in time you are willing to rewind. Recovery Time Objective (RTO) is the maximum acceptable downtime before service is restored to a defined quality bar. These are business metrics, not database metrics, but chaos experiments make them measurable. When you kill a primary, the time between the last committed transaction on the old primary and the first writable state on the new primary is your observed RPO window unless you use synchronous replication that waits for quorum acknowledgment on every commit.
+
+Synchronous replication narrows the data-loss window at the cost of latency and availability under partition: if a synchronous replica is unreachable, commits may block or fail. Asynchronous replication keeps the primary fast but allows lag; promoting a lagging replica crystallizes that lag as permanent loss. Chaos testing should record both failover duration (RTO component) and the gap between WAL positions or binlog coordinates before and after promotion (RPO component).
+
+"It came back up" is the most dangerous sentence in incident response. A database that starts after crash recovery may skip torn pages, accept writes on a split-brain primary, or serve stale reads from a replica that has not caught up. Verification means comparing checksums (`pg_checksums` in PostgreSQL), row counts on critical tables, monotonic sequence values, and application-level idempotency tokens. The [Google SRE Book chapter on data integrity](https://sre.google/sre-book/data-integrity/) emphasizes that durability requires end-to-end checks, not assumptions from architecture diagrams.
+
+Linearizability and serializability are formal consistency models that few teams implement end-to-end, yet everyone assumes informally. Chaos experiments translate those assumptions into observations: during partition, can two clients both succeed on conflicting writes? After heal, does any client read a value that was never committed on the surviving history? You do not need to run full Jepsen suites in your cluster to benefit from Jepsen’s lesson — design workloads that write monotonic tokens and read them back from multiple clients and replicas after faults. Gaps in the token sequence are smoke; matching sequences across replicas after heal are evidence that your operational model matches your mental model.
+
+Read-your-writes and causal consistency show up in applications long before architects name them. A user updates a profile, refreshes, and sees stale data because the read hit a replica that lagged — chaos exposes that routing mistake faster than code review. Document which endpoints require primary reads versus replica reads, then fault the primary and verify that read-only traffic either fails fast with a clear message or follows replicas with bounded staleness acceptable to product owners.
+
+---
+
+## What to Test on Stateful Systems
+
+A complete stateful chaos program exercises the failure modes your architecture claims to handle, not only the ones that are easy to trigger. Leader or primary failover tests answer whether promotion completes within RTO and what RPO the promotion actually incurred. Replica loss and re-sync tests answer whether remaining replicas absorb read load and whether the replaced member rejoins without manual rebuild. Quorum loss tests answer whether the cluster refuses writes rather than accepting divergent commits — the etcd failure documentation describes how minority members become read-only when quorum disappears.
+
+Storage-layer faults deserve equal attention. Disk-full conditions, elevated IO latency, and injected IO errors (EIO) reveal whether applications time out gracefully or hang thread pools until the whole service stalls. PVC detach and node loss scenarios test whether StatefulSet rescheduling and volume reattachment complete within your runbook assumptions; cloud block storage reattach often takes minutes, not seconds. Network partitions between replicas test split-brain defenses: does the isolated primary stop accepting writes? Does consensus elect exactly one leader?
+
+Backup and restore drills belong in the same program as live failover. Restore into an isolated database or cluster, then compare counts and checksums against the live system at backup time. Clock skew experiments using TimeChaos probe consensus algorithms that assume bounded time drift — relevant for etcd, ZooKeeper, and many distributed databases. Message queues and caches hold state too: durable queue semantics, ISR behavior in Kafka, and Sentinel promotion rules are all stateful surfaces even when the workload runs in memory.
+
+Disk-full and inode exhaustion faults differ from latency injection because many databases stop accepting writes entirely when a volume fills — a condition IOChaos can approximate with error injection on append operations or with carefully scoped emptyDir pressure tests on log sidecars. The learning goal is whether monitoring fires before the database halts and whether autoscaling or log rotation runbooks execute without manual paging. Latency-only programs miss full-volume incidents because the process stays alive while every write blocks.
+
+Replica re-sync after extended outage tests whether your operator rebuilds from scratch, reuses incremental catch-up, or requires human object-store restore. Kill a replica pod, pause it long enough for retention windows to expire WAL or binlog segments the primary no longer retains, then restart and measure rebuild time and load on the primary. That scenario mimics maintenance mistakes and network partitions longer than your retention policy allows — a common surprise in production that simple pod-kill tests never reach.
 
 ---
 
 ## IOChaos: Storage-Level Fault Injection
 
-IOChaos intercepts filesystem operations inside target containers and injects delays, errors, or attribute modifications. This simulates degraded storage, failing disks, and IO controller issues.
+IOChaos intercepts filesystem operations inside target containers and injects delays, errors, or attribute modifications. This simulates degraded storage, failing disks, and IO controller issues without rewriting bytes on the underlying PersistentVolume — the application experiences real syscall failures and latency, which is what you need to test application and database behavior under stress.
 
-### How IOChaos Works
+Chaos Mesh implements IOChaos with a FUSE (Filesystem in Userspace) layer inserted between the application and the mounted volume path documented in the [IOChaos guide](https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/). When the experiment CRD is deleted, the FUSE layer is removed and IO returns to normal unless the application corrupted its own files in response to simulated errors — which is itself a valuable finding.
 
 ```
 Normal IO path:
@@ -64,14 +111,7 @@ IOChaos path:
                               faults here
 ```
 
-Chaos Mesh uses a FUSE (Filesystem in Userspace) layer to intercept and manipulate IO operations. This means:
-- The application sees real filesystem errors/delays
-- The actual data on disk is never corrupted
-- The fault is completely reversible by removing the CRD
-
-### IO Read/Write Delay
-
-**Hypothesis**: "We believe the API will continue responding within 2 seconds even when disk read latency increases to 100ms per operation, because frequently accessed data is cached in PostgreSQL's shared buffers and only cold queries hit disk."
+**Hypothesis**: "We believe the API will continue responding within two seconds even when disk read latency increases to one hundred milliseconds per operation, because frequently accessed data is cached in PostgreSQL shared buffers and only cold queries hit disk."
 
 ```yaml
 # io-delay-experiment.yaml
@@ -89,20 +129,18 @@ spec:
     labelSelectors:
       app: postgresql
       role: primary
-  volumePath: /var/lib/postgresql/data    # Target the data volume
-  path: "**"                               # All files in the volume
-  delay: "100ms"                           # 100ms IO delay
-  percent: 100                             # Affect 100% of operations
+  volumePath: /var/lib/postgresql/data
+  path: "**"
+  delay: "100ms"
+  percent: 100
   containerNames:
     - postgresql
   duration: "180s"
 ```
 
 ```bash
-# Apply IO delay
 kubectl apply -f io-delay-experiment.yaml
 
-# Monitor query performance from the application
 kubectl exec -it deployment/api-server -n app -- \
   sh -c 'for i in $(seq 1 10); do
     START=$(date +%s%N)
@@ -112,85 +150,25 @@ kubectl exec -it deployment/api-server -n app -- \
     sleep 1
   done'
 
-# Check PostgreSQL's internal IO statistics
 kubectl exec -it postgresql-0 -n database -- \
   psql -U postgres -c "SELECT * FROM pg_stat_io WHERE backend_type = 'client backend';"
 
-# Clean up
 kubectl delete iochaos postgres-io-delay -n database
 ```
 
-### IO Error Injection
+IO error injection on WAL paths can cause PostgreSQL to halt to protect integrity — expected behavior. The experiment question is whether your operator or runbook detects the crash and promotes a healthy replica within RTO. Target selective paths (`**/pg_wal/**`, `**/base/**`) to stress replication versus heap access separately rather than blasting one hundred percent errors at the primary without a standby ready to promote.
 
-Simulate disk errors — files that can't be read or written:
+When interpreting IOChaos results, separate engine behavior from storage behavior. PostgreSQL may enter recovery mode, MySQL InnoDB may crash the mysqld process, and etcd may panic on fsync failure — each response is intentional crash safety, not a failed experiment. Capture logs from the moment of first injected error through restart or promotion so postmortems reference timestamps instead of memory. Compare `pg_stat_io` or equivalent metrics before, during, and after fault to confirm the FUSE layer fully detached; lingering elevation indicates cleanup issues worth filing against the chaos tooling or restarting the pod.
 
-```yaml
-# io-error-experiment.yaml
-apiVersion: chaos-mesh.org/v1alpha1
-kind: IOChaos
-metadata:
-  name: postgres-io-errors
-  namespace: database
-spec:
-  action: fault
-  mode: one
-  selector:
-    namespaces:
-      - database
-    labelSelectors:
-      app: postgresql
-      role: primary
-  volumePath: /var/lib/postgresql/data
-  path: "/var/lib/postgresql/data/pg_wal/**"   # Target WAL files only
-  errno: 5                                      # EIO (Input/Output error)
-  percent: 25                                   # 25% of WAL operations fail
-  methods:
-    - write
-    - fsync                                     # Target write and fsync only
-  containerNames:
-    - postgresql
-  duration: "60s"
-```
-
-**Warning**: IO errors on WAL (Write-Ahead Log) files can cause PostgreSQL to shut down to protect data integrity. This is expected behavior — PostgreSQL is designed to crash-safe rather than continue with potentially corrupted data. The real test is whether your failover mechanism detects the crash and promotes a replica.
-
-### Selective IO Chaos
-
-Target specific file patterns to test specific behaviors:
-
-| File Pattern | What It Tests |
-|-------------|---------------|
-| `**/pg_wal/**` | WAL write failures — replication and crash recovery |
-| `**/base/**` | Table data access — query performance under IO stress |
-| `**/pg_stat_tmp/**` | Statistics collector — monitoring degradation |
-| `**/pg_tblspc/**` | Tablespace access — if using custom tablespaces |
-| `**/*.idx` | Index file access — query plan changes under IO stress |
+Percent-based IOChaos (`percent: 25`) models intermittent array glitches better than total failure and keeps the database running long enough to observe application retry storms. Pair intermittent faults with idempotent write tests: if duplicate charges appear after partial failures, the bug lives in application logic, not the storage tier. That combination is how stateful chaos earns its complexity label — you are debugging distributed systems behavior, not toggling a pod.
 
 ---
 
-## Database Failover Testing
+## Database Failover and Operator Logic
 
-### PostgreSQL with Patroni
+Modern Kubernetes databases are often operated by controllers — CloudNativePG for PostgreSQL, Strimzi for Kafka, Vitess for sharded MySQL — that encode failover, backup, and reconfiguration logic you previously performed by hand. Stateful chaos tests that day-two automation, not merely the database binary. When you kill the primary pod, you are asking whether the operator updates Services or endpoints, whether it respects replication lag before promotion, and whether it rebuilds failed members without human intervention.
 
-Patroni is the most common PostgreSQL high-availability solution in Kubernetes. It uses a distributed consensus store (etcd, ZooKeeper, or Kubernetes API) to manage leader election and automated failover.
-
-```
-                    ┌─────────────┐
-                    │   Patroni   │
-                    │   Leader    │
-                    │  Election   │
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────▼─────┐ ┌───▼────┐ ┌────▼────┐
-        │ PG Primary│ │PG Repl │ │PG Repl  │
-        │ (pod-0)   │ │(pod-1) │ │(pod-2)  │
-        │ read/write│ │readonly│ │readonly │
-        └───────────┘ └────────┘ └─────────┘
-```
-
-**Failover test using PodChaos:**
+Patroni-style PostgreSQL HA remains a common pattern: a distributed configuration store holds the leader key, replicas watch that key, and promotion runs `pg_ctl promote` on the lag-appropriate candidate. The [CloudNativePG failover documentation](https://cloudnative-pg.io/documentation/current/failover/) describes Kubernetes-native promotion flows that replace much of the Patroni glue with CRD status and controlled switchover. Either way, your experiment metrics are the same: time to writable primary, count of failed client writes, replication lag at kill time versus data visible after promotion, and time for the old primary to rejoin as a replica without split-brain.
 
 ```yaml
 # patroni-failover-test.yaml
@@ -207,120 +185,27 @@ spec:
       - database
     labelSelectors:
       app: postgresql
-      role: master              # Target the current primary
-  gracePeriod: 0                # Immediate kill
+      role: master
+  gracePeriod: 0
   duration: "120s"
 ```
 
-**What to observe during Patroni failover:**
+During failover, run parallel observers: cluster state from the operator CLI or `patronictl list`, application health and write probes, and replication lag queries on survivors. Record lag before the kill — if you skip that step, you cannot interpret data loss afterward. After failover, verify sequence continuity and row counts on tables that received writes during the window; gaps in serial columns or missing idempotency keys reveal RPO breaches that latency metrics hide.
 
-```bash
-# Terminal 1: Watch Patroni cluster state
-kubectl exec -it postgresql-0 -n database -- \
-  patronictl list
+Switchover differs from failover in ways chaos programs often ignore. Planned switchover moves leadership without crash, testing whether applications tolerate brief write pauses and DNS or Service updates. Failover chaos kills pods; switchover chaos should include operator-initiated `kubectl cnpg promote` or Patroni `switchover` commands to compare graceful handoff against violent loss. Teams that only test crash failover discover during maintenance that graceful paths drop more connections because connection draining behaved differently than SIGKILL.
 
-# Terminal 2: Monitor application connectivity
-kubectl exec -it deployment/api-server -n app -- \
-  sh -c 'while true; do
-    RESULT=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:8080/api/health)
-    echo "$(date +%H:%M:%S) Health: $RESULT"
-    sleep 1
-  done'
+Vitess and sharded MySQL introduce shard-level primary concepts — killing one tablet primary does not test the entire cluster, which is a feature for blast-radius control. Document which shard your experiment targets and whether cross-shard transactions can observe partial failure. Strimzi-managed Kafka treats brokers as cattle yet partitions as precious; broker chaos without producer/consumer load generates trivial results, so inject synthetic traffic or replay production traffic samples at reduced rate during broker faults.
 
-# Terminal 3: Check for write availability
-kubectl exec -it deployment/api-server -n app -- \
-  sh -c 'while true; do
-    RESULT=$(curl -s -w "\n%{http_code}" --max-time 5 \
-      -X POST http://localhost:8080/api/test-write \
-      -H "Content-Type: application/json" \
-      -d "{\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}")
-    echo "$(date +%H:%M:%S) Write: $RESULT"
-    sleep 2
-  done'
-```
-
-**Expected Patroni failover timeline:**
-
-| Time | Event |
-|------|-------|
-| T+0s | Primary pod killed |
-| T+1-3s | Patroni detects leader loss via DCS (distributed config store) |
-| T+5-10s | Leader election begins; replicas check replication lag |
-| T+10-20s | New primary promoted; Patroni updates endpoint |
-| T+15-30s | Applications reconnect to new primary |
-| T+20-45s | Old primary pod restarted by Kubernetes as replica |
-
-**Key metrics to record:**
-- Time from kill to new primary promotion
-- Number of failed writes during failover
-- Number of failed reads during failover (should be zero if read replicas are used)
-- Time for the application to reconnect
-- Whether any writes were lost (check sequence gaps)
-
-### Redis Sentinel Failover
-
-```yaml
-# redis-sentinel-failover.yaml
-apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
-metadata:
-  name: redis-primary-kill
-  namespace: cache
-spec:
-  action: pod-kill
-  mode: one
-  selector:
-    namespaces:
-      - cache
-    labelSelectors:
-      app: redis
-      role: master
-  gracePeriod: 0
-  duration: "60s"
-```
-
-**Redis Sentinel failover verification:**
-
-```bash
-# Check Sentinel's view of the cluster
-kubectl exec -it redis-sentinel-0 -n cache -- \
-  redis-cli -p 26379 SENTINEL masters
-
-# Monitor failover events
-kubectl exec -it redis-sentinel-0 -n cache -- \
-  redis-cli -p 26379 SUBSCRIBE +sdown +odown +switch-master
-
-# Verify from the application
-kubectl exec -it deployment/api-server -n app -- \
-  sh -c 'while true; do
-    RESULT=$(redis-cli -h redis-sentinel.cache.svc.cluster.local -p 26379 \
-      SENTINEL get-master-addr-by-name mymaster 2>/dev/null)
-    echo "$(date +%H:%M:%S) Master: $RESULT"
-    sleep 1
-  done'
-```
-
-**Expected Redis Sentinel timeline:**
-
-| Time | Event |
-|------|-------|
-| T+0s | Primary pod killed |
-| T+5s | Sentinel marks primary as `+sdown` (subjectively down) |
-| T+15-30s | Quorum agrees on `+odown` (objectively down) |
-| T+15-35s | Sentinel elects new primary via Raft consensus |
-| T+20-45s | `+switch-master` event; clients reconnect |
+The [PostgreSQL high availability documentation](https://www.postgresql.org/docs/current/high-availability.html) describes replication modes and standby promotion at the engine level; operators implement those rules with Kubernetes-specific timing. Read both layers before claiming your cluster is "HA" because it runs three pods.
 
 ---
 
-## Split-Brain Testing
+## Split-Brain, Quorum Loss, and Network Partitions
 
-Split-brain is the most feared failure mode in distributed databases: two nodes both believe they are the primary and accept writes. This causes data divergence that is extremely difficult to reconcile.
-
-### Simulating Split-Brain with NetworkChaos
+Split-brain is the condition where two nodes both believe they are primary and accept writes, producing divergent histories that are painful or impossible to merge automatically. It is the failure mode [Jepsen](https://jepsen.io/analyses) repeatedly demonstrates when consensus boundaries are misunderstood. Testing split-brain requires NetworkChaos partitions that isolate the current primary from witnesses (Sentinel, etcd, or other replicas) while leaving some clients able to reach the isolated node — a deliberate setup that must never run uncontrolled in production.
 
 ```yaml
 # split-brain-simulation.yaml
-# Partition the primary from Sentinel, but keep it reachable by clients
 apiVersion: chaos-mesh.org/v1alpha1
 kind: NetworkChaos
 metadata:
@@ -346,156 +231,35 @@ spec:
   duration: "120s"
 ```
 
-**What this creates:**
+The [Redis Sentinel documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/) describes subjective and objective down detection and the importance of quorum before failover. Your partition experiment should observe whether an isolated primary stops writes when it cannot reach enough replicas (`min-replicas-to-write` and related settings), whether clients follow the new master after `+switch-master`, and what happens to writes accepted on the losing side when the partition heals — typically they are discarded when the old primary resyncs.
 
-```
-Before partition:                After partition:
+Quorum loss testing applies to etcd and other Raft systems: killing a majority of members should make the cluster refuse writes rather than electing competing leaders. The [etcd failure guide](https://etcd.io/docs/v3.6/op-guide/failures/) documents expected behavior when members are unavailable. Attempt a write after losing quorum; you should see errors like `etcdserver: no leader`, not silent success on divergent nodes.
 
-Sentinel ←→ Primary ←→ Replica  Sentinel ←─╳─→ Primary (isolated)
-                                      ↕
-                                  Replica (promoted to new primary)
+NetworkChaos direction matters for split-brain realism. Partitioning the primary from all replicas differs from partitioning one replica from the others; each topology teaches different fencing behavior. Use [NetworkChaos documentation](https://chaos-mesh.org/docs/simulate-network-chaos-on-kubernetes/) fields deliberately — `direction: both` with a `target` selector creates asymmetric paths that mirror partial switch failures better than blanket packet loss. Draw the partition on paper before applying YAML so observers know which clients should still reach which nodes.
 
-Result: TWO primaries accepting writes = SPLIT BRAIN
-```
-
-**What to observe:**
-1. Does the old primary reject writes after losing contact with Sentinel?
-2. Does the application reconnect to the new primary?
-3. After the partition heals, which primary "wins"?
-4. Are any writes lost from the losing primary?
-
-```bash
-# During partition: Check if old primary still accepts writes
-kubectl exec -it redis-0 -n cache -- redis-cli SET test-key "written-during-partition"
-
-# Check the new primary
-kubectl exec -it redis-1 -n cache -- redis-cli GET test-key
-
-# After partition heals: Which value survives?
-kubectl exec -it redis-0 -n cache -- redis-cli GET test-key
-```
-
-### Quorum Loss Testing
-
-For systems that use quorum (etcd, ZooKeeper, Raft-based databases), losing a majority of nodes should make the cluster read-only, preventing split-brain:
-
-```yaml
-# quorum-loss-test.yaml
-# Kill 2 of 3 etcd members to lose quorum
-apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
-metadata:
-  name: etcd-quorum-loss
-  namespace: etcd
-spec:
-  action: pod-kill
-  mode: fixed
-  value: "2"                   # Kill 2 pods
-  selector:
-    namespaces:
-      - etcd
-    labelSelectors:
-      app: etcd
-  gracePeriod: 0
-  duration: "60s"
-```
-
-**Expected behavior:** The remaining etcd member should refuse writes (no quorum). Applications that depend on etcd should handle the read-only state gracefully.
-
-```bash
-# Verify etcd health after killing 2 of 3 members
-kubectl exec -it etcd-0 -n etcd -- \
-  etcdctl endpoint health --cluster
-
-# Attempt a write — should fail
-kubectl exec -it etcd-0 -n etcd -- \
-  etcdctl put /test/key "value" 2>&1
-
-# Expected: "etcdserver: no leader" or "context deadline exceeded"
-```
+Fencing is the durable concept behind split-brain prevention: the old primary must be prevented from accepting writes after a new primary wins. STONITH (shoot the other node in the head) in bare-metal clusters becomes cloud API stop-instance calls or operator demotion in Kubernetes. If your chaos experiment shows the old primary still writable after promotion, you lack fencing — no amount of replication tuning fixes that. Document the fencing mechanism your stack uses and test it explicitly during partition heal.
 
 ---
 
-## PersistentVolume Chaos
+## PersistentVolume Chaos and Node Failure
 
-### PV Detachment Simulation
+When a node fails, StatefulSet pods reschedule with the same identity but the PersistentVolume must detach from the old node and attach to the new one. That attach/detach cycle is slow on many cloud providers and is a frequent source of RTO misses that pod-only chaos never reveals. You can simulate total volume unavailability with IOChaos at one hundred percent error rate on the data mount — the effect resembles sudden detach or array failure from the application's perspective.
 
-What happens when a PersistentVolume is suddenly unavailable? This simulates cloud provider storage detachment, iSCSI timeout, or NFS server failure.
+After injecting total IO failure, observe whether the database process exits cleanly, whether the operator triggers failover, and how long until clients can write again. When IOChaos ends, verify automatic recovery: does the instance replay WAL and open for connections, or does it require manual `pg_resetwal`-class intervention that your runbook forbids? For node-level tests, cordon the node, delete the pod with zero grace, watch PVC binding events, and measure wall-clock time until the pod is running and ready on another node — then uncordon.
 
-You cannot directly detach a PV with Chaos Mesh, but you can simulate the effect using IOChaos with 100% error rate:
+These experiments pair with [Kubernetes pod disruption concepts](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/): voluntary disruptions (drains, PDB-aware evictions) and involuntary ones (node loss, kubelet death) interact with your chaos schedule. A Game Day that kills pods without accounting for simultaneous node maintenance teaches the wrong lesson.
 
-```yaml
-# pv-unavailable-simulation.yaml
-apiVersion: chaos-mesh.org/v1alpha1
-kind: IOChaos
-metadata:
-  name: pv-detachment-simulation
-  namespace: database
-spec:
-  action: fault
-  mode: one
-  selector:
-    namespaces:
-      - database
-    labelSelectors:
-      app: postgresql
-  volumePath: /var/lib/postgresql/data
-  path: "**"
-  errno: 5                     # EIO - Input/Output error
-  percent: 100                 # All IO operations fail
-  methods:
-    - read
-    - write
-    - open
-    - fsync
-  containerNames:
-    - postgresql
-  duration: "60s"
-```
+Local versus remote volumes change the story materially. Local SSD or `local-path` PVs bind data to a node; node loss may mean unrecoverable placement until manual intervention copies data. Network-attached block storage survives node loss but pays attach latency. Chaos experiments should label which storage class they target so results are not generalized incorrectly across environments. A team on fast regional SSD may assume sub-minute RTO while another on cross-region disks learns double-digit minutes — both outcomes are valid when attributed to storage architecture rather than operator skill.
 
-**What to observe:**
-1. Does PostgreSQL crash immediately or continue serving cached data?
-2. If it crashes, does Patroni detect the failure and trigger failover?
-3. How long until the application can write again?
-4. After IO is restored, does PostgreSQL recover automatically?
-
-### Testing PV Rescheduling
-
-When a node fails, StatefulSet pods must be rescheduled to another node. The PV must be detached from the failed node and attached to the new node. This process can take 5-10 minutes depending on the cloud provider:
-
-```bash
-# Simulate node failure for the node running the database
-# WARNING: This is destructive — only run in test clusters
-
-# Find which node runs the database pod
-NODE=$(kubectl get pod postgresql-0 -n database -o jsonpath='{.spec.nodeName}')
-
-# Cordon the node (prevent new pods)
-kubectl cordon $NODE
-
-# Delete the pod (simulating node failure)
-kubectl delete pod postgresql-0 -n database --grace-period=0 --force
-
-# Watch the pod reschedule to another node
-kubectl get pods -n database -w
-
-# Monitor PV attachment
-kubectl get pv -w
-
-# Uncordon after the test
-kubectl uncordon $NODE
-```
+ReadWriteOnce volumes allow only one writer at a time, which protects against accidental dual mount but serializes failover during attach storms. If multiple pods mount the same RWO claim during a bad failover, filesystem corruption follows — another reason operators manage Services and endpoints tightly. After node failure simulation, inspect events on the PVC for `FailedAttachVolume` or `Multi-Attach error` messages; those strings appear in real incidents and should appear in your runbook index.
 
 ---
 
-## Backup Verification Through Chaos
+## Backup, Restore, and Recovery Validation
 
-The GitLab lesson: backups that haven't been restored are not backups. Use chaos experiments to verify your backup and restore process works.
-
-### Backup Restoration Test
+The GitLab incident demonstrates that multiple backup mechanisms can fail together when none were restore-tested under realistic conditions. Chaos-driven backup validation means taking a backup, introducing controlled damage or failover, restoring to an isolated scope, and proving row-level equality on representative tables — not merely observing that `pg_dump` exited zero.
 
 ```bash
-# Step 1: Create a known dataset
 kubectl exec -it postgresql-0 -n database -- \
   psql -U postgres -c "
     CREATE TABLE IF NOT EXISTS chaos_test (
@@ -506,148 +270,139 @@ kubectl exec -it postgresql-0 -n database -- \
     INSERT INTO chaos_test (data)
     SELECT 'record-' || generate_series(1, 1000);
     SELECT count(*) FROM chaos_test;"
-# Expected: 1000 rows
 
-# Step 2: Take a backup
 kubectl exec -it postgresql-0 -n database -- \
   pg_dump -U postgres -F c -f /tmp/chaos_backup.dump postgres
 
-# Step 3: Corrupt the data (simulating data loss)
 kubectl exec -it postgresql-0 -n database -- \
   psql -U postgres -c "DELETE FROM chaos_test WHERE id % 3 = 0;"
-# Deleted ~333 rows
 
-# Step 4: Restore from backup
 kubectl exec -it postgresql-0 -n database -- \
   pg_restore -U postgres -d postgres --clean --if-exists /tmp/chaos_backup.dump
 
-# Step 5: Verify restoration
 kubectl exec -it postgresql-0 -n database -- \
   psql -U postgres -c "SELECT count(*) FROM chaos_test;"
-# Expected: 1000 rows — backup restoration verified
 
-# Step 6: Clean up test data
 kubectl exec -it postgresql-0 -n database -- \
   psql -U postgres -c "DROP TABLE IF EXISTS chaos_test;"
 ```
 
-### Automated Backup Verification Schedule
+Schedule restore verification regularly — weekly or monthly depending on RPO — into a disposable instance whose name includes the date, then drop it after checks. Measure restore duration every time; RTO budgets that assume "about thirty minutes" fail when the real restore takes ninety minutes on production-tier storage. If restore is too slow, your steady-state mitigation is replicas and point-in-time recovery, not optimism.
 
-```yaml
-# backup-verification-cronjob.yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: backup-verification
-  namespace: database
-spec:
-  schedule: "0 6 * * 0"        # Every Sunday at 6 AM
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          containers:
-            - name: verify-backup
-              image: postgres:16
-              command:
-                - /bin/bash
-                - -c
-                - |
-                  set -euo pipefail
+Point-in-time recovery (PITR) chaos combines base backup with WAL or binlog replay to a timestamp — closer to how large teams recover from operator error than full restore from yesterday’s dump. After taking a base backup, insert a known marker row, simulate accidental mass delete, then replay to one second before the delete and verify the marker survives while deleted rows reappear. PITR drills expose missing WAL archiving, wrong retention on object storage, and permission errors on backup buckets — failures GitLab’s postmortem showed can stack silently until needed.
 
-                  echo "=== Backup Verification Started ==="
-                  echo "Time: $(date -u)"
+Encrypt backups at rest and test restore credentials under fault: revoke the backup IAM role temporarily in lab to confirm alerts fire and restores fail loudly rather than writing empty files. Backup verification is also a security exercise because restored databases often land in less restricted networks; isolate restore namespaces with NetworkPolicy defaults deny and audit logging enabled.
 
-                  # Fetch latest backup from S3
-                  aws s3 cp s3://backups/postgresql/latest.dump /tmp/restore.dump
+---
 
-                  # Create a temporary database for verification
-                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql.database.svc \
-                    -U postgres -c "CREATE DATABASE backup_verify_$(date +%Y%m%d);"
+## Message Queues, Caches, and TimeChaos
 
-                  # Restore into the temporary database
-                  PGPASSWORD=$POSTGRES_PASSWORD pg_restore -h postgresql.database.svc \
-                    -U postgres -d "backup_verify_$(date +%Y%m%d)" /tmp/restore.dump
+Kafka brokers, RabbitMQ nodes, and Redis primaries hold in-flight state that pod kills can orphan or duplicate depending on producer and consumer settings. Kafka partition leadership election after broker loss tests whether producers with `acks=all` block correctly and whether consumers stall or skip as ISR membership changes — Strimzi documents operator-managed rolling and recovery patterns in its [overview](https://strimzi.io/docs/operators/latest/overview.html). RabbitMQ mirrored queues test whether messages survive node restart when publishers use confirms and consumers use acknowledgments.
 
-                  # Run verification queries
-                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql.database.svc \
-                    -U postgres -d "backup_verify_$(date +%Y%m%d)" -c "
-                      SELECT 'users' as table_name, count(*) as row_count FROM users
-                      UNION ALL
-                      SELECT 'orders', count(*) FROM orders
-                      UNION ALL
-                      SELECT 'products', count(*) FROM products;"
+TimeChaos skews the clock inside selected pods, stressing lease timeouts, TLS validity checks, and consensus elections that assume synchronized time. Apply TimeChaos only in isolated namespaces with explicit duration caps; see the [TimeChaos documentation](https://chaos-mesh.org/docs/simulate-time-chaos-on-kubernetes/). Combined with network partitions, clock skew reveals edge cases in leader election that sequential PodChaos tests miss.
 
-                  # Clean up temporary database
-                  PGPASSWORD=$POSTGRES_PASSWORD psql -h postgresql.database.svc \
-                    -U postgres -c "DROP DATABASE backup_verify_$(date +%Y%m%d);"
+Caches are stateful even when labeled ephemeral. Redis persistence (RDB snapshots, AOF) means pod kill tests intersect disk IO and replication; pure in-memory mode means kill equals cold cache and thundering herd on rebuild. Design cache chaos hypotheses around business impact: elevated database load, stale feature flags, or rate-limit counters reset. RabbitMQ durable queues survive broker restart when messages were persisted and publishers used confirms; chaos without publisher confirms teaches little about production safety.
 
-                  echo "=== Backup Verification Complete ==="
-              envFrom:
-                - secretRef:
-                    name: postgresql-credentials
-          restartPolicy: OnFailure
+Kafka’s controller broker coordinates partition leadership; killing it triggers election storms that look scary in logs but should settle within broker-configured timeouts. Use [PodChaos on brokers](https://chaos-mesh.org/docs/simulate-pod-chaos-on-kubernetes/) with consumer groups running and measure duplicate delivery counts — exactly-once semantics are rare; chaos should quantify how many duplicates your idempotent consumers actually absorb. Document whether your stack uses Strimzi’s rolling update strategy or raw StatefulSet ordering because upgrade semantics change failure coupling during experiments.
+
+---
+
+## Landscape Snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.
+
+| Capability | Chaos Mesh | Litmus |
+|------------|------------|--------|
+| Pod kill / container kill on StatefulSet targets | PodChaos | pod-delete / container-kill experiments |
+| Network partition and latency | NetworkChaos | network-chaos experiments |
+| IO latency and syscall errors on a volume path | IOChaos | limited; often combined with node IO stress |
+| Clock skew injection | TimeChaos | time-chaos experiments |
+| Operator-native DB failover hooks | none (BYO runbooks) | workflow hooks via ChaosCenter |
+
+| Operator (illustrative) | Failover model (verify in docs) |
+|-------------------------|----------------------------------|
+| CloudNativePG | Kubernetes-native promotion; lag-aware switchover |
+| Vitess | Planned and emergency reparent via vtctl ([operating guide](https://vitess.io/docs/21.0/user-guides/operating-vitess/)) |
+| Strimzi | Kafka broker rolling restart; partition leader election via Kafka protocol |
+
+We use Chaos Mesh YAML in examples because it makes IO and time faults explicit; Litmus and other frameworks can target the same durable capabilities — see [What is Litmus](https://docs.litmuschaos.io/docs/introduction/what-is-litmus/) for workflow-oriented Game Days. No single tool replaces post-experiment data verification.
+
+Choosing a chaos framework for stateful work is less important than choosing observability signals. Prefer tools that integrate with your existing Prometheus metrics and Kubernetes events so experiments appear as annotated intervals on dashboards. Whether the fault arrives from IOChaos or a Litmus workflow, the post-experiment questions remain identical: what was lag at fault time, how many writes failed, how long until checksums match across replicas, and did the operator CR reach `Ready` without manual patch?
+
+---
+
+## Verifying Correctness After Every Experiment
+
+Stateful chaos that ends when the CRD is deleted has missed half the learning. The heal phase — minutes to hours after fault removal — is when split-brain reconciliation, cache repopulation, and replica catch-up either succeed or expose drift. Schedule verification queries as a checklist tied to service name: financial tables get sum(amount) comparisons, identity tables get count distinct user_id, event streams get max(event_id) monotonicity checks. Automate the checklist in a Job that runs after Game Days so human fatigue does not skip steps.
+
+Compare results against a snapshot taken immediately before fault injection, not against production’s current live state if other traffic mutated data during the experiment. For shared staging databases, use dedicated chaos schemas or tables prefixed `chaos_` so parallel teams do not confound measurements. When mismatch appears, capture page dumps, LSN positions, and operator logs before restarting pods — restart destroys evidence you need for root cause.
+
+Silent corruption detection sometimes requires external auditors: `pg_amcheck` for PostgreSQL heap and index consistency, `mysqlcheck` for MySQL, or application-level reconciliation jobs that compare ledger totals to payment provider APIs. Chaos should trigger those auditors on schedule after IO fault classes even when user-facing metrics look green. The [Google SRE data integrity](https://sre.google/sre-book/data-integrity/) guidance recommends designing systems so integrity checks are routine, not emergency-only — stateful chaos is the forcing function that proves those checks exist and run.
+
+Document every experiment outcome in a short record: hypothesis, fault applied, lag at start, RTO observed, RPO observed, verification query results, surprises, runbook updates filed. Over quarters that record becomes evidence for auditors and onboarding material for engineers who were not in the room. Without written outcomes, teams repeat the same primary kill annually and call it maturity when they are actually relearning the same thirty-second failover number without deepening correctness coverage.
+
+Hypothetical scenario: After a NetworkChaos partition heals, row counts match on two of three replicas but diverge by fourteen rows on the third. An engineer restarts the odd replica without investigation, wiping the evidence that a partial write set replicated asymmetrically during partition. The correct response is to quarantine the divergent replica, pg_dump its conflicting rows for analysis, and only then rebuild from the known-good primary — chaos maturity means preserving ambiguity long enough to learn from it.
+
+Game Day facilitation for stateful systems benefits from explicit roles: fault injector, metric watcher, application driver, scribe, and abort owner. The scribe captures timestamps when observers shout observations — "write failed at 14:03:08" — because post-hoc log correlation without notes devolves into guessing. Debrief within forty-eight hours while context is fresh; update runbooks the same week or the learning evaporates. Stateful chaos is as much organizational discipline as technical YAML.
+
+When integrating with CI, keep stateful experiments out of pull-request pipelines unless the cluster is disposable and data is synthetic. The durable CI-friendly checks are restore drills against anonymized dumps and linting of chaos manifests for dangerous selectors (production namespace labels, `percent: 100` on primary without replica selectors). Full failover chaos belongs in scheduled staging windows with humans present — automating it without guards recreates the GitLab risk in miniature.
+
+Finally, teach stakeholders the vocabulary of stateful chaos before the first Game Day. Product managers who understand RPO tradeoffs will accept brief write unavailability during staging drills; executives who do not may panic at expected error spikes. A fifteen-minute briefing on lag gates, restore isolation, and the difference between availability metrics and correctness metrics prevents organizational antibodies from shutting down a program that was actually working as designed.
+
+Regulatory and contractual retention requirements intersect with chaos when experiments delete or corrupt audit tables — even in staging. If your staging database mirrors production schema including audit logs, scope faults to non-audit schemas or use synthetic tenants whose loss is immaterial. Legal hold and compliance teams should appear on the stakeholder list for any production-adjacent stateful experiment because the blast radius includes evidence chains, not only customer-facing rows.
+
+Treat every stateful experiment as a rehearsal for the postmortem you hope never to write: if you cannot explain what broke, what was lost, and what runbook changed, the time was entertainment, not engineering. The scribe role exists so those answers are captured in the moment, not reconstructed from incomplete logs a week later when priorities have moved on and team memories have faded.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Patterns
+
+**Lag gate before primary kill.** Measure replication lag immediately before any primary-targeting experiment; abort if lag exceeds your RPO budget. This pattern converts failover chaos from a gamble into a controlled measurement.
+
+**Restore into isolation.** Always restore backups to a temporary instance or namespace, never onto the live primary. Verification learns restore mechanics without risking production corruption.
+
+**Hypothesis with steady-state metrics.** Tie each experiment to Prometheus or operator metrics (lag bytes, write error rate, leader changes) so abort conditions are objective rather than debated mid-incident.
+
+### Anti-Patterns
+
+**Primary-first without standby health.** Killing the primary when replicas are degraded turns an experiment into an outage with no promotion target — the anti-pattern of testing availability by removing all redundancy.
+
+**Green probe equals correct data.** Readiness only proves the process accepts connections; it does not prove replicas agree on row counts or that sequences are monotonic after promotion.
+
+**Partition test without heal phase.** Stopping the experiment when the network heals is where reconciliation bugs appear; always extend observation through heal and run checksum or count queries on all members.
+
+**Idle cluster fault injection.** Running chaos without representative write load hides connection pool exhaustion and retry storms that appear only under real concurrency; always generate synthetic or sampled production traffic during stateful faults.
+
+### Decision Framework
+
+| Situation | Start with | Escalate to | Stop if |
+|-----------|------------|-------------|---------|
+| New stateful service, no prior chaos | Replica pod kill, read-only checks | Primary kill in staging with lag gate | Lag unknown or no backup verified |
+| Regulated data, strict RPO | IO latency on single replica | Network partition in lab only | Any checksum mismatch |
+| Operator-managed database | Operator switchover drill | PodChaos on primary with runbook owner present | Operator CR reports failed reconciliation |
+| Message queue | Single broker kill, ISR watch | Multi-broker loss in staging | Unclean leader election or duplicate delivery |
+
+```mermaid
+flowchart TD
+  A[Define hypothesis + RPO/RTO limits] --> B{Backup verified in last 30 days?}
+  B -->|No| C[Run restore drill first]
+  B -->|Yes| D[Lag gate + PDB check]
+  D --> E[Inject fault on smallest blast radius]
+  E --> F{Metrics within abort thresholds?}
+  F -->|No| G[Abort: delete CRD / manual failover]
+  F -->|Yes| H[Continue through heal phase]
+  H --> I[Row counts + checksums + app invariants]
+  C --> D
 ```
 
 ---
 
-## Message Queue Chaos
+## Did You Know?
 
-Stateful chaos isn't limited to databases. Message queues (RabbitMQ, Kafka) hold state that can be lost or corrupted:
-
-### RabbitMQ Node Failure
-
-```yaml
-# rabbitmq-node-kill.yaml
-apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
-metadata:
-  name: rabbitmq-node-failure
-  namespace: messaging
-spec:
-  action: pod-kill
-  mode: one
-  selector:
-    namespaces:
-      - messaging
-    labelSelectors:
-      app: rabbitmq
-  gracePeriod: 0
-  duration: "120s"
-```
-
-**What to verify:**
-1. Are messages in durable queues preserved after pod restart?
-2. Do publishers detect the failure and retry or fail gracefully?
-3. Do consumers reconnect to surviving nodes automatically?
-4. Is the queue mirroring configuration working (messages available on other nodes)?
-
-### Kafka Broker Failure
-
-```yaml
-# kafka-broker-kill.yaml
-apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
-metadata:
-  name: kafka-broker-failure
-  namespace: messaging
-spec:
-  action: pod-kill
-  mode: one
-  selector:
-    namespaces:
-      - messaging
-    labelSelectors:
-      app: kafka
-  gracePeriod: 0
-  duration: "180s"
-```
-
-**What to verify:**
-1. Do producers with `acks=all` fail immediately or wait for the ISR to shrink?
-2. Do consumers continue reading from partitions on surviving brokers?
-3. Does the controller elect new partition leaders within the expected time?
-4. After the killed broker restarts, does it rejoin the ISR and catch up?
+- **FUSE-based IOChaos does not mutate disk blocks**: Chaos Mesh intercepts syscalls in the mount namespace; deleting the experiment removes the interceptor, which is why IOChaos is preferred for storage degradation tests over destructive writes inside the container.
+- **etcd requires quorum for writes**: When a majority of members are unavailable, the cluster becomes read-only rather than accepting conflicting writes — the behavior Jepsen tests often expect but applications forget to handle gracefully.
+- **PostgreSQL halts on WAL IO errors by design**: An injected EIO on `pg_wal` may crash the postmaster to prevent torn writes; the learning goal is operator detection and promotion, not keeping a corrupt primary online.
+- **Principles of Chaos include steady-state hypothesis**: The [Principles of Chaos Engineering](https://principlesofchaos.org/) argue every experiment should compare measurable steady-state behavior before and during fault — for stateful systems, steady state must include data correctness metrics, not only latency and error rate.
 
 ---
 
@@ -655,216 +410,111 @@ spec:
 
 | Mistake | Why It's a Problem | Better Approach |
 |---------|-------------------|-----------------|
-| Running IOChaos at 100% error rate on a database primary without replicas | The database will crash, and without a replica to failover to, you've just caused an outage with no learning | Always ensure at least one healthy replica exists before injecting IO faults on the primary |
-| Not checking replication lag before killing the primary | If the replica is 30 seconds behind and you kill the primary, 30 seconds of committed data is lost during failover | Check replication lag (`SELECT pg_last_wal_replay_lsn()` in PostgreSQL) before running failover tests |
-| Testing backup restore on the primary database | A failed restore on the primary corrupts the live database — this is worse than the disaster you're simulating | Always test restores on a separate instance, a read replica, or a temporary database |
-| Assuming StatefulSet pod restart means data is safe | StatefulSet pods keep their PVs, but if the PV is corrupted by an IO chaos experiment or interrupted write, the data may be inconsistent | After IO fault experiments, run database consistency checks (e.g., `pg_amcheck` for PostgreSQL) |
-| Ignoring application connection pool behavior | Killing a database pod doesn't just test the database — it tests whether your application's connection pool detects dead connections and creates new ones | Monitor connection pool metrics (active, idle, broken connections) during failover tests |
-| Running split-brain tests without understanding the consensus protocol | If you don't understand how your database prevents split-brain, you can't design a meaningful test or interpret the results | Read the consensus protocol documentation (Raft, Paxos, PBFT) for your database before testing split-brain scenarios |
-| Not testing the "return from partition" scenario | Most teams test what happens when a partition starts but not what happens when it heals — this is where data reconciliation bugs hide | Always extend the experiment past the partition healing point and verify data consistency across all nodes |
-| Skipping cleanup verification after IOChaos | FUSE mounts can persist if the chaos-daemon doesn't properly clean up, leaving the volume permanently degraded | After every IOChaos experiment, verify IO performance has returned to baseline; restart the pod if the FUSE mount persists |
+| Running IOChaos at 100% error rate on a primary without healthy replicas | The database crashes with no promotion target — an outage, not an experiment | Ensure at least one caught-up replica and tested promotion path before primary IO faults |
+| Not checking replication lag before killing the primary | Promoting a lagging replica crystallizes lag as permanent data loss | Record lag seconds and bytes immediately before fault; abort if above RPO |
+| Testing backup restore on the live primary | A failed restore corrupts production — worse than the simulated disaster | Restore to an isolated instance or temporary database only |
+| Assuming StatefulSet restart implies data is safe | Incomplete writes and interrupted fsync may require recovery or fail checksum validation | Run `pg_amcheck` or equivalent after IO experiments |
+| Ignoring connection pool behavior during failover | Apps may hang on dead connections even after DB recovery | Monitor pool reconnect metrics and set max lifetimes below expected failover time |
+| Running split-brain tests without reading consensus docs | Misinterpreted results lead to false confidence | Study Raft/Sentinel/operator failover rules before NetworkChaos partitions |
+| Ending partition tests when NetworkChaos deletes | Reconciliation bugs appear when the partition heals | Extend monitoring through heal; compare row counts on all replicas |
+| Skipping post-IOChaos performance baseline | Stale FUSE mounts can leave volumes degraded silently | Re-run IO latency checks or restart pod if baseline not restored |
 
 ---
 
 ## Quiz
 
-### Question 1: How does IOChaos inject faults without actually corrupting data on disk?
+### Question 1: How do you design a safe chaos experiment for a three-replica PostgreSQL cluster before killing the primary?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-IOChaos uses **FUSE (Filesystem in Userspace)** to intercept filesystem operations between the application and the actual filesystem. The FUSE layer sits in the IO path and can delay, error, or modify operations before they reach the real filesystem. The actual data on the PersistentVolume is never modified by IOChaos.
-
-When the IOChaos CRD is deleted, the FUSE layer is removed, and IO operations go directly to the filesystem again. This is why IOChaos is safe — it simulates IO failures without causing real data corruption.
-
-However, the **application** may corrupt its own data in response to the simulated failures (e.g., a partially written file due to an injected fsync failure), which is exactly what you're testing for.
+Start with a written hypothesis and explicit RPO/RTO abort thresholds, then verify a recent backup restores successfully into an isolated instance — not onto the live primary. Measure replication lag on every replica and abort if lag exceeds your RPO budget; killing a primary while a replica is minutes behind converts lag into permanent loss. Confirm PodDisruptionBudgets and operator health, bound blast radius to one namespace, and assign a human abort owner who can delete Chaos Mesh CRDs immediately. Only after those safety controls are in place should you apply PodChaos to the primary, with parallel observers for cluster state, write probes, and post-failover row-count verification.
 
 </details>
 
-### Question 2: You have a 3-node PostgreSQL cluster managed by Patroni. You kill the primary pod. Describe the expected sequence of events for failover.
+### Question 2: How does IOChaos inject faults without modifying bytes on the PersistentVolume?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-1. **T+0s**: Primary pod process killed by chaos-daemon
-2. **T+1-3s**: Patroni on the surviving replicas detects that the primary is not updating its leader key in the DCS (distributed configuration store — etcd or Kubernetes API)
-3. **T+3-10s**: The DCS leader TTL expires (default 30s in etcd, but Patroni checks health every few seconds)
-4. **T+5-15s**: Patroni initiates leader election. Each replica checks its replication lag (WAL position) and the one closest to the primary's last position wins
-5. **T+10-20s**: The winning replica runs `pg_ctl promote` to become the new primary. Patroni updates the DCS with the new leader
-6. **T+15-25s**: The Kubernetes Service endpoint (managed by Patroni or an endpoint controller) updates to point to the new primary
-7. **T+15-30s**: Application connection pools detect broken connections, reconnect, and start sending queries to the new primary
-8. **T+30-60s**: Kubernetes restarts the killed pod. Patroni on the restarted pod detects a new primary, initializes as a replica, and starts replicating from the new primary
-
-Total failover time: typically 15-30 seconds for the database, plus 5-15 seconds for application reconnection.
+IOChaos uses a FUSE layer in the container mount namespace to intercept read, write, and fsync syscalls before they reach the real filesystem backed by the PersistentVolume. The layer can delay operations or return errno values such as EIO without rewriting disk blocks. When the IOChaos custom resource is deleted, the interceptor is removed and syscalls reach the volume directly again. Applications may still corrupt their own files if they mishandle partial writes — that application response is part of what you are testing.
 
 </details>
 
-### Question 3: What is the difference between killing a StatefulSet pod and killing a Deployment pod in terms of data impact?
+### Question 3: You killed a StatefulSet database pod and readiness returned green in twenty seconds. Why is that insufficient to prove correctness?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-**Deployment pod kill**: The pod is terminated and a new pod is created (potentially on a different node). The new pod has no persistent state — it starts fresh. Any in-memory state is lost, but there is no disk state to worry about. The Service routes traffic to healthy pods during restart.
-
-**StatefulSet pod kill**: The pod is terminated, but the PersistentVolumeClaim remains bound to the pod's identity (e.g., `postgresql-0`'s PVC is always `data-postgresql-0`). When Kubernetes restarts the pod, it reattaches the same PVC. The data on disk survives the restart. However, there are risks:
-- In-flight writes may be incomplete (write was sent but fsync didn't complete before kill)
-- WAL files may need recovery on restart
-- If the PV is on a node that failed, PV reattachment to a new node can take minutes
-- The StatefulSet controller waits for the old pod to be fully terminated before creating a new one (unlike Deployments), so there's a gap
-
-This is why StatefulSet chaos is more complex and requires more careful observation.
+Readiness only indicates the process passed local checks — it does not prove replicas agree on data, that sequences are monotonic, or that no committed writes were lost during promotion. A stale replica promoted after primary loss can be writable while missing recent transactions; split-brain survivors can accept divergent writes before reconciliation. Correctness requires post-failover verification: compare row counts and checksums on critical tables, inspect replication lag captured before the kill, and validate application idempotency keys or audit logs for gaps.
 
 </details>
 
-### Question 4: Explain how to test for split-brain in a Redis Sentinel cluster and what you should observe.
+### Question 4: Describe a split-brain test for Redis Sentinel and what you should observe during and after the partition.
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-**How to test**: Use NetworkChaos to partition the primary from Sentinel nodes while keeping the primary reachable by some clients. This creates a scenario where Sentinel promotes a replica to primary (because it can't see the old primary), but the old primary is still alive and accepting writes from clients that can still reach it.
-
-**What to observe**:
-1. **During partition**: Check if the old primary continues accepting writes. If `min-replicas-to-write` is configured, the old primary should reject writes because it has no reachable replicas. If not configured, it accepts writes — this is split-brain.
-2. **After partition heals**: The old primary discovers it's no longer the primary. It should demote itself to replica and sync from the new primary. Check: are the writes that happened during the partition on the old primary lost?
-3. **Data divergence**: Compare keys that were written to both primaries during the partition. The old primary's writes are typically lost because Redis uses last-writer-wins based on replication, and the old primary becomes a replica that syncs from the new primary.
-
-**Key configuration to verify**: `min-replicas-to-write 1` and `min-replicas-max-lag 10` — these settings prevent the isolated primary from accepting writes when it has no reachable replicas, which is the primary defense against split-brain in Redis.
+Use NetworkChaos to partition the Redis master from Sentinel processes while some clients can still reach the isolated master. During partition, observe whether Sentinel promotes a replica on the majority side and whether the isolated master rejects writes when it cannot reach enough replicas (`min-replicas-to-write`). After heal, the demoted master should resync from the new primary; writes accepted only on the losing side during partition are typically discarded. Document whether clients followed `+switch-master` events or stale endpoints — client behavior dominates real-world RTO as much as Sentinel itself.
 
 </details>
 
-### Question 5: Why is it important to check replication lag BEFORE running a database failover test?
+### Question 5: Why must you measure replication lag immediately before a failover chaos experiment?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-Replication lag determines **how much data you lose** during failover. If the replica is 30 seconds behind the primary and you kill the primary, the last 30 seconds of committed transactions are not on the replica. When the replica is promoted, those transactions are lost forever.
-
-Checking replication lag before the test serves three purposes:
-
-1. **Safety**: If lag is unexpectedly high (minutes instead of seconds), you know the failover will cause significant data loss — you may want to abort the experiment
-2. **Baseline**: You need to know the normal lag to assess whether the failover test results are representative of a real failure
-3. **Measurement**: After failover, you can calculate exactly how many transactions were lost by comparing the primary's last WAL position with the promoted replica's position
-
-For PostgreSQL: `SELECT pg_current_wal_lsn() - replay_lsn AS lag FROM pg_stat_replication;`
-For Redis: `INFO replication` shows `master_repl_offset` vs `slave_repl_offset`
+Lag at kill time is the best estimate of data loss if the primary never flushes another byte. Asynchronous replication means commits acknowledged on the primary may not yet be on the replica chosen for promotion; that gap becomes permanent lost work. Recording lag before fault gives you a baseline to compare against post-promotion sequence positions and row counts. If lag is unexpectedly high, abort — the experiment would measure accidental data destruction, not production-like failure.
 
 </details>
 
-### Question 6: Your backup restore test succeeds, but you notice the restore took 45 minutes for a 20GB database. Is this acceptable? How would you evaluate it?
+### Question 6: What is the difference between killing a Deployment pod and a StatefulSet pod regarding data impact?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-Whether 45 minutes is acceptable depends entirely on your **Recovery Time Objective (RTO)** — the maximum time your business can tolerate being down.
+Deployment pods are interchangeable; replacement starts with empty local state unless external storage is attached. StatefulSet pods retain stable identity and reattach the same PVC on reschedule, so on-disk data survives the restart but may require crash recovery or WAL replay. In-flight writes may be torn if the kill happens mid-fsync, and node loss can delay reschedule while volumes detach and reattach elsewhere. Chaos on StatefulSets therefore demands volume-aware runbooks and correctness checks Deployment tests skip.
 
-To evaluate:
-1. **Compare against RTO**: If your RTO is 1 hour, 45 minutes of restore plus time for application reconnection and cache warming may be too close for comfort
-2. **Consider the full recovery timeline**: Restore time is not the only delay. Add: time to detect the failure (5-15 min), time to decide to restore (variable), time to download the backup (depends on storage), restore time (45 min), application restart (5-10 min), cache warming (variable). Total could be 2+ hours.
-3. **Test under realistic conditions**: Was the restore test on the same hardware/storage tier as production? Restoring to a fast SSD in dev doesn't prove the production restore will be as fast.
-4. **Calculate restore rate**: 20GB / 45min = ~7.4 MB/s. Is this IO-bound or CPU-bound? Can you parallelize with pg_restore `-j` flag?
+</details>
 
-If the restore time is too long for your RTO, consider:
-- Point-in-time recovery (WAL replay from a base backup) instead of full restore
-- Standby replicas that are always up-to-date (failover in seconds, not minutes)
-- Incremental backups that reduce restore data volume
-- Higher IOPS storage for faster restore throughput
+### Question 7: Your restore test succeeds but takes ninety minutes for a twenty-gigabyte database. How do you evaluate whether that is acceptable?
+
+<details>
+<summary>Answer</summary>
+
+Compare ninety minutes against your RTO budget including detection, decision, download, restore, application restart, and cache warm-up — not restore alone. Compute effective throughput (roughly twenty gigabytes in ninety minutes) and determine whether storage tier or parallel restore (`pg_restore -j`) can improve it. If total recovery exceeds RTO, steady-state architecture must change — hotter standbys, point-in-time recovery, or smaller backup scope — because a backup you cannot restore in time is not a viable control.
+
+</details>
+
+### Question 8: How do operators change what you are testing during stateful chaos?
+
+<details>
+<summary>Answer</summary>
+
+Operators encode day-two automation: failover, backup, rolling updates, and rejoin of failed members. Killing a pod tests whether the operator reconciles desired CR state — new primary Service, replica rebuild, lag-aware promotion — not merely whether the database binary restarts. Failures often appear in operator logs and status conditions while pods look healthy. Stateful chaos should include operator metrics and events alongside database probes.
 
 </details>
 
 ---
 
-## Hands-On Exercise: IO Delay on PostgreSQL Primary with Failover Validation
+## Hands-On
 
-### Objective
+**Objective:** Inject IO read/write delay on a PostgreSQL primary, observe query impact, and validate cluster recovery after experiment removal.
 
-Inject IO read/write delay on a PostgreSQL primary managed by Patroni, observe the impact on query performance, and validate that automated failover kicks in if the primary becomes unresponsive.
-
-### Architecture
-
-```
-┌──────────────────────────────────────────────────┐
-│              PostgreSQL Cluster (Patroni)          │
-│                                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │
-│  │  pg-0        │  │  pg-1        │  │  pg-2      │ │
-│  │  PRIMARY     │  │  REPLICA     │  │  REPLICA   │ │
-│  │  r/w         │  │  r/o         │  │  r/o       │ │
-│  │  ┌────────┐  │  │              │  │            │ │
-│  │  │IOChaos │  │  │              │  │            │ │
-│  │  │100ms   │  │  │              │  │            │ │
-│  │  │delay   │  │  │              │  │            │ │
-│  │  └────────┘  │  │              │  │            │ │
-│  └──────┬───────┘  └──────────────┘  └────────────┘ │
-│         │                                            │
-│    ┌────▼────┐                                       │
-│    │   PVC   │ ← IO delay injected here              │
-│    │ 20Gi    │                                        │
-│    └─────────┘                                       │
-└──────────────────────────────────────────────────────┘
-```
-
-### Prerequisites
-
-For this exercise, you need:
-- A Kubernetes cluster with Chaos Mesh installed
-- PostgreSQL with Patroni (use the Zalando PostgreSQL Operator or Crunchy PGO for easy setup)
-- At least 3 PostgreSQL pods (1 primary + 2 replicas)
-
-If you don't have Patroni available, you can adapt the exercise for any StatefulSet database.
-
-### Step 1: Verify Cluster Health
+### Step 1: Verify cluster health and lag gate
 
 ```bash
-# Check PostgreSQL cluster status
 kubectl exec -it postgresql-0 -n database -- patronictl list
 
-# Expected output:
-# +-------------+--------+---------+----+-----------+
-# | Member      | Host   | Role    | .. | Lag in MB |
-# +-------------+--------+---------+----+-----------+
-# | postgresql-0| ...    | Leader  | .. | 0         |
-# | postgresql-1| ...    | Replica | .. | 0         |
-# | postgresql-2| ...    | Replica | .. | 0         |
-# +-------------+--------+---------+----+-----------+
-
-# Check replication lag
 kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "SELECT client_addr, state, sent_lsn, replay_lsn,
+  psql -U postgres -c "SELECT client_addr, state,
     pg_wal_lsn_diff(sent_lsn, replay_lsn) AS lag_bytes
     FROM pg_stat_replication;"
 ```
 
-### Step 2: Create Test Data and Measure Baseline
-
-```bash
-# Create a test table and insert data
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "
-    CREATE TABLE IF NOT EXISTS chaos_perf_test (
-      id SERIAL PRIMARY KEY,
-      payload TEXT DEFAULT repeat('x', 1024),
-      created_at TIMESTAMP DEFAULT now()
-    );
-    INSERT INTO chaos_perf_test (payload)
-    SELECT repeat('x', 1024) FROM generate_series(1, 5000);
-    SELECT count(*) FROM chaos_perf_test;"
-
-# Measure baseline query performance
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "
-    \timing on
-    SELECT count(*) FROM chaos_perf_test WHERE id BETWEEN 100 AND 4900;
-    SELECT * FROM chaos_perf_test ORDER BY id DESC LIMIT 10;
-    INSERT INTO chaos_perf_test (payload) VALUES ('baseline-write-test');
-    SELECT pg_current_wal_lsn();"
-
-# Record baseline: query time, write time, current WAL position
-```
-
-### Step 3: Apply IO Delay
+### Step 2: Apply IO delay and observe
 
 ```yaml
-# Save as postgres-io-delay.yaml
 apiVersion: chaos-mesh.org/v1alpha1
 kind: IOChaos
 metadata:
@@ -889,97 +539,53 @@ spec:
 ```
 
 ```bash
-# Apply the IO delay
-kubectl apply -f postgres-io-delay.yaml
-echo "IO delay started at $(date +%H:%M:%S)"
+kubectl apply -f postgres-primary-io-delay.yaml
+
+kubectl exec -it postgresql-0 -n database -- \
+  psql -U postgres -c "\timing on
+    SELECT count(*) FROM pg_stat_user_tables;
+    INSERT INTO chaos_probe DEFAULT VALUES;"
 ```
 
-### Step 4: Observe Impact
+### Step 3: Remove chaos and verify baseline recovery
 
 ```bash
-# Run the same queries and compare with baseline
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "
-    \timing on
-    SELECT count(*) FROM chaos_perf_test WHERE id BETWEEN 100 AND 4900;
-    SELECT * FROM chaos_perf_test ORDER BY id DESC LIMIT 10;
-    INSERT INTO chaos_perf_test (payload) VALUES ('during-io-chaos-write');"
-
-# Monitor Patroni's view — is the primary still healthy?
-kubectl exec -it postgresql-0 -n database -- patronictl list
-
-# Check replication lag — has it increased?
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "SELECT client_addr, state,
-    pg_wal_lsn_diff(sent_lsn, replay_lsn) AS lag_bytes
-    FROM pg_stat_replication;"
-
-# Check PostgreSQL's IO wait statistics
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "SELECT * FROM pg_stat_bgwriter;"
-```
-
-### Step 5: Clean Up and Verify Recovery
-
-```bash
-# Remove the chaos experiment
 kubectl delete iochaos postgres-primary-io-delay -n database
-
-# Wait for IO to normalize
 sleep 15
-
-# Run queries again to verify recovery
 kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "
-    \timing on
-    SELECT count(*) FROM chaos_perf_test WHERE id BETWEEN 100 AND 4900;
-    INSERT INTO chaos_perf_test (payload) VALUES ('post-recovery-write');"
-
-# Verify replication lag has returned to baseline
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "SELECT client_addr, state,
-    pg_wal_lsn_diff(sent_lsn, replay_lsn) AS lag_bytes
-    FROM pg_stat_replication;"
-
-# Clean up test data
-kubectl exec -it postgresql-0 -n database -- \
-  psql -U postgres -c "DROP TABLE IF EXISTS chaos_perf_test;"
+  psql -U postgres -c "\timing on SELECT count(*) FROM pg_stat_user_tables;"
 ```
 
 ### Success Criteria
 
-- [ ] Cluster health verified before the experiment (3 members, 0 lag)
-- [ ] Baseline query performance recorded (read time, write time)
-- [ ] IO delay applied successfully (100ms on primary's data volume)
-- [ ] Query performance during chaos documented and compared to baseline
-- [ ] Replication lag during chaos monitored — did it increase?
-- [ ] Patroni cluster status checked during chaos — did it consider failover?
-- [ ] Recovery verified after experiment removal (queries back to baseline)
-- [ ] At least one finding documented (e.g., "read queries 35x slower," "replication lag grew to 5MB," "Patroni did not trigger failover for IO delay alone")
-
-### Expected Observations
-
-With 100ms IO delay:
-- **Read queries**: 10-50x slower (depends on how many pages need to be read from disk vs. shared buffers)
-- **Write queries**: 5-20x slower (every WAL write and fsync is delayed)
-- **Replication lag**: Will increase because WAL writes on the primary are slower
-- **Patroni**: Likely will NOT trigger failover for IO delay alone — the primary is still responding to health checks, just slowly. This is a valuable finding: IO degradation can make a database unusable without triggering automated failover.
-
-If you want to test the failover path, increase the delay to 500ms or higher, which may cause Patroni health checks to time out and trigger failover.
+- [ ] Replication lag recorded before IOChaos; lag within agreed RPO budget
+- [ ] Query and write timings documented during IO delay versus baseline
+- [ ] IOChaos removed and read/write latency returns near baseline within fifteen minutes
+- [ ] Patroni or operator cluster status shows stable leader and zero divergent replicas after recovery
 
 ---
 
-## Summary
+## Sources
 
-Stateful chaos is the hardest and most important domain of Chaos Engineering. Databases, caches, and message queues hold state that cannot be trivially recreated, making every experiment higher-stakes than stateless pod kills. IOChaos lets you simulate storage degradation without risking real data. Failover testing verifies that your HA configuration actually works. Split-brain testing reveals the most dangerous failure mode in distributed data systems. And backup verification ensures your last line of defense is functional.
-
-Key takeaways:
-- **IOChaos uses FUSE** — it intercepts IO, it doesn't corrupt data
-- **Check replication lag before failover tests** — lag determines data loss
-- **Split-brain is preventable** — but only if you've configured and tested the prevention mechanisms
-- **Untested backups are not backups** — schedule regular restore verification
-- **IO degradation may not trigger failover** — this is a finding, not a failure of the experiment
-- **Always have a replica before testing the primary** — failover without a target is just an outage
+- [Chaos Mesh — Simulate IO Chaos on Kubernetes](https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/)
+- [Chaos Mesh — Simulate Pod Chaos on Kubernetes](https://chaos-mesh.org/docs/simulate-pod-chaos-on-kubernetes/)
+- [Chaos Mesh — Simulate Network Chaos on Kubernetes](https://chaos-mesh.org/docs/simulate-network-chaos-on-kubernetes/)
+- [Chaos Mesh — Simulate Time Chaos on Kubernetes](https://chaos-mesh.org/docs/simulate-time-chaos-on-kubernetes/)
+- [Kubernetes — StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)
+- [Kubernetes — Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+- [Kubernetes — Configure Pod Disruption Budgets](https://kubernetes.io/docs/tasks/run-application/configure-pdb/)
+- [Kubernetes — Pod Disruptions](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/)
+- [CloudNativePG — Failover](https://cloudnative-pg.io/documentation/current/failover/)
+- [Vitess — Operating Vitess](https://vitess.io/docs/21.0/user-guides/operating-vitess/)
+- [Strimzi — Overview](https://strimzi.io/docs/operators/latest/overview.html)
+- [Jepsen — Analyses](https://jepsen.io/analyses)
+- [Google SRE Book — Data Integrity](https://sre.google/sre-book/data-integrity/)
+- [Principles of Chaos Engineering](https://principlesofchaos.org/)
+- [Litmus — What is Litmus](https://docs.litmuschaos.io/docs/introduction/what-is-litmus/)
+- [PostgreSQL Documentation — High Availability](https://www.postgresql.org/docs/current/high-availability.html)
+- [Redis — Sentinel Documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/)
+- [etcd — Failures and Recovery](https://etcd.io/docs/v3.6/op-guide/failures/)
+- [GitLab — Database Incident Postmortem (2017)](https://about.gitlab.com/blog/2017/02/01/gitlab-dot-com-database-incident/)
 
 ---
 
