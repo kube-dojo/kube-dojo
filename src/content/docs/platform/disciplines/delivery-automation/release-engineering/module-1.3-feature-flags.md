@@ -367,7 +367,7 @@ The workflow is straightforward but requires discipline at every step. A develop
 
 Every team that adopts feature flags enthusiastically eventually confronts the same crisis: hundreds of flags littering the codebase, many at 100% for months, some whose purpose nobody remembers, some referencing dead code paths that have not been tested in a year. This is the flag graveyard, and it is the primary reason teams abandon feature flag programs. It is not a tooling problem — it is a discipline problem. Feature flags without lifecycle management are worse than no feature flags, because the dead code paths they create increase cognitive load, slow down refactoring, and introduce unpredictable behavior when someone accidentally re-enables a flag whose guarded code has rotted.
 
-The Knight Capital disaster of 2012 is the canonical cautionary tale. During a routine deployment, a flag referencing an old trading algorithm — code that had been repurposed years earlier but never removed — was accidentally toggled. The zombie algorithm executed millions of unintended trades in 45 minutes, causing a loss that ultimately forced the firm to be acquired.<!-- incident-xref: knight-capital-2012 --> The root cause was not the flag itself. It was the absence of lifecycle discipline: the flag should have been removed years earlier, and its continued existence in the codebase made the accidental activation possible.
+The Knight Capital<!-- incident-xref: knight-capital-2012 --> disaster of 2012 is the canonical cautionary tale. During a routine deployment, a flag referencing an old trading algorithm — code that had been repurposed years earlier but never removed — was accidentally toggled. The zombie algorithm executed millions of unintended trades in 45 minutes, causing a loss that ultimately forced the firm to be acquired.<!-- incident-xref: knight-capital-2012 --> The root cause was not the flag itself. It was the absence of lifecycle discipline: the flag should have been removed years earlier, and its continued existence in the codebase made the accidental activation possible.
 
 ### Prevention Strategies
 
@@ -607,7 +607,7 @@ For a deeper treatment of canary deployments and traffic-shifting strategies, se
 
 2. **Facebook's Gatekeeper system evaluates over 10 billion feature flag checks per second** across their infrastructure. The system is so critical that it has its own dedicated reliability team. Flag evaluations are cached client-side and refreshed every few seconds, meaning a flag change propagates globally in under 10 seconds to billions of devices. Gatekeeper predates the modern feature flag platforms by years — Facebook built it because they needed it, before the category existed.
 
-3. **Knight Capital<!-- incident-xref: knight-capital-2012 --> lost $440 million in 45 minutes in 2012** because of a deployment that accidentally re-enabled dead code from an old feature flag that was never removed. The flag referenced a trading algorithm that had been repurposed years earlier. When the flag was accidentally toggled during a deployment, the zombie algorithm executed millions of unintended trades. This is the most expensive feature flag technical debt incident in history. For the full case study, see [Infrastructure as Code](../../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/).
+3. **Knight Capital<!-- incident-xref: knight-capital-2012 --> lost $440 million in 45 minutes in 2012** because of a deployment that accidentally re-enabled dead code from an old feature flag that was never removed. The flag referenced a trading algorithm that had been repurposed years earlier. When the flag was accidentally toggled during a deployment, the zombie algorithm executed millions of unintended trades. It is one of the most-cited examples of feature-flag technical debt. For the full case study, see [Infrastructure as Code](../../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/).
 
 4. **The CNCF accepted OpenFeature as a Sandbox project in June 2022**, and it moved to Incubating maturity in November 2023, recognizing that feature flag standardization is as important as observability standardization. The specification defines a vendor-neutral API with a provider model that lets teams switch between backends — Unleash, LaunchDarkly, Flagsmith, Flipt — without rewriting application code, the same way OpenTelemetry lets you switch between Jaeger, Zipkin, and Honeycomb without changing instrumentation.
 
@@ -637,7 +637,7 @@ For a deeper treatment of canary deployments and traffic-shifting strategies, se
 <details>
 <summary>Show Answer</summary>
 
-A **release toggle** like `new-payment-gateway` is short-lived — days to weeks — and serves as temporary scaffolding for trunk-based development. Once the payment gateway is fully rolled out to 100% of users and validated against production metrics, both the flag and the legacy code path it guards must be removed from the codebase. Leaving them in place creates dead code that accumulates over time and increases the risk of accidental re-activation, as the Knight Capital incident demonstrated.
+A **release toggle** like `new-payment-gateway` is short-lived — days to weeks — and serves as temporary scaffolding for trunk-based development. Once the payment gateway is fully rolled out to 100% of users and validated against production metrics, both the flag and the legacy code path it guards must be removed from the codebase. Leaving them in place creates dead code that accumulates over time and increases the risk of accidental re-activation, as the Knight Capital<!-- incident-xref: knight-capital-2012 --> incident demonstrated.
 
 In contrast, an **ops toggle** like `disable-heavy-reports` is a permanent safety mechanism that is intended to remain in the codebase indefinitely. It functions as a manually-operated circuit breaker that SRE can trigger during peak load to shed non-critical work and protect the database. It must be simple — boolean only, no complex targeting — and default to the safe path so that a flag service outage does not disable the protection it provides.
 
@@ -1093,9 +1093,9 @@ You have completed this exercise when you can confirm:
 - [Flagsmith Documentation](https://docs.flagsmith.com/) — Open-source feature flag and remote config platform
 - [Flipt Documentation](https://www.flipt.io/docs) — Lightweight, GitOps-native feature flag solution
 - [LaunchDarkly Documentation](https://docs.launchdarkly.com/) — Commercial feature management platform
-- [Continuous Delivery](https://martinfowler.com/books/cd.html) — Jez Humble and David Farley; the chapter on feature toggles established the deployment-release separation
+- [Continuous Delivery](https://martinfowler.com/books/continuousDelivery.html) — Jez Humble and David Farley; the chapter on feature toggles established the deployment-release separation
 - [OpenFeature GitHub — Specification](https://github.com/open-feature/spec) — The formal OpenFeature specification
-- [Knight Capital Group](https://en.wikipedia.org/wiki/Knight_Capital_Group) — The Knight Capital trading disaster, the most expensive feature flag debt incident in history
+- [Knight Capital Group](https://en.wikipedia.org/wiki/Knight_Capital_Group) <!-- incident-xref: knight-capital-2012 --> — The Knight Capital trading disaster, a widely-cited example of feature-flag technical debt
 
 ---
 
