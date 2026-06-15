@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 155 — Platform Disciplines 100% complete (#1953 closed) + Toolkits epic (#1996)</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#e6edf3; --muted:#9fb0c3; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --card:#111927; --border:#243048; }
+  body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,sans-serif; max-width:1040px; margin:0 auto; padding:2rem 1.2rem; }
+  h1 { font-size:1.5rem; border-bottom:2px solid var(--border); padding-bottom:.4rem; }
+  h2 { font-size:1.15rem; color:var(--accent); margin-top:1.8rem; }
+  code { background:#1c2433; padding:.1rem .35rem; border-radius:4px; font-size:.9em; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; }
+  th,td { border:1px solid var(--border); padding:.4rem .6rem; text-align:left; vertical-align:top; font-size:.88rem; }
+  th { color:var(--muted); }
+  .good { color:var(--good); font-weight:600; }
+  .warn { color:var(--warn); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:.8rem 1rem; margin:.6rem 0; }
+  .tldr { border-left:4px solid var(--accent); }
+  ul { margin:.3rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 155 — Platform Disciplines 100% complete (#1953 closed) + Toolkits epic filed</h1>
+<p class="muted">2026-06-15 · continues s154 ("maintain git + issue + PR discipline") · 2 PRs merged (#1994 devsecops, #1995 networking) · 7 modules · <strong>Disciplines 7→0 not-done (100%)</strong> · epic #1953 CLOSED · successor #1996 filed</p>
+
+<div class="card tldr">
+<strong>TL;DR.</strong> Closed the final two not-done <strong>reliability-security</strong> sections of Platform Disciplines — <strong>devsecops</strong> (#1994: 4.1 expand + 4.7 flip) and <strong>networking</strong> (#1995: 1.1–1.5 expand). That brings <strong>Platform Disciplines to 91/91 done (0 not-done)</strong> → epic <strong>#1953 CLOSED</strong> on the snapshot-AC-met rule. Filed the successor epic <strong>#1996 — platform-toolkits (60 not-done)</strong>, the last non-done curriculum bulk. Same proven loop: live-file sweep → ≤3 concurrent authors (cursor/codex/deepseek) in worktrees → opus-inline R1 (≠author family, no gemini) + web-verify both ways + incident-dedup gate → consolidated PR → required-CI build → rebase-merge → <code>finalize_module.sh</code>. <strong>Caught &amp; fixed 3 real defects the verifier passed</strong> (a fabricated Fairwinds stat, an unsourced incident detail, a wrong incident-xref slug).</div>
+
+<h2>1 · Sections closed (#1953 — final wave)</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>Before → After</th><th>Type / notable</th></tr>
+<tr><td>devsecops 4.1 DevSecOps Fundamentals</td><td>cursor</td><td>T3 548w/0src → <span class="good">T0 5026w/21src</span></td><td>expand — full tool-class taxonomy + shift-left + champions + STRIDE; dated snapshot + Rosetta</td></tr>
+<tr><td>devsecops 4.7 AI Coding Agent Security</td><td>flip (review)</td><td>T0 but score 1.5 → <span class="good">done 5.0</span></td><td>heuristic-score flip (<code>## Further Reading</code> → <code>## Sources</code>) + incident ground-check</td></tr>
+<tr><td>networking 1.1 CNI Architecture</td><td>codex</td><td>T3 861w/0src → <span class="good">T0 6389w/33src</span></td><td>expand — CNI spec, dataplanes (iptables/IPVS/eBPF), overlay-vs-native; Cilium/Antrea/Weave maturity correct</td></tr>
+<tr><td>networking 1.2 Network Policy Design</td><td>deepseek</td><td>T3 1016w/0src → <span class="good">T0 5173w/16src</span></td><td>expand — default-deny, additive semantics, DNS-egress gotcha, AdminNetworkPolicy; <span class="warn">Fairwinds stat fixed</span></td></tr>
+<tr><td>networking 1.3 Service Mesh Strategy</td><td>cursor</td><td>T3 786w/0src → <span class="good">T0 5000w/15src</span></td><td>expand — data/control plane, sidecar→ambient, GAMMA; Istio/Linkerd/Cilium Graduated</td></tr>
+<tr><td>networking 1.4 Ingress &amp; Gateway API</td><td>codex</td><td>T3 753w/0src → <span class="good">T0 5069w/29src</span></td><td>expand — Ingress ceiling, Gateway API role model, GAMMA; <strong>ingress-nginx retirement web-verified</strong></td></tr>
+<tr><td>networking 1.5 Multi-Cluster Networking</td><td>deepseek</td><td>T3 898w/0src → <span class="good">T0 6712w/16src</span></td><td>expand — CIDR-overlap, MCS API, ClusterMesh/Submariner Rosetta, locality failover</td></tr>
+</table>
+
+<h2>2 · Defects caught at cross-family review (verifier-blind)</h2>
+<ul>
+<li><strong>Fabricated statistic — networking 1.2 (deepseek):</strong> a "Did You Know" claimed "a 2024 Fairwinds survey found <strong>83%</strong> of clusters have no network policies… 17%… &lt;3%." Web-verified against the real <a href="https://www.fairwinds.com/blog/2024-kubernetes-benchmark-report-kubernetes-workload-analysis">2024 Fairwinds Kubernetes Benchmark Report</a> (330k+ workloads): the actual figure is <strong>58% of organizations have workloads missing network policy</strong>. Replaced the invented numbers with the verified figure + source. (deepseek invented-numbers failure mode.)</li>
+<li><strong>Unsourced incident detail — devsecops 4.7:</strong> the Miasma case study claimed the worm used "a downloaded Bun runtime <em>to evade Node.js process monitoring</em>." Bun is real (TNW: "Bun-based worm"), but the evasion rationale is in neither cited source → trimmed to "a Bun runtime." Credentials line matched to source ("…+ 90+ developer-tool configs"). Relabeled the SafeDep citation (a <em>separate</em> Red Hat campaign) as same-pattern context, not an incident source. All other incident facts (73 repos/4 orgs, <code>Azure/durabletask</code> backdated-2020, 5 trigger paths incl. npm test) <strong>confirmed</strong> against StepSecurity + The Next Web.</li>
+<li><strong>Wrong incident-xref slug — devsecops 4.1:</strong> used <code>&lt;!-- incident-xref: solarwinds --&gt;</code> but the canonical slug is <code>solarwinds-2020</code> → the dedup gate was FAILING. Fixed the slug + softened the over-claim that 4.3 is "the canonical narrative" (real canonical = prerequisites CI/CD module).</li>
+</ul>
+
+<h2>3 · Web-verifications (durable-vendor rule — both directions)</h2>
+<ul>
+<li><span class="good">Confirmed (kept):</span> <strong>Kyverno</strong> CNCF Graduated 2026-03-24 (post-cutoff reverse-save); <strong>cert-manager</strong> Graduated 2024-11; <strong>Cilium</strong> Graduated 2023-10; <strong>ingress-nginx</strong> retirement (best-effort maintenance to March 2026, then archived — Kubernetes SIG Network); <strong>Antrea</strong> Sandbox; <strong>Submariner</strong> Sandbox; <strong>Weave Net</strong> archived; Istio/Linkerd/Envoy Graduated, Contour Incubating.</li>
+<li>All claims dated and quarantined in per-module Landscape snapshot + Rosetta blocks; no leadership/best-tool claims; Hypothetical-scenario labels on narratives.</li>
+</ul>
+
+<h2>4 · Process notes</h2>
+<ul>
+<li><span class="warn">Footgun (mine):</span> first dispatch attempt used <code>nohup … &amp;</code> <em>inside</em> a <code>run_in_background:true</code> Bash call → double-backgrounded → the tracked shell exited and killed the detached dispatches. Re-fired with <code>run_in_background:true</code> and <strong>no inner <code>&amp;</code></strong> (reusing the already-created worktrees). Lesson: never combine the harness background flag with a shell <code>&amp;</code>.</li>
+<li><strong>codex timeout-without-commit (1.4):</strong> codex finished the file (5069w/T0) but timed out before <code>git commit</code> (worktree left at base commit, file edited). Recovered by copying the complete working-tree file into the consolidated PR worktree — no re-author needed. (Known <code>feedback_codex_sigkill_at_timeout_recover_from_worktree</code> pattern.)</li>
+<li><strong>4.7 had no v2-pipeline state</strong> (shipped outside the pipeline) → <code>finalize_module.sh</code> reset-stage is a no-op; the score-flip + APPROVE record drive its board <code>done</code>. Ran <code>record-build</code> separately for telemetry.</li>
+<li>Reviews done <strong>opus-inline</strong> (Anthropic seat in-session, main quota) — no <code>claude -p</code> / subagents needed. Review records + the 7 <code>.pipeline/reviews</code> APPROVE files shipped <em>inside</em> the PRs (force-added) to avoid any direct-push to main; board flips are local (<code>v2.db</code>).</li>
+<li>All worktree-only; both PRs rebase-merged + branch-deleted; 7 author worktrees + orphan branches cleaned; <code>g2-craft</code> (unrelated, #1623) untouched.</li>
+</ul>
+
+<h2>5 · NEXT</h2>
+<ul>
+<li><strong>#1996 — platform-toolkits (60 not-done = 56 needs_rewrite + 2 needs_review + 2 shipped_unreviewed; 112 total).</strong> The last non-done curriculum bulk. Same loop. First step: <code>verify_module.py</code> sweep each Toolkits section's LIVE files to split expand-vs-flip before dispatching. (The briefing's "36 critical" was the critical-<em>score</em> subset; the review-axis not-done is 60.)</li>
+<li><strong>#1911 UK</strong> — translation currency (~14%); detector-driven calque review on new pages as bulk-translation lands.</li>
+<li><strong>#1876</strong> AI-history book review (queued).</li>
+<li class="warn"><strong>Admin toggles (user):</strong> make <code>arXiv citation check</code> and <code>Unit tests (vitest)</code> REQUIRED branch-protection checks (#1965). Optional P2 polish on leadership 1.2/1.5 recorded on review records.</li>
+<li class="good"><strong>Policy update (user, this session):</strong> the <code>claude -p</code> / programmatic-pool billing change was <strong>cancelled</strong> → opus/<code>claude -p</code> dispatch is back on the table for future sessions (memory <code>feedback_claude_billing_reroute</code> updated). Inline-opus reviews remain the cheapest default.</li>
+</ul>
+</body>
+</html>
