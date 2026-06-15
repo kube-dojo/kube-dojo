@@ -485,7 +485,7 @@ The recommended way to run Vitess on Kubernetes is the Vitess Operator, maintain
 
 ```bash
 # Install the Vitess Operator
-kubectl apply -f https://github.com/planetscale/vitess-operator/releases/latest/download/operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/planetscale/vitess-operator/v2.17.0/deploy/operator.yaml
 
 # Wait for operator to be ready
 kubectl wait --for=condition=Available deployment/vitess-operator \
@@ -804,7 +804,7 @@ Vitess is not the only way to scale a relational database horizontally — Cockr
 
 ```bash
 # 1. Install the Vitess operator
-kubectl apply -f https://github.com/planetscale/vitess-operator/releases/latest/download/operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/planetscale/vitess-operator/v2.17.0/deploy/operator.yaml
 
 kubectl wait --for=condition=Available deployment/vitess-operator \
   -n vitess-operator-system --timeout=120s
@@ -987,9 +987,9 @@ kubectl delete secret commerce-schema
 - [CNCF Vitess Project Page](https://www.cncf.io/projects/vitess/) — Project status, maturity level (Graduated), community statistics, and adoption case studies maintained by the CNCF.
 - [CNCF Vitess Graduation Announcement](https://www.cncf.io/announcements/2019/11/05/cloud-native-computing-foundation-announces-vitess-graduation/) — Official CNCF press release confirming Vitess graduated on November 5, 2019, alongside the adoption metrics and endorser statements supporting the graduation decision.
 - [Vitess Operator for Kubernetes](https://github.com/planetscale/vitess-operator) — Kubernetes operator for deploying and managing Vitess clusters using custom resources, maintained by PlanetScale.
-- [Vitess Sharding Concepts](https://vitess.io/docs/concepts/sharding/) — Official overview of Vitess sharding primitives: keyspaces, shards, vindexes, and the relationship between sharding keys and query routing.
-- [Vitess VTGate Reference](https://vitess.io/docs/reference/features/vtgate/) — Reference documentation for VTGate, covering query routing, connection pooling, scatter-gather logic, and the MySQL protocol implementation.
-- [Vitess Operator User Guide](https://vitess.io/docs/user-guides/vitess-operator/) — Step-by-step guide for deploying Vitess clusters using the Vitess Operator on Kubernetes, including keyspace and cell configuration.
+- [Vitess Sharding Concepts](https://vitess.io/docs/24.0/reference/features/sharding/) — Official overview of Vitess sharding primitives: keyspaces, shards, vindexes, and the relationship between sharding keys and query routing.
+- [Vitess VTGate Reference](https://vitess.io/docs/24.0/concepts/vtgate/) — Reference documentation for VTGate, covering query routing, connection pooling, scatter-gather logic, and the MySQL protocol implementation.
+- [Vitess Operator User Guide](https://vitess.io/docs/24.0/get-started/operator/) — Step-by-step guide for deploying Vitess clusters using the Vitess Operator on Kubernetes, including keyspace and cell configuration.
 - [Slack Engineering: Scaling Datastores with Vitess](https://slack.engineering/scaling-datastores-at-slack-with-vitess/) — Engineering blog post describing Slack's migration from a single MySQL cluster to a sharded Vitess deployment, including the sharding key selection, phased traffic migration, and noisy-neighbor isolation gained.
 - [PlanetScale Documentation](https://planetscale.com/docs) — Managed Vitess platform documentation covering database branching, query insights, and operational workflows built on Vitess.
 - [CockroachDB Documentation](https://cockroachlabs.com/docs/stable/) — Official CockroachDB documentation covering its distributed SQL engine, automatic sharding, serializable transactions, and Kubernetes operator.
