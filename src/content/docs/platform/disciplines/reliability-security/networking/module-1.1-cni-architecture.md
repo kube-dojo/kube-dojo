@@ -3,16 +3,17 @@ title: "Module 1.1: CNI Architecture & Selection"
 slug: platform/disciplines/reliability-security/networking/module-1.1-cni-architecture
 sidebar:
   order: 2
+revision_pending: false
 ---
-> **Discipline Module** | Complexity: `[COMPLEX]` | Time: 55-65 min
+> **Discipline Module** | Complexity: `[COMPLEX]` | Time: 1.5 hours
 
 ## Prerequisites
 
 Before starting this module:
-- **Required**: [Kubernetes Basics](/prerequisites/kubernetes-basics/) — Pod, Service, and Namespace concepts
-- **Required**: [Advanced Networking foundations](/platform/foundations/advanced-networking/) — IP addressing, routing, overlay networks
-- **Recommended**: Linux networking fundamentals (network namespaces, iptables, bridges)
-- **Helpful**: Experience running a Kubernetes cluster (kind, minikube, or kubeadm)
+- **Required**: [Kubernetes Basics](/prerequisites/kubernetes-basics/) - Pod, Service, and Namespace concepts
+- **Required**: [Advanced Networking foundations](/platform/foundations/advanced-networking/) - IP addressing, routing, overlays, and zero-trust networking
+- **Recommended**: Linux networking fundamentals, especially network namespaces, routes, veth pairs, and packet filtering
+- **Helpful**: Experience operating a Kubernetes cluster with `kubectl`, kubelet logs, and node shell access
 
 ---
 
@@ -27,86 +28,72 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In March 2023, a fintech company migrated their 200-node production cluster from Flannel to Calico to gain network policy support. The migration seemed straightforward — swap the CNI plugin, restart nodes in a rolling fashion, done. Twelve minutes into the migration, every Pod on the third node batch lost connectivity. The CNI's IPAM (IP Address Management) assigned IPs from the old Flannel CIDR range that Calico didn't recognize. The cross-node Pod traffic that had been flowing through VXLAN tunnels now tried to route through BGP peering that hadn't fully converged. The outage lasted 94 minutes and affected every customer-facing service.
+Hypothetical scenario: A platform team rebuilds a production Kubernetes cluster from a simple overlay CNI to a policy-capable CNI during a maintenance window. The team has tested application deploys, node drains, and storage failover, but they have not modeled what happens when old pod CIDRs, stale node routes, and new encapsulation settings coexist during the migration. In the first migrated batch, pods on new nodes can talk to each other, pods on old nodes can talk to each other, and cross-batch traffic fails in ways that look random until someone inspects routes and tunnel interfaces on the nodes. The outage is not caused by a defective CNI binary; it is caused by treating the cluster network as an interchangeable addon rather than as the data plane all workloads depend on.
 
-The root cause wasn't a bug in either CNI. It was a fundamental misunderstanding of how CNI plugins interact with the Linux networking stack. The team treated "swap out one binary for another" like changing a database driver. In reality, CNI plugins rewire your node's entire network topology — bridges, routes, iptables rules, tunnel interfaces, and IP allocation tables all change.
+Kubernetes makes networking look intentionally boring to application teams. A pod gets an IP address, another pod dials that IP, a Service gives stable virtual addressing, and most developers never have to learn whether the packet crossed a Linux bridge, a VXLAN tunnel, an eBPF program, a cloud VPC route, or a top-of-rack router. That simplicity is one of Kubernetes' strongest design choices, but it hides a platform engineering responsibility: somebody must select, configure, operate, observe, and eventually migrate the CNI implementation that makes the model true. When that layer breaks, nearly every symptom in the cluster can look like an application incident.
 
-After this module, you'll understand exactly what happens when a Pod gets an IP address, how different CNI plugins implement Pod-to-Pod connectivity, and how to make an informed choice (or migration) without nuking your cluster's network.
+The durable lesson is that CNI is not "the thing that installs pod networking." It is the contract between the container runtime and network plugins, plus a family of implementations that satisfy the Kubernetes network model using very different data planes. A small development cluster might only need simple cross-node reachability. A regulated multi-tenant platform might need namespace isolation, egress controls, flow logs, transparent encryption, and policy that follows workload identity instead of fragile IP addresses. A large services cluster might care less about tunnel overhead than about how service routing and policy scale when endpoints churn all day.
 
----
-
-## Did You Know?
-
-> The CNI specification is remarkably small — just 5 operations: ADD, DEL, CHECK, VERSION, and GC. Every CNI plugin, from Flannel's 2,000 lines of Go to Cilium's 500,000+, implements this same minimal interface. The complexity lives entirely in what happens *after* the CNI binary is invoked.
-
-> Cilium processes over 1 million packets per second per node using eBPF programs attached directly to the Linux kernel's network hooks. Traditional iptables-based CNIs like Calico (in iptables mode) rebuild the entire rule table on every Service change — a 5,000-Service cluster can have 40,000+ iptables rules.
-
-> AWS EKS, GKE, and AKS all ship with their own CNI plugins (aws-vpc-cni, GKE dataplane v2/Cilium, Azure CNI). These are tightly integrated with the cloud provider's VPC networking and cannot be easily swapped without losing cloud-specific features like native VPC routing and security groups.
-
-> The CNI `GC` (garbage collection) verb was only added in CNI spec v1.1.0 (2023). Before that, if a container runtime crashed between creating and registering a network interface, the orphaned interface and IP address leaked permanently. Clusters running for months would accumulate hundreds of zombie veth pairs.
+This module teaches the durable spine before the tool roster. You will learn the Kubernetes network invariants, what a CNI plugin actually does during pod sandbox creation and deletion, how overlay and native routing differ, why packet-processing engines such as iptables, IPVS, and eBPF change operational behavior, how policy and encryption fit into CNI selection, and how to evaluate cloud-managed CNI choices without reducing architecture to a product comparison. Tool names appear because you must operate real systems, but the point is to build a decision process that survives vendor churn.
 
 ---
 
-## How CNI Plugins Work
+## The Kubernetes Network Model Is the Contract
 
-### The Container Runtime to CNI Interface
+The [Kubernetes cluster networking documentation](https://kubernetes.io/docs/concepts/cluster-administration/networking/) defines the model every cluster network must satisfy: pods can communicate with pods on any node without NAT, agents on a node can communicate with all pods on that node, and a pod's own view of its IP matches the IP other pods use to reach it. Those requirements are deliberately small, but they are powerful because they remove application-level topology work. A pod does not need to know which node hosts its peer, whether the peer moved after a reschedule, or whether traffic crossed a tunnel.
 
-When kubelet needs to start a Pod, it doesn't set up networking itself. It delegates to a CNI plugin through a well-defined contract:
+That flat model exists because early container platforms often made applications choose between host ports, explicit links, overlays with special DNS behavior, or per-host translation. Kubernetes chose a cleaner abstraction: every pod is an addressable endpoint in a cluster-wide network, and Services provide stable virtual endpoints for groups of pods. The model does not say how to implement routing, how to allocate addresses, how to enforce policy, or how to integrate with a cloud network. It only defines what must be true from the workload's point of view.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        kubelet                               │
-│  1. Creates Pod sandbox (pause container)                    │
-│  2. Creates network namespace                                │
-│  3. Calls CNI binary with ADD command                        │
-└────────────────────────┬────────────────────────────────────┘
-                         │  stdin: JSON config
-                         │  env: CNI_COMMAND=ADD
-                         │       CNI_CONTAINERID=...
-                         │       CNI_NETNS=/proc/.../ns/net
-                         │       CNI_IFNAME=eth0
-                         v
-┌─────────────────────────────────────────────────────────────┐
-│                    CNI Plugin Binary                          │
-│  1. Reads config from stdin                                  │
-│  2. Creates veth pair                                        │
-│  3. Moves one end into Pod namespace                         │
-│  4. Assigns IP (via IPAM)                                    │
-│  5. Sets up routes                                           │
-│  6. Returns IP/gateway to kubelet on stdout                  │
-└─────────────────────────────────────────────────────────────┘
+This distinction matters during selection. Kubernetes does not require that your pod IPs be routable from the corporate WAN, that traffic be encrypted between nodes, that NetworkPolicy be enforced, that packets avoid encapsulation, or that flow logs exist. Those are platform requirements layered on top of the base model. If your team says "we need Kubernetes networking," the minimum answer is pod-to-pod reachability. If your team says "we need a shared multi-tenant platform," the answer expands into policy enforcement, address planning, observability, upgrade safety, and operational ownership.
+
+The network model also explains why CNI mistakes create strange symptoms. If pod-to-pod traffic fails only across nodes, the application may report database timeouts, DNS failures, readiness probe failures, or broken service calls, even though the root cause is cross-node routing. If a node cannot reach local pods, kubelet probes may fail while pods can still talk outward. If pods communicate through NAT unexpectedly, application logs and audit trails may show node IPs instead of workload IPs, breaking policy assumptions and troubleshooting. A good platform engineer keeps the model in mind and asks which invariant is broken before chasing individual symptoms.
+
+The useful analogy is a city street grid. Kubernetes promises every building has an address and every other building can send a courier there without asking which landlord owns the road. CNI implementations are the road builders, traffic lights, tunnels, and maps. A small town might use simple roads and signs; a dense city might need traffic cameras, bus lanes, tolling, and tunnel ventilation. The address promise is stable, but the infrastructure needed to keep the promise changes with scale, risk, and operating model.
+
+```mermaid
+flowchart LR
+    PodA["Pod A<br/>10.244.1.12"] -->|"direct pod IP"| PodB["Pod B<br/>10.244.7.34"]
+    NodeA["Node A agent"] --> PodA
+    NodeB["Node B agent"] --> PodB
+    Service["Service virtual IP"] --> PodA
+    Service --> PodB
 ```
 
-The CNI configuration lives in `/etc/cni/net.d/` and the binaries in `/opt/cni/bin/`:
+CIDR planning is part of the contract because pod and Service address spaces are difficult to change after cluster creation. Pod CIDRs must not overlap with node networks, service CIDRs, peered VPCs, VPN routes, on-premises networks, or other clusters you may connect later. A single-cluster lab can survive a lazy default; a platform with multi-cluster failover, service mesh, private endpoints, and hybrid connectivity cannot. The durable design question is not "what CIDR does this installer default to?" but "will this address plan still work when we add clusters, tenants, regions, and private routes?"
 
-```bash
-# View CNI configuration on a node
-ls /etc/cni/net.d/
-# 10-calico.conflist  (or 10-flannel.conflist, 05-cilium.conflist)
+For the current KubeDojo target of Kubernetes 1.35, the same model still holds. What changes over time is the ecosystem around it: kube-proxy modes, eBPF dataplanes, cloud CNI integrations, policy APIs, and observability tooling. Keeping the base invariant separate from implementation details lets you reason clearly when a vendor page changes or a managed service adds a feature. You are not choosing whether Kubernetes should have a flat pod network; you are choosing how your platform will satisfy and extend that network safely.
 
-# View installed CNI binaries
-ls /opt/cni/bin/
-# bandwidth  bridge  calico  calico-ipam  flannel  host-local
-# loopback  portmap  tuning  vrf
+---
+
+## What a CNI Plugin Actually Does
+
+The [CNI specification](https://github.com/containernetworking/cni/blob/main/SPEC.md) is an open standard for connecting a container runtime to network plugins. Kubernetes uses it through the node runtime path: kubelet asks the container runtime to create a pod sandbox, the runtime creates or references the pod network namespace, and the runtime invokes one or more CNI plugin binaries with environment variables and JSON configuration. The plugin returns structured result data, including interfaces, IP addresses, routes, and DNS information. The runtime does not need to know whether the plugin uses a bridge, a tunnel, BGP, eBPF, or cloud APIs.
+
+The distinction between the CNI specification and a CNI implementation is easy to miss. The specification is the contract: commands, inputs, outputs, version behavior, error handling, and plugin chaining. An implementation is a program such as Cilium, Calico, Flannel, Antrea, AWS VPC CNI, Azure CNI, or another plugin that obeys that contract while programming the node network. When someone says "CNI is broken," ask whether they mean the runtime could not call the plugin, the plugin returned an error, IPAM failed, Linux interfaces were not created, routes were wrong, policy blocked traffic, or the data plane dropped packets.
+
+The important CNI lifecycle operations are simple in name and deep in consequence. `ADD` attaches a container or pod sandbox to the network. `DEL` removes that attachment and releases resources. `CHECK` verifies an existing attachment still matches the expected state. `VERSION` lets runtimes and plugins negotiate supported versions. `GC` gives runtimes a standard way to ask plugins to clean up stale resources that no longer correspond to live containers. The current spec is small because it intentionally avoids dictating implementation internals.
+
+```text
+kubelet
+  -> container runtime
+       -> create pod sandbox network namespace
+       -> invoke CNI plugin with CNI_COMMAND=ADD
+       -> plugin allocates IP, wires interface, programs routes
+       -> runtime starts workload containers in that namespace
 ```
 
-### CNI Plugin Chain
+A typical plugin execution has four jobs. First, it needs IPAM, or IP address management, to decide which pod IP belongs to this sandbox and to reserve that address so another pod does not receive it. Second, it wires the pod network namespace, often by creating a veth pair with one end moved into the pod namespace as `eth0` and the other end left on the host. Third, it configures routes so the pod knows how to reach the cluster and the host knows where to send traffic for the pod. Fourth, it programs the wider data plane: bridge membership, tunnel devices, BGP advertisements, eBPF maps, cloud ENI attachment, policy rules, or service routing state depending on the implementation.
 
-CNI plugins can be chained — each performs one job:
+Plugin chaining is how Kubernetes clusters compose small networking functions. A primary plugin might provide pod connectivity and IPAM, while additional plugins handle port mappings, bandwidth shaping, tuning, or loopback behavior. The [CNI conventions document](https://github.com/containernetworking/cni/blob/main/CONVENTIONS.md) describes common behaviors around capabilities and plugin composition. Chaining is powerful, but it also means a failure may come from a secondary plugin rather than the primary CNI. When hostPort stops working, the root cause might be the portmap plugin. When pod rate limits conflict with policy enforcement, the root cause might be two plugins competing for the same kernel hook.
 
 ```json
 {
-  "cniVersion": "1.0.0",
+  "cniVersion": "1.1.0",
   "name": "k8s-pod-network",
   "plugins": [
     {
-      "type": "calico",
-      "ipam": { "type": "calico-ipam" },
-      "policy": { "type": "k8s" }
-    },
-    {
-      "type": "bandwidth",
-      "capabilities": { "bandwidth": true }
+      "type": "primary-plugin",
+      "ipam": { "type": "host-local" }
     },
     {
       "type": "portmap",
@@ -116,573 +103,489 @@ CNI plugins can be chained — each performs one job:
 }
 ```
 
-In this example: Calico handles the core networking, the bandwidth plugin enforces Pod-level rate limits, and portmap handles hostPort mappings.
-
-### The Lifecycle of a Pod IP
-
-Understanding the full path helps you troubleshoot:
-
-```
-Pod creation:
-  1. kubelet creates pause container → new network namespace
-  2. CNI ADD called → veth pair created
-  3. eth0 (Pod side) gets IP from IPAM
-  4. Routes added: default via gateway, pod CIDR routes
-  5. Node's routing table updated (BGP or tunnel entries)
-  6. Pod containers start, sharing the pause container's namespace
-
-Pod deletion:
-  7. Containers stop
-  8. CNI DEL called → veth pair destroyed
-  9. IPAM releases IP back to pool
-  10. Routes cleaned up
-```
+Operationally, the files matter. CNI configuration usually lives under `/etc/cni/net.d/`, and plugin binaries usually live under `/opt/cni/bin/`. Those paths are node-local state. If a migration leaves an old conflist in place, the runtime may call the wrong plugin. If a binary is missing on one node, only pods scheduled there fail. If the IPAM database under `/var/lib/cni/` is stale, a node may believe addresses are still allocated after pods disappeared. These problems do not show up in application manifests, so diagnosing them requires node-level inspection.
 
 ```bash
-# Inspect a Pod's network namespace
-POD_PID=$(crictl inspect $(crictl ps --name my-app -q) | jq .info.pid)
-nsenter -t $POD_PID -n ip addr show
-nsenter -t $POD_PID -n ip route show
-
-# See the veth pair on the host side
-ip link show type veth
-# Output: cali1234abcd@if3: <BROADCAST,MULTICAST,UP>
+sudo ls -la /etc/cni/net.d/
+sudo ls -la /opt/cni/bin/
+sudo find /var/lib/cni -maxdepth 3 -type f -print
 ```
+
+The pod sandbox is the reason application containers in the same pod share one IP. Kubernetes creates a pause or infrastructure container that owns the pod network namespace. The CNI plugin wires that namespace once, then application containers join it. If one application container restarts, the pod IP normally remains stable because the sandbox still exists. If the sandbox is recreated, the runtime calls CNI again and a new IP may be allocated. Understanding this lifecycle helps you explain why container restarts and pod recreations have different networking effects.
+
+The deletion path is just as important as creation. `DEL` should remove interfaces, release IPAM reservations, and clean state that belongs only to that sandbox. In real clusters, node crashes, runtime failures, or plugin bugs can interrupt cleanup. That is why a good operational runbook includes stale veth inspection, IPAM state checks, and a safe node rebuild path. Do not start by deleting random interfaces on a production node; first identify whether they correspond to live pods, because the kernel does not know your intent.
 
 ---
 
-## CNI Plugin Deep Dive
+## Dataplane Architecture: Overlay, Native Routing, and Packet Engines
 
-### Flannel: The Simple Overlay
+The first durable axis is how packets move between nodes. Overlay designs encapsulate pod traffic inside an outer packet that the underlying network already knows how to route. VXLAN and Geneve are common examples. The pod packet remains intact inside the tunnel, while the outer header uses node IP addresses. This makes overlays attractive when you do not control the underlay network, cannot advertise pod routes, or need a consistent cluster network across clouds and datacenters. The tradeoff is overhead: encapsulation consumes MTU headroom, adds processing work, and introduces another interface and path to troubleshoot.
 
-Flannel is the simplest CNI — it only handles L3 Pod-to-Pod connectivity using an overlay network. It does NOT support network policies natively.
+Native or underlay routing avoids encapsulation by making the underlying network know how to reach pod CIDRs. A CNI may install routes on nodes, advertise pod routes through BGP, or rely on cloud VPC route tables and network interfaces. This can reduce encapsulation overhead and make packet paths easier for network teams to inspect with familiar routing tools. The tradeoff is integration complexity. Someone must manage route scale, route convergence, subnet boundaries, cloud limits, firewall rules, and coordination with network infrastructure. Native routing is often excellent when the network team and platform team share ownership; it is risky when neither side owns the full path.
 
-**How Flannel works (VXLAN mode):**
+The overlay-versus-native decision is not a moral ranking. Overlay is often the pragmatic answer in heterogeneous environments because it isolates the cluster from the underlay. Native routing is often the pragmatic answer when pods must appear as first-class VPC or datacenter endpoints, or when strict latency and MTU constraints matter. Many CNIs support more than one mode because different clusters have different constraints. Your architecture document should state the selected mode and the reason: "VXLAN because the underlay cannot carry pod routes" is useful; "default install" is not.
 
+The second durable axis is the packet-processing engine. Classic Kubernetes clusters often rely on iptables rules for Service routing, NAT, and policy. iptables is widely available and well understood, but large rule sets can become operationally painful because updates are table-oriented and troubleshooting requires following chains across generated rules. IPVS improves Service load balancing behavior by using kernel virtual server facilities for faster lookup patterns, but it does not by itself solve every policy or observability question. eBPF moves programmable packet handling into safe, verified kernel programs attached to hooks such as TC or XDP, with maps storing service, endpoint, identity, and policy state.
+
+The [eBPF project documentation](https://ebpf.io/what-is-ebpf/) describes eBPF as a way to run sandboxed programs in privileged kernel contexts. For Kubernetes networking, the practical value is that the data plane can make decisions earlier and with richer context than long iptables chains. eBPF dataplanes can replace kube-proxy service routing, attach identity information to endpoints, collect flow events, enforce policy close to the packet path, and update maps without rewriting a large generated rule table. That is why CNI discussions often connect eBPF with scale, observability, and identity-based security.
+
+Do not oversell eBPF as magic. It depends on kernel features, distribution support, CNI implementation quality, and operator familiarity. A cluster on old enterprise kernels may be safer with a mature iptables mode until the node OS strategy changes. A team with excellent network engineers and BGP experience may prefer native routing with a non-eBPF mode because they can reason about it confidently. A team that needs flow visibility, kube-proxy replacement, and identity-based policy may accept stricter kernel requirements to gain those capabilities. The decision is about fit, not fashion.
+
+```mermaid
+flowchart TD
+    A["Cross-node pod packet"] --> B{"How does the underlay know the destination?"}
+    B -->|"It does not"| C["Overlay encapsulation<br/>VXLAN or Geneve"]
+    B -->|"It carries pod routes"| D["Native routing<br/>BGP, VPC routes, or node routes"]
+    C --> E{"Where is policy and service logic applied?"}
+    D --> E
+    E --> F["iptables chains"]
+    E --> G["IPVS service tables"]
+    E --> H["eBPF programs and maps"]
 ```
-Node A (10.244.0.0/24)              Node B (10.244.1.0/24)
-┌──────────────────────┐            ┌──────────────────────┐
-│  Pod A: 10.244.0.5   │            │  Pod B: 10.244.1.12  │
-│    │                  │            │    │                  │
-│    └── cni0 (bridge)  │            │    └── cni0 (bridge)  │
-│         │             │            │         │             │
-│    flannel.1 (vxlan)  │            │    flannel.1 (vxlan)  │
-│         │             │            │         │             │
-│    eth0: 192.168.1.10 │            │    eth0: 192.168.1.11 │
-└─────────┼─────────────┘            └─────────┼─────────────┘
-          │        VXLAN tunnel (UDP 8472)      │
-          └────────────────────────────────────┘
+
+MTU is the practical symptom of this architecture choice. Encapsulation adds headers, so a packet that fit the pod interface MTU may become too large after tunneling unless the CNI lowers pod MTU or the underlay supports larger frames. MTU bugs appear as mysterious hangs on larger responses while small pings succeed. That is why platform runbooks should include path MTU checks and why CNI settings should not be copied blindly between cloud, on-premises, and VPN-connected clusters.
+
+Service routing intersects with CNI selection even though Services are a Kubernetes API concept. In many clusters kube-proxy programs iptables or IPVS for Service virtual IPs. In some eBPF modes, the CNI replaces kube-proxy and handles Service translation itself. This can simplify one part of the packet path while making the CNI more central to cluster correctness. If kube-proxy replacement is enabled, the CNI upgrade process and observability become even more important because the same component now owns pod routing, policy, and service load balancing.
+
+The right design review question is therefore concrete: for a packet from pod A to pod B on another node, list every transformation and decision point. Which namespace does it leave? Which host interface receives it? Is it routed, bridged, tunneled, or translated? Which component enforces policy? Which component handles Service translation? Which metric or log tells you it was dropped? If the team cannot answer those questions for its chosen CNI, it is not ready to operate that CNI in a high-stakes platform.
+
+---
+
+## Policy Enforcement: From IP Rules to Workload Intent
+
+The [Kubernetes NetworkPolicy documentation](https://kubernetes.io/docs/concepts/services-networking/network-policies/) defines a standard API for controlling pod ingress and egress, but Kubernetes does not enforce those policies by itself. Enforcement is delegated to the networking implementation. This is one of the most important CNI selection facts: a cluster can accept NetworkPolicy YAML while the installed CNI ignores it. A policy object existing in the API server is not proof that packets are being filtered.
+
+Basic Kubernetes NetworkPolicy is L3/L4: it selects pods by labels and allows traffic by peer selectors, namespaces, IP blocks, ports, and protocols. The model is intentionally portable and conservative. It is excellent for default-deny posture, namespace boundaries, application-to-database rules, and controlled egress to known CIDRs. It is not a full application firewall and does not natively understand HTTP paths, DNS names, JWT claims, or service identities beyond labels and IPs. Those higher-level needs are implementation extensions or service-mesh territory, which sets up the next module.
+
+Policy implementation differs across CNIs. Calico supports Kubernetes NetworkPolicy and Calico policy resources with additional ordering and scope features. Cilium supports Kubernetes NetworkPolicy and Cilium policy resources with identity-aware behavior and optional L7 visibility or policy in specific configurations. Antrea supports Kubernetes NetworkPolicy and Antrea-native policy resources on top of Open vSwitch. AWS VPC CNI and Azure CNI have managed-service-specific policy options that depend on cluster mode and platform support. Flannel by itself focuses on connectivity and does not provide a native NetworkPolicy enforcement engine, so teams commonly pair it with another policy component or choose a policy-capable CNI.
+
+Identity-based policy is the durable concept behind many newer CNI features. IP-based policy says "allow traffic from 10.244.3.21 to 10.244.8.14 on port 5432." That works until pods churn, nodes recycle, or IP pools change. Identity-based policy says "allow pods with app=api in namespace checkout to reach pods with app=postgres in namespace data on port 5432." The implementation still maps identity to packet decisions somewhere, but the operator expresses intent in workload terms. This makes policy review easier and reduces coupling to IPAM behavior.
+
+L7 and FQDN policies are useful but volatile. L7 policy can say "allow GET /healthz but not POST /admin" for HTTP, or inspect DNS queries before allowing egress. FQDN policy can allow egress to names instead of static CIDRs, which helps with SaaS endpoints whose IPs change. These features depend heavily on implementation details such as DNS proxying, Envoy integration, sidecarless proxies, or managed platform constraints. Use them when they solve a real requirement, but document the dependency clearly because moving CNIs or managed-service modes may change what is enforceable.
+
+Policy also has a failure mode: an incorrect default-deny can break core cluster services such as DNS, metrics, admission webhooks, or cloud metadata access. This is not an argument against policy; it is an argument for rollout discipline. Start with inventory and observability, then namespace-level default deny in low-risk environments, then explicit allows for DNS and control-plane dependencies, then tenant templates, then enforcement in production. A CNI with great policy features still needs a change-management model that prevents platform teams from cutting off the cluster's own nervous system.
+
+---
+
+## Encryption in Transit Is a CNI Capability, Not a Checkbox
+
+The base Kubernetes network model does not require pod-to-pod traffic to be encrypted between nodes. If your nodes share a trusted private network, you may accept that. If your cluster spans untrusted networks, regulated environments, bare-metal racks with shared infrastructure, or multi-tenant nodes, you may require transparent encryption below the application. Some CNIs provide node-to-node pod traffic encryption using WireGuard or IPsec so application teams do not have to add transport security for every east-west path before the platform has a baseline.
+
+WireGuard and IPsec solve similar platform goals with different operational profiles. WireGuard is usually simpler to reason about and uses a modern, compact protocol design. IPsec is familiar to many network and security teams and may fit existing compliance controls or hardware acceleration assumptions. The CNI-specific details matter: how keys are rotated, whether encryption applies to all pod traffic or selected paths, how node joins are handled, what metrics expose handshake health, and how the feature interacts with cloud-native routing or direct server return paths.
+
+Transparent encryption is not a substitute for application-layer TLS or service mesh mTLS when those are required. It protects traffic between nodes or endpoints according to CNI behavior, but it may not authenticate application identities, express per-service authorization, or provide end-to-end encryption through proxies and gateways. Treat CNI encryption as a platform baseline for network exposure risk. Treat application TLS or mesh mTLS as a service-level identity and authorization mechanism. They can complement each other, but they answer different questions.
+
+The selection question should be requirement-driven. If the cluster runs entirely inside a private managed service network and every sensitive service already uses mTLS, CNI encryption may add operational complexity without much risk reduction. If nodes span datacenters or cross administrative boundaries, transparent encryption may be mandatory before the platform is approved. If your team cannot monitor encryption status or recover from keying issues, enabling encryption can create a new outage mode. The design review should state the threat model, not just the feature.
+
+---
+
+## Designing Kubernetes Network Architecture
+
+Designing Kubernetes network architectures starts with address ownership. Pick pod, Service, node, load balancer, and peering CIDRs as a single plan. Reserve room for future clusters, dual-stack adoption if it is on your roadmap, blue-green migrations, and disaster recovery environments. A pod CIDR that looks generous for one cluster can become a trap when you later need ten clusters connected through private routing. A Service CIDR that overlaps a corporate subnet can create years of exceptions because changing it usually means rebuilding the cluster.
+
+The second design step is deciding where routes live. In an overlay cluster, the underlay routes only node IPs and the CNI handles pod reachability through tunnels. In a native-routed cluster, routers, cloud route tables, or node routes must understand pod CIDRs. In AWS EKS with the Amazon VPC CNI, pods can receive VPC addresses through elastic network interfaces, which gives strong cloud integration but ties pod density to subnet capacity and instance networking limits. In Azure CNI modes, pod addressing choices determine whether pod IPs come from overlay space or virtual network space. In GKE VPC-native clusters, alias IP ranges make pod and Service ranges part of VPC design. These are not late-stage implementation details; they are architecture constraints.
+
+Multi-tenancy changes the shape of the problem. A single application team cluster may tolerate broad pod reachability and simple namespace conventions. A shared platform needs defaults that assume tenants should not talk until policy allows them. That usually means policy-capable CNI selection, tenant namespace templates, egress review, DNS allowances, observability for denied flows, and a documented break-glass process. Without those patterns, the flat pod network becomes a lateral-movement surface.
+
+Performance requirements should be stated as workload characteristics rather than vague desires. High packet rate, low-latency trading, storage replication, DNS-heavy service discovery, and bursty HTTP microservices stress different parts of the data plane. Overlay overhead may matter for storage replication and jumbo responses. Rule update latency may matter for clusters with frequent endpoint churn. Flow visibility may matter more than raw throughput for regulated workloads. The CNI choice should trace back to the workload profile.
+
+Operational familiarity is a first-class criterion. A BGP-native design may be technically elegant and operationally poor if the platform team has no BGP runbooks and the network team does not participate in cluster changes. An eBPF design may be powerful and operationally poor if node kernels vary wildly and nobody can inspect programs, maps, or flow events. A cloud-native CNI may be safe and operationally poor if subnet exhaustion alerts are absent. Architecture is not only what packets do; it is who can debug them at 2 AM.
+
+The design artifact should be short enough to keep current and detailed enough to debug from. Include CIDRs, CNI mode, encapsulation mode, MTU, kube-proxy or replacement mode, policy engine, encryption stance, cloud integration points, observability tools, and migration constraints. A future engineer should be able to answer "why this CNI, why this mode, and what breaks if we change it?" without reading a hundred chat messages.
+
+---
+
+## Implementing CNI Configuration Safely
+
+Implementation begins before `kubectl apply`. Confirm node OS and kernel versions, container runtime, Kubernetes version, cloud provider constraints, routing requirements, and whether kube-proxy replacement is in scope. Read the CNI's supported Kubernetes version matrix and installation mode for your environment. For managed clusters, read the provider's networking documentation before assuming you can replace the default CNI; managed platforms often couple node provisioning, load balancing, pod IP assignment, and policy support to their own network plugin.
+
+For self-managed clusters, install the CNI before scheduling real workloads. kubeadm-style clusters usually require a pod CIDR at cluster initialization and remain NotReady until the network plugin is installed. The primary CNI manifests or operator create DaemonSets, CRDs, RBAC, configuration, and binaries that land on every node. If one node misses the DaemonSet because of taints, architecture, image pull errors, or a bad node selector, pods on that node will fail even while the cluster looks mostly healthy.
+
+```bash
+kubectl get nodes -o wide
+kubectl -n kube-system get pods -o wide
+kubectl get pods -A --field-selector=status.phase=Pending
+kubectl describe node "$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
 ```
 
-Flannel allocates a /24 subnet per node from the cluster CIDR, uses a bridge on each node, and encapsulates cross-node traffic in VXLAN packets.
+Configuration should be treated as platform code. Record the intended pod CIDR, encapsulation mode, MTU, policy defaults, kube-proxy mode, encryption settings, and observability settings in version control. Avoid one-off dashboard changes that nobody can reproduce. If your CNI uses an operator, store the custom resources and values files. If your CNI uses Helm, pin the chart through your normal dependency process, but remember that version pins are volatile facts and must be checked against current vendor support before each upgrade.
+
+Multi-tenant implementation should start with safe defaults. Create namespaces through a template that includes labels used by policy, resource quotas, and a baseline NetworkPolicy posture. Ensure DNS egress is allowed intentionally, not accidentally. Provide examples for common patterns such as app-to-database, app-to-egress-proxy, and app-to-same-namespace communication. Make denied-flow visibility available to tenant teams; otherwise every blocked packet becomes a platform ticket with no self-service path.
 
 ```yaml
-# Flannel DaemonSet (typical deployment via kube-flannel.yml)
-# Key config in ConfigMap:
-apiVersion: v1
-kind: ConfigMap
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata:
-  name: kube-flannel-cfg
-  namespace: kube-flannel
-data:
-  net-conf.json: |
-    {
-      "Network": "10.244.0.0/16",
-      "EnableNFTables": true,
-      "Backend": {
-        "Type": "vxlan",
-        "VNI": 1,
-        "Port": 8472
-      }
-    }
-```
-
-**When to use Flannel**: Development clusters, environments with no network policy needs, or extremely resource-constrained nodes. Flannel's CPU/memory overhead is near zero.
-
-### Calico: The Enterprise Workhorse
-
-Calico offers three networking modes, rich network policy, and can run with or without an overlay:
-
-| Mode | How It Works | Performance | Use Case |
-|------|-------------|-------------|----------|
-| **BGP (no overlay)** | Peers with ToR switches via BGP | Fastest (native routing) | On-prem with BGP-capable switches |
-| **VXLAN overlay** | Encapsulates cross-node traffic | Good (~5% overhead) | Cloud/on-prem without BGP |
-| **IPinIP** | IP-in-IP encapsulation | Good (~3% overhead) | Legacy; VXLAN preferred now |
-| **eBPF dataplane** | Replaces iptables with eBPF | Excellent at scale | High-performance clusters |
-
-```yaml
-# Calico Installation with Tigera Operator (recommended for 1.31+)
-apiVersion: operator.tigera.io/v1
-kind: Installation
-metadata:
-  name: default
+  name: default-deny-ingress-egress
+  namespace: tenant-a
 spec:
-  calicoNetwork:
-    ipPools:
-      - name: default-ipv4-ippool
-        cidr: 10.244.0.0/16
-        encapsulation: VXLAN
-        natOutgoing: Enabled
-        nodeSelector: all()
-    linuxDataplane: BPF    # Use eBPF dataplane
-    bgp: Disabled           # Disable BGP when using VXLAN
-  typhaDeployment:
-    spec:
-      template:
-        spec:
-          tolerations:
-            - effect: NoSchedule
-              operator: Exists
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: tenant-a
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ```
+
+The YAML above is intentionally plain Kubernetes NetworkPolicy, not a vendor extension. It demonstrates the safe starting point: deny by default, then allow a required platform dependency. In production you must validate the DNS pod labels and namespace labels used by your cluster, because CoreDNS or managed DNS components may not match the simplified selector shown here. Copy-runnable does not mean copy-blind; it means the API is real and the operator still checks local labels before applying it.
+
+Migration deserves special caution. There is rarely a safe "swap the CNI binary while workloads keep running" path because old and new plugins may disagree about IPAM, routes, tunnel devices, policy state, and kube-proxy assumptions. The safer pattern is blue-green cluster migration when business risk is high, or rolling node replacement when the platform can tolerate controlled workload movement. In both cases, test with representative Services, NetworkPolicies, DNS, ingress, node-local components, and workloads that use hostNetwork or hostPort.
 
 ```bash
-# Install Calico with Tigera Operator
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29/manifests/tigera-operator.yaml
-
-# Verify installation
-kubectl get pods -n calico-system
-kubectl get ippool -o yaml
-
-# Check BGP peering (if using BGP mode)
-calicoctl node status
-# Returns: peering state with neighbor nodes
-
-# View Calico's eBPF programs (if BPF dataplane)
-tc filter show dev eth0 ingress
+kubectl cordon worker-03
+kubectl drain worker-03 --ignore-daemonsets --delete-emptydir-data --timeout=10m
+kubectl get pods -A -o wide --field-selector spec.nodeName=worker-03
 ```
 
-### Cilium: The eBPF-Native CNI
-
-Cilium is built from the ground up on eBPF. Instead of iptables rules, it attaches eBPF programs to kernel hooks that process packets at near-wire speed.
-
-```
-Traditional (iptables)              Cilium (eBPF)
-┌─────────────────────┐            ┌──────────────────────┐
-│ Packet arrives      │            │ Packet arrives       │
-│   │                 │            │   │                  │
-│   v                 │            │   v                  │
-│ PREROUTING chain    │            │ eBPF tc-ingress      │
-│   │                 │            │ (single program      │
-│   v                 │            │  handles routing,    │
-│ FORWARD chain       │            │  policy, NAT, LB)    │
-│   │                 │            │   │                  │
-│   v                 │            │   v                  │
-│ POSTROUTING chain   │            │ Delivered to Pod     │
-│   │                 │            │                      │
-│   v                 │            │ Kernel version: 5.10+│
-│ (40,000+ rules)     │            │                      │
-└─────────────────────┘            └──────────────────────┘
-```
-
-```bash
-# Install Cilium via Helm (K8s 1.31+)
-helm repo add cilium https://helm.cilium.io/
-helm install cilium cilium/cilium --version 1.16.5 \
-  --namespace kube-system \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost=${API_SERVER_IP} \
-  --set k8sServicePort=6443 \
-  --set hubble.enabled=true \
-  --set hubble.relay.enabled=true \
-  --set hubble.ui.enabled=true
-
-# Verify Cilium status
-cilium status
-# Output shows: OK for all components
-
-# View eBPF maps and programs
-cilium bpf endpoint list
-cilium bpf ct list global | head -20
-
-# Hubble: observe network flows in real time
-hubble observe --namespace production --protocol TCP
-hubble observe --verdict DROPPED  # See blocked traffic
-```
-
-**Cilium's killer features:**
-
-| Feature | Description |
-|---------|-------------|
-| **L7 network policies** | Filter by HTTP method, path, headers — not just L3/L4 |
-| **Hubble observability** | Real-time network flow visibility without tcpdump |
-| **kube-proxy replacement** | eBPF-based Service routing (no iptables) |
-| **Bandwidth Manager** | EDT-based rate limiting with BBR support |
-| **Transparent encryption** | WireGuard or IPsec between nodes |
-| **Service mesh** | Sidecarless L7 traffic management |
-| **ClusterMesh** | Multi-cluster connectivity |
+Those commands do not perform a CNI migration by themselves; they show the safe beginning of a node replacement workflow. The dangerous work happens in the provider or node automation layer: rebuilding the node with the new CNI configuration, verifying the node joins Ready, confirming the CNI DaemonSet is healthy, and running cross-node connectivity tests before uncordoning. A runbook that jumps from "delete old CNI files" to "restart kubelet" without a rollback path should not be used on a shared platform.
 
 ---
 
-## CNI Comparison Matrix
+## Diagnosing CNI-Level Networking Issues
 
-| Criteria | Flannel | Calico | Cilium |
-|----------|---------|--------|--------|
-| **Network Policy** | None | L3/L4 (+ L7 with Envoy) | L3/L4/L7 native |
-| **Dataplane** | iptables/nftables | iptables, eBPF, or nftables | eBPF |
-| **Encryption** | None | WireGuard | WireGuard, IPsec |
-| **Overlay modes** | VXLAN, host-gw | VXLAN, IPinIP, none (BGP) | VXLAN, Geneve, native |
-| **kube-proxy replacement** | No | Yes (eBPF mode) | Yes |
-| **Observability** | None | Basic flow logs | Hubble (deep L7) |
-| **Multi-cluster** | No | Federation (Enterprise) | ClusterMesh |
-| **Min kernel** | 3.10 | 3.10 (iptables), 5.3 (eBPF) | 5.4 (5.10+ recommended) |
-| **Memory per node** | ~15 MB | ~60-120 MB | ~150-300 MB |
-| **CNCF status** | Sandbox | None (Tigera) | Graduated |
-| **Best for** | Dev/test, simple setups | Enterprise, BGP environments | Modern, eBPF-capable |
+Good CNI troubleshooting starts by classifying the failure. Is it pod-to-pod on the same node, pod-to-pod across nodes, pod-to-Service, pod-to-external, node-to-pod, ingress-to-pod, DNS resolution, or policy-specific? Each category points to different layers. Same-node pod failure suggests local namespace, veth, bridge, or policy problems. Cross-node pod failure adds tunnel, route, BGP, cloud firewall, and MTU questions. Pod-to-Service failure may involve kube-proxy, eBPF service maps, EndpointSlices, or service session affinity. Egress failure may involve NAT, routing, NetworkPolicy, DNS, or cloud security rules.
 
-### Performance Benchmarks (Approximate)
+Start with Kubernetes state because it is the least invasive. Confirm pod IPs, node placement, endpoint readiness, and NetworkPolicy objects. Then test direct pod IP connectivity before testing Services. If direct pod IP works and Service IP fails, the CNI underlay may be fine and service routing may be broken. If direct pod IP fails only across nodes, focus on cross-node data plane. If both direct and Service paths fail only for one namespace, look at policy. This branching prevents random command execution.
 
-These vary enormously by hardware, kernel version, and workload. Use them as relative guidance only:
+```bash
+kubectl get pod -A -o wide
+kubectl get svc,endpointslices -A
+kubectl get networkpolicy -A
+kubectl describe pod -n default netshoot-a
+```
 
-| Scenario | Flannel VXLAN | Calico BGP | Calico eBPF | Cilium eBPF |
-|----------|:------------:|:----------:|:-----------:|:-----------:|
-| TCP throughput (% of bare metal) | ~92% | ~98% | ~97% | ~97% |
-| Latency overhead (P99) | +15-25 us | +3-5 us | +5-8 us | +5-8 us |
-| New connections/sec (10K Services) | ~45K | ~65K | ~120K | ~130K |
-| Memory at 500 nodes | Low | Medium | Medium | Medium-High |
+Node inspection should be deliberate. Use `ip addr`, `ip route`, and `ip link` to identify pod interfaces, tunnel interfaces, and routes. Use CNI-specific status commands when available, but do not depend on them as your only source of truth. If a CNI status command says healthy while the Linux route table is missing a pod CIDR, the packet will follow the kernel, not the dashboard. Conversely, a strange-looking interface may be normal for your CNI. That is why your platform documentation should include examples from a healthy node.
+
+```bash
+ip addr show
+ip route show
+ip link show type veth
+sudo ls -la /etc/cni/net.d/
+sudo journalctl -u kubelet --since "30 min ago" --no-pager
+```
+
+For policy issues, look for denied-flow evidence before editing YAML. Cilium users may inspect Hubble flows. Calico users may inspect policy logs or flow observability features available in their edition and configuration. Antrea users may use Antrea-native visibility tooling. Managed cloud CNIs may expose flow logs or node-agent logs. The diagnostic principle is the same: prove whether the packet was dropped by policy, failed route lookup, failed DNS, or never left the source pod. Changing policy blindly can hide the real problem and weaken isolation.
+
+IP exhaustion has a distinctive pattern. Pods stay Pending or ContainerCreating, CNI ADD fails, kubelet logs mention address allocation, and failures cluster on specific nodes or subnets. In cloud-native CNI modes, the limiting factor may be subnet free addresses, ENI attachment capacity, prefix delegation settings, or per-node pod limits. In overlay or host-local IPAM modes, the limiting factor may be per-node pod CIDR size or stale IPAM reservations. Do not increase pod density until you know which allocator is exhausted.
+
+MTU failures have another pattern: small requests work, large responses hang, TLS handshakes fail intermittently, or only paths crossing VPNs and tunnels break. Test with packet sizes and the Don't Fragment bit when your environment allows it, and compare pod MTU with node and underlay MTU. The fix may be a CNI MTU setting, cloud network MTU setting, or avoiding nested encapsulation. A service owner will experience this as an application timeout; the platform owner should recognize it as a packet-size path problem.
+
+Routing corruption is usually visible as asymmetry. A request reaches the destination pod, but the response takes a different path, hits a firewall, or returns through a node that lacks state. Native routing designs must pay special attention to this because external routers, cloud tables, and nodes all participate. Overlays hide some underlay route complexity but add tunnel health. In either case, capture the source pod IP, destination pod IP, source node, destination node, and expected return path before restarting components.
 
 ---
 
-## Choosing the Right CNI
+## Landscape Snapshot and Rosetta
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+
+This snapshot is intentionally dated and limited. Cilium is listed by CNCF as a Graduated project. Antrea is listed by CNCF as a Sandbox project. Calico is a Tigera-maintained open source project with its own documentation and release lifecycle rather than a CNCF-hosted project maturity level. Flannel remains a simple Kubernetes networking project focused on connectivity. The original Weave Net repository is archived and read-only, so mention it only for legacy evaluation and migration planning, not as a current recommendation for new clusters.
+
+| Durable capability | Cilium | Calico | Flannel | Antrea | AWS VPC CNI | Azure CNI |
+|---|---|---|---|---|---|---|
+| Dataplane engine | eBPF-first dataplane | iptables, nftables, eBPF, or other modes by configuration | Overlay-focused Linux networking | Open vSwitch data plane | VPC-native ENI/IP model with node agents | Azure VNet or overlay models; Cilium dataplane in supported modes |
+| NetworkPolicy support | Kubernetes NetworkPolicy plus Cilium policy resources | Kubernetes NetworkPolicy plus Calico policy resources | Not native by itself | Kubernetes NetworkPolicy plus Antrea policy resources | Kubernetes NetworkPolicy support in supported EKS configurations | Policy options depend on AKS network dataplane and policy engine |
+| L7 or FQDN policy | Available through Cilium policy features in supported configurations | Available through Calico extensions and integrations in supported configurations | No native L7 or FQDN policy | Antrea L7 policy exists in Antrea-native features | Not the primary reason to choose it | Cilium-powered modes expose Cilium policy capabilities with AKS constraints |
+| Transparent encryption | WireGuard or IPsec options | WireGuard options in supported modes | Not a core feature | IPsec options in Antrea documentation and configuration | Usually relies on VPC and application controls | Depends on AKS mode and surrounding Azure network controls |
+| BGP or native routing | Native routing modes are available | Strong BGP-native routing story | host-gw mode can avoid overlay on a simple L2 network | Supports noEncap and traffic modes by design | Native VPC pod IP integration | VNet-native or overlay IP assignment depending on AKS mode |
+| eBPF | Central design point | Available as a dataplane option | No | No, OVS-based | Uses node agents and cloud networking, with policy implementation details managed by AWS | Cilium-powered mode uses Cilium dataplane |
+| Multi-cluster | ClusterMesh | Calico multi-cluster capabilities vary by edition and design | Not a core capability | Antrea multi-cluster features exist; verify current scope | Use AWS networking primitives or add another layer | Use Azure networking primitives or add another layer |
+| Observability | Hubble flow visibility | Calico observability varies by edition and configuration | Minimal native observability | Antrea-native flow and trace tooling | Cloud logs and add-on metrics | Azure Monitor, flow logs, and Cilium observability depending on mode |
+
+Use the Rosetta as a translation aid, not a ranking. If your requirement is "default-deny namespace isolation with portable Kubernetes NetworkPolicy," several options can satisfy it. If your requirement is "workload-identity-aware L7 policy with built-in flow visibility," the viable set narrows. If your requirement is "pods must be first-class VPC IPs because downstream firewalls identify pod addresses," a cloud-native CNI may be a better starting point than a generic overlay. If your requirement is "small lab cluster with the fewest moving parts," simple connectivity may be enough.
+
+The equivalent-language habit prevents tool lock-in. A Cilium design might say "identity-based policy with Hubble flow validation." The equivalent in Calico might be "label-driven policy with Calico policy resources and configured flow visibility." The equivalent in a cloud-native CNI might be "provider-supported NetworkPolicy plus VPC flow logs and subnet capacity monitoring." The specific commands differ, but the durable capability is the same: express allowed communication, enforce it, and prove it with observable traffic.
+
+---
+
+## Selection Criteria That Survive Tool Churn
+
+Scale is the first criterion, but define it precisely. Node count matters, pod count matters, Service count matters, endpoint churn matters, and policy object count matters. A cluster with many idle pods is different from a cluster with constant deploys and EndpointSlice changes. A cluster with few Services and huge packet volume is different from a cluster with many Services and modest traffic. Ask which scaling dimension your workload stresses before selecting a data plane for "scale."
+
+Policy needs are the second criterion. If the cluster is single-tenant and all sensitive traffic already uses application-layer controls, basic policy may be enough. If the cluster is a shared platform, default-deny and tenant isolation should be baseline requirements. If auditors ask who can call which HTTP paths or external domains, you may need L7 or FQDN features, and you should understand their portability limits before adopting them. Policy design should be reviewed with security teams before the CNI is locked.
+
+Observability is the third criterion. A CNI that can show allowed and denied flows, source and destination identities, DNS names, and policy verdicts can reduce incident time dramatically. A simple CNI can still be valid, but you must add other tools or accept a slower troubleshooting loop. The question is not whether a dashboard looks attractive; it is whether an on-call engineer can answer "where was this packet dropped?" without guessing.
+
+Encryption is the fourth criterion. Decide whether node-to-node pod traffic requires transparent encryption, whether application mTLS is sufficient, whether the platform spans trust boundaries, and who operates key rotation. If encryption is mandatory, confirm it works with your routing mode, MTU, kernel, and observability. If encryption is not mandatory, document the threat model so future reviewers know it was a deliberate decision.
+
+Cloud integration is the fifth criterion. AWS VPC CNI, Azure CNI, and GKE VPC-native networking can make pod IPs part of the cloud network model, which helps with firewalls, routing, flow logs, and private service access. The tradeoff is provider-specific limits and migration coupling: subnet exhaustion, ENI or IP-per-node limits, managed add-on versions, and cluster modes that cannot be changed in place. If portability across clouds is a hard requirement, a generic overlay may be easier to standardize. If cloud-native integration is a hard requirement, portability may be a secondary concern.
+
+Operational familiarity is the final criterion because the "right" architecture nobody can operate is wrong for your organization. List the skills required for your chosen mode: BGP, OVS, eBPF, cloud subnet planning, NetworkPolicy design, kernel debugging, or managed-service constraints. Then compare that to the skills you actually have on call. Training can close gaps, but pretending gaps do not exist turns every incident into a learning exercise under pressure.
+
+---
+
+## Patterns & Anti-Patterns
+
+### Patterns
+
+| Pattern | Why It Works | Where It Fits |
+|---|---|---|
+| Capability-first selection | Starts with requirements such as policy, observability, encryption, and cloud integration before naming tools | New platform design and major rebuilds |
+| Dated landscape snapshot | Keeps volatile maturity and feature facts in one reviewable place | Vendor-heavy curriculum, architecture records, and platform RFCs |
+| Default-deny with paved-road allows | Gives tenants safe isolation while preserving required platform dependencies such as DNS | Shared clusters and regulated environments |
+| Blue-green CNI migration | Avoids mixing incompatible IPAM, tunnels, and routes on one live cluster | High-risk production CNI changes |
+| Healthy-node packet-path examples | Gives incident responders a known-good route, interface, and policy picture | Runbooks and on-call training |
+
+### Anti-Patterns
+
+| Anti-Pattern | Why It's Bad | Better Approach |
+|---|---|---|
+| Choosing by product reputation | It hides actual requirements and produces untestable architecture claims | Write the capability matrix first, then map tools to it |
+| Treating NetworkPolicy YAML as enforcement proof | Kubernetes accepts policy objects even when the CNI does not enforce them | Verify enforcement with denied-flow tests and CNI documentation |
+| Copying CIDRs from a tutorial | Defaults can overlap future VPCs, VPNs, Services, and clusters | Reserve address space as part of platform network design |
+| Enabling eBPF without kernel and runbook checks | Powerful features become outage risks if nodes or operators are unprepared | Validate kernel support and teach inspection workflows before rollout |
+| Migrating CNI in place | Old and new plugins may disagree about IPAM, routes, tunnels, and policy state | Use blue-green clusters or controlled node replacement |
+| Ignoring MTU after choosing an overlay | Large packets fail while small tests pass, creating confusing application symptoms | Set and test MTU explicitly for the underlay and encapsulation mode |
 
 ### Decision Framework
 
-```
-Start here:
-  │
-  ├── Development/test cluster?
-  │     └── YES → Flannel (simplest, lowest overhead)
-  │
-  ├── Need network policies?
-  │     └── YES → Calico or Cilium
-  │           │
-  │           ├── Need L7 policies (HTTP path/method filtering)?
-  │           │     └── YES → Cilium
-  │           │
-  │           ├── Running on-prem with BGP-capable switches?
-  │           │     └── YES → Calico (BGP mode, no overlay)
-  │           │
-  │           └── Kernel 5.10+ available?
-  │                 ├── YES → Cilium (best observability, performance)
-  │                 └── NO → Calico (iptables mode)
-  │
-  ├── Running on managed K8s (EKS/GKE/AKS)?
-  │     └── Consider the cloud CNI first (best VPC integration)
-  │         Then evaluate Calico or Cilium as add-on/replacement
-  │
-  └── Multi-cluster networking needed?
-        └── YES → Cilium ClusterMesh (easiest)
-              or Calico Federation (Enterprise license)
+```mermaid
+flowchart TD
+    START["Define platform requirements"] --> C1{"Managed cloud cluster<br/>with required VPC/VNet integration?"}
+    C1 -->|Yes| CLOUD["Start from provider CNI<br/>then evaluate policy and observability gaps"]
+    C1 -->|No| C2{"Need strong tenant isolation<br/>with enforced NetworkPolicy?"}
+    C2 -->|No| SIMPLE["Simple connectivity CNI may be enough<br/>if risk is low and observability is acceptable"]
+    C2 -->|Yes| C3{"Need L7, FQDN, or identity-rich policy?"}
+    C3 -->|Yes| ADV["Evaluate policy-rich CNIs<br/>and document portability limits"]
+    C3 -->|No| C4{"Underlay can carry pod routes?"}
+    C4 -->|Yes| ROUTED["Consider native routing or BGP<br/>with network-team ownership"]
+    C4 -->|No| OVERLAY["Use overlay encapsulation<br/>and set MTU deliberately"]
+    CLOUD --> C5{"Subnet, ENI, IP, and mode limits acceptable?"}
+    C5 -->|No| REDESIGN["Redesign address plan<br/>or choose a different cluster mode"]
+    C5 -->|Yes| OPS["Write runbooks and validation tests"]
+    ADV --> OPS
+    ROUTED --> OPS
+    OVERLAY --> OPS
+    SIMPLE --> OPS
 ```
 
-### Cloud Provider CNI Considerations
-
-| Provider | Default CNI | Pod IP Model | Swap Possible? |
-|----------|------------|-------------|----------------|
-| **EKS** | aws-vpc-cni | VPC-native (ENI) | Yes, but lose SG-for-Pods |
-| **GKE** | GKE Dataplane v2 (Cilium) | VPC-native | Standard: yes. Autopilot: no |
-| **AKS** | Azure CNI | VNet-native or overlay | Yes (kubenet or Cilium) |
+Use the framework as a forcing function. If a decision skips requirements and jumps straight to a product name, send it back. If a managed service integration is mandatory, evaluate the provider CNI first because replacing it can remove cloud-native behavior you rely on. If policy and observability are mandatory, do not accept a connectivity-only CNI unless another component explicitly fills the gap. If native routing looks attractive, require network-team ownership before you remove the overlay safety boundary.
 
 ---
 
-## CNI Migration Strategies
+## Did You Know?
 
-Migrating CNI plugins is one of the most dangerous cluster operations. There is no in-place swap — the cluster must be drained and rebuilt.
-
-### Strategy 1: Rolling Node Replacement (Recommended)
-
-```bash
-# For each node (start with non-critical workloads):
-
-# 1. Cordon the node
-kubectl cordon node-03
-
-# 2. Drain all Pods
-kubectl drain node-03 --ignore-daemonsets --delete-emptydir-data --timeout=120s
-
-# 3. Stop kubelet
-ssh node-03 "sudo systemctl stop kubelet"
-
-# 4. Remove old CNI config and state
-ssh node-03 "sudo rm -rf /etc/cni/net.d/*"
-ssh node-03 "sudo rm -rf /var/lib/cni/"
-ssh node-03 "sudo rm -rf /var/run/calico/"  # if migrating FROM calico
-
-# 5. Clean up old network interfaces
-ssh node-03 "sudo ip link delete flannel.1 2>/dev/null; sudo ip link delete cni0 2>/dev/null"
-
-# 6. Install new CNI (e.g., Cilium DaemonSet will deploy to this node)
-ssh node-03 "sudo systemctl start kubelet"
-
-# 7. Wait for new CNI pod to be ready
-kubectl wait --for=condition=ready pod -l k8s-app=cilium -n kube-system \
-  --field-selector spec.nodeName=node-03 --timeout=120s
-
-# 8. Uncordon
-kubectl uncordon node-03
-
-# 9. Verify Pod connectivity from this node before proceeding
-kubectl run test-net --image=busybox:1.36 --overrides='{"spec":{"nodeName":"node-03"}}' \
-  --rm -it --restart=Never -- wget -qO- http://kubernetes.default.svc.cluster.local/healthz
-```
-
-### Strategy 2: Blue-Green Cluster (Safest)
-
-Build a new cluster with the target CNI, migrate workloads via DNS cutover or load balancer switching. More expensive but zero-risk to the existing cluster.
+- **The CNI spec is intentionally narrow**: The current [CNI specification](https://github.com/containernetworking/cni/blob/main/SPEC.md) standardizes plugin invocation and results, but it does not dictate whether an implementation uses bridges, tunnels, BGP, eBPF, OVS, or cloud APIs.
+- **NetworkPolicy needs an enforcing plugin**: The [Kubernetes NetworkPolicy documentation](https://kubernetes.io/docs/concepts/services-networking/network-policies/) describes the API, but enforcement depends on the installed network plugin or managed networking layer.
+- **CNCF maturity is not universal across CNIs**: [Cilium](https://www.cncf.io/projects/cilium/) is listed by CNCF as Graduated, while [Antrea](https://www.cncf.io/projects/antrea/) is listed as Sandbox; other CNIs may have no CNCF project maturity level at all.
+- **Legacy CNIs still affect migrations**: The original [Weave Net repository](https://github.com/weaveworks/weave) is archived and read-only, so platform teams should treat Weave as a legacy footprint to evaluate or migrate away from, not a fresh selection target.
 
 ---
 
 ## Common Mistakes
 
-| Mistake | Why It Happens | How to Fix It |
-|---------|---------------|---------------|
-| Running Flannel and expecting network policies to work | Flannel has no policy engine; `NetworkPolicy` resources are silently ignored | Use Calico or Cilium, or add Calico as a policy-only addon alongside Flannel |
-| Choosing a CNI without checking kernel version | Cilium eBPF requires 5.4+, Calico eBPF needs 5.3+; old distros ship 4.x | Run `uname -r` on all nodes; upgrade kernel first or choose iptables-based CNI |
-| Overlapping Pod CIDR with node/service network | Cluster bootstrapped with default CIDR that collides with corporate LAN | Plan CIDRs carefully at cluster creation; use `--pod-network-cidr` and `--service-cidr` flags |
-| Not monitoring IPAM exhaustion | Each node gets a /24 (256 IPs) by default; high-density nodes run out | Configure IPAM with larger node allocations or use Calico/Cilium's per-node pool sizing |
-| Migrating CNI without draining nodes first | Assuming CNI swap is like upgrading a DaemonSet | Always drain, clean old state, then restart — treat it as a node rebuild |
-| Ignoring MTU configuration | VXLAN/Geneve adds 50-byte overhead; jumbo frames not supported in some clouds | Set MTU explicitly in CNI config: typically 1450 for VXLAN, 1500 for native routing |
-| Using IPinIP when VXLAN is better | IPinIP is Calico-legacy; VXLAN is more widely supported and firewall-friendly | Prefer VXLAN for new Calico installs; IPinIP only if you have a specific need for it |
+| Mistake | Why It's a Problem | Better Approach |
+|---|---|---|
+| Selecting a CNI before writing requirements | The team argues product names instead of platform needs | Write requirements for routing, policy, observability, encryption, cloud integration, and operations first |
+| Assuming all CNIs enforce NetworkPolicy | Policy objects may exist while traffic remains unrestricted | Run an explicit deny test and verify the CNI supports enforcement in your mode |
+| Overlapping pod CIDR with VPC or on-premises routes | Cross-cluster, VPN, or private endpoint traffic becomes ambiguous | Reserve pod and Service ranges with the network team before cluster creation |
+| Forgetting subnet or ENI limits in cloud-native CNI modes | Pods fail to start even when cluster CPU and memory are available | Monitor subnet capacity, node pod limits, and provider-specific IP allocation behavior |
+| Treating eBPF as an automatic upgrade | Kernel support, observability, and operator skills may be missing | Validate node OS support, CNI docs, and debugging runbooks before enabling it |
+| Ignoring MTU in overlay or nested-network designs | Large packets fail while small tests succeed, creating misleading symptoms | Set CNI MTU deliberately and test realistic payload sizes across nodes |
+| Migrating without draining or rebuilding nodes | Old IPAM state, tunnels, and routes can coexist with new plugin state | Use blue-green clusters or controlled node replacement with connectivity gates |
+| Debugging from application logs only | CNI failures surface as generic timeouts, DNS errors, or readiness failures | Classify the network path, then inspect pods, Services, routes, interfaces, and policy verdicts |
 
 ---
 
-## Hands-On Exercises
+## Quiz
 
-### Exercise 1: Explore CNI Internals on a kind Cluster
+Test your understanding of CNI architecture and selection:
 
-```bash
-# Create a kind cluster (uses kindnetd CNI by default)
-cat <<'EOF' > kind-config.yaml
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-networking:
-  disableDefaultCNI: true
-  podSubnet: "10.244.0.0/16"
-  serviceSubnet: "10.96.0.0/12"
-nodes:
-  - role: control-plane
-  - role: worker
-  - role: worker
-EOF
-kind create cluster --name cni-lab --config kind-config.yaml
-```
+### Question 1: The Base Contract
 
-**Task 1**: Install Calico and verify Pod connectivity.
-
-```bash
-# Install Calico operator and custom resource
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29/manifests/tigera-operator.yaml
-
-cat <<'EOF' | kubectl apply -f -
-apiVersion: operator.tigera.io/v1
-kind: Installation
-metadata:
-  name: default
-spec:
-  calicoNetwork:
-    ipPools:
-      - name: default-ipv4-ippool
-        cidr: 10.244.0.0/16
-        encapsulation: VXLANCrossSubnet
-        natOutgoing: Enabled
-        nodeSelector: all()
-EOF
-
-# Wait for all calico pods to be ready
-kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n calico-system --timeout=300s
-```
-
-**Task 2**: Deploy two Pods on different nodes and verify cross-node communication.
-
-```bash
-# Create test pods pinned to different nodes
-WORKERS=$(kubectl get nodes --no-headers -l '!node-role.kubernetes.io/control-plane' -o name)
-NODE1=$(echo "$WORKERS" | head -1 | cut -d/ -f2)
-NODE2=$(echo "$WORKERS" | tail -1 | cut -d/ -f2)
-
-kubectl run pod-a --image=busybox:1.36 --overrides="{\"spec\":{\"nodeName\":\"$NODE1\"}}" \
-  --command -- sleep 3600
-kubectl run pod-b --image=busybox:1.36 --overrides="{\"spec\":{\"nodeName\":\"$NODE2\"}}" \
-  --command -- sleep 3600
-
-kubectl wait --for=condition=ready pod/pod-a pod/pod-b --timeout=120s
-
-# Get Pod B's IP and ping from Pod A
-POD_B_IP=$(kubectl get pod pod-b -o jsonpath='{.status.podIP}')
-kubectl exec pod-a -- ping -c 3 $POD_B_IP
-```
-
-**Task 3**: Examine the CNI plumbing on the node.
-
-```bash
-# Exec into the kind node container to inspect networking
-docker exec -it cni-lab-worker bash
-
-# Inside the node:
-ip link show type veth          # See veth pairs to Pods
-ip route show                   # See per-Pod routes (Calico adds /32 routes)
-cat /etc/cni/net.d/*.conflist   # CNI configuration
-ls /opt/cni/bin/                # CNI binaries
-iptables-save | head -50        # iptables rules (if not using eBPF)
-```
+> Hypothetical scenario: A developer asks why Kubernetes does not simply expose every pod through a node port and let applications track where their peers run. Explain the Kubernetes network model and how it changes application design.
 
 <details>
-<summary>What to observe</summary>
+<summary>Answer</summary>
 
-- Each Pod has a `cali*` veth pair on the host
-- Calico adds /32 routes pointing to each veth interface (no bridge)
-- The CNI conflist shows the Calico plugin chain
-- Cross-node traffic goes through VXLAN tunnel (`vxlan.calico` interface)
+Kubernetes expects every pod to have a routable pod IP and expects pods to communicate with pods on other nodes without NAT from the workload's point of view. That flat model lets application code dial peer pod IPs or Service addresses without knowing node placement, host ports, or tunnel details. The CNI implementation is responsible for making the model true through IPAM, interfaces, routes, policy, and data-plane programming. This is the foundation for designing Kubernetes network architectures with CIDR planning, overlay versus native routing, and IP management rather than pushing topology concerns into applications.
 
 </details>
 
-### Exercise 2: Install Cilium and Enable Hubble
+### Question 2: CNI Spec Versus Implementation
 
-```bash
-# Delete previous cluster and create fresh one
-kind delete cluster --name cni-lab
-kind create cluster --name cilium-lab --config kind-config.yaml
-
-# Install Cilium CLI (detect OS and architecture)
-CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-CLI_ARCH=amd64
-if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then CLI_ARCH=arm64; fi
-curl -L --fail --remote-name-all \
-  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-$(uname -s | tr '[:upper:]' '[:lower:]')-${CLI_ARCH}.tar.gz
-sudo tar xzvfC cilium-$(uname -s | tr '[:upper:]' '[:lower:]')-${CLI_ARCH}.tar.gz /usr/local/bin
-rm cilium-$(uname -s | tr '[:upper:]' '[:lower:]')-${CLI_ARCH}.tar.gz
-
-# Install Cilium
-cilium install --version 1.16.5
-
-# Wait for Cilium to be ready
-cilium status --wait
-
-# Enable Hubble
-cilium hubble enable --ui
-
-# Run connectivity test
-cilium connectivity test
-```
-
-**Task**: Deploy a workload and observe traffic flows with Hubble.
-
-```bash
-# Deploy sample app
-kubectl create deployment nginx --image=nginx:1.27 --replicas=2
-kubectl expose deployment nginx --port=80
-
-# Port-forward Hubble UI
-cilium hubble ui &
-
-# Observe flows from CLI
-hubble observe --namespace default --follow
-```
-
-### Exercise 3: Compare CNI Performance
-
-```bash
-# Install iperf3 on both clusters to compare throughput
-kubectl run iperf-server --image=networkstatic/iperf3 --command -- iperf3 -s
-kubectl wait --for=condition=ready pod/iperf-server --timeout=60s
-
-SERVER_IP=$(kubectl get pod iperf-server -o jsonpath='{.status.podIP}')
-kubectl run iperf-client --image=networkstatic/iperf3 --rm -it --restart=Never \
-  --command -- iperf3 -c $SERVER_IP -t 10 -P 4
-
-# Record: bandwidth, retransmits, CPU usage
-# Compare results across CNI installs
-```
-
-**Success Criteria:**
-- [ ] Installed Calico on a kind cluster and verified cross-node Pod connectivity
-- [ ] Inspected veth pairs, routes, and CNI config on the node
-- [ ] Installed Cilium with Hubble and observed live traffic flows
-- [ ] Ran iperf3 throughput test and recorded baseline numbers
-
----
-
-## War Story
-
-**The 10,000-Service iptables Meltdown**
-
-A SaaS platform running 800 microservices on a 150-node Calico cluster (iptables mode) started experiencing intermittent 2-5 second latency spikes during deployments. The spikes correlated perfectly with Service or Endpoint changes.
-
-**Timeline:**
-
-- **Day 1**: Engineering notices P99 latency spikes during peak deployment hours (2-4 PM). Each spike lasts 2-5 seconds. Customer-facing APIs return 504 Gateway Timeout.
-- **Day 3**: Investigation reveals that kube-proxy is rebuilding ~38,000 iptables rules on every EndpointSlice update. Each rebuild takes 1.8 seconds and blocks packet processing.
-- **Day 5**: Team adds `--iptables-min-sync-period=5s` to kube-proxy to batch updates. Spikes reduce from 30/hour to 8/hour during deployments.
-- **Day 12**: Root cause: the combination of high churn (120 deployments/day) and many Services means iptables is being rewritten constantly. The team migrates to Calico's eBPF dataplane over a weekend maintenance window.
-- **Day 14**: After eBPF migration, latency spikes disappear entirely. Service routing happens in eBPF maps (O(1) lookup) instead of iptables chains (O(n) traversal).
-
-**Business impact**: $340K in SLA credits over 12 days. Two enterprise customers began evaluating competitors.
-
-**Lesson**: iptables-based networking does not scale linearly with Service count. If you're running more than 3,000 Services, evaluate eBPF-based dataplanes (Cilium, Calico eBPF) or IPVS mode as a minimum.
-
----
-
-## Knowledge Check
+> Hypothetical scenario: During an incident, someone says "CNI is down." What follow-up questions help separate a CNI contract failure from an implementation data-plane failure?
 
 <details>
-<summary>1. What are the five CNI specification operations, and which one was added most recently?</summary>
+<summary>Answer</summary>
 
-The five operations are **ADD**, **DEL**, **CHECK**, **VERSION**, and **GC** (garbage collection). GC was added in CNI spec v1.1.0 (2023) to address the problem of orphaned network interfaces and leaked IP addresses when container runtimes crash between creating and registering a network interface. Before GC, operators had to manually clean up zombie veth pairs on long-running nodes.
+Ask whether the runtime can invoke the plugin, whether `ADD` or `DEL` is failing, whether IPAM allocated an address, whether the pod network namespace has an interface, and whether node routes or policy rules were programmed correctly. The CNI spec defines the runtime-to-plugin contract, while implementations such as Calico, Cilium, Flannel, Antrea, AWS VPC CNI, and Azure CNI make different data-plane choices behind that contract. A plugin invocation error, stale IPAM reservation, missing veth, broken route, and policy drop all look like "networking" to an application but require different fixes. Clear diagnosis starts by locating which part of the lifecycle failed.
+
 </details>
 
-<details>
-<summary>2. Why does Calico in BGP mode offer better raw throughput than Calico in VXLAN mode?</summary>
+### Question 3: Overlay or Native Routing
 
-BGP mode uses **native routing** — packets are forwarded using standard Linux routing tables with no encapsulation overhead. VXLAN mode wraps every cross-node packet in a UDP/VXLAN header (50 bytes of overhead), which reduces the effective MTU and adds CPU cost for encapsulation/decapsulation. BGP mode is ~5-6% faster in throughput benchmarks because it avoids this overhead entirely. The trade-off is that BGP mode requires the underlying network infrastructure to support BGP peering.
+> Hypothetical scenario: Your company runs Kubernetes on an on-premises network where the network team can advertise pod CIDRs through BGP and participate in operations. Another business unit runs clusters in a cloud account where route-table control is limited. How should the two teams think about overlay versus native routing?
+
+<details>
+<summary>Answer</summary>
+
+The on-premises team can reasonably evaluate native routing because the underlay can carry pod routes and the network team is part of the operating model. That may reduce encapsulation overhead and make packet paths visible to existing routing tools, but it requires route ownership and convergence runbooks. The cloud team may prefer overlay or provider-native pod IP integration because it cannot assume direct route control. This is not a ranking; it is a design choice based on who owns the underlay, how routes scale, and how failures will be diagnosed.
+
 </details>
 
-<details>
-<summary>3. A cluster has 5,000 Services. Why might you see latency spikes with iptables-based kube-proxy?</summary>
+### Question 4: Policy-Capable Multi-Tenancy
 
-With iptables-based kube-proxy, every Service creates multiple iptables rules (for ClusterIP, endpoints, load balancing). At 5,000 Services, you can have 40,000+ rules. When any Service or EndpointSlice changes, kube-proxy rewrites the **entire** iptables table atomically — this takes 1-3 seconds during which packet processing stalls. eBPF or IPVS mode solves this because they use hash-map lookups (O(1)) instead of sequential chain traversal (O(n)).
+> Hypothetical scenario: A shared platform team wants tenant namespaces to default-deny all east-west traffic, allow DNS, and later add selected app-to-database rules. The current cluster uses a connectivity-only CNI. What should the team evaluate before adding tenants?
+
+<details>
+<summary>Answer</summary>
+
+The team must verify that its CNI or an added policy component actually enforces Kubernetes NetworkPolicy, because policy YAML alone does not block packets. For multi-tenant clusters, they should implement CNI configuration for network isolation with namespace templates, default-deny policies, explicit DNS allows, denied-flow observability, and a safe rollout path. If the current CNI lacks policy enforcement, the team should evaluate a policy-capable CNI or a supported policy-only addon before onboarding tenants. The design must also include performance requirements and troubleshooting evidence so isolation does not become a blind support burden.
+
 </details>
 
-<details>
-<summary>4. You're deploying a new cluster in AWS EKS. Should you replace the aws-vpc-cni with Cilium?</summary>
+### Question 5: eBPF Tradeoffs
 
-Not necessarily. The aws-vpc-cni provides **VPC-native Pod IPs** — each Pod gets a real ENI IP from the VPC subnet. This enables native AWS security groups for Pods, VPC Flow Logs, and direct routing without overlay overhead. Replacing it with Cilium means you lose these VPC-native features. However, if you need advanced L7 network policies, Hubble observability, or ClusterMesh, you might install Cilium alongside or instead. Evaluate the trade-offs: cloud integration vs. advanced networking features.
+> Hypothetical scenario: A team wants to enable an eBPF dataplane because it heard that iptables does not scale well. What checks should happen before approving the change?
+
+<details>
+<summary>Answer</summary>
+
+The team should confirm node kernel support, CNI version support, kube-proxy replacement expectations, observability changes, rollback strategy, and operator familiarity with eBPF-specific diagnostics. eBPF can replace long generated rule chains with programs and maps, which helps service routing, policy, and observability at scale, but it also makes the CNI more central to cluster behavior. If nodes run inconsistent kernels or the on-call team cannot inspect maps and flow events, the change may increase operational risk. Approve it only when the requirement and the runbook are both clear.
+
 </details>
 
-<details>
-<summary>5. What is the purpose of the pause container in Kubernetes Pod networking?</summary>
+### Question 6: Cloud-Managed CNI Selection
 
-The pause container creates and holds the **network namespace** for the Pod. All other containers in the Pod share this namespace (same IP, same ports, same interfaces). The pause container starts first, the CNI plugin configures networking in its namespace, and then application containers join. If an application container crashes and restarts, the network namespace (and IP) persist because the pause container is still running.
+> Hypothetical scenario: An EKS team asks whether it should replace AWS VPC CNI with a generic overlay CNI to standardize with other clusters. What tradeoffs should the architecture review cover?
+
+<details>
+<summary>Answer</summary>
+
+The review should evaluate CNI plugins against networking and security requirements rather than assuming standardization is automatically better. AWS VPC CNI gives pods VPC-native addressing and integrates with AWS networking behavior, but it brings subnet capacity and provider-specific mode considerations. A generic overlay may improve cross-cloud consistency or unlock features the team wants, but it can remove VPC-native assumptions used by firewalls, flow logs, or security controls. The right answer depends on required policy, observability, encryption, IP capacity, migration risk, and operational ownership.
+
 </details>
 
-<details>
-<summary>6. Scenario: After migrating from Flannel to Calico, some Pods on migrated nodes can reach each other, but Pods on migrated nodes cannot reach Pods on not-yet-migrated nodes. What's likely wrong?</summary>
+### Question 7: Diagnosing Cross-Node Failure
 
-The two CNIs use **different overlay protocols** and **different tunnel interfaces**. Flannel uses VXLAN with a `flannel.1` interface, while Calico uses its own VXLAN tunnel (`vxlan.calico`) or IPinIP (`tunl0`). Packets from Calico nodes are encapsulated in a format that Flannel nodes don't understand, and vice versa. This is why CNI migration requires draining all nodes — you cannot run two different overlay CNIs simultaneously. The fix is to complete the migration by draining and converting the remaining nodes.
+> Hypothetical scenario: Pods on the same node can communicate, but pods on different nodes time out. Services also fail only when endpoints live on another node. What CNI-level areas should you inspect first?
+
+<details>
+<summary>Answer</summary>
+
+This pattern points away from application code and toward cross-node data-plane behavior. Inspect pod placement, direct pod IP connectivity, node routes, tunnel interfaces, BGP or cloud route state, MTU settings, and policy verdicts. If the CNI uses overlay encapsulation, verify tunnel health and MTU. If it uses native routing, verify that the source node and underlay know the destination pod CIDR and that the return path is symmetric.
+
 </details>
 
-<details>
-<summary>7. Why does Cilium require a minimum kernel version of 5.4?</summary>
+### Question 8: Legacy Weave Footprint
 
-Cilium's core functionality relies on **eBPF features** that were only added in Linux kernel 5.x. Specifically: BPF-to-BPF function calls (4.16), bounded loops (5.3), and BTF (BPF Type Format) for CO-RE (Compile Once, Run Everywhere) portability (5.4). Without these features, Cilium cannot compile or load its eBPF programs. Kernel 5.10+ is recommended because it adds additional features like BPF LSM hooks and improved memory management for BPF maps.
-</details>
+> Hypothetical scenario: A legacy cluster still runs Weave Net, and a new platform standard must cover Calico, Cilium, Flannel, and cloud-managed CNIs. How should the team treat Weave in the evaluation?
 
 <details>
-<summary>8. Your cluster runs Flannel but you need network policies. What are your options without a full CNI migration?</summary>
+<summary>Answer</summary>
 
-You can install **Calico in policy-only mode**. Calico can run alongside Flannel, handling only network policy enforcement while Flannel continues to manage the actual Pod networking (IP assignment, routing). This is sometimes called "Canal" (Calico + Flannel). Install Calico with `CALICO_NETWORKING_BACKEND=none` and it will enforce NetworkPolicy resources without interfering with Flannel's data plane. This avoids a full CNI migration while adding policy support.
+The team should include Weave in the evaluation as a legacy migration concern, not as a current recommendation for new clusters, because the original repository is archived and read-only. The assessment should identify what capabilities the legacy cluster relies on, what gaps exist compared with current requirements, and which migration path avoids mixing incompatible CNI state. This keeps the outcome "Evaluate CNI plugins - Calico, Cilium, Flannel, Weave - against requirements" honest: evaluation can conclude that a legacy tool should be retired. The migration plan should then focus on CIDR compatibility, policy replacement, observability, and controlled node or cluster replacement.
+
 </details>
 
 ---
 
-## Summary
+## Hands-On
 
-CNI plugins are the foundation of Kubernetes networking — they determine how Pods get IPs, how traffic flows between nodes, and what policy enforcement is available. The three main choices today are:
+### Objective
 
-- **Flannel** — Simple, lightweight, no policies. Use for dev/test.
-- **Calico** — Feature-rich, supports BGP and eBPF, enterprise proven. Best for on-prem and mixed environments.
-- **Cilium** — eBPF-native, L7 policies, Hubble observability, service mesh. Best for modern stacks on recent kernels.
+Create a CNI selection and diagnostic brief for a realistic Kubernetes platform. The exercise focuses on durable decision quality rather than installing a specific vendor plugin.
 
-Choosing a CNI is a long-term architectural decision. Migration is possible but disruptive. Make the right choice early by evaluating your kernel version, policy needs, observability requirements, and whether you need multi-cluster connectivity.
+### Scenario
 
-## What's Next
+Hypothetical scenario: You operate a shared Kubernetes platform for several product teams. The current cluster is a simple overlay network with no enforced NetworkPolicy. The next platform version must support tenant isolation, private cloud connectivity, flow-level troubleshooting, optional transparent encryption, and enough IP capacity for future clusters in two regions.
 
-In [Module 1.2: Network Policy Design Patterns](../module-1.2-network-policy-design/), you'll learn how to use the policy engine your CNI provides — designing default-deny strategies, namespace isolation, and zero-trust microsegmentation patterns that keep your cluster secure without breaking connectivity.
+### Tasks
+
+**Task 1**: Write the Kubernetes network invariants your platform must preserve, then list pod CIDR, Service CIDR, node CIDR, VPC or datacenter CIDR, and future cluster ranges. Identify any overlap risks.
+
+**Task 2**: Compare at least four CNI options using durable capabilities: routing mode, policy support, observability, encryption, multi-cluster story, managed-cloud integration, kernel requirements, and operator familiarity.
+
+**Task 3**: Pick one preferred architecture and one fallback architecture. For each, describe the packet path from pod A on node 1 to pod B on node 2, including policy and Service-routing decision points.
+
+**Task 4**: Write a diagnostic runbook for three failures: cross-node pod timeout, IPAM exhaustion, and policy denying a valid application call.
+
+**Task 5**: Write a migration strategy from the current CNI to the selected architecture. Decide whether blue-green cluster migration or rolling node replacement is safer, and explain why.
+
+### Success Criteria
+
+- [ ] The brief separates the Kubernetes network model from the CNI implementation and states which invariant each design protects
+- [ ] CIDR planning covers pod, Service, node, cloud or datacenter, future cluster, and private connectivity ranges with no unexplained overlaps
+- [ ] The comparison evaluates capabilities and tradeoffs instead of declaring a single tool "best"
+- [ ] The selected architecture explains overlay versus native routing, packet-processing engine, policy engine, encryption stance, and observability path
+- [ ] The diagnostic runbook includes concrete `kubectl`, node route, interface, and policy-verdict checks for each failure mode
+- [ ] The migration plan avoids mixing incompatible CNI state and includes a rollback or blue-green cutover strategy
+
+### Useful Commands for the Diagnostic Section
+
+```bash
+kubectl get pod -A -o wide
+kubectl get svc,endpointslices -A
+kubectl get networkpolicy -A
+kubectl describe node "$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')"
+```
+
+```bash
+ip addr show
+ip route show
+ip link show type veth
+sudo ls -la /etc/cni/net.d/
+sudo journalctl -u kubelet --since "30 min ago" --no-pager
+```
+
+---
+
+## Sources
+
+- [CNI Specification](https://github.com/containernetworking/cni/blob/main/SPEC.md)
+- [CNI Conventions](https://github.com/containernetworking/cni/blob/main/CONVENTIONS.md)
+- [Kubernetes: Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/)
+- [Kubernetes: Cluster Networking](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
+- [Kubernetes: Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+- [Cilium: Routing](https://docs.cilium.io/en/stable/network/concepts/routing/)
+- [Cilium: eBPF Datapath](https://docs.cilium.io/en/stable/network/ebpf/)
+- [Cilium: Hubble](https://docs.cilium.io/en/stable/observability/hubble/)
+- [Cilium: Transparent Encryption](https://docs.cilium.io/en/stable/security/network/encryption/)
+- [Cilium: Cluster Mesh](https://docs.cilium.io/en/stable/network/clustermesh/)
+- [Calico: About Calico](https://docs.tigera.io/calico/latest/about/)
+- [Calico: Configure BGP Peering](https://docs.tigera.io/calico/latest/networking/configuring/bgp)
+- [Calico: Enable the eBPF Dataplane](https://docs.tigera.io/calico/latest/operations/ebpf/enabling-ebpf)
+- [Calico: Kubernetes Network Policy](https://docs.tigera.io/calico/latest/network-policy/get-started/kubernetes-policy/kubernetes-network-policy)
+- [Calico: Configure VXLAN and IP-in-IP](https://docs.tigera.io/calico/latest/networking/configuring/vxlan-ipip)
+- [Flannel: Backend Types](https://github.com/flannel-io/flannel/blob/master/Documentation/backends.md)
+- [Flannel: Running Flannel with Kubernetes](https://github.com/flannel-io/flannel/blob/master/Documentation/kubernetes.md)
+- [Antrea: Architecture](https://antrea.io/docs/main/docs/design/architecture/)
+- [Antrea: NetworkPolicy CRDs](https://antrea.io/docs/main/docs/antrea-network-policy/)
+- [Antrea: Layer 7 NetworkPolicy](https://antrea.io/docs/main/docs/antrea-l7-network-policy/)
+- [Amazon EKS: Assign IPs to Pods with the Amazon VPC CNI](https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html)
+- [Amazon EKS: Limit Pod Traffic with Kubernetes Network Policies](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html)
+- [Amazon EKS Best Practices: VPC CNI](https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html)
+- [Azure AKS: Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/concepts-network-azure-cni-overlay)
+- [Azure AKS: Azure CNI Pod Subnet](https://learn.microsoft.com/en-us/azure/aks/concepts-network-azure-cni-pod-subnet)
+- [Azure AKS: Azure CNI Powered by Cilium](https://learn.microsoft.com/en-us/azure/aks/azure-cni-powered-by-cilium)
+- [Azure AKS: Network Policies](https://learn.microsoft.com/en-us/azure/aks/use-network-policies)
+- [Google Kubernetes Engine: Alias IPs](https://cloud.google.com/kubernetes-engine/docs/concepts/alias-ips)
+- [Google Kubernetes Engine: Dataplane V2](https://cloud.google.com/kubernetes-engine/docs/concepts/dataplane-v2)
+- [CNCF: Cilium Project](https://www.cncf.io/projects/cilium/)
+- [CNCF: Antrea Project](https://www.cncf.io/projects/antrea/)
+- [Weave Net Repository](https://github.com/weaveworks/weave)
+- [eBPF: What Is eBPF?](https://ebpf.io/what-is-ebpf/)
+
+---
+
+## Next Module
+
+In [Module 1.2: Network Policy Design Patterns](../module-1.2-network-policy-design/), you will turn the policy foundation from this module into practical default-deny, namespace isolation, egress control, and zero-trust design patterns.
