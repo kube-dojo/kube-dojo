@@ -409,7 +409,7 @@ Treat external benchmarks and maturity surveys as optional inputs, not verdicts.
 
 - **DORA's metric set is not frozen.** The program moved from four keys to five, renaming recovery around **failed deployment recovery time** and adding **deployment rework rate**; always verify the current model on [dora.dev/guides/dora-metrics/](https://dora.dev/guides/dora-metrics/) before codifying internal standards.
 
-- **The SPACE framework** ([arxiv.org/abs/2102.07763](https://arxiv.org/abs/2102.07763)) formalizes why no single delivery number captures developer productivity — satisfaction, performance, activity, communication, and efficiency all matter alongside DORA outcomes.
+- **The SPACE framework** ([queue.acm.org SPACE paper](https://queue.acm.org/detail.cfm?id=3454124)) formalizes why no single delivery number captures developer productivity — satisfaction, performance, activity, communication, and efficiency all matter alongside DORA outcomes.
 
 - **Google's four golden signals** (latency, traffic, errors, saturation) from the SRE book predate modern progressive delivery but remain the minimum viable panel during rollouts because deployments perturb all four simultaneously.
 
@@ -722,7 +722,7 @@ Primary references verified at authoring time (2026-06):
 - [Four Keys open-source project](https://github.com/dora-team/fourkeys) — event ingestion reference architecture
 - [Accelerate (IT Revolution)](https://itrevolution.com/product/accelerate/) — book grounding the original research
 - [DevOps Research and Assessment — research archive](https://www.devops-research.com/research.html) — historical DORA publications
-- [The SPACE of Developer Productivity](https://arxiv.org/abs/2102.07763) — multidimensional developer productivity framework
+- [The SPACE of Developer Productivity](https://queue.acm.org/detail.cfm?id=3454124) — multidimensional developer productivity framework
 - [Google SRE Book — Monitoring distributed systems](https://sre.google/sre-book/monitoring-distributed-systems/) — golden signals during change
 - [Google SRE Workbook — Postmortem culture](https://sre.google/workbook/postmortem-culture/) — blameless learning paired with delivery metrics
 - [Grafana — Annotate visualizations](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/annotate-visualizations/) — deployment marker mechanics
