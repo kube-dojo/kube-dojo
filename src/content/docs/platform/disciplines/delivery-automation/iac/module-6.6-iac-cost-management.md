@@ -86,7 +86,7 @@ Many organizations discover, after implementing Infracost and tagging, that thei
 
 ## Cost Estimation in CI: Making Infrastructure Cost Visible at Review Time
 
-The core technical pattern for shift-left cost management is running a cost estimation tool as part of your continuous integration pipeline, triggered on every pull request that touches infrastructure code, and posting the resulting estimate as a comment on the PR. This section uses Infracost as the worked example because it is the most mature open-source tool for this specific workflow — but the durable idea is the cost gate itself, not any particular implementation of it.
+The core technical pattern for shift-left cost management is running a cost estimation tool as part of your continuous integration pipeline, triggered on every pull request that touches infrastructure code, and posting the resulting estimate as a comment on the PR. This section uses Infracost as the worked example because it is a widely-used, purpose-built open-source tool for this workflow — but the durable idea is the cost gate itself, not any particular implementation of it. The equivalent in other tools (and in HCP Terraform's native cost estimation) serves the same Inform-phase purpose.
 
 Infracost works by parsing your Terraform plan or HCL code, matching each resource against a pricing database that maps cloud resource configurations to their per-unit costs, and producing a monthly cost breakdown. The tool can run in two modes: a static `breakdown` that estimates the total cost of all resources in a directory, and a comparative `diff` that estimates the cost delta between a baseline (typically the main branch) and the current change. The diff mode is the one that matters for pull-request workflows, because it answers the question every reviewer should be asking: "How much will this change cost?"
 
@@ -904,9 +904,9 @@ The lightweight column is where most teams should start — it requires minimal 
 
 ## Did You Know?
 
-- **The FinOps Foundation was established in 2019** as a Linux Foundation project to develop a standardized framework for cloud financial management. Its core lifecycle — Inform, Optimize, Operate — is now the industry-standard model for connecting engineering decisions to financial outcomes. The Foundation maintains a certification program and a library of vendor-neutral best practices.
+- **The FinOps Foundation was established in 2019** as a Linux Foundation project to develop a standardized framework for cloud financial management. Its core lifecycle — Inform, Optimize, Operate — is widely adopted as a vendor-neutral model for connecting engineering decisions to financial outcomes. The Foundation maintains a certification program and a library of vendor-neutral best practices.
 
-- **Infracost originated from a real billing surprise.** The project's creator, Alistair Scott, built the first prototype after a teammate accidentally provisioned a large number of expensive instances in a test environment and the team discovered the resulting bill weeks later. The tool was open-sourced in 2020 and has since been adopted by thousands of organizations for Terraform cost estimation in CI/CD pipelines.
+- **Infracost's founders are long-time cloud-cost practitioners.** Infracost was open-sourced in 2020 by founders (Hassan Khajeh-Hosseini, Ali Khajeh-Hosseini, and Alistair Scott) who had built cloud cost-management products since 2012 — work that later became part of RightScale and then Flexera — and who serve on the FinOps Foundation board. The tool's core move is posting a cost-delta estimate as a pull-request comment so cost becomes a review-time signal rather than an end-of-month surprise.
 
 - **A single forgotten NAT gateway can cost more than a reserved instance.** In AWS, a NAT gateway costs approximately $32 per month in hourly charges plus $0.045 per GB of data processed. If a development environment provisions one NAT gateway per availability zone for high availability — a common pattern — the baseline cost is roughly $96 per month before any traffic flows, which is more than the on-demand cost of a `t3.medium` instance.
 
