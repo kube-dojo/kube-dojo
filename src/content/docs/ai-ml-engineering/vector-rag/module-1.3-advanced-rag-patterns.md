@@ -688,4 +688,4 @@ Continue to [Module 1.4: RAG Evaluation & Optimization](./module-1.4-rag-evaluat
 - [Sentence-Transformers cross-encoder documentation](https://www.sbert.net/examples/applications/cross-encoder/README.html) — Bi-encoder versus cross-encoder tradeoffs and usage patterns.
 - [cross-encoder/ms-marco-MiniLM-L-6-v2 (Hugging Face)](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) — Widely used reranking model checkpoint for second-stage retrieval.
 - [LangChain Parent Document Retriever](https://python.langchain.com/docs/how_to/parent_document_retriever/) — Small-to-big chunking pattern for search precision with parent context.
-- [Passage Re-ranking with BERT (NAACL 2019)](https://arxiv.org/abs/1908.10084) — Cross-encoder relevance scoring lineage for passage ranking.
+- [Passage Re-ranking with BERT (NAACL 2019)](https://arxiv.org/abs/1901.04085) — Cross-encoder relevance scoring lineage for passage ranking.

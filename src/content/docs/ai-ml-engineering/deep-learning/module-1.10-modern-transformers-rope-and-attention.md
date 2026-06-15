@@ -844,7 +844,7 @@ Continue to [Module 1.6: Memory Bandwidth Math](../ai-infrastructure/module-1.6-
 
 - [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864)
 - [ALiBi: Attention with Linear Biases](https://arxiv.org/abs/2108.12409)
-- [GQA: Efficient Implementation of Large Language Model with Grouped-Query Attention](https://arxiv.org/abs/2305.13245)
+- [GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints](https://arxiv.org/abs/2305.13245)
 - [YaRN: Effective Context Length Extrapolation](https://arxiv.org/abs/2309.00071)
 - [DeepSeek-V2: A Next-Generation Mixture-of-Experts Language Model](https://arxiv.org/abs/2405.04434)
 - [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)

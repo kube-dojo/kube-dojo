@@ -1164,7 +1164,7 @@ Continue to [Module 1.6 — Reasoning Models](/ai-ml-engineering/generative-ai/m
 - [BERT: Pre-training of Deep Bidirectional Transformers](https://arxiv.org/abs/1810.04805) — Devlin et al.; contextual embeddings that supersede static word vectors in many pipelines.
 - [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320) — Malkov and Yashunin; primary reference for HNSW graph indexing.
 - [FAISS: A library for efficient similarity search](https://github.com/facebookresearch/faiss) — Meta's CPU/GPU ANN library used for HNSW, IVF, and product quantization examples.
-- [Product Quantization for Nearest Neighbor Search](https://arxiv.org/abs/1011.3029) — Jégou et al.; foundational PQ paper behind FAISS compression and ADC distance tables.
+- [Product Quantization for Nearest Neighbor Search](https://inria.hal.science/inria-00514462) — Jégou et al.; foundational PQ paper behind FAISS compression and ADC distance tables.
 - [Sentence-BERT (SBERT)](https://arxiv.org/abs/1908.10084) — Reimers and Gurevych; contrastive sentence embeddings that power many `sentence-transformers` retrieval models.
 - [scikit-learn PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html) — Documentation for linear dimensionality reduction used in visualization examples.
 - [scikit-learn t-SNE](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html) — Documentation for non-linear neighborhood-preserving visualization.
