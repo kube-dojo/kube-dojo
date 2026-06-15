@@ -3,12 +3,13 @@ title: "Module 1.6: Building a Data Lakehouse on Kubernetes"
 slug: platform/disciplines/data-ai/data-engineering/module-1.6-lakehouse
 sidebar:
   order: 7
+revision_pending: false
 ---
 > **Discipline Module** | Complexity: `[COMPLEX]` | Time: 3.5 hours
 
 ## Prerequisites
 
-Before starting this module:
+Before starting this module, make sure you have completed the required modules below and are comfortable with the recommended concepts — the lakehouse builds on streaming, batch processing, and SQL foundations covered earlier in this sub-track.
 - **Required**: [Module 1.2 — Apache Kafka on Kubernetes](../module-1.2-kafka/) — Understanding event streaming and data pipelines
 - **Required**: [Module 1.4 — Batch Processing & Apache Spark on K8s](../module-1.4-spark/) — Spark fundamentals and the Spark Operator
 - **Recommended**: SQL proficiency (joins, window functions, CTEs, partitioning)
@@ -18,16 +19,18 @@ Before starting this module:
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to design, implement, and operate each layer of a production lakehouse architecture on Kubernetes.
 
 - **Design lakehouse architectures on Kubernetes using Delta Lake, Apache Iceberg, or Apache Hudi**
 - **Implement data catalog and metadata management for lakehouse tables across streaming and batch workloads**
 - **Configure storage tiering and compaction strategies that optimize query performance and storage costs**
 - **Build data governance workflows that enforce schema evolution, access controls, and data quality checks**
 
+---
+
 ## Why This Module Matters
 
-For 30 years, the data world has been split into two camps.
+For 30 years, the data world has been split into two camps, each strong where the other is weak, and organizations have been forced to choose between them — paying the cost of the choice they did not make.
 
 **Data lakes** store everything cheaply in open formats on object storage — Parquet, JSON, CSV — but struggle with consistency, transactions, and performance at query time. You can dump petabytes into S3 for pennies per gigabyte, but querying it feels like searching a library where the books are shelved randomly and some have missing pages.
 
@@ -37,23 +40,31 @@ The **data lakehouse** is the third option: the reliability and performance of a
 
 On Kubernetes, you can build a complete lakehouse with open-source components: object storage for data, Iceberg or Delta Lake for table management, Hive Metastore for metadata, and Trino or Spark for SQL queries. No vendor lock-in. No per-query pricing. Full control.
 
-This module teaches you every layer of the lakehouse stack and how to deploy it on Kubernetes.
+This architectural shift matters because it fundamentally separates two concerns that warehouses tightly coupled: storage and compute. In a warehouse, your data lives inside the warehouse engine — if you need a different query pattern, you buy more warehouse capacity, or you export and copy. In a lakehouse, data lives in open formats on commodity object storage, and you bring whatever compute engine suits the workload: Spark for heavy ETL, Trino for interactive SQL, Flink for streaming. The data stays put; the engines come and go. This decoupling is the same principle that made containers and Kubernetes transformative for application workloads — now it is reaching data workloads, and the implications are equally profound.
+
+The economic argument is not just about storage cost per gigabyte. The more significant savings come from eliminating data copies. In a traditional two-tier architecture, organizations routinely maintain three copies of the same data: raw files in the lake, a transformed copy in the warehouse, and aggregated extracts in operational databases for application consumption. Each copy carries storage cost, pipeline maintenance cost, and a consistency problem — which copy is canonical? The lakehouse eliminates the warehouse copy altogether, and with careful design, the aggregated extracts can become materialized views over the same lakehouse tables rather than separate copies. The result is a single source of truth with multiple access patterns, not multiple sources of truth fighting each other.
 
 > **Stop and think**: If data lakes are cheap and data warehouses are fast, what are the trade-offs of trying to maintain both simultaneously in a traditional "two-tier" architecture instead of moving to a unified lakehouse?
 
 ---
 
-## Did You Know?
+## From Warehouses to Lakes to Lakehouses: The Evolution
 
-- **Netflix was one of the earliest adopters of the lakehouse pattern.** Before the term existed, Netflix built Apache Iceberg internally to manage their petabyte-scale data on S3. They open-sourced it in 2018, and it became an Apache top-level project in 2020.
-- **The cost difference between a lakehouse and a traditional warehouse is staggering.** Storing 1 PB in Snowflake costs approximately $23,000/month in storage alone. Storing the same data in S3 with Iceberg tables costs about $750/month. The query engines (Trino, Spark) run only when you need them.
-- **Iceberg's hidden partition feature eliminates a class of query errors entirely.** Unlike Hive-style partitioning where users must know the partition scheme to write efficient queries, Iceberg automatically prunes partitions based on filter predicates — no partition column in the WHERE clause needed.
+### The Data Warehouse Era
 
----
+Data warehouses solved a real problem. In the early 2000s, analytical queries against operational databases were slow, unreliable, and risked taking down production systems. The warehouse decoupled analytics from operations: extract data nightly, transform it into a star schema, load it into a dedicated system with columnar storage, precomputed aggregates, and a cost-based query optimizer. The result was fast, predictable analytics on structured data. The trade-off was that you had to know your schema before you loaded data — schema-on-write — and anything that did not fit the warehouse schema (semi-structured logs, images, raw JSON events) was left outside. Worse, the warehouse hardware and software were proprietary and expensive, so you stored only the most valuable data and aggressively pruned the rest.
 
-## Data Lake vs Data Warehouse vs Data Lakehouse
+### The Data Lake Era
 
-### The Evolution
+Hadoop changed the economics. Suddenly you could store everything — structured, semi-structured, unstructured — on commodity hardware in open file formats. Object storage (S3, then GCS, Azure Blob, MinIO) completed the picture by removing the physical cluster entirely. Data lakes adopted a schema-on-read model: dump data in any format, and apply structure only when you query. This removed the upfront modeling burden and let organizations retain raw data they might never use.
+
+The problem that emerged — and the reason the term "data swamp" entered the vocabulary — was that schema-on-read without governance means nobody knows what is in the lake, what quality it has, or whether two datasets are consistent. Queries that joined across unversioned, unvalidated files produced contradictory results. Updates were done by rewriting entire directory trees, which meant a 1-GB partition with a single-row change required rewriting the entire gigabyte. There was no notion of a transaction, no snapshot isolation, and no way to time-travel to yesterday's data. A team that needed to reproduce a report from last month would find that the underlying files had been overwritten by the nightly ETL job, making the historical result permanently unrecoverable. The data lake had solved the storage cost problem but had created a correctness problem that grew worse with scale.
+
+### The Lakehouse
+
+The lakehouse answers a specific question: can we have the openness and cost model of a lake with the reliability guarantees of a warehouse? The answer is yes, provided you add a metadata layer that gives Parquet files the transactional semantics they lack. That metadata layer is the **open table format**. It is not middleware or a proxy service — it is a specification for how metadata (table schema, partition layout, snapshot history, column statistics, file manifests) is written alongside data files so that any compatible query engine can read a consistent, point-in-time view of the table without coordinating with a central service.
+
+This is a subtle but important distinction from the warehouse model. A warehouse stores data in a closed format and controls access through a monolithic query engine. A lakehouse table format defines an open protocol that any engine can implement. The data remains Parquet files (or ORC, or Avro) in object storage, and the metadata is also committed to object storage. The catalog — a lightweight service like Hive Metastore or a REST catalog — acts only as a pointer to the current metadata location. The result is that multiple engines can safely read and write the same table concurrently, each seeing a consistent snapshot, without the table format acting as a runtime bottleneck.
 
 ```mermaid
 flowchart TD
@@ -107,11 +118,19 @@ Each layer is independent and interchangeable. You can switch from Trino to Spar
 
 ## Open Table Formats: The Core Innovation
 
+### What a Table Format Actually Is
+
+A table format is not a file format and not a storage engine. Parquet tells you how to encode rows into bytes and compress them; a table format tells you which Parquet files belong to a logical table, what schema they share, which rows are currently visible, and how to safely add, remove, or modify them without corrupting concurrent reads.
+
+Think of the relationship as analogous to a version control system over a collection of documents. The documents themselves are Parquet files — formatted, compressed, self-describing. The table format is the git repository: it tracks what files exist in each snapshot, records who changed what and when, and lets you check out any historical version. Without the table format, you have a pile of files in a directory with no history, no consistency boundary, and no way to know whether a file you are reading was half-written by a concurrent job.
+
+The core operations every open table format must support are deceptively simple to state but fiendishly difficult to implement correctly on eventually-consistent object storage. First, writes must be atomic: a reader must never see a partial write, even if the writer crashes mid-operation. Second, writes must be isolated: two concurrent writers must not silently corrupt each other's metadata. Third, snapshots must be consistent: once a snapshot is committed, its contents must be immutable — queries against that snapshot must return the same results forever, regardless of later writes. Achieving these guarantees on object stores that offer only eventual consistency for list-after-write operations (historically a well-known S3 behavior) required careful protocol design, and the differences in how Iceberg, Delta Lake, and Hudi solve these challenges are the primary distinctions between them.
+
 ### Apache Iceberg
 
-Iceberg is the most widely adopted open table format. Originally developed at Netflix, it is now used by Apple, LinkedIn, Airbnb, and hundreds of other organizations.
+Iceberg is the most widely adopted open table format. Originally developed at Netflix to manage their petabyte-scale data on S3, it is now used by Apple, LinkedIn, Airbnb, and hundreds of other organizations. It became an Apache top-level project in 2020.
 
-**How Iceberg works:**
+Iceberg's metadata architecture is best understood by comparing its on-disk layout with the flat-directory approach of Hive tables. While a Hive table is simply a directory tree where the path encodes partition values, an Iceberg table maintains a structured metadata directory that tracks every snapshot, manifest, and data file — giving the query engine a precise map of what to read without ever listing files:
 
 ```text
 Traditional Hive table:
@@ -131,7 +150,7 @@ Iceberg table:
       └── 00003-ghi.parquet
 ```
 
-The **metadata layer** is what gives Iceberg its powers:
+With this metadata structure in place, Iceberg delivers a set of capabilities that were previously impossible on object storage alone.
 
 | Feature | How It Works | Why It Matters |
 |---------|-------------|---------------|
@@ -141,6 +160,10 @@ The **metadata layer** is what gives Iceberg its powers:
 | **Partition evolution** | Partition spec in metadata, not directory layout | Change partitioning without rewriting data |
 | **Hidden partitioning** | Engine auto-prunes based on transforms | Users write `WHERE date = '2026-03-24'`, Iceberg handles the rest |
 | **File-level statistics** | Min/max/null counts per column per file | Skip entire files that cannot contain matching rows |
+
+Iceberg's architecture uses a three-level metadata hierarchy that is worth understanding because it explains both its performance characteristics and its operational complexity. At the top is the metadata file (`v{N}.metadata.json`), which points to a manifest list. The manifest list points to individual manifests, each of which tracks a subset of data files along with per-column statistics (min, max, null count). When a query with a filter like `WHERE event_date = '2026-03-24'` arrives, the engine can check the partition statistics in the manifest files to eliminate entire manifests without opening any data files. Then, for the remaining manifests, it checks per-file column statistics to skip individual Parquet files whose min/max ranges exclude the filter value. This multi-level pruning — partition → manifest → file → row group — means that on a well-partitioned, well-compacted table, a point query might open only a handful of Parquet files even when the table holds billions of rows.
+
+This design also makes Iceberg's partition evolution possible. Because the partition specification is stored in the metadata rather than encoded in directory paths (as Hive does), you can change the partition scheme — say, from daily to hourly granularity — by writing new data with the new partition spec. Old data retains the old spec; new data uses the new spec; queries transparently handle both. No table rewrite is required.
 
 ### Delta Lake
 
@@ -157,28 +180,48 @@ Created by Databricks, Delta Lake uses a transaction log (`_delta_log/`) stored 
 └── part-00001-xxx.parquet
 ```
 
-Delta Lake's transaction log is simpler than Iceberg's multi-level metadata. Each JSON file records the actions (add file, remove file, change metadata) for one transaction.
+Delta Lake's transaction log is simpler than Iceberg's multi-level metadata. Each JSON file records the actions (add file, remove file, change metadata) for one transaction. When a reader opens a table, it reads the transaction log from the latest checkpoint forward, reconstructing the current state of the table.
 
-### Comparison
+This simpler model makes Delta Lake easier to understand and debug — you can literally open `_delta_log/00000000000000000001.json` and read what changed — but it comes with trade-offs. Because there is no per-file column-level statistics index in the metadata (unlike Iceberg's manifests), file-skipping during queries relies on the statistics embedded within Parquet file footers, which requires opening more files during query planning. This means that on very large tables with thousands of data files, Iceberg's manifest-based approach typically produces more efficient query plans, while Delta Lake's simpler log is faster to read and write for tables with fewer files and lower cardinality.
 
-| Feature | Apache Iceberg | Delta Lake | Apache Hudi |
-|---------|---------------|------------|-------------|
-| **Origin** | Netflix (2018) | Databricks (2019) | Uber (2017) |
-| **License** | Apache 2.0 | Apache 2.0 | Apache 2.0 |
-| **ACID transactions** | Yes | Yes | Yes |
-| **Schema evolution** | Full (add, drop, rename, reorder) | Add, rename, change nullability | Add columns |
-| **Time travel** | Yes (snapshot-based) | Yes (version-based) | Yes (timeline-based) |
-| **Partition evolution** | Yes (change without rewrite) | Partial | Partial |
-| **Hidden partitioning** | Yes | No | No |
-| **Engine support** | Spark, Flink, Trino, Presto, Dremio, Snowflake | Spark, Flink (limited), Trino, Presto | Spark, Flink, Presto |
-| **Streaming support** | Via Flink sink | Structured Streaming | Native (core feature) |
-| **Community momentum** | Highest (2025-2026) | Strong (Databricks ecosystem) | Growing |
+Delta Lake's approach to concurrent writes is based on optimistic concurrency control. When a writer commits, it checks that there are no new transaction log entries since it began writing — if someone else committed first, the writer must retry by reading the new state and reapplying its changes. This is functionally similar to a compare-and-swap operation and works well under moderate write concurrency. Under very high write concurrency (hundreds of simultaneous writers), the retry overhead can become significant, which is why Iceberg's design — where writers can prepare manifests independently and only the final metadata pointer swap is atomic — scales better to high-concurrency scenarios.
 
-**Recommendation for new projects:** Apache Iceberg. It has the broadest engine support, the most advanced features (partition evolution, hidden partitioning), and the strongest community momentum outside any single vendor's ecosystem.
+### Apache Hudi
+
+Apache Hudi originated at Uber in 2017 for solving a specific problem that neither Hive nor early data lakes addressed well: incremental upserts on large tables at streaming speeds. If you have a ride-sharing dataset where trips transition through states (requested → matched → in-progress → completed → paid), you do not want to rewrite an entire partition every time a trip changes status. You want to efficiently update individual rows, and you want downstream consumers to be able to read only the rows that changed since their last read — incremental pull, rather than full-table scan.
+
+Hudi achieves this through a design centered on two table types. Copy-on-Write (CoW) works like a traditional batch table: every write creates new versions of the data files that were modified, and queries read the latest file versions. This is simple and provides good read performance, but the write amplification can be high for frequent small updates — changing one row in a 500 MB Parquet file requires rewriting the entire file. Merge-on-Read (MoR) stores incoming updates in row-based log files (Avro) alongside the columnar base files (Parquet). Reads merge the base files with the log files at query time, which reduces write amplification at the cost of higher read latency. This MoR design is conceptually similar to how LSM trees work in storage engines like RocksDB — writes go to a fast append-only log, and a background compaction process periodically merges the log into the sorted base files. It is the key differentiator that makes Hudi the strongest choice for workloads where low-latency upserts are the primary requirement.
+
+Hudi also pioneered the concept of an incremental query — a query that returns only rows that changed since a given commit timestamp — which makes it particularly well-suited for building incremental data pipelines where each stage processes only the delta from the previous stage rather than rescanning full tables.
+
+### The Rosetta: Comparing Table Formats on Capability
+
+Rather than declaring a "best" format, think of each as strongest in its area of origin. Iceberg excels at multi-engine interoperability and analytical workloads with broad, complex schema evolution needs. Delta Lake excels in the Databricks/Spark ecosystem with a simpler operational model and deep Unity Catalog integration. Hudi excels at streaming upserts and incremental processing. The table below compares them on the durable capabilities that matter:
+
+| Capability | Apache Iceberg | Delta Lake | Apache Hudi |
+|------------|---------------|------------|-------------|
+| ACID transactions | Yes (atomic metadata swap) | Yes (optimistic concurrency) | Yes (timeline-based) |
+| Time travel | Yes (snapshot-based) | Yes (version-based) | Yes (commit-timeline-based) |
+| Schema evolution | Full (add, drop, rename, reorder, change type) | Add, rename, change nullability, change type | Add columns, change type |
+| Partition evolution | Yes (change without rewrite) | Partial (requires rewrite for some changes) | No (partition path is fixed) |
+| Hidden partitioning | Yes | No | No |
+| Streaming upserts | Via Flink sink | Via Structured Streaming | Native (core design feature, MoR tables) |
+| Incremental reads | Yes (snapshot diffing) | Limited | Native (core design feature) |
+| Multi-engine | Spark, Flink, Trino, Presto, Dremio, Snowflake, StarRocks, Doris | Spark, Flink (limited), Trino, Presto | Spark, Flink, Presto, Trino (emerging) |
+| File-level stats in metadata | Yes (per-column min/max/null in manifests) | No (stats in Parquet footers) | Yes (per-column in Hudi metadata table) |
+| Metadata table | Built-in for query planning | Not separate; uses checkpoint mechanism | Built-in (Hudi metadata table) |
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.** The three formats are increasingly converging on features. Iceberg has added stored procedures for row-level deletes and updates (v2 spec). Delta Lake added column mapping (renaming columns without rewrite) and liquid clustering. Hudi added a metadata table for faster file listing, non-blocking concurrency control, and a record-level index. All three now support the Iceberg REST catalog specification for multi-engine table discovery — Delta Lake via UniForm, Hudi via its catalog integration layer. Do not choose based on a feature checklist alone; evaluate against your actual workload mix (batch vs streaming, write frequency, query engine diversity), your team's operational comfort, and your catalog strategy.
+
+### Choosing a Format: Decision Factors
+
+The largest factor is not feature count — it is engine compatibility. If your organization standardizes on Trino for SQL and Spark for ETL, Iceberg gives you the most consistent cross-engine experience because both engines implement the full Iceberg spec natively. If you are deep in the Databricks ecosystem with Unity Catalog for governance, Delta Lake's integration is seamless in ways that Iceberg-on-Databricks cannot entirely match. If your primary workload is streaming upserts with low-latency incremental consumers — think fraud detection pipelines where every status change must propagate within seconds — Hudi's Merge-on-Read tables and native incremental queries are purpose-built for this pattern in ways that Iceberg's append-and-compact approach and Delta Lake's copy-on-write default cannot replicate without significant engineering effort.
+
+The good news is that all three formats store data as Parquet files in object storage. Migration between formats is possible, though not trivial — there are community tools for converting between Iceberg and Delta Lake metadata without rewriting data files. This reduces the risk of format lock-in, provided you maintain portable data rather than relying on format-specific stored procedures that tie business logic to the format layer.
 
 ---
 
-## The Metadata Layer: Hive Metastore and Alternatives
+## The Metadata Layer: Catalogs
 
 > **Pause and predict**: If open table formats like Iceberg track metadata at the file level, what prevents two concurrent Spark jobs from trying to update the exact same metadata file at the same time, and how might a catalog solve this?
 
@@ -200,6 +243,8 @@ Table Format (Iceberg): "Current snapshot is snap-1234, which includes files 000
       ▼
 Query Engine reads: s3://warehouse/analytics/events/data/00001-abc.parquet ...
 ```
+
+The catalog is not just a file path registry. For Iceberg specifically, the catalog plays an essential role in concurrency control by acting as the atomic compare-and-swap point. When a writer finishes preparing new metadata files in object storage, it asks the catalog to atomically update the table's current metadata pointer from the old version to the new version — but only if the current pointer is still the expected old version. If another writer committed first, the pointer has already changed, and the first writer's commit is rejected. The writer must then read the new state, rebase its changes, and retry. This optimistic locking pattern, mediated by the catalog's backing database (typically PostgreSQL or MySQL), is what prevents the "two writers overwrite each other" scenario without requiring a distributed lock manager.
 
 ### Hive Metastore on Kubernetes
 
@@ -299,42 +344,49 @@ spec:
       name: thrift
 ```
 
-### Alternatives to Hive Metastore
+### Beyond Hive: The Catalog Landscape
 
-| Catalog | Description | When To Use |
-|---------|-------------|-------------|
-| **Hive Metastore** | Original catalog, broadest support | Default choice, works with everything |
+The catalog layer is undergoing a major transition. Hive Metastore, while battle-tested and universally supported, was designed for a world where tables were Hive tables stored as directories of files. It has no native concept of Iceberg snapshots or Delta Lake transaction logs — table format clients work around this by storing format-specific metadata as HMS table properties. This works but is fragile and leads to format-specific catalog configuration.
+
+The **Iceberg REST Catalog** specification changes this by defining a standard HTTP API for table operations: create, load, commit, list. Any catalog that implements this API can serve Iceberg tables, and any Iceberg client can connect to any compliant catalog without format-specific glue code. This is analogous to how the S3 API became the universal object storage interface — the REST catalog spec aims to be the universal table catalog interface.
+
+| Catalog | Type | Best For |
+|---------|------|----------|
+| **Hive Metastore** | Thrift service with RDBMS backend | Universal compatibility; the safe default |
+| **Polaris (Apache)** | Iceberg REST catalog, open-source | Iceberg-native deployments, multi-engine, vendor-neutral |
+| **Unity Catalog (Apache)** | Multi-format REST catalog, open-source | Delta Lake + Iceberg, Databricks ecosystem integration |
+| **Gravitino (Apache)** | Multi-format REST catalog, open-source | Multi-format federation across Iceberg/Hive/MySQL/PostgreSQL |
 | **AWS Glue Catalog** | Managed HMS-compatible service | AWS-native deployments |
-| **Nessie** | Git-like catalog with branching and tagging | Multi-table transactions, data-as-code workflows |
-| **Polaris (Iceberg REST Catalog)** | Snowflake-donated OSS REST catalog | Iceberg-first deployments, vendor neutral |
-| **Unity Catalog** | Databricks-donated OSS catalog | Delta Lake-first or multi-format deployments |
+| **Nessie** | Git-like catalog with branching and tagging | Multi-table transactions, data-as-code workflows, experimentation |
+
+The trend is clear: the catalog is becoming an open protocol rather than a proprietary service. This means you can run the same catalog on Kubernetes that you run in a managed cloud environment, preserving portability and avoiding lock-in at the metadata layer — which, historically, was the hardest layer to migrate.
 
 ---
 
-## Trino: The SQL Query Engine
+## Trino: The SQL Query Engine for the Lakehouse
 
 ### What Is Trino?
 
-Trino (formerly PrestoSQL, originally Presto from Facebook) is a distributed SQL query engine that can query data where it lives — S3, databases, Kafka, Elasticsearch — without requiring you to move or copy data first.
+Trino (formerly PrestoSQL, originally Presto from Facebook) is a distributed SQL query engine designed specifically for the lakehouse pattern: it queries data where it lives — S3, databases, Kafka, Elasticsearch — without requiring you to move or copy data first. Unlike Spark, which is fundamentally a batch processing engine that can also run SQL, Trino is an MPP (massively parallel processing) SQL engine that was built from the ground up for interactive query performance.
 
 ```mermaid
 flowchart TD
     subgraph TC [TRINO CLUSTER]
         C["Coordinator (1 Pod)<br>Parses SQL, plans execution, distributes to workers"]
-        
+
         W1["Worker 1 (Pod)"]
         W2["Worker 2 (Pod)"]
         W3["Worker 3 (Pod)"]
-        
+
         C --> W1
         C --> W2
         C --> W3
-        
+
         subgraph Conn [Connectors]
             direction LR
             Iceberg ~~~ PostgreSQL ~~~ Kafka ~~~ Hive_S3["Hive/S3"]
         end
-        
+
         W1 -.-> Conn
         W2 -.-> Conn
         W3 -.-> Conn
@@ -345,6 +397,8 @@ Trino does not store data. It is a pure compute engine that:
 - Reads from configured **connectors** (data sources)
 - Executes SQL queries across multiple data sources
 - Can **join data across different systems** in a single query
+
+The architectural implication of this is important: Trino is stateless from the perspective of the data layer. You can scale Trino workers up and down, deploy multiple independent Trino clusters for different workload classes (ad-hoc analytics vs scheduled reporting vs data exploration), and upgrade Trino versions without touching data. This operational flexibility is what makes Trino such a natural fit for the lakehouse model — it complements rather than competes with the other compute engines in your stack.
 
 ### Deploying Trino on Kubernetes
 
@@ -590,11 +644,71 @@ data:
 
 ---
 
+## Building the Lakehouse: End-to-End Architecture
+
+### The Reference Architecture
+
+```mermaid
+flowchart TD
+    subgraph DL_K8S [DATA LAKEHOUSE ON K8s]
+        K["Kafka<br>(ingest)"]
+        A["Airflow<br>(orchestrate)"]
+        T["Trino<br>(query)"]
+
+        ITF["ICEBERG TABLE FORMAT<br>• ACID transactions<br>• Schema evolution<br>• Time travel"]
+
+        HM["HIVE METASTORE<br>(catalog)"]
+
+        OS["OBJECT STORAGE (MinIO / S3)<br>s3://warehouse/<br>├── raw/ (landing zone)<br>├── curated/ (cleaned, validated)<br>└── aggregated/ (business-ready)"]
+
+        K --> ITF
+        A --> ITF
+        T --> ITF
+
+        ITF --> HM
+        HM --> OS
+    end
+```
+
+### The Medallion Architecture
+
+The most common lakehouse data organization pattern is the medallion architecture:
+
+```mermaid
+flowchart LR
+    B["BRONZE (Raw)<br>Raw events as received<br><br>Schema: evolving<br>Retention: 90 days<br>Format: JSON→Parquet<br>Updates: append-only"]
+
+    S["SILVER (Curated)<br>Cleaned, Validated, Deduped<br><br>Schema: enforced<br>Retention: 2 years<br>Format: Parquet<br>Updates: upsert"]
+
+    G["GOLD (Aggregated)<br>Business Metrics, Reports<br><br>Schema: stable<br>Retention: forever<br>Format: Parquet<br>Updates: overwrite"]
+
+    B -- "ETL" --> S
+    S -- "Agg" --> G
+```
+
+The medallion architecture is not just a directory structure — it is a data quality contract. Bronze tables accept data as it arrives, with minimal validation, in whatever schema the source system emits. The contract for Bronze is "we captured it." Silver tables enforce schema, deduplicate, resolve identity (mapping source-specific IDs to canonical entity IDs), and apply business validation rules. The contract for Silver is "this data is correct and complete." Gold tables contain business-ready aggregates, metrics, and feature stores. The contract for Gold is "this data is directly consumable by dashboards, models, and applications."
+
+The key operational insight is that each layer can be recomputed from the layer below it. If a bug in the Silver transformation logic corrupts a month of data, you do not need to replay from the source — you recompute Silver from Bronze. If the business definition of a Gold metric changes retroactively, you recompute Gold from Silver. This recomputability is what distinguishes a well-architected lakehouse from a data swamp, and it is only possible because the table format provides snapshot isolation and time travel — you recompute Silver as of a specific Bronze snapshot, and the new Silver results are committed as a new Silver snapshot, leaving the old Silver intact for comparison.
+
+### Maintenance Operations
+
+A lakehouse that ingests streaming data requires ongoing maintenance to prevent performance degradation, and the operational reality on Kubernetes changes how you approach this compared to managed services. In a managed lakehouse (Databricks, Snowflake with Iceberg tables), maintenance is handled by the platform. On Kubernetes, you own maintenance explicitly — which means you must schedule it, monitor it, and budget compute resources for it alongside your data processing workloads. This ownership is not a disadvantage; it is the same trade-off Kubernetes operators already accept for application workloads in exchange for portability and cost control. The maintenance jobs run as Kubernetes CronJobs or Airflow DAGs, the same way your ETL jobs run, and they benefit from the same observability and retry infrastructure you have already built. Three operations are essential:
+
+**Compaction** addresses the small-file problem. When a streaming job (Flink, Spark Structured Streaming, or Kafka Connect) writes events continuously, it produces many small Parquet files — often a few megabytes each — rather than the optimal 128–512 MB. Query engines spend disproportionate time opening and reading metadata for thousands of tiny files rather than scanning data. Compaction merges these small files into larger ones, typically as a scheduled batch job. Iceberg exposes this through the `rewriteDataFiles` procedure; Delta Lake through `OPTIMIZE`; Hudi through its built-in compaction scheduler for MoR tables.
+
+**Snapshot expiration** prevents metadata bloat. Every write to an Iceberg table creates a new snapshot with associated manifest files. Over months of streaming ingestion, these accumulate into tens of thousands of metadata files. Trino queries must read the snapshot hierarchy to determine which files are current, and this metadata traversal eventually dominates query latency. Snapshot expiration — `expire_snapshots` in Iceberg, `VACUUM` in Delta Lake — removes old snapshots and their orphaned data files, retaining only a configurable window of history.
+
+**Orphan file cleanup** removes data files that are no longer referenced by any snapshot. These accumulate when writes fail partway through, when snapshots are expired without deleting associated data files, or when compaction creates new files without cleaning up the old ones. Iceberg's `remove_orphan_files` procedure scans the data directory and deletes any file not referenced by a live snapshot.
+
+These three operations — compact, expire, clean — should run as scheduled maintenance jobs. Neglecting them causes query performance to degrade gradually, often going unnoticed until a critical dashboard times out.
+
+---
+
 ## Access Control
 
 ### Trino Security
 
-Trino supports fine-grained access control:
+Trino supports fine-grained access control through file-based rules or integration with Apache Ranger. A typical file-based access control configuration restricts which users can access which catalogs, schemas, and tables, and can also apply column-level masking for sensitive fields.
 
 ```yaml
 # In trino-coordinator-config ConfigMap, add:
@@ -609,92 +723,135 @@ data:
 {
   "catalogs": [
     {
+      "user": "analyst",
       "catalog": "iceberg",
       "allow": "all"
     },
     {
+      "user": "analyst",
       "catalog": "postgres",
       "allow": "read-only"
+    },
+    {
+      "user": "data_engineer",
+      "catalog": ".*",
+      "allow": "all"
     }
   ],
   "schemas": [
     {
+      "user": "analyst",
       "catalog": "iceberg",
-      "schema": "raw",
-      "owner": true
+      "schema": "finance",
+      "allow": "read-only"
     }
   ],
   "tables": [
     {
+      "user": "analyst",
       "catalog": "iceberg",
-      "schema": "pii",
+      "schema": ".*",
+      "table": "users",
+      "allow": "read-only",
+      "filter": "mask_columns(ssn, email)"
+    },
+    {
+      "user": "analyst",
+      "catalog": "iceberg",
+      "schema": "raw_prod",
       "table": ".*",
-      "privileges": ["SELECT"],
-      "grantee": "analyst",
-      "columns": [
-        {
-          "name": "ssn",
-          "allow": false
-        },
-        {
-          "name": "email",
-          "mask": "'***@***.***'"
-        }
-      ]
+      "allow": "none"
     }
   ]
 }
 ```
 
-This configuration:
-- Gives full access to the Iceberg catalog
-- Gives read-only access to PostgreSQL
-- Masks PII columns for the `analyst` role
-- Blocks access to SSN entirely
+This rule configuration grants full access to the Iceberg catalog for the analyst role while restricting PostgreSQL to read-only access. The column masking rule obfuscates the `ssn` and `email` columns in the users table, and access to the raw production schema is blocked entirely for analysts — data engineers retain unrestricted access through a separate role definition.
 
 ---
 
-## Building the Lakehouse: End-to-End
+## Patterns and Anti-Patterns
 
-### The Reference Architecture
+### Patterns (What Good Looks Like)
+
+**Medallion architecture from day one.** Establish Bronze, Silver, and Gold schemas before the first production pipeline runs. The cost of retrofitting layers onto an existing flat lake is significantly higher than starting with the structure, because retrofitting requires identifying which tables are at which quality tier, backfilling missing layers, and retraining consumers to use the correct layer — all while production queries are running against the old layout. A common lightweight starting point: Bronze gets a schema per source system (ingested raw), Silver gets a schema per business domain (cleaned, validated, entity-resolved), Gold gets a schema per consumer use case (aggregates, feature stores, exports).
+
+**Storage and compute separation as a design principle, not a cost-saving tactic.** The architectural benefit — the ability to choose the right engine for each workload and evolve engines independently — outweighs the infrastructure cost savings. Design your tables so that they are queryable by any engine you might reasonably adopt, not just the engine you use today. This means avoiding engine-specific SQL extensions in transformation logic (prefer ANSI SQL where possible), storing table schemas in the catalog rather than in engine-specific configuration, and using the table format's native partitioning rather than engine-specific partition schemes.
+
+**Time travel as a testing and recovery primitive.** Before running a data-modifying operation (a schema change, a backfill, a deduplication pass), record the current snapshot ID. If the operation produces incorrect results, roll back by querying the old snapshot and rewriting the table from it. This turns irreversible data modifications — historically a source of anxiety in data engineering — into reversible operations with a known recovery point.
+
+**Scheduled maintenance as a first-class operational concern.** Compaction, snapshot expiration, and orphan file cleanup should run on a schedule with alerting. The table format provides the procedures; your job is to ensure they execute reliably. A table with six months of unmaintained streaming writes is not a lakehouse — it is a data swamp with ACID guarantees.
+
+### Anti-Patterns (What to Avoid)
+
+| Anti-Pattern | Why It Is Harmful | What to Do Instead |
+|--------------|-------------------|--------------------|
+| **Hive-style partitioning with Iceberg** | Bypasses hidden partitioning; query writers must know and include partition columns in WHERE clauses, or suffer full-table scans | Use Iceberg partition transforms defined in the table spec. Let the engine prune partitions automatically from any filter predicate |
+| **Neglecting compaction** | Streaming ingestion creates thousands of small files; metadata traversal overhead dominates query latency, turning sub-second queries into minute-long scans | Schedule `rewriteDataFiles` (Iceberg), `OPTIMIZE` (Delta Lake), or compaction (Hudi MoR) as a regular maintenance job with alerting |
+| **Skipping the catalog layer** | Every engine needs hardcoded S3 paths; no concurrency control between writers; table discovery is manual and error-prone | Deploy Hive Metastore or a REST catalog (Polaris, Unity) as the single source of truth for table locations and current metadata pointers |
+| **Choosing format based on vendor alignment** | "We use Databricks, so Delta Lake" or "We attended an Iceberg talk, so Iceberg" — the format must match your actual workload, not your vendor relationship | Evaluate based on engine compatibility, write patterns (batch vs streaming upserts), and multi-engine requirements. The Rosetta table in this module is your starting point |
+| **Single-table medallion** | Writing cleaned data and business aggregates into the same table as raw events creates tight coupling; a schema change to accommodate new raw fields can break aggregate queries | Separate schemas for Bronze, Silver, and Gold. Each layer can evolve independently; downstream layers recompute from upstream when formats change |
+| **Ignoring snapshot expiration** | Metadata files accumulate indefinitely; Trino must traverse thousands of snapshots to determine current state, degrading query planning time linearly with table age | Configure `write.metadata.delete-after-commit.enabled=true` (Iceberg) and schedule `expire_snapshots` with a retention window appropriate for your compliance requirements |
+| **PII in Bronze without access controls** | Raw data contains unmasked PII; any user with Trino access to the Bronze schema can read sensitive fields | Mask or hash PII columns in the Silver transformation, restrict Bronze access to data engineers only, and use Trino's file-based or Ranger-based access control to enforce column-level restrictions |
+| **No dry-run before destructive write operations** | Data-modifying operations (backfills, schema migrations, deduplications) that run without a snapshot checkpoint are irreversible if they go wrong | Record the current snapshot ID before any write that touches more rows than you can manually verify. Test with a `SELECT` of the intended changes before executing the modification |
+
+---
+
+## Decision Framework: Choosing Your Lakehouse Stack
+
+When designing a lakehouse, work through these decisions in order. Each decision constrains the next, and skipping ahead to tool selection before understanding your workload guarantees a rewrite within 12 months.
 
 ```mermaid
 flowchart TD
-    subgraph DL_K8S [DATA LAKEHOUSE ON K8s]
-        K["Kafka<br>(ingest)"]
-        A["Airflow<br>(orchestrate)"]
-        T["Trino<br>(query)"]
-        
-        ITF["ICEBERG TABLE FORMAT<br>• ACID transactions<br>• Schema evolution<br>• Time travel"]
-        
-        HM["HIVE METASTORE<br>(catalog)"]
-        
-        OS["OBJECT STORAGE (MinIO / S3)<br>s3://warehouse/<br>├── raw/ (landing zone)<br>├── curated/ (cleaned, validated)<br>└── aggregated/ (business-ready)"]
-        
-        K --> ITF
-        A --> ITF
-        T --> ITF
-        
-        ITF --> HM
-        HM --> OS
-    end
+    A[What are your primary write patterns?] --> B{Batch-heavy ETL?}
+    A --> C{Streaming upserts?}
+    A --> D{Mixed batch + streaming?}
+
+    B --> B1[Iceberg or Delta Lake<br>Copy-on-Write tables]
+    C --> C1[Hudi Merge-on-Read<br>or Iceberg with Flink sink]
+    D --> D1[Iceberg with append +<br>scheduled compaction]
+
+    B1 --> E[What query engines matter?]
+    C1 --> E
+    D1 --> E
+
+    E --> F{Trino + Spark + Flink?}
+    E --> G{Spark-only ecosystem?}
+    E --> H{Databricks-first?}
+
+    F --> F1[Iceberg — broadest<br>multi-engine support]
+    G --> G1[Iceberg or Hudi — both<br>have mature Spark integration]
+    H --> H1[Delta Lake — seamless<br>Unity Catalog integration]
+
+    F1 --> I[Choose catalog]
+    G1 --> I
+    H1 --> I
+
+    I --> J{Vendor-neutral required?}
+    I --> K{AWS-native?}
+    I --> L{Data-as-code branching?}
+
+    J --> J1[Polaris REST Catalog<br>or Apache Gravitino]
+    K --> K1[AWS Glue Catalog]
+    L --> L1[Nessie with Git-like<br>branching and tagging]
+
+    J1 --> M[Deploy on Kubernetes]
+    K1 --> M
+    L1 --> M
+
+    M --> N[Add maintenance:<br>compaction + snapshot<br>expiration + monitoring]
 ```
 
-### The Medallion Architecture
+The flowchart is a guide, not a prescription. The correct stack is the one your team can operate reliably, not the one with the most features. If your team knows Spark deeply but has never run Trino, starting with Spark as both the ETL engine and the query engine (via Spark Thrift Server) is operationally safer than deploying Trino alongside Spark on day one — even though Trino would deliver better interactive query performance. Operational simplicity should win tiebreakers.
 
-The most common lakehouse data organization pattern:
+---
 
-```mermaid
-flowchart LR
-    B["BRONZE (Raw)<br>Raw events as received<br><br>Schema: evolving<br>Retention: 90 days<br>Format: JSON→Parquet<br>Updates: append-only"]
-    
-    S["SILVER (Curated)<br>Cleaned, Validated, Deduped<br><br>Schema: enforced<br>Retention: 2 years<br>Format: Parquet<br>Updates: upsert"]
-    
-    G["GOLD (Aggregated)<br>Business Metrics, Reports<br><br>Schema: stable<br>Retention: forever<br>Format: Parquet<br>Updates: overwrite"]
-    
-    B -- "ETL" --> S
-    S -- "Agg" --> G
-```
+## Did You Know?
+
+- **Netflix created Iceberg because Hive tables on S3 broke at their scale.** Before the term "lakehouse" existed, Netflix engineers found that Hive's directory-based partitioning made atomic table operations impossible on S3's eventually-consistent object listing. Listing a partition with thousands of files took minutes. Iceberg's snapshot-based design eliminated the need to list files entirely — the manifest tells you exactly which files to read. Netflix open-sourced Iceberg in 2018, and it became an Apache top-level project in 2020.
+- **The cost difference between a lakehouse and a traditional warehouse is not just about storage.** Storing 1 PB in a cloud data warehouse costs an order of magnitude more in compute than in storage because the warehouse bundles compute with data. In a lakehouse, storage is commodity object storage with no compute markup, and query engines (Trino, Spark) run only when you need them — and can be scaled independently based on query concurrency rather than data volume. This architectural decoupling is the same principle that made microservices economically viable compared to monolithic application servers.
+- **Iceberg's hidden partitioning eliminates a class of query errors that plagued Hive for a decade.** In Hive, if you partition by `year`, `month`, and `day`, every query author must remember to include all three columns in the WHERE clause. Forgetting one causes a full-table scan. Iceberg's partition transforms let the engine derive partition values from any filter predicate — `WHERE event_timestamp > '2026-03-01'` automatically prunes to the correct partitions even though the table is partitioned by `month(event_timestamp)`, not by a literal partition column.
+- **The Iceberg REST Catalog specification is becoming the universal table catalog protocol.** What the S3 API did for object storage — making it possible to switch between Amazon S3, MinIO, Ceph, GCS, and Azure Blob without application changes — the Iceberg REST Catalog specification is doing for table catalogs. Polaris (Apache), Unity Catalog (Apache), Gravitino (Apache), Tabular, and Dremio all implement this spec, meaning an Iceberg client written against the REST API can discover and query tables regardless of which catalog implementation sits behind it. This is a secular trend toward catalog portability that significantly reduces the risk of metadata-layer lock-in.
 
 ---
 
@@ -702,21 +859,20 @@ flowchart LR
 
 | Mistake | Why It Happens | What To Do Instead |
 |---------|---------------|-------------------|
-| Using Hive partitioning with Iceberg | Old habits from Hive/Spark | Use Iceberg's hidden partitioning. Define partition transforms in the table spec, not in directory paths |
-| Not compacting small files | Streaming ingestion creates many tiny files | Schedule compaction jobs (Spark or Trino `OPTIMIZE`) to merge small files into optimal sizes (128-512 MB) |
-| Skipping the catalog layer | "I'll just point at the S3 path" | Without a catalog, every engine needs hardcoded paths. Use Hive Metastore or a REST catalog for a single source of truth |
-| Choosing table format based on marketing | "We use Databricks, so Delta Lake" | Choose based on engine compatibility. If you use Trino + Spark + Flink, Iceberg has the broadest support |
-| Not monitoring query performance | "Queries are running, so they must be fine" | Track query duration, data scanned per query, and failed queries. A single bad query can scan terabytes unnecessarily |
-| Ignoring file format and compression | "Parquet is Parquet" | Use ZSTD compression (better ratio than Snappy, comparable speed). Use Parquet with appropriate row group sizes (64-128 MB) |
-| Storing everything in one schema | "We'll organize later" | Use the medallion architecture from day one. Bronze/Silver/Gold schemas with clear ownership and SLAs |
-| Running Trino coordinator and workers on the same node | Resource contention | Use pod anti-affinity to spread workers across nodes. The coordinator should be on a separate node |
-| Not enabling Iceberg metadata cleanup | Metadata files accumulate indefinitely | Configure `write.metadata.delete-after-commit.enabled=true` and run `expire_snapshots` regularly |
+| Using Hive partitioning with Iceberg | Old habits from Hive/Spark — directory-based partitioning is familiar | Use Iceberg's hidden partitioning: define partition transforms in the table spec, not in directory paths. The query engine handles pruning automatically from any filter predicate |
+| Not compacting small files | Streaming ingestion feels fast and "just works" until it does not — the degradation is gradual | Schedule compaction jobs (Iceberg `rewriteDataFiles` or Trino `OPTIMIZE`) to merge small files into 128–512 MB Parquet files. Monitor average file size per partition as a leading indicator |
+| Skipping the catalog layer | "I will just point at the S3 path" — works for one engine, fails for multi-engine coordination | Deploy Hive Metastore or a REST catalog as the single source of truth. Without a catalog, concurrent writers will corrupt each other's metadata, and table discovery is manual and fragile |
+| Choosing format based on vendor alignment rather than workload fit | Organizational momentum: "We standardize on vendor X, therefore format Y" | Evaluate against the Rosetta table in this module. Iceberg for multi-engine, Delta Lake for Databricks-native, Hudi for streaming upserts with incremental consumers |
+| Storing everything in a single schema | "We will organize later" — later never arrives, and retrofitting medallion layers onto a live lake is painful | Establish Bronze, Silver, and Gold schemas from day one. Each layer has clear ownership, SLAs, and a recompute path from the layer below |
+| Neglecting snapshot expiration | Metadata files are small and invisible — nobody notices until queries slow down months later | Configure automatic snapshot expiration with a retention window appropriate for compliance needs. Iceberg: `expire_snapshots`. Delta Lake: `VACUUM` |
+| Writing PII to Bronze without access controls | Raw data capture is treated as an infrastructure problem; governance is treated as an application problem | Mask or hash PII in the Silver transformation. Restrict Bronze access to data engineers only via Trino access control rules |
+| Running compaction as an afterthought rather than a scheduled operation | Compaction is seen as a one-time fix rather than continuous maintenance | Schedule compaction as a cron-like job with alerting. Untended tables degrade to swamp quality regardless of the table format |
 
 ---
 
 ## Quiz
 
-**Question 1:** Your team is currently dumping JSON and Parquet logs directly into an S3 bucket and querying them with Athena. Data scientists are complaining that queries occasionally fail with "file not found" errors, and they can't reproduce reports from last week because the data has changed. Why is this happening, and how would adopting an open table format like Apache Iceberg resolve these specific issues?
+**Question 1:** Your team is currently dumping JSON and Parquet logs directly into an S3 bucket and querying them with Athena. Data scientists are complaining that queries occasionally fail with "file not found" errors, and they cannot reproduce reports from last week because the data has changed. Why is this happening, and how would adopting an open table format like Apache Iceberg resolve these specific issues?
 
 <details>
 <summary>Show Answer</summary>
@@ -766,7 +922,7 @@ The team is violating the Medallion Architecture pattern by mixing raw data inge
 <details>
 <summary>Show Answer</summary>
 
-The most likely root cause of this degradation is the "small file problem" caused by the continuous streaming ingestion from Flink. Because Flink is writing data continuously, it produces thousands of tiny Parquet files and corresponding metadata entries, rather than large, optimally sized files. When Trino attempts to query the table, the sheer overhead of opening, reading, and parsing the metadata for thousands of tiny files dominates the query execution time, effectively neutralizing the benefits of partition pruning. To fix this, the data engineering team must schedule a regular compaction job (using Trino's `OPTIMIZE` or Spark's `rewriteDataFiles` procedure) to routinely merge these small, fragmented files into larger, 128-512 MB files, dramatically reducing metadata bloat and restoring query performance.
+The most likely root cause of this degradation is the "small file problem" caused by the continuous streaming ingestion from Flink. Because Flink is writing data continuously, it produces thousands of tiny Parquet files and corresponding metadata entries, rather than large, optimally sized files. When Trino attempts to query the table, the sheer overhead of opening, reading, and parsing the metadata for thousands of tiny files dominates the query execution time, effectively neutralizing the benefits of partition pruning. To fix this, the data engineering team must schedule a regular compaction job (using Trino's `OPTIMIZE` or Iceberg's `rewriteDataFiles` procedure) to routinely merge these small, fragmented files into larger, 128–512 MB files, dramatically reducing metadata bloat and restoring query performance. The team should also implement monitoring on average file size per partition to catch this regression before users notice.
 
 </details>
 
@@ -1085,7 +1241,7 @@ kubectl -n lakehouse run trino-cli --rm -it --restart=Never \
   --image=trinodb/trino:450 -- trino --server http://trino:8080 --catalog iceberg
 ```
 
-Inside the Trino CLI:
+Once connected to the Trino CLI, execute the following SQL statements to create schemas, load TPCH sample data into Iceberg tables, and inspect the resulting metadata:
 
 ```sql
 -- Create a schema (database)
@@ -1186,7 +1342,7 @@ kind delete cluster --name lakehouse-lab
 
 ### Success Criteria
 
-You have completed this exercise when you:
+You have completed this exercise when you can independently perform each of the following tasks and verify the results:
 - [ ] Deployed MinIO, PostgreSQL, and Trino on Kubernetes
 - [ ] Created an Iceberg schema pointing to MinIO (S3)
 - [ ] Created partitioned Iceberg tables from TPCH sample data
@@ -1198,35 +1354,35 @@ You have completed this exercise when you:
 
 ## Key Takeaways
 
-1. **The lakehouse combines the best of lakes and warehouses** — Cheap, open storage with ACID transactions, schema enforcement, and fast queries.
-2. **Open table formats are the key innovation** — Iceberg, Delta Lake, and Hudi add a metadata layer on top of Parquet files that enables transactions, time travel, and schema evolution.
-3. **The catalog (Hive Metastore) is the bridge** — It maps logical table names to physical storage locations, enabling multiple engines to share the same data.
-4. **Trino is the interactive SQL layer** — It queries data where it lives without moving it, supporting sub-second to minute-range analytical queries.
-5. **The medallion architecture organizes data quality** — Bronze (raw), Silver (curated), Gold (aggregated) layers provide clear data lineage and quality guarantees.
-6. **File compaction is not optional** — Streaming ingestion and frequent writes create small files that destroy query performance. Schedule regular compaction.
+1. **The lakehouse combines the best of lakes and warehouses** — Cheap, open storage with ACID transactions, schema enforcement, and fast queries. The architectural innovation is decoupling storage from compute, the same principle that made containers transformative.
+2. **Open table formats are the key innovation** — Iceberg, Delta Lake, and Hudi add a metadata layer on top of Parquet files that enables transactions, time travel, and schema evolution without requiring a proprietary storage engine.
+3. **The catalog (Hive Metastore or REST catalog) is the coordination point** — It maps logical table names to physical storage locations and provides the atomic compare-and-swap that prevents concurrent writers from corrupting each other's metadata.
+4. **Trino is the interactive SQL layer** — An MPP query engine that reads data where it lives without moving it, providing sub-second to minute-range analytical queries without competing with Spark for batch ETL responsibilities.
+5. **The medallion architecture organizes data quality** — Bronze (raw), Silver (curated), Gold (aggregated) layers provide clear data lineage, recomputability, and quality guarantees. Each layer depends on the one below it and can be recomputed without touching upstream sources.
+6. **Maintenance is not optional** — Compaction, snapshot expiration, and orphan file cleanup must run on a schedule. An unmaintained lakehouse degrades to data-swamp performance regardless of which table format you chose.
 
 ---
 
-## Further Reading
+## Sources
 
-**Books:**
-- **"Apache Iceberg: The Definitive Guide"** — Tomer Shiran, Jason Hughes, Alex Merced (O'Reilly)
-- **"The Data Lakehouse"** — Bill Inmon, Mary Levins, Ranjeet Srivastava (Technics Publications)
-
-**Articles:**
-- **"Lakehouse: A New Generation of Open Platforms"** — Databricks Research Paper (cidrdb.org/cidr2021)
-- **"Apache Iceberg Documentation"** — iceberg.apache.org
-- **"Trino Documentation"** — trino.io/docs/current
-
-**Talks:**
-- **"The Rise of the Data Lakehouse"** — Ali Ghodsi, Data + AI Summit 2023 (YouTube)
-- **"Apache Iceberg: An Architectural Look Under the Covers"** — Alex Merced, Dremio (YouTube)
+- [Apache Iceberg Documentation](https://iceberg.apache.org/docs/latest/) — Official documentation for the Iceberg table format, including specification, quickstart, and connector guides
+- [Apache Iceberg Specification](https://iceberg.apache.org/spec/) — The formal table format specification defining metadata layout, snapshot lifecycle, and partition transforms
+- [Delta Lake Documentation](https://docs.delta.io/latest/index.html) — Official Delta Lake documentation covering the transaction log protocol, table features, and engine integrations
+- [Apache Hudi Overview](https://hudi.apache.org/docs/overview/) — Official Hudi documentation describing table types (CoW, MoR), timeline, and incremental processing model
+- [Apache Hudi Table Types](https://hudi.apache.org/docs/table_types/) — Deep dive into Copy-on-Write vs Merge-on-Read table designs and their trade-offs
+- [Lakehouse: A New Generation of Open Platforms that Unify Data Warehousing and Advanced Analytics](https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf) — Armbrust et al., CIDR 2021. The foundational paper that defined the lakehouse architecture and motivated the development of open table formats
+- [Trino Documentation](https://trino.io/docs/current/) — Official Trino documentation covering architecture, deployment, SQL reference, and connector configuration
+- [Trino Iceberg Connector](https://trino.io/docs/current/connector/iceberg.html) — Configuration reference for Trino's native Iceberg connector, including catalog setup, SQL support, and performance tuning
+- [Apache Iceberg Flink Integration](https://iceberg.apache.org/docs/latest/flink/) — Official documentation for reading and writing Iceberg tables from Apache Flink streaming jobs
+- [Apache Polaris (Incubating)](https://github.com/apache/polaris) — Open-source implementation of the Iceberg REST Catalog specification, donated by Snowflake to the Apache Software Foundation
+- [Apache Hive](https://hive.apache.org/) — The original metastore service; still the most broadly supported catalog across query engines and table formats
+- [Kubernetes StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) — Kubernetes documentation on StatefulSets, relevant for running stateful catalog and database workloads on K8s
 
 ---
 
 ## Summary
 
-The data lakehouse is not a single product — it is an architecture pattern built from composable, open-source components. Object storage provides durability at scale. Open table formats (Iceberg) add reliability and governance. Catalogs provide discoverability. Query engines (Trino, Spark) provide compute.
+The data lakehouse is not a single product — it is an architecture pattern built from composable, open-source components. Object storage provides durability at scale. Open table formats (Iceberg) add reliability and governance. Catalogs provide discoverability and concurrency control. Query engines (Trino, Spark) provide compute on demand.
 
 On Kubernetes, each of these components runs as a managed workload: scalable, declarative, and replaceable. You are not locked into any vendor. If a better query engine emerges, swap it in. If your storage needs change, switch backends. The data stays in open formats on storage you control.
 
@@ -1234,12 +1390,9 @@ This is the promise of the lakehouse: warehouse-grade reliability, lake-scale ec
 
 ---
 
-## Next Steps
+## Next Module
 
-You have completed the Data Engineering on Kubernetes discipline. From here, consider:
-- **[SRE Discipline](/platform/disciplines/core-platform/sre/)** — Learn to operate these data systems reliably in production
-- **[Observability Toolkit](/platform/toolkits/observability-intelligence/observability/)** — Monitor your data platform with Prometheus, Grafana, and OpenTelemetry
-- **[MLOps Discipline](/platform/disciplines/data-ai/mlops/)** — Build ML pipelines on top of your lakehouse
+[Module 1.7 — Data Orchestration with Apache Airflow on Kubernetes](../module-1.7-airflow/) — Learn to build, schedule, and monitor complex data pipelines that span your lakehouse components
 
 ---
 
