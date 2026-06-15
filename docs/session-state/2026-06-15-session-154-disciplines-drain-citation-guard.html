@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 154 — Disciplines drain (mlops→chaos) + arXiv citation guard (#1953/#1991)</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#e6edf3; --muted:#9fb0c3; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --card:#111927; --border:#243048; }
+  body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,sans-serif; max-width:1040px; margin:0 auto; padding:2rem 1.2rem; }
+  h1 { font-size:1.5rem; border-bottom:2px solid var(--border); padding-bottom:.4rem; }
+  h2 { font-size:1.15rem; color:var(--accent); margin-top:1.8rem; }
+  code { background:#1c2433; padding:.1rem .35rem; border-radius:4px; font-size:.9em; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; }
+  th,td { border:1px solid var(--border); padding:.4rem .6rem; text-align:left; vertical-align:top; font-size:.88rem; }
+  th { color:var(--muted); }
+  .good { color:var(--good); font-weight:600; }
+  .warn { color:var(--warn); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:.8rem 1rem; margin:.6rem 0; }
+  .tldr { border-left:4px solid var(--accent); }
+  ul { margin:.3rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 154 — Platform Disciplines drain (mlops→chaos) + arXiv citation guard</h1>
+<p class="muted">2026-06-15 · continues s152/s153 (same session, "continue to 800K") · 6 PRs merged (#1988–#1993) · 18 modules + a CI guard · Disciplines 60→7 not-done (92%)</p>
+
+<div class="card tldr">
+<strong>TL;DR.</strong> Continued the #1953 Platform Disciplines drain in curriculum order, closing five more sections — <strong>mlops + gitops</strong> (#1988), <strong>iac</strong> (#1989), <strong>release-engineering</strong> (#1990), <strong>chaos-engineering</strong> (#1993) — and landing a new <strong>citation-integrity</strong> workstream (#1991 → #1992): audited all 526 arXiv citations, fixed 6 "valid-but-wrong" wrong-ID bugs, and shipped a precise CI guard (<code>check_arxiv_citations.py</code> + <code>arxiv-citations.yml</code>). Same loop throughout: live-file sweep → ≤3 concurrent authors (cursor/codex/deepseek) in worktrees → opus-inline R1 (≠author, no gemini) + curl source sweep + ground-check + web-verify + dedup gate → consolidated PR → required-CI build → rebase-merge → <code>finalize_module.sh</code>. Across the whole session (s152+s153+s154): <strong>33 modules to T0, 8 Disciplines sections closed (60→7 not-done), 11 PRs merged.</strong></div>
+
+<h2>1 · Sections closed this continuation (#1953)</h2>
+<table>
+<tr><th>Section</th><th>PR</th><th>Modules</th><th>Notable R1 catches</th></tr>
+<tr><td>data-ai/mlops + delivery-automation/gitops</td><td>#1988</td><td>3 (5.3, 3.2, 3.3)</td><td>Kubeflow Trainer v2 TrainJob + Kueue v0.18.1 (codex, hedged); Argo/Flux CNCF-Graduated Rosetta; build-once/promote-the-digest</td></tr>
+<tr><td>delivery-automation/iac</td><td>#1989</td><td>5 (6.1/6.2/6.4/6.5/6.6)</td><td>OpenTofu fork facts; driftctl maturity caveat (last release Dec-2023); 6.6 de-fabbed (Infracost origin anecdote + "thousands of orgs" + "most mature" — founders web-verified)</td></tr>
+<tr><td>delivery-automation/release-engineering</td><td>#1990</td><td>5 (1.1-1.5)</td><td>1.3 dead CD-book link + Knight Capital xref; 1.4 Facebook-2021-BGP xref; <strong>1.5 wrong SPACE arXiv id → ACM Queue</strong></td></tr>
+<tr><td>reliability-security/chaos-engineering</td><td>#1993</td><td>5 (1.1-1.5)</td><td>tc/netem + Fallacies + Jepsen; Chaos Mesh/Litmus CNCF-Incubating peers; GitLab-2017 + facebook-2021-bgp + netflix-chaos-monkey all xref'd to canonical owners (dedup)</td></tr>
+</table>
+<p>(Earlier in the same session: SRE Wave 2 #1983 [s152], AIOps #1984, data-engineering #1985/86/87 [s153].)</p>
+
+<h2>2 · Citation integrity — NEW workstream (#1991 → PR #1992)</h2>
+<p>User asked "what defect? how much affected?" about the wrong-arXiv-IDs caught during authoring. Investigated properly:</p>
+<ul>
+<li><strong>Defect:</strong> "valid-but-wrong" arXiv citation — an ID that returns HTTP 200 but points to the WRONG paper. The URL resolves, so <code>verify_module.py</code>'s <code>sources_all_reachable</code>, the link checker, and the Astro Zod schema all pass it. Same blind-spot class as the killercoda <code>lab.url</code> bug. Trigger: the real paper isn't on arXiv → author confabulates a plausible ID.</li>
+<li><strong>Blast radius (audited all 526 citations / 260 IDs):</strong> high-traffic corpus sound (top-18 IDs all correct). 6 total defects, all fixed: Isolation Forest + SPACE (caught pre-merge), concept-drift→astronomy, underspecification→gamma-spectroscopy, product-quantization→physics, Passage-Re-ranking (cited Sentence-BERT's ID) + 1 paraphrased GQA title. <strong>Full re-scan: 0 mismatches across 1527 files.</strong></li>
+<li><strong>Permanent guard:</strong> <code>scripts/quality/check_arxiv_citations.py</code> (fetches real arXiv title, FAILs on near-zero overlap of <em>title-like</em> link texts; <strong>0 false positives across 1527 files</strong> via method-name/prose/author-citation skips + <code>&lt;!-- arxiv-ok: ID --&gt;</code> escape hatch) wired as <code>.github/workflows/arxiv-citations.yml</code> (changed-md scope, fork-safe, zizmor-clean, <code>base.sha</code> via env). 5 offline pytests. Now live + dogfooded green on #1992/#1993. Memory: <code>feedback_wrong_arxiv_id_valid_but_wrong</code>.</li>
+<li class="warn"><strong>Follow-up:</strong> make <code>arXiv citation check</code> a REQUIRED branch-protection check (admin toggle, like vitest #1965).</li>
+</ul>
+
+<h2>3 · Process notes</h2>
+<ul>
+<li><strong>Pipelining</strong> (build/PR batch N while batch N+1 authors run; fill the 3-author cap as slots free) kept throughput high across 5-module sections.</li>
+<li><strong>Dedup gate</strong> bit repeatedly on real incidents in fresh content (Knight Capital, Facebook-2021-BGP, GitLab-2017, Netflix-Chaos-Monkey). Fix = <code>&lt;!-- incident-xref: SLUG --&gt;</code> within ~200 chars of the incident NAME (not at paragraph end). Run the gate from the worktree path; on the consolidated branch before PR.</li>
+<li><strong>R1 ground-check pattern that paid off:</strong> curl every source; for any academic citation, fetch the paper TITLE (resolving ≠ correct); web-verify volatile maturity both ways (OpenTofu fork, Chaos Mesh/CloudEvents/Argo CNCF status, Flink 2.2, Airflow 3.x — all confirmed real). deepseek/cursor occasionally ship a stale version URL or wrong paper id; the sweep catches them every time.</li>
+<li>All worktree-only; rebase-merged; every session worktree+branch cleaned (only long-standing <code>g2-craft</code> #1623 remains).</li>
+</ul>
+
+<h2>4 · NEXT (curriculum order, #1953)</h2>
+<p>Platform Disciplines <strong>7 not-done (92% done)</strong>: <strong>reliability-security/devsecops (2)</strong> → <strong>reliability-security/networking (5)</strong>. Then <strong>Toolkits (36)</strong> — the last non-done curriculum bulk. Same loop; generic shared-rules in <code>logs/remediation/briefs/pf-misc/_shared-expand-rules.md</code>; per-section briefs accumulate under <code>logs/remediation/briefs/pf-*</code>. <strong>Durable-vendor rule applies hard</strong> to the security sections (scanner/tool rosters churn). Both remaining sections are security → expect named-incident dedup conflicts (xref to canonical owners) + heavy web-verify of CVE/tool currency.</p>
+<p><strong>Standing:</strong> #1911 UK currency · #1876 AI-history book review · #1823 mermaid-parens campaign · #1623 g2-craft · make the new <code>arXiv citation check</code> + vitest required checks (admin).</p>
+</body>
+</html>
