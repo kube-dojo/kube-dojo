@@ -1,543 +1,198 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 3.2: Tekton"
 slug: platform/toolkits/cicd-delivery/ci-cd-pipelines/module-3.2-tekton
 sidebar:
   order: 3
 ---
-> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45-50 min
 
-A platform team proposing Tekton might argue that running CI/CD on Kubernetes can reduce hosted CI spend, lower platform lock-in, and make it easier to support workloads that must run in specific environments such as on-premises clusters.
-
-## Prerequisites
-
-Before starting this module:
-- [DevSecOps Discipline](/platform/disciplines/reliability-security/devsecops/) — CI/CD concepts
-- Kubernetes basics (Pods, Services, CRDs)
-- Container fundamentals
-- YAML proficiency
+> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 65-80 min
 
 ## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
-- **Deploy Tekton on Kubernetes and configure Tasks, Pipelines, and PipelineRuns for CI/CD workflows**
-- **Implement reusable Tekton task catalogs with parameterized inputs and workspace sharing**
-- **Configure event-driven pipeline triggers using Tekton Triggers and interceptors**
-- **Evaluate Tekton's Kubernetes-native approach against hosted CI services for cost and control trade-offs**
-
+- **Model** Kubernetes-native CI/CD as declarative custom resources reconciled into Pods, rather than as jobs scheduled on a separate CI worker fleet.
+- **Compose** reusable Tekton `Task`, `Pipeline`, `TaskRun`, and `PipelineRun` resources with parameters, results, and workspaces that make pipeline behavior explicit.
+- **Connect** repository events to `PipelineRun` creation with Tekton Triggers, including `EventListener`, `TriggerBinding`, `TriggerTemplate`, and interceptor responsibilities.
+- **Secure** build outputs with signed provenance by explaining how Tekton Chains relates to image digests, SLSA attestations, Cosign, and downstream admission policy.
+- **Choose** when Tekton, Argo Workflows, Dagger, hosted CI, or Jenkins fits a delivery problem without turning tool selection into a popularity contest.
 
 ## Why This Module Matters
 
-[Tekton is a Kubernetes-native CI/CD framework](https://tekton.dev/docs/concepts/overview/). Unlike hosted CI services, Tekton runs in your cluster, which can give teams more control and portability while letting pipelines use Kubernetes scheduling and scaling primitives.
+Hypothetical scenario: a platform team supports 20 product teams that all deploy into Kubernetes. The teams already use a hosted CI service for pull request checks, but their release builds need private network access, cluster-local test dependencies, consistent service accounts, and the same admission policies that protect runtime workloads. The hosted workers can reach those systems only through brittle network exceptions, while a cluster-local runner can use Kubernetes scheduling, secrets, storage, RBAC, and policy directly.
 
-Born from Google's [Knative Build project](https://tekton.dev/blog/2022/10/26/tekton-graduation/) and now a [CNCF project](https://tekton.dev/docs/concepts/overview/), Tekton is used in commercial products and by teams building Kubernetes-native CI/CD systems.
+Tekton matters because it treats CI/CD as Kubernetes API design. A build is not a hidden script on a long-lived worker; it is a `TaskRun` or `PipelineRun` object with status, ownership, labels, service accounts, resource requests, and Pods that you can inspect with normal Kubernetes tools. That is the durable capability to learn: delivery work becomes declarative cluster work, and the controller reconciles the desired execution into short-lived Pods.
 
-## Did You Know?
+This does not make Tekton automatically simpler than hosted CI. It moves responsibility from a provider-managed runner pool into your platform. You gain control over where builds run, which identities they use, what storage they mount, how network policy applies, and how provenance is produced. You also accept the operational burden of controller upgrades, CRD compatibility, cluster capacity, pod startup latency, workspace cleanup, RBAC design, webhook exposure, and support for teams that now depend on your CI control plane.
 
-- **Tekton is named after the Greek word for "builder"**—appropriate for a build system
-- **Tekton underpins offerings such as OpenShift Pipelines**—it is part of the foundation for multiple enterprise CI/CD products
-- [**Tekton Pipelines runs as pods in your cluster**—each task step is a container](https://tekton.dev/docs/concepts/concept-model/), scaling naturally with Kubernetes
-- **The Tekton Catalog provides reusable tasks and pipelines**—including common building blocks maintained by the community
+The useful mental model is an assembly line inside a governed building. Hosted CI gives you an external workshop with convenient tools and managed staff, which is often exactly the right answer for ordinary pull request automation. Tekton lets you build the workshop inside your Kubernetes facility, with your own doors, badges, cameras, storage rooms, and safety rules. That control is valuable when the work must touch internal systems, run with cluster-native identity, or emit supply-chain evidence tied to the same platform that later deploys the artifact.
 
-## Tekton Architecture
+You should already understand Pods, Services, CRDs, container images, Kubernetes secrets, and YAML before using this module. The examples target current KubeDojo Kubernetes practice and use Tekton `tekton.dev/v1` pipeline resources, plus `triggers.tekton.dev/v1beta1` trigger resources. The goal is not to memorize every field. The goal is to understand why the fields exist and how to reason about a pipeline that is also a set of Kubernetes objects.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    TEKTON ARCHITECTURE                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  CUSTOM RESOURCES                                                │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                                                           │   │
-│  │  Task          TaskRun         Pipeline       PipelineRun│   │
-│  │  (template)    (instance)      (template)     (instance) │   │
-│  │  ┌─────────┐   ┌─────────┐    ┌─────────┐    ┌─────────┐│   │
-│  │  │ Steps:  │──▶│ Pod     │    │ Tasks:  │───▶│ TaskRuns││   │
-│  │  │ - clone │   │ running │    │ - build │    │ running ││   │
-│  │  │ - build │   │         │    │ - test  │    │         ││   │
-│  │  │ - push  │   │         │    │ - deploy│    │         ││   │
-│  │  └─────────┘   └─────────┘    └─────────┘    └─────────┘│   │
-│  │                                                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                               │                                  │
-│                               ▼                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                 TEKTON CONTROLLERS                        │   │
-│  │                                                           │   │
-│  │  ┌─────────────────┐    ┌─────────────────┐              │   │
-│  │  │    Pipeline     │    │   Triggers      │              │   │
-│  │  │   Controller    │    │   Controller    │              │   │
-│  │  │                 │    │                 │              │   │
-│  │  │ Watches CRs     │    │ Webhooks        │              │   │
-│  │  │ Creates Pods    │    │ Creates Runs    │              │   │
-│  │  └─────────────────┘    └─────────────────┘              │   │
-│  │                                                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                               │                                  │
-│                               ▼                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              KUBERNETES CLUSTER                           │   │
-│  │                                                           │   │
-│  │  ┌─────────────────────────────────────────────────────┐ │   │
-│  │  │                    POD (TaskRun)                    │ │   │
-│  │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐            │ │   │
-│  │  │  │ Step 1  │  │ Step 2  │  │ Step 3  │            │ │   │
-│  │  │  │ (init)  │─▶│ (main)  │─▶│ (post)  │            │ │   │
-│  │  │  └─────────┘  └─────────┘  └─────────┘            │ │   │
-│  │  │                                                     │ │   │
-│  │  │  Shared workspace volume                           │ │   │
-│  │  └─────────────────────────────────────────────────────┘ │   │
-│  │                                                           │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+## Kubernetes-Native CI/CD: The Durable Spine
+
+Tekton's core idea is simple but far-reaching: define CI/CD primitives as custom resources, then let a controller create Pods to perform the work. A `Task` describes ordered container steps. A `Pipeline` describes how tasks depend on each other. A `TaskRun` or `PipelineRun` is an execution object. The controller watches these objects, resolves references, creates Pods, records status, and continues reconciling until the run succeeds, fails, times out, or is cancelled.
+
+That architecture changes the operating model. In a hosted CI product, the central abstraction is usually a workflow file interpreted by a service that owns the runner lifecycle. In Tekton, the central abstraction is an API object inside the cluster. The difference matters because an API object participates in Kubernetes ownership, admission, audit, namespace isolation, RBAC, labels, events, quotas, and scheduling. You can ask the cluster what happened instead of searching through a separate runner backend.
+
+```text
+Repository event or manual command
+        |
+        v
+PipelineRun custom resource
+        |
+        v
+Tekton Pipelines controller
+        |
+        v
+TaskRun objects and Pods
+        |
+        v
+Container steps using Kubernetes RBAC, secrets, volumes, quotas, and scheduling
 ```
 
-### Core Concepts
+The upside is locality. If your build must run integration tests against private cluster services, mount internal certificates, or push to a registry reachable only from the cluster network, Tekton can reduce special-case plumbing. The same network policy model that governs applications can govern build Pods. The same namespace quota model that protects teams from each other can protect pipeline workloads. The same service-account model that grants deployment rights can also prevent a lint job from becoming a production deployer.
 
-| Concept | Description |
-|---------|-------------|
-| **Task** | A template defining a sequence of steps (containers) |
-| **TaskRun** | An instance of a Task execution |
-| **Pipeline** | A template defining a sequence of Tasks |
-| **PipelineRun** | An instance of a Pipeline execution |
-| **Workspace** | Shared storage between steps and tasks |
-| **Trigger** | Webhook listener that creates PipelineRuns |
+The downside is that Kubernetes becomes the CI substrate, including all of its sharp edges. Slow image pulls slow builds. Pending PVCs block pipelines. Overly broad service accounts become supply-chain risk. A controller upgrade can affect every team that submits `PipelineRun` resources. If your cluster has no spare CPU during a production incident, your release pipeline competes with workloads unless you deliberately isolate capacity. Kubernetes-native CI/CD is powerful because it inherits Kubernetes, and it is demanding for the same reason.
 
-## Installing Tekton
+This is why Tekton is best taught as a capability, not as a product tour. The durable question is not "Should everyone migrate to Tekton?" The better question is "Which delivery work benefits from being represented as cluster-native API objects?" When the answer is strong, Tekton gives platform teams a clean way to standardize build, test, package, provenance, and deployment handoff behavior without operating a separate VM runner fleet. When the answer is weak, hosted CI may be simpler and cheaper to support.
 
-```bash
-# Install Tekton Pipelines
-kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+## Core Primitives: Tasks, Pipelines, Runs, Workspaces, Params, and Results
 
-# Install Tekton Triggers (for webhooks)
-kubectl apply -f https://storage.googleapis.com/tekton-releases/triggers/latest/release.yaml
-kubectl apply -f https://storage.googleapis.com/tekton-releases/triggers/latest/interceptors.yaml
+A `Task` is a reusable template for one unit of work. Its steps are containers that execute in order. Each step can use a different image, command, working directory, environment, and script. Because the steps are part of one task execution, they share the task's declared workspaces and can cooperate through the mounted filesystem. This makes `Task` a good boundary for work that is tightly related, such as preparing source code, running a focused validation, or building an image from an already prepared workspace.
 
-# Install Tekton Dashboard (optional)
-kubectl apply -f https://storage.googleapis.com/tekton-releases/dashboard/latest/release.yaml
-
-# Wait for components
-kubectl -n tekton-pipelines wait --for=condition=ready pod -l app=tekton-pipelines-controller --timeout=120s
-
-# Install tkn CLI
-brew install tektoncd-cli  # macOS
-```
-
-## Tasks
-
-### Basic Task
+A `TaskRun` is the execution of a `Task`. This template-versus-run distinction is central to Tekton. A `Task` says what can be done; a `TaskRun` says do it now with these parameter values, this service account, these workspaces, and this namespace context. When debugging, you should inspect the run object rather than only the template. The run has status, Pod references, events, start time, completion time, and failure reason.
 
 ```yaml
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: hello
-spec:
-  steps:
-    - name: hello
-      image: alpine
-      script: |
-        echo "Hello from Tekton!"
-```
-
-### Task with Parameters
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Task
-metadata:
-  name: greet
+  name: say-message
 spec:
   params:
-    - name: name
+    - name: message
       type: string
-      description: Name to greet
-      default: World
-
+      default: "hello from Tekton"
   steps:
-    - name: greet
-      image: alpine
+    - name: print
+      image: alpine:3.20
       script: |
-        echo "Hello, $(params.name)!"
+        set -eu
+        printf '%s\n' "$(params.message)"
 ```
-
-### Task with Workspaces
 
 ```yaml
 apiVersion: tekton.dev/v1
-kind: Task
+kind: TaskRun
 metadata:
-  name: git-clone
+  name: say-message-run
 spec:
+  taskRef:
+    name: say-message
   params:
-    - name: url
-      type: string
-
-  workspaces:
-    - name: output
-      description: The git repo will be cloned here
-
-  steps:
-    - name: clone
-      image: alpine/git
-      workingDir: $(workspaces.output.path)
-      script: |
-        git clone $(params.url) .
-        ls -la
+    - name: message
+      value: "the run supplies the execution-time value"
 ```
 
-### Task with Results
+A `Pipeline` composes tasks into a directed dependency graph. It does not need to re-describe every container step; it can reference tasks and pass values into them. A task can start after another task through `runAfter`, or it can be ordered by consuming another task's result. This is where Tekton begins to feel like CI/CD rather than a generic job runner: clone source, validate it, build an artifact, emit a digest, sign provenance, and hand the immutable output to a deploy system.
+
+A `PipelineRun` is the execution of a `Pipeline`. It supplies concrete parameters and workspace bindings, and Tekton creates child `TaskRun` objects for the pipeline tasks. This layered object model is more verbose than a single hosted CI YAML file, but it gives platform teams separate control points. Shared tasks can be versioned and reviewed. Team pipelines can compose them. Individual runs can be labelled, retained, cancelled, retried, or inspected without rewriting the template.
+
+Workspaces are how Tekton moves files between steps and tasks. A task declares that it needs a workspace, and the run binds that workspace to a concrete volume source such as an `emptyDir`, `Secret`, `ConfigMap`, existing PVC, or `volumeClaimTemplate`. The design is intentionally explicit because file movement is one of the hardest parts of Kubernetes-native CI. A source checkout, a compiled binary, a test report, and a container build context are not the same kind of data, and treating all of them as one giant persistent directory creates cost and cleanup problems.
+
+Parameters and results handle small values. Parameters flow into tasks and pipelines, often as strings such as repository URL, Git revision, image name, branch name, or deployment environment. Results flow out of tasks, often as image digest, computed version, artifact URL, or a boolean-like decision value. Use results for small facts that later tasks need to reference; use workspaces or artifact storage for files. If you put large data into results, you are fighting the API instead of designing with it.
 
 ```yaml
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: get-version
+  name: read-version
 spec:
   workspaces:
     - name: source
-
   results:
     - name: version
-      description: The version from package.json
-
+      description: Application version read from a VERSION file.
   steps:
-    - name: get-version
-      image: node:20-alpine
+    - name: read
+      image: alpine:3.20
       workingDir: $(workspaces.source.path)
       script: |
-        VERSION=$(node -p "require('./package.json').version")
-        echo -n $VERSION | tee $(results.version.path)
+        set -eu
+        test -f VERSION
+        tr -d '\n' < VERSION | tee "$(results.version.path)"
 ```
 
-### Build and Push Task
+Reuse comes from parameterized tasks, disciplined naming, and catalog ownership. Tekton Hub and catalog-style repositories are useful places to find patterns, but a platform team should not treat remote task YAML as invisible executable dependency. A shared `git-clone` task, an image-build task, or a deploy task should be pinned, reviewed, tested in your cluster, and versioned like any other platform API. The reusable unit is not just YAML; it is a contract with inputs, outputs, required permissions, resource shape, failure behavior, and support expectations.
+
+The most important design habit is to draw the pipeline boundary before writing YAML. If a task needs source files and emits an image digest, make that explicit. If a deployment step needs only the digest and a target environment, do not give it the whole source workspace. If a scan needs read-only access to the built image, do not reuse the builder service account. Tekton gives you the primitives to separate duties, but the separation only appears if you model it deliberately.
+
+## Event-Driven Triggering
+
+Manual `kubectl create -f pipelinerun.yaml` commands are useful for learning, but delivery systems are normally event driven. A Git provider sends a webhook when code is pushed, a pull request is opened, a tag is created, or a release is approved. The durable pattern is webhook to validation to parameter extraction to run creation. Tekton Triggers implements that pattern with `EventListener`, `TriggerBinding`, `TriggerTemplate`, and optional interceptors.
+
+An `EventListener` is the network-facing receiver. It exposes a Kubernetes Service and listens for incoming HTTP events. A `TriggerBinding` extracts fields from the payload and maps them to named parameters. A `TriggerTemplate` defines the resource to create, usually a `PipelineRun`. An interceptor sits before binding and template creation so the platform can verify signatures, filter event types, reject unwanted branches, or transform payloads. These pieces are separate because receiving a webhook, trusting a webhook, parsing a webhook, and creating cluster work are different responsibilities.
+
+```text
+Git provider webhook
+        |
+        v
+EventListener Service
+        |
+        v
+Interceptor validates signature and filters event type
+        |
+        v
+TriggerBinding extracts repo URL, revision, and branch
+        |
+        v
+TriggerTemplate creates a PipelineRun
+```
+
+The security boundary is easy to underestimate. A webhook endpoint is an external door into your cluster's delivery system. If an unauthenticated request can create a `PipelineRun`, then anyone who can reach the endpoint can consume build capacity and possibly trigger privileged tasks. A production trigger should verify a shared secret or provider signature, restrict event types, bind only the fields the pipeline needs, and run under a service account with the narrowest useful permissions.
 
 ```yaml
-apiVersion: tekton.dev/v1
-kind: Task
+apiVersion: v1
+kind: Secret
 metadata:
-  name: build-push
-spec:
-  params:
-    - name: image
-      type: string
-    - name: dockerfile
-      default: Dockerfile
-
-  workspaces:
-    - name: source
-    - name: dockerconfig
-      description: Docker config for registry auth
-
-  results:
-    - name: digest
-      description: Image digest
-
-  steps:
-    - name: build-push
-      image: gcr.io/kaniko-project/executor:latest
-      workingDir: $(workspaces.source.path)
-      env:
-        - name: DOCKER_CONFIG
-          value: $(workspaces.dockerconfig.path)
-      args:
-        - --dockerfile=$(params.dockerfile)
-        - --destination=$(params.image)
-        - --context=.
-        - --digest-file=$(results.digest.path)
-```
-
-## TaskRuns
-
-### Running a Task
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: TaskRun
-metadata:
-  generateName: greet-run-
-spec:
-  taskRef:
-    name: greet
-  params:
-    - name: name
-      value: "Tekton"
-```
-
-```bash
-# Create TaskRun
-kubectl create -f taskrun.yaml
-
-# List TaskRuns
-tkn taskrun list
-
-# View logs
-tkn taskrun logs -f greet-run-xyz
-
-# Describe
-tkn taskrun describe greet-run-xyz
-```
-
-### TaskRun with Workspace
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: TaskRun
-metadata:
-  generateName: clone-run-
-spec:
-  taskRef:
-    name: git-clone
-  params:
-    - name: url
-      value: https://github.com/tektoncd/pipeline.git
-  workspaces:
-    - name: output
-      emptyDir: {}  # Or use PVC for persistence
-```
-
-## Pipelines
-
-### Basic Pipeline
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: build-test-deploy
-spec:
-  params:
-    - name: repo-url
-      type: string
-    - name: image
-      type: string
-
-  workspaces:
-    - name: shared-workspace
-    - name: docker-credentials
-
-  tasks:
-    - name: fetch-source
-      taskRef:
-        name: git-clone
-      workspaces:
-        - name: output
-          workspace: shared-workspace
-      params:
-        - name: url
-          value: $(params.repo-url)
-
-    - name: run-tests
-      runAfter:
-        - fetch-source
-      taskRef:
-        name: npm-test
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-
-    - name: build-push
-      runAfter:
-        - run-tests
-      taskRef:
-        name: build-push
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-        - name: dockerconfig
-          workspace: docker-credentials
-      params:
-        - name: image
-          value: $(params.image)
-```
-
-### Pipeline with Parallel Tasks
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: parallel-ci
-spec:
-  workspaces:
-    - name: shared-workspace
-
-  tasks:
-    - name: fetch-source
-      taskRef:
-        name: git-clone
-      workspaces:
-        - name: output
-          workspace: shared-workspace
-
-    # These run in parallel after fetch-source
-    - name: lint
-      runAfter: [fetch-source]
-      taskRef:
-        name: lint
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-
-    - name: test
-      runAfter: [fetch-source]
-      taskRef:
-        name: test
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-
-    - name: security-scan
-      runAfter: [fetch-source]
-      taskRef:
-        name: trivy-scan
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-
-    # This runs after all parallel tasks complete
-    - name: build
-      runAfter: [lint, test, security-scan]
-      taskRef:
-        name: build-push
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-```
-
-### Pipeline with Conditional Tasks
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: conditional-deploy
-spec:
-  params:
-    - name: deploy-to-prod
-      type: string
-      default: "false"
-
-  tasks:
-    - name: build
-      taskRef:
-        name: build-push
-
-    - name: deploy-staging
-      runAfter: [build]
-      taskRef:
-        name: kubectl-deploy
-      params:
-        - name: namespace
-          value: staging
-
-    - name: deploy-production
-      runAfter: [deploy-staging]
-      when:
-        - input: $(params.deploy-to-prod)
-          operator: in
-          values: ["true"]
-      taskRef:
-        name: kubectl-deploy
-      params:
-        - name: namespace
-          value: production
-```
-
-### Using Results Between Tasks
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: version-pipeline
-spec:
-  tasks:
-    - name: get-version
-      taskRef:
-        name: get-version
-      workspaces:
-        - name: source
-          workspace: shared-workspace
-
-    - name: build-image
-      runAfter: [get-version]
-      taskRef:
-        name: build-push
-      params:
-        - name: image
-          # Use result from previous task
-          value: "myregistry/myapp:$(tasks.get-version.results.version)"
-```
-
-## PipelineRuns
-
-### Running a Pipeline
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: PipelineRun
-metadata:
-  generateName: build-test-deploy-run-
-spec:
-  pipelineRef:
-    name: build-test-deploy
-  params:
-    - name: repo-url
-      value: https://github.com/org/app.git
-    - name: image
-      value: ghcr.io/org/app:latest
-  workspaces:
-    - name: shared-workspace
-      volumeClaimTemplate:
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 1Gi
-    - name: docker-credentials
-      secret:
-        secretName: docker-credentials
-```
-
-```bash
-# Create PipelineRun
-kubectl create -f pipelinerun.yaml
-
-# List PipelineRuns
-tkn pipelinerun list
-
-# View logs
-tkn pipelinerun logs -f build-test-deploy-run-xyz
-
-# Cancel a running pipeline
-tkn pipelinerun cancel build-test-deploy-run-xyz
-```
-
-## Triggers
-
-### Webhook Trigger
-
-```yaml
-# EventListener - receives webhooks
-apiVersion: triggers.tekton.dev/v1beta1
-kind: EventListener
-metadata:
-  name: github-listener
-spec:
-  serviceAccountName: tekton-triggers-sa
-  triggers:
-    - name: github-push
-      bindings:
-        - ref: github-push-binding
-      template:
-        ref: github-push-template
-
+  name: github-webhook-secret
+type: Opaque
+stringData:
+  secretToken: replace-with-a-real-shared-secret
 ---
-# TriggerBinding - extracts data from webhook
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tekton-triggers-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tekton-triggers-create-runs
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns"]
+    verbs: ["create", "get", "list", "watch"]
+  - apiGroups: ["triggers.tekton.dev"]
+    resources: ["triggerbindings", "triggertemplates"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tekton-triggers-create-runs
+subjects:
+  - kind: ServiceAccount
+    name: tekton-triggers-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tekton-triggers-create-runs
+---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
 metadata:
@@ -547,12 +202,10 @@ spec:
     - name: repo-url
       value: $(body.repository.clone_url)
     - name: revision
-      value: $(body.head_commit.id)
+      value: $(body.after)
     - name: branch
       value: $(body.ref)
-
 ---
-# TriggerTemplate - creates PipelineRun
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
 metadata:
@@ -562,827 +215,509 @@ spec:
     - name: repo-url
     - name: revision
     - name: branch
-
   resourcetemplates:
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
       metadata:
-        generateName: github-triggered-
+        generateName: webhook-build-
+        labels:
+          delivery.kubedojo.io/source: github-webhook
       spec:
         pipelineRef:
-          name: build-test-deploy
+          name: build-container-image
         params:
           - name: repo-url
             value: $(tt.params.repo-url)
           - name: revision
             value: $(tt.params.revision)
+          - name: image
+            value: ttl.sh/tekton-webhook-demo:1h
         workspaces:
-          - name: shared-workspace
+          - name: shared-source
             volumeClaimTemplate:
               spec:
-                accessModes: [ReadWriteOnce]
+                accessModes:
+                  - ReadWriteOnce
                 resources:
                   requests:
                     storage: 1Gi
-```
-
-### Exposing the Webhook
-
-```yaml
-# Ingress for webhook
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: github-webhook
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-spec:
-  rules:
-    - host: tekton.example.com
-      http:
-        paths:
-          - path: /hooks
-            pathType: Prefix
-            backend:
-              service:
-                name: el-github-listener
-                port:
-                  number: 8080
-```
-
-## Tekton Catalog
-
-```bash
-# Install a task from catalog
-kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
-kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/kaniko/0.6/kaniko.yaml
-kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/kubernetes-actions/0.2/kubernetes-actions.yaml
-
-# Or use tkn hub
-tkn hub install task git-clone
-tkn hub install task kaniko
-```
-
-### Using Catalog Tasks
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: catalog-pipeline
-spec:
-  params:
-    - name: repo-url
-    - name: image
-
-  workspaces:
-    - name: shared-data
-    - name: docker-credentials
-
-  tasks:
-    - name: fetch-repo
-      taskRef:
-        name: git-clone  # From catalog
-      workspaces:
-        - name: output
-          workspace: shared-data
-      params:
-        - name: url
-          value: $(params.repo-url)
-
-    - name: build-push
-      runAfter: [fetch-repo]
-      taskRef:
-        name: kaniko  # From catalog
-      workspaces:
-        - name: source
-          workspace: shared-data
-        - name: dockerconfig
-          workspace: docker-credentials
-      params:
-        - name: IMAGE
-          value: $(params.image)
-```
-
-## Common Mistakes
-
-| Mistake | Why It's Bad | Better Approach |
-|---------|--------------|-----------------|
-| No workspaces | Data lost between steps | Use PVC workspaces for shared data |
-| Large PVC for each run | Expensive, slow | Use volumeClaimTemplate with cleanup |
-| No resource limits | Pods can starve cluster | Set CPU/memory limits on steps |
-| Hardcoded secrets | Insecure | Use Secrets and Workspaces |
-| No timeouts | Stuck pipelines waste resources | Set `timeout` on Tasks and Pipelines |
-| Ignoring results | Can't pass data between tasks | Use `results` for task outputs |
-
-## War Story: Workspace Mismanagement Under Load
-
-A team can migrate from a hosted CI system to Tekton for cost or portability reasons, only to discover during a peak event that poor workspace and storage hygiene can stall critical pipelines.
-
-```
-THE WORKSPACE DISASTER TIMELINE
-─────────────────────────────────────────────────────────────────
-NOVEMBER 25 (BLACK FRIDAY EVE)
-9:00 AM     Feature freeze lifted, 47 PRs merge in first hour
-9:30 AM     PipelineRuns start queuing (normal)
-10:15 AM    Storage alerts: EBS provisioning hitting rate limits
-10:45 AM    47 pipelines stuck in "Pending" - no PVCs available
-11:00 AM    Storage costs spiking: 10GB PVC per run, not cleaning up
-11:30 AM    Kubernetes cluster storage at 94% capacity
-12:00 PM    Critical hotfix needed for checkout bug
-12:15 PM    Hotfix pipeline can't start - no storage available
-12:45 PM    Manual PVC cleanup begins (47 orphaned PVCs)
-1:30 PM     Hotfix finally deploys - 90 minutes late
-2:00 PM     Checkout page slow - cache invalidated during chaos
-5:00 PM     Black Friday traffic starts ramping
-
-POST-INCIDENT DISCOVERY
-─────────────────────────────────────────────────────────────────
-Orphaned PVCs found:              847 (from 3 months of runs)
-Storage wasted:                   8,470 GB
-Storage cost (accumulated):       $42,350 over 3 months
-Lost revenue (hotfix delay):      ~$340,000 (90 min during peak prep)
-Engineering time for cleanup:     120 hours @ $100/hr = $12,000
-Incident response costs:          $15,000
-Customer trust impact:            $500,000+ (estimated)
-
-TOTAL COST OF WORKSPACE MISMANAGEMENT: ~$890,000
-```
-
-The root cause analysis revealed multiple failures:
-
-```yaml
-# MISTAKE 1: Static PVC (never cleaned up)
-workspaces:
-  - name: shared
-    persistentVolumeClaim:
-      claimName: pipeline-pvc  # Reused but eventually abandoned
-
-# MISTAKE 2: Oversized storage requests
-resources:
-  requests:
-    storage: 10Gi  # Actual usage: 200-500 MB
-
-# MISTAKE 3: No resource quotas on tekton-pipelines namespace
-# Any pipeline could request unlimited storage
-
-# MISTAKE 4: No monitoring on PVC lifecycle
-# 847 PVCs accumulated without anyone noticing
-```
-
-**The Fix—Comprehensive Workspace Strategy:**
-
-```yaml
-# FIX 1: volumeClaimTemplate for automatic cleanup
-apiVersion: tekton.dev/v1
-kind: PipelineRun
-metadata:
-  generateName: build-
-spec:
-  pipelineRef:
-    name: build-pipeline
-  workspaces:
-    - name: shared
-      volumeClaimTemplate:
-        spec:
-          accessModes: [ReadWriteOnce]
-          storageClassName: fast-ssd  # Explicit storage class
-          resources:
-            requests:
-              storage: 500Mi  # Right-sized for actual needs
-          # PVC automatically deleted when PipelineRun completes
-
-# FIX 2: Resource quotas for tekton namespace
 ---
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: tekton-storage-quota
-  namespace: tekton-pipelines
-spec:
-  hard:
-    persistentvolumeclaims: "100"
-    requests.storage: "100Gi"
-
-# FIX 3: LimitRange for default sizes
----
-apiVersion: v1
-kind: LimitRange
-metadata:
-  name: tekton-storage-limits
-  namespace: tekton-pipelines
-spec:
-  limits:
-    - type: PersistentVolumeClaim
-      max:
-        storage: 2Gi
-      default:
-        storage: 500Mi
-
-# FIX 4: PVC cleanup CronJob for any stragglers
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: cleanup-orphaned-pvcs
-spec:
-  schedule: "0 */6 * * *"  # Every 6 hours
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          serviceAccountName: pvc-cleaner
-          containers:
-            - name: cleaner
-              image: bitnami/kubectl
-              command:
-                - /bin/sh
-                - -c
-                - |
-                  # Delete PVCs older than 2 hours with no owner
-                  kubectl get pvc -n tekton-pipelines \
-                    --field-selector status.phase=Bound \
-                    -o json | jq -r '.items[] |
-                    select(.metadata.ownerReferences == null) |
-                    select(now - (.metadata.creationTimestamp | fromdateiso8601) > 7200) |
-                    .metadata.name' | xargs -r kubectl delete pvc -n tekton-pipelines
-          restartPolicy: OnFailure
-```
-
-**Results After Fix:**
-
-```
-BEFORE VS AFTER
-─────────────────────────────────────────────────────────────────
-                            Before          After
-Orphaned PVCs/month:        280             0
-Storage costs/month:        $14,000         $2,100
-Pipeline queue time:        5-15 min        < 30 sec
-Storage provisioning:       Rate limited    Never limited
-Black Friday readiness:     FAILED          PASSED
-```
-
-**Key Takeaway**: Tekton is Kubernetes-native—which means Kubernetes storage problems become Tekton problems. Plan your workspace strategy before your first pipeline, not after your first incident.
-
-## Quiz
-
-### Question 1
-What's the difference between a Task and a Pipeline in Tekton?
-
-<details>
-<summary>Show Answer</summary>
-
-**Task**: A single unit of work containing one or more sequential steps. Each step runs as a container in the same pod. Steps share the pod's workspace and environment.
-
-**Pipeline**: A collection of Tasks that can run sequentially or in parallel. Each Task runs as a separate pod. Pipelines use workspaces to share data between Tasks.
-
-Think of it as:
-- Task = one pod with multiple containers (steps)
-- Pipeline = multiple pods (tasks) orchestrated together
-</details>
-
-### Question 2
-How do you pass data between Tasks in a Pipeline?
-
-<details>
-<summary>Show Answer</summary>
-
-Two mechanisms:
-
-1. **Workspaces**: Shared storage (PVC) mounted in multiple Tasks. Good for files (source code, artifacts).
-
-```yaml
-workspaces:
-  - name: shared-data
-```
-
-2. **Results**: Small string values (< 4KB) written by one Task and read by another. Good for versions, digests, URLs.
-
-```yaml
-# Task A writes
-echo -n "v1.2.3" > $(results.version.path)
-
-# Pipeline uses in Task B
-value: $(tasks.taskA.results.version)
-```
-
-Use workspaces for file data, results for small values.
-</details>
-
-### Question 3
-Your pipeline has lint, test, and security-scan tasks that should run in parallel after git-clone. Write the YAML.
-
-<details>
-<summary>Show Answer</summary>
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: parallel-checks
-spec:
-  tasks:
-    - name: git-clone
-      taskRef:
-        name: git-clone
-
-    # All three run in parallel (same runAfter)
-    - name: lint
-      runAfter: [git-clone]
-      taskRef:
-        name: lint
-
-    - name: test
-      runAfter: [git-clone]
-      taskRef:
-        name: test
-
-    - name: security-scan
-      runAfter: [git-clone]
-      taskRef:
-        name: security-scan
-
-    # Build waits for all parallel tasks
-    - name: build
-      runAfter: [lint, test, security-scan]
-      taskRef:
-        name: build
-```
-
-Tasks with the same `runAfter` dependency run in parallel. A task with multiple `runAfter` entries waits for all of them.
-</details>
-
-### Question 4
-How would you trigger a Tekton pipeline from a GitHub push webhook?
-
-<details>
-<summary>Show Answer</summary>
-
-You need three components:
-
-1. **EventListener**: Receives the webhook
-2. **TriggerBinding**: Extracts data from the webhook payload
-3. **TriggerTemplate**: Creates the PipelineRun
-
-```yaml
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
 metadata:
-  name: github
+  name: github-listener
 spec:
+  serviceAccountName: tekton-triggers-sa
   triggers:
-    - bindings: [github-binding]
+    - name: github-push
+      interceptors:
+        - ref:
+            name: github
+          params:
+            - name: secretRef
+              value:
+                secretName: github-webhook-secret
+                secretKey: secretToken
+            - name: eventTypes
+              value:
+                - push
+      bindings:
+        - ref: github-push-binding
       template:
-        ref: github-template
----
-apiVersion: triggers.tekton.dev/v1beta1
-kind: TriggerBinding
-metadata:
-  name: github-binding
-spec:
-  params:
-    - name: repo
-      value: $(body.repository.clone_url)
----
-apiVersion: triggers.tekton.dev/v1beta1
-kind: TriggerTemplate
-metadata:
-  name: github-template
-spec:
-  params: [repo]
-  resourcetemplates:
-    - apiVersion: tekton.dev/v1
-      kind: PipelineRun
-      spec:
-        pipelineRef: {name: my-pipeline}
-        params:
-          - name: repo-url
-            value: $(tt.params.repo)
+        ref: github-push-template
 ```
 
-Then expose the EventListener service via Ingress and configure GitHub webhook to POST to it.
-</details>
+The example is intentionally not an ingress recipe. Exposing an `EventListener` depends on your cluster's ingress controller, TLS policy, DNS model, and provider webhook configuration. The durable design rule is to keep the public endpoint boring and the trust decision explicit. A webhook should not smuggle deployment authority into a pipeline; it should submit a run with a small set of verified parameters, and the pipeline service account should decide what that run is allowed to do.
 
-### Question 5
-A company runs 500 Tekton pipeline runs per day. Each run uses a 2GB workspace PVC. Without volumeClaimTemplate (manual cleanup), they clean up PVCs weekly. With volumeClaimTemplate, PVCs are usually deleted automatically after the run finishes. Storage costs $0.10/GB/month. Calculate monthly storage cost savings.
+## Supply-Chain Security with Tekton Chains
 
-<details>
-<summary>Show Answer</summary>
+Modern delivery systems are judged not only by whether they build software, but by whether they can explain what they built. A container image tag is not enough evidence. Tags can move, build scripts can change, dependencies can shift, and a registry can hold multiple artifacts that look similar to a human. The durable security concept is signed provenance: for each build, produce authenticated metadata that ties the artifact digest to the build inputs, builder identity, and execution record.
 
-**Without volumeClaimTemplate (weekly cleanup):**
-```
-Daily PVCs created:     500
-PVCs accumulated before cleanup: 500 × 7 days = 3,500 PVCs
-Average PVCs existing:  ~1,750 (middle of week)
-Storage:                1,750 × 2GB = 3,500 GB
-Monthly cost:           3,500 × $0.10 = $350/month
-```
+Tekton Chains extends the pipeline model by observing completed `TaskRun` and `PipelineRun` objects, generating signed records, and storing signatures or attestations according to its configuration. The important idea is not a single command-line flag. The important idea is that the CI system can emit evidence as a normal part of the build, and that evidence can later be checked by policy engines, release tooling, or incident responders. A platform should make provenance routine, not heroic.
 
-**With volumeClaimTemplate (immediate cleanup):**
-```
-Concurrent pipelines:   ~20 at any time (estimate)
-Storage:                20 × 2GB = 40 GB
-Monthly cost:           40 × $0.10 = $4/month
-```
+SLSA provenance is a common shape for that evidence. In plain language, provenance answers questions such as: which builder ran, which source revision was used, which parameters influenced the build, which artifact digest came out, and which system signed the statement. Tekton Chains can generate SLSA-style provenance for Tekton executions when the pipeline exposes enough information for Chains to understand the relevant inputs and outputs. The most practical design habit is to make image URL and image digest explicit task results.
 
-**Monthly Savings:** $350 - $4 = **$346/month** ($4,152/year)
+Image signing and provenance signing are related but not identical. Cosign can sign an image digest so a verifier knows the image came from a trusted signer. Provenance attestation can describe how the image was produced. Admission policy can then ask stronger questions: is this exact digest signed, was it built by the approved pipeline, did it come from the expected repository, and does the attestation satisfy the required predicate? Tekton does not replace policy; it gives policy better evidence.
 
-But this calculation is conservative! The real cost includes:
-- EBS provisioning API rate limits
-- Time waiting for storage provisioning
-- Risk of running out of storage quota
-- Engineering time for cleanup scripts
+This is where Tekton connects to the security-tooling modules rather than duplicating them. A delivery platform can build an image with Tekton, sign or attest the result with Tekton Chains and Sigstore-compatible tooling, scan it with a vulnerability scanner, and later enforce deployment rules with an admission controller. Each tool owns one part of the chain. The CI/CD lesson is to preserve the artifact digest and provenance link across the handoff, because a deployment pipeline that reverts to mutable tags discards the evidence it just created.
 
-The actual value of proper workspace management is often 10-100x the raw storage savings.
-</details>
+Supply-chain security also raises uncomfortable permission questions. A build Pod often needs source access and registry push access, but it should not automatically have production deployment rights. A signing component needs access to signing material or keyless identity, but ordinary test steps should not. A trigger service account needs permission to create `PipelineRun` objects, but it should not be able to edit arbitrary secrets. Tekton's Kubernetes-native model gives you RBAC boundaries; you still have to draw them.
 
-### Question 6
-Your Tekton pipeline has these tasks: git-clone (30s), lint (2m), unit-test (3m), integration-test (5m), build (2m), push (1m). Currently all tasks run sequentially. Lint, unit-test, and integration-test can run in parallel after git-clone. Build requires all three to pass. What's the time savings from parallelization?
+## Worked Example: Clone Source and Build an Image
 
-<details>
-<summary>Show Answer</summary>
+The worked example uses two tasks: one clones source into a workspace, and one builds and pushes a container image from that workspace. It uses Buildah as the builder because the stale utility image in the stub was not relevant to this build path, and the current Buildah project publishes `quay.io/buildah/stable:v1.43.0` images. Docker manifest checks during authoring verified `quay.io/buildah/stable:v1.43.0`, `alpine:3.20`, and `node:22-alpine` as pullable image references.
 
-**Sequential execution (current):**
-```
-git-clone → lint → unit-test → integration-test → build → push
-   30s      2m       3m            5m              2m      1m
-
-Total: 30s + 2m + 3m + 5m + 2m + 1m = 13 minutes 30 seconds
-```
-
-**Parallel execution (optimized):**
-```
-git-clone → [lint (2m), unit-test (3m), integration-test (5m)] → build → push
-   30s              parallel: max(2m, 3m, 5m) = 5m               2m      1m
-
-Total: 30s + 5m + 2m + 1m = 8 minutes 30 seconds
-```
-
-**Time savings:** 13m30s - 8m30s = **5 minutes per run** (37% faster)
-
-At 500 runs/day:
-- Time saved: 500 × 5 min = 2,500 min = **41.7 hours/day**
-- If developers wait for pipelines: 41.7 hrs × $75/hr = **$3,125/day**
-
-Pipeline YAML for parallel:
-```yaml
-tasks:
-  - name: lint
-    runAfter: [git-clone]  # Same runAfter = parallel
-  - name: unit-test
-    runAfter: [git-clone]
-  - name: integration-test
-    runAfter: [git-clone]
-  - name: build
-    runAfter: [lint, unit-test, integration-test]  # Waits for all
-```
-</details>
-
-### Question 7
-You're designing a Tekton setup for a company with 15 teams, each with their own pipelines but sharing common tasks (git-clone, build-push, deploy). How would you structure the Tekton resources? Consider maintenance, security, and team autonomy.
-
-<details>
-<summary>Show Answer</summary>
-
-**Recommended Structure:**
-
-```
-NAMESPACE STRATEGY
-─────────────────────────────────────────────────────────────────
-tekton-system/          # Tekton controllers (installed once)
-tekton-catalog/         # Shared Tasks (ClusterTasks deprecated)
-team-alpha-pipelines/   # Team Alpha's pipelines and runs
-team-beta-pipelines/    # Team Beta's pipelines and runs
-...
-```
-
-**Implementation:**
+This example is intentionally small, but it teaches the production shape. The pipeline takes `repo-url`, `revision`, and `image` parameters. The clone task writes source files into a shared workspace. The build task reads the workspace, creates a fallback Dockerfile if the repository does not include one, builds the image, pushes it to the registry named by the `image` parameter, and writes `IMAGE_URL` plus `IMAGE_DIGEST` results. Those result names are chosen to make the supply-chain handoff obvious.
 
 ```yaml
-# 1. Shared Tasks in central namespace (or use Tekton Hub)
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: git-clone
-  namespace: tekton-catalog
-  labels:
-    app.kubernetes.io/version: "1.0"
-# ...
-
-# 2. Team namespaces with RBAC
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: team-alpha-pipelines
-  labels:
-    team: alpha
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: team-alpha-tekton
-  namespace: team-alpha-pipelines
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: tekton-pipelines-admin
-subjects:
-  - kind: Group
-    name: team-alpha
-    apiGroup: rbac.authorization.k8s.io
-
-# 3. Teams reference shared tasks
----
-apiVersion: tekton.dev/v1
-kind: Pipeline
-metadata:
-  name: team-alpha-build
-  namespace: team-alpha-pipelines
-spec:
-  tasks:
-    - name: clone
-      taskRef:
-        resolver: cluster
-        params:
-          - name: kind
-            value: task
-          - name: name
-            value: git-clone
-          - name: namespace
-            value: tekton-catalog
-```
-
-**Key Decisions:**
-| Aspect | Recommendation |
-|--------|----------------|
-| Controllers | Single installation, cluster-wide |
-| Common Tasks | Central namespace with versioning |
-| Team Pipelines | Per-team namespace with RBAC |
-| Secrets | Usually per-team, not commonly shared |
-| Storage | Per-namespace ResourceQuotas |
-| Triggers | Per-team EventListeners |
-
-This gives teams autonomy while maintaining governance over shared components.
-</details>
-
-### Question 8
-Your Tekton TaskRun shows status "Pending" with message "pod has unbound immediate PersistentVolumeClaims". List all possible causes and how you'd diagnose each.
-
-<details>
-<summary>Show Answer</summary>
-
-**Diagnostic Checklist:**
-
-```bash
-# 1. Check PVC status
-kubectl get pvc -n <namespace>
-kubectl describe pvc <pvc-name>
-
-# 2. Check StorageClass
-kubectl get storageclass
-kubectl describe storageclass <class-name>
-
-# 3. Check available storage capacity
-kubectl get pv
-kubectl describe nodes | grep -A 5 "Allocatable"
-
-# 4. Check resource quotas
-kubectl get resourcequota -n <namespace>
-kubectl describe resourcequota -n <namespace>
-
-# 5. Check events
-kubectl get events -n <namespace> --sort-by=.lastTimestamp
-```
-
-**Possible Causes and Solutions:**
-
-| Cause | Diagnosis | Solution |
-|-------|-----------|----------|
-| **No StorageClass default** | `kubectl get sc` shows no `(default)` | Add annotation `storageclass.kubernetes.io/is-default-class: "true"` |
-| **StorageClass doesn't exist** | PVC shows "storageclass not found" | Create StorageClass or use existing one |
-| **Insufficient storage quota** | ResourceQuota shows exceeded | Increase quota or clean up old PVCs |
-| **CSI driver not ready** | CSI pods not running | Check `kubectl get pods -n kube-system \| grep csi` |
-| **Cloud provider limits** | Events show "rate limit" or "quota" | Check cloud provider quotas, request increase |
-| **Wrong access mode** | PV exists but mode mismatch | Match PVC accessModes to available PVs |
-| **Node affinity mismatch** | PV bound to unavailable node | Check PV nodeAffinity, ensure nodes available |
-| **Storage class provisioner failing** | Provisioner pod logs show errors | `kubectl logs -n kube-system <provisioner-pod>` |
-
-**Quick Fix Workflow:**
-```bash
-# Fast diagnosis
-kubectl get events -n tekton-pipelines | grep -i pvc
-kubectl describe pvc -n tekton-pipelines | grep -A 10 "Events"
-
-# If quota issue
-kubectl delete pvc -n tekton-pipelines -l tekton.dev/pipelineRun  # Clean completed runs
-
-# If StorageClass issue
-kubectl get pvc <name> -o yaml | grep storageClassName
-kubectl get sc  # Verify class exists
-```
-</details>
-
-## Hands-On Exercise
-
-### Scenario: Build a Tekton Pipeline
-
-Create a Tekton pipeline that clones a repo, runs tests, and builds a container.
-
-### Setup
-
-```bash
-# Create kind cluster
-kind create cluster --name tekton-lab
-
-# Install Tekton
-kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
-
-# Wait for controller
-kubectl -n tekton-pipelines wait --for=condition=ready pod -l app=tekton-pipelines-controller --timeout=120s
-
-# Install tkn CLI if not installed
-brew install tektoncd-cli
-```
-
-### Create Tasks
-
-```yaml
-# tasks.yaml
-apiVersion: tekton.dev/v1
-kind: Task
-metadata:
-  name: git-clone-simple
+  name: clone-repository
 spec:
   params:
-    - name: url
+    - name: URL
+      type: string
+    - name: REVISION
+      type: string
+      default: main
   workspaces:
     - name: output
   steps:
     - name: clone
-      image: alpine/git
+      image: alpine:3.20
       script: |
-        cd $(workspaces.output.path)
-        git clone $(params.url) .
-        ls -la
+        set -eu
+        apk add --no-cache ca-certificates git
+        rm -rf "$(workspaces.output.path)/source"
+        git clone --depth=1 --branch "$(params.REVISION)" "$(params.URL)" "$(workspaces.output.path)/source"
+        git -C "$(workspaces.output.path)/source" rev-parse HEAD
 ---
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: npm-test
+  name: build-image-buildah
 spec:
+  params:
+    - name: IMAGE
+      type: string
+    - name: CONTEXT
+      type: string
+      default: source
+    - name: DOCKERFILE
+      type: string
+      default: Dockerfile
   workspaces:
     - name: source
+  results:
+    - name: IMAGE_URL
+      description: Image reference pushed by this task.
+    - name: IMAGE_DIGEST
+      description: Registry digest returned by the push.
   steps:
-    - name: test
-      image: node:20-alpine
+    - name: build-and-push
+      image: quay.io/buildah/stable:v1.43.0
       workingDir: $(workspaces.source.path)
+      securityContext:
+        privileged: true
       script: |
-        if [ -f package.json ]; then
-          npm install
-          npm test || echo "No tests defined"
-        else
-          echo "No package.json found"
+        set -eu
+        cd "$(params.CONTEXT)"
+        if [ ! -f "$(params.DOCKERFILE)" ]; then
+          cat > "$(params.DOCKERFILE)" <<'DOCKERFILE'
+        FROM alpine:3.20
+        RUN echo "built by a Tekton PipelineRun" > /message.txt
+        CMD ["cat", "/message.txt"]
+        DOCKERFILE
         fi
----
-apiVersion: tekton.dev/v1
-kind: Task
-metadata:
-  name: echo-done
-spec:
-  steps:
-    - name: done
-      image: alpine
-      script: |
-        echo "Pipeline completed successfully!"
+        buildah --storage-driver=vfs bud --isolation=chroot -f "$(params.DOCKERFILE)" -t "$(params.IMAGE)" .
+        buildah --storage-driver=vfs push --digestfile "$(results.IMAGE_DIGEST.path)" "$(params.IMAGE)" "docker://$(params.IMAGE)"
+        printf '%s' "$(params.IMAGE)" | tee "$(results.IMAGE_URL.path)"
 ```
 
-```bash
-kubectl apply -f tasks.yaml
-```
-
-### Create Pipeline
+The privileged setting is not decoration. Container builds inside containers depend on your builder, storage driver, kernel features, and cluster policy. Some clusters allow privileged Buildah in a controlled namespace; others require rootless configuration, a different builder, or an external build service. The point is to make that choice visible. If a build task needs elevated privileges, isolate it behind namespace policy, a dedicated service account, explicit resource limits, and a reviewed task definition rather than hiding the requirement in a generic shell step.
 
 ```yaml
-# pipeline.yaml
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: build-pipeline
+  name: build-container-image
 spec:
   params:
     - name: repo-url
       type: string
-      default: https://github.com/tektoncd/pipeline.git
-
+    - name: revision
+      type: string
+      default: main
+    - name: image
+      type: string
   workspaces:
-    - name: shared-workspace
-
+    - name: shared-source
   tasks:
     - name: fetch-source
       taskRef:
-        name: git-clone-simple
+        name: clone-repository
       params:
-        - name: url
+        - name: URL
           value: $(params.repo-url)
+        - name: REVISION
+          value: $(params.revision)
       workspaces:
         - name: output
-          workspace: shared-workspace
-
-    - name: run-tests
-      runAfter: [fetch-source]
+          workspace: shared-source
+    - name: build-image
+      runAfter:
+        - fetch-source
       taskRef:
-        name: npm-test
+        name: build-image-buildah
+      params:
+        - name: IMAGE
+          value: $(params.image)
+        - name: CONTEXT
+          value: source
       workspaces:
         - name: source
-          workspace: shared-workspace
-
-    - name: finish
-      runAfter: [run-tests]
-      taskRef:
-        name: echo-done
+          workspace: shared-source
 ```
-
-```bash
-kubectl apply -f pipeline.yaml
-```
-
-### Run Pipeline
 
 ```yaml
-# pipelinerun.yaml
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: build-pipeline-run-
+  name: build-demo-run
+  labels:
+    app.kubernetes.io/part-of: tekton-module
 spec:
   pipelineRef:
-    name: build-pipeline
+    name: build-container-image
   params:
     - name: repo-url
-      value: https://github.com/kubernetes/examples.git
+      value: https://github.com/tektoncd/pipeline.git
+    - name: revision
+      value: main
+    - name: image
+      value: ttl.sh/tekton-kubedojo-demo:1h
   workspaces:
-    - name: shared-workspace
+    - name: shared-source
       volumeClaimTemplate:
         spec:
           accessModes:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 500Mi
+              storage: 1Gi
 ```
+
+The equivalent Argo Workflows shape would usually be a `Workflow` with templates for clone and build, useful when the same delivery graph is part of a larger DAG that fans out into many jobs. The equivalent Dagger shape would usually be code that clones, builds, and pushes through a programmable pipeline that can run locally or in a CI system. Tekton's distinctive angle is that the reusable CI/CD primitives themselves are Kubernetes resources, so the platform can govern tasks, runs, identities, and evidence with cluster-native controls.
+
+## Designing Task Boundaries and Shared Catalogs
+
+Task boundaries are where many Tekton designs either become clear platform APIs or turn into YAML sprawl. A task should have a reason to exist as a unit: it needs a distinct permission set, it owns a reusable capability, it consumes and produces a clear data contract, or it represents a failure boundary that operators will understand. Splitting a pipeline merely because a shell script has many commands creates extra Pods and extra objects without improving governance. Combining clone, test, build, sign, and deploy into one task goes too far in the other direction because it hides identity and evidence boundaries.
+
+Start by naming the contract in plain language. A clone task takes a repository URL and revision, writes source files into a workspace, and should not need registry push credentials. A build task takes a source workspace and image reference, pushes an image, and emits the pushed digest. A signing task takes an image digest and signing identity, then produces an attestation or signature. A deployment handoff task takes an approved digest and environment target. Those contracts give you a principled reason to separate tasks because each unit has different inputs, outputs, secrets, and blast radius.
+
+This contract-first approach also keeps shared catalogs healthy. A platform catalog should not be a landfill of every task anyone has ever written. It should be a curated set of supported building blocks with version labels, changelogs, examples, and deprecation policy. If a task changes its result name, required workspace, image, or service account expectations, every downstream pipeline can break. Treat catalog tasks like internal APIs: review changes, test backward compatibility, and give teams time to migrate when behavior must change.
+
+Parameter design is part of that API. A good task parameter exposes a decision the caller legitimately owns, such as repository URL, revision, image reference, test command, or deployment environment. A weak parameter exposes implementation clutter, such as a dozen flags that mirror a tool's entire command-line surface. Too many parameters make the task hard to support because every team can create a unique behavior combination. Too few parameters force teams to fork the task. The platform goal is a narrow contract that supports real variation without exposing accidental complexity.
+
+Results deserve the same discipline. A task result should be a small, named fact that another step can trust and use. Image digest, computed semantic version, generated artifact URL, and test summary location are good result candidates. Large reports, dependency directories, and build outputs belong in workspaces or artifact storage. When a task emits a result, document whether the value is authoritative, informational, or advisory. A deployment gate should not treat an untrusted script's free-form text as an approval signal unless the platform has defined who can run that script and how the result is verified.
+
+Versioning is the final catalog habit. Some teams pin task versions by copying reviewed YAML into a platform namespace and referring to it by name. Others use resolvers or catalog mechanisms to fetch tasks from Git or hub-style sources. Either approach can work, but the operational question is the same: can you reproduce yesterday's pipeline run and explain which task definition it used? If a task reference floats silently, incident response becomes guesswork. Pinning and review may feel slower during setup, but they make the platform supportable after adoption.
+
+## Failure Modes and Debugging Mindset
+
+Tekton debugging becomes easier when you remember that every failure has both a pipeline layer and a Kubernetes layer. The pipeline layer explains orchestration: which task was waiting, skipped, cancelled, timed out, or failed. The Kubernetes layer explains execution: whether the Pod could be admitted, scheduled, pulled, started, mounted, and allowed to reach dependencies. New users often stare at the `PipelineRun` status while the real clue is in Pod events, or they stare at container logs while the run never created a Pod because RBAC denied it.
+
+Pending runs usually point to capacity, storage, or policy. If a task declares a workspace backed by a `volumeClaimTemplate`, the PVC must bind before the Pod can run. If the namespace has no quota left, the run may sit behind an admission or provisioning problem. If a build task asks for privileged mode and the namespace enforces restricted Pod Security, the controller may create an object that Kubernetes refuses to run. Those are not Tekton mysteries; they are cluster scheduling and admission facts surfaced through a pipeline workflow.
+
+Failed runs usually point to task contract mismatches. A clone task may write source to `$(workspaces.output.path)/source`, while a build task expects the Dockerfile at the workspace root. A result may be referenced before the producing task runs. A trigger may pass `refs/heads/main` when the clone task expects `main`. A registry push may fail because the build service account has no pull secret or because network policy blocks egress. The fastest diagnosis is to compare the task's declared contract with the concrete values in the `TaskRun` that failed.
+
+Skipped runs require a different mindset. Tekton supports conditional execution through `when` expressions and dependency rules, so a missing task may be correct behavior. A task can be skipped because a branch filter did not match, because a previous result value did not satisfy the condition, or because a dependency failed. Operators should avoid treating every skipped task as a platform bug. The better question is whether the skip condition is visible enough for the team to understand why the pipeline chose that path.
+
+Timeouts should be designed, not merely raised. A short timeout on a quick lint task prevents stuck jobs from consuming cluster resources. A longer timeout on integration tests may be reasonable if the test environment is slow. An unlimited build pipeline is usually a smell because it turns accidental hangs into capacity leaks. Put timeouts at the level where the owner can take action: task timeouts for bounded units of work, pipeline timeouts for the overall delivery expectation, and alerting for repeated timeout patterns that indicate a systemic issue.
+
+Observability should preserve the execution story. Labels that include team, repository, pipeline, environment, and run purpose make it possible to query runs during incidents. Logs should identify the input revision and output image digest without printing secrets. Events should be retained long enough for normal support windows. Provenance should be stored somewhere more durable than the live run object if it is part of compliance or release evidence. Tekton gives you objects to observe; the platform still needs naming, retention, and export conventions.
+
+## Operating Tekton as a Platform Capability
+
+A learning pipeline is easy to create; an internal CI/CD platform is a service. The first operational concern is workspace lifecycle. A `volumeClaimTemplate` is often a good default because each run gets its own PVC and Kubernetes ownership can clean it up with the run. A shared static PVC can be useful for caches, but it also creates concurrency, contamination, and cleanup risks. A pipeline that writes source code, build layers, test output, and credentials into one long-lived volume is not merely messy; it can become a data isolation problem.
+
+The second concern is pod-per-step and pod-per-task overhead. Tekton runs each task as Kubernetes work, and each task execution normally creates a Pod. That gives you scheduling, isolation, and observability, but it also means every run pays image-pull and pod-startup costs. Ten small shell commands split into ten tasks may be slower and harder to debug than one coherent task with ten steps. Conversely, one giant task can hide permission boundaries and make reuse impossible. Good design chooses task boundaries around data contracts, permissions, and failure handling, not around every line of shell.
+
+The third concern is retention. `PipelineRun`, `TaskRun`, Pod, PVC, and log retention all need an answer. If you keep too little, debugging and audit suffer. If you keep everything forever, the API server, storage layer, and human search experience degrade. Most teams need a tiered policy: keep recent run objects and logs for normal debugging, export important provenance and audit evidence to durable storage, and prune routine run resources after a defined window. Retention should be a platform policy, not an afterthought left to each repository.
+
+The fourth concern is the support surface. Tekton Dashboard and the `tkn` CLI can make runs easier to inspect, while `kubectl` remains the universal fallback. A support runbook should teach engineers to inspect the `PipelineRun`, then the child `TaskRun`, then the Pod events and container logs. Many Tekton failures are ordinary Kubernetes failures wearing CI/CD clothes: image pull errors, pending PVCs, denied service account permissions, insufficient CPU, admission rejection, or network policy blocking the registry.
 
 ```bash
-# Create and watch
-kubectl create -f pipelinerun.yaml
-
-# Watch logs
-tkn pipelinerun logs -f $(tkn pipelinerun list -o name | head -1 | cut -d'/' -f2)
-
-# List runs
-tkn pipelinerun list
+kubectl get pipelinerun -n tekton-lab
+kubectl describe pipelinerun build-demo-run -n tekton-lab
+kubectl get taskrun -n tekton-lab -l tekton.dev/pipelineRun=build-demo-run
+kubectl get pods -n tekton-lab -l tekton.dev/pipelineRun=build-demo-run
+kubectl logs -n tekton-lab -l tekton.dev/pipelineRun=build-demo-run --all-containers=true --tail=100
 ```
 
-### Success Criteria
+The fifth concern is tenant design. A single shared Tekton control plane can serve many namespaces, but the team boundary should live in namespaces, service accounts, quotas, network policies, and task ownership. A platform-managed catalog namespace can hold reviewed tasks. Team namespaces can hold team pipelines and runs. Secrets should usually stay near the team or environment that owns them. If every team receives cluster-wide pipeline admin permissions, Tekton becomes another path around the platform's own guardrails.
 
-- [ ] Tekton is running in the cluster
-- [ ] Tasks are created
-- [ ] Pipeline combines tasks
-- [ ] PipelineRun executes successfully
-- [ ] Can view logs with tkn CLI
+Hosted CI is still the better call in many cases. If your pipelines only run unit tests on public repositories, if the team has no Kubernetes platform staff, if build isolation requirements are satisfied by a managed provider, or if developers need a familiar low-friction pull request experience, a hosted service may deliver more value with less operational load. Tekton earns its keep when cluster-native execution, explicit supply-chain evidence, internal network access, reusable governed tasks, or platform-owned isolation are more important than outsourcing runner operations.
 
-### Cleanup
+## Landscape Snapshot and Rosetta
+
+> **Landscape snapshot - as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> Tekton previously reached graduated status within the Continuous Delivery Foundation in 2022. Official CNCF and CDF announcements published on 2026-03-24 state that the CNCF Technical Oversight Committee accepted Tekton as a CNCF incubating project and that Tekton is moving from the CDF context into the CNCF context. This module therefore treats "CDF graduated" as historical status and "CNCF incubating" as the current foundation snapshot, not as interchangeable maturity labels.
+
+| Durable capability | Tekton | Argo Workflows | Dagger | GitHub Actions | Jenkins |
+|--------------------|--------|----------------|--------|----------------|---------|
+| Kubernetes-native execution | Primary model: CRDs reconciled into Pods | Primary model for workflows on Kubernetes | Can run against containers from local, CI, or cloud contexts | Hosted or self-hosted runners; Kubernetes is optional | Controller and agents can run many places, including Kubernetes |
+| Definition format | YAML custom resources: `Task`, `Pipeline`, runs, triggers | YAML `Workflow` resources with templates and DAG or steps | Program code and Dagger functions/modules | Repository workflow YAML | Jenkinsfile Groovy pipeline plus plugins |
+| Triggering | Tekton Triggers receives events and creates runs | Often submitted by CLI, API, sensors, or another event layer | Invoked from local shell or another CI system | Native repository events | Webhooks, polling, plugin events, and manual runs |
+| Supply-chain provenance | Tekton Chains observes runs and can sign provenance | Usually paired with separate signing and policy tooling | Can be integrated with external signing workflows | Artifact attestations and OIDC patterns are available in GitHub ecosystem | Plugin-dependent; usually assembled from multiple components |
+| Reusable catalog | Tasks and pipelines can be shared through Hub or internal catalogs | WorkflowTemplates and ClusterWorkflowTemplates | Reusable modules and functions | Actions and reusable workflows | Shared libraries and plugins |
+| Runs off-cluster | Not its normal operating model | Not its normal operating model | Yes, by design | Yes, through hosted runners | Yes, through agents |
+
+This Rosetta table is a translation aid, not a ranking. Tekton and Argo Workflows both run on Kubernetes, but their center of gravity differs. Tekton is purpose-built around CI/CD primitives such as tasks, pipelines, triggers, and Chains. Argo Workflows is a more general DAG and workflow engine, which you will study in the next module. Dagger's strength is portable programmable pipelines. GitHub Actions optimizes for repository-integrated automation. Jenkins remains broad and extensible, especially where plugin ecosystems and existing installations matter.
+
+## Patterns & Anti-Patterns
+
+The first good pattern is the governed task catalog. A platform team maintains a small set of tasks for clone, test, image build, scan, sign, and deployment handoff. Each task has a documented interface, version labels, resource defaults, and a clear permission model. Product teams compose those tasks into pipelines without copying implementation details into every repository. This pattern reduces drift because the shared task is the supported API, not a pasted shell fragment.
+
+The second good pattern is digest-first delivery. The build task emits an image digest result, the signing step signs or attests that digest, and the deployment handoff uses the digest rather than a mutable tag. This pattern makes rollback, audit, and policy checks more reliable because every later stage refers to the exact artifact that was built. It also makes failures easier to reason about because a digest either has the required evidence or it does not.
+
+The third good pattern is namespace-scoped tenancy. Teams submit pipelines in namespaces that carry quotas, network policies, service accounts, secrets, and retention labels. Shared platform tasks live in a reviewed namespace or catalog, but team-specific secrets do not. This pattern keeps the control plane shared while preserving boundaries between teams. It is especially important when build tasks can push images, reach internal services, or request elevated build privileges.
+
+The fourth good pattern is explicit trigger trust. The webhook listener verifies the provider signature, filters the event type, extracts only necessary fields, and creates a `PipelineRun` under a narrow service account. The pipeline still performs its own branch, revision, and policy checks rather than trusting every payload field blindly. This pattern recognizes that webhook data is an input to be validated, not an authority to deploy.
+
+| Pattern | Why it works | Tekton design move |
+|---------|--------------|--------------------|
+| Governed task catalog | Reduces copy-paste CI drift while preserving team composition | Version shared `Task` resources and document params/results |
+| Digest-first delivery | Keeps artifact identity stable across signing, policy, and deployment | Emit `IMAGE_DIGEST` results and pass digests downstream |
+| Namespace-scoped tenancy | Gives teams autonomy without cluster-wide CI permissions | Use namespaces, RBAC, quotas, and dedicated service accounts |
+| Explicit trigger trust | Prevents webhook endpoints from becoming unaudited run creation APIs | Use interceptors, secrets, event filters, and narrow trigger RBAC |
+
+The first anti-pattern is "one giant privileged pipeline service account." It is tempting because every pipeline starts working quickly, but it destroys the value of Kubernetes-native control. Lint, unit test, image build, signing, and deployment do not need the same permissions. When a compromised test dependency can use the same identity as a production deploy step, the pipeline has become a privilege-escalation path.
+
+The second anti-pattern is "workspace as junk drawer." Teams mount one persistent volume everywhere, leave source trees and credentials behind, and use path conventions instead of contracts. That may work during a demo, but it fails under concurrency and makes data ownership unclear. Workspaces should be scoped to data that tasks truly need to share, and sensitive material should use secrets or short-lived credentials rather than leftover files.
+
+The third anti-pattern is "webhook equals deployment approval." A push event should not automatically carry the authority to deploy to a protected environment. It can start validation, build artifacts, and produce evidence, but promotion should still pass through the release policy appropriate for the environment. Tekton can participate in that flow; it should not erase the distinction between code arrival and release authorization.
+
+The fourth anti-pattern is "Tekton for every automation task." A Kubernetes-native pipeline framework is not always the lowest-friction tool. If a workflow must run locally on laptops, Dagger may fit better. If it is a complex scientific or ML DAG, Argo Workflows may fit better. If it is a simple repository check and the hosted CI provider already meets security and cost needs, adding a cluster CI platform can be operational ceremony without enough benefit.
+
+| Anti-pattern | Why it fails | Better approach |
+|--------------|--------------|-----------------|
+| One giant privileged service account | Any compromised step inherits excessive power | Split service accounts by task responsibility |
+| Workspace as junk drawer | Data leaks across tasks and runs, and cleanup becomes unreliable | Use scoped workspaces, secrets, results, and retention policy |
+| Webhook equals deployment approval | External events bypass environment governance | Treat webhooks as run requests and keep promotion policy explicit |
+| Tekton for every automation task | Platform burden can exceed the value of cluster-native execution | Choose Tekton only where its Kubernetes-native model matters |
+
+### Decision Framework
+
+```mermaid
+flowchart TD
+    A[Do builds need cluster-local access, Kubernetes RBAC, or cluster policy?]
+    A -- yes --> B[Do teams accept platform-owned runner operations?]
+    A -- no --> C[Can hosted CI satisfy security, cost, and workflow needs?]
+    B -- yes --> D[Consider Tekton]
+    B -- no --> E[Consider hosted CI or Dagger invoked from existing CI]
+    C -- yes --> F[Use hosted CI]
+    C -- no --> G[Is the work a broad DAG or batch workflow?]
+    G -- yes --> H[Consider Argo Workflows]
+    G -- no --> I[Consider Dagger, Jenkins, or a smaller automation path]
+```
+
+Use the framework as a forcing function. If the only argument for Tekton is "it runs on Kubernetes," that is not enough. If the argument is "our release builds need private cluster dependencies, restricted identities, consistent provenance, and shared governed tasks," Tekton has a strong rationale. Good platform decisions name the capability they need, the tradeoff they accept, and the operational owner who will support it.
+
+## Did You Know?
+
+- **Tekton came from Knative Build lineage**: the project history traces back through Knative Build and Knative Pipeline before Tekton became its own project.
+- **Tekton uses ordinary Kubernetes visibility**: a failed pipeline usually leaves `PipelineRun`, `TaskRun`, Pod, event, and container log evidence that platform engineers can inspect with Kubernetes tooling.
+- **Tekton Chains observes completed runs**: Chains is designed to capture information after `TaskRun` and `PipelineRun` execution, then format, sign, and store evidence according to configuration.
+- **Triggers are not just webhooks**: the durable concept is event-to-resource creation, so interceptors, bindings, templates, and RBAC matter as much as the HTTP endpoint.
+
+## Common Mistakes
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Treating Tekton like a hosted CI clone | Teams expect a managed runner service while the platform owns cluster capacity, upgrades, and support | Explain the Kubernetes-native operating model before adoption and assign an owner |
+| Copying remote catalog tasks directly into production | Unreviewed task YAML can change permissions, images, or behavior in ways teams do not notice | Pin, review, test, and version shared tasks as platform APIs |
+| Giving every task the same service account | Test and build steps inherit deployment or signing authority they do not need | Use separate service accounts for clone, build, sign, and deploy responsibilities |
+| Using one static PVC for all runs | Concurrent builds can contaminate each other and leave expensive or sensitive residue | Prefer run-scoped workspaces with `volumeClaimTemplate` unless a shared cache is deliberate |
+| Ignoring image digests | Mutable tags weaken signing, audit, and rollback because the artifact identity can move | Emit and pass image digest results, then sign or attest the digest |
+| Exposing EventListeners without verification | Anyone who can reach the endpoint may create expensive or privileged runs | Use provider signature verification, event filtering, TLS, and narrow trigger RBAC |
+| Splitting every shell line into a separate task | Pod startup overhead and YAML noise hide the real data contract | Use steps for tightly related commands and tasks for meaningful permission or data boundaries |
+| Keeping unlimited run history in the cluster | API objects, Pods, logs, and PVCs accumulate until troubleshooting and storage degrade | Define retention and export durable evidence outside the live cluster |
+
+## Quiz
+
+### Question 1
+
+A team wants to **model** Kubernetes-native CI/CD for release builds that need private cluster services and strict RBAC. Why is Tekton a stronger fit than a hosted worker for this specific problem, and what operational burden does the team accept?
+
+<details><summary>Answer</summary>
+
+Tekton is a stronger fit when the release build benefits from being a Kubernetes API object reconciled into Pods that use cluster-native identity, scheduling, secrets, network policy, and storage. That model lets the team **model** CI/CD with the same controls that govern application workloads instead of punching special network holes from hosted workers. The accepted burden is that the platform team now operates the CI substrate: controllers, CRDs, capacity, upgrades, retention, and support. Hosted CI may still be better for simple repository checks that do not need those cluster-local properties.
+
+</details>
+
+### Question 2
+
+You need to **compose** a reusable clone-build pipeline. Source files must move from clone to build, while the image digest must move from build to signing. Which Tekton primitive should carry each kind of data, and why?
+
+<details><summary>Answer</summary>
+
+Use a workspace for source files because a checkout is file data that the build task must read from a mounted filesystem. Use a result for the image digest because it is a small value that later tasks can reference directly. This lets you **compose** tasks with clear contracts: the workspace carries build context, and the result carries artifact identity. Putting the digest in a workspace would hide an important value, while putting source files in results would misuse the API.
+
+</details>
+
+### Question 3
+
+A repository push should **connect** to a `PipelineRun`, but only after the webhook signature is verified and the event type is confirmed as a push. Which Tekton Triggers components are involved?
+
+<details><summary>Answer</summary>
+
+An `EventListener` receives the HTTP event, and an interceptor verifies the signature and filters the event type before the payload is trusted. A `TriggerBinding` extracts fields such as repository URL, revision, and branch from the payload. A `TriggerTemplate` uses those bound parameters to create the `PipelineRun`. This separation lets you **connect** webhooks to pipeline execution without treating every incoming request as authorized cluster work.
+
+</details>
+
+### Question 4
+
+A security team wants to **secure** image promotion by allowing only images built by the approved pipeline. Why is a mutable image tag insufficient, and how do Tekton Chains and Cosign-style signing help?
+
+<details><summary>Answer</summary>
+
+A mutable tag is insufficient because it can point to different image digests over time, so it does not permanently identify the artifact that was built. Tekton Chains can produce signed provenance from completed `TaskRun` or `PipelineRun` records, while image signing can authenticate the digest itself. Together, they help **secure** the path from build to promotion by giving policy engines evidence about both artifact identity and build process. The deploy policy should evaluate digests and attestations, not just friendly tag names.
+
+</details>
+
+### Question 5
+
+Your platform has CPU shortages during business hours, and Tekton build Pods sometimes wait behind production workloads. What design choices would you review before blaming Tekton itself?
+
+<details><summary>Answer</summary>
+
+First review whether pipeline workloads have resource requests, limits, quotas, and node placement that reflect their priority. Then check whether build Pods should use dedicated nodes, taints, tolerations, or separate clusters to avoid competing with runtime workloads. Also inspect image pull time, PVC provisioning, and the number of tasks per run, because pod startup overhead may be a major contributor. Tekton exposes the work as Kubernetes Pods, so the diagnosis should follow Kubernetes scheduling evidence.
+
+</details>
+
+### Question 6
+
+A team wants one workflow engine for CI builds, nightly ML training, and large fan-out batch jobs. How would you **choose** between Tekton and Argo Workflows without claiming one is universally better?
+
+<details><summary>Answer</summary>
+
+Start by naming the dominant workload shape. Tekton is a strong fit for CI/CD primitives such as reusable tasks, pipelines, triggers, and build provenance, while Argo Workflows is often a stronger fit for general DAG orchestration and large fan-out job graphs. If the same platform needs both, Tekton can build and attest artifacts while Argo handles broader workflow orchestration. The right way to **choose** is by capability and operational tradeoff, not by treating either tool as a universal winner.
+
+</details>
+
+### Question 7
+
+A platform team wants to let product teams customize pipelines while keeping build and signing behavior governed. What resource ownership model would you recommend?
+
+<details><summary>Answer</summary>
+
+Keep reviewed shared tasks in a platform-owned catalog or namespace, and let product teams compose those tasks into pipelines inside their own namespaces. Use namespace-scoped RBAC, quotas, secrets, and service accounts so each team has autonomy without inheriting cluster-wide CI permissions. Version the shared tasks and document their parameters, results, and permission expectations. This ownership model gives teams flexibility while keeping sensitive build and signing behavior under platform governance.
+
+</details>
+
+## Hands-On
+
+This lab creates a local cluster, installs Tekton Pipelines, applies the two-task pipeline from the worked example, and runs a build. The Buildah task uses privileged mode for the lab because container image builds inside Kubernetes depend on kernel and storage-driver behavior. In a production cluster, validate your builder isolation model with your security team before allowing privileged build Pods.
+
+```bash
+kind create cluster --name tekton-lab
+
+kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+
+kubectl -n tekton-pipelines wait \
+  --for=condition=available deployment/tekton-pipelines-controller \
+  --timeout=180s
+
+kubectl create namespace tekton-lab
+kubectl label namespace tekton-lab pod-security.kubernetes.io/enforce=privileged --overwrite
+```
+
+Save the `Task`, `Pipeline`, and `PipelineRun` YAML from the worked example into a file named `tekton-build-demo.yaml`, then apply it in the lab namespace.
+
+```bash
+kubectl apply -n tekton-lab -f tekton-build-demo.yaml
+
+kubectl wait -n tekton-lab \
+  --for=condition=Succeeded pipelinerun/build-demo-run \
+  --timeout=10m
+
+kubectl get pipelinerun build-demo-run -n tekton-lab
+kubectl get taskrun -n tekton-lab -l tekton.dev/pipelineRun=build-demo-run
+kubectl logs -n tekton-lab -l tekton.dev/pipelineRun=build-demo-run --all-containers=true --tail=100
+```
+
+If the run fails, inspect it as Kubernetes work first and Tekton work second. A pending Pod usually points to scheduling, image pull, PVC, or admission policy. A failed step usually points to the script, registry access, source checkout, or builder configuration. The useful debugging path is `PipelineRun` to `TaskRun` to Pod to events and logs, because each layer narrows the failure from orchestration to execution.
+
+```bash
+kubectl describe pipelinerun build-demo-run -n tekton-lab
+kubectl describe taskrun -n tekton-lab -l tekton.dev/pipelineRun=build-demo-run
+kubectl get events -n tekton-lab --sort-by=.lastTimestamp
+```
+
+Success criteria:
+
+- [ ] Tekton Pipelines controller is available in the `tekton-pipelines` namespace.
+- [ ] The `clone-repository` and `build-image-buildah` tasks exist in the `tekton-lab` namespace.
+- [ ] The `build-container-image` pipeline creates a `build-demo-run` `PipelineRun`.
+- [ ] The run produces child `TaskRun` objects for clone and build.
+- [ ] The build task writes `IMAGE_URL` and `IMAGE_DIGEST` results or fails with a clearly diagnosed registry or builder policy reason.
+
+Clean up the lab when you are done.
 
 ```bash
 kind delete cluster --name tekton-lab
 ```
 
-## Key Takeaways
+## Sources
 
-Before moving on, ensure you can:
-
-- [ ] Explain the difference between Task, TaskRun, Pipeline, and PipelineRun
-- [ ] Write a multi-step Task with parameters, workspaces, and results
-- [ ] Design pipelines with parallel tasks using `runAfter` patterns
-- [ ] Configure workspace strategies (volumeClaimTemplate vs static PVC)
-- [ ] Set up Tekton Triggers for webhook-driven pipeline execution
-- [ ] Calculate storage costs and implement cleanup strategies
-- [ ] Use the Tekton Catalog for common tasks (git-clone, kaniko)
-- [ ] Debug "Pending" TaskRuns using kubectl and tkn CLI
-- [ ] Design multi-team Tekton setups with proper namespace isolation
-- [ ] Compare Tekton's Kubernetes-native approach with hosted CI services
+- [Tekton Overview](https://tekton.dev/docs/concepts/overview/)
+- [Tekton Concept Model](https://tekton.dev/docs/concepts/concept-model/)
+- [Tekton Tasks](https://tekton.dev/docs/pipelines/tasks/)
+- [Tekton Pipelines](https://tekton.dev/docs/pipelines/pipelines/)
+- [Tekton TaskRuns](https://tekton.dev/docs/pipelines/taskruns/)
+- [Tekton PipelineRuns](https://tekton.dev/docs/pipelines/pipelineruns/)
+- [Tekton Workspaces](https://tekton.dev/docs/pipelines/workspaces/)
+- [Tekton Triggers](https://tekton.dev/docs/triggers/)
+- [Tekton Interceptors](https://tekton.dev/docs/triggers/interceptors/)
+- [Tekton Chains](https://tekton.dev/docs/chains/)
+- [Tekton SLSA Provenance](https://tekton.dev/docs/chains/slsa-provenance/)
+- [tektoncd/pipeline GitHub repository](https://github.com/tektoncd/pipeline)
+- [tektoncd/triggers GitHub repository](https://github.com/tektoncd/triggers)
+- [tektoncd/chains GitHub repository](https://github.com/tektoncd/chains)
+- [Tekton Graduation within CDF](https://tekton.dev/blog/2022/10/26/tekton-graduation/)
+- [Tekton Moves to the CNCF](https://cd.foundation/announcement/2026/03/24/tekton-moves-to-the-cncf/)
+- [Tekton Becomes a CNCF Incubating Project](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/)
+- [SLSA Provenance v1.2](https://slsa.dev/spec/v1.2/provenance)
+- [Sigstore Cosign Documentation](https://docs.sigstore.dev/cosign/)
+- [Argo Workflows Core Concepts](https://argo-workflows.readthedocs.io/en/latest/workflow-concepts/)
+- [Dagger Documentation](https://docs.dagger.io/)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Jenkins Pipeline Documentation](https://www.jenkins.io/doc/book/pipeline/)
+- [Buildah Release Announcements](https://buildah.io/releases/)
 
 ## Next Module
 
-Continue to [Module 3.3: Argo Workflows](../module-3.3-argo-workflows/) where we'll explore DAG-based workflow orchestration.
-
----
-
-*"Kubernetes-native means your pipelines scale like pods, fail like pods, and are debugged like pods. Tekton makes CI/CD a first-class Kubernetes citizen."*
-
-## Sources
-
-- [Tekton Overview](https://tekton.dev/docs/concepts/overview/) — Canonical overview of Tekton's Kubernetes-native CI/CD model and core project concepts.
-- [Tekton Graduation](https://tekton.dev/blog/2022/10/26/tekton-graduation/) — Summarizes Tekton's history from Knative Build through CNCF graduation.
-- [Tekton Concept Model](https://tekton.dev/docs/concepts/concept-model/) — Explains how steps, tasks, TaskRuns, pipelines, and PipelineRuns map to containers and pods.
-- [Getting Started with Triggers](https://tekton.dev/docs/getting-started/triggers/) — Follow-on reference for EventListeners, TriggerBindings, and TriggerTemplates used in webhook-driven pipelines.
+Continue to [Module 3.3: Argo Workflows](module-3.3-argo-workflows/) to compare Tekton's CI/CD-focused primitives with a general Kubernetes-native workflow engine for DAGs, batch orchestration, and fan-out workloads.
