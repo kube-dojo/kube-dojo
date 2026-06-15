@@ -22,10 +22,10 @@
 </head>
 <body>
 <h1>Session 155 — Platform Disciplines 100% complete (#1953 closed) + Toolkits epic filed</h1>
-<p class="muted">2026-06-15 · continues s154 ("maintain git + issue + PR discipline") · 2 PRs merged (#1994 devsecops, #1995 networking) · 7 modules · <strong>Disciplines 7→0 not-done (100%)</strong> · epic #1953 CLOSED · successor #1996 filed</p>
+<p class="muted">2026-06-15 · continues s154 ("maintain git + issue + PR discipline" → then "continue the session" ×2) · 4 PRs merged (#1994, #1995, #1997, #1998) · 14 modules · <strong>Disciplines 7→0 (100%, #1953 CLOSED)</strong> + <strong>Toolkits 60→53</strong> (#1996 filed + 2 waves)</p>
 
 <div class="card tldr">
-<strong>TL;DR.</strong> Closed the final two not-done <strong>reliability-security</strong> sections of Platform Disciplines — <strong>devsecops</strong> (#1994: 4.1 expand + 4.7 flip) and <strong>networking</strong> (#1995: 1.1–1.5 expand). That brings <strong>Platform Disciplines to 91/91 done (0 not-done)</strong> → epic <strong>#1953 CLOSED</strong> on the snapshot-AC-met rule. Filed the successor epic <strong>#1996 — platform-toolkits (60 not-done)</strong>, the last non-done curriculum bulk. Same proven loop: live-file sweep → ≤3 concurrent authors (cursor/codex/deepseek) in worktrees → opus-inline R1 (≠author family, no gemini) + web-verify both ways + incident-dedup gate → consolidated PR → required-CI build → rebase-merge → <code>finalize_module.sh</code>. <strong>Caught &amp; fixed 3 real defects the verifier passed</strong> (a fabricated Fairwinds stat, an unsourced incident detail, a wrong incident-xref slug).</div>
+<strong>TL;DR.</strong> Closed the final two <strong>reliability-security</strong> Disciplines sections — <strong>devsecops</strong> (#1994) + <strong>networking</strong> (#1995) — bringing <strong>Platform Disciplines to 91/91 done</strong> → epic <strong>#1953 CLOSED</strong>. Filed successor epic <strong>#1996 — platform-toolkits</strong> and immediately drained two Toolkits sections: <strong>security-tools</strong> (#1997: Vault/ESO, OPA-Gatekeeper, Falco, Tetragon) and <strong>code-quality</strong> (#1998: Semgrep, Snyk, Trivy) — <strong>Toolkits 60→53 not-done</strong>. 14 modules total, all T0. Same proven loop throughout: live-file sweep → ≤3 concurrent authors (cursor/codex/deepseek) → opus-inline R1 (≠author, no gemini) + web-verify both ways + dedup gate → consolidated PR → required-CI → rebase-merge → <code>finalize_module.sh</code>. <strong>Caught &amp; fixed 6 verifier-blind defects</strong> across the session (fabricated Fairwinds stat, unsourced Bun-evasion claim, wrong solarwinds xref slug, Tetragon "Sandbox" mislabel, Trivy "CNCF" mislabel, unsourced Trivy origin-story + promo quote). Every CNCF maturity / volatile claim web-verified.</div>
 
 <h2>1 · Sections closed (#1953 — final wave)</h2>
 <table>
@@ -61,9 +61,24 @@
 <li>All worktree-only; both PRs rebase-merged + branch-deleted; 7 author worktrees + orphan branches cleaned; <code>g2-craft</code> (unrelated, #1623) untouched.</li>
 </ul>
 
-<h2>5 · NEXT</h2>
+<h2>5 · Toolkits drain — first two waves (#1996)</h2>
+<p>After filing #1996, drained two Toolkits sections in the same session. Both sweeps reconfirmed the trust-the-live-file rule: the board's stale 5.0 / mixed scores implied flips, but every module was a sub-500-word stub → genuine expand.</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>Before → After</th><th>Notable review catch</th></tr>
+<tr><td>security-tools 4.1 Vault + ESO</td><td>cursor</td><td>437w → <span class="good">T0 5000w/16src</span></td><td>Vault BSL / OpenBao (LF OpenSSF) / IBM-acq-2025-02-27 / ESO Sandbox — all web-verified accurate</td></tr>
+<tr><td>security-tools 4.2 OPA Gatekeeper</td><td>codex</td><td>317w → <span class="good">T0 5128w/24src</span></td><td>exemplary — VAP GA 1.30, OPA/Kyverno Graduated, MutatingAdmissionPolicy hedged; all cited</td></tr>
+<tr><td>security-tools 4.3 Falco</td><td>deepseek</td><td>430w → <span class="good">T0 5030w/12src</span></td><td><span class="warn">fixed:</span> Rosetta wrongly labeled Tetragon "Sandbox" → "Cilium sub-project (not separately rated)"</td></tr>
+<tr><td>security-tools 4.5 Tetragon</td><td>cursor</td><td>348w → <span class="good">T0 5333w/16src</span></td><td>correctly framed Tetragon as Cilium-ecosystem (this surfaced the 4.3 error)</td></tr>
+<tr><td>code-quality 12.2 Semgrep</td><td>codex</td><td>340w → <span class="good">T0 5172w/21src</span></td><td>exemplary — Semgrep LGPL-2.1 + rules-license + Opengrep fork (Jan-2025) all accurate</td></tr>
+<tr><td>code-quality 12.4 Snyk</td><td>cursor</td><td>334w → <span class="good">T0 5126w/22src</span></td><td><span class="warn">fixed:</span> Rosetta wrongly called Trivy a "CNCF sandbox project" → not CNCF (Aqua OSS; default scanner in CNCF Harbor)</td></tr>
+<tr><td>code-quality 12.5 Trivy</td><td>deepseek</td><td>459w → <span class="good">T0 5143w/16src</span></td><td><span class="warn">fixed:</span> trimmed unsourced origin-story embellishment + removed a fabricated promo quote + added log4shell xref markers</td></tr>
+</table>
+<p>PRs <strong>#1997</strong> (security-tools) and <strong>#1998</strong> (code-quality), both rebase-merged + finalized → <strong>Toolkits 60→53 not-done</strong>.</p>
+<p class="warn"><strong>Near-miss + process lesson:</strong> 12.5 (Trivy) carried a specific named incident from its fabrication-heavy stub — "the <strong>TeamPCP</strong> supply-chain attack on <code>trivy-action</code>, March 2026, v0.69.4." My review's fab-signal grep scanned for <code>$</code>/<code>%</code>/leadership keywords but <strong>not for named-incident/proper-noun claims</strong>, so it slipped past R1; I only caught it because the harness surfaced the old stub on restore. Web-verified it — it is <strong>REAL</strong> (CVE-2026-33634; Wiz/Microsoft/Unit 42/Aqua confirm; 76/77 trivy-action tags force-pushed; also hit Checkmarx KICS + LiteLLM) → a reverse-save, kept. <strong>Lesson: when expanding a fabrication-heavy stub, grep the expanded output for surviving named entities (incidents/companies/quotes/metrics) and web-verify each — fabrications (and real-but-unverified facts) can survive expansion.</strong></p>
+
+<h2>6 · NEXT</h2>
 <ul>
-<li><strong>#1996 — platform-toolkits (60 not-done = 56 needs_rewrite + 2 needs_review + 2 shipped_unreviewed; 112 total).</strong> The last non-done curriculum bulk. Same loop. First step: <code>verify_module.py</code> sweep each Toolkits section's LIVE files to split expand-vs-flip before dispatching. (The briefing's "36 critical" was the critical-<em>score</em> subset; the review-axis not-done is 60.)</li>
+<li><strong>#1996 — platform-toolkits, now 53 not-done</strong> (was 60; security-tools + code-quality done). Remaining sections incl. cicd-delivery, data-ai-platforms (ml-platforms, cloud-native-databases), developer-experience (devex-tools, scaling-reliability), infrastructure-networking (iac-tools 9, k8s-distributions 6, networking 6, platforms 5, storage 1), observability-intelligence (observability 6, aiops 1). Same loop. First step: <code>verify_module.py</code> sweep each section's LIVE files to split expand-vs-flip before dispatching (the board scores are stale — every wave so far was genuine expands).</li>
 <li><strong>#1911 UK</strong> — translation currency (~14%); detector-driven calque review on new pages as bulk-translation lands.</li>
 <li><strong>#1876</strong> AI-history book review (queued).</li>
 <li class="warn"><strong>Admin toggles (user):</strong> make <code>arXiv citation check</code> and <code>Unit tests (vitest)</code> REQUIRED branch-protection checks (#1965). Optional P2 polish on leadership 1.2/1.5 recorded on review records.</li>
