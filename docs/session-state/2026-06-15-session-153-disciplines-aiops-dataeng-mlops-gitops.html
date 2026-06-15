@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 153 — Disciplines drain: AIOps + data-engineering + mlops/gitops (#1953)</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#e6edf3; --muted:#9fb0c3; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --card:#111927; --border:#243048; }
+  body { background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,sans-serif; max-width:1020px; margin:0 auto; padding:2rem 1.2rem; }
+  h1 { font-size:1.5rem; border-bottom:2px solid var(--border); padding-bottom:.4rem; }
+  h2 { font-size:1.15rem; color:var(--accent); margin-top:1.8rem; }
+  code { background:#1c2433; padding:.1rem .35rem; border-radius:4px; font-size:.9em; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; }
+  th,td { border:1px solid var(--border); padding:.4rem .6rem; text-align:left; vertical-align:top; font-size:.9rem; }
+  th { color:var(--muted); }
+  .good { color:var(--good); font-weight:600; }
+  .warn { color:var(--warn); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:.8rem 1rem; margin:.6rem 0; }
+  .tldr { border-left:4px solid var(--accent); }
+  ul { margin:.3rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 153 — Platform Disciplines drain (#1953): AIOps + data-engineering + mlops/gitops</h1>
+<p class="muted">2026-06-15 · continues s152 (same session, "continue to 800K") · 4 PRs merged (#1984 aiops, #1985/#1986/#1987 data-engineering) + mlops/gitops wave in flight</p>
+
+<div class="card tldr">
+<strong>TL;DR.</strong> Continued draining Platform Disciplines in curriculum order after SRE Wave 2 (s152). Closed three sections: <strong>AIOps</strong> (3 modules, PR #1984), <strong>data-engineering</strong> (8 modules, PRs #1985/#1986/#1987 in 3 pipelined batches), and dispatched the <strong>mlops 5.3 + gitops 3.2/3.3</strong> wave (in flight at handoff). Same proven loop throughout: live-file verifier sweep → ≤3 concurrent authors (cursor/codex/deepseek) in own worktrees → opus-inline R1 (≠ author, no gemini) + independent curl source sweep + ground-check + web-verify → consolidated PR → required-CI Astro build → rebase-merge → finalize via <code>finalize_module.sh</code>. <strong>Platform Disciplines: 60 → 25 not-done</strong> (was 33 at s152 end). Durable-vendor rule enforced hard on all the version-volatile topics.
+</div>
+
+<h2>1 · AIOps section → done (PR #1984, 3 modules)</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>Before→After</th><th>Src</th><th>R1</th></tr>
+<tr><td>6.1 AIOps Foundations</td><td>cursor</td><td>452→5005 w</td><td>4→16</td><td>War-story de-fabbed; Gartner framing + 5-capability pipeline + Rosetta; <strong>P1 fixed: wrong Isolation Forest arXiv id (0810.2371 = a math paper) → verified ICDM 2008 authors' copy</strong></td></tr>
+<tr><td>6.2 Anomaly Detection</td><td>codex</td><td>663→5272 w</td><td>4→16</td><td>z-score/MAD(0.6745)/EWMA/Holt-Winters/STL math verified; runnable IsolationForest; dead source replaced</td></tr>
+<tr><td>6.4 Root Cause Analysis</td><td>deepseek</td><td>366→5021 w</td><td>4→15</td><td>correlation-vs-causation, topology depth+blast-radius, Pearl <em>Causality</em>/do-calculus, Dapper paper, 5-Whys→Toyota/Ohno — ground-checked, no hallucinations</td></tr>
+</table>
+
+<h2>2 · data-engineering section → done (PRs #1985/#1986/#1987, 8 modules)</h2>
+<p>Pipelined in 3 batches (build batch N while batch N+1 authors run):</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>Before→After</th><th>Src</th><th>R1</th></tr>
+<tr><td>1.1 Stateful Workloads</td><td>cursor</td><td>1367→5008</td><td>0→16</td><td>StatefulSets/CSI/operators; cockroach-operator v2.15.0 pinned; no bitnami</td></tr>
+<tr><td>1.2 Kafka</td><td>codex</td><td>1825→5043</td><td>8→14</td><td>log/partitions/ISR/acks/KRaft (ZK-removed); Kafka 4.3 + Strimzi</td></tr>
+<tr><td>1.3 Flink</td><td>deepseek</td><td>1330→5151</td><td>0→18</td><td>event-time/watermarks/checkpoint-vs-savepoint/RocksDB; <strong>P1 fixed: stale operator helm URL 1.10.0→1.15.0 (archived→404)</strong>; Flink 2.2 web-verified</td></tr>
+<tr><td>1.4 Spark</td><td>codex</td><td>1331→5801</td><td>0→17</td><td>Catalyst/Tungsten/shuffle; Spark Operator at kubeflow/spark-operator</td></tr>
+<tr><td>1.5 Airflow</td><td>cursor</td><td>1008→5000</td><td>0→12</td><td><code>schedule</code> vs deprecated <code>schedule_interval</code>; Airflow 3.x CronTriggerTimetable + logical-date shift</td></tr>
+<tr><td>1.6 Lakehouse</td><td>deepseek</td><td>1170→5038</td><td>0→12</td><td>Iceberg/Delta/Hudi Rosetta + convergence; CIDR 2021 Lakehouse paper confirmed; no best-format claims</td></tr>
+<tr><td>1.7 Event Streaming Fundamentals</td><td>codex</td><td>2998→6530</td><td>0→14</td><td>delivery semantics (exactly-once=effectively-once within a boundary); Kreps log; Dataflow Model paper</td></tr>
+<tr><td>1.8 CloudEvents &amp; EDA</td><td>cursor</td><td>2425→5405</td><td>4→14</td><td><strong>CloudEvents CNCF Graduated 2024-01-25 web-verified</strong>; spec v1.0; outbox/saga/CQRS; Knative</td></tr>
+</table>
+<p class="warn">Note: 1.7/1.8 had no pipeline-state JSON (only a stale <code>.lock</code>) → <code>finalize_module.sh</code> printed "no state for" and skipped reset-stage + record-build. The board shows them <strong>done/5.0</strong> anyway (status derives from score + review record, like 1.9 which was already done in <code>stage:UNAUDITED</code>). Telemetry record-build was run manually for both. No action needed; the section is fully done.</p>
+
+<h2>3 · mlops 5.3 + gitops 3.2/3.3 wave — IN FLIGHT at handoff</h2>
+<p>Dispatched (codex mlops-5.3-model-training, cursor gitops-3.2-repository-strategies, deepseek gitops-3.3-environment-promotion). All 3 swept genuine T3 expands (390/709/605 w, fab markers to clean). Briefs: <code>logs/remediation/briefs/pf-misc/</code>. <strong>NEXT-SESSION PICKUP (if not finished):</strong> check worktrees <code>.worktrees/mlops-53</code>, <code>.worktrees/gitops-32</code>, <code>.worktrees/gitops-33</code> for committed work → verify T0 → opus-inline R1 + curl sweep + ground-check (gitops: web-verify Argo CD/Flux/Rollouts/Flagger CNCF maturity; mlops: web-verify Kubeflow Training Operator TrainJob-vs-PyTorchJob API + Kueue maturity) → consolidate → PR → build → merge → finalize. Closes mlops + gitops sections.</p>
+
+<h2>4 · Process notes / reusables</h2>
+<ul>
+<li><strong>Pipelining works well</strong> for multi-batch sections: consolidate+build batch N while batch N+1 authors run, poll CI in background. Kept ~3 authors busy continuously.</li>
+<li><strong>5 real P1s caught by R1 ground-check</strong> this session (across s152+s153): SRE Opsgenie dates (verified accurate), Isolation Forest citation (fixed), Flink operator URL (fixed), + durable-vendor enforcement. Pattern: deepseek/cursor occasionally ship a stale version URL or wrong paper id → the curl source sweep + paper-title check catches them every time.</li>
+<li><strong>Web-verify wins:</strong> Flink 2.2 current, CloudEvents graduated 2024-01-25, Airflow 3.x, Spark Operator @ kubeflow — all confirmed against live sources (reviewer cutoff is Jan 2026; these are real).</li>
+<li>Reusable scaffolds: <code>logs/remediation/briefs/pf-aiops/</code>, <code>pf-dataeng/</code>, <code>pf-misc/</code> (generic Disciplines shared-expand-rules — reuse for remaining sections).</li>
+<li>All worktree-only; never branched in primary; rebase-merged; all session worktrees+branches cleaned except long-standing <code>g2-craft</code> (#1623).</li>
+</ul>
+
+<h2>5 · NEXT (curriculum order, #1953)</h2>
+<p>Platform Disciplines <strong>25 not-done</strong>: mlops (1, in flight) → gitops (2, in flight) → <strong>iac (5)</strong> → release-engineering (5) → chaos-engineering (5) → devsecops (2) → networking (5). Then <strong>Toolkits (36)</strong>. Same loop; generic shared-rules in <code>pf-misc/</code>. Durable-vendor rule applies hard to IaC (Terraform/OpenTofu/Pulumi/Crossplane versions) and the security sections.</p>
+<p><strong>Standing:</strong> #1911 UK currency · #1876 AI-history book review · #1823 mermaid-parens campaign · #1623 g2-craft.</p>
+</body>
+</html>
