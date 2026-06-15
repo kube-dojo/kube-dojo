@@ -1239,8 +1239,8 @@ Continue to [Module 3.2: Tekton](../module-3.2-tekton/) where we will explore Ku
 
 - [Dagger Documentation](https://docs.dagger.io/) — The authoritative reference for Dagger Engine, SDKs, CLI, and features. Current as of version 0.21.x.
 - [Getting Started with Dagger](https://docs.dagger.io/getting-started) — Installation, core concepts, and quickstart guides for building CI workflows and AI agents with Dagger.
-- [Dagger Go SDK](https://docs.dagger.io/sdk/go) — Reference for the Go SDK, including installation, types, and API documentation.
-- [Dagger Python SDK](https://docs.dagger.io/sdk/python) — Reference for the Python SDK, including decorators, types, and async patterns.
+- [Dagger API & SDK Reference](https://docs.dagger.io/reference/) — Current API reference for the Go, Python, and TypeScript SDK types, installation, and methods.
+- [Extending Dagger with the SDKs](https://docs.dagger.io/extending/) — How the language SDKs (Go, Python, TypeScript) construct the operation graph; decorators, types, and async patterns.
 - [Dagger Features: Caching](https://docs.dagger.io/features/caching) — Documentation on Dagger's content-addressed caching, CacheVolumes, and Dagger Cloud shared caching.
 - [Dagger Features: Modules](https://docs.dagger.io/features/modules) — Module creation, publishing, installation, and the Daggerverse module ecosystem.
 - [Dagger Core Concepts: Functions](https://docs.dagger.io/core-concepts/functions) — How Dagger Functions work, argument passing, return types, and function composition.
