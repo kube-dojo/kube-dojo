@@ -3,6 +3,7 @@ title: "Module 1.5: Release Engineering Metrics & Observability"
 slug: platform/disciplines/delivery-automation/release-engineering/module-1.5-release-metrics
 sidebar:
   order: 6
+revision_pending: false
 ---
 > **Discipline Module** | Complexity: `[MEDIUM]` | Time: 2 hours
 
@@ -20,506 +21,315 @@ Before starting this module:
 
 After completing this module, you will be able to:
 
-- **Implement DORA metrics collection to measure deployment frequency, lead time, MTTR, and change failure rate**
+- **Implement DORA metrics collection to measure deployment frequency, change lead time, change fail rate, and failed deployment recovery time**
 - **Design release quality dashboards that give engineering leadership actionable visibility into delivery health**
 - **Build automated release scorecards that track reliability and velocity trends over time**
 - **Analyze release metric patterns to identify bottlenecks in your software delivery pipeline**
 
 ## Why This Module Matters
 
-A VP of Engineering walks into a meeting and asks three questions:
+**Hypothetical scenario:** A platform team ships twelve services through a shared GitOps pipeline. Leadership asks how often production changes, how long commits take to reach users, and how often deployments cause incidents. The CI system logs builds, Prometheus tracks request errors, and PagerDuty records pages — but nobody has wired those systems together. After a bad rollout, engineers spend twenty minutes in chat asking who deployed what. The organization invests in canary analysis and feature flags, yet six months later nobody can say whether delivery got faster or safer. That gap is not a tooling failure; it is a measurement failure.
 
-1. "How often do we deploy to production?"
-2. "When a deployment causes a problem, how quickly do we recover?"
-3. "What percentage of our deployments cause failures?"
+Release engineering without metrics is faith-based shipping. You can adopt every progressive-delivery pattern from earlier modules in this track — blue/green, Argo Rollouts analysis, ring deployments — and still not know whether those investments changed outcomes. Metrics turn release engineering from artisan craft into an improvable practice by giving teams shared language for throughput and stability, surfacing bottlenecks before they become cultural excuses, and connecting delivery performance to reliability concepts like error budgets that SRE teams already use.
 
-The room goes silent. Nobody knows. The CI/CD system tracks builds. The monitoring system tracks uptime. The incident tracker tracks outages. But nobody has connected these systems to answer the fundamental question: **are we getting better or worse at releasing software?**
+The DevOps Research and Assessment (DORA) program, rooted in the research behind the book *Accelerate*, studied software delivery at scale and found that a small set of delivery metrics correlates with organizational outcomes when measured consistently at the application or service level. This module teaches the durable spine of that model — what to measure, how to instrument it from CI/CD and observability systems, how to visualize it without gaming, and how to use the numbers to improve batch size, review flow, and recovery — not to rank individuals.
 
-This is the blind spot that kills engineering organizations. Without release metrics, you cannot tell if your investment in canary deployments, feature flags, and ring rollouts is actually paying off. You cannot tell if your deployment pipeline is a competitive advantage or a liability. You cannot tell if the team that deploys 50 times a day is bold or reckless.
-
-The DORA research program — the largest scientific study of software delivery performance ever conducted — identified four metrics that separate elite engineering organizations from the rest. These are not vanity metrics. They are predictive indicators of organizational performance, and they all center on one thing: **how you release software**.
-
-This module teaches you to measure what matters, build dashboards that tell the truth, and use release metrics to drive continuous improvement — not continuous blame.
+Release metrics sit at the intersection of practices you learned earlier in this discipline track and reliability work from SRE. Canary analysis from Module 1.2 and feature flags from Module 1.3 reduce change fail rate and recovery time when instrumented honestly; global release orchestration from Module 1.4 adds complexity that must appear in deployment events so multi-region rollouts do not look like a single opaque deploy. Metrics make those practices auditable instead of aspirational.
 
 ---
 
-## The DORA Four Key Metrics
+## Why Measure Releases at All
 
-### What DORA Discovered
+Every production change is a hypothesis: we believe this diff improves the product without unacceptable risk. Without measurement, teams debate that hypothesis anecdotally forever. One group points to uptime graphs; another cites sprint velocity; a third remembers last month's outage. None of those views answer the delivery-specific questions release engineers own — how frequently we integrate, how long changes wait in queues, how often production rejects a deployment, and how quickly we restore service when it does.
 
-The DevOps Research and Assessment (DORA) program, founded by Dr. Nicole Forsgren, Jez Humble, and Gene Kim, studied thousands of engineering organizations over a decade. Their finding: four metrics predict both software delivery performance AND organizational performance (profitability, market share, customer satisfaction).
+Instrumenting those four questions consistently transforms postmortems from opinion to evidence and gives new engineers a map of the delivery system they inherit.
 
-These metrics are:
+Good definitions are boring on purpose: they prevent quarterly renegotiation of what "deploy" meant when numbers move, and they keep finance, product, and engineering aligned when someone asks for the denominator each review cycle.
+
+Measuring releases creates feedback loops that standalone monitoring cannot. Service-level dashboards tell you that errors rose; release metrics tell you whether a deployment caused the rise and whether your delivery process is producing changes small enough to diagnose quickly. That distinction matters because the fix for a spike caused by a deployment is rollback or feature disable, while the fix for gradual drift is capacity or dependency work — and conflating the two wastes incident time.
+
+Good release metrics also align engineering with product and leadership on definitions. "We deploy continuously" means something different on a mobile client with store review than on a stateless API behind Kubernetes. When teams agree on numerators and denominators — what counts as a deployment, what counts as a failure — they stop arguing about labels and start improving pipelines. The goal is not a vanity dashboard for executives; it is a team-visible signal that says where batch size, test gaps, or approval friction block safer speed.
+
+Finally, release metrics complement SRE error budgets rather than replacing them. Error budgets describe customer-facing reliability remaining in a window; DORA-style metrics describe whether your delivery system produces changes that fit inside that budget. A team with a healthy budget but rising change fail rate is borrowing reliability; a team with low lead time but exhausted budget may be shipping too aggressively for current test maturity. Used together, the two frameworks connect *how we ship* with *what users experience*.
+
+Leaders sometimes ask for ROI on release-engineering investments — progressive delivery controllers, better staging, deployment automation. Without before-and-after metrics, those conversations devolve into anecdotes about one bad outage or one fast feature launch. Trend lines for lead time and change fail rate after adopting canary analysis or trunk-based development give evidence that is legible to finance and product, not just infra engineers. The ROI is rarely a single quarter; it accumulates as batch size shrinks, diagnosis time falls, and teams stop scheduling "release weekends" that burn people out.
+
+Measurement also exposes **hidden work**. A team that deploys rarely may look stable while sitting on a backlog of undeployed fixes; frequency and lead time together reveal that stability is purchased by delay, not by quality. Conversely, a team that deploys constantly but spends half its week on rework shows high throughput with poor instability metrics — a different prescription than "deploy less." The metrics are diagnostic lenses, not report cards.
+
+---
+
+## DORA Software Delivery Performance Metrics
+
+### Throughput and instability — the durable model
+
+DORA organizes software delivery performance around two complementary factors: **throughput** (how much change moves safely through the pipeline) and **instability** (how often production rejects that change). The research program has evolved its metric set over time; the current model published on [dora.dev](https://dora.dev/guides/dora-metrics/) describes **five** metrics rather than the original four. Three metrics capture throughput; two capture instability. Treat the count as a dated snapshot — verify naming and definitions on dora.dev before hard-coding them into executive scorecards.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against [dora.dev/guides/dora-metrics/](https://dora.dev/guides/dora-metrics/) before relying on specifics.**
+
+| Factor | Metric (current DORA name) | Durable question it answers |
+|--------|---------------------------|-----------------------------|
+| Throughput | Deployment frequency | How often do we successfully reach production? |
+| Throughput | Change lead time | How long from commit to production? |
+| Throughput | Failed deployment recovery time | How long to recover when a deployment fails in production? |
+| Instability | Change fail rate | What share of deployments need immediate intervention? |
+| Instability | Deployment rework rate | What share of deployments are unplanned reactions to production incidents? |
+
+The fifth metric — **deployment rework rate** — captures reactive work that never should have been a normal planned deployment. It complements change fail rate: a failed canary that never reaches full traffic may not count as a production failure, but emergency redeploys driven by incidents still reveal instability in how changes flow. When you instrument, document whether rework includes hotfix-only pipelines, config-only rolls, or data backfills so year-over-year comparisons stay honest.
 
 ```mermaid
 graph TD
-    subgraph "DORA Four Key Metrics"
-        subgraph "THROUGHPUT (Speed)"
-            DF["1. Deployment Frequency<br/>How often do we deploy?"]
-            LT["2. Lead Time for Changes<br/>How fast from commit to production?"]
-        end
-        subgraph "STABILITY (Quality)"
-            CFR["3. Change Failure Rate<br/>How often do deploys fail?"]
-            MTTR["4. Mean Time to Recovery<br/>How fast do we recover from failures?"]
-        end
+    subgraph "Throughput"
+        DF["Deployment frequency"]
+        CLT["Change lead time"]
+        FDRT["Failed deployment recovery time"]
+    end
+    subgraph "Instability"
+        CFR["Change fail rate"]
+        DRR["Deployment rework rate"]
     end
 ```
 
-> **Key Insight**: Elite teams are BOTH faster AND more stable. Speed and stability are NOT trade-offs — they reinforce each other.
+### The speed–stability finding
 
-### Metric 1: Deployment Frequency
+A persistent myth in enterprise software holds that moving faster increases outages. DORA's repeated finding is the opposite for high-performing teams: throughput and stability metrics **correlate positively** when teams work in small batches, automate verification, and design recovery paths. Faster feedback shrinks changes; smaller changes fail less often and are easier to roll back when they do. That is why optimizing only deployment frequency — or only change fail rate — misleads: the metrics are a system, not a menu.
 
-**Definition**: How often does your organization deploy code to production?
+Do not treat industry tier labels ("elite", "high", "medium") as scientific constants for your organization. DORA publishes benchmark bands in its annual reports; those bands shift with sample and methodology. Use them as conversation starters, not quotas. Compare your application to its past self first; compare to external benchmarks only when context (architecture, regulatory burden, release surface) is similar.
 
-| Performance Level | Deployment Frequency |
-|-------------------|---------------------|
-| Elite | On-demand (multiple deploys per day) |
-| High | Between once per day and once per week |
-| Medium | Between once per week and once per month |
-| Low | Between once per month and once every 6 months |
+When reading the annual State of DevOps report, note which capabilities the research links to your bottleneck metric that quarter — AI tooling, platform engineering, and user-centricity have appeared in recent editions as moderators of stability and throughput. Those themes change; the habit of reading the report for **capability hypotheses**, not magic numbers, endures.
 
-**Why it matters**: Frequent deployments mean smaller changesets. Smaller changesets are easier to debug, faster to roll back, and less risky. A team deploying 10 times per day ships 10 small changes. A team deploying monthly ships one massive change with hundreds of commits.
+### Deployment frequency
 
-> **Pause and predict**: If you move from a monolithic architecture to microservices, how might your deployment frequency change?
+Deployment frequency measures how often a team successfully deploys to production — or equivalently, the elapsed time between production deployments. Higher frequency, when paired with low batch size, implies less risk per change because each diff is easier to reason about and revert. Frequency alone is meaningless if every deployment is a manual drama or if "deploy" means copying artifacts without serving traffic; define the event in writing before counting.
 
-**How to measure it**:
+Watch for frequency **decreasing** after incidents (fear-driven batching), **diverging** across teams that share a platform (hidden toil in one pipeline), or **rising** without corresponding lead-time improvement (possible empty or cosmetic deploys if someone tied incentives to the number). The diagnostic question is always whether more frequent deployments still represent customer-meaningful change.
 
-```promql
-# Count deployments per day (using observed generation changes)
-sum(
-  changes(kube_deployment_status_observed_generation{namespace="production"}[24h])
-) by (deployment)
+Mobile clients, firmware, and regulated mainframe batches legitimately deploy less often than stateless APIs; compare those systems to their own history rather than to a microservice baseline. When frequency is low by design, emphasize lead time within release trains and change fail rate per train — the durable goal remains small, understandable batches relative to your release surface, not arbitrary daily deploy counts for every tier.
+
+### Change lead time
+
+Change lead time is elapsed time from **first commit** that is part of a change until that change runs successfully in production. It includes coding, review wait, CI, staging gates, approvals, and the production rollout — not just pipeline wall clock. Teams that measure only "build duration" systematically underestimate lead time and mis-prioritize optimizations.
+
+Lead time is where release metrics most often reveal organizational bottlenecks. Code review queues, change-advisory boards, infrequent release trains, and long-running integration suites all inflate lead time without appearing on a deployment-frequency chart. Segment lead time by stage — time to first review, time in review, time from merge to prod — so improvements target the actual constraint rather than the noisiest graph.
+
+Calendar time and working time diverge when teams across zones hand off reviews. If your tracker stores only timestamps, note timezone in the metrics contract. Waiting over a weekend counts against lead time even if no human could act — that is useful data for staffing and follow-the-sun review, not noise to delete.
+
+### Change fail rate
+
+Change fail rate is the proportion of production deployments that require **immediate intervention**: rollback, forward fix, or incident response tied to the release. The definition of "immediate" should be team-owned and documented. Many teams use a twenty-four-hour window for hotfix attribution; others tie failure strictly to automated rollback or SLO burn triggered during canary analysis. Consistency matters more than which window you pick.
+
+Change fail rate is not a blame metric. In a blameless culture, it signals where verification or batch size failed — not who merged. Pair it with postmortem themes from SRE postmortem practice to see whether failures cluster on certain services, certain days, or certain change types (schema migrations, flag flips, config-only diffs).
+
+Feature flags complicate CFR attribution: a bad flag default may count as a failed release even when the container image unchanged. Tag deploy events with flag keys toggled so scorecards distinguish binary rollouts from configuration exposure. Similarly, database migrations may need a separate fail-rate line item because rollback mechanics differ from stateless apps.
+
+### Failed deployment recovery time
+
+DORA renamed the familiar **MTTR** framing to **failed deployment recovery time** to emphasize recovery from **deployment-caused** impairment rather than every infrastructure incident. The clock typically starts when a deployment-related failure is detected and stops when production is restored to an acceptable state — whether by rollback, flag off, or forward fix. Measuring all incidents conflates database failovers with bad app releases and hides release-process weaknesses.
+
+Recovery time decomposes into detection, diagnosis, mitigation, and verification. Deployment markers on dashboards attack diagnosis; automated rollback and feature kill switches attack mitigation; progressive delivery attacks detection by failing small blast-radius changes early. When recovery time dominates your instability metrics, invest in observability correlation before adding more pre-merge tests.
+
+Runbooks should state expected recovery paths per service — rollback command, flag name, scale-down procedure — because hesitation during incidents inflates recovery time even when detection is fast. Game days that practice rollback under time pressure improve this metric more reliably than adding another integration test suite that rarely fails.
+
+### Deployment rework rate
+
+Deployment rework rate measures unplanned deployments performed because something already in production misbehaved — the emergency patch on Friday, the config revert after a traffic shift, the second deploy that exists only because the first missed a dependency. High rework often indicates upstream quality gaps or unclear ownership of "done." Tracking it separately from change fail rate prevents teams from celebrating low fail rates while firefighting through unplanned pushes.
+
+When you present DORA metrics to stakeholders, lead with the **two-axis story**: throughput answers "are we delivering value continuously?" while instability answers "does production trust our changes?" A service can legitimately prioritize one axis temporarily — stabilizing after a migration may justify higher lead time for a quarter — but chronic imbalance signals structural debt. Document those intentional tradeoffs in release retrospectives so temporary exceptions do not become permanent culture.
+
+---
+
+## Instrumenting DORA Metrics from CI/CD and VCS
+
+Implementing DORA metrics collection means stitching together three data domains: **version control** (commits, merges, tags), **CI/CD** (build, test, deploy events with outcomes), and **incident/observability** (pages, rollbacks, SLO burns). None of the five metrics requires exotic tooling; all require explicit event schemas and honest definitions.
+
+**Deployment events** should be immutable facts emitted at the end of every production promotion: service identifier, environment, commit SHA(s) included, start and end timestamps, deployer (human or automation), strategy (rolling, canary, blue/green), and result (`success`, `failed`, `aborted`, `rolled_back`). Store them in a warehouse, an event bus, or — for smaller teams — structured CI logs that a nightly job parses. Without a deployment event stream, deployment frequency and change fail rate devolve into guessing from Kubernetes `observedGeneration` bumps, which miscounts failed applies and config-only changes.
+
+**Change lead time** joins deployment events to VCS history. For each production deployment, determine the set of commits not present in the previous successful production deployment; lead time for that deploy is `deploy_timestamp - min(commit_timestamp)` across that set. Monorepos need path filters so unrelated commits do not skew service-level numbers. Trunk-based teams with continuous deployment may compute lead time per commit at pick-up time instead of per deploy batch — pick one method and document it.
+
+**Change fail rate** joins deployment events to failure signals: automated rollback, failed canary analysis, incident tickets tagged with release cause, or hotfix deploy within your attribution window. Human judgment will edge cases; run a monthly audit sample to calibrate. Exclude staging-only failures — they reflect the process working — and exclude deliberate rollback drills if you tag them.
+
+**Failed deployment recovery time** joins failure detection time (alert, canary abort, or first SLO burn) to recovery time (rollback complete, error rate normalized, or incident resolved). Incident tools and deployment annotations supply timestamps; ensure time zones and clock skew are normalized in UTC.
+
+**Deployment rework rate** flags deploy events whose trigger was `incident` or whose commit message/metadata marks reactive work, divided by total deploys in the window. If you cannot automate classification yet, start with a weekly human tag on deploys — imperfect data beats none.
+
+The open-source [Four Keys](https://github.com/dora-team/fourkeys) project demonstrates one reference architecture: ingest GitHub/GitLab and Cloud Build (or analogous) events into BigQuery and visualize throughput and stability. Commercial dashboards and internal data platforms can implement the same joins; the durable lesson is **event-first instrumentation**, not which UI renders the chart.
+
+Privacy and compliance constrain where deploy events land. Commit messages may contain ticket IDs with customer references; deployer fields may identify individuals. Scrub or hash identifiers in warehouse layers while preserving team-level attribution. Security review of the event pipeline prevents later surprises when auditors ask who can see production change history.
+
+```yaml
+# deployment-events ConfigMap (emitted by CI/CD after every prod promotion)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deployment-event
+  labels:
+    deployment-event: "true"
+data:
+  service: "webapp"
+  version: "v2.1.0"
+  environment: "production"
+  deployer: "ci-bot"
+  commit_sha: "abc123"
+  commit_timestamp: "2026-03-24T10:00:00Z"
+  deploy_timestamp: "2026-03-24T10:15:00Z"
+  result: "success"
 ```
 
-Or, if you emit a custom metric on each deployment:
-
 ```promql
-# Custom deployment counter
-sum(increase(deployment_completed_total{environment="production"}[24h]))
-```
+# Deployment frequency — custom counter emitted by CI/CD
+sum(increase(deployment_completed_total{environment="production"}[7d]))
 
-**What to watch for**:
-- Deployment frequency decreasing over time (sign of growing fear or complexity)
-- Uneven distribution across teams (some teams deploy daily, others monthly)
-- Deploy frequency dropping after an incident (overcorrection)
-
-### Metric 2: Lead Time for Changes
-
-**Definition**: The time from a code commit to that code running successfully in production.
-
-| Performance Level | Lead Time |
-|-------------------|-----------|
-| Elite | Less than 1 hour |
-| High | Between 1 day and 1 week |
-| Medium | Between 1 week and 1 month |
-| Low | Between 1 month and 6 months |
-
-**Components of lead time**:
-
-```mermaid
-flowchart LR
-    A["Commit<br/>(Coding time)"] --> B["Code Review<br/>(Review wait)"]
-    B --> C["CI Build<br/>(Build time)"]
-    C --> D["Deploy to Staging<br/>(Stage/test gates)"]
-    D --> E["Deploy to Prod<br/>(Deploy pipeline)"]
-    
-    subgraph "Total Lead Time"
-        A
-        B
-        C
-        D
-        E
-    end
-```
-
-> **Stop and think**: Why is code review often the largest bottleneck in Lead Time? What cultural or tooling changes could reduce it?
-
-**How to measure it**:
-
-```promql
-# If you emit timestamps for each stage:
-histogram_quantile(0.50,
-  sum(rate(
-    deployment_lead_time_seconds_bucket{environment="production"}[7d]
-  )) by (le)
-)
-```
-
-In practice, most teams compute this by comparing the deployment timestamp with the oldest commit SHA in the deployment that was not in the previous deployment.
-
-**Common bottlenecks**:
-- Code review wait time (the #1 bottleneck in most organizations)
-- Manual approval gates
-- Slow CI pipelines
-- Infrequent deploy windows
-- Long-running integration test suites
-
-### Metric 3: Change Failure Rate (CFR)
-
-**Definition**: The percentage of deployments that cause a failure in production (requiring rollback, hotfix, or incident).
-
-| Performance Level | Change Failure Rate |
-|-------------------|-------------------|
-| Elite | 0-5% |
-| High | 5-10% |
-| Medium | 10-15% |
-| Low | 16-30% |
-
-> **Pause and predict**: Will implementing rigorous manual QA phases before every release improve or degrade your Change Failure Rate? Why?
-
-**How to measure it**:
-
-```promql
-# Failed deployments / Total deployments (use increase() for counters over a window)
-sum(increase(deployment_completed_total{result="failure", environment="production"}[30d])) /
+# Change fail rate — failed or rolled-back deploys over total
+sum(increase(deployment_completed_total{result=~"failure|rollback", environment="production"}[30d]))
+/
 sum(increase(deployment_completed_total{environment="production"}[30d]))
-```
 
-**What counts as a "failure"?**:
-- Deployment rolled back (automatically or manually)
-- Hotfix deployed within 24 hours of the original deployment
-- Incident created and attributed to the deployment
-- Canary analysis failed and aborted the rollout
-
-**What does NOT count**:
-- Bugs found in staging (caught before production)
-- Planned rollbacks (testing the rollback mechanism)
-- Configuration changes that did not affect users
-
-**Key insight**: CFR and deployment frequency are NOT inversely correlated for elite teams. Elite teams deploy more often AND have lower failure rates. This is because frequent deployments mean smaller changes, which are inherently less risky.
-
-### Metric 4: Mean Time to Recovery (MTTR)
-
-**Definition**: How long it takes to recover from a production failure (service impairment or outage).
-
-| Performance Level | MTTR |
-|-------------------|------|
-| Elite | Less than 1 hour |
-| High | Less than 1 day |
-| Medium | Less than 1 week |
-| Low | More than 1 week |
-
-**MTTR components**:
-
-```mermaid
-flowchart LR
-    A["Failure occurs"] --> B["Detection<br/>(Time to Detect)"]
-    B --> C["Diagnosis<br/>(Time to Diagnose)"]
-    C --> D["Fix<br/>(Time to Fix)"]
-    D --> E["Recovery<br/>(Time to Deploy Fix)"]
-    
-    subgraph "Total MTTR"
-        B
-        C
-        D
-        E
-    end
-```
-
-> **Stop and think**: Which phase of MTTR (Detect, Diagnose, Fix, Deploy) usually takes the longest for your team today?
-
-**How to reduce each component**:
-
-| Component | Reduction Strategy |
-|-----------|-------------------|
-| Time to Detect | Better monitoring, tighter alert thresholds, canary analysis |
-| Time to Diagnose | Deployment markers in dashboards, correlation of deploys with metrics |
-| Time to Fix | Instant rollback, feature flag kill switches |
-| Time to Deploy Fix | Fast CI/CD pipeline, automated deployment |
-
-**How to measure it**:
-
-```promql
-# Average time from incident creation to resolution
-avg(
-  incident_resolution_timestamp - incident_creation_timestamp
-) by (severity)
-```
-
----
-
-## Release Health: Beyond DORA
-
-### Deployment-Specific Metrics
-
-DORA metrics tell you about your overall delivery performance. You also need metrics about individual deployments:
-
-**1. Deployment Duration**
-
-How long does a deployment take from start to all pods healthy?
-
-```promql
-# Time from deployment start to last pod ready
-histogram_quantile(0.95,
-  sum(rate(
-    deployment_duration_seconds_bucket{environment="production"}[7d]
-  )) by (le, deployment)
-)
-```
-
-Watch for deployments getting slower over time — this often indicates growing image sizes, slow health checks, or resource contention.
-
-**2. Rollback Frequency**
-
-How often do deployments get rolled back?
-
-```promql
-sum(rate(deployment_rollback_total{environment="production"}[30d]))
-/
-sum(rate(deployment_completed_total{environment="production"}[30d]))
-```
-
-A healthy rollback rate is 1-5%. Below 1% might mean you are not rolling back when you should be. Above 10% means your pre-production testing is inadequate.
-
-**3. Canary Analysis Pass Rate**
-
-How often do canary deployments pass their analysis gates?
-
-```promql
-sum(rate(argo_rollouts_analysis_run_total{phase="Successful"}[30d]))
-/
-sum(rate(argo_rollouts_analysis_run_total[30d]))
-```
-
-**4. Time to Full Rollout**
-
-How long from first canary pod to 100% traffic?
-
-```promql
+# Lead time p50 — requires histogram exported by your deploy tracker
 histogram_quantile(0.50,
-  sum(rate(
-    rollout_completion_time_seconds_bucket[30d]
-  )) by (le)
+  sum(rate(deployment_lead_time_seconds_bucket{environment="production"}[7d])) by (le)
 )
 ```
 
-### SLIs and SLOs During Releases
+### Measurement pitfalls that invalidate dashboards
 
-Releases are the most dangerous time for SLO compliance. Here is how to protect your SLOs:
+Teams routinely skew DORA metrics without malice. Counting **builds** instead of **production deployments** inflates frequency. Treating **every pod restart** as a deployment destroys stability metrics. Including **non-production** environments in executive roll-ups mixes contexts. Comparing a mobile app team to a mainframe batch team because both report to the same VP violates the application-level spirit of the model. Fixing definitions in a written "metrics contract" page prevents re-litigation every quarter.
 
-**Pre-release SLO check**:
-Before deploying, check remaining error budget:
+Another pitfall is **premature precision**: spending quarters building perfect data integrations before anyone looks at trends. DORA's own guidance recommends starting with conversations, the [DORA Quick Check](https://dora.dev/quickcheck/), or lightweight sampling, then hardening instrumentation where decisions actually hinge on numbers. A spreadsheet updated weekly with honest definitions beats a real-time dashboard that lies.
 
-```promql
-# Remaining error budget (30-day window)
-1 - (
-  sum(rate(http_requests_total{status=~"5.."}[30d]))
-  /
-  sum(rate(http_requests_total[30d]))
-) / (1 - 0.999)  # SLO target: 99.9%
-```
+For Kubernetes-centric pipelines, `kube_deployment_status_observed_generation` changes can approximate deployment frequency when no custom events exist yet, but treat that as a bootstrap only. Generation bumps miscount failed applies, include config-only changes you might exclude from CFR, and ignore services deployed via Argo CD sync waves or Helm hooks differently than raw Deployments. Migrate to explicit CI-emitted counters as soon as one executive makes a decision from the bootstrap chart — accountability follows the metric.
 
-> **Stop and think**: If your error budget is completely exhausted, should you block all deployments, or only new feature deployments? What about emergency hotfixes?
-
-If error budget is below 20%, consider delaying the deployment or deploying with extra caution (smaller canary percentage, longer bake time).
-
-**During-release SLO monitoring**:
-
-```promql
-# Real-time error budget burn rate
-sum(rate(http_requests_total{status=~"5.."}[5m]))
-/
-sum(rate(http_requests_total[5m]))
-```
-
-If the 5-minute error rate exceeds 10x the SLO threshold during a canary, trigger automatic rollback.
-
-**Post-release SLO impact**:
-
-```promql
-# Error budget consumed by last deployment
-# (error rate during deploy window - baseline error rate) * deploy duration
-```
-
-Track this per deployment to identify which releases consume the most error budget.
-
-### The Error Budget Gate
-
-Some organizations gate deployments on error budget:
-
-```
-Error Budget Remaining    Deployment Policy
-─────────────────────    ─────────────────────
-> 50%                    Deploy freely (normal process)
-20-50%                   Deploy with caution (smaller canary, longer bake)
-5-20%                    Deploy only critical fixes
-< 5%                     Deployment freeze (reliability work only)
-```
-
-This is the error budget concept from SRE applied to release engineering: reliability failures consume the budget that would otherwise allow new deployments.
+OpenTelemetry semantic conventions for CI/CD (where adopted) offer durable attribute names for pipeline spans: commit, pipeline ID, environment, result. Even if you are not fully on OTel today, aligning internal event schemas with emerging conventions reduces rework when you centralize traces and metrics later. The durable practice is **correlate VCS SHA to production identity** across every path to prod, whether GitOps, imperative kubectl, or a SaaS deploy button.
 
 ---
 
-## Deployment Markers and Correlation
+## Finding Pipeline Bottlenecks Through Metric Trends
 
-### The Most Important Dashboard Feature
+**Analyze release metric patterns** by decomposing lead time and recovery into stages, then watching which stage variance grows when product pressure increases. A flat median lead time with rising p95 often means most changes flow quickly but a few monsters stall — usually oversized pull requests or shared test environments. Segment by team, service tier, and change type (feature, fix, dependency bump) before blaming "the pipeline."
 
-The single most powerful thing you can add to any monitoring dashboard is a **deployment marker** — a vertical line showing when a deployment happened:
+Compare **deployment frequency vs. batch size** indirectly: if frequency is flat but story count per deploy rises (from VCS), batches grew even though cadence did not. Pair DORA tiles with cumulative flow diagrams from work tracking so product WIP shows up in delivery metrics. Bottlenecks frequently sit outside Jenkins or GitHub Actions — in approval committees, security scans queued without SLA, or manual database steps — and only appear when you map wall-clock from merge to prod.
+
+When change fail rate spikes on one service, drill into **failure mode**: rollback vs. hotfix vs. canary abort vs. post-deploy incident. Each mode suggests different fixes — better analysis templates, stronger contract tests, schema migration guardrails, or ownership gaps. When failed deployment recovery time grows while fail rate is flat, observability and rollback paths degraded even though fewer deploys fail outright; that pattern appears when teams add services without adding deployment markers or flag coverage.
+
+Seasonality matters. End-of-quarter deploy surges, holiday freezes, and on-call rotations change distributions. Use rolling thirty- or ninety-day windows for executive views and seven-day windows for team standups. Annotate known events (major conference, regulatory deadline) on the same dashboard as deployments so narrative and data stay linked.
+
+Cross-service dependencies hide in aggregate metrics. If your checkout API fails after a auth deploy, attributing CFR only to checkout misses the lesson. Optional dependency tags on deployment events — `depends_on=auth` — enable later graph analysis without blocking initial instrumentation. Start simple; enrich schema as pain appears.
+
+---
+
+## Beyond DORA: SPACE, Flow, and Goodhart's Law
+
+DORA metrics describe **delivery outcomes** for a service. They do not fully describe **developer experience**, **team health**, or **product impact** — nor should they. The SPACE framework (Satisfaction and well-being, Performance, Activity, Communication and collaboration, Efficiency and flow) argues that productivity is multidimensional; collapsing it to deployment counts or lines of code invites false conclusions. Use SPACE-style surveys and interviews alongside DORA when diagnosing "we deploy often but engineers are miserable" or "lead time dropped but defects rose in beta."
+
+**Flow metrics** from lean/Kanban — work in progress, queue time, cycle time per work item — explain *why* change lead time grew even when CI got faster. If product floods the team with parallel epics, review queues lengthen regardless of build optimizer investments. Mapping Jira (or issue tracker) state transitions to release metrics connects product decisions to delivery timelines.
+
+**Goodhart's Law** warns that any metric becomes a poor target once it becomes a reward. Tying bonuses to deployment frequency produces empty deploys; punishing change fail rate produces fear and batching. DORA capabilities research on [dora.dev/capabilities/](https://dora.dev/capabilities/) emphasizes generative culture and continuous improvement — metrics as mirrors for the team that owns the service, not leaderboard weapons. When leadership wants a single number, offer a balanced panel: one throughput, one instability, one flow, one customer-quality (SLO), explicitly labeled with tensions between them.
+
+Change fail rate sits uncomfortably with blameless postmortems unless framed correctly. The metric counts system outcomes, not individual fault. Pair every CFR retrospective with "what guardrail failed?" rather than "who merged?" That pairing preserves psychological safety while still exposing weak tests or oversized batches.
+
+Research from DORA's capability catalog links outcomes to practices — trunk-based development, continuous integration, test automation, streamlining change approval — without prescribing a single vendor stack. When a metric regresses, ask which capability gap explains it rather than buying a dashboard product. A lead-time spike after adding a manual CAB meeting is a process signal; fixing it is policy, not Kubernetes tuning.
+
+Developer surveys (SPACE-style) catch dysfunctions metrics miss: frequent deploys with rising toil and falling satisfaction mean the pipeline is fast but painful. Combine quarterly SPACE-ish pulse questions with monthly DORA trends for a fuller picture. If survey comments cite "death by cherry-pick" while lead time looks fine, you may measure only trunk flows while production receives manual hotfix branches — split metrics by path.
+
+---
+
+## Release Quality Dashboards and Scorecards
+
+**Design release quality dashboards** for operators and leadership by answering four questions on one screen: Are we deploying? Are deployments hurting users? Which recent change correlates with pain? How much reliability budget remains? The layout is less important than **deployment markers** — vertical annotations on time-series panels that bind metric movement to change events.
+
+A practical release health dashboard stacks golden signals (latency, traffic, errors, saturation) above recent deployment history and DORA summary stats for the selected service and window. Leadership views aggregate trends over thirty to ninety days; on-call views emphasize the last twenty-four hours with annotation density high enough to spot overlapping rollouts on shared dependencies.
 
 ```mermaid
-timeline
-    title Error Rate over time
-    00:00 : Normal traffic : Error Rate at 1%
-    06:00 : Deploy v2.1.0 marker : Error rate spikes to 3%
-    12:00 : Normal traffic : Error Rate normalizes to 1%
+flowchart TB
+    subgraph "Release health dashboard"
+        P1["Errors / latency with deployment markers"]
+        P2["Recent deploy table — result, version, owner"]
+        P3["DORA trend tiles — 30d rolling"]
+        P4["Error budget remaining"]
+    end
+    P1 --> P2 --> P3 --> P4
 ```
 
-Without the deployment marker, you see a spike and wonder: "What happened at 4 AM?" With the marker, the correlation is instant: "The v2.1.0 deployment caused the spike."
+**Build automated release scorecards** as scheduled reports — weekly email, wiki page, or Grafana render — that snapshot the same metrics without requiring executives to click through ten dashboards. A scorecard row per service might include deployment count, median lead time, change fail rate, recovery time p90, top bottleneck stage, and narrative commentary from the owning team. Automation matters because manual slide decks go stale the day after all-hands; the scorecard should regenerate from the same event stream as live dashboards.
 
-> **Pause and predict**: How much time do you think deployment markers save during an incident investigation?
+Scorecards should show **trends**, not hero numbers. A single-week change fail rate of eight percent is ambiguous; a chart showing CFR rising from three to eight over six weeks while lead time fell demands investigation — perhaps speed increased without test investment. Include deployment rework rate when available so teams cannot hide instability behind planned deploy counts alone.
 
-### Implementing Deployment Markers
+### Implementing deployment markers
 
-**In Grafana (Annotations)**:
+Deployment markers are the highest-return observability feature for release engineering. Without them, every incident begins with "what changed?" — a question that burns recovery minutes and trains engineers to guess instead of correlate.
 
 ```bash
-# Push a deployment annotation to Grafana
-curl -X POST http://grafana:3000/api/annotations \
+# Push a deployment annotation to Grafana after prod promotion
+curl -X POST "http://grafana:3000/api/annotations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GRAFANA_TOKEN" \
   -d '{
-    "dashboardUID": "release-health",
-    "time": '$(date +%s000)',
+    "time": '"$(date +%s000)"',
     "tags": ["deployment", "webapp", "v2.1.0"],
     "text": "Deployed webapp v2.1.0 by deploy-bot"
   }'
 ```
 
-**In Prometheus (recording rule)**:
+Emit markers from CI/CD on success **and** on rollback so graphs show both forward and reverse changes. Tag annotations with service, version, commit, and environment so multi-tenant dashboards filter cleanly. If the annotation API fails, queue retries — silent failure recreates the blind spot you eliminated.
 
-```yaml
-# Record deployment events as a metric
-groups:
-  - name: deployments
-    rules:
-      - record: deployment_event
-        expr: |
-          kube_deployment_status_observed_generation
-          != ignoring(generation)
-          kube_deployment_metadata_generation
-```
+For leadership, **design release quality dashboards** that hide raw PromQL but show narrative status: green/amber/red against the team's own baselines, not against copied industry tiers. Executives need to know direction and risk concentration — "payments API CFR trending up three months" — more than they need histogram buckets. Link dashboard tiles to the metrics contract wiki page so definitions travel with numbers.
 
-**In CI/CD pipeline**:
-
-```yaml
-# GitLab CI example
-deploy:
-  script:
-    - kubectl apply -f manifests/
-    - |
-      curl -X POST "$GRAFANA_URL/api/annotations" \
-        -H "Authorization: Bearer $GRAFANA_TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "{
-          \"time\": $(date +%s000),
-          \"tags\": [\"deployment\", \"$CI_PROJECT_NAME\", \"$CI_COMMIT_SHORT_SHA\"],
-          \"text\": \"Deployed $CI_PROJECT_NAME ($CI_COMMIT_SHORT_SHA) by $GITLAB_USER_LOGIN\"
-        }"
-```
-
-> **Stop and think**: What happens if your deployment marker system fails to post an annotation during a major release? How would you design a fallback?
-
-### Correlation Dashboard Design
-
-A release health dashboard should answer these questions at a glance:
-
-```mermaid
-flowchart TB
-    subgraph "RELEASE HEALTH DASHBOARD"
-        direction TB
-        P1["Error Rate (with deployment markers)<br/>[graph with vertical lines at each deployment]"]
-        P2["P99 Latency (with deployment markers)<br/>[graph with vertical lines at each deployment]"]
-        
-        subgraph "Metrics"
-            direction LR
-            M1["Deploy Freq: 12/day"]
-            M2["Change Failure Rate: 3.2%"]
-            M3["Lead Time: 2.3 hours"]
-            M4["MTTR: 18 min"]
-        end
-        
-        P3["Recent Deployments<br/>[PASS] 14:22 webapp v2.1.0<br/>[FAIL] 11:05 api-gateway v3.0 (FAILED)<br/>[PASS] 09:30 auth-svc v1.8.2"]
-        P4["Error Budget Remaining: 72%"]
-        
-        P1 --- P2
-        P2 --- Metrics
-        Metrics --- P3
-        P3 --- P4
-    end
-```
+Scorecards should include **qualitative footnotes** each period: major migrations, known test gaps, headcount changes. Numbers without context invite wrong decisions. Automate data collection but let service owners append three sentences; that hybrid keeps trust in the artifact.
 
 ---
 
-## Alert Fatigue During Releases
+## Error Budgets, Release Gating, and Deployment Freezes
 
-### The Problem
+Releases are the highest-risk routine operation for most user-facing SLOs. **Analyze release metric patterns** alongside error budget burn to decide when to ship boldly and when to narrow blast radius. Pre-release checks should query remaining budget for the affected SLIs; during release, short-window burn rates trigger automated rollback; post-release, attribute budget consumed to the deployment window for trending.
 
-Deployments are inherently noisy. During a rolling update, old pods terminate and new pods start. Connection counts spike, latency briefly increases, error rates may blip. If your alerting is not deployment-aware, every deployment triggers false alerts:
-
-```
-14:00 - Deploy starts
-14:01 - ALERT: Connection pool usage > 80%          ← False alarm
-14:02 - ALERT: P99 latency > 200ms                  ← False alarm (cold caches)
-14:03 - ALERT: Error rate > 0.5%                     ← False alarm (old pods draining)
-14:05 - Deploy complete, metrics normalize
-14:06 - Three people investigated three false alerts
+```promql
+# Remaining error budget fraction (30d, 99.9% SLO example)
+1 - (
+  sum(rate(http_requests_total{status=~"5.."}[30d]))
+  /
+  sum(rate(http_requests_total[30d]))
+) / (1 - 0.999)
 ```
 
-Over time, the team starts ignoring deployment alerts. Then a real deployment problem occurs, and nobody notices because they have been trained that deployment alerts are noise.
+Policy tables help teams act consistently:
 
-### Solutions
+| Error budget remaining | Suggested release policy |
+|------------------------|--------------------------|
+| Above 50% | Normal progressive delivery |
+| 20–50% | Smaller canary, longer bake, extra reviewer |
+| 5–20% | Fixes and low-risk changes only |
+| Below 5% | Reliability work; defer features |
 
-**1. Deployment-Aware Alert Suppression**
+These bands are starting points, not universal law. A service with tight SLOs and strong automated rollback may ship more aggressively at twenty percent budget than a fragile legacy service at fifty percent. Revisit policy when failed deployment recovery time improves — faster recovery effectively increases usable budget for controlled risk.
 
-Temporarily raise alert thresholds during deployments:
+**Deployment freezes** — calendar or budget-driven — are tempting and often counterproductive. Freezes accumulate undeployed change, which raises batch size and change fail rate when the freeze lifts. DORA's guidance favors keeping flow with stricter safety mechanisms (mandatory canary, longer analysis) over stopping delivery entirely. When legal or commercial events truly require a freeze, plan a controlled ramp afterward: smaller releases, extra verification, explicit rework budget.
+
+During active incidents, many organizations adopt implicit freezes — nobody wants another change while pages fire. Track those periods in deployment event metadata (`freeze_reason=incident`) so post-incident reviews reveal whether change starvation extended customer impact. Explicit communication beats informal paralysis: a documented "reliability hold" with an owner and expiry preserves psychological safety for teams waiting to deploy legitimate fixes.
+
+Connecting error budgets to **change fail rate** clarifies vocabulary: budget burn is customer-facing; CFR is delivery-facing. A deploy can fail without burning budget if caught early in canary, or burn budget without triggering CFR if latency degrades within SLO but upsets users. Teach both teams the same dashboard so SRE and release engineering do not argue from incompatible charts.
+
+---
+
+## Operationalizing a Metrics Program
+
+Start with a **metrics contract** workshop: define deployment, failure, recovery, and rework for one pilot service. Instrument events in CI/CD before building the perfect warehouse schema. Run thirty days baseline without targets — trends only. Then set incremental goals (reduce median lead time by twenty percent, not "be elite overnight") and tie initiatives to bottlenecks the data exposes.
+
+Monthly review cadence works well: product plus engineering plus release owners scan DORA trends, pick one constraint, run an experiment (parallel review, slimmer integration suite, automated rollback drill), and re-measure. Capabilities from [How to Transform](https://dora.dev/guides/how-to-transform/) — trunk-based development, test automation, streamlining change approval — map cleanly to lead time and fail rate movements when you track them together.
+
+Avoid exporting raw DORA tiles to enterprise BI without context footnotes; executives misread snapshot percentages as performance grades. Prefer narrative plus trend arrows plus explicit definitions. Celebrate improvement in recovery time even when frequency is flat — not every quarter rewards frequency gains.
+
+**Build automated release scorecards** incrementally: week one email with deployment count and CFR from CI logs; month two add lead time from VCS join; quarter three add recovery time from incident linkage. Each increment proves value before the next engineering investment. Store scorecard JSON in git if your organization treats written history as audit trail — regressions become diffable.
+
+Onboard new services by copying the metrics contract template, not by copying someone else's thresholds. A greenfield microservice should not inherit a monolith's deploy frequency expectations. Platform teams provide instrumentation libraries — event emitters, Grafana dashboard JSON, annotation curl snippets — so product teams own definitions while sharing plumbing.
+
+Training completes the loop: on-call engineers must know how markers, rollback, and DORA definitions interact. A beautiful dashboard that on-call ignores during incidents delivers zero value. Run game days that inject a bad deploy and score how quickly markers lead to rollback; gamify recovery time improvement without tying it to individual blame.
+
+---
+
+## Deployment-Aware Alerting and Release Noise
+
+Rolling updates naturally perturb metrics: connection drains, cache cold starts, brief error blips. Alerts that ignore deployment context train on-call engineers to ignore alerts — then real deployment failures hide in the noise. Suppress or route deployment-window alerts differently; prefer **burn-rate** or **relative spike** rules that compare current error rate to pre-deploy baseline.
 
 ```yaml
-# Prometheus alerting rule with deployment awareness
-groups:
-  - name: deployment-aware-alerts
-    rules:
-      - alert: HighErrorRate
-        expr: |
-          (
-            # Normal threshold: 0.5%
-            sum(rate(http_requests_total{status=~"5.."}[5m]))
-            / sum(rate(http_requests_total[5m]))
-            > 0.005
-          )
-          # Only alert if no deployment is in progress
-          unless on()
-          (
-            kube_deployment_status_updated_replicas
-            != kube_deployment_spec_replicas
-          )
-        for: 5m
-        labels:
-          severity: warning
-```
-
-**2. Separate "Deployment Alert" Channel**
-
-Route deployment-time alerts to a dedicated channel that the deployer monitors:
-
-```yaml
-# Alertmanager routing
-route:
-  routes:
-    - match:
-        context: deployment
-      receiver: deployment-channel
-      group_wait: 30s
-    - match:
-        severity: critical
-      receiver: pagerduty
-```
-
-**3. Post-Deployment Burn Rate Alerts**
-
-Instead of alerting on absolute thresholds during deployment, alert on the rate of change:
-
-```yaml
-# Alert if error rate increases by more than 5x during deployment
+# Alert only if error rate spikes 5x vs pre-deploy baseline
 - alert: DeploymentCausedErrorSpike
   expr: |
     (
@@ -538,219 +348,80 @@ Instead of alerting on absolute thresholds during deployment, alert on the rate 
     context: deployment
 ```
 
-This alerts when the error rate is 5x the baseline from an hour ago — catching real problems while ignoring normal deployment noise.
+Pair suppression with accountability: the deployer monitors the deployment channel; on-call keeps page-worthy thresholds for sustained user impact beyond rollout transients.
+
+Progressive delivery controllers (Argo Rollouts, Flagger, or similar) emit analysis phases that should appear as annotations or overlay panels alongside golden signals. When analysis fails, the marker text should say `canary aborted` with metric snapshot links so postmortems reference objective thresholds, not memory. This habit tightens the feedback loop between release metrics and alerting design.
+
+Latency alerts during rollouts deserve the same relative treatment as error rates: compare p99 to pre-deploy baseline, not static SLA only, because cold caches legitimately raise latency for minutes. Document expected transients in runbooks so new engineers do not confuse normal rollout noise with incidents — that documentation reduces false escalations and protects on-call well-being.
 
 ---
 
-## Deployment Freezes
+## Patterns and Anti-Patterns
 
-### When to Freeze Deployments
+### Patterns that work
 
-A deployment freeze is a period during which non-critical deployments are prohibited. Common triggers:
+| Pattern | Why it helps |
+|---------|--------------|
+| Event-first deploy log | Single source of truth for DORA numerators |
+| Service-scoped dashboards | Preserves context; avoids apples-to-oranges rankings |
+| Deployment markers everywhere | Cuts diagnosis time for deployment-tied incidents |
+| Trend panels over snapshot KPIs | Shows direction; resists gaming |
+| Blameless CFR reviews | Improves system without punishing merge |
+| Error-budget-aware gating | Connects release risk to customer impact |
+| Monthly one-constraint improvement | Focuses change; avoids metric whack-a-mole |
 
-| Trigger | Rationale |
-|---------|-----------|
-| **Error budget exhausted** | No remaining budget for risky changes |
-| **Major business event** | Black Friday, tax season, election day |
-| **Active incident** | Do not compound problems with more changes |
-| **Holiday periods** | Reduced staffing means slower incident response |
-| **End of quarter** | Revenue-critical period for B2B SaaS |
+### Anti-patterns to avoid
 
-### Implementing Deployment Freezes
+| Anti-pattern | Why it fails | Better direction |
+|--------------|--------------|------------------|
+| Individual DORA rankings | Goodhart + fear; batching | Team/service trends only |
+| Build count as deploy frequency | Inflates throughput | Count production promotions only |
+| Ignoring rework rate | Hides firefighting | Track unplanned deploys |
+| Executive-only dashboards | No ownership | Operators co-design views |
+| Freeze as default risk tool | Batches change | Safer progressive delivery |
+| Single-metric OKRs | Optimizes wrong behavior | Balanced throughput + stability |
+| Copying benchmark tiers as quotas | Context mismatch | Compare to own history first |
 
-**1. CI/CD Pipeline Gate:**
-
-```yaml
-# Check freeze status before deploying
-deploy:
-  rules:
-    - if: $DEPLOYMENT_FREEZE == "true"
-      when: manual
-      allow_failure: false
-  script:
-    - |
-      FREEZE=$(curl -s http://deploy-config/api/freeze-status)
-      if [ "$FREEZE" = "active" ]; then
-        echo "DEPLOYMENT FREEZE ACTIVE. Reason: $(curl -s http://deploy-config/api/freeze-reason)"
-        echo "Contact release-engineering team for exceptions."
-        exit 1
-      fi
-    - kubectl apply -f manifests/
-```
-
-**2. Kubernetes Admission Webhook:**
-
-```python
-# Webhook that rejects deployments during freeze periods
-def validate_deployment(request):
-    if is_freeze_active():
-        # Allow critical security patches
-        if has_annotation(request, "freeze-exception: security"):
-            return allow(request)
-        return deny(request, "Deployment freeze active. Contact release-eng for exceptions.")
-    return allow(request)
-```
-
-**3. DORA-Driven Freeze Policy:**
-
-```
-Error Budget Status          Deployment Policy
-──────────────────          ──────────────────
-Budget > 50%                Normal — deploy freely
-Budget 20-50%               Cautious — canary required, longer bake
-Budget 5-20%                Restricted — critical fixes only
-Budget < 5%                 Frozen — reliability work only
-Budget = 0%                 Hard freeze — emergency patches only
-```
-
-### The Freeze Paradox
-
-Counterintuitively, **deployment freezes often make things worse**. Here is why:
+### Decision framework: which metric to improve first
 
 ```mermaid
 flowchart TD
-    A["Deployment Freeze Active"] --> B["Changes Accumulate"]
-    B --> C["Large batch of changes post-freeze"]
-    C --> D["Higher risk per deployment"]
-    D --> E["Higher failure rate"]
-    E --> F["More incidents"]
-    F --> A
-    
-    subgraph "Vicious Cycle"
-        A
-        B
-        C
-        D
-        E
-        F
-    end
+    A["Start: pick one service"] --> B{"Change fail rate high?"}
+    B -->|Yes| C["Shrink batch size; strengthen canary + tests"]
+    B -->|No| D{"Lead time dominant?"}
+    D -->|Yes| E["Profile review + CI + approval queues"]
+    D -->|No| F{"Recovery time dominant?"}
+    F -->|Yes| G["Markers + rollback + flags"]
+    F -->|No| H{"Frequency low but stable?"}
+    H -->|Yes| I["Reduce batch + WIP limits"]
+    H -->|No| J["Maintain; revisit monthly"]
 ```
 
-The DORA research shows that high-performing teams deploy more often, not less. Freezes should be rare, short, and combined with a plan to reduce the conditions that caused them.
+Use the framework iteratively — improving lead time without touching fail rate often trades stability for speed until tests catch up.
 
-> **Pause and predict**: What is the typical psychological effect on engineering teams when a deployment freeze is lifted?
+Platform engineering teams can accelerate adoption by shipping golden-path emitters: a CI template step that posts deployment events, Grafana dashboard JSON, and annotation snippets. Product teams remain responsible for defining failure and deployment for their tier, but should not rebuild plumbing each time. That division mirrors how SRE provides SLI libraries while service owners pick thresholds.
 
-**Better alternative**: Instead of freezing deployments, increase deployment safety requirements during high-risk periods:
-- Require canary deployments (no direct rollouts)
-- Increase bake time (24h instead of 2h)
-- Require manual promotion at each stage
-- Add extra metric checks to analysis templates
-
----
-
-## Building a DORA Metrics Program
-
-### Step 1: Start Measuring
-
-You cannot improve what you do not measure. Begin by instrumenting your deployment pipeline:
-
-```yaml
-# deployment-events ConfigMap (emitted by CI/CD)
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: deployment-event
-  labels:
-    deployment-event: "true"
-data:
-  service: "webapp"
-  version: "v2.1.0"
-  environment: "production"
-  deployer: "ci-bot"
-  commit_sha: "abc123"
-  commit_timestamp: "2026-03-24T10:00:00Z"
-  deploy_timestamp: "2026-03-24T10:15:00Z"
-  result: "success"       # or "failure", "rollback"
-```
-
-### Step 2: Calculate Baselines
-
-Measure your current state for at least 30 days before setting targets:
-
-```
-Current Baselines (30-day):
-  Deployment Frequency: 2.3 per day
-  Lead Time (p50): 18 hours
-  Change Failure Rate: 8.5%
-  MTTR (p50): 45 minutes
-```
-
-### Step 3: Set Improvement Targets
-
-Use the DORA performance levels as guides, but set realistic incremental targets:
-
-```
-                    Current     3-Month Target    6-Month Target
-Deploy Frequency:   2.3/day     5/day             10/day
-Lead Time:          18 hours    8 hours           2 hours
-CFR:                8.5%        5%                3%
-MTTR:               45 min      30 min            15 min
-```
-
-### Step 4: Review Regularly
-
-Monthly DORA reviews should:
-- Track trends (improving or degrading?)
-- Identify the biggest bottleneck (usually lead time)
-- Celebrate improvements (deploy frequency up 20%!)
-- Investigate regressions (why did CFR increase this month?)
-
-### Step 5: Avoid Goodhart's Law
-
-> "When a measure becomes a target, it ceases to be a good measure."
-
-If you incentivize deployment frequency, teams will deploy empty changes. If you penalize change failure rate, teams will stop deploying. Use DORA metrics as **diagnostic tools**, not performance targets for individuals.
+Treat external benchmarks and maturity surveys as optional inputs, not verdicts. The [DORA Quick Check](https://dora.dev/quickcheck/) helps teams self-assess against research-backed questions when numeric instrumentation is immature — useful in quarter zero before BigQuery or Four Keys wiring exists.
 
 ---
 
 ## Did You Know?
 
-1. **The DORA research proved that speed and stability are NOT trade-offs**. Before DORA, the conventional wisdom was that deploying faster meant more failures. The data showed the opposite: elite teams deploy 973x more frequently than low performers AND have 3x lower change failure rates. Speed enables stability because smaller changes are inherently less risky.
+- **DORA's metric set is not frozen.** The program moved from four keys to five, renaming recovery around **failed deployment recovery time** and adding **deployment rework rate**; always verify the current model on [dora.dev/guides/dora-metrics/](https://dora.dev/guides/dora-metrics/) before codifying internal standards.
 
-2. **Etsy was one of the first companies to put deployment markers on all dashboards**, and they found that over 80% of production incidents correlated with a recent deployment. This single visualization — a vertical line on a graph — reduced their mean time to diagnose by 60% because engineers stopped asking "what changed?" and started asking "what did this specific deployment change?"
+- **The SPACE framework** ([arxiv.org/abs/2102.07763](https://arxiv.org/abs/2102.07763)) formalizes why no single delivery number captures developer productivity — satisfaction, performance, activity, communication, and efficiency all matter alongside DORA outcomes.
 
-3. **Deployment freezes are inversely correlated with reliability in the DORA data**. Organizations with more frequent deployment freezes have WORSE reliability metrics, not better. The freeze accumulates changes, making the post-freeze deployment larger and riskier. Elite performers deploy through holidays with automated canary analysis instead of freezing.
+- **Google's four golden signals** (latency, traffic, errors, saturation) from the SRE book predate modern progressive delivery but remain the minimum viable panel during rollouts because deployments perturb all four simultaneously.
 
-4. **Google's "golden signals" — latency, traffic, errors, and saturation — were designed specifically for deployment monitoring**. The original Google SRE book presents these four signals as the minimum viable monitoring for any service, and they are particularly important during deployments when all four can shift simultaneously. Every release health dashboard should track all four golden signals.
+- **The Four Keys open-source project** ([github.com/dora-team/fourkeys](https://github.com/dora-team/fourkeys)) shows how to derive DORA metrics from VCS and CI events — useful as a reference architecture even if you implement elsewhere.
 
 ---
 
-## War Story: The Dashboard That Stopped Incidents
+## Hypothetical scenario: Dashboards That Shorten Recovery
 
-A fintech company averaged 3-4 deployment-related incidents per month. Their MTTR was 2 hours. They had good monitoring but a critical gap: deployments were invisible on their dashboards.
+**Hypothetical scenario:** A payments API team averages three deployment-tied incidents per month. Monitoring is solid, but Grafana boards lack deployment annotations. On-call runbooks describe the same slow loop: alert fires, engineer opens dashboards, spikes visible, nobody knows which change landed. Slack questions add fifteen to twenty minutes before rollback. After the team wires CI to push Grafana annotations on every production promotion and rollback, the loop collapses — the graph shows the marker aligned with the spike, and the engineer rolls back immediately. Over the next quarter, median **failed deployment recovery time** falls because diagnosis time nearly vanishes; change fail rate also drops because fast rollback prevents cascading damage. Implementation took roughly one sprint to add annotation steps to the pipeline and document fallback behavior when the annotation API is down.
 
-The post-incident analysis for every deployment-related incident followed the same pattern:
-
-```
-1. Alert fires at 14:22 — "Error rate > 1%"
-2. On-call opens Grafana — sees spike starting at 14:15
-3. On-call checks recent changes — "Did anyone deploy anything?"
-4. On-call asks in Slack — no response for 10 minutes
-5. Someone responds — "I deployed api-gateway 20 minutes ago"
-6. On-call rolls back — error rate normalizes
-7. Total MTTR: 45 minutes (30 minutes spent finding the cause)
-```
-
-The fix was embarrassingly simple: **add deployment annotations to every Grafana dashboard**.
-
-After the change:
-
-```
-1. Alert fires at 14:22 — "Error rate > 1%"
-2. On-call opens Grafana — sees spike starting at 14:15
-3. Deployment marker visible: "api-gateway v3.2.0 deployed at 14:14"
-4. On-call rolls back api-gateway
-5. Total MTTR: 8 minutes (zero time spent finding the cause)
-```
-
-Over the next quarter:
-- MTTR dropped from 2 hours to 15 minutes average
-- Deployment-related incidents dropped from 3-4/month to 1/month (faster rollbacks prevented cascading failures)
-- Engineer satisfaction with on-call improved significantly
-
-The total implementation effort: one day of work to add annotations to the CI/CD pipeline.
-
-**Lesson**: The most impactful observability improvement is often the simplest: connect your deployment system to your monitoring system.
+The same pattern applies whether you use Grafana, another vendor dashboard, or open-source tooling — the durable practice is correlating change events with golden signals, not a specific product. Teams that cannot annotate yet should at minimum log deploy SHA and timestamp in a searchable runbook linked from the dashboard header so on-call has a manual marker until automation lands.
 
 ---
 
@@ -758,110 +429,123 @@ The total implementation effort: one day of work to add annotations to the CI/CD
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| Measuring DORA metrics but not acting on them | Metrics without action are theater | Monthly review meetings with specific improvement actions |
-| Using DORA metrics to evaluate individuals | Creates gaming and fear; people stop deploying | Use metrics as team/system diagnostics, never for individual performance |
-| No deployment markers on dashboards | Every incident starts with "did anyone deploy something?" | Annotate all dashboards with deployment events from CI/CD |
-| Alert thresholds not deployment-aware | Every deployment triggers false alerts, causing alert fatigue | Use deployment-aware alerting with suppression or elevated thresholds |
-| Deployment freezes as primary risk strategy | Accumulates changes, making post-freeze deploys riskier | Increase deployment safety requirements instead of freezing |
-| Measuring only deployment frequency | Frequent deploys mean nothing if they keep failing | Track all four DORA metrics together — they are interconnected |
-| Not tracking error budget consumption per deploy | Cannot identify which releases are burning budget | Measure error budget delta for each deployment window |
-| Ignoring lead time bottlenecks | Slow pipelines discourage frequent deployment | Profile your pipeline: where does time actually go? |
+| Measuring DORA without a written definition | Every team calculates differently | Publish a metrics contract per service |
+| Using metrics for individual performance review | Gaming, fear, batching | Team-level diagnostics only |
+| Skipping deployment markers | Long incident diagnosis | Annotate from CI/CD on every prod change |
+| Equating builds with deployments | Fake throughput | Count successful prod promotions |
+| Optimizing one DORA metric in isolation | Speed–quality imbalance | Review throughput and instability together |
+| Ignoring deployment rework rate | Hidden firefighting | Tag and track reactive deploys |
+| Comparing unlike services | Misleading rankings | Scope metrics per application context |
+| Alert thresholds ignore rollouts | Alert fatigue | Deployment-aware routing or burn-rate rules |
 
 ---
 
-## Quiz: Check Your Understanding
+## Quiz
 
-### Question 1
-Your VP of Engineering wants to measure if the new CI/CD pipeline is actually making the team better. She asks you to implement the four DORA metrics. You observe that deployment frequency has increased from once a month to twice a week, but the change failure rate has increased from 5% to 15%. What does this indicate about your team's delivery performance according to DORA?
+1. **Your change fail rate rose from four to eleven percent while deployment frequency doubled. What is the most constructive first interpretation?**
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-This indicates that while your throughput (speed) has improved, your stability (quality) has degraded, meaning you are not yet an elite performer. The DORA metrics consist of Deployment Frequency and Lead Time for Changes (measuring throughput), alongside Change Failure Rate and Mean Time to Recovery (measuring stability). 
-
-A core insight from the DORA research is that elite teams do not trade stability for speed; they excel at both. If your change failure rate is rising as you deploy more often, it likely means your testing and validation gates within the new CI/CD pipeline are inadequate. You need to invest in automated testing and safer deployment strategies (like canaries) so that you can deploy frequently without breaking production.
+Throughput improved but instability worsened — you are not yet in the balanced high-performance zone DORA describes. The joint movement suggests batch size or verification did not keep pace with faster pipelines. Profile recent failures: are canaries aborting, are rollbacks clustering on one service, did review depth shrink? Implement DORA metrics collection fixes on definitions first, then invest in smaller batches and automated analysis before slowing deployments entirely.
 
 </details>
 
-### Question 2
-It is 3:00 AM, and an alert wakes you up: the P99 latency for the checkout service has spiked to 5 seconds. You open the main monitoring dashboard and see the latency curve climbing steadily over the last 15 minutes. How do deployment markers on this dashboard fundamentally change your incident response process?
+2. **Lead time histograms show review wait dominates while CI is fast. Which improvement best targets the bottleneck?**
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-Deployment markers immediately answer the most critical question in any incident: "Did a recent change cause this?" Without these markers, you would have to waste precious minutes manually checking CI/CD logs, querying Slack channels, or asking other engineers if a deployment just occurred.
-
-By visually correlating the exact time of a deployment (via a vertical line on the graph) with the start of the metric degradation, your Mean Time to Diagnose (MTTD) drops from minutes to seconds. If the latency spike aligns perfectly with a deployment marker for the checkout service, you can instantly initiate a rollback to mitigate the issue. This simple observability integration prevents you from chasing false leads and dramatically reduces overall recovery time.
+Focus on flow through code review: WIP limits, review SLAs, smaller pull requests, or dedicated review pairing. Faster builds alone cannot shrink change lead time when commits sit idle. Measure stage-level lead time continuously to verify review investments work — deployment frequency may rise only after queue time falls.
 
 </details>
 
-### Question 3
-To prepare for the biggest sales day of the year, leadership announces a month-long deployment freeze. Only absolute emergencies are allowed. However, in the week following the freeze, the site experiences three major outages linked to deployments. Why did the deployment freeze lead to worse reliability?
+3. **Leadership wants a single "DevOps score" for all teams. Why push back?**
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-Deployment freezes artificially accumulate changes, turning what would have been many small, low-risk releases into one massive, high-risk batch deployment. When the freeze is finally lifted, the resulting deployment contains weeks or months of unreleased code from multiple teams, making it nearly impossible to test all interactions or isolate the root cause when something breaks.
-
-DORA research shows that speed and stability are mutually reinforcing. Elite teams maintain reliability by deploying small, easily understood changes frequently. Instead of halting deployments, organizations should manage risk during critical periods by enforcing stricter safety mechanisms—such as mandatory canary rollouts, longer bake times, and automated metric analysis—while keeping the pipeline flowing.
+DORA metrics are meaningful at the application or service level; blending unlike systems produces nonsense and encourages context-free competition. SPACE and Goodhart's Law both warn against collapsing multidimensional work into one target. Offer per-service trend scorecards with definitions instead — design release quality dashboards for comparison to past self, not league tables.
 
 </details>
 
-### Question 4
-Your team maintains an authentication service with a 99.9% SLO. Over the last two weeks, a series of minor database connection issues has consumed 85% of your 30-day error budget. A developer has just finished a major refactor of the login flow and wants to deploy it today. How should the current error budget influence this deployment decision?
+4. **How do deployment markers change incident response for a latency spike?**
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-The deployment should be delayed, or released under extremely restricted conditions, because the service has very little error budget left to absorb any potential failures from a risky refactor. Error budgets are designed to act as a dynamic control mechanism that balances feature velocity with system reliability. 
-
-When your remaining error budget is low (e.g., <20%), the policy should dictate that you deploy with extreme caution, utilizing smaller canary percentages and longer bake times, or restrict deployments to critical fixes only. If a major refactor fails now, it will likely exhaust the remaining budget and violate the SLO, harming user trust. The team should instead focus their immediate efforts on addressing the root cause of the database connection issues to restore system stability.
+They answer "did a deployment cause this?" immediately by aligning metric movement with annotated change events. Without markers, on-call burns failed deployment recovery time on discovery instead of rollback. Markers convert ambiguous spikes into actionable release decisions and should appear on latency, errors, and saturation panels alike.
 
 </details>
 
-### Question 5
-Your company announces that starting next quarter, engineering bonuses will be tied to achieving "Elite" DORA status, specifically requiring teams to hit a target of 5 deployments per day. Within a week, you notice teams deploying trivial documentation changes or empty commits just to trigger the CI/CD pipeline. What principle explains this behavior, and how should DORA metrics be used instead?
+5. **What is the difference between change fail rate and deployment rework rate?**
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-This behavior is a classic example of Goodhart's Law, which states that "when a measure becomes a target, it ceases to be a good measure." By tying financial incentives to deployment frequency, leadership incentivized the metric itself rather than the underlying goal of delivering valuable software efficiently. 
-
-Engineers will naturally optimize for the reward, gaming the system and rendering the metric useless for actual performance assessment. DORA metrics must be used exclusively as diagnostic tools to help teams identify bottlenecks and improve their own processes. They should facilitate continuous improvement conversations—such as "why is our lead time so high?"—rather than serving as a stick or carrot for performance evaluations.
+Change fail rate measures planned deployments that fail in production and need immediate intervention. Deployment rework rate measures unplanned deployments driven by production incidents — reactive work that signals upstream gaps. A team can have moderate fail rates but high rework if it firefights through emergency pushes; track both to analyze release metric patterns honestly.
 
 </details>
 
-### Question 6
-During a rolling update of your core API, the old pods begin terminating and new pods spin up. Because of the brief connection draining, your monitoring system fires a "High Error Rate" PagerDuty alert to the on-call engineer. After five minutes, the deployment completes and the error rate returns to zero. How can you redesign your alerting strategy to prevent this false alarm while still catching real incidents?
+6. **Error budget is at eight percent remaining and a team wants to ship a large refactor. What policy fits?**
 
 <details>
-<summary>Show Answer</summary>
+<summary>Answer</summary>
 
-You should implement deployment-aware alerting that correlates metric thresholds with ongoing rollout events. Deployments inherently cause brief fluctuations in metrics like latency and error rates as traffic shifts between pod versions, which often triggers static threshold alerts unnecessarily. 
+Treat the change as high risk relative to remaining budget: defer, split into smaller releases, or ship behind flags with extended canary bakes. Error budgets exist to balance velocity and reliability; exhausting the budget on one refactor violates SRE principles and likely raises change fail rate. Restore budget with reliability work before large feature risk.
 
-To solve this, you can configure your Prometheus rules to suppress alerts if a deployment is actively in progress (e.g., when the updated replicas do not match the desired replicas). Alternatively, you can use rate-of-change alerts that trigger only if the error rate spikes significantly beyond a baseline, or route deployment-time alerts to a dedicated, lower-priority channel for the deploying engineer. This prevents alert fatigue and ensures the on-call engineer only wakes up for genuine production issues.
+</details>
+
+7. **Why did DORA emphasize failed deployment recovery time over generic MTTR?**
+
+<details>
+<summary>Answer</summary>
+
+Generic MTTR blends infrastructure incidents, third-party outages, and deployment failures — obscuring release-process weakness. Failed deployment recovery time focuses measurement on changes your pipeline introduced, aligning metrics with release engineering ownership. It still decomposes into detect, diagnose, mitigate, and verify, but the population of incidents is the right one for delivery improvement.
+
+</details>
+
+8. **A team hits deployment frequency targets by running empty pipeline deploys nightly. Which principle explains this?**
+
+<details>
+<summary>Answer</summary>
+
+Goodhart's Law — when a measure becomes a target, it ceases to measure the intended outcome. Automated release scorecards should include change significance checks or link frequency to lead time and customer-facing outcomes. Build automated release scorecards that flag anomalous deploy volume with no commit delta.
 
 </details>
 
 ---
 
-## Hands-On Exercise: Build a Release Health Dashboard in Grafana
+## Hands-On: Build a Release Health Dashboard
 
-### Objective
-
-Create a Grafana dashboard that correlates deployments with error rates, demonstrating how deployment markers make incident diagnosis instant.
+Create a Grafana dashboard in a local kind cluster that correlates Kubernetes rollouts with annotations, practicing the deployment-marker workflow you will reuse in production CI/CD.
 
 ### Setup
 
 ```bash
-# Create cluster
 kind create cluster --name metrics-lab
 
-# Install Prometheus and Grafana
 kubectl create namespace monitoring
 
-# Deploy Prometheus
 cat <<'PROMEOF' | kubectl apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 10s
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -883,7 +567,7 @@ spec:
           ports:
             - containerPort: 9090
           args:
-            - "--config.file=/etc/prometheus/prometheus.yml"
+            - --config.file=/etc/prometheus/prometheus.yml
           volumeMounts:
             - name: config
               mountPath: /etc/prometheus
@@ -903,32 +587,6 @@ spec:
   ports:
     - port: 9090
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: monitoring
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 10s
-    scrape_configs:
-      - job_name: 'kubernetes-pods'
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-            action: keep
-            regex: true
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
-            action: replace
-            target_label: __address__
-            regex: (.+)
-            replacement: ${1}:9090
-PROMEOF
-
-# Deploy Grafana
-cat <<'GRAFEOF' | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -965,25 +623,20 @@ spec:
     app: grafana
   ports:
     - port: 3000
-GRAFEOF
+PROMEOF
 
-kubectl -n monitoring rollout status deployment prometheus --timeout=90s
-kubectl -n monitoring rollout status deployment grafana --timeout=90s
+kubectl -n monitoring rollout status deployment/prometheus --timeout=90s
+kubectl -n monitoring rollout status deployment/grafana --timeout=90s
 ```
 
-### Step 1: Port-Forward Grafana and Prometheus
+### Port-forward and configure Grafana
 
 ```bash
 kubectl -n monitoring port-forward svc/grafana 3000:3000 &
 kubectl -n monitoring port-forward svc/prometheus 9090:9090 &
 sleep 3
-```
 
-### Step 2: Configure Prometheus Data Source in Grafana
-
-```bash
-# Add Prometheus as data source
-curl -s -X POST http://admin:admin@localhost:3000/api/datasources \
+curl -s -X POST http://admin:admin@127.0.0.1:3000/api/datasources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Prometheus",
@@ -991,225 +644,93 @@ curl -s -X POST http://admin:admin@localhost:3000/api/datasources \
     "url": "http://prometheus.monitoring:9090",
     "access": "proxy",
     "isDefault": true
-  }' | jq .
+  }'
 ```
 
-### Step 3: Create the Release Health Dashboard
+### Create dashboard and deployment annotations
 
 ```bash
-# Create a dashboard with deployment annotations
-curl -s -X POST http://admin:admin@localhost:3000/api/dashboards/db \
+curl -s -X POST http://admin:admin@127.0.0.1:3000/api/dashboards/db \
   -H "Content-Type: application/json" \
   -d '{
     "dashboard": {
       "title": "Release Health Dashboard",
       "tags": ["release-engineering"],
-      "timezone": "browser",
       "annotations": {
-        "list": [
-          {
-            "name": "Deployments",
-            "datasource": "-- Grafana --",
-            "enable": true,
-            "iconColor": "rgba(255, 96, 96, 1)",
-            "tags": ["deployment"]
-          }
-        ]
+        "list": [{
+          "name": "Deployments",
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "iconColor": "rgba(255, 96, 96, 1)",
+          "tags": ["deployment"]
+        }]
       },
-      "panels": [
-        {
-          "title": "Pod Restarts (Simulated Error Rate)",
-          "type": "timeseries",
-          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
-          "datasource": "Prometheus",
-          "targets": [
-            {
-              "expr": "sum(rate(kube_pod_container_status_restarts_total[5m])) by (namespace)",
-              "legendFormat": "{{namespace}}"
-            }
-          ]
-        },
-        {
-          "title": "Running Pods by Namespace",
-          "type": "timeseries",
-          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
-          "datasource": "Prometheus",
-          "targets": [
-            {
-              "expr": "count(kube_pod_status_phase{phase=\"Running\"}) by (namespace)",
-              "legendFormat": "{{namespace}}"
-            }
-          ]
-        },
-        {
-          "title": "DORA Metrics (Placeholder)",
-          "type": "stat",
-          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
-          "options": {
-            "textMode": "value_and_name"
-          },
-          "targets": [
-            {
-              "expr": "vector(8)",
-              "legendFormat": "Deploy Freq (per day)"
-            }
-          ]
-        },
-        {
-          "title": "Change Failure Rate",
-          "type": "stat",
-          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
-          "targets": [
-            {
-              "expr": "vector(0.032)",
-              "legendFormat": "CFR"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percentunit"
-            }
-          }
-        }
-      ]
+      "panels": [{
+        "title": "Pod restarts by namespace",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "datasource": "Prometheus",
+        "targets": [{
+          "expr": "sum(rate(kube_pod_container_status_restarts_total[5m])) by (namespace)",
+          "legendFormat": "{{namespace}}"
+        }]
+      }]
     },
     "overwrite": true
-  }' | jq '.uid'
-```
+  }'
 
-### Step 4: Simulate a Deployment and Add an Annotation
+kubectl create deployment webapp --image=hashicorp/http-echo:0.2.3 -- -text=v1 -listen=:8080
+kubectl rollout status deployment/webapp
 
-```bash
-# Deploy a sample app
-kubectl create deployment webapp --image=hashicorp/http-echo:0.2.3 -- -text="v1" -listen=:8080
-kubectl rollout status deployment webapp
-
-# Add deployment annotation to Grafana
-curl -s -X POST http://admin:admin@localhost:3000/api/annotations \
+curl -s -X POST http://admin:admin@127.0.0.1:3000/api/annotations \
   -H "Content-Type: application/json" \
   -d '{
-    "time": '$(date +%s000)',
+    "time": '"$(date +%s000)"',
     "tags": ["deployment"],
     "text": "Deployed webapp v1.0.0"
-  }' | jq .
-
-echo "First deployment marker added."
-sleep 10
-
-# Simulate a new deployment
-kubectl set image deployment/webapp http-echo=hashicorp/http-echo:0.2.3
-
-# Add another annotation
-curl -s -X POST http://admin:admin@localhost:3000/api/annotations \
-  -H "Content-Type: application/json" \
-  -d '{
-    "time": '$(date +%s000)',
-    "tags": ["deployment"],
-    "text": "Deployed webapp v2.0.0 - NEW VERSION"
-  }' | jq .
-
-echo "Second deployment marker added."
+  }'
 ```
 
-### Step 5: View the Dashboard
-
-Open your browser and navigate to:
-
-```
-http://localhost:3000/dashboards
-```
-
-Log in with `admin` / `admin`. Find the "Release Health Dashboard."
-
-You should see:
-- Time series panels showing Kubernetes metrics
-- **Red vertical lines** (deployment annotations) marking when each deployment happened
-- Stat panels showing placeholder DORA metrics
-
-### Step 6: Add More Annotations to Simulate a Deployment History
+### Clean up
 
 ```bash
-# Simulate a history of deployments
-for i in $(seq 1 5); do
-  OFFSET=$((i * 600))  # Every 10 minutes back
-  TIMESTAMP=$(( $(date +%s) - OFFSET ))
-  curl -s -X POST http://admin:admin@localhost:3000/api/annotations \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"time\": ${TIMESTAMP}000,
-      \"tags\": [\"deployment\"],
-      \"text\": \"Deployed webapp v1.${i}.0\"
-    }" | jq .status
-done
-
-echo "Deployment history annotations added. Refresh your dashboard."
-```
-
-### Clean Up
-
-```bash
-kill %1 %2 2>/dev/null
+kill %1 %2 2>/dev/null || true
 kind delete cluster --name metrics-lab
 ```
 
-### Success Criteria
+### Success criteria
 
-You have completed this exercise when you can confirm:
-
-- [ ] Grafana is running with Prometheus as a data source
-- [ ] The Release Health Dashboard shows time-series panels with Kubernetes metrics
-- [ ] Deployment annotations (red vertical lines) are visible on the dashboard
-- [ ] You can see the correlation between deployment events and metric changes
-- [ ] You understand how CI/CD pipelines would push these annotations automatically
-- [ ] You can explain why deployment markers reduce Mean Time to Diagnose
+- [ ] Grafana runs with Prometheus as the default data source
+- [ ] Release Health Dashboard displays at least one Kubernetes metric panel
+- [ ] Deployment annotations appear as vertical markers on the dashboard
+- [ ] You can explain how CI/CD would push the same annotations automatically after prod deploys
 
 ---
 
-## Key Takeaways
+## Sources
 
-1. **DORA metrics predict organizational performance** — deployment frequency, lead time, change failure rate, and MTTR are the four metrics that matter most
-2. **Speed and stability reinforce each other** — elite teams deploy more often AND fail less, because small changes are inherently less risky
-3. **Deployment markers are the highest-ROI observability investment** — connecting your deployment system to your monitoring system eliminates the "what changed?" investigation
-4. **Error budgets should gate deployment risk, not deployment itself** — low budget means more caution, not a freeze
-5. **Deployment freezes often backfire** — they accumulate changes, making the post-freeze deployment riskier
-6. **Deployment-aware alerting prevents alert fatigue** — suppress or adjust alerts during deployments to avoid crying wolf
-7. **Use DORA metrics as diagnostics, not performance targets** — Goodhart's Law will destroy any metric used to judge individuals
+Primary references verified at authoring time (2026-06):
 
----
-
-## Further Reading
-
-**Books:**
-- **"Accelerate"** — Nicole Forsgren, Jez Humble, Gene Kim (the definitive DORA research)
-- **"The DevOps Handbook"** — Gene Kim, Jez Humble, Patrick Debois (deployment pipeline optimization)
-- **"Observability Engineering"** — Charity Majors, Liz Fong-Jones, George Miranda
-
-**Reports:**
-- **DORA State of DevOps Report** — dora.dev (annual, free)
-- **Puppet State of DevOps Report** — puppet.com/resources
-
-**Articles:**
-- **"Are You an Elite DevOps Performer?"** — DORA (dora.dev/research)
-- **"The Four Keys"** — Google Cloud Blog (implementing DORA metrics)
-- **"Deployment Markers: The Most Important Dashboard Feature"** — Charity Majors
-
-**Tools:**
-- **Four Keys** — github.com/dora-team/fourkeys (open-source DORA metrics dashboard)
-- **Sleuth** — sleuth.io (DORA metrics tracking platform)
-- **LinearB** — linearb.io (engineering metrics)
-
----
-
-## Summary
-
-Release engineering metrics transform deployment from an act of faith into a measurable, improvable process. The DORA four key metrics — deployment frequency, lead time, change failure rate, and MTTR — provide a scientific framework for measuring release performance. Combined with deployment markers on dashboards, error budget gating, and deployment-aware alerting, these practices give you visibility into whether your release engineering investments are paying off. The ultimate goal is not just measuring — it is creating a culture where releasing software is boring, predictable, and safe.
+- [DORA software delivery performance metrics](https://dora.dev/guides/dora-metrics/) — current five-metric model, throughput vs instability, pitfalls
+- [A history of DORA's software delivery metrics](https://dora.dev/guides/dora-metrics-four-keys/) — evolution from four keys to five metrics and MTTR renaming
+- [DORA research hub](https://dora.dev/research/) — annual State of DevOps reports and methodology
+- [Accelerate State of DevOps Report 2024](https://dora.dev/research/2024/dora-report/) — recent findings on AI, platform engineering, and stability tradeoffs
+- [DORA capability catalog](https://dora.dev/capabilities/) — practices that drive delivery performance
+- [DORA Quick Check](https://dora.dev/quickcheck/) — baseline assessment tool
+- [How to Transform — DORA implementation guide](https://dora.dev/guides/how-to-transform/) — program steps for capability adoption
+- [Using the Four Keys to measure DevOps performance](https://cloud.google.com/blog/products/devops-sre/using-the-four-keys-to-measure-devops-performance) — Google Cloud implementation perspective
+- [Four Keys open-source project](https://github.com/dora-team/fourkeys) — event ingestion reference architecture
+- [Accelerate (IT Revolution)](https://itrevolution.com/product/accelerate/) — book grounding the original research
+- [DevOps Research and Assessment — research archive](https://www.devops-research.com/research.html) — historical DORA publications
+- [The SPACE of Developer Productivity](https://arxiv.org/abs/2102.07763) — multidimensional developer productivity framework
+- [Google SRE Book — Monitoring distributed systems](https://sre.google/sre-book/monitoring-distributed-systems/) — golden signals during change
+- [Google SRE Workbook — Postmortem culture](https://sre.google/workbook/postmortem-culture/) — blameless learning paired with delivery metrics
+- [Grafana — Annotate visualizations](https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/annotate-visualizations/) — deployment marker mechanics
+- [Prometheus naming and best practices](https://prometheus.io/docs/practices/naming/) — metric design for deploy counters and histograms
+- [Continuous Delivery Foundation](https://cd.foundation/) — ecosystem context for delivery engineering
 
 ---
 
 ## Next Module
 
-You have completed the Release Engineering discipline fundamentals. Continue to the [Release Engineering Overview]() for a summary of all modules and suggested next steps, including how to integrate release engineering with SRE, GitOps, and Platform Engineering practices.
-
----
-
-*"What gets measured gets managed — but only if you measure the right things for the right reasons."* — Adapted from Peter Drucker
+You have completed the Release Engineering discipline fundamentals. Continue to the [Release Engineering overview](../) for a summary of all modules and suggested next steps, including integration with SRE, GitOps, and broader platform engineering practices.
