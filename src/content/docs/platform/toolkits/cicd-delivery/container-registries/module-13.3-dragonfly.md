@@ -1,24 +1,17 @@
 ---
-revision_pending: true
+revision_pending: false
+citations_verified: true
 title: "Module 13.3: Dragonfly - P2P Image Distribution at Scale"
 slug: platform/toolkits/cicd-delivery/container-registries/module-13.3-dragonfly
 sidebar:
   order: 4
 ---
-> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45-50 minutes
 
-## Overview
-
-What happens when you deploy to 1,000 nodes simultaneously? Your registry melts. Every node requests the same layers, creating a thundering herd that saturates bandwidth and brings deployments to a crawl. Dragonfly solves this with peer-to-peer distribution: the first node pulls from the registry, then shares with neighboring nodes, who share with their neighbors. In large rollouts, a P2P layer can reduce origin-registry traffic from every node pulling directly to only a small number of seed or back-to-source pulls.
-
-This module teaches you to deploy Dragonfly for massive-scale container image distribution.
+> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 45-50 minutes | Kubernetes: 1.35+
 
 ## Prerequisites
 
-- Understanding of container registries (Harbor or Zot)
-- Kubernetes fundamentals (DaemonSets, Services)
-- Basic networking concepts (P2P, BitTorrent-like protocols)
-- [DevSecOps Discipline](/platform/disciplines/reliability-security/devsecops/) - Supply chain concepts
+Before starting this module, you should understand what a container registry does and how image pulls fit into a Kubernetes rollout. If you have not yet worked through the registry modules in this toolkit, read [Module 13.1: Harbor](../module-13.1-harbor/) for enterprise registry governance and [Module 13.2: Zot](../module-13.2-zot/) for minimal OCI-native storage. You should also be comfortable with Kubernetes DaemonSets, Services, and basic cluster networking, because Dragonfly installs node agents and changes how pull traffic flows across your fleet.
 
 ## What You'll Be Able to Do
 
@@ -29,161 +22,108 @@ After completing this module, you will be able to:
 - **Integrate Dragonfly with existing registries (Harbor, Zot, ECR) as a transparent distribution layer**
 - **Monitor P2P distribution metrics and optimize cache hit rates for large-scale deployments**
 
-
 ## Why This Module Matters
 
-Traditional registry architectures hit a wall at scale:
+**Hypothetical scenario:** A platform team schedules a rolling update of a payment service across eight hundred worker nodes during a maintenance window. The new container image is modest by modern standards—roughly six hundred megabytes of layer content once dependencies are counted—but every node must fetch it before Pods become ready. The central Harbor registry in [Module 13.1](../module-13.1-harbor/) is healthy, vulnerability scanning completed, and CI promoted the digest correctly. Within minutes, registry ingress saturates, pull latencies spike past two minutes, and three hundred nodes still report `ImagePullBackOff` when the window closes. The failure is not bad image content; it is physics. Eight hundred nodes multiplied by six hundred megabytes is nearly half a terabyte of duplicate transfer aimed at a single origin unless something reshapes the traffic pattern.
 
-```
-THE THUNDERING HERD PROBLEM
-─────────────────────────────────────────────────────────────────────────────
+That scenario is the thundering herd problem in registry clothing. Harbor and Zot solve **where** images live, who may push them, and how you govern supply-chain evidence. Dragonfly solves **how** those images reach many nodes without repeatedly crushing the origin. It is a distribution layer, not a replacement registry. The registry remains authoritative for storage, scanning, signing, and policy. Dragonfly sits between the container runtime and that upstream, intercepting blob downloads, splitting content into pieces, and coordinating peer-to-peer transfers so the registry sees a small number of back-to-source pulls instead of one per node.
 
-Traditional Pull:                    P2P Pull (Dragonfly):
+This matters because large fleets, bursty rollouts, edge clusters on constrained links, and AI platforms moving multi-gigabyte model artifacts all share the same structural risk: duplicate downloads scale linearly with node count while registry capacity does not. A pull-through cache at each site helps, as described in the Zot module, but a cache still centralizes fetch work the first time content appears. Peer-to-peer distribution spreads that first-fetch work across the cluster itself. Dragonfly is the CNCF Graduated project that implements this pattern for cloud native environments, and understanding it helps you decide when P2P acceleration belongs in your architecture versus when simpler mirroring is enough.
 
-     Registry                             Registry
-        │                                    │
-        │ 1000 requests                      │ ~10 requests
-        │                                    │
-   ┌────┴────┐                          ┌────┴────┐
-   │         │                          │         │
-   ▼         ▼                          ▼         ▼
-┌─────┐   ┌─────┐                    ┌─────┐◄──►┌─────┐
-│Node1│   │Node2│   ...              │Node1│    │Node2│
-└─────┘   └─────┘                    └──┬──┘    └──┬──┘
-   │         │                          │          │
-   ▼         ▼                          ▼          ▼
-┌─────┐   ┌─────┐                    ┌─────┐◄──►┌─────┐
-│Node3│   │Node4│                    │Node3│    │Node4│
-└─────┘   └─────┘                    └─────┘    └─────┘
+The hypothetical numbers are intentionally round so you can reason about orders of magnitude without pretending a fictional company donated telemetry. What matters is the multiplication: nodes times layer bytes times synchronization factor. When that product routinely exceeds origin throughput during planned change windows, you need a distribution strategy rather than only a larger registry VM. Dragonfly does not remove the need for registry capacity planning upstream; it prevents every worker from exercising that capacity simultaneously for identical content.
 
-1000-node deploy time: 30 min        1000-node deploy time: 3 min
-Registry bandwidth: 1000x            Registry bandwidth: ~10x
-Failure mode: Registry overload      Failure mode: Graceful degradation
-```
+## 1. Separate the Registry from the Distribution Layer
 
-At large scale, Dragonfly is designed to cut rollout time substantially by shifting most transfer traffic from the registry to peers.
+The most expensive misunderstanding in this space is treating Dragonfly as another registry competing with Harbor or Zot. Registries implement the [OCI Distribution specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md): repositories, manifests, blobs, authentication, and garbage collection semantics. Harbor adds enterprise workflow, scanning, replication, and RBAC. Zot offers a compact OCI-native server for edge and cache scenarios. Dragonfly does not replace those responsibilities. It accelerates delivery of content that already exists upstream, whether that upstream is Harbor at headquarters, Zot at a warehouse, Amazon ECR, Google Artifact Registry, or a public hub.
 
-## Did You Know?
+Think of the split in terms of authority versus acceleration. The registry is authoritative: it decides which digests exist, which credentials may read them, and which policies apply before content is promoted. The distribution layer is accelerative: it decides how bytes move from authority to runtime with minimal duplicate work. When you integrate the two correctly, security properties remain anchored at the registry while performance properties improve across the fleet. When you confuse them, teams either duplicate storage unnecessarily or bypass governance trying to make a P2P mesh act like a source of truth.
 
-- **Origin**: Dragonfly was created at Alibaba to solve their Singles' Day scaling problems—imagine deploying to 10,000+ nodes for the world's largest shopping event
-- **CNCF Graduated**: Dragonfly is now a CNCF Graduated project with broad production adoption.
-- **Bandwidth Savings**: Dragonfly case studies report large reductions in source-registry bandwidth and image-pull cost.
-- **Not Just Images**: [Dragonfly can distribute any large file—ML models, datasets, artifacts](https://github.com/dragonflyoss/dragonfly)
-- **Large-Scale Use**: Dragonfly is used for very large production distributions.
+Dragonfly's transparent integration model is what preserves that boundary. Container runtimes continue to request images by familiar registry hostnames. Dfdaemon on each node proxies those requests, participates in piece scheduling, and falls back to direct upstream pulls when peers cannot satisfy a request. Operators do not re-tag images into a separate P2P namespace, and developers do not change Dockerfiles for basic acceleration. The mental model should feel similar to a registry mirror, except the mirror fans out through peers instead of only through local disk on one cache host.
 
-## Dragonfly Architecture
+Supply-chain reviewers sometimes worry that P2P sharing weakens immutability guarantees. In a well-designed deployment it does not, because manifests and digests still originate from the trusted registry APIs. Dfdaemon verifies piece integrity within its protocol and hands containerd the same blob a direct pull would have produced. Your scanning and admission policies should continue to reference digests promoted in Harbor projects, not informal tags observed on worker disks. Dragonfly changes transport economics, not the definition of what constitutes an approved artifact.
 
-```
-DRAGONFLY ARCHITECTURE
-─────────────────────────────────────────────────────────────────────────────
+Cross-linking the toolkit modules makes the design choice concrete. If your primary need is project RBAC, vulnerability gates, and replication between regions, start with Harbor. If your primary need is a small OCI cache that survives intermittent connectivity at the edge, start with Zot. If your primary need is reducing duplicate bytes during simultaneous pulls across hundreds or thousands of nodes that already trust an upstream registry, add Dragonfly as a layer in front of that upstream. Many production platforms use all three shapes in different places: Harbor as system of record, Zot as site cache, Dragonfly as intra-cluster accelerator during large rollouts.
+
+Platform engineers who skip this separation often recreate storage silos. They configure Dragonfly to proxy public hub content, then quietly promote the mesh cache into an informal registry of record because teams discover images there first. That shortcut collapses provenance trails: nobody knows which digest Harbor authoritative storage holds versus which digest happened to linger on a worker SSD. The durable pattern keeps promotion, scanning, and signing at the registry while Dragonfly caches and shares bytes that already passed those gates. Runtime teams get faster rollouts without asking security teams to accept a second source of truth.
+
+## 2. Diagnose the Thundering Herd Before Adding Complexity
+
+Peer-to-peer distribution is powerful, but it is not free complexity. Before you install mesh agents on every node, quantify whether your environment actually exhibits thundering herd behavior or merely occasional slow pulls. The signature of a herd is concurrency: many nodes requesting the same large blobs within a short interval, typically during Deployment rollouts, node repairs, autoscaling events, or DaemonSet upgrades. The symptom on the registry side is sustained egress saturation and rising latency histograms even though per-request authentication and manifest resolution remain healthy.
+
+A useful back-of-the-envelope model helps platform engineers justify infrastructure to skeptical teams. Suppose five hundred nodes each need a six hundred megabyte layer set during a rollout and the registry can sustain roughly two gigabits per second of useful egress to that cluster. Serializing five hundred independent downloads implies three hundred gigabytes of origin traffic. At two gigabits per second, draining that volume takes many minutes even before retries, TLS overhead, and manifest chatter are counted. Meanwhile kubelet retry loops increase concurrency further, which is why incidents feel sudden: the registry was fine at steady state and collapses only when coordination spikes.
+
+Latency fairness is another hidden cost. When registry CPU spends time serving identical blobs, authenticated manifest lookups for unrelated teams slow down as well. That cross-tenant coupling is why large organizations centralize registries for governance yet still need distribution mechanics that do not serialize through one hostname during fleet events. Observability teams should tag rollout windows in metrics systems so egress spikes correlate with Kubernetes change records instead of appearing as mysterious infrastructure noise.
+
+Not every cluster needs P2P to solve that math. A small staging cluster with twenty nodes may be adequately served by a single pull-through cache or generous registry quotas. A single-region fleet with staggered rollouts and modest image sizes may never saturate origin bandwidth. Multi-zone production fleets rolling out identical versions to hundreds of workers at once are a different class. Edge clusters where the upstream link is tens of megabits are another. AI inference platforms prefetching multi-gigabyte model weights to many GPU nodes simultaneously are a third. Dragonfly targets the cases where duplicate bytes dominate operational risk.
+
+The decision is also about failure modes. Without P2P, the registry or its ingress becomes a hard choke point: if it degrades, every node suffers. With P2P, degradation tends to be partial: peers that already hold pieces continue sharing, and nodes can still back off to origin pulls when the mesh is unhealthy. That graceful degradation is valuable, but it only helps if you monitor back-to-source rates and peer participation. Otherwise you may run an expensive mesh that silently reverts to direct pulls without anyone noticing until the next major rollout.
+
+You can gather evidence before buying hardware. Capture registry egress metrics during your last large DaemonSet upgrade. Count how many nodes pulled within the same five-minute bucket. Measure median and tail pull latency for the largest layer in that image. Interview application teams about how they roll out: synchronized `maxUnavailable` percentages, node repair storms, and cluster autoscaling all create herds even when individual services look calm. If those signals are weak, document why P2P is deferred and revisit after the next growth milestone. If they are strong, you already have the incident narrative finance and infrastructure reviewers expect when you request dfdaemon exceptions in pod security policy.
+
+## 3. Map Dragonfly's Control Plane and Data Plane Components
+
+Dragonfly v2 organizes work into a small number of cooperating services documented in the [project documentation](https://d7y.io/docs/) and [upstream repository](https://github.com/dragonflyoss/dragonfly). The **manager** is the administrative control plane. It exposes APIs and UI for cluster configuration, peer visibility, preheat jobs, and scheduler coordination when multiple schedulers participate in one deployment. The **scheduler** is the regional brain for download tasks. It decides how pieces flow, which peers should serve which segments, and when to fetch missing content from upstream. **Seed peers** are specialized schedulers or dedicated peers that guarantee an initial copy of content exists inside the mesh before worker nodes begin wide fan-out. **Dfdaemon** is the data-plane agent that runs on each node, typically as a DaemonSet in Kubernetes environments.
+
+```ascii
+DRAGONFLY ARCHITECTURE (SIMPLIFIED)
+──────────────────────────────────────────────────────────────────────────────
 
                          ┌─────────────────────────────────────┐
                          │              Manager                │
-                         │                                     │
-                         │  • Cluster coordination             │
-                         │  • Scheduler selection              │
-                         │  • Metrics & monitoring             │
-                         │  • Peer discovery                   │
+                         │  APIs, console, scheduler registry  │
                          └────────────────┬────────────────────┘
                                           │
                     ┌─────────────────────┼─────────────────────┐
-                    │                     │                     │
                     ▼                     ▼                     ▼
            ┌────────────────┐    ┌────────────────┐    ┌────────────────┐
-           │   Scheduler    │    │   Scheduler    │    │   Scheduler    │
-           │   (Region A)   │    │   (Region B)   │    │   (Region C)   │
-           │                │    │                │    │                │
-           │ • Seed peer    │    │ • Seed peer    │    │ • Seed peer    │
-           │ • Task mgmt    │    │ • Task mgmt    │    │ • Task mgmt    │
-           │ • Piece sched  │    │ • Piece sched  │    │ • Piece sched  │
+           │   Scheduler    │    │   Seed peer    │    │   Scheduler    │
+           │  piece tasks   │    │  warm content  │    │  (optional HA) │
            └───────┬────────┘    └───────┬────────┘    └───────┬────────┘
                    │                     │                     │
           ┌────────┴────────┐   ┌────────┴────────┐   ┌────────┴────────┐
-          │                 │   │                 │   │                 │
           ▼                 ▼   ▼                 ▼   ▼                 ▼
      ┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────────┐
-     │  Dfdaemon│      │  Dfdaemon│      │  Dfdaemon│      │  Dfdaemon│
-     │ (Node 1)│◄────▶│ (Node 2)│◄────▶│ (Node 3)│◄────▶│ (Node 4)│
-     │         │      │         │      │         │      │         │
-     │ • Peer  │      │ • Peer  │      │ • Peer  │      │ • Peer  │
-     │ • Proxy │      │ • Proxy │      │ • Proxy │      │ • Proxy │
-     │ • Cache │      │ • Cache │      │ • Cache │      │ • Cache │
-     └─────────┘      └─────────┘      └─────────┘      └─────────┘
-          │                │                │                │
+     │ Dfdaemon│◄────▶│ Dfdaemon│◄────▶│ Dfdaemon│◄────▶│ Dfdaemon│
+     │ (node)  │      │ (node)  │      │ (node)  │      │ (node)  │
+     └────┬────┘      └────┬────┘      └────┬────┘      └────┬────┘
           ▼                ▼                ▼                ▼
      ┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────────┐
-     │Container│      │Container│      │Container│      │Container│
-     │ Runtime │      │ Runtime │      │ Runtime │      │ Runtime │
+     │containerd│     │containerd│     │containerd│     │containerd│
      └─────────┘      └─────────┘      └─────────┘      └─────────┘
-
-COMPONENT ROLES:
-─────────────────────────────────────────────────────────────────────────────
-Manager     • Central coordination for multiple schedulers
-            • Stores cluster topology and peer information
-            • REST API for management operations
-
-Scheduler   • Regional coordinator and seed peer
-            • First to download from source registry
-            • Breaks files into pieces and coordinates distribution
-            • Tracks which peers have which pieces
-
-Dfdaemon    • Runs on every node as DaemonSet
-            • Intercepts container runtime pulls
-            • Downloads pieces from scheduler or other peers
-            • Shares downloaded pieces with other peers
-            • Caches content locally
 ```
 
-### How P2P Distribution Works
+Dfdaemon fulfills three simultaneous roles on the node. It acts as a **registry proxy** so containerd can keep using familiar mirror endpoints. It acts as a **peer client** that downloads missing pieces from schedulers or neighboring peers. It acts as a **peer server** that uploads pieces it already holds to other nodes that need them. Local disk cache on the node is what makes repeated pod starts cheap after the first successful population. Redis and MySQL in Helm deployments back manager metadata; treat them as operational dependencies with the same seriousness as any other control-plane datastore.
 
-```
-P2P PIECE DISTRIBUTION
-─────────────────────────────────────────────────────────────────────────────
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.** Dragonfly reached [CNCF Graduated](https://www.cncf.io/projects/dragonfly/) status with maturity dated October 28, 2025 on the project page, and the foundation published the [graduation announcement](https://www.cncf.io/announcements/2026/01/14/cloud-native-computing-foundation-announces-dragonflys-graduation/) on January 14, 2026. The project originated at Alibaba and entered CNCF as a sandbox project before evolving into the v2 architecture described here. Component names, default chart values, and metrics labels continue to move between releases, so always confirm against your installed chart version.
 
-Image layer: [======================================] 100MB
+Understanding which component owns which failure helps on-call rotation. Manager outages typically impact visibility APIs, preheat submission, and multi-scheduler coordination more than they stop in-flight piece transfers already coordinated by schedulers. Scheduler outages push nodes toward back-to-source behavior for net-new content while existing local caches still serve restarts on the same node. Dfdaemon outages on a subset of nodes isolate those nodes to direct pulls without necessarily affecting neighbors that continue sharing among themselves. Document these partial-failure modes in runbooks so incident commanders do not assume an all-or-nothing blast radius.
 
-Split into pieces:
-[====][====][====][====][====][====][====][====][====][====]
-  P1    P2    P3    P4    P5    P6    P7    P8    P9   P10
- 10MB  10MB  10MB  10MB  10MB  10MB  10MB  10MB  10MB  10MB
+## 4. Configure Scheduling Policies and Seed Peer Strategies
 
-Distribution timeline:
-─────────────────────────────────────────────────────────────────────────────
+Piece scheduling is the heart of Dragonfly's performance story. When a node requests a large blob, the scheduler divides the content into fixed-size pieces—commonly on the order of a few megabytes—and assigns download tasks across peers that already hold subsets. The scheduler tracks which peers possess which piece ranges and prioritizes assignments that shorten remaining work globally, not merely on the requesting node. This is why Dragonfly behaves differently from a simple HTTP cache: it parallelizes within a single object, similar in spirit to BitTorrent-style swarming, but integrated with registry pull semantics.
 
-T=0: Scheduler downloads from registry
-     Scheduler: [P1][P2][P3][P4][P5][P6][P7][P8][P9][P10]
-     Node A:    [  ][  ][  ][  ][  ][  ][  ][  ][  ][  ]
-     Node B:    [  ][  ][  ][  ][  ][  ][  ][  ][  ][  ]
-     Node C:    [  ][  ][  ][  ][  ][  ][  ][  ][  ][  ]
+Seed peers exist to answer the cold-start question. If no node yet holds pieces for a blob, someone must fetch from upstream first. Seed peers are provisioned with better network paths to the registry and more generous disk budgets so they accept that responsibility predictably. In Helm values, the `seedPeer` stanza configures these endpoints. For regional clusters, operators often deploy schedulers and seeds per zone so cross-zone traffic pays only once per zone rather than once per node. For smaller lab clusters, a single seed is enough to demonstrate behavior even though production would isolate seeds from noisy neighbor workloads.
 
-T=1: Scheduler shares pieces with nodes
-     Scheduler: [P1][P2][P3][P4][P5][P6][P7][P8][P9][P10]
-     Node A:    [P1][  ][P3][  ][  ][  ][  ][  ][  ][  ] ← from scheduler
-     Node B:    [  ][P2][  ][P4][  ][  ][  ][  ][  ][  ] ← from scheduler
-     Node C:    [  ][  ][  ][  ][P5][P6][  ][  ][  ][  ] ← from scheduler
+Configuration levers belong in both scheduler and dfdaemon YAML. Scheduler settings such as `backToSourceCount` and retry intervals define how aggressively the system returns to origin when peers fail. Dfdaemon download settings such as `pieceSize`, `concurrentPieceCount`, and rate limits define how hard a single node hammers its neighbors. Tuning is workload dependent: high-latency wide-area links favor larger pieces and fewer connections, while dense rack-local networks tolerate smaller pieces and higher concurrency. The wrong tuning shows up quickly as either elevated back-to-source rates or LAN congestion during rollouts.
 
-T=2: Nodes share pieces with each other
-     Scheduler: [P1][P2][P3][P4][P5][P6][P7][P8][P9][P10]
-     Node A:    [P1][P2][P3][P4][P5][P6][  ][  ][  ][  ] ← P2,P4 from B, P5,P6 from C
-     Node B:    [P1][P2][P3][P4][P5][P6][  ][  ][  ][  ] ← P1,P3 from A, P5,P6 from C
-     Node C:    [P1][P2][P3][P4][P5][P6][  ][  ][  ][  ] ← P1-P4 from A,B
-
-T=3: Continue until all nodes have all pieces
-     All nodes: [P1][P2][P3][P4][P5][P6][P7][P8][P9][P10] ✓
-
-Registry bandwidth used: 100MB (scheduler only)
-Without P2P: 300MB (100MB × 3 nodes)
-Savings: 66%
-
-At 1000 nodes:
-Registry bandwidth with Dragonfly: ~100MB
-Registry bandwidth without: 100GB
-Savings: 99%+
+```yaml
+# scheduler fragment (representative)
+scheduler:
+  algorithm: default
+  backToSourceCount: 3
+  retryLimit: 10
+  retryInterval: 1s
 ```
 
-## Deploying Dragonfly
+Document baseline metrics before changing tuning knobs. Capture back-to-source ratio, piece latency percentiles, and rollout duration for a known test image. Change one variable per rehearsal week so you can attribute improvements or regressions. Scheduling policy is not a fire-once YAML dump; it is a living configuration tied to fleet size, NIC speed, and application rollout culture.
 
-### Prerequisites
+Scheduling policies also interact with security boundaries. Peers exchange pieces only within the trust domain you configure. If you run multiple tenant clusters, you do not want one tenant's nodes seeding another tenant's layers unless storage isolation policies explicitly allow it. NetworkPolicy around dfdaemon gRPC and proxy ports must align with your platform segmentation model. Scheduling is therefore not a performance-only topic; it is part of your multi-tenant safety story.
+
+Piece size interacts with storage fragmentation on worker nodes. Very small pieces increase metadata overhead and scheduler chatter; very large pieces reduce scheduling flexibility when only a subset of peers finish early. Start from chart defaults, then adjust after observing piece cost histograms during a controlled rollout rehearsal. Seed peers should sit on hosts with stable hostnames and taints that prevent application Pods from evicting them during node pressure. Treat seeds like infrastructure, not like generic worker capacity, because their absence converts an otherwise warm mesh into a synchronized origin stampede.
+
+## 5. Deploy Dragonfly's P2P Distribution Layer with Helm
+
+For most teams, Helm is the fastest credible path to a working mesh. The [Dragonfly Helm charts repository](https://github.com/dragonflyoss/helm-charts) packages manager, scheduler, seed peer, dfdaemon, and optional dependencies such as MySQL and Redis. The commands below target a local kind cluster with multiple workers so you can observe peer behavior without borrowing production hardware. They intentionally request modest CPU and memory because the goal is architectural learning, not maximum throughput benchmarking.
 
 ```bash
 # Create kind cluster with enough nodes to demonstrate P2P
@@ -197,21 +137,15 @@ nodes:
 - role: worker
 EOF
 
-# Verify nodes
 kubectl get nodes
 ```
 
-### Option 1: Helm Deployment (Recommended)
-
 ```bash
-# Add Dragonfly Helm repository
 helm repo add dragonfly https://dragonflyoss.github.io/helm-charts/
 helm repo update
 
-# Create namespace
 kubectl create namespace dragonfly-system
 
-# Create values file
 cat > dragonfly-values.yaml <<EOF
 manager:
   replicas: 1
@@ -250,7 +184,6 @@ seedPeer:
     verbose: true
 
 dfdaemon:
-  # Runs on every node
   resources:
     requests:
       cpu: 100m
@@ -262,13 +195,11 @@ dfdaemon:
     verbose: true
     proxy:
       registryMirror:
-        # Proxy all registries through Dragonfly
         dynamic: true
         url: https://index.docker.io
       proxies:
         - regx: blobs/sha256.*
 
-# For containerd runtime
 containerRuntime:
   containerd:
     enable: true
@@ -278,7 +209,6 @@ containerRuntime:
         serverAddr: https://index.docker.io
         capabilities: ["pull", "resolve"]
 
-# Enable console UI
 jaeger:
   enable: false
 
@@ -299,346 +229,121 @@ redis:
         memory: 256Mi
 EOF
 
-# Install Dragonfly
 helm install dragonfly dragonfly/dragonfly \
   --namespace dragonfly-system \
   -f dragonfly-values.yaml \
   --wait
 
-# Verify all components are running
 kubectl -n dragonfly-system get pods
-
-# Expected output:
-# dragonfly-dfdaemon-xxxxx     Running (one per node)
-# dragonfly-manager-xxxxx      Running
-# dragonfly-mysql-xxxxx        Running
-# dragonfly-redis-xxxxx        Running
-# dragonfly-scheduler-xxxxx    Running
-# dragonfly-seed-peer-xxxxx    Running
 ```
 
-### Option 2: Manual Deployment
+After `helm install`, confirm that manager, scheduler, seed peer, dfdaemon DaemonSet, and dependency pods reach Ready. Dfdaemon must run on every node you expect to participate; missing DaemonSet pods on tainted workers is a common reason rollouts still hit origin directly. Version pins matter for supportability: chart defaults move with upstream releases, and manual manifests in older guides may reference earlier tags such as `v2.1.0`. For lab reproducibility, align manager, scheduler, dfdaemon, and seed peer images to the same minor release family—for example `v2.4.0`—before you promote configurations into long-lived environments.
 
-For understanding the components:
+Manual manifests remain valuable when you need to understand security contexts. Dfdaemon typically requires host network or elevated privileges to integrate with containerd sockets and node networking. That is not a reason to avoid Dragonfly, but it is a reason to document exceptions in your pod security standards. Platform teams should treat dfdaemon like other node-level agents—CNI plugins, CSI drivers, or observability collectors—with explicit exception review rather than silent cluster-admin installs.
 
 ```yaml
-# manager.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: dragonfly-manager
-  namespace: dragonfly-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: dragonfly-manager
-  template:
-    metadata:
-      labels:
-        app: dragonfly-manager
-    spec:
-      containers:
-      - name: manager
-        image: dragonflyoss/manager:v2.1.0
-        ports:
-        - containerPort: 8080
-          name: http
-        - containerPort: 65003
-          name: grpc
-        env:
-        - name: DRAGONFLY_MANAGER_DATABASE_TYPE
-          value: mysql
-        - name: DRAGONFLY_MANAGER_DATABASE_MYSQL_HOST
-          value: mysql
-        volumeMounts:
-        - name: config
-          mountPath: /etc/dragonfly
-      volumes:
-      - name: config
-        configMap:
-          name: dragonfly-manager-config
----
-# scheduler.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: dragonfly-scheduler
-  namespace: dragonfly-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: dragonfly-scheduler
-  template:
-    metadata:
-      labels:
-        app: dragonfly-scheduler
-    spec:
-      containers:
-      - name: scheduler
-        image: dragonflyoss/scheduler:v2.1.0
-        ports:
-        - containerPort: 8002
-          name: http
-        - containerPort: 65002
-          name: grpc
-        volumeMounts:
-        - name: config
-          mountPath: /etc/dragonfly
-      volumes:
-      - name: config
-        configMap:
-          name: dragonfly-scheduler-config
----
-# dfdaemon.yaml (DaemonSet - runs on every node)
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: dragonfly-dfdaemon
-  namespace: dragonfly-system
-spec:
-  selector:
-    matchLabels:
-      app: dragonfly-dfdaemon
-  template:
-    metadata:
-      labels:
-        app: dragonfly-dfdaemon
-    spec:
-      hostNetwork: true
-      hostPID: true
-      containers:
-      - name: dfdaemon
-        image: dragonflyoss/dfdaemon:v2.1.0
-        securityContext:
-          privileged: true
-        ports:
-        - containerPort: 65001
-          name: grpc
-        - containerPort: 65002
-          name: proxy
-        volumeMounts:
-        - name: config
-          mountPath: /etc/dragonfly
-        - name: containerd-socket
-          mountPath: /run/containerd/containerd.sock
-        - name: cache
-          mountPath: /var/lib/dragonfly
-      volumes:
-      - name: config
-        configMap:
-          name: dragonfly-dfdaemon-config
-      - name: containerd-socket
-        hostPath:
-          path: /run/containerd/containerd.sock
-      - name: cache
-        hostPath:
-          path: /var/lib/dragonfly
-          type: DirectoryOrCreate
+# Illustrative manual dfdaemon image pin (lab only)
+containers:
+- name: dfdaemon
+  image: dragonflyoss/dfdaemon:v2.4.0
 ```
 
-## Configuring Container Runtime Integration
+Upgrade strategy should pin all Dragonfly images to the same release train and roll nodes in waves. Mixed minor versions between scheduler and dfdaemon sometimes manifest as subtle piece protocol mismatches rather than clean crash loops. Keep Helm values in Git, snapshot `kubectl -n dragonfly-system get pods` health after each upgrade, and rehearse rollback by reapplying the previous chart revision before you touch production maintenance windows.
 
-### containerd Configuration
+## 6. Integrate Containerd Through hosts.toml Mirror Endpoints
 
-Dragonfly integrates with containerd by configuring registry mirrors:
+Transparent runtime integration is what keeps Dragonfly adoptable. Containerd resolves registry hosts using mirror configuration documented in [containerd hosts.md](https://github.com/containerd/containerd/blob/main/docs/hosts.md). Instead of teaching kubelet about a new registry protocol, you point mirrors for `docker.io`, `ghcr.io`, or internal Harbor hostnames at the local dfdaemon proxy endpoint, with the real upstream as fallback. Helm can inject these paths when `containerRuntime.containerd.enable` is true, which is why the values file above enables injection for Docker Hub.
 
 ```toml
-# /etc/containerd/config.toml (on each node)
-version = 2
+# /etc/containerd/certs.d/docker.io/hosts.toml (conceptual layout)
+server = "https://index.docker.io"
 
-[plugins."io.containerd.grpc.v1.cri".registry]
-  [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
-      endpoint = ["http://127.0.0.1:65001", "https://index.docker.io"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."gcr.io"]
-      endpoint = ["http://127.0.0.1:65001", "https://gcr.io"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."ghcr.io"]
-      endpoint = ["http://127.0.0.1:65001", "https://ghcr.io"]
-    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."harbor.example.com"]
-      endpoint = ["http://127.0.0.1:65001", "https://harbor.example.com"]
+[host."http://127.0.0.1:65001"]
+  capabilities = ["pull", "resolve"]
 ```
 
-The Helm chart handles this automatically with `containerRuntime.containerd.enable: true`.
-
-### Docker Configuration (Legacy)
-
-```json
-{
-  "registry-mirrors": ["http://127.0.0.1:65001"],
-  "insecure-registries": ["127.0.0.1:65001"]
-}
+```toml
+# Legacy mirrors table still appears in many clusters
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+  endpoint = ["http://127.0.0.1:65001", "https://index.docker.io"]
 ```
 
-## Dragonfly Configuration
+The ordering semantics matter operationally. Containerd tries mirror endpoints first. Dfdaemon answers when it can satisfy the blob from cache or peers. If dfdaemon cannot complete the transfer, containerd continues to the upstream entry, preserving availability. This is the integration contract operators must verify after upgrades: a misconfigured mirror leaves Dragonfly idle while still appearing healthy, because pods pull directly from origin without touching the mesh.
 
-### Dfdaemon Configuration
+Authentication flows deserve explicit testing. Manifest pulls often carry repository credentials or token exchanges that differ from anonymous blob redirects. Many deployments therefore proxy **blob** paths while letting manifests resolve directly, which is why the Helm values example includes `regx: blobs/sha256.*` under `proxies`. The pattern reduces authentication surprises while still accelerating the large payload portion of pulls. After changing proxy rules, run controlled pulls of private Harbor images and confirm that dfdaemon logs show peer activity rather than only back-to-source tasks.
+
+Kind clusters and managed Kubernetes diverge in socket paths. Kind often requires chart adjustments or post-install hooks that differ from cloud node images using containerd with standardized `/etc/containerd/certs.d` layouts. When something fails, compare `crictl pull` behavior on the node with and without mirror entries before blaming registry credentials. A quick A/B pull test saves hours of misdirected Harbor debugging when the real issue is simply that kubelet never contacted dfdaemon.
+
+## 7. Integrate Dragonfly with Harbor, Zot, and Cloud Registries Transparently
+
+Upstream choice does not change Dragonfly's role. Harbor remains the authoritative registry for signed production images in many enterprises. Zot may serve as a lightweight mirror at a remote site. Amazon ECR, Google Artifact Registry, and Azure Container Registry expose the same OCI blob semantics Dragonfly already proxies. Integration work is primarily credential and URL configuration in dfdaemon rather than image format translation.
 
 ```yaml
-# dfdaemon config
-server:
-  # Listen address
-  listen:
-    ip: 0.0.0.0
-    port: 65001
-
-# Scheduler connection
-scheduler:
-  manager:
-    enable: true
-    netAddrs:
-      - type: tcp
-        addr: dragonfly-manager.dragonfly-system.svc:65003
-    refreshInterval: 5m
-
-# Proxy configuration
-proxy:
-  # Enable registry proxy
-  registryMirror:
-    # Dynamic proxying for all registries
-    dynamic: true
-    # Default upstream
-    url: https://index.docker.io
-    # Insecure registries
-    insecure: false
-
-  # Specific proxy rules
-  proxies:
-    # Only proxy blob downloads (not manifests)
-    - regx: blobs/sha256.*
-    # Or proxy everything
-    # - regx: .*
-
-# Peer configuration
-download:
-  # Piece size for P2P distribution
-  pieceSize: 4Mi
-  # Concurrent download limit
-  concurrentPieceCount: 16
-  # Total rate limit
-  totalRateLimit: 2Gi
-  # Per-peer rate limit
-  perPeerRateLimit: 512Mi
-
-# Cache configuration
-storage:
-  # Local cache directory
-  taskExpireTime: 6h
-  diskGCThreshold: 50Gi
-  diskGCThresholdPercent: 0.8
-
-# Security
-security:
-  # Disable for testing, enable in production
-  autoIssueCert: false
-```
-
-### Scheduler Configuration
-
-```yaml
-# scheduler config
-server:
-  listen:
-    ip: 0.0.0.0
-    port: 8002
-  advertiseIP: 0.0.0.0
-
-# Scheduling algorithm configuration
-scheduler:
-  # Algorithm: default or ml (machine learning based)
-  algorithm: default
-
-  # Back-to-source configuration
-  backToSourceCount: 3
-
-  # Retry configuration
-  retryBackToSourceLimit: 5
-  retryLimit: 10
-  retryInterval: 1s
-
-# Piece configuration
-pieceDownloadTimeout: 30s
-
-# Manager connection
-manager:
-  enable: true
-  addr: dragonfly-manager.dragonfly-system.svc:65003
-  schedulerClusterID: 1
-```
-
-## Integrating with Harbor
-
-Dragonfly works seamlessly with Harbor as the upstream registry:
-
-```
-DRAGONFLY + HARBOR ARCHITECTURE
-─────────────────────────────────────────────────────────────────────────────
-
-                    ┌─────────────────────────────────────┐
-                    │              Harbor                 │
-                    │         (Source of Truth)           │
-                    │  • Image storage                    │
-                    │  • Vulnerability scanning           │
-                    │  • RBAC / Authentication           │
-                    └────────────────┬────────────────────┘
-                                     │
-                                     │ Authenticated pull
-                                     │ (only by scheduler)
-                                     ▼
-                    ┌─────────────────────────────────────┐
-                    │         Dragonfly Scheduler         │
-                    │            (Seed Peer)              │
-                    │  • Downloads once from Harbor      │
-                    │  • Splits into pieces              │
-                    │  • Coordinates P2P distribution    │
-                    └────────────────┬────────────────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    │                │                │
-                    ▼                ▼                ▼
-            ┌───────────┐    ┌───────────┐    ┌───────────┐
-            │ Dfdaemon  │◄──▶│ Dfdaemon  │◄──▶│ Dfdaemon  │
-            │ (Node 1)  │    │ (Node 2)  │    │ (Node N)  │
-            └─────┬─────┘    └─────┬─────┘    └─────┬─────┘
-                  │                │                │
-                  ▼                ▼                ▼
-            ┌───────────┐    ┌───────────┐    ┌───────────┐
-            │ Container │    │ Container │    │ Container │
-            │  Runtime  │    │  Runtime  │    │  Runtime  │
-            └───────────┘    └───────────┘    └───────────┘
-```
-
-Configure dfdaemon for Harbor with authentication:
-
-```yaml
-# dfdaemon config with Harbor
+# dfdaemon fragment for Harbor upstream authentication
 proxy:
   registryMirror:
     dynamic: true
     url: https://harbor.example.com
-
-  # Harbor credentials for authenticated pulls
   registries:
     - url: https://harbor.example.com
       host: harbor.example.com
       username: robot$dragonfly
       password: ${HARBOR_ROBOT_PASSWORD}
       insecure: false
-
   proxies:
     - regx: blobs/sha256.*
       useHTTPS: true
 ```
 
-## Monitoring Dragonfly
+Harbor robot accounts with pull-only scope are a practical pattern. The scheduler or seed peer authenticates once, retrieves blobs, and fans out inside the cluster. Application namespaces never receive Harbor credentials broadly, because nodes talk to dfdaemon locally. This preserves Harbor RBAC and scanning gates while still allowing large parallel rollouts. When teams also use Zot as an edge cache, Dragonfly can sit behind Zot or in parallel depending on link economics: Zot minimizes cross-site repeats; Dragonfly minimizes intra-site repeats during burst events.
 
-### Prometheus Metrics
+Cloud registry integration adds IAM complexity. ECR and similar providers issue short-lived tokens. Dfdaemon must refresh credentials or rely on node/instance roles where supported. Test token expiry paths explicitly, because P2P meshes fail quietly when seeds can no longer authenticate even though cached public layers still flow. Document which components hold secrets and rotate them with the same discipline as any pull secret mounted in application namespaces.
 
-Dragonfly exposes comprehensive metrics:
+Replication patterns from Harbor complicate mental models in helpful ways. Harbor may replicate an image from headquarters to a regional Harbor instance first; Dragonfly then prevents that regional instance from serving five hundred parallel worker pulls without peer assistance. Zot may mirror upstream content overnight; Dragonfly still helps when Monday morning autoscaling requests the same digest simultaneously across a dense node pool. The integration lesson is consistent: identify the authoritative upstream URL dfdaemon should treat as origin for a given cluster, then map robot accounts or cloud IAM roles to that URL only on schedulers and seeds.
+
+## 8. Accelerate Startup with Nydus Lazy Loading
+
+Container startup latency is not only about download bytes; it is also about how quickly a runtime can mount root filesystem content. [Nydus](https://github.com/dragonflyoss/nydus), maintained as a Dragonfly subproject, implements lazy loading of image layers so containers begin executing before entire filesystems are local. Dragonfly distributes Nydus blobs using the same piece scheduler, which ties together two separate optimizations: P2P reduces origin load, while Nydus reduces time-to-first-process.
+
+The combination matters for bursty scale-out scenarios. A service that adds hundreds of replicas during an incident may be network-bound on full layer downloads even when P2P is healthy. Nydus changes the unit of work: nodes fetch critical metadata and initial blocks first, then hydrate remaining filesystem ranges on demand. Operators still need cache capacity planning, because lazy loading shifts pressure from upfront bandwidth to ongoing block fetches during runtime I/O.
+
+Adopting Nydus is not automatic with a stock Helm install. Image build pipelines must produce Nydus-formatted artifacts, and runtimes must enable the appropriate snapshotter integration. Treat Nydus as a coordinated change across build, registry, distribution, and node configuration rather than a toggle on dfdaemon alone. When it fits, the user-visible effect is faster cold starts on large images; when it does not fit, standard OCI layers with Dragonfly P2P alone still deliver most bandwidth savings.
+
+Teams frequently ask whether Nydus replaces P2P. It does not. Nydus changes how runtimes consume layers after bytes arrive; Dragonfly changes how bytes traverse the network. A Nydus image without P2P still bottlenecks origin when hundreds of nodes fetch bootstrap chunks at once. P2P without Nydus still wins when images are multi-gigabyte tar layers that must be fully present before main processes start. Together they address different parts of the latency budget, which is why the Nydus subproject lives under the Dragonfly ecosystem rather than as an unrelated utility.
+
+## 9. Extend P2P Distribution to AI Models and Large Artifacts
+
+Dragonfly's design goal has always been broader than container images. The [CNCF blog on AI model distribution](https://www.cncf.io/blog/2026/04/06/peer-to-peer-acceleration-for-ai-model-distribution-with-dragonfly/) describes how the same piece scheduler moves large model weights to inference nodes without repeatedly saturating a central artifact store. The problem shape matches image layers: a large immutable blob, many parallel consumers, and costly origin bandwidth if every consumer downloads independently.
+
+Model distribution introduces operational nuances images sometimes hide. Models may live in object storage with different authentication headers, exceed tens of gigabytes, and update less frequently but with higher blast radius when wrong. Preheat APIs become essential: platform teams trigger manager jobs to seed known model versions across peers before traffic shifts. Monitoring must track piece completion percent per model version, not only container image tags. Governance teams also care about provenance: Dragonfly accelerates delivery of bytes that remain subject to the same signing and approval processes as the upstream store.
+
+Treat model artifacts as release trains, not as anonymous files. Record digest, origin URL, preheat job identifier, and completion timestamp in change-management tickets the same way you record container image promotions. When auditors ask whether inference nodes executed against an approved weight snapshot, your distribution logs should corroborate registry metadata rather than contradict it.
+
+Kubernetes-native AI platforms scheduling many GPU nodes should evaluate Dragonfly alongside registry mirrors and object storage CDNs. None of those options alone solves intra-cluster fan-out when hundreds of nodes on the same high-speed fabric need identical weights immediately. Dragonfly targets exactly that fan-out layer, provided you size seeds and disk caches for multi-gigabyte objects rather than assuming image-sized footprints.
+
+FinOps teams should model AI distribution separately from microservice rollouts. Egress charges for moving a thirty-gigabyte model out of object storage into every GPU node can dwarf the compute cost of a short inference burst if the mesh is cold. Preheat jobs look like optional polish until you multiply gigabytes by node count in a spreadsheet. Dragonfly does not eliminate storage bills, but it converts repeated full-origin downloads into one seeded copy plus peer exchanges inside the datacenter fabric you already pay for.
+
+## 10. Operate Seeds, Cache Eviction, Network Policy, and Know When to Skip P2P
+
+Running Dragonfly well is mostly operational discipline. Seed peers need predictable network paths to upstream registries, sufficient SSD capacity, and monitoring identical to other data-plane choke points. Dfdaemon caches require garbage collection thresholds so rolling deploys of large images do not exhaust node disks silently. Configure `diskGCThreshold` and `taskExpireTime` with eyes open: aggressive eviction improves safety but reduces peer hit rates during repeated rollbacks.
+
+Network policy defaults in secure clusters often block node-to-node traffic that dfdaemon requires. Document allowed ports between peers and schedulers, and test policies in staging with deliberate rollout storms. Without that test, production policies may allow DNS and kube-apiserver traffic while accidentally isolating P2P piece uploads, which manifests as elevated back-to-source rates rather than explicit connection errors.
 
 ```yaml
-# ServiceMonitor for Prometheus Operator
+# dfdaemon cache and rate limits (representative)
+storage:
+  taskExpireTime: 6h
+  diskGCThreshold: 50Gi
+  diskGCThresholdPercent: 0.8
+
+download:
+  totalRateLimit: 2Gi
+  perPeerRateLimit: 512Mi
+```
+
+**Monitor P2P distribution metrics and optimize cache hit rates** by treating upload-versus-download ratios as first-class indicators. Dragonfly exposes Prometheus metrics from manager, scheduler, and dfdaemon components. A ServiceMonitor integrates with Prometheus Operator stacks.
+
+```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -653,302 +358,164 @@ spec:
     interval: 30s
 ```
 
-Key metrics:
+| Metric | Operational meaning |
+|--------|---------------------|
+| `dragonfly_dfdaemon_upload_traffic_total` | Bytes served to peers; low values imply weak mesh sharing |
+| `dragonfly_dfdaemon_download_traffic_total` | Bytes acquired by the node; compare against upload for ratio |
+| Back-to-source task rate | Direct origin pulls; should spike only on cold starts |
+| `dragonfly_scheduler_download_piece_cost_seconds` | Piece latency; sustained high values hint at tuning issues |
 
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `dragonfly_dfdaemon_download_task_total` | Total download tasks | N/A |
-| `dragonfly_dfdaemon_download_traffic_total` | Bytes downloaded | N/A |
-| `dragonfly_dfdaemon_upload_traffic_total` | Bytes uploaded to peers | N/A |
-| `dragonfly_dfdaemon_proxy_request_total` | Proxy requests | > 1000/min |
-| `dragonfly_scheduler_download_peer_total` | Active peers | N/A |
-| `dragonfly_scheduler_download_piece_cost_seconds` | Piece download latency | > 10s |
-| `dragonfly_manager_peer_total` | Total registered peers | N/A |
+The manager console, highlighted in the [v2.1.0 release notes](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/), helps operators visualize active peers and tasks during incidents. Port-forward the manager Service when debugging a rollout, then correlate console task states with Prometheus trends rather than relying on either alone.
 
-### Grafana Dashboard
+SLO thinking applies to distribution the same way it applies to API latency. Define an internal objective for rollout completion time during maintenance windows and track how often registry egress limits threaten that objective. When Dragonfly is installed, add companion SLOs for peer upload ratio and seed availability so regressions surface before customer-facing services miss their deadlines. Optimization work should target measurable cache hit improvements rather than vanity bandwidth charts that ignore application-level readiness gates.
 
-```json
-{
-  "dashboard": {
-    "title": "Dragonfly Overview",
-    "panels": [
-      {
-        "title": "P2P Traffic Ratio",
-        "targets": [{
-          "expr": "sum(rate(dragonfly_dfdaemon_upload_traffic_total[5m])) / sum(rate(dragonfly_dfdaemon_download_traffic_total[5m]))"
-        }],
-        "description": "Higher is better - more P2P, less registry load"
-      },
-      {
-        "title": "Back-to-Source Rate",
-        "targets": [{
-          "expr": "rate(dragonfly_dfdaemon_download_task_total{type=\"back_to_source\"}[5m])"
-        }],
-        "description": "Downloads directly from registry (should be low)"
-      },
-      {
-        "title": "Active Peers per Scheduler",
-        "targets": [{
-          "expr": "dragonfly_scheduler_download_peer_total"
-        }]
-      },
-      {
-        "title": "Download Latency P99",
-        "targets": [{
-          "expr": "histogram_quantile(0.99, rate(dragonfly_scheduler_download_piece_cost_seconds_bucket[5m]))"
-        }]
-      }
-    ]
-  }
-}
-```
+Not every environment should deploy P2P. Small clusters, images under a few hundred megabytes with staggered rollouts, or teams already satisfied with regional pull-through caches may not justify dfdaemon on every node. P2P shines when duplicate bytes during concurrent pulls dominate incident history. If your pain is scanning policy, retention governance, or multi-tenant RBAC, invest in Harbor first. If your pain is edge survivability with minimal components, invest in Zot first. If your pain is origin saturation during synchronized pulls, Dragonfly belongs in the conversation.
 
-### Dragonfly Console
-
-[Dragonfly includes a web console](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/) for visualization:
+Capacity planning should include rollback scenarios. If a deployment fails and Kubernetes retries image pulls across a large fraction of nodes, cache hit rates temporarily drop while old and new digests compete for disk on dfdaemon stores. Size caches for at least two large digests per active application family if you support rapid rollbacks. Pair that sizing with aggressive monitoring of node disk pressure alerts, because image distribution agents are easy to overlook when dashboards only track application PVC usage.
 
 ```bash
-# Port-forward to manager console
-kubectl -n dragonfly-system port-forward svc/dragonfly-manager 8080:8080
-
-# Open browser to http://localhost:8080
-```
-
-The console shows:
-- Cluster topology
-- Active downloads
-- Peer connections
-- Task history
-- Configuration
-
-## Advanced Configuration
-
-### Multi-Cluster Distribution
-
-```
-MULTI-CLUSTER WITH DRAGONFLY
-─────────────────────────────────────────────────────────────────────────────
-
-                        ┌─────────────────┐
-                        │  Harbor (HQ)    │
-                        └────────┬────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-              ▼                  ▼                  ▼
-    ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-    │   Cluster A     │ │   Cluster B     │ │   Cluster C     │
-    │   (US-East)     │ │   (EU-West)     │ │   (AP-South)    │
-    │                 │ │                 │ │                 │
-    │  ┌───────────┐  │ │  ┌───────────┐  │ │  ┌───────────┐  │
-    │  │ Scheduler │  │ │  │ Scheduler │  │ │  │ Scheduler │  │
-    │  └─────┬─────┘  │ │  └─────┬─────┘  │ │  └─────┬─────┘  │
-    │        │        │ │        │        │ │        │        │
-    │  ┌─────┴─────┐  │ │  ┌─────┴─────┐  │ │  ┌─────┴─────┐  │
-    │  │ Dfdaemons │  │ │  │ Dfdaemons │  │ │  │ Dfdaemons │  │
-    │  │ (100 nodes)│ │ │  │ (200 nodes)│ │ │  │ (150 nodes)│ │
-    │  └───────────┘  │ │  └───────────┘  │ │  └───────────┘  │
-    └─────────────────┘ └─────────────────┘ └─────────────────┘
-
-Each cluster has its own scheduler that:
-1. Pulls from Harbor (once per cluster)
-2. Distributes via P2P within the cluster
-3. Shares peer information with manager
-
-Harbor sees: 3 pulls (one per cluster)
-Without Dragonfly: 450 pulls (one per node)
-```
-
-### Preheating (Pre-distribution)
-
-Proactively distribute images before deployment:
-
-```bash
-# Preheat an image across the cluster
-curl -X POST "http://dragonfly-manager:8080/api/v1/preheat" \
+# Preheat example (adjust URL and auth for your environment)
+curl -fsS -X POST "http://dragonfly-manager.dragonfly-system.svc:8080/api/v1/preheat" \
   -H "Content-Type: application/json" \
-  -d '{
-    "type": "image",
-    "url": "harbor.example.com/production/myapp:v2.0.0",
-    "scope": "all_peers",
-    "headers": {
-      "Authorization": "Bearer ${TOKEN}"
-    }
-  }'
-
-# Check preheat status
-curl "http://dragonfly-manager:8080/api/v1/preheat/{job_id}"
+  -d '{"type":"image","url":"harbor.example.com/production/api:v3.2.1"}'
 ```
 
-Create preheat CronJob for critical images:
+Finally, rehearse disaster recovery with the same discipline as registry outages. If manager data is lost but peer caches remain, behavior depends on what metadata must be reconstructed before new content can schedule. Back up manager databases, document Helm reinstallation order, and keep robot credentials for upstream registries in your secrets manager so rebuilt clusters can seed quickly after region failures.
 
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: preheat-base-images
-  namespace: dragonfly-system
-spec:
-  schedule: "0 */6 * * *"  # Every 6 hours
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          containers:
-          - name: preheat
-            image: curlimages/curl
-            command:
-            - /bin/sh
-            - -c
-            - |
-              for IMAGE in \
-                "harbor.example.com/library/nginx:1.25" \
-                "harbor.example.com/library/alpine:3.19" \
-                "harbor.example.com/base/python:3.12"; do
-                curl -X POST "http://dragonfly-manager:8080/api/v1/preheat" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"type\":\"image\",\"url\":\"$IMAGE\"}"
-              done
-          restartPolicy: OnFailure
+## Patterns and Anti-Patterns
+
+### Patterns
+
+**Registry authority with P2P acceleration.** Keep Harbor or cloud registry as the signing and policy system of record while Dragonfly handles burst distribution. Teams preserve auditability without accepting rollout-induced registry outages.
+
+**Blob-only proxying.** Configure dfdaemon to intercept large `blobs/sha256` paths while manifests resolve with standard registry auth flows. This pattern avoids digest mismatches and reduces token churn during pulls.
+
+**Preheat before peak events.** Use manager preheat jobs for base images and AI model versions hours before expected demand. Cold caches during incidents convert P2P into expensive origin storms.
+
+**Regional seeds and schedulers.** Place seeds close to upstream registry egress and schedulers close to worker populations. This contains cross-region charges and keeps piece traffic on high-bandwidth fabrics.
+
+**Explicit back-to-source alerting.** Alert when back-to-source ratios exceed baseline for more than a few minutes. Silent fallback to direct pulls is a feature for availability but a bug if it becomes the steady state.
+
+### Anti-Patterns
+
+**Treating Dragonfly as the primary registry.** Without upstream governance you lose centralized scanning workflows, project RBAC, and reproducible promotion trails that Harbor and enterprise registries provide.
+
+**Disabling disk garbage collection.** Uncapped local caches eventually fill node disks and cause unrelated Pod evictions that are hard to correlate with image distribution.
+
+**Uniform piece tuning everywhere.** Globally tiny pieces on high-latency networks amplify connection overhead, while oversized pieces on lossy networks reduce scheduling flexibility.
+
+**Ignoring NetworkPolicy during install.** Default-deny meshes that block peer uploads force origin pulls and create a false sense that Dragonfly is installed but ineffective.
+
+**Proxying manifests without testing private repos.** Manifest interception can break authentication flows or signing verification if credentials and redirect headers differ from blob paths.
+
+**Skipping observability because P2P is best-effort.** Best-effort delivery still needs metrics; otherwise operators cannot distinguish healthy swarms from clusters that silently reverted to registry meltdown.
+
+## Decision Framework
+
+| Capability | Dragonfly | Kraken | Spegel | Pull-through cache (Zot/Harbor) |
+|------------|-----------|--------|--------|----------------------------------|
+| P2P distribution | Piece scheduler with dfdaemon mesh | Uber-origin P2P design | Kubernetes-aware peer discovery | None; central cache serves clients |
+| Registry mirror integration | Transparent containerd hosts.toml proxy | Registry fronting components | Mirrors registry content paths in-cluster | Native OCI pull-through or replication |
+| Lazy loading | Nydus subproject integration | Not primary focus | Not primary focus | Depends on client runtime; not built-in |
+| AI model focus | Documented CNCF AI distribution patterns | Container image heritage | Container image focus | General OCI artifacts if configured |
+| Kubernetes-native install | Helm DaemonSet-first deployment | Helm/kubernetes manifests available | Lightweight in-cluster daemonset | Helm for Zot; Harbor kubernetes installer |
+
+```mermaid
+flowchart TD
+  A[Many nodes pull same large blobs concurrently?] -->|No| B[Prefer registry or pull-through cache]
+  A -->|Yes| C[Upstream registry already governed?]
+  C -->|No| D[Implement Harbor or cloud registry first]
+  C -->|Yes| E[Need only first-fetch acceleration at edge?]
+  E -->|Yes| F[Consider Zot mirror per site]
+  E -->|No| G[Need intra-cluster swarming?]
+  G -->|Yes| H[Evaluate Dragonfly P2P layer]
+  G -->|No| I[Regional cache plus staggered rollouts may suffice]
 ```
 
-### Rate Limiting
+Use the matrix comparatively, not as a scorecard. Kraken and Spegel are legitimate peers with different integration assumptions; see [Kraken](https://github.com/uber/kraken) and [Spegel](https://github.com/spegel-org/spegel) upstream docs when their deployment models fit your fleet constraints better than dfdaemon's proxy model.
 
-Protect network bandwidth:
+Pull-through caches remain the right default when operational simplicity outweighs burst bandwidth optimization. They are easier to reason about in security reviews because traffic looks like standard HTTPS registry pulls terminated at a known service. Dragonfly earns its complexity when empirical evidence shows peer sharing materially shortens rollout tail latency or prevents recurring registry saturation incidents. Revisit the decision after major fleet growth milestones rather than treating P2P as a permanent install-once choice.
 
-```yaml
-# Per-node rate limiting in dfdaemon config
-download:
-  # Total download rate limit per node
-  totalRateLimit: 1Gi
-  # Rate limit for each peer connection
-  perPeerRateLimit: 200Mi
+## Did You Know?
 
-# Scheduler-level rate limiting
-scheduler:
-  # Limit concurrent back-to-source downloads
-  backToSourceCount: 5
-```
-
-## War Story: The Alibaba Singles' Day
-
-This is Dragonfly's origin story—solving the largest deployment challenge on Earth.
-
-**The Challenge**:
-Singles' Day (11/11) is the world's biggest shopping event. Alibaba needed to:
-- Deploy updates to 10,000+ nodes
-- Complete quickly enough to be practical for a peak-event rollout
-- Handle traffic spikes of millions of requests/second
-- Avoid disruption during the peak shopping period
-
-**The Traditional Approach (Failed)**:
-
-```
-10,000 nodes × 500MB image = 5TB bandwidth
-Single registry: 500MB/s max throughput
-Time: 10,000 seconds = 2.7 hours
-
-Result: Deployments timed out. Services couldn't scale.
-```
-
-**The Dragonfly Solution**:
-
-```
-Initial seed: 500MB (1 download to scheduler)
-P2P distribution: Each node downloads ~500MB but shares with 10 peers
-Effective bandwidth: Multiplied by peer count
-Time: < 5 minutes for 10,000 nodes
-```
-
-**Key Optimizations**:
-1. **Intelligent piece scheduling**: Hot pieces distributed first
-2. **Locality awareness**: Prefer peers in same rack/zone
-3. **Preheating**: Popular images pre-distributed
-4. **Back-pressure**: Rate limiting prevented network saturation
-
-**The Results**:
-- Deployment time dropped dramatically.
-- Registry bandwidth demand fell sharply.
-- Distribution reliability improved significantly.
-- The system later expanded to much larger production environments.
-
-**The Lesson**: At massive scale, P2P isn't an optimization—it's the only way.
+- **CNCF Graduated status**: Dragonfly is listed as a Graduated project on the [CNCF project page](https://www.cncf.io/projects/dragonfly/), with maturity dated October 28, 2025 and a public [graduation announcement](https://www.cncf.io/announcements/2026/01/14/cloud-native-computing-foundation-announces-dragonflys-graduation/) on January 14, 2026.
+- **Alibaba origin**: CNCF materials attribute Dragonfly's creation to Alibaba engineering efforts to improve large-scale file and image distribution before the project joined the foundation ecosystem.
+- **Beyond container images**: The [upstream repository](https://github.com/dragonflyoss/dragonfly) documents distribution of large files generally, including AI and ML artifacts that do not fit classic image-only mental models.
+- **Console visibility**: The [Dragonfly v2.1.0 release article](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/) describes console features for observing peers and tasks, which remain a practical incident debugging path alongside Prometheus metrics.
 
 ## Common Mistakes
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| No piece size tuning | Poor performance on slow networks | Adjust `pieceSize` based on RTT |
-| Proxying manifests | Authentication issues, extra latency | Only proxy blob downloads |
-| No cache cleanup | Disk fills up | Configure `diskGCThreshold` |
-| Single scheduler | Bottleneck for large clusters | Deploy multiple schedulers by region |
-| No rate limiting | Network saturation | Set `totalRateLimit` and `perPeerRateLimit` |
-| Skipping preheating | Cold cache on deploy | Preheat critical images |
-| No monitoring | Silent failures | Enable metrics, set up alerts |
-| Wrong containerd config | Falls back to direct pull | Verify mirror configuration |
+| Installing dfdaemon without verifying containerd mirrors | Nodes pull directly from origin; Dragonfly appears unused | Confirm `hosts.toml` or injected mirror endpoints reference the local dfdaemon proxy |
+| Proxying manifests and blobs identically | Auth token or digest mismatches break private pulls | Restrict proxy `regx` to blob paths unless you have tested manifest flows end-to-end |
+| Undersized seed peer disk | Cold content evicts before rollouts finish | Size seeds for largest expected images plus headroom; monitor cache occupancy |
+| No rate limits on dfdaemon | Rollouts saturate node NICs and hurt latency-sensitive workloads | Set `totalRateLimit` and `perPeerRateLimit` per node class |
+| Single scheduler for multi-zone fleets | Cross-zone piece traffic increases cost and latency | Deploy schedulers and seeds per zone or region |
+| Ignoring back-to-source metrics | Mesh silently degrades to registry overload | Alert on sustained back-to-source spikes and investigate peer connectivity |
+| Skipping preheat for critical digests | First wave of replicas behaves like a thundering herd | Preheat base images and models before maintenance windows |
+| Treating P2P as a registry replacement | Governance and scanning bypass creep into production | Keep Harbor or equivalent as authority; use Dragonfly only for acceleration |
 
 ## Quiz
 
-Test your understanding of Dragonfly:
-
 <details>
-<summary>1. How does Dragonfly reduce registry bandwidth consumption?</summary>
+<summary>1. Scenario: A 600-node rollout saturates Harbor ingress despite healthy scans and correct digests. Pods show slow pulls but not `ImagePullBackOff`. Where does Dragonfly fit, and what must remain at Harbor?</summary>
 
-**Answer**: Dragonfly uses peer-to-peer distribution. The scheduler (seed peer) downloads from the registry once, then splits content into pieces. Nodes download pieces from the scheduler and each other. Each piece is downloaded from the registry only once, then shared among peers. At 1000 nodes, this reduces registry load from 1000x to ~1x.
+Harbor should remain the authoritative registry for vulnerability results, RBAC, signing, and promotion workflows described in [Module 13.1](../module-13.1-harbor/). Dragonfly belongs between containerd and Harbor to reduce duplicate blob transfers during the concurrent rollout. Deploy dfdaemon as a DaemonSet, configure seeds to perform the limited back-to-source pulls, and verify mirrors route blob traffic through the mesh. Harbor still stores content and enforces policy; Dragonfly reshapes delivery economics without replacing registry governance.
 </details>
 
 <details>
-<summary>2. What is the role of the dfdaemon component?</summary>
+<summary>2. Scenario: After Helm install, dfdaemon pods are healthy but Prometheus shows near-zero upload traffic during a large nginx rollout. What configuration areas do you inspect first?</summary>
 
-**Answer**: Dfdaemon runs on every node as a DaemonSet. It: (1) Intercepts container runtime pull requests via proxy, (2) Downloads pieces from scheduler or peers, (3) Uploads pieces to other requesting peers, (4) Caches downloaded content locally, (5) Reports status to scheduler for coordination.
+Start with containerd mirror integration because healthy dfdaemon pods can still be bypassed if `hosts.toml` endpoints do not point kubelet pulls at the proxy. Confirm Helm `containerRuntime.containerd` injection or manual mirrors list dfdaemon before upstream. Next inspect proxy `regx` rules to ensure blob paths are intercepted. Finally verify NetworkPolicy allows peer piece uploads; otherwise nodes may back-to-source for every piece and upload metrics stay flat.
 </details>
 
 <details>
-<summary>3. Why should you only proxy blob downloads, not manifests?</summary>
+<summary>3. How do piece scheduling and seed peers interact during a cold pull of a 1.2GB layer?</summary>
 
-**Answer**: Manifests are small (~KB) and contain image metadata including digests. Proxying manifests: (1) Adds latency for minimal gain, (2) Can cause authentication issues if manifest endpoint differs, (3) Digests in manifests must match—corruption breaks pulls. Blobs (layers) are large (~MB-GB) and benefit from P2P distribution.
+The scheduler breaks the layer into fixed-size pieces and assigns download tasks. Seed peers—or the first peers seeded by them—perform initial back-to-source fetches so at least one mesh member holds each piece range. Other nodes request pieces from peers with partial completion, increasing parallelism as more nodes join. Configure seed count and `backToSourceCount` so cold starts remain bounded while peer sharing dominates warm phases.
 </details>
 
 <details>
-<summary>4. What is preheating and when should you use it?</summary>
+<summary>4. Scenario: A platform team uses Zot at edge sites and Harbor at headquarters. Should Dragonfly replace Zot?</summary>
 
-**Answer**: Preheating proactively distributes images before they're needed. Use it for: (1) Critical production images before deployment, (2) Base images used by many applications, (3) Large ML models before inference starts, (4) After security updates to popular images. Preheating ensures the first deploy doesn't suffer cold-cache latency.
+Usually not. Zot in [Module 13.2](../module-13.2-zot/) minimizes repeated cross-site fetch of OCI content and survives constrained operations with a single process. Dragonfly minimizes duplicate intra-cluster transfers when many nodes on the same site pull simultaneously. A common pattern keeps Harbor authoritative, uses Zot for site caching across the WAN, and adds Dragonfly inside large clusters during burst rollouts. Integrate credentials so seeds authenticate upstream without widening application pull secrets.
 </details>
 
 <details>
-<summary>5. How does Dragonfly integrate with Harbor?</summary>
+<summary>5. Why is blob-only proxying a default recommendation for dfdaemon?</summary>
 
-**Answer**: Dragonfly sits between the container runtime and Harbor. Configure dfdaemon to proxy Harbor URLs with credentials. The scheduler authenticates to Harbor once, downloads images, then distributes via P2P. Nodes typically do not contact Harbor directly—all traffic usually goes through dfdaemon → scheduler → Harbor. This preserves Harbor's security (RBAC, scanning) while adding P2P scale.
+Manifests are small and participate directly in authentication and digest verification flows. Proxying them adds latency without meaningful bandwidth savings and can break private registry token exchanges if headers differ. Blobs carry the bulk of bytes and benefit from piece scheduling. Restricting `proxies` to `blobs/sha256.*` therefore captures most acceleration while preserving registry semantics for metadata resolution.
 </details>
 
 <details>
-<summary>6. What metrics indicate healthy P2P distribution?</summary>
+<summary>6. Scenario: GPU nodes need a 30GB model artifact before inference autoscaling kicks in. Which Dragonfly capabilities matter beyond standard image pulls?</summary>
 
-**Answer**: Key health indicators: (1) High P2P traffic ratio (upload/download > 0.5), (2) Low back-to-source rate (most pulls from peers), (3) Low piece download latency (<5s P99), (4) High peer utilization (peers actively sharing). Problems: High back-to-source = cache misses; low upload = peers not sharing.
+Large single artifacts amplify thundering herd math, so seeds and preheat jobs matter more than for typical microservice images. Use manager preheat APIs to seed known versions before scale events, size disk caches for multi-gigabyte retention, and monitor piece completion metrics. The [CNCF AI distribution article](https://www.cncf.io/blog/2026/04/06/peer-to-peer-acceleration-for-ai-model-distribution-with-dragonfly/) describes this pattern explicitly. Integrate upstream object-store authentication on seeds rather than distributing cloud credentials to every node.
 </details>
 
 <details>
-<summary>7. How do you size a Dragonfly deployment?</summary>
+<summary>7. Which metrics best indicate healthy P2P cache hit behavior versus silent fallback?</summary>
 
-**Answer**: Sizing guidelines: (1) Manager: 1 per cluster, 256MB-1GB RAM, (2) Scheduler: 1 per 500-1000 nodes or per region, 256MB-512MB RAM each, (3) Dfdaemon: 1 per node (DaemonSet), 256MB-512MB RAM, disk cache 10-50GB, (4) Seed peers: 1-3 for large clusters, beefy network. Scale schedulers for more parallelism.
+Compare dfdaemon upload traffic to download traffic: healthy meshes show meaningful upload bytes as nodes serve peers. Monitor back-to-source task rates and piece download latency histograms; sustained back-to-source dominance means peers are not satisfying requests. Manager peer counts help confirm registration. Optimize hit rates by tuning eviction, preheating popular digests, and fixing NetworkPolicy blocks that prevent piece uploads.
 </details>
 
 <details>
-<summary>8. What happens if Dragonfly fails during a pull?</summary>
+<summary>8. When should a team decline Dragonfly and stay with pull-through cache only?</summary>
 
-**Answer**: Dragonfly has graceful degradation. If dfdaemon can't reach scheduler or peers, it falls back to direct registry pull (back-to-source). The container runtime sees a successful pull regardless. Temporary Dragonfly failures don't break deployments—they just lose P2P benefits. Configure `retryLimit` and `retryInterval` for transient issues.
+If node counts are modest, rollouts are staggered, and image sizes stay small, a pull-through cache or Zot mirror may solve pain without node-level agents. If regulatory concerns prohibit peer-to-peer sharing across tenancy boundaries, or if network policy cannot safely allow mesh traffic, direct caching is simpler. Dragonfly earns its operational cost when concurrent duplicate bytes—not registry feature gaps—dominate incident timelines.
 </details>
 
-## Hands-On Exercise: Deploy Dragonfly and Measure P2P Benefits
+## Hands-On Exercise: Deploy Dragonfly and Observe P2P Behavior
 
 ### Objective
-Deploy Dragonfly on a multi-node cluster and measure the bandwidth savings from P2P distribution.
 
-### Environment Setup
+Deploy Dragonfly on a multi-node kind cluster, integrate containerd mirrors, trigger parallel image pulls, and observe whether dfdaemon upload metrics indicate peer sharing. This exercise reinforces deploy, integrate, and monitor outcomes from the learning list.
+
+### Step 1: Create the lab cluster
 
 ```bash
-# Create kind cluster with 4 nodes
-cat <<EOF | kind create cluster --name dragonfly-lab --config -
+kind create cluster --name dragonfly-lab --config - <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
@@ -958,266 +525,97 @@ nodes:
 - role: worker
 EOF
 
-# Verify nodes
 kubectl get nodes
 ```
 
-### Step 1: Deploy Dragonfly
+### Step 2: Install Dragonfly with Helm
 
 ```bash
-# Add Helm repo
 helm repo add dragonfly https://dragonflyoss.github.io/helm-charts/
 helm repo update
-
-# Create namespace
 kubectl create namespace dragonfly-system
 
-# Create minimal values for testing
-cat > dragonfly-values.yaml <<EOF
-manager:
-  replicas: 1
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "50m"
-
-scheduler:
-  replicas: 1
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "50m"
-
-seedPeer:
-  replicas: 1
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "50m"
-
-dfdaemon:
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "50m"
-  config:
-    proxy:
-      registryMirror:
-        dynamic: true
-        url: https://index.docker.io
-      proxies:
-        - regx: blobs/sha256.*
-
-containerRuntime:
-  containerd:
-    enable: false  # kind handles this differently
-
-mysql:
-  enable: true
-  primary:
-    resources:
-      requests:
-        memory: "128Mi"
-
-redis:
-  enable: true
-  master:
-    resources:
-      requests:
-        memory: "128Mi"
-EOF
-
-# Install Dragonfly
 helm install dragonfly dragonfly/dragonfly \
   --namespace dragonfly-system \
-  -f dragonfly-values.yaml
+  --set containerRuntime.containerd.enable=true \
+  --wait
 
-# Wait for deployment (this takes a few minutes)
-kubectl -n dragonfly-system wait --for=condition=ready pod -l app.kubernetes.io/name=dragonfly --timeout=300s
-
-# Verify all pods are running
-kubectl -n dragonfly-system get pods
+kubectl -n dragonfly-system get pods -o wide
 ```
 
-### Step 2: Configure Test Environment
+### Step 3: Trigger parallel pulls
 
 ```bash
-# Get dfdaemon proxy address
-DFDAEMON_PORT=$(kubectl -n dragonfly-system get svc dragonfly-dfdaemon -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "65001")
-
-# For testing, we'll create a deployment that uses the dfdaemon proxy
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: pull-test-script
-  namespace: default
-data:
-  test.sh: |
-    #!/bin/bash
-    echo "Starting pull test at \$(date)"
-    echo "Node: \$(hostname)"
-
-    # Record start time
-    START=\$(date +%s.%N)
-
-    # Pull image (this goes through dfdaemon if configured)
-    crictl pull docker.io/library/nginx:1.25-alpine
-
-    # Record end time
-    END=\$(date +%s.%N)
-
-    # Calculate duration
-    DURATION=\$(echo "\$END - \$START" | bc)
-    echo "Pull completed in \${DURATION}s"
-EOF
-```
-
-### Step 3: Test Without P2P (Baseline)
-
-```bash
-# Create test pods on each worker node
-for i in 1 2 3; do
-  kubectl run pull-test-$i \
-    --image=busybox \
-    --restart=Never \
-    --overrides="{\"spec\":{\"nodeName\":\"dragonfly-lab-worker$([[ $i -gt 1 ]] && echo $i || echo '')\"}}" \
-    --command -- sh -c "time wget -q https://index.docker.io/v2/ && sleep infinity" &
-done
-wait
-
-# Check pods are scheduled to different nodes
-kubectl get pods -o wide | grep pull-test
-```
-
-### Step 4: Test With P2P
-
-```bash
-# Deploy test pods that simulate large image pulls
-cat <<EOF | kubectl apply -f -
+kubectl apply -f - <<EOF
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: p2p-test
-  namespace: default
+  name: p2p-pull-test
 spec:
   selector:
     matchLabels:
-      app: p2p-test
+      app: p2p-pull-test
   template:
     metadata:
       labels:
-        app: p2p-test
+        app: p2p-pull-test
     spec:
       containers:
       - name: nginx
         image: nginx:1.25
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "50m"
+            memory: 64Mi
+            cpu: 50m
 EOF
 
-# Watch pods start on all nodes
-kubectl get pods -l app=p2p-test -o wide -w
-
-# Check Dragonfly metrics
-kubectl -n dragonfly-system port-forward svc/dragonfly-manager 8080:8080 &
-sleep 2
-
-# Get download statistics
-curl -s http://localhost:8080/api/v1/tasks | jq '.[] | {id, state, contentLength}' | head -20
+kubectl rollout status daemonset/p2p-pull-test --timeout=300s
+kubectl get pods -l app=p2p-pull-test -o wide
 ```
 
-### Step 5: Verify P2P Distribution
+### Step 4: Inspect logs and metrics
 
 ```bash
-# Check dfdaemon logs for P2P activity
-kubectl -n dragonfly-system logs -l component=dfdaemon --tail=50 | grep -E "(peer|piece|download)"
+kubectl -n dragonfly-system logs -l component=dfdaemon --tail=40 | grep -E 'peer|piece|download'
 
-# Check scheduler logs
-kubectl -n dragonfly-system logs -l component=scheduler --tail=50 | grep -E "(task|peer)"
-
-# Get metrics
 kubectl -n dragonfly-system port-forward svc/dragonfly-scheduler 8002:8002 &
 sleep 2
-
-curl -s http://localhost:8002/metrics | grep dragonfly
+curl -fsS http://127.0.0.1:8002/metrics | grep dragonfly_dfdaemon_upload_traffic_total | head
 ```
 
-### Step 6: Measure Bandwidth Savings
+### Step 5: Cleanup
 
 ```bash
-# Calculate P2P efficiency
-echo "Checking Dragonfly metrics..."
-
-# Get traffic stats from dfdaemon
-for pod in $(kubectl -n dragonfly-system get pods -l component=dfdaemon -o name); do
-  echo "Stats for $pod:"
-  kubectl -n dragonfly-system exec $pod -- cat /var/lib/dragonfly/stats.json 2>/dev/null || echo "  No stats available"
-done
-
-# The key metric is: bytes from peers vs bytes from source
-# Higher peer percentage = better P2P distribution
+pkill -f 'port-forward.*dragonfly-scheduler' || true
+kubectl delete daemonset p2p-pull-test --ignore-not-found
+helm uninstall dragonfly -n dragonfly-system
+kind delete cluster --name dragonfly-lab
 ```
 
 ### Success Criteria
 
-- [ ] Dragonfly components deployed (manager, scheduler, dfdaemon)
-- [ ] DaemonSet pods running on all nodes
-- [ ] P2P traffic visible in dfdaemon logs
-- [ ] Metrics endpoint returning data
-- [ ] Subsequent pulls faster than first pull
-
-### Cleanup
-
-```bash
-# Kill port-forwards
-pkill -f "port-forward"
-
-# Delete test resources
-kubectl delete daemonset p2p-test
-kubectl delete pods -l run=pull-test
-
-# Delete Dragonfly
-helm uninstall dragonfly -n dragonfly-system
-kubectl delete namespace dragonfly-system
-
-# Delete cluster
-kind delete cluster --name dragonfly-lab
-```
-
-## Key Takeaways
-
-1. **P2P solves the thundering herd**: Registry sees 1 request instead of N
-2. **Three components**: Manager (coordination), Scheduler (seed/scheduling), Dfdaemon (per-node agent)
-3. **Works with any registry**: Harbor, Zot, DockerHub, private registries
-4. **Proxy configuration is key**: Only proxy blobs, not manifests
-5. **Preheating prevents cold starts**: Push images to the mesh before deployment
-6. **Rate limiting protects networks**: Configure per-node and per-peer limits
-7. **Graceful degradation**: Falls back to direct pull if P2P fails
-8. **Monitor P2P ratio**: High peer traffic = successful distribution
-9. **Scale schedulers by region**: Reduce latency for large clusters
-10. **Origin story matters**: Born from Alibaba's extreme scale requirements
-
-## Next Steps
-
-You've completed the Container Registries toolkit! You now understand:
-- **Harbor**: Enterprise registry with scanning, RBAC, replication
-- **Zot**: Minimal OCI-native registry for edge and simplicity
-- **Dragonfly**: P2P distribution for massive scale
-
-Continue to the [K8s Distributions Toolkit](/platform/toolkits/infrastructure-networking/k8s-distributions/) to explore k3s, k0s, and other lightweight Kubernetes distributions.
-
----
-
-*"At scale, peer-to-peer isn't an optimization—it's the only architecture that works."*
+- [ ] Dragonfly manager, scheduler, seed peer, and dfdaemon pods reach Ready in `dragonfly-system`
+- [ ] DaemonSet `p2p-pull-test` pods schedule on all worker nodes without `ImagePullBackOff`
+- [ ] Dfdaemon logs show piece or peer download activity during the parallel pull test
+- [ ] Scheduler metrics endpoint exposes `dragonfly_dfdaemon_upload_traffic_total` samples
 
 ## Sources
 
-- [Dragonfly Upstream Repository](https://github.com/dragonflyoss/dragonfly) — Authoritative upstream source for Dragonfly's capabilities, including distributing images, files, and AI/ML artifacts.
-- [Peer-to-Peer Acceleration for AI Model Distribution with Dragonfly](https://www.cncf.io/blog/2026/04/06/peer-to-peer-acceleration-for-ai-model-distribution-with-dragonfly/) — Recent CNCF article that illustrates Dragonfly's peer-to-peer acceleration model in practice.
-- [Cloud Native Computing Foundation Announces Dragonfly's Graduation](https://www.cncf.io/announcements/2026/01/14/cloud-native-computing-foundation-announces-dragonflys-graduation/) — CNCF announcement useful for framing Dragonfly's maturity and large-scale delivery use cases.
-- [CNCF Dragonfly Project Page](https://www.cncf.io/projects/dragonfly/) — Best single overview of Dragonfly's current CNCF status, scope, and public project references.
-- [containerd Registry Host Configuration](https://github.com/containerd/containerd/blob/main/docs/hosts.md) — Upstream containerd documentation for registry host and mirror behavior relevant to Dragonfly integrations.
-- [Dragonfly v2.1.0 Is Released](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/) — Release note covering Dragonfly features including its console and operational improvements.
+- [Dragonfly upstream repository](https://github.com/dragonflyoss/dragonfly) — Source code, architecture overview, and component boundaries for manager, scheduler, seed peer, and dfdaemon.
+- [CNCF Dragonfly project page](https://www.cncf.io/projects/dragonfly/) — Official maturity status, timeline, and project scope within the foundation landscape.
+- [CNCF Dragonfly graduation announcement](https://www.cncf.io/announcements/2026/01/14/cloud-native-computing-foundation-announces-dragonflys-graduation/) — Graduation news and context on production adoption claims.
+- [Peer-to-Peer Acceleration for AI Model Distribution with Dragonfly](https://www.cncf.io/blog/2026/04/06/peer-to-peer-acceleration-for-ai-model-distribution-with-dragonfly/) — CNCF guidance on applying Dragonfly to large model artifacts.
+- [Dragonfly v2.1.0 release article](https://www.cncf.io/blog/2023/08/07/dragonfly-v2-1-0-is-released/) — Console and operational feature discussion for v2 era deployments.
+- [Dragonfly documentation site](https://d7y.io/docs/) — Installation, configuration, and operations reference maintained by the project.
+- [containerd registry hosts configuration](https://github.com/containerd/containerd/blob/main/docs/hosts.md) — Authoritative mirror and credential path behavior for runtime integration.
+- [Nydus image acceleration repository](https://github.com/dragonflyoss/nydus) — Lazy loading snapshotter project associated with Dragonfly distribution.
+- [Spegel upstream repository](https://github.com/spegel-org/spegel) — Comparative in-cluster P2P mirror implementation for Kubernetes.
+- [Kraken upstream repository](https://github.com/uber/kraken) — Comparative P2P registry distribution system from Uber.
+- [OCI Distribution specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md) — Manifest and blob semantics Dragonfly proxies without replacing.
+- [Dragonfly Helm charts repository](https://github.com/dragonflyoss/helm-charts) — Chart sources and default values for Kubernetes deployment.
+
+## Next Module
+
+Continue to [Module 14.1: k3s](../../infrastructure-networking/k8s-distributions/module-14.1-k3s/) in the Kubernetes Distributions toolkit to study lightweight cluster provisioning patterns that often pair with edge registry and distribution designs.
+
+Lightweight distributions and P2P acceleration frequently appear together at edge sites where bandwidth and operational headcount are both constrained.
