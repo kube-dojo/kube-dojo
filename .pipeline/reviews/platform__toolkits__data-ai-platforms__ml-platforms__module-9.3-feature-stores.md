@@ -1,0 +1,4 @@
+## 2026-06-16T00:15:27Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author deepseek; no gemini) + ground-check + web-verify. **#1996, PR pending.**
+Author: deepseek-v4-pro. 451→5023 prose-w, 4→17 sources. Teaches the durable **feature store** capability (training-serving skew + its 3 mechanisms, offline/online store, point-in-time correctness, materialization) with Feast as the worked example; LF AI & Data governance; Rosetta vs Tecton/Hopsworks/Databricks/Vertex. T0; all gates pass; Hypothetical scenario labeled.
+**Ground-checks:** **Feast API current** (`FeatureView(schema=[Field(name=, dtype=)])` + `Entity(join_keys=)`, NOT the deprecated `features=[Feature]`). **Fixed:** lab manifests used `feastdev/feature-server:latest` → pinned to verified `0.46.0` (reproducibility). Full `curl -L` sweep 200. **APPROVE.**

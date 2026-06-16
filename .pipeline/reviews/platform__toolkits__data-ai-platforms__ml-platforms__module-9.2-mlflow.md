@@ -1,0 +1,4 @@
+## 2026-06-16T00:15:27Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author cursor/Kimi; no gemini) + ground-check + web-verify. **#1996, PR pending.**
+Author: cursor `--model auto`. 426→5000 prose-w, 4→22 sources. Teaches the durable **ML experiment+model lifecycle** (tracking, model registry, packaging/serving, projects) with MLflow as the worked example; LF AI & Data governance; Rosetta vs W&B/Comet/Neptune/DVC/cloud. T0; all gates pass; Hypothetical scenario labeled.
+**Ground-checks:** **stages→aliases framing exactly correct** ("deprecated since MLflow 2.9.0", cites RFC + migration guide, teaches `models:/name@champion` as the durable mechanism — the known s121 correctness point). `ghcr.io/mlflow/mlflow:v3.13.0` + `postgres:16` pullable; full `curl -L` sweep 200 (13 redirects all land correct). **APPROVE.**

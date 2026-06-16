@@ -1,0 +1,4 @@
+## 2026-06-16T00:15:27Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author cursor/Kimi; no gemini) + ground-check + web-verify. **#1996, PR pending.**
+Author: cursor `--model auto`. 276→5000 prose-w, 4→15 sources. **Highest-churn module — handled right:** teaches the durable **RAG pipeline + orchestration-primitive** spine (not an API tour), LangChain+LlamaIndex as **peer** frameworks (no leadership claims), explicit division-of-labor + differentiation from the AI/ML-engineering track (this = platform-engineering operate-on-K8s angle). Dated snapshot + Rosetta. T0; all gates pass; Hypothetical scenario labeled.
+**Ground-checks:** full `curl -L` sweep 200 (4 redirects land correct). The `registry.example.com/.../rag-api:1.4.0` "unknown image" is a deliberate build-your-own placeholder (RFC example domain), not a broken ref. **APPROVE.**

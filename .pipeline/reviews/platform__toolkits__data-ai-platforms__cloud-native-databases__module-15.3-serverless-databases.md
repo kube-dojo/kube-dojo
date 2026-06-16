@@ -1,0 +1,4 @@
+## 2026-06-16T00:15:27Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author cursor/Kimi; no gemini) + ground-check + web-verify. **#1996 (Toolkits data-ai-platforms), PR pending.**
+Author: cursor `--model auto`. 333→5001 prose-w, 5→12 sources. Teaches the durable **serverless/elastic database model** (compute–storage separation, scale-to-zero, consumption billing, the serverless connection problem, copy-on-write branching) as an architectural model, not a vendor feature; Neon/PlanetScale/CockroachDB/Aurora/Cloud SQL/AlloyDB as peer slices. Dated snapshot + Rosetta. T0; all gates pass; Hypothetical scenario labeled with round numbers; no leadership claims.
+**Ground-checks:** full `curl -L` final-status sweep of ALL URLs = 200 (5 redirects all land on correct current pages: neon.tech→neon.com, GCP→docs.cloud.google.com, planetscale path moved). CockroachDB tiering (Basic/Standard) current. **APPROVE.**
