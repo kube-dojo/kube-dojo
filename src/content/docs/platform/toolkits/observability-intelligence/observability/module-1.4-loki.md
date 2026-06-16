@@ -212,7 +212,7 @@ Promtail reached long-term support in February 2025 and [end-of-life on 2026-03-
 
 The following Alloy snippet mirrors a Kubernetes pod log scrape with namespace and app labels. Syntax differs from Promtail, but the durable intent is identical: discover pods, enrich with metadata, push to Loki.
 
-```alloy
+```hcl
 loki.source.kubernetes "pods" {
   targets    = discovery.kubernetes.pods.targets
   forward_to = [loki.process.default.receiver]
