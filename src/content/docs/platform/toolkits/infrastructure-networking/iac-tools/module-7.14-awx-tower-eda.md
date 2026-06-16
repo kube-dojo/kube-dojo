@@ -71,7 +71,7 @@ The `awx-web` container serves the Django REST API and the React web UI. The `aw
 
 This architecture matters for production resource planning because each component has distinct demands. The web container handles API requests and can be relatively light. The task container needs CPU and memory proportional to concurrent job executions — each running job spawns an ansible-runner subprocess. PostgreSQL needs sufficient IOPS and storage for job artifact retention. Under-provisioning the task container is the most common production failure mode; the symptom is jobs that queue but never start, or jobs that are OOM-killed mid-run.
 
-On a managed Kubernetes service such as EKS or GKE, a minimum production AWX deployment with two task replicas, one web replica, and a PostgreSQL instance using 100 GiB of network storage costs roughly $200–350 per month in compute and storage depending on instance type and region. The main cost levers are: right-sizing task worker memory based on actual concurrent job counts (profile before provisioning), using preemptible or spot instances for task workers when job interruption is acceptable, and setting aggressive job artifact retention policies in the AWX settings to prevent PostgreSQL storage from growing unbounded over months of job history.
+On a managed Kubernetes service such as EKS or GKE, a minimum production AWX deployment with two task replicas, one web replica, and a PostgreSQL instance using 100 GiB of network storage typically lands on the order of a few hundred US dollars per month in compute and storage — a rough, region- and instance-dependent figure to validate against current cloud pricing rather than a quoted price. The main cost levers are: right-sizing task worker memory based on actual concurrent job counts (profile before provisioning), using preemptible or spot instances for task workers when job interruption is acceptable, and setting aggressive job artifact retention policies in the AWX settings to prevent PostgreSQL storage from growing unbounded over months of job history.
 
 The AWX Operator installs from a kustomization that points to the operator's `config/default` directory at a specific release tag. The install sequence is: deploy the operator, then create an `AWX` CR. The operator reconciles all components from the CR spec.
 
@@ -458,6 +458,8 @@ kubectl get secret awx-job-runner-token \
   -n default \
   -o jsonpath='{.data.token}' | base64 -d
 ```
+
+> **Token currency note**: the `type: kubernetes.io/service-account-token` Secret above mints a *long-lived, non-expiring* service-account token. Since Kubernetes 1.24 these are no longer auto-created, and for in-cluster workloads short-lived **bound** tokens issued through the TokenRequest API (or projected service-account-token volumes) are the modern, more secure default. A long-lived Secret token remains the pragmatic option for an *external* consumer like AWX that cannot mount a projected volume — but treat it as a credential to scope tightly and rotate on a schedule, not a set-and-forget value.
 
 The **custom credential type** feature allows AWX administrators to define credential schemas with typed input fields and injectors that map those fields to environment variables or temporary files. A team that uses a proprietary secret manager, a custom OIDC flow, or a non-standard token format can model it as a custom credential type and grant teams permission to use credentials of that type without exposing the raw secrets.
 
