@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 157 — Toolkits observability-intelligence drained (7 modules, #1996)</title>
+<style>
+  body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;color:#1a1a2e;background:#fafafc}
+  h1{font-size:1.55rem;border-bottom:3px solid #4f46e5;padding-bottom:.4rem}
+  h2{font-size:1.2rem;margin-top:1.8rem;color:#3730a3;border-bottom:1px solid #ddd;padding-bottom:.2rem}
+  h3{font-size:1.02rem;color:#4338ca;margin-bottom:.3rem}
+  code{background:#eef;padding:.1rem .35rem;border-radius:4px;font-size:.88em}
+  table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.9rem}
+  th,td{border:1px solid #ccd;padding:.4rem .55rem;text-align:left;vertical-align:top}
+  th{background:#eef0ff}
+  .ok{color:#067647;font-weight:600}
+  .fix{background:#fff7ed;border-left:4px solid #ea580c;padding:.5rem .8rem;margin:.5rem 0;border-radius:4px}
+  .lesson{background:#eff6ff;border-left:4px solid #2563eb;padding:.5rem .8rem;margin:.5rem 0;border-radius:4px}
+  .next{background:#f0fdf4;border-left:4px solid #16a34a;padding:.5rem .8rem;margin:.5rem 0;border-radius:4px}
+  ul{margin:.3rem 0}
+</style>
+</head>
+<body>
+<h1>Session 157 — Toolkits <code>observability-intelligence</code> drained: 7 modules → done (#1996)</h1>
+<p><strong>Date:</strong> 2026-06-16 &nbsp;·&nbsp; <strong>Branch:</strong> main &nbsp;·&nbsp;
+<strong>PR:</strong> <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/2002">#2002</a> (squash-merged) &nbsp;·&nbsp;
+<strong>Epic:</strong> #1996 &nbsp;·&nbsp; <strong>Result:</strong> Toolkits not-done <strong>34 → 27</strong>;
+<code>observability-intelligence</code> section <strong>100% done (16/16)</strong>.</p>
+
+<h2>What shipped</h2>
+<p>Standalone orchestrator session. Cold-start → orient → picked the briefing's DO-FIRST tractable chunk:
+the <code>observability-intelligence</code> Toolkits section (7 not-done). Same proven loop as s155/s156.
+The infrastructure-networking section (27) was deliberately left as "its own session" per the s156 handoff.</p>
+
+<p><strong>Sweep split</strong> (LIVE-file <code>density.py</code> — board scores stale as predicted):
+<strong>5 deep expands + 1 light-expand + 1 flip</strong>.</p>
+
+<table>
+<tr><th>Module</th><th>Action</th><th>Author</th><th>Body words</th><th>Result</th></tr>
+<tr><td>1.4 Loki</td><td>expand</td><td>cursor</td><td>468 → 5123</td><td class="ok">T0 ✓</td></tr>
+<tr><td>1.5 Distributed Tracing</td><td>light-expand</td><td>cursor</td><td>4591 → 5342</td><td class="ok">T0 ✓</td></tr>
+<tr><td>1.3 Grafana</td><td>flip</td><td>orchestrator-inline</td><td>5714 (gate fixes)</td><td class="ok">T0 ✓</td></tr>
+<tr><td>1.10 SLO Tooling</td><td>expand</td><td>cursor</td><td>713 → 5078</td><td class="ok">T0 ✓</td></tr>
+<tr><td>1.8 Coroot</td><td>expand</td><td>deepseek</td><td>617 → 5316</td><td class="ok">T0 ✓</td></tr>
+<tr><td>1.9 Continuous Profiling</td><td>expand</td><td>codex gpt-5.5</td><td>509 → 6938</td><td class="ok">T0 ✓</td></tr>
+<tr><td>10.1 Anomaly Detection (aiops)</td><td>expand</td><td>cursor</td><td>410 → 5000</td><td class="ok">T0 ✓</td></tr>
+</table>
+
+<p>≤3 concurrent authors throughout (Wave A: loki/cursor + coroot/deepseek + profiling/codex; Wave B:
+slo/cursor + tracing/cursor + anomaly/cursor as slots freed). opus-inline R1 (≠ author, no gemini) on every
+module via <code>git show</code>/grep/curl (no worktree-bundle re-inject), every finding ground-checked +
+web-verified both ways. Consolidated cherry-pick PR → required CI → squash-merge → <code>finalize_module.sh</code> ×7.</p>
+
+<h2>Defects caught at R1 (ground-checked, not rubber-stamped)</h2>
+<div class="fix"><strong>Coroot (deepseek maturity-fab):</strong> the dated snapshot + prose claimed
+<em>"Parca (CNCF Sandbox)"</em>. Parca is Polar Signals vendor OSS (Apache-2.0), <strong>NOT a CNCF project</strong>
+— verified parca.dev makes no CNCF claim and it's not in the catalog. Fixed prose + table row. Classic
+deepseek expand-fabrication on a maturity claim (rest of the snapshot — Pixie Sandbox, Hubble Graduated,
+Beyla/Coroot not-CNCF — was correct).</div>
+<div class="fix"><strong>Anomaly (wrong award attribution):</strong> claimed the Isolation Forest paper won the
+<em>"SIGKDD 2008 Best Application Paper"</em> award → it was <strong>ICDM 2008</strong> (IEEE ICDM, Pisa) with
+no verifiable best-paper award → corrected. Good practice elsewhere: iForest cited via the canonical authors'
+copy (<code>cs.nju.edu.cn/zhouzh/…icdm08b.pdf</code>), NOT a confabulated arXiv ID (#1991 lesson held).</div>
+<div class="fix"><strong>Grafana (flip — fabricated currency):</strong> the <code>War story:</code> "fintech team"
+section carried a fabricated metrics block (<code>$1.2M</code>/<code>7.7%</code>/<code>23 min</code>/<code>3 in 6 months</code>)
+→ relabeled <code>Hypothetical scenario:</code> with round numbers, fake $ removed; opening retailer narrative
+labeled; 3 runnable lab <code>k</code> commands → full <code>kubectl</code> (copy-paste safe). T3 → clean T0.</div>
+
+<h2>Currency web-verified (both directions)</h2>
+<ul>
+<li><strong>OpenTelemetry GRADUATED 2026-05-21</strong> (opentelemetry.io + cncf.io + PRNewswire) — superseded my
+own draft addendum's stale "incubating"; tracing &amp; profiling both correctly say graduated.</li>
+<li><strong>OTel Profiles signal still ALPHA</strong> / active development — profiling module explicitly says
+"do not describe as stable or GA" (the tricky volatile claim, handled precisely by codex).</li>
+<li><strong>Promtail EOL 2026-03-02</strong> → Grafana Alloy (Apache-2.0 OTel-Collector distro); Loki AGPL-3.0
+→ CNCF-ineligible. <strong>Pyroscope 2.0</strong> (2026-04-21, Grafana, OTLP profiling; acq. 2023 + Phlare).</li>
+<li>Jaeger CNCF Graduated; Grafana Tempo AGPL-not-CNCF; Pixie CNCF Sandbox; Cilium Hubble CNCF Graduated;
+Parca/Pyroscope vendor OSS (not CNCF); Sloth/Pyrra/OpenSLO not CNCF (OpenSLO ← Nobl9, community);
+SLO burn-rate math (14.4× = 2%/30-day-budget/hr) matches the Google SRE Workbook.</li>
+</ul>
+
+<h2>Lessons (reinforced)</h2>
+<div class="lesson"><strong>Reading inside <code>.worktrees/</code> re-injects the full CLAUDE.md+rules bundle
+(~15-20K tokens each).</strong> Did all worktree edits + reviews via Bash (<code>git show</code>, python string-replace,
+curl) instead of Read/Edit on worktree paths. Only one accidental worktree Read early — caught and switched.</div>
+<div class="lesson"><strong>Full <code>curl -L</code> source sweep (follow redirects)</strong> — the verifier's
+<code>sources_all_reachable</code> passes a 301→404. All 7 modules' Sources swept = 200.</div>
+<div class="lesson"><strong>Cross-module dedup-xref catches contradictions.</strong> coroot vs profiling disagreed on
+Parca's CNCF status → web-verify settled it (profiling right, coroot wrong). Without the xref it would have
+shipped one wrong maturity claim.</div>
+<div class="lesson"><strong>codex wrapper <code>OK:False</code> ≠ failed work</strong> — profiling (codex) hit the
+806s edit-class timeout but committed COMPLETE 6938-word work; verifier confirmed full module (recover-from-worktree).</div>
+<div class="lesson"><strong>Re-read each CI check deterministically.</strong> <code>gh pr checks</code> showed the
+Astro build "pending 0" while <code>mergeStateStatus</code> was CLEAN — the statusCheckRollup confirmed
+COMPLETED/SUCCESS (a stale duplicate entry). Verified before merging.</div>
+
+<h2>Next</h2>
+<div class="next">
+<strong>DO FIRST — #1996 Toolkits <code>infrastructure-networking</code> (27 — the big one, its own session):</strong>
+iac-tools + k8s-distributions + networking + platforms + storage. Same loop: LIVE-file <code>density.py</code>
+sweep first (split expand-vs-flip; board scores stale) → ≤3 authors (cursor/codex/deepseek) → opus-inline R1
+(no gemini) + web-verify CNCF maturity both ways + named-entity fab-grep + <strong>cross-module dedup-xref</strong>
+→ consolidated PR → req-CI → <code>finalize_module.sh</code>. Durable-vendor rule applies hard. Reuse
+<code>logs/remediation/briefs/pf-toolkits-obs/</code> (shared rules + per-module addendum pattern) as the template.
+<br><br>
+After Toolkits: <strong>#1911 UK</strong> (translation currency ~14%) · <strong>#1876</strong> AI-history book review ·
+admin toggles still open: make <code>arXiv citation check</code> + <code>Unit tests (vitest)</code> REQUIRED checks.
+</div>
+
+<h2>Hygiene</h2>
+<p>All 8 session worktrees (7 author + consolidation) removed + branches deleted; only PRIMARY (main) and the
+pre-existing <code>g2-craft</code> remain. 7 <code>.pipeline/reviews</code> APPROVE records written + force-added;
+telemetry recorded for all 7 via <code>finalize_module.sh</code>. Operated autonomously per the standing
+"run the queue, no babysitting" directive — no per-turn sign-offs on the clean wave.</p>
+</body>
+</html>
