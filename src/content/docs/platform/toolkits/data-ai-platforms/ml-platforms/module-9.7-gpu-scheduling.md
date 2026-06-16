@@ -95,7 +95,7 @@ The operator is still not magic. It reconciles the NVIDIA software stack, but it
 > | Area | Current fact | Why it belongs in the snapshot |
 > |---|---|---|
 > | KubeDojo Kubernetes target | Examples in this module target Kubernetes 1.35. | The curriculum target is a moving compatibility baseline. |
-> | Kubernetes DRA status | The upstream DRA concept page marks core Dynamic Resource Allocation as Kubernetes v1.35 stable and enabled by default. | DRA has moved through alpha, beta, and stable states quickly, and adjacent DRA features have separate gates. |
+> | Kubernetes DRA status | Core Dynamic Resource Allocation graduated to GA (stable) in Kubernetes v1.34 (announced 2025-09) and remains stable and enabled by default in v1.35. | DRA moved through alpha and beta quickly before its v1.34 GA; adjacent DRA features (e.g. extended-resource mapping, partitionable devices) advance on their own feature gates. |
 > | GPU Operator patch level | NVIDIA's installation docs list GPU Operator v26.3.2 as the current patch release for the documented version. | Operator versions and operand versions change frequently. |
 > | GPU Operator v26.3.2 operands | NVIDIA's component matrix lists device plugin 0.19.2, GPU Feature Discovery 0.19.2, MIG Manager 0.14.2, DCGM Exporter v4.5.3-4.8.2, and Node Feature Discovery v0.18.3. | These are release-matrix facts, not durable scheduling concepts. |
 > | Kubernetes native gang scheduling | The upstream gang scheduling page marks the Kubernetes 1.35 feature as alpha and disabled by default. | Production scheduling choices may use native alpha features, Kueue, Volcano, or another batch scheduler depending on cluster policy. |
