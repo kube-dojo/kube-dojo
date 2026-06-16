@@ -1,0 +1,4 @@
+## 2026-06-16T00:15:27Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author codex; no gemini) + ground-check + web-verify. **#1996, PR pending.**
+Author: codex gpt-5.5. 363→5166 prose-w, 4→18 sources (all 200, 0 redirect). Teaches the durable **operate-a-consensus-datastore** capability (Raft/quorum, member lifecycle, backup/restore/DR, compaction/defrag, operator-as-encoded-runbook) with etcd as the worked example. T0; all gates pass.
+**Ground-checks (high-staleness landmine handled correctly):** CoreOS `etcd-operator` correctly flagged **archived/historical**; `etcd-io/etcd-operator` noted as **prerelease v0.2.0 with backup/restore still roadmap**; etcd-druid used as the worked example (current CRD); upstream etcd = CNCF Graduated. Exemplary durable-spine framing ("project names change; the lifecycle is the stable skill"). `gcr.io/etcd-development/etcd:v3.5.21` pullable; full URL sweep 200. **APPROVE.**
