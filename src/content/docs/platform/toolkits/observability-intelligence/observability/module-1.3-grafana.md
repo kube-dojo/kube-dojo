@@ -8,7 +8,7 @@ sidebar:
 
 > **Comprehensive Toolkit Track Evaluation Path** | Architectural Complexity Level: `[MEDIUM]` | Estimated Completion Timeframe: 40-45 minutes of focused reading and practical exercises
 
-Prerequisites: complete Module 1.1 on Prometheus metrics collection and Module 1.2 on OpenTelemetry tracing before starting this module. You should already be comfortable reading PromQL, recognizing Kubernetes workload labels, and explaining why modern services need metrics, logs, and traces instead of a single monitoring feed. Kubernetes examples assume version 1.35 or later; when commands use `k`, set the standard shortcut with `alias k=kubectl` before you begin.
+Prerequisites: complete Module 1.1 on Prometheus metrics collection and Module 1.2 on OpenTelemetry tracing before starting this module. You should already be comfortable reading PromQL, recognizing Kubernetes workload labels, and explaining why modern services need metrics, logs, and traces instead of a single monitoring feed. Kubernetes examples assume version 1.35 or later; the runnable commands below use the full `kubectl` form so they are copy-paste safe in a fresh shell.
 
 ## Learning Outcomes
 
@@ -20,7 +20,7 @@ Prerequisites: complete Module 1.1 on Prometheus metrics collection and Module 1
 
 ## Why This Module Matters
 
-Late on a holiday shopping night, the platform director at a large online retailer stood in a war room while abandoned carts climbed faster than the checkout team could count them. The main Grafana screen looked calm: CPU was green, memory was green, request rate looked normal, and a wall of tiny panels suggested that every service was healthy. Revenue still dropped by millions because the dashboard answered the questions that engineers had happened to graph, not the questions the incident demanded.
+Hypothetical scenario: late on a holiday shopping night, the platform director at a large online retailer stood in a war room while abandoned carts climbed faster than the checkout team could count them. The main Grafana screen looked calm: CPU was green, memory was green, request rate looked normal, and a wall of tiny panels suggested that every service was healthy. Revenue still dropped by millions because the dashboard answered the questions that engineers had happened to graph, not the questions the incident demanded.
 
 The damaging part was not that Grafana failed. Grafana had faithfully rendered every query it had been given, but the dashboard estate had grown by copy and paste across several years. Some panels looked at staging, some used old labels, several mixed one-minute rates with long averages, and almost none linked business pain to service symptoms. The team spent the most expensive part of the incident trying to identify the dashboard that actually described checkout, then found a third-party payment gateway timeout that should have been obvious from a well-designed service view.
 
@@ -329,20 +329,20 @@ Stat panels work well for error percentage, current p99 latency, burn rate, or r
 
 Thresholds deserve careful governance. A red threshold should mean that a responder needs to consider action, not that a number looks subjectively high. If the service has an SLO, derive thresholds from the error budget, latency objective, or saturation limit that threatens the objective. If there is no SLO yet, document the threshold as provisional and revisit it after the team has enough production history.
 
-War story: a fintech team once celebrated having hundreds of alert rules and dashboards because coverage looked impressive in a quarterly reliability review. During a database pool failure, the on-call engineer received separate pages for CPU, memory, disk input, latency, and queue depth across the same service. The first alerts were technically true but operationally noisy, so by the time the latency alert arrived, the engineer had already learned to dismiss the incident as routine background noise.
+Hypothetical scenario: imagine a team that celebrated having hundreds of alert rules and dashboards because coverage looked impressive in a quarterly reliability review. During a database pool failure, the on-call engineer received separate pages for CPU, memory, disk input, latency, and queue depth across the same service. The first alerts were technically true but operationally noisy, so by the time the latency alert arrived, the engineer had already learned to dismiss the incident as routine background noise.
 
 ```
-Dashboard/Alert Audit Results
+Dashboard / Alert Audit (illustrative, round numbers)
 ─────────────────────────────────────────────────────────────────
-Total dashboards:           312
-Dashboards viewed monthly:  46
-Total alert rules:          846
-Alerts/week average:        156
-True positives:             12 (7.7%)
-MTTA (Mean Time to Ack):    23 minutes (should be <5)
-Incidents missed due to fatigue: 3 in 6 months
+Total dashboards:            ~300
+Dashboards viewed monthly:   a small minority of them
+Total alert rules:           ~800
+Alerts per week:             ~150
+Actionable (true positives): a small fraction
+MTTA (Mean Time to Ack):     well above the 5-minute target
+Incidents missed to fatigue: several across two quarters
 ─────────────────────────────────────────────────────────────────
-Cost of alert fatigue: $1.2M in incident impact
+Pattern: most pages were noise, so responders stopped trusting them
 ```
 
 The remediation was not a prettier dashboard. The team deleted redundant alerts, tied paging to user-impacting symptoms, moved infrastructure warnings into ticket workflows, and rebuilt the dashboard hierarchy around SLOs. Grafana became more useful when there were fewer panels because each panel earned its place. This is a recurring lesson in observability: a smaller number of trusted signals usually beats a larger number of unowned signals.
@@ -695,7 +695,7 @@ The alert labels are not carrying enough ownership, severity, environment, or se
 
 ## Hands-On Exercise
 
-In this exercise, you will build a parameterized Grafana service dashboard and connect it to a Kubernetes-based monitoring workflow. The commands assume a test cluster running Kubernetes 1.35 or later, the Helm CLI, and a namespace dedicated to monitoring experiments. Set `alias k=kubectl` before running the Kubernetes commands so the shorter form used below works in your shell.
+In this exercise, you will build a parameterized Grafana service dashboard and connect it to a Kubernetes-based monitoring workflow. The commands assume a test cluster running Kubernetes 1.35 or later, the Helm CLI, and a namespace dedicated to monitoring experiments. The Kubernetes commands below use the full `kubectl` form so each line is copy-paste runnable without first defining a shell alias.
 
 ### Setup
 
@@ -706,7 +706,7 @@ Create or reuse a disposable namespace for the exercise. The Helm commands insta
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
-k create namespace critical-monitoring-infrastructure
+kubectl create namespace critical-monitoring-infrastructure
 
 helm install grafana grafana/grafana \
   --namespace critical-monitoring-infrastructure \
@@ -719,10 +719,10 @@ Wait for the Grafana pod to become ready, then open a local tunnel to the servic
 
 ```bash
 # Retrieve the generated admin password if you did not set one explicitly.
-k get secret -n critical-monitoring-infrastructure grafana -o jsonpath="{.data.admin-password}" | base64 -d
+kubectl get secret -n critical-monitoring-infrastructure grafana -o jsonpath="{.data.admin-password}" | base64 -d
 
 # Establish a local authenticated tunnel to the Grafana service.
-k port-forward -n critical-monitoring-infrastructure svc/grafana 3000:80
+kubectl port-forward -n critical-monitoring-infrastructure svc/grafana 3000:80
 
 # Open http://127.0.0.1:3000 in a browser and authenticate as admin.
 ```
