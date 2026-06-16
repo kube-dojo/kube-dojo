@@ -1,6 +1,6 @@
 ---
 citations_verified: true
-revision_pending: true
+revision_pending: false
 title: "Module 1.5: Distributed Tracing"
 slug: platform/toolkits/observability-intelligence/observability/module-1.5-tracing
 sidebar:
@@ -102,6 +102,10 @@ tracestate: vendorA=state,vendorB=another-state
 ```
 
 There is an important difference between propagation and instrumentation. Propagation keeps the request identity connected across boundaries. Instrumentation creates the spans and attributes that make the trace useful. A service can propagate context without recording rich spans, and a service can record spans without correctly joining the upstream trace. Production tracing needs both, because a beautifully detailed disconnected trace still leaves teams guessing across the service edge.
+
+Propagation failures rarely announce themselves in unit tests, because many code paths only cross process boundaries under load, behind a feature flag, or after a deploy changes a client library. The difficult cases are thread-pool handoffs, asynchronous continuations, and forked worker processes where the active span context does not automatically follow the logical request. A handler may finish the inbound span on one thread while a background task continues work on another, and unless that task explicitly attaches the extracted context, the downstream database call appears orphaned. Service meshes and reverse proxies can inject or strip headers depending on configuration, so a team can see perfect propagation in a direct service-to-service test while production traffic through the mesh still breaks the chain.
+
+The practical verification habit is to treat every new communication pattern as a propagation test case. Exercise the path with a single known trace ID and confirm that each hop preserves the same identifier in logs, spans, and exported headers. When propagation breaks at a boundary, fix that boundary before debating backend vendors, because no storage engine can reconstruct a parent-child link that was never shipped.
 
 A useful span has a clear operation name, a correct parent, a status, a duration, and enough attributes to support investigation without creating dangerous cardinality. Good names look like `HTTP GET /checkout/{cart_id}`, `SELECT inventory by sku`, or `publish order.created`. Weak names look like `request`, `handler`, or `function_call`, because they force the reader to inspect every span manually. The best span names are stable enough for aggregation and specific enough for debugging.
 
@@ -286,9 +290,9 @@ The most common beginner mistake is to stop after installing an SDK and seeing a
 
 A tracing backend stores traces and lets engineers retrieve them during investigations. The backend is not the tracing system by itself; the system includes instrumentation libraries, propagation, collectors, sampling policy, storage, query, dashboards, and operational habits. Choosing a backend is therefore less about brand preference and more about the workflow you need during incidents. The central question is how your team usually finds the trace it needs.
 
-Jaeger is often chosen for teams that want a dedicated tracing backend and flexible trace-search workflows, but the exact search experience and storage trade-offs depend on the storage backend and deployment design.
+[Jaeger is a CNCF graduated tracing project](https://www.cncf.io/projects/jaeger/) often chosen by teams that want a dedicated tracing backend and flexible trace-search workflows, but the exact search experience and storage trade-offs depend on the storage backend and deployment design. Jaeger's strength is exploratory lookup: engineers can start from a service, operation, duration, or tag and walk toward a suspect trace without already knowing the trace ID.
 
-Grafana Tempo takes a different position. [Tempo is optimized around cheap trace storage and trace-ID lookup, with strong integration into Grafana workflows](https://grafana.com/docs/tempo/latest/introduction/architecture/). Instead of indexing every span attribute heavily, [Tempo expects you to arrive with a trace ID from metrics exemplars, logs, or TraceQL-supported search paths](https://grafana.com/docs/tempo/latest/introduction/architecture/) depending on deployment mode and version. This can be a better fit for teams already using Prometheus, Grafana, and Loki, especially when trace volume is high and cost pressure is real.
+Grafana Tempo takes a different position. Tempo is Grafana Labs open-source software under the AGPL-3.0-only license; it is not a CNCF project. That distinction matters for governance conversations more than day-to-day debugging, but it explains why Tempo's roadmap tracks Grafana ecosystem integration rather than CNCF portability requirements. [Tempo is optimized around cheap trace storage and trace-ID lookup, with strong integration into Grafana workflows](https://grafana.com/docs/tempo/latest/introduction/architecture/). Instead of indexing every span attribute heavily, [Tempo expects you to arrive with a trace ID from metrics exemplars, logs, or TraceQL-supported search paths](https://grafana.com/docs/tempo/latest/introduction/architecture/) depending on deployment mode and version. This can be a better fit for teams already using Prometheus, Grafana, and Loki, especially when trace volume is high and cost pressure is real.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -554,9 +558,13 @@ The first calculation is simple enough to do during design reviews. Multiply req
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
+Trace storage cost is rarely just raw span bytes on disk. Indexed backends pay to maintain search keys for service name, operation, duration, and tags, and those index structures can dominate spend when attributes are numerous or high-cardinality. Object-storage-oriented backends push cost toward retained trace blocks and compaction work, shifting the budget question toward retention duration and how often engineers query cold data. Either model becomes painful when teams store full payloads, unbounded attributes, or unsampled successful traffic at high QPS. Cost conversations should therefore include sampling percentage, index design, attribute cardinality, and retention together rather than treating storage as a single price-per-gigabyte quote from a vendor calculator.
+
 [Head-based sampling decides at the beginning of the trace whether the request will be sampled](https://opentelemetry.io/docs/concepts/sampling/). [It is simple, cheap, and easy to propagate because the sampled decision travels in the trace context](https://opentelemetry.io/docs/concepts/sampling/). The weakness is that the decision happens before the system knows whether the request will be slow, fail, or hit an unusual path. A random decision at the start can discard the one trace that would have explained the incident.
 
 Tail-based sampling waits until enough of the trace has arrived to make a smarter decision. The collector can keep traces with errors, traces above a latency threshold, traces for important routes, or traces for selected tenants. The cost is that [the collector must receive and buffer many traces before deciding, which uses memory and adds operational complexity](https://opentelemetry.io/docs/concepts/sampling/). Tail sampling is powerful, but it is not free.
+
+Head-based sampling makes its keep-or-drop decision before the request has done anything expensive or unusual, which keeps collector logic simple and propagation cheap because the sampled flag travels in trace context from the first span. The tradeoff is informational: a one-in-ten random decision made at the gateway may discard the only trace where a downstream payment provider times out once every twenty minutes, because the failure has not happened yet when the random decision occurs. Tail-based sampling waits for evidence such as error status, duration, or route attributes, but it pays for that patience with collector memory, buffering time, and operational tuning. Incomplete traces can still arrive late, so tail policies need a decision window and trace limits that platform owners monitor like any other queue.
 
 | Sampling Strategy | Decision Time | Keeps Errors Reliably | Cost Profile | Good Use |
 |-------------------|---------------|-----------------------|--------------|----------|
@@ -638,6 +646,8 @@ The weak assumption is that random coverage guarantees diagnostic coverage. Ten 
 Observability becomes much stronger when the three major signals share identifiers. Metrics are often the fastest way to notice a broad symptom, such as elevated latency or error rate. Traces show where a specific request spent time or crossed a failing dependency. Logs provide local detail, such as the exact exception message, retry count, database lock, or business rule decision. Correlation means you can move between these signals without starting the investigation over each time.
 
 The best incident workflow often starts with metrics because metrics are compact and objective-oriented. A latency alert points to a service-level objective burn, a route, or a dependency. [An exemplar can attach a trace ID to a specific metric observation](https://grafana.com/docs/grafana/latest/fundamentals/exemplars/), [letting an engineer jump from a slow histogram bucket to a real trace](https://grafana.com/docs/grafana/latest/fundamentals/exemplars/). The trace then identifies the suspicious span, and logs filtered by `trace_id` reveal the local details around that span.
+
+Correlation only works when every signal agrees on a contract for identifiers and cardinality. Metrics expose low-cardinality labels and optional exemplars that point at a trace ID. Traces carry span IDs, parent links, and bounded attributes that explain path and timing. Logs must echo the same trace ID and often the active span ID so an investigator can pivot without parsing free-text messages. If applications log trace IDs only on error lines, or metrics omit exemplars on the histogram that triggered the alert, the workflow collapses back into manual timestamp guessing. Platform teams should document which identifiers are mandatory, which business keys are allowed in logs versus spans, and which dashboards must display the handoff fields that connect signals. [OpenTelemetry is the CNCF graduated instrumentation layer](https://www.cncf.io/projects/opentelemetry/) that most teams use to emit compatible trace IDs and resource attributes, but the correlation contract still has to be designed and enforced by the platform.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -1109,9 +1119,7 @@ Success criteria for this step:
 
 ### Step 7: Design A Sampling Policy For The Demo Scenario
 
-Assume this dispatch application becomes a real production service with high request volume. Design a sampling policy in prose, then map it to collector rules. Your answer should keep all errors, keep slow dispatch traces, keep more traces for important customer-facing routes, and sample routine successful traffic at a lower percentage.
-
-Use this starter configuration and adjust the route names or thresholds to match your reasoning:
+Assume this dispatch application becomes a real production service with high request volume. Design a sampling policy in prose, then map it to collector rules. Your answer should keep all errors, keep slow dispatch traces, keep more traces for important customer-facing routes, and sample routine successful traffic at a lower percentage. The starter collector configuration below encodes a plausible hybrid policy, but you should adjust route names and latency thresholds to match your reasoning and explain why each rule would retain or discard a trace during a real incident.
 
 ```yaml
 processors:
@@ -1143,7 +1151,7 @@ processors:
           sampling_percentage: 10
 ```
 
-Success criteria for this step:
+When you review your policy, confirm it meets the criteria below and that you can defend each rule as an evidence-preservation decision rather than a default percentage copied from documentation.
 
 - [ ] Your policy explains why random-only sampling is not enough.
 - [ ] Your policy keeps error traces before sampling ordinary successful traffic.
@@ -1156,7 +1164,7 @@ Success criteria for this step:
 kind delete cluster --name tracing-lab
 ```
 
-Final success criteria for the exercise:
+After cleanup, look back at the whole exercise and confirm you can explain each step to another engineer without reopening the lab. The criteria below are the minimum bar for calling this tracing investigation complete.
 
 - [ ] You deployed a tracing backend into Kubernetes.
 - [ ] You generated traces from an application and found them in the UI.
@@ -1169,10 +1177,12 @@ Final success criteria for the exercise:
 
 ## Next Module
 
-Continue to [GitOps & Deployments Toolkit](/platform/toolkits/cicd-delivery/gitops-deployments/) to learn how observable services are delivered and operated through declarative deployment workflows.
+Continue to [GitOps & Deployments Toolkit](/platform/toolkits/cicd-delivery/gitops-deployments/) to learn how observable services are delivered and operated through declarative deployment workflows. Tracing tells you what happened inside a running system; GitOps tells you which version of that system was supposed to be running when the trace was recorded.
 
 ## Sources
 
+- [CNCF: Jaeger](https://www.cncf.io/projects/jaeger/) — Confirms Jaeger as a CNCF graduated project (graduated October 2019) and the canonical maturity reference for the Jaeger backend discussion.
+- [CNCF: OpenTelemetry](https://www.cncf.io/projects/opentelemetry/) — Confirms OpenTelemetry as a CNCF graduated project and the canonical maturity reference for the instrumentation and correlation discussion.
 - [OpenTelemetry: Traces](https://opentelemetry.io/docs/concepts/signals/traces/) — Backs core tracing concepts: traces, spans, parent-child relationships, span context, attributes, events, links, status, and how a request path is represented across services.
 - [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — Backs the Collector as the vendor-neutral layer for receiving, processing, and exporting telemetry, including the receiver/processor/exporter pipeline model and backend-neutral architecture.
 - [Grafana Tempo: Architecture](https://grafana.com/docs/tempo/latest/introduction/architecture/) — Backs Tempo’s backend architecture, object-storage-based trace retention, TraceQL search, ingestion/query path, and tradeoff discussions for self-managed tracing backends.
