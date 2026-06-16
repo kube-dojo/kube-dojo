@@ -279,7 +279,7 @@ spec:
     spec:
       containers:
       - name: feast
-        image: feastdev/feature-server:latest
+        image: feastdev/feature-server:0.46.0
         command: ["feast", "serve", "--host=0.0.0.0", "--port=6566"]
         ports:
         - containerPort: 6566
@@ -333,7 +333,7 @@ spec:
         spec:
           containers:
           - name: feast
-            image: feastdev/feature-server:latest
+            image: feastdev/feature-server:0.46.0
             command:
             - feast
             - materialize-incremental
