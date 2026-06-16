@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 158 — Toolkits infrastructure-networking: Ansible Operator arc reviewed (3 flipped, 3 defect-deferred) (#1996)</title>
+<style>
+  :root { --bg:#0a0f1a; --panel:#121a2b; --ink:#e6edf6; --muted:#9fb0c8; --accent:#5eb1ff; --good:#34d399; --warn:#fbbf24; --bad:#f87171; --border:#243149; }
+  body { background:var(--bg); color:var(--ink); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin:0; padding:2rem; }
+  main { max-width:1000px; margin:0 auto; }
+  h1 { font-size:1.5rem; line-height:1.3; border-bottom:2px solid var(--border); padding-bottom:.5rem; }
+  h2 { font-size:1.15rem; color:var(--accent); margin-top:2rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+  h3 { font-size:1rem; color:var(--muted); margin-top:1.2rem; }
+  code { background:var(--panel); padding:.1rem .35rem; border-radius:4px; font-size:.9em; }
+  .tldr { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); padding:1rem 1.2rem; border-radius:6px; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.92em; }
+  th,td { border:1px solid var(--border); padding:.45rem .6rem; text-align:left; vertical-align:top; }
+  th { background:var(--panel); color:var(--accent); }
+  .good { color:var(--good); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  ul { padding-left:1.2rem; } li { margin:.3rem 0; }
+  .pill { display:inline-block; background:var(--panel); border:1px solid var(--border); border-radius:999px; padding:.1rem .6rem; font-size:.8em; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<h1>Session 158 — Toolkits <code>infrastructure-networking</code>: Ansible Operator arc reviewed; 3 flipped, 3 defect-deferred (#1996)</h1>
+
+<p class="tldr"><strong>Date:</strong> 2026-06-17 · <strong>Branch:</strong> main · <strong>PR:</strong> #2003 (squash-merged) · <strong>Epic:</strong> #1996 · <strong>Result:</strong> the 27-module <code>infrastructure-networking</code> section was swept (authoritative <code>verify_module</code> split); the coherent <strong>Ansible Operator arc 7.12–7.17</strong> was cross-family reviewed → <strong>7.12 / 7.14 / 7.15 flipped to <span class="good">done</span></strong>; <strong>7.13 / 7.16 / 7.17 deferred</strong> with a precise fix-spec after cursor R1 found verifier-blind <strong>fabricated-API</strong> defects (web-verified vs upstream Operator-SDK docs). Toolkits not-done 27 → 24.</p>
+
+<h2>What happened</h2>
+<ol>
+  <li><strong>Authoritative section sweep.</strong> Ran <code>verify_module.py</code> on all 41 live module files in <code>platform/toolkits/infrastructure-networking</code>. Confirmed the briefing's "27 not-done" but corrected the heuristic: <code>density.py</code> over-flags (e.g. <code>14.6-managed-kubernetes</code> fails density.py but verify_module shows all density gates pass — its only defect is <code>outcomes_aligned</code>, a quiz retag, and it's already board-<code>COMMITTED</code>). The true split is recorded on <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1996">#1996</a> (comment) — see table below.</li>
+  <li><strong>Picked the coherent flip cluster.</strong> The Ansible Operator arc (7.12–7.17) is mostly verifier-<strong>T0</strong> already, authored long ago (#1354 "T2-13 Wave 2") but <strong>never cross-family reviewed or finalized</strong> — classic stale-board (7.12 scored 1.5 only because it used <code>## References</code>, capping the heuristic scorer).</li>
+  <li><strong>Orchestrator (opus-inline) fixes + cursor R1 cross-family review.</strong> Fixed structural/de-fab issues, then dispatched cursor (Composer-2.5) to review all 6 — it ground-checked against the upstream Operator-SDK docs both ways.</li>
+  <li><strong>Split verdict.</strong> 7.12/7.14/7.15 → <span class="good">APPROVE</span> (nits applied) → PR #2003 → merged → <code>finalize_module.sh</code> ×3. 7.13/7.16/7.17 → <span class="bad">NEEDS CHANGES</span> (real fabricated-API defects) → deferred with a precise spec.</li>
+</ol>
+
+<h2>The section sweep (verify_module on live files) — the 27 not-done</h2>
+<table>
+  <tr><th>Class</th><th>Modules</th><th>Work</th></tr>
+  <tr><td><strong>Flips</strong> (T0, review+finalize)</td><td>7.8, 7.11, 7.12✓, 7.13⚠, 7.14✓, 7.16⚠, 7.17⚠, 14.8</td><td>cross-family review then flip (this session did the 7.12–7.17 cluster)</td></tr>
+  <tr><td><strong>Light/medium fixes</strong></td><td>14.6 (outcomes_aligned only), 7.1 (dead link), 7.2, 14.4, 3.5, 5.4, 16.2, 16.3, 7.15✓, 14.7</td><td>single-gate or small expand</td></tr>
+  <tr><td><strong>Heavy expands</strong> (stubs &lt;700 bw)</td><td>7.3, 7.4, 7.5, 7.6, 7.7, 7.9, 7.10, 14.1, 14.2, 14.3, 14.5, 5.2, 3.4, 3.6, 7.1-backstage, 7.2-crossplane, 7.3-cert-manager, 16.1 + medium expands 5.1/5.3/5.5/5.6/5.7/5.8</td><td>full author dispatch (≤3 concurrent)</td></tr>
+</table>
+<p class="warn">⚠ = defect found this session (deferred). ✓ = flipped this session.</p>
+
+<h2>Flipped this session (PR #2003, cursor R1 APPROVE)</h2>
+<ul>
+  <li><strong>7.12 ansible-operator-sdk</strong> — <code>## References</code> → <code>## Sources</code> (clears the 1.5 cap); removed stale <code>(planned)</code> from 6 cross-refs (7.13–7.17 now exist). Core SDK flow ground-checked sound (kindest/node:v1.35.0, nginx:1.27-alpine real).</li>
+  <li><strong>7.14 awx-tower-eda</strong> — removed stale <code>(planned)</code>; reframed unsourced <code>$200–350/mo</code> AWX cost as illustrative; added SA-token currency note (long-lived <code>kubernetes.io/service-account-token</code> Secret is legacy K8s 1.24+; bound TokenRequest preferred). AWX-Operator overlay pin / EDA webhook+informer / <code>k8s_info+add_host</code> all accurate (carries <code>code-verified-against</code> provenance).</li>
+  <li><strong>7.15 helm-ansible-go-decision</strong> — <strong>de-fabricated the Did-You-Know section</strong>: removed an unsourced "cert-manager over 1 billion renewals/year, &lt;5000 LOC" claim → web-verified replacement (cert-manager = CNCF <strong>graduated 2024-09-29</strong>; controllers named); corrected Operator Framework history (2016 pattern → 2018 framework → 2020 CNCF incubating); softened Cluster-API motivation + deploy-scale claims. Added a <em>Recognizing the Migration Trigger</em> subsection to clear the 5000 floor; fixed sidebar order <code>7.15</code> → <code>16</code>.</li>
+</ul>
+
+<h2>Deferred with fix-spec (cursor R1 NEEDS CHANGES — verifier-blind fabricated-API)</h2>
+<p>Web-verified against the Operator-SDK <a href="https://sdk.operatorframework.io/docs/building-operators/ansible/reference/advanced_options/">advanced_options</a> + <a href="https://sdk.operatorframework.io/docs/building-operators/ansible/reference/watches/">watches</a> references — cursor's findings are <strong>correct both ways</strong>. Full review saved at <code>logs/dispatch_responses/smart-cursor-review-1781649152.txt</code>; spec also on #1996.</p>
+<table>
+  <tr><th>Module</th><th>P1 defects → correct API</th></tr>
+  <tr><td><strong>7.13</strong> advanced-watches</td><td><code>ANSIBLE_WORKERS</code> + "default 1" → <code>--max-concurrent-reconciles</code> flag + <code>MAX_CONCURRENT_RECONCILES_&lt;KIND&gt;_&lt;GROUP&gt;</code> env (default <code>runtime.NumCPU()</code>). Lab role must use <code>replicas | default(1)</code> / <code>image | default(...)</code> (SDK injects spec fields as top-level extra vars). <code>:831</code> stale "next module coming soon".</td></tr>
+  <tr><td><strong>7.16</strong> production-patterns</td><td>Remove fabricated <code>maxConcurrentReconciles</code>-in-watches, <code>dependentWatches:</code> list, <code>ANSIBLE_OPERATOR_PLUGINS_*</code> → use real <code>watchDependentResources: true</code> + the concurrency flag/env. Finalizer: delete external resources only, let the SDK drop its finalizer (no manual <code>finalizers: []</code>). <code>:88</code> condition type is <code>Failure</code> not <code>AnsibleFailed</code>. <code>:691</code> metric is <code>workqueue_depth</code>. <code>:11</code> prereq link.</td></tr>
+  <tr><td><strong>7.17</strong> testing-ansible-operators</td><td><code>_demoapp_*</code> var teaching is wrong — SDK passes spec fields directly + <code>ansible_operator_meta</code>; align Molecule converge vars + Kuttl asserts (<code>:1014-1019</code>) to 7.12's role labels (<code>app.kubernetes.io/name: demoapp</code> + <code>instance</code>).</td></tr>
+</table>
+
+<h2>Lessons</h2>
+<ul>
+  <li><strong>Cross-family review is the floor — it caught fabricated-API in exactly the 3 modules opus-inline didn't full-read.</strong> "Verifier T0 ≠ correct" held again: 7.13/7.16/7.17 pass every gate yet document non-existent SDK knobs (<code>ANSIBLE_WORKERS</code>, <code>dependentWatches</code>). Routing the review across all 6 (not just the ones I edited) surfaced them.</li>
+  <li><strong>density.py over-flags vs verify_module.</strong> Trust <code>verify_module</code> tier for the expand/flip/light-fix split; density.py's prose-word heuristic flags some already-T0 modules (14.6, 7.11, 7.12) that only need a non-density fix.</li>
+  <li><strong>Stale board scores are the rule in this section.</strong> Several "critical 1.5" modules (e.g. 7.12) are already T0 — the score is capped by a <code>## References</code> vs <code>## Sources</code> heading, not by content quality. Grep the heading first.</li>
+  <li><strong>Verify-both-ways saved a false-flag.</strong> 7.14's <code>ansible.eda</code> plugin list looked fabricable but carries a <code>code-verified-against</code> source comment → kept, not "fixed."</li>
+</ul>
+
+<h2>NEXT</h2>
+<ol>
+  <li><strong>Fix 7.13/7.16/7.17</strong> from the spec above (correct API already web-verified) → cursor R2 re-review → second flip PR. (Task #3 / #1996 comment.)</li>
+  <li><strong>Continue <code>infrastructure-networking</code></strong> heavy expands (the ~18 stubs) + light fixes, ≤3 concurrent authors, same loop. This is the section's bulk and remains "its own (multi-)session."</li>
+  <li>Then <strong>#1911 UK</strong> currency, <strong>#1876</strong> AI-history book review.</li>
+</ol>
+<p class="pill">Brief template reused/created: <code>logs/remediation/briefs/pf-toolkits-infra-net/</code></p>
+</main>
+</body>
+</html>
