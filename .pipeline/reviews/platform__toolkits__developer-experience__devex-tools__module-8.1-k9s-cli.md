@@ -1,0 +1,4 @@
+## 2026-06-16T00:51:29Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author cursor/Kimi; no gemini) + ground-check + web-verify. **#1996 (Toolkits developer-experience), PR pending.**
+Author: cursor `--model auto`. 406→5009 prose-w, 4→14 sources (all 200). Teaches the durable **terminal-cockpit** capability (navigate-inspect-act loop; TUI/plugin-manager/context-switch/log-multiplexer categories) with k9s as worked example. T0; all gates pass; Hypothetical scenario labeled.
+**Ground-checks:** k9s correctly framed **not a CNCF project**; Headlamp CNCF **Sandbox** (accepted 2023-05-17) web-verified; Lens as peer. Two sweep "404s" were false positives (a captured trailing quote on the k9s release asset, which resolves 200; and the verbatim official `${KREW}` krew install snippet). **APPROVE.**

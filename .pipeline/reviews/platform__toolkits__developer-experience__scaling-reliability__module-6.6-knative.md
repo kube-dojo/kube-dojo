@@ -1,0 +1,4 @@
+## 2026-06-16T00:51:29Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author deepseek; no gemini) + ground-check + web-verify. **#1996, PR pending.**
+Author: deepseek-v4-pro. 992→6093 prose-w, 5→16 sources. Teaches the durable **serverless-on-K8s** capability (Knative Serving: Service/Configuration/Revision/Route, scale-to-zero, activator, traffic-split; Eventing: Broker/Trigger/Sources + CloudEvents) with peers (HPA/KEDA/OpenFaaS/cloud-FaaS). T0; all gates pass.
+**Ground-checks:** Knative Serving/Eventing API correct; the $45k→$12k/140-services narrative carries a proper `Hypothetical scenario:` label with round numbers + generic "mid-size company" (no fake provenance). **Fixed:** replaced a bot-blocked (403) O'Reilly paywalled source with the knative.dev Eventing-Triggers doc; full `curl -L` sweep now 200. **APPROVE.**

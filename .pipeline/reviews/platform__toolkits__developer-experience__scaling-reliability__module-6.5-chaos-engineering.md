@@ -1,0 +1,4 @@
+## 2026-06-16T00:51:29Z — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R1 (≠ author cursor/Kimi; no gemini) + ground-check + web-verify. **#1996, PR pending.**
+Author: cursor `--model auto`. 890→5001 prose-w, 4→18 sources (all 200). Teaches the durable **controlled fault-injection** capability (fault taxonomy, CRD experiment model, steady-state/blast-radius/abort) with Chaos Mesh + LitmusChaos as worked examples; differentiated from the disciplines chaos PRACTICE module. T0; all gates pass.
+**Ground-checks (dedup-sensitive — handled perfectly):** ZERO named incidents (no Netflix-Chaos-Monkey/GitLab-2017/Facebook-2021 retelling — grep clean); **local incident-dedup gate PASS**; hypotheticals only. Chaos Mesh + LitmusChaos both CNCF **Incubating** (with verify-on-cncf hedging). **APPROVE.**
