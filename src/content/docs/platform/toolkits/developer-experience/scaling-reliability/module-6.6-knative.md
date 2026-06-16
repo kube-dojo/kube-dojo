@@ -1059,7 +1059,7 @@ Install Knative Eventing and create a PingSource that fires every 30 seconds, a 
 - [Knative Eventing GitHub Repository](https://github.com/knative/eventing)
 - [CNCF Knative Project Page](https://www.cncf.io/projects/knative/)
 - [CloudEvents Specification](https://cloudevents.io/)
-- [Knative Cookbook (O'Reilly)](https://www.oreilly.com/library/view/knative-cookbook/9781492061182/)
+- [Knative Eventing Triggers](https://knative.dev/docs/eventing/triggers/) — Reference for filtered event subscription via Brokers and Triggers.
 - [Google Cloud Run Documentation](https://cloud.google.com/run/docs)
 - [KEDA Documentation](https://keda.sh/)
 - [OpenFaaS Documentation](https://docs.openfaas.com/)
