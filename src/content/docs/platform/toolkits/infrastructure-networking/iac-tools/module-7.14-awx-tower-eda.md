@@ -1079,4 +1079,4 @@ kind delete cluster --name awx-lab
 
 ## Next Module
 
-Continue with **Module 7.15 (planned): Helm vs Ansible Operator Decision Framework** to learn when a Helm-managed application is a better fit than an Ansible role, how the two operator implementation styles compare for package-shaped vs automation-shaped domains, and how to migrate between them as a platform's needs evolve.
+Continue with **Module 7.15: Helm vs Ansible Operator Decision Framework** to learn when a Helm-managed application is a better fit than an Ansible role, how the two operator implementation styles compare for package-shaped vs automation-shaped domains, and how to migrate between them as a platform's needs evolve.

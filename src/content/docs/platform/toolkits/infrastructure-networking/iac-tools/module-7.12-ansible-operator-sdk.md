@@ -1527,23 +1527,23 @@ modules can now assume that `watches.yaml`, role-driven reconciliation,
 `kubernetes.core`, custom status, and the Ansible-versus-Go trade-off have
 already been introduced.
 
-- **Module 7.13 (planned): Advanced `watches.yaml` Patterns** - selectors,
+- **Module 7.13: Advanced `watches.yaml` Patterns** - selectors,
   multiple watches, dependent watches, reconcile period tuning, and annotation
   overrides.
-- **Module 7.14 (planned): AWX, Tower, and Event-Driven Ansible Integration** -
+- **Module 7.14: AWX, Tower, and Event-Driven Ansible Integration** -
   where cluster controllers and enterprise automation controllers should meet,
   and where they should remain separate.
-- **Module 7.15 (planned): Helm vs. Ansible Operator Decision Framework** -
+- **Module 7.15: Helm vs. Ansible Operator Decision Framework** -
   a deeper implementation-choice guide for chart-shaped, role-shaped, and
   code-shaped controllers.
-- **Module 7.16 (planned): Production Ansible Operator Patterns** - finalizers,
+- **Module 7.16: Production Ansible Operator Patterns** - finalizers,
   status conditions, RBAC minimization, image publishing, observability, and
   upgrade strategy.
-- **Module 7.17 (planned): Testing Ansible Operators with Molecule and Kuttl** -
+- **Module 7.17: Testing Ansible Operators with Molecule and Kuttl** -
   local role tests, cluster integration tests, and CI gates for operator
   behavior.
 
-## References
+## Sources
 
 - https://sdk.operatorframework.io/docs/building-operators/ansible/
 - https://sdk.operatorframework.io/docs/building-operators/ansible/quickstart/
@@ -1561,7 +1561,7 @@ already been introduced.
 
 ## Next Module
 
-Continue with **Module 7.13 (planned): Advanced `watches.yaml` Patterns** to
+Continue with **Module 7.13: Advanced `watches.yaml` Patterns** to
 learn how one Ansible Operator can manage multiple kinds, tune event behavior,
 control dependent watches, and make deliberate choices about periodic
 reconciliation.
