@@ -36,7 +36,7 @@ To understand why MicroK8s exists, you first need to understand what a Kubernete
 
 A distribution is a curated, tested, integrated bundle of these components, shipped with a defined upgrade path, a support model, and a set of opinions about how the pieces should fit together. kubeadm, the reference installer maintained by the upstream Kubernetes project, gives you the closest thing to a "vanilla" assembly experience: it bootstraps the control plane, generates certificates, and leaves the CNI and ingress choices to you. It is the baseline against which every distribution is measured. MicroK8s departs from that baseline in three fundamental ways.
 
-First, it wraps everything in a snap. A snap is not just a package — it is a confined execution environment with transactional updates, automatic rollback on failure, and release channels that map to stability levels. When you install MicroK8s, Snapcraft downloads a signed, verifiable bundle that includes the Kubernetes binaries, containerd, dqlite, and all the add-on manifests. Updates happen automatically within the channel you track (so `1.28/stable` receives patch releases without manual intervention), and if an update breaks something, `snap revert microk8s` takes you back to the previous working revision. This is a fundamentally different operational model from downloading a binary and wiring up systemd units yourself — it outsources packaging discipline to the snap ecosystem and lets you treat Kubernetes version management like any other system package.
+First, it wraps everything in a snap. A snap is not just a package — it is a confined execution environment with transactional updates, automatic rollback on failure, and release channels that map to stability levels. When you install MicroK8s, Snapcraft downloads a signed, verifiable bundle that includes the Kubernetes binaries, containerd, dqlite, and all the add-on manifests. Updates happen automatically within the channel you track (so `1.34/stable` receives patch releases without manual intervention), and if an update breaks something, `snap revert microk8s` takes you back to the previous working revision. This is a fundamentally different operational model from downloading a binary and wiring up systemd units yourself — it outsources packaging discipline to the snap ecosystem and lets you treat Kubernetes version management like any other system package.
 
 Second, MicroK8s replaces etcd with dqlite for its default datastore. Dqlite is a distributed SQL database built by Canonical on top of SQLite and the Raft consensus algorithm. Each MicroK8s node runs a dqlite process. When you form a cluster of three or more nodes, the dqlite instances elect a leader via Raft, replicate writes to a quorum of followers, and present a familiar SQL interface to the control plane. The rationale is simplicity: SQLite has orders of magnitude fewer lines of code than etcd, it is one of the most heavily tested software libraries in existence, and its operational surface — backups are file copies, recovery is file replacement — is far smaller than etcd's. The tradeoff is scale. Dqlite has not been battle-tested at the extreme cluster sizes that etcd handles (thousands of nodes, tens of thousands of concurrent watches). For the 3-to-20-node clusters that MicroK8s targets — developer workstations, CI runners, edge appliances, small production deployments — dqlite is a pragmatic fit. If you need larger scale, MicroK8s also supports an etcd add-on.
 
@@ -63,7 +63,7 @@ Before diving into MicroK8s specifics, here is how the three lightweight distrib
 
 > **Landscape snapshot — as of 2026-06. This changes fast; verify against upstream docs before relying on specifics.**
 >
-> - MicroK8s latest stable channels: 1.28, 1.29, 1.30 (tracked per minor version)
+> - MicroK8s latest stable channels: 1.33, 1.34, 1.35 (most recent stable 1.35/stable, published 2026-04; tracked per minor version)
 > - Minimum resources: 540 MB RAM (idle), recommended 4 GB+ for workloads, 2+ vCPUs
 > - Supported architectures: amd64, arm64 (Raspberry Pi 4+, AWS Graviton, Apple Silicon multipass)
 > - Strict confinement snap variant available for hardened environments (requires manual interface connections)
@@ -83,7 +83,7 @@ Before diving into MicroK8s specifics, here is how the three lightweight distrib
 
 Before you run `snap install microk8s --classic`, it is worth understanding what that command actually places on your machine. The snap contains the full Kubernetes control plane — kube-apiserver, kube-controller-manager, and kube-scheduler — plus the kubelet as a system daemon, kube-proxy for network rules, and containerd as the container runtime. All of these run inside the snap's confined mount namespace, writing configuration to `/var/snap/microk8s/current/args/` and persistent data to `/var/snap/microk8s/common/`. The `--classic` flag relaxes snap confinement because a Kubernetes node needs to create network interfaces, mount filesystems, and manage cgroups — operations that strict confinement would block. Canonical also ships a strict-confinement variant for environments where security policy demands it, but it requires manually connecting snap interfaces and is not the default path.
 
-The architecture diagram below shows how these components layer together. Notice the add-on system at the bottom: each add-on is a script at `/snap/microk8s/current/addons/<name>/enable` that applies Kubernetes manifests, waits for pods to reach readiness, and configures integration with other add-ons. The add-ons are version-locked to the MicroK8s release — when you track `1.28/stable`, you receive add-on manifests tested against Kubernetes 1.28, and when you refresh to `1.29/stable`, the add-ons update in lockstep.
+The architecture diagram below shows how these components layer together. Notice the add-on system at the bottom: each add-on is a script at `/snap/microk8s/current/addons/<name>/enable` that applies Kubernetes manifests, waits for pods to reach readiness, and configures integration with other add-ons. The add-ons are version-locked to the MicroK8s release — when you track `1.34/stable`, you receive add-on manifests tested against Kubernetes 1.34, and when you refresh to `1.35/stable`, the add-ons update in lockstep.
 
 ```
 MicroK8s ARCHITECTURE
@@ -191,17 +191,17 @@ microk8s enable dns storage
 
 ### Install Specific Version
 
-The snap channel model is one of MicroK8s's strongest operational features. Each Kubernetes minor version has its own set of channels — `1.28/stable`, `1.28/candidate`, `1.28/beta`, `1.28/edge` — and `latest/stable` tracks the most recent stable release. When you install with `--channel=1.28/stable`, you receive the latest patch release on the 1.28 line. When 1.28.4 ships, snap refreshes you automatically. When 1.29.0 ships, you stay on 1.28.x until you explicitly switch channels. This gives you the best of both worlds: automatic patch updates for security and bug fixes, plus deliberate control over minor-version upgrades.
+The snap channel model is one of MicroK8s's strongest operational features. Each Kubernetes minor version has its own set of channels — `1.34/stable`, `1.34/candidate`, `1.34/beta`, `1.34/edge` — and `latest/stable` tracks the most recent stable release. When you install with `--channel=1.34/stable`, you receive the latest patch release on the 1.34 line. When 1.34.4 ships, snap refreshes you automatically. When 1.35.0 ships, you stay on 1.34.x until you explicitly switch channels. This gives you the best of both worlds: automatic patch updates for security and bug fixes, plus deliberate control over minor-version upgrades.
 
 ```bash
 # List available versions
 snap info microk8s
 
 # Install specific channel
-sudo snap install microk8s --classic --channel=1.28/stable
+sudo snap install microk8s --classic --channel=1.34/stable
 
-# Track latest patch releases for 1.28
-sudo snap refresh microk8s --channel=1.28/stable
+# Track latest patch releases for 1.34
+sudo snap refresh microk8s --channel=1.34/stable
 ```
 
 ### Install on Other Linux Distributions
@@ -495,11 +495,11 @@ microk8s start
 
 ## Upgrading MicroK8s
 
-The upgrade experience is where snap's transactional update model pays off most visibly. In a kubeadm-managed cluster, upgrading involves draining nodes, upgrading kubeadm, running `kubeadm upgrade plan` and `kubeadm upgrade apply`, upgrading kubelet and kubectl on each node, and uncordoning. It is a deliberate, multi-step process designed for production clusters where downtime is expensive. MicroK8s, by contrast, updates automatically within your channel — if you track `1.28/stable`, the snap daemon downloads and applies patch releases (1.28.3 → 1.28.4) on its refresh schedule, typically daily. This is convenient but carries risk: a patch release, however well-tested, could introduce a regression that breaks your workloads in the middle of the night.
+The upgrade experience is where snap's transactional update model pays off most visibly. In a kubeadm-managed cluster, upgrading involves draining nodes, upgrading kubeadm, running `kubeadm upgrade plan` and `kubeadm upgrade apply`, upgrading kubelet and kubectl on each node, and uncordoning. It is a deliberate, multi-step process designed for production clusters where downtime is expensive. MicroK8s, by contrast, updates automatically within your channel — if you track `1.34/stable`, the snap daemon downloads and applies patch releases (1.34.3 → 1.34.4) on its refresh schedule, typically daily. This is convenient but carries risk: a patch release, however well-tested, could introduce a regression that breaks your workloads in the middle of the night.
 
-For production, you should understand three controls: channel selection determines what you receive, refresh holding prevents automatic updates, and rollback gives you a safety net. Track a specific stable channel (`1.28/stable`), not `latest/stable`, so you control when minor-version upgrades happen. Hold refreshes during critical periods with `snap refresh --hold microk8s` and unhold when you are ready to test. And if an update breaks something, `snap revert microk8s` restores the previous revision — the snap keeps the last several revisions cached on disk, so rollback is a matter of seconds, not a multi-node drain-and-rebuild.
+For production, you should understand three controls: channel selection determines what you receive, refresh holding prevents automatic updates, and rollback gives you a safety net. Track a specific stable channel (`1.34/stable`), not `latest/stable`, so you control when minor-version upgrades happen. Hold refreshes during critical periods with `snap refresh --hold microk8s` and unhold when you are ready to test. And if an update breaks something, `snap revert microk8s` restores the previous revision — the snap keeps the last several revisions cached on disk, so rollback is a matter of seconds, not a multi-node drain-and-rebuild.
 
-The channel naming convention maps directly to upstream Kubernetes versions: `1.28/stable` is Kubernetes 1.28, latest patch. `1.28/candidate` is the release candidate for the next patch. `1.28/beta` is the beta. `1.28/edge` is the bleeding edge — updated on every commit, useful for testing upcoming features but never for production. The `latest` track mirrors the most recent stable upstream release and is reasonable for development environments where you want the newest Kubernetes features as soon as Canonical packages them.
+The channel naming convention maps directly to upstream Kubernetes versions: `1.34/stable` is Kubernetes 1.34, latest patch. `1.34/candidate` is the release candidate for the next patch. `1.34/beta` is the beta. `1.34/edge` is the bleeding edge — updated on every commit, useful for testing upcoming features but never for production. The `latest` track mirrors the most recent stable upstream release and is reasonable for development environments where you want the newest Kubernetes features as soon as Canonical packages them.
 
 ### Automatic Updates (Default)
 
@@ -522,11 +522,11 @@ sudo snap refresh --unhold microk8s
 
 ```bash
 # Switch to a different Kubernetes version
-sudo snap refresh microk8s --channel=1.29/stable
+sudo snap refresh microk8s --channel=1.35/stable
 
 # Available channels:
-# 1.28/stable, 1.28/candidate, 1.28/beta, 1.28/edge
-# 1.29/stable, 1.29/candidate, ...
+# 1.34/stable, 1.34/candidate, 1.34/beta, 1.34/edge
+# 1.35/stable, 1.35/candidate, ...
 # latest/stable, latest/edge
 ```
 
@@ -550,7 +550,7 @@ The container image problem is separate. While the snap includes the Kubernetes 
 # On connected machine:
 
 # Download the snap
-snap download microk8s --channel=1.28/stable
+snap download microk8s --channel=1.34/stable
 
 # This creates:
 # microk8s_NNNN.snap
@@ -683,7 +683,7 @@ Test your understanding of MicroK8s:
 <details>
 <summary>5. How do you perform an air-gapped installation of MicroK8s?</summary>
 
-**Answer**: On a connected machine: `snap download microk8s --channel=1.28/stable`. Transfer the .snap and .assert files to the air-gapped machine. Install: `sudo snap ack microk8s_NNNN.assert` then `sudo snap install microk8s_NNNN.snap --classic`. Import container images with `microk8s ctr image import`.
+**Answer**: On a connected machine: `snap download microk8s --channel=1.34/stable`. Transfer the .snap and .assert files to the air-gapped machine. Install: `sudo snap ack microk8s_NNNN.assert` then `sudo snap install microk8s_NNNN.snap --classic`. Import container images with `microk8s ctr image import`.
 </details>
 
 <details>
@@ -695,7 +695,7 @@ Test your understanding of MicroK8s:
 <details>
 <summary>7. What's the difference between stable and edge channels?</summary>
 
-**Answer**: Stable channels (e.g., `1.28/stable`) receive tested releases suitable for production. Edge channels receive latest builds, possibly unstable. Candidate and beta are between. For production, always use stable. For testing new features, use edge with caution.
+**Answer**: Stable channels (e.g., `1.34/stable`) receive tested releases suitable for production. Edge channels receive latest builds, possibly unstable. Candidate and beta are between. For production, always use stable. For testing new features, use edge with caution.
 </details>
 
 <details>
