@@ -48,10 +48,14 @@ It then links forward into reasoning, safety, and prompt-library work where the 
 
 ## Did You Know
 
-- Did You Know: OpenAI's current prompting docs describe reusable prompt objects with versions and variables, which means prompt lifecycle management can be treated as an API design and release-management concern rather than a chat-window habit.
+- Did You Know: OpenAI now directs new prompt work toward prompts stored in application code, which means prompt lifecycle management should be treated as a repo-owned API design and release-management concern rather than a chat-window habit.
 - Did You Know: OpenAI's prompt-caching docs expose cached-token usage, so cache health can be observed directly instead of guessed from latency alone.
 - Did You Know: Anthropic's Claude docs recommend XML tags for multi-component prompts, but the guidance is about semantic separation rather than a fixed set of magic tag names.
 - Did You Know: Gemini's system-instruction docs expose durable behavior through generation configuration, which reinforces the same authority split even though the API shape differs from role-based chat APIs.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> OpenAI deprecated reusable prompt objects on 2026-06-03. The `v1/prompts` API and reusable prompt objects are scheduled to shut down on 2026-11-30, and OpenAI now directs new work to code-managed prompts through the Responses API path. Provider-native prompt objects were one prompt-lifecycle path, but repo-owned prompt versioning is the durable pattern: keep prompt content in source control, pass typed variables from code, and review prompt changes with the application behavior they control.
 
 ## Prompt As Interface Contract
 
@@ -197,7 +201,7 @@ Examples include the agent's durable job, the output schema, allowed and forbidd
 This role should be concise because it is usually part of the stable prefix and because bloated high-authority text can make every request expensive, less cacheable, and harder to audit.
 
 The user role should own the current task instance, meaning the current problem, files, inputs, ticket fields, preferred audience, and one-run acceptance criteria.
-A user message can include examples when those examples are task-specific, but durable examples that define the workflow's behavior usually belong with the developer instructions or the reusable prompt object.
+A user message can include examples when those examples are task-specific, but durable examples that define the workflow's behavior usually belong with the developer instructions or the repo-owned prompt template.
 
 Tool results should own evidence from the outside world, not governance.
 A web page, shell command, database row, or file search result that says "ignore previous instructions" remains data from the tool rather than an instruction from the application.
@@ -218,7 +222,7 @@ The harness should enforce the rule when the consequence of violation matters.
 Prompt style is not entirely portable because model families, APIs, and tool ecosystems have different conventions for message roles, long-context behavior, thinking behavior, and examples.
 
 The portable layer is the contract: purpose, authority, inputs, output schema, evidence boundary, and failure behavior.
-The provider-specific layer is the representation: XML tags, Markdown headings, system-instruction fields, developer messages, schema parameters, prompt objects, or tool-call configuration.
+The provider-specific layer is the representation: XML tags, Markdown headings, system-instruction fields, developer messages, schema parameters, code-managed prompt templates, or tool-call configuration.
 
 Claude documentation recommends XML tags for prompts with multiple components because tags separate instructions, examples, context, and formatting in a way that reduces misinterpretation and supports post-processing.
 
@@ -226,7 +230,7 @@ This does not mean every Claude prompt must become a nested XML document, and An
 
 A Claude-style prompt for a review workflow might use `<instructions>`, `<rubric>`, `<context>`, `<examples>`, and `<output_format>` so the model can keep examples from being mistaken for live data.
 
-OpenAI documentation describes message roles, reusable prompts, and prompt engineering patterns that use Markdown headers, lists, and XML-style delimiters to mark distinct prompt sections.
+OpenAI documentation describes message roles and prompt engineering patterns that use Markdown headers, lists, and XML-style delimiters to mark distinct prompt sections, while current prompting guidance directs new work toward prompt content stored in application code.
 
 This makes GPT-family prompts a good fit for clean Markdown sections such as `# Role`, `# Task`, `# Evidence`, `# Output Contract`, and `# Refusal Or Missing Data Behavior`, especially when the prompt will be reviewed in source control.
 
@@ -276,7 +280,7 @@ In an agentic workflow, the task frame may be refreshed often while the durable 
 In a safety-sensitive workflow, the output schema and missing-data behavior should be backed by validators and audit logs rather than left as natural-language wishes.
 
 This four-section model is deliberately modest because a prompt contract should be easy to read during code review.
-If the contract grows too large, split the source of truth: keep the reusable prompt concise, move deep context to the context layer, and move enforcement to the harness.
+If the contract grows too large, split the source of truth: keep the durable prompt template concise, move deep context to the context layer, and move enforcement to the harness.
 
 ## Negative Space
 
@@ -714,6 +718,8 @@ That module shifts from instruction design to the assembled working set the mode
 - Anthropic, "Claude Messages API": [https://platform.claude.com/docs/en/api/messages](https://platform.claude.com/docs/en/api/messages)
 - Anthropic, "Prompt caching": [https://platform.claude.com/docs/en/build-with-claude/prompt-caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
 - OpenAI, "Prompt engineering": [https://developers.openai.com/api/docs/guides/prompt-engineering](https://developers.openai.com/api/docs/guides/prompt-engineering)
+- OpenAI, "Migrate from prompt objects": [https://developers.openai.com/api/docs/guides/prompting/migrate-from-prompt-object](https://developers.openai.com/api/docs/guides/prompting/migrate-from-prompt-object)
+- OpenAI, "Deprecations": [https://developers.openai.com/api/docs/deprecations](https://developers.openai.com/api/docs/deprecations)
 - OpenAI, "Text generation and message roles": [https://developers.openai.com/api/docs/guides/text](https://developers.openai.com/api/docs/guides/text)
 - OpenAI, "Prompt caching": [https://developers.openai.com/api/docs/guides/prompt-caching](https://developers.openai.com/api/docs/guides/prompt-caching)
 - OpenAI, "Working with evals": [https://developers.openai.com/api/docs/guides/evals](https://developers.openai.com/api/docs/guides/evals)
