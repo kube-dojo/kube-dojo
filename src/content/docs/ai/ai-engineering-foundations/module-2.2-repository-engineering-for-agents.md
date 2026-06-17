@@ -85,14 +85,14 @@ The split is intentional. If a rule should survive across model families and too
 AGENTS remains compact and stable because that file is the first shared contract the engine sees.
 CLAUDE carries the richer session-specific details and then points to the same scoped rule surface for current run behavior.
 
-OpenAI’s AGENTS.md guide describes directory-based discovery order as:
+OpenAI’s AGENTS.md guide describes **per-directory precedence with root-to-leaf concatenation** (at most one file per directory).
+Within each directory, discovery order is:
 `AGENTS.override.md` → `AGENTS.md` → fallback filenames configured in `project_doc_fallback_filenames`.
-This is a strict precedence chain.
-If a directory contains `AGENTS.override.md`, that file replaces `AGENTS.md` and any configured fallback at the same directory level before the next parent directory is considered.
-If none of those files exists at that level, discovery continues upward according to the same rule.
+If a directory contains `AGENTS.override.md`, that file wins at that level and replaces `AGENTS.md` and any configured fallback there.
+If none of those files exists at that level, discovery continues upward; the selected file from each ancestor directory is concatenated root-to-leaf into the combined instruction set.
 
 The guide also makes one important hard-limit point explicit: `project_doc_max_bytes` truncates combined instructions.
-The current sample config in the guide sets `project_doc_max_bytes = 65536`, and the behavior is to keep only the most recent in-scope bytes when combined guidance exceeds that boundary.
+The default is **32 KiB (32768 bytes)**; the sample config in the guide shows raising the limit to `65536`, and the behavior is to keep only the most recent in-scope bytes when combined guidance exceeds that boundary.
 That means KubeDojo’s design principle of keeping AGENTS/CLAUDE concise is not stylistic; it is a reliability requirement so critical lines are not evicted by byte cap.
 Fallback filenames only work when listed in config.
 If a project uses `TEAM_GUIDE.md` but forgets it in `project_doc_fallback_filenames`, Codex silently ignores that file.
@@ -103,7 +103,7 @@ The byte cap can silently drop lower-priority content in that same file, which i
 That is also why the bootstrap should stay deterministic: every non-deterministic or long-lived detail must be delegated to scoped files or checkable endpoints, then explicitly referenced from the root contract.
 
 The OpenAI model side has another implication that is easy to miss.
-AGENTS.md has a strict directory discovery chain (`AGENTS.override.md` -> `AGENTS.md` -> fallback files), while CLAUDE.md is not bound to that same precedence model.
+AGENTS.md uses per-directory precedence with root-to-leaf concatenation (`AGENTS.override.md` -> `AGENTS.md` -> fallback files, at most one file per directory), while CLAUDE.md is not bound to that same precedence model.
 In practice, that means `AGENTS.md` has clearer portability and fallback semantics in cross-tool dispatch, while CLAUDE.md can encode Anthropic-specific continuity and memory posture for workflows that need it.
 Treating the two as the same layer creates coupling risk, but treating them as complementary layers gives you predictability: one stable cross-runtime boot contract plus one higher-cardinality operational memory contract.
 
