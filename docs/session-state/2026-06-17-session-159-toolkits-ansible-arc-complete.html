@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Session 159 — Toolkits Ansible Operator arc COMPLETE (7.13/7.16/7.17 flipped; #1996)</title>
+<title>Session 159 — Toolkits infrastructure-networking: 6 modules flipped to done (#1996)</title>
 <style>
   :root { --bg:#0a0f1a; --fg:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --card:#111827; --border:#243044; }
   body { background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin:0; padding:2rem; max-width:1100px; }
@@ -26,7 +26,12 @@
 <p class="muted">Date: 2026-06-17 · Branch: main · PR: #2006 (squash-merged → <code>957e3e7cb</code>) · Epic: #1996 · Role: standalone orchestrator</p>
 
 <div class="tldr">
-<strong>TL;DR.</strong> Closed the Ansible Operator arc deferred in s158: <strong>7.13 / 7.16 / 7.17 fixed and flipped to <code>done</code></strong>, completing the coherent arc 7.12–7.17. The defects were <strong>verifier-blind fabricated/wrong Operator-SDK API surface</strong> (cursor R1 found them last session). I <strong>independently web-verified every disputed API fact against upstream docs <em>before</em> the fix</strong>, locked the ground truth into the brief, dispatched <strong>codex gpt-5.5</strong> to apply it, then ran a web-grounded <strong>opus-inline cross-family R2</strong> (Anthropic ≠ codex/OpenAI) confirming every finding resolved with 0 residual fabrications. CI all green (incl. the required 2000-page Astro build), merged, finalized (COMMITTED + telemetry). infrastructure-networking not-done dropped by 3.
+<strong>TL;DR.</strong> Drove <strong>6 modules to <code>done</code></strong> in Toolkits/infrastructure-networking (#1996); the section is now <strong>18 done / 24 not-done</strong> (was ~30 not-done at session start). Two batches:
+<ul>
+<li><strong>Ansible Operator arc 7.13 / 7.16 / 7.17</strong> (PR #2006) — the s158-deferred <strong>verifier-blind fabricated/wrong Operator-SDK API</strong>. Browser-verified every disputed fact <em>before</em> the fix, locked ground truth into the brief, codex gpt-5.5 applied, opus-inline web-grounded R2 confirmed. Completes the arc 7.12–7.17.</li>
+<li><strong>Flip batch 7.8-sst / 7.11-hcp-terraform / 14.8-edge-distros</strong> (PRs #2007 + #2008) — T0-but-never-cross-family-reviewed modules, genuine opus-inline web-grounded review. 7.8 got a small anti-fab polish (illustrative metrics framing); 7.11 + 14.8 verified clean (pricing/maturity web-confirmed); 14.8 needed a follow-up <code>## References</code>→<code>## Sources</code> rename to clear the heuristic-score cap.</li>
+</ul>
+All 6 verified <code>status=done</code> on the board; all CI green; finalized (COMMITTED state + telemetry).
 </div>
 
 <h2>What shipped</h2>
@@ -63,30 +68,16 @@
 <h2>Authoritative remaining split — infrastructure-networking (sweep this session, trust the LIVE files)</h2>
 <p>Ran <code>verify_module.py</code> + review-record + <code>## Sources</code> presence on all 42 section modules. The Ansible arc (7.12–7.17) is done. Remaining, by cost:</p>
 
-<h3 class="good">Cheap FLIP candidates — T0, already ≥5000 bw, never cross-family reviewed (review-only → flip)</h3>
-<ul>
-<li><code>7.8-sst</code> (5155 bw, T0)</li>
-<li><code>7.11-hcp-terraform-workflows</code> (6648 bw, T0)</li>
-<li><code>14.8-edge-distros-landscape</code> (5292 bw, T0)</li>
-</ul>
-<p class="warn">⚠ These PASS the verifier but have NEVER been cross-family reviewed — the Ansible arc proved T0 ≠ correct (fabricated API passes the verifier). Each needs a genuine web-grounded review (durable-content: IaC/edge = vendor/version churn) before flipping, not a rubber-stamp.</p>
+<p class="warn"><strong>Correction to the earlier verifier-tier sweep:</strong> the board's "done" is the <em>review-status</em> axis (score≥4 + state/verdict), NOT the verifier tier. So several modules the tier-sweep called "moderate expands" — <code>7.1-terraform</code>, <code>14.4-talos</code>, <code>14.6-managed-kubernetes</code>, <code>5.1-cilium</code>, <code>5.4-metallb</code>, <code>3.5-cluster-api</code>, <code>16.2-minio</code>, <code>16.3-longhorn</code> — are <strong>already board-<code>done</code></strong>. (Latent quality note: <code>7.1-terraform</code> has a dead Sources URL <code>/blog/terraform-announcement</code> → should be <code>/blog/terraform</code>; T3 on <code>sources_all_reachable</code> but board-done. Worth a cleanup pass.)</p>
 
-<h3>Gate-fix near-flips — over the 5000 floor but T3 on a non-density gate</h3>
+<h3 class="good">Done this session (6)</h3>
 <ul>
-<li><code>7.1-terraform</code> (5059 bw, T3) — over floor, failing a non-density gate; check which.</li>
-<li><code>14.6-managed-kubernetes</code> (5658 bw, T3) — likely just <code>outcomes_aligned</code> (per s158 note); small deterministic fix.</li>
+<li>Ansible arc: <code>7.13</code>, <code>7.16</code>, <code>7.17</code> (PR #2006)</li>
+<li>Flip batch: <code>7.8-sst</code>, <code>7.11-hcp-terraform</code>, <code>14.8-edge-distros</code> (PRs #2007 + #2008)</li>
 </ul>
 
-<h3>Moderate expands (3000–4800 bw → ~+500–1700w to floor)</h3>
-<ul>
-<li>iac: <code>7.2-opentofu</code> (4203)</li>
-<li>k8s-distros: <code>14.4-talos</code> (4505), <code>14.7-rke2</code> (2914; has a gemini WRITE-log in .pipeline/reviews — NOT an approve)</li>
-<li>networking: <code>5.4-metallb</code> (4760), <code>5.5-flannel</code> (2190), <code>5.6-calico</code> (2132), <code>5.1-cilium</code> (1589), <code>5.8-multus</code> (1533), <code>5.7-kube-router</code> (1119)</li>
-<li>platforms: <code>3.5-cluster-api</code> (4609)</li>
-<li>storage: <code>16.2-minio</code> (3503, T2), <code>16.3-longhorn</code> (3300)</li>
-</ul>
-
-<h3>Heavy stubs (&lt;1000 bw → major expand)</h3>
+<h3>Remaining not-done in the section (24, board review-status axis)</h3>
+<p>Almost all are genuine <strong>expands</strong> (heavy stubs &lt;1000 bw plus a few mediums) — these need authoring, not just review. <code>5.6-calico</code> is <code>shipped_unreviewed</code> (review-then-likely-expand).</p>
 <ul>
 <li>iac: <code>7.3-pulumi</code>, <code>7.4-ansible</code>, <code>7.5-cloudformation</code>, <code>7.6-bicep</code>, <code>7.7-winglang</code>, <code>7.9-system-initiative</code>, <code>7.10-nitric</code></li>
 <li>k8s-distros: <code>14.1-k3s</code>, <code>14.2-k0s</code>, <code>14.3-microk8s</code>, <code>14.5-openshift</code></li>
