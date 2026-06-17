@@ -4,6 +4,7 @@ title: "Module 2.5: Dapr and Buildpacks — Application Definition Beyond Helm"
 slug: platform/toolkits/cicd-delivery/gitops-deployments/module-2.5-dapr-buildpacks
 sidebar:
   order: 6
+revision_pending: false
 ---
 
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 60-70 min
@@ -91,6 +92,17 @@ The thesis of this module is direct: Dapr defines runtime concerns as
 platform components; Buildpacks defines build concerns without a Dockerfile;
 together they shift application definition from "imperative template tree" to
 "declarative component graph plus declarative build."
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> **Dapr** is a CNCF **Graduated** project (graduated October 30, 2024).
+> It was accepted into CNCF on November 9, 2021 directly at the Incubating
+> maturity level, bypassing Sandbox — the first CNCF project to do so.
+> **Cloud Native Buildpacks (CNB)** is a separate CNCF **Incubating** project
+> (accepted into Sandbox on October 3, 2018, promoted to Incubating in
+> November 2020). Both projects remain actively maintained and widely used
+> in production. Dapr's current release line is v1.18 (June 2026), which
+> introduced verifiable execution support.
 
 ## 1. Helm's Unfinished Application-Definition Problem
 
