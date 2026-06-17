@@ -3,949 +3,299 @@ title: "Module 5.7: Kube-Router - The Swiss Army Knife in a Single Binary"
 slug: platform/toolkits/infrastructure-networking/networking/module-5.7-kube-router
 sidebar:
   order: 8
+revision_pending: false
 ---
-> **Toolkit Track** | Complexity: `[MEDIUM]` | Time: 45-55 minutes
+> **Toolkit Track** | Complexity: `[MEDIUM]` | Time: 55-70 minutes
 
-## The Bare-Metal Startup That Ditched Three Tools for One
+## Learning Outcomes
 
-*Fifteen bare-metal nodes. One overworked platform engineer. And a networking stack that was falling apart.*
-
-```
-[2 months ago]
-@platform-eng  OK so here's our stack: Flannel for CNI, kube-proxy for
-               service routing, and we manually manage iptables for
-               network policies. Three moving parts, three sets of logs,
-               three things to debug at 2 AM.
-
-@platform-eng  The real problem: kube-proxy in iptables mode. We have
-               ~600 services now. That's 12,000+ iptables rules.
-
-@platform-eng  Service routing latency: 200ms. For INTERNAL traffic.
-               Our users think the app is slow but it's the network.
-
-@cto           Can we move to the cloud?
-@platform-eng  Our budget says no.
-@cto           Can we buy a load balancer?
-@platform-eng  Our budget REALLY says no.
-
-[1 month ago]
-@platform-eng  Found kube-router. One binary. Replaces Flannel AND
-               kube-proxy. Uses IPVS instead of iptables for services.
-               Also does NetworkPolicy. All three controllers in one
-               process.
-
-@cto           That sounds too good to be true.
-@platform-eng  Migrating the staging cluster this weekend.
-
-[Monday morning]
-@platform-eng  Done. Results:
-               - IPVS service routing latency: 2ms (was 200ms)
-               - iptables rules: 47 (was 12,000+)
-               - Memory usage per node: 35MB (Flannel+kube-proxy was 180MB)
-               - Number of DaemonSets to manage: 1 (was 2)
-               - Things I have to debug at 2 AM: fewer
-
-@cto           Ship it to production.
-@platform-eng  Already did.
-```
-
-One binary. Three jobs. 100x latency improvement. That is kube-router.
-
-**What You'll Learn**:
-- Why kube-router exists and what problem it solves
-- The three-controller architecture: routes, services, policies
-- How BGP replaces overlay networks on flat L2 networks
-- IPVS service proxying and why it crushes iptables at scale
-- When kube-router is the right choice (and when it is not)
-
-**Prerequisites**:
-- Kubernetes Services and networking basics (ClusterIP, NodePort, kube-proxy)
-- [Module 5.1: Cilium](../module-5.1-cilium/) (helpful for comparison, not required)
-- Basic understanding of Linux networking (routing tables, iptables)
-- Familiarity with BGP concepts (we will explain what you need)
-
----
-
-## What You'll Be Able to Do
-
-After completing this module, you will be able to:
-
-- **Deploy kube-router as an all-in-one networking solution with routing, firewall, and service proxy**
-- **Configure kube-router's BGP-based pod networking with route redistribution to external routers**
-- **Implement IPVS-based service proxy with kube-router for high-performance load balancing**
-- **Compare kube-router's unified approach against separate CNI and kube-proxy implementations**
-
+- Explain CNI lifecycle, IPAM, plugin chaining, and Kubernetes pod-networking expectations.
+- Compare overlay networking, native Layer 3 routing, BGP route distribution, and underlay requirements.
+- Verify kube-router BGP routing, IPVS Service proxying, and NetworkPolicy enforcement.
+- Test NetworkPolicy behavior and decide when Multus, Flannel, Calico, or Cilium changes the design.
 
 ## Why This Module Matters
 
-There is a quiet revolution happening in Kubernetes networking, and it is not about eBPF or service meshes. It is about simplicity.
+Kubernetes networking can feel like three separate subjects wearing one trench coat: pod networking, Service load balancing, and NetworkPolicy enforcement. A cluster needs all three before it feels like a useful platform. Pods need routable addresses, Services need a stable virtual IP that can move traffic to changing endpoints, and teams need a way to restrict east-west traffic after workloads are running. Many production clusters split those jobs across multiple components, such as a CNI plugin for pod connectivity, kube-proxy for Services, and another policy engine for NetworkPolicy. Kube-router is interesting because it deliberately combines those jobs into one daemon, which makes it a good lens for learning the durable architecture underneath all CNI choices.
 
-Most Kubernetes clusters run at least two networking components: a CNI plugin (Calico, Flannel, Cilium) for pod-to-pod communication, and kube-proxy for Service routing. Some clusters add a third component for NetworkPolicy enforcement. That is three DaemonSets, three configuration surfaces, three sets of logs, three things that can fail independently.
+The durable lesson is not that kube-router is the right answer for every cluster. It is that every Kubernetes networking stack must answer the same questions: who assigns pod IPs, who makes those pod IPs reachable across nodes, who implements Service virtual IPs, and who enforces policy when a pod should not be allowed to talk to another pod. Kube-router answers those questions with standard Linux networking primitives: BGP for route distribution, GoBGP as the embedded BGP implementation, IPVS/LVS for Service proxying, and iptables plus ipset for NetworkPolicy. Once you understand those choices, Flannel, Calico, Cilium, and Multus become easier to compare without turning the conversation into a brand contest.
 
-Kube-router says: what if one binary did all three?
+Hypothetical scenario: imagine a small bare-metal platform team that started with Flannel because it was simple. The cluster grew, teams began asking for NetworkPolicy, and the operations team noticed that Service troubleshooting always bounced between the CNI daemon, kube-proxy, and host firewall state. One option is to add another policy component and keep kube-proxy. Another option is to choose a plugin that owns routing, policy, and Services together. Kube-router is built for that second shape: fewer moving pieces, native Layer 3 routing where the fabric can support it, and a service proxy based on a kernel load balancer instead of a long chain of iptables rules.
 
-This is not a theoretical exercise. For teams running small-to-medium bare-metal clusters on tight budgets, kube-router is a legitimate choice. It is used in production by companies that need Kubernetes networking without the overhead of Calico's multiple daemons or Cilium's kernel requirements.
+The memorable analogy is a campus mail system. An overlay network is like putting every internal letter inside a second envelope addressed to the building where the recipient sits; it is flexible because the outside mailroom only needs to know building addresses, but every letter carries extra wrapping. BGP-based routing is like teaching the campus map where every department is located, so the original envelope can travel directly to the right building without being repackaged. Kube-router chooses the map-first approach for pod traffic, then adds an in-kernel load balancer for Service addresses and firewall rules for policy.
 
-> **Did You Know?** Kube-router was one of the first CNI plugins to implement IPVS-based service proxying, beating even kube-proxy's own IPVS mode to production readiness. The kube-proxy IPVS mode was partly inspired by kube-router's proof that IPVS was viable for Kubernetes service routing.
+This module also matters because kube-router forces you to separate control plane from dataplane. BGP sessions, Kubernetes watches, and controller loops are control-plane mechanisms that decide what the node should know. Linux routes, IPVS virtual services, ipsets, and iptables chains are dataplane artifacts that affect packets. When those ideas blur together, debugging becomes guesswork. When they stay separate, you can ask precise questions: did Kubernetes record the desired state, did kube-router observe it, did the node program the expected object, and did the packet follow that object?
 
----
+The comparison habit you build here transfers to every CNI conversation. A product page may lead with a feature, but the durable decision is usually about ownership boundaries. If one component owns pod routes, another owns Services, and a third owns policy, you need a clear mental map of how their failure modes interact. If one component owns all three, you need confidence in that component's behavior and rollback path. Kube-router gives you one compact case study for both sides of that tradeoff.
 
-## Part 1: Understanding the Architecture
+## Did You Know?
 
-### One Binary, Three Controllers
+- **CNI is intentionally small**: The CNI specification focuses on adding and removing container network connectivity; Kubernetes builds a larger cluster model on top of that small interface.
+- **Kubernetes Services are not magic IPs**: A service proxy watches Services and EndpointSlices, then programs the node data plane so packets for a virtual IP reach a backing endpoint.
+- **BGP is about reachability**: In a kube-router cluster, BGP is not carrying application traffic; it is distributing route information so the Linux kernel can forward pod packets normally.
+- **NetworkPolicy needs an enforcer**: Creating a NetworkPolicy object only records intent in the API server; enforcement depends on a CNI or policy component that watches those objects and programs the dataplane.
 
-Kube-router is a single Go binary that runs as a DaemonSet on every node. Inside that binary, three independent controllers handle the three core networking concerns:
+## Part 1: The CNI Contract Under Every Plugin
 
-```
-KUBE-ROUTER ARCHITECTURE
-═══════════════════════════════════════════════════════════════════
+CNI stands for Container Network Interface, but it is better to think of it as a contract between a container runtime and executable plugins on the node. The runtime creates a pod sandbox and asks the configured CNI plugin chain to connect that sandbox to one or more networks. The plugin receives JSON configuration through stdin, runtime context through environment variables, and a command such as `ADD`, `DEL`, `CHECK`, or `VERSION`. The plugin then creates interfaces, assigns addresses, installs routes, and returns a structured result that later plugins in the chain can consume.
 
-                    ┌─────────────────────────────────┐
-                    │         Kubernetes API           │
-                    │    (watches Nodes, Services,     │
-                    │     Endpoints, NetworkPolicies)  │
-                    └──────────┬──────────────────────┘
-                               │
-                    ┌──────────▼──────────────────────┐
-                    │     kube-router (single binary)  │
-                    │                                   │
-                    │  ┌─────────────────────────────┐ │
-                    │  │  Network Routes Controller   │ │
-                    │  │  ─────────────────────────── │ │
-                    │  │  BGP peering with GoBGP      │ │
-                    │  │  Advertises pod CIDRs        │ │
-                    │  │  Programs host routing table │ │
-                    │  │  → Replaces: Flannel/CNI     │ │
-                    │  └─────────────────────────────┘ │
-                    │                                   │
-                    │  ┌─────────────────────────────┐ │
-                    │  │  Network Services Controller │ │
-                    │  │  ─────────────────────────── │ │
-                    │  │  IPVS virtual servers        │ │
-                    │  │  Load balancing algorithms   │ │
-                    │  │  Direct Server Return (DSR)  │ │
-                    │  │  → Replaces: kube-proxy      │ │
-                    │  └─────────────────────────────┘ │
-                    │                                   │
-                    │  ┌─────────────────────────────┐ │
-                    │  │  Network Policy Controller   │ │
-                    │  │  ─────────────────────────── │ │
-                    │  │  iptables + ipsets           │ │
-                    │  │  Efficient rule matching     │ │
-                    │  │  Full NetworkPolicy spec     │ │
-                    │  │  → Replaces: Calico policies │ │
-                    │  └─────────────────────────────┘ │
-                    │                                   │
-                    └──────────┬──────────────────────┘
-                               │
-                    ┌──────────▼──────────────────────┐
-                    │         Linux Kernel             │
-                    │  ┌────────┐ ┌──────┐ ┌────────┐│
-                    │  │Routing │ │ IPVS │ │iptables││
-                    │  │ Table  │ │      │ │+ipsets ││
-                    │  └────────┘ └──────┘ └────────┘│
-                    └─────────────────────────────────┘
-```
+That small contract is why very different projects can all be "CNI plugins" while doing radically different things behind the scenes. Flannel can create an overlay fabric, Calico can program routes and policy, Cilium can load eBPF programs, Multus can call other CNI plugins as delegates, and kube-router can use the standard bridge and host-local plugins on the node while its daemon handles distributed routing state. Kubernetes does not require every implementation to have the same internals; it requires the resulting pod network to satisfy the Kubernetes networking model.
 
-Each controller can be enabled or disabled independently. You can run kube-router as:
-- **Full replacement**: All three controllers (CNI + kube-proxy + NetworkPolicy)
-- **kube-proxy replacement only**: Just the Network Services Controller
-- **NetworkPolicy only**: Just the Network Policy Controller alongside your existing CNI
-- **Any combination**: Mix and match based on your needs
+The CNI lifecycle matters operationally because failure modes often appear at the boundary between pod sandbox creation and node-level networking state. When `ADD` fails, the pod may sit in `ContainerCreating` because the runtime could not attach a working interface. When `DEL` fails, stale veth interfaces, IPAM reservations, or routes can remain behind. When `CHECK` is supported and used, it lets the runtime ask whether the network attachment still matches the declared configuration. A good platform engineer treats CNI errors as node networking errors with a lifecycle, not as random pod scheduling problems.
 
-This flexibility is a killer feature. You can adopt kube-router incrementally.
+IPAM, or IP Address Management, is the part of the system that decides which pod IP a sandbox receives. Some CNI setups use `host-local` IPAM so each node allocates addresses from a node-specific CIDR; others use cluster-wide IPAM backed by Kubernetes custom resources, cloud APIs, or an external datastore. Kube-router can use the pod CIDR assigned to each node and then advertise that CIDR through BGP. The important separation is that assigning an address and making that address reachable are different jobs, even though some products package both jobs together.
 
-### How It Watches the API Server
+CNI plugin chaining is another durable idea. A primary plugin may create the interface and assign the IP, while helper plugins add port mapping, bandwidth shaping, firewall behavior, or additional interfaces. Multus uses this idea more explicitly by acting as a meta-plugin that attaches multiple networks to a pod. Kube-router sits in the primary networking conversation because it can provide cluster pod routing, but you still need to understand chaining because Kubernetes nodes often combine a main CNI with loopback, portmap, tuning, or multi-network plugins.
 
-All three controllers share a single connection to the Kubernetes API server. They watch:
+## Part 2: The Kubernetes Pod-Networking Model
 
-- **Nodes**: To learn about peer nodes and their pod CIDRs
-- **Services and EndpointSlices**: To program IPVS virtual servers
-- **NetworkPolicies**: To generate iptables rules
-- **Pods**: To map pod IPs to nodes for routing decisions
+Kubernetes expects a flat pod network from the point of view of workloads. Every pod gets its own IP address, containers inside a pod share that network namespace, and pods should be able to communicate with other pods directly across nodes unless a NetworkPolicy or another intentional control blocks the connection. The packet may travel through tunnels, route tables, bridges, eBPF programs, or cloud networking devices, but the application should not have to know which node hosts the other pod or which host port maps to the container port.
 
-One watch connection, one binary, one DaemonSet. Compare that to Calico, which runs `calico-node`, `calico-kube-controllers`, and optionally `calico-typha` -- three separate processes with their own API watchers.
+This model is different from the classic Docker-on-one-host model where port publishing and host NAT were the normal way to expose containers. Kubernetes Services handle stable virtual addressing for groups of pods, while the pod network handles direct endpoint reachability. That distinction is central to debugging. If a pod cannot reach another pod IP, you look at the pod network and CNI dataplane. If a pod can reach endpoint IPs but not a ClusterIP, you look at the service proxy path. If the connection works until policy is applied, you look at NetworkPolicy selectors and enforcement state.
 
-> **Did You Know?** Kube-router uses GoBGP, a pure Go implementation of BGP written by the team at NTT Communications. GoBGP supports the full BGP specification (RFC 4271) and is also used by other networking projects like MetalLB and Cilium for their BGP implementations.
+Kubernetes itself does not prescribe one dataplane. The API server stores pods, nodes, Services, EndpointSlices, and NetworkPolicies, but it does not push every route or firewall rule into the kernel. Node agents watch the API and reconcile local state. Kube-proxy is the traditional Service agent. CNI daemons or policy controllers are the pod-network and firewall agents. Kube-router combines several of these watches into one process, but the control-loop pattern is the same: observe desired state from Kubernetes, compare it with local Linux state, then repair drift.
 
----
+The model also explains why "no NAT between pods" matters. If pod A connects to pod B by pod IP, pod B should see pod A's pod IP as the source, not the node IP after masquerading. Preserving pod identity makes logs, policy, and debugging more understandable. Some egress paths still use NAT when traffic leaves the cluster, and some Service paths may rewrite addresses depending on traffic policy, but the core pod-to-pod model is direct IP reachability. CNI choices are mostly different ways to deliver that promise over imperfect real networks.
 
-## Part 2: BGP Routing (Network Routes Controller)
+## Part 3: Overlay, Native Layer 3 Routing, and Underlay Integration
 
-### The Overlay Tax
+The first major CNI design fork is whether the cluster hides pod networks behind an overlay or teaches the physical network how to reach pod CIDRs. Overlay networking encapsulates the original pod packet inside another packet whose outer source and destination are node IPs. VXLAN and IP-in-IP are common examples. The underlay only needs to route node IPs, so overlays are easy to deploy in networks that do not know anything about pod CIDRs. The tradeoff is extra packet headers, lower effective MTU, and another datapath to inspect when troubleshooting.
 
-Most CNI plugins use overlay networks. Flannel wraps every pod packet inside a VXLAN header. Calico can do either overlay or native routing. Cilium supports both.
+Native Layer 3 routing takes the opposite approach. Each node owns one or more pod CIDRs, and other nodes learn routes to those CIDRs. The original pod packet remains the packet being forwarded, and the Linux kernel sends it toward the node that owns the destination pod range. BGP is a common way to distribute those routes because it is already a routing protocol designed to exchange reachability information. Kube-router's network routes controller uses GoBGP to advertise pod CIDRs and learn peers' pod CIDRs, then installs routes into the host routing table.
 
-Overlays have a cost:
+Underlay-integrated networking goes one step further by involving routers, top-of-rack switches, cloud route tables, or a cloud-native CNI in pod reachability. The cluster may peer directly with network devices, update cloud APIs, or allocate pod IPs from the same address space that the VPC already understands. This can reduce encapsulation and make pods first-class network endpoints, but it requires stronger coordination with the network team or cloud provider. A design that works perfectly in a lab may fail in a production VPC if the fabric refuses to route arbitrary pod CIDRs.
 
-```
-OVERLAY NETWORKING (Flannel VXLAN)
-═══════════════════════════════════════════════════════════════════
+MTU is where this design fork becomes painfully concrete. Ethernet payload size is finite. If an overlay adds an outer IP header, UDP header, and VXLAN header, the inner pod packet has less room unless the physical network supports a larger MTU. If the path MTU is wrong, small requests work while larger responses fragment or disappear. Native routing avoids overlay header overhead for pod-to-pod traffic, but it requires route distribution to be correct. Kube-router's appeal is strongest when you can route pod CIDRs natively or deliberately peer with infrastructure that can.
 
-Pod A (10.244.1.5) on Node 1 → Pod B (10.244.2.8) on Node 2
+Flannel is the useful contrast. Its common VXLAN mode is intentionally simple: nodes exchange subnet lease information and encapsulate pod traffic between node IPs. That simplicity is a strength when you want a basic pod network and do not need policy enforcement in the same component. Kube-router chooses BGP and Linux routes instead, which removes the normal overlay wrapping in the direct-routing path but moves complexity into BGP session design, route filtering, and fabric compatibility. Neither model is universally superior; each pays a different operational cost.
 
-Step 1: Pod A sends packet to 10.244.2.8
-Step 2: Node 1 kernel doesn't know 10.244.2.0/24
-Step 3: Flannel catches it, wraps in VXLAN header
-        Original packet: [IP: 10.244.1.5 → 10.244.2.8] [data]
-        VXLAN packet:    [IP: 192.168.1.10 → 192.168.1.11]
-                         [VXLAN header]
-                         [IP: 10.244.1.5 → 10.244.2.8] [data]
-Step 4: Outer packet routed via physical network
-Step 5: Node 2 receives, strips VXLAN header
-Step 6: Inner packet delivered to Pod B
+## Part 4: Where Kube-Router Fits
 
-Cost: +50 bytes per packet, encap/decap CPU overhead, MTU reduction
-```
+Kube-router is an all-in-one Kubernetes networking daemon. With all major controllers enabled, it handles pod networking, Service proxying, NetworkPolicy enforcement, and a LoadBalancer IP allocator path for environments without a cloud load balancer. The durable design point is that it uses standard Linux building blocks instead of an overlay-first SDN dataplane: BGP routes for pod CIDR reachability, IPVS virtual services for Kubernetes Services, and iptables plus ipset for policy. You can also enable only selected controllers when you want kube-router to replace just one part of a stack.
 
-### Kube-Router's Approach: Just Use BGP
+The network routes controller is the part most people mean when they call kube-router an L3 CNI. Each node runs kube-router, learns the pod CIDR for that node, and advertises that route to BGP peers. By default, a small cluster can form a node-to-node mesh, where every kube-router instance peers with the others. Larger or fabric-integrated designs can use route reflectors or external routers so nodes do not all need to peer with every other node. The result should be ordinary host routes to remote pod CIDRs in the Linux routing table.
 
-If your nodes are on the same L2 network (same switch, same VLAN), you do not need an overlay. You just need every node to know "pod CIDR 10.244.2.0/24 lives on Node 2." That is a routing problem, and BGP has been solving routing problems since 1989.
+The network services controller is the kube-proxy replacement. It watches Services and EndpointSlices, then programs IPVS virtual servers and real servers so packets sent to a ClusterIP, NodePort, or supported external address are load-balanced to endpoints. This is conceptually the same job kube-proxy performs, but with a different Linux mechanism. Kube-router's service proxy is most relevant when you want IPVS behavior and you are already choosing kube-router for routing, or when you want to run only its service proxy beside another CNI after cleaning up kube-proxy state.
 
-```
-KUBE-ROUTER BGP ROUTING (No Overlay)
-═══════════════════════════════════════════════════════════════════
+The network policy controller watches namespaces, pods, and NetworkPolicy objects, then translates policy selectors into ipsets and iptables rules. ipset matters because policies usually match groups of pod IPs, not one fixed address. A selector such as `app=frontend` may match many pods, and those pods can churn as Deployments roll. Instead of writing one long firewall rule chain per pod IP, kube-router can maintain hashed sets and reference those sets from iptables. The enforcement model is standard Kubernetes NetworkPolicy, which means L3/L4 allow rules rather than application-layer authorization.
 
-Pod A (10.244.1.5) on Node 1 → Pod B (10.244.2.8) on Node 2
+Those three controllers can be enabled independently with flags such as `--run-router`, `--run-service-proxy`, and `--run-firewall`. That modularity is a practical migration tool. A team could use kube-router only for NetworkPolicy enforcement beside Flannel, only for IPVS Service proxying after removing kube-proxy, or as the full network stack in a new bare-metal cluster. The danger is accidental overlap: two components trying to own routes, Service virtual IPs, or firewall chains can create hard-to-debug behavior, so controller boundaries must be explicit.
 
-Step 1: Pod A sends packet to 10.244.2.8
-Step 2: Node 1 kernel checks routing table:
-        10.244.2.0/24 via 192.168.1.11 dev eth0  ← learned via BGP
-Step 3: Packet sent directly to Node 2's IP
-        Packet: [IP: 10.244.1.5 → 10.244.2.8] [data]
-Step 4: Node 2 receives, routes to Pod B
+## Landscape Snapshot
 
-Cost: Zero overhead. Native IP routing. Full MTU preserved.
+> **Landscape snapshot - as of 2026-06. This changes fast; verify against upstream docs before relying on specifics.**
 
-How the routes got there:
-─────────────────────────────────────────────────────────────────
-Node 1 kube-router ←──BGP──→ Node 2 kube-router
+Upstream GitHub releases show kube-router `v2.10.0` as the latest release, published on 2026-05-27. The release notes describe network policy hardening, broader IPv6 parity in the Network Routes Controller, EndpointSlice handling updates, Kubernetes client library refreshes, and GoBGP `v4.5.0` in the maintenance stack. Treat those as snapshot facts, not timeless curriculum content, and verify the release page before pinning production manifests or writing procurement documentation.
 
-"Hey, I'm responsible for 10.244.1.0/24"
-                    "Cool, I've got 10.244.2.0/24"
+The project repository is under `cloudnativelabs/kube-router`, and the upstream documentation describes kube-router as a turnkey Kubernetes networking solution built around a single DaemonSet or binary. The project documentation says current bug fixes and security patches generally target the current major.minor release, with exceptional backports handled by request. The upstream kube-router docs do not present a CNCF project maturity level for kube-router itself, so if governance status matters to your organization, verify against the CNCF project list and the current upstream repository before making a decision.
 
-Both nodes add routes to their kernel routing table.
-Done. No overlay, no encapsulation, no tunnel interfaces.
-```
+Kube-router's documented feature set includes pod networking with direct routing through BGP and GoBGP, IPVS/LVS Service proxying with scheduling options, NetworkPolicy enforcement through iptables and ipset, DSR for selected external or LoadBalancer service paths, and optional advertisement of selected Service IPs to BGP peers. Some of those features are dataplane architecture choices that will remain useful to understand for years. Specific flags, defaults, manifests, and version compatibility are volatile and belong in runbooks that are checked against current upstream docs.
 
-### Full-Mesh BGP vs Route Reflectors
+## Cross-CNI Rosetta Table
 
-By default, kube-router establishes BGP sessions between every pair of nodes (full mesh). This works great for small clusters:
+The table below compares durable capabilities, not market position. Read each row as a design question you would ask before selecting or operating a CNI stack. A plugin can be a strong fit for one row and a poor fit for another, and many real clusters combine more than one component, such as a primary CNI plus Multus for secondary interfaces.
 
-```
-FULL MESH BGP (default, good for < 50 nodes)
-═══════════════════════════════════════════════════════════════════
+| Capability | kube-router | Flannel | Calico | Cilium | Multus |
+|---|---|---|---|---|---|
+| Connectivity model | Native L3 routing with BGP for pod CIDRs; tunneling can be used for fallback cases | Simple L3 fabric, commonly VXLAN overlay between nodes | BGP routing, IP-in-IP, VXLAN, and other dataplane options depending on configuration | eBPF dataplane with encapsulation or native routing modes; BGP control plane can advertise routes outward | Meta-plugin; delegates connectivity to other CNI plugins |
+| Encapsulation posture | Avoids encapsulation on direct routed paths; overlay/tunneling is situational | Overlay is common, especially VXLAN; host-gw/direct options exist in some deployments | Can run no-encap with routable fabric or encapsulate with IP-in-IP/VXLAN | Can run overlay or native routing; exact datapath depends on configuration | No dataplane by itself; secondary networks may be bridge, macvlan, SR-IOV, or another plugin |
+| NetworkPolicy support | Standard Kubernetes NetworkPolicy through iptables, ipset, and conntrack | No built-in NetworkPolicy enforcement in the basic flannel dataplane | Kubernetes NetworkPolicy plus Calico policy APIs, depending on edition and configuration | Kubernetes NetworkPolicy plus Cilium policy features, including identity-aware and L7 options | Does not enforce policy by itself; depends on delegated plugins and network design |
+| Service handling | Optional kube-proxy replacement using IPVS/LVS virtual services | Leaves Service proxying to kube-proxy or another component | Commonly works with kube-proxy; eBPF dataplane can replace kube-proxy in supported configurations | Can fully replace kube-proxy with eBPF service load balancing | Leaves Service handling to the default network and service proxy |
+| IPAM relationship | Can use node pod CIDRs and CNI host-local behavior; advertises ownership with BGP | Allocates or records node subnet leases from a larger pod CIDR | Supports Calico IP pools and several IPAM patterns | Supports Kubernetes, cluster-scope, and cloud-integrated IPAM modes depending on environment | Delegates IPAM to the default and additional network plugins |
+| Multi-NIC workloads | Not the primary purpose; use another plugin if pods need multiple interfaces | Not the primary purpose | Possible through additional tooling, but not the core role | Possible through additional integrations, but not the core role | Core purpose: attach multiple interfaces to a pod through delegate CNI plugins |
+| Typical operating fit | Bare-metal or on-prem clusters where BGP routing, IPVS Services, and standard policy in one daemon are attractive | Simple pod connectivity where overlay simplicity matters more than built-in policy | Clusters needing flexible routing and Calico policy controls across many environments | Clusters needing eBPF dataplane features, rich observability, or advanced policy semantics | Network-function, storage, telecom, or specialized workloads needing secondary data interfaces |
+| Governance and maturity signal | CloudNativeLabs GitHub project; verify current release and governance status upstream | flannel-io GitHub project; verify current maintenance status upstream | Project Calico by Tigera; verify current version and support model upstream | CNCF Graduated project; verify feature compatibility against current Cilium docs | Kubernetes Network Plumbing Working Group project; verify current release and deployment model upstream |
 
-    Node 1 ◄─────────► Node 2
-      ▲  ╲               ╱  ▲
-      │    ╲             ╱    │
-      │      ╲         ╱      │
-      │        ╲     ╱        │
-      ▼          ╲ ╱          ▼
-    Node 4 ◄─────────► Node 3
+## Part 5: BGP Routing in Kube-Router
 
-    4 nodes = 6 BGP sessions (n*(n-1)/2)
-    10 nodes = 45 sessions
-    50 nodes = 1,225 sessions  ← getting uncomfortable
-    100 nodes = 4,950 sessions ← too many
-```
+BGP is often introduced as "the protocol of the Internet," which can make it sound too heavy for a Kubernetes cluster. For kube-router, the relevant idea is simpler: BGP speakers exchange reachability information. A node can say, "I can reach pod CIDR `10.244.2.0/24` through my node IP," and peers can install that route. The pod packet does not ride inside the BGP session. BGP is the control-plane conversation that teaches each node's kernel where to send ordinary IP packets.
 
-For larger clusters, use BGP route reflectors. A few nodes act as central hubs:
+In a full-mesh kube-router cluster, every node peers with every other node. This is easy to reason about in small clusters because there is no central route distributor. The cost is that session count grows quickly as nodes are added. Route reflectors reduce the peer count by letting ordinary nodes peer with one or more reflector nodes, which then reflect learned routes to the rest of the cluster. External peering extends the same idea beyond Kubernetes nodes, allowing routers or top-of-rack switches to learn pod or Service routes when the network team intentionally supports that design.
 
-```
-ROUTE REFLECTOR TOPOLOGY (for larger clusters)
-═══════════════════════════════════════════════════════════════════
+The routing table is the most honest debugging surface for this part of kube-router. If pod A on node one cannot reach pod B on node two, you can check whether node one has a route for node two's pod CIDR, whether the next hop is the expected node IP, whether the reverse route exists, and whether the underlay can actually deliver traffic to that next hop. BGP session state is important, but the kernel route table tells you what packets will do after the route control plane has spoken.
 
-                 ┌──────────────────┐
-                 │  Route Reflector  │
-                 │  (Node 1)        │
-                 └────────┬─────────┘
-                    ╱     │     ╲
-                 ╱        │        ╲
-              ╱           │           ╲
-    ┌────────┐    ┌───────┐    ┌────────┐
-    │ Node 2 │    │ Node 3│    │ Node 4 │
-    └────────┘    └───────┘    └────────┘
+External router peering is powerful because it can make pod CIDRs or selected Service VIPs reachable outside the cluster without a cloud load balancer. It is also where route hygiene becomes non-negotiable. You need a clear autonomous system number plan, explicit import and export policies, route filters, and agreement on what prefixes Kubernetes may advertise. Accidentally leaking pod CIDRs into the wrong network, or accepting a default route from a peer that should never provide one, can turn a CNI experiment into a fabric incident.
 
-    Each node peers only with the route reflector(s).
-    100 nodes = 100 BGP sessions (vs 4,950 in full mesh)
-```
+The native routing path is easiest when all nodes share a simple network where node IPs can reach each other and pod CIDR routes can be installed without fighting cloud provider restrictions. Clouds often have anti-spoofing, route table limits, or VPC behavior that prevents arbitrary pod IP routing unless the provider CNI is designed for it. That is why overlay plugins remain useful. A durable CNI decision starts with the fabric, not the plugin logo: can this network route pod CIDRs, and who owns that route table?
 
-Configure route reflectors with annotations:
+## Part 6: Service Proxying with IPVS/LVS
+
+Kubernetes Services solve a different problem from pod routing. Pod IPs are ephemeral, but clients need a stable address for a logical application. A Service gives clients a virtual IP and port, while EndpointSlices describe the current backend endpoints. A service proxy watches those objects and programs the node dataplane so packets to the virtual IP are redirected or load-balanced to real endpoints. Kube-proxy is the standard implementation, but Kubernetes explicitly allows alternative service proxy implementations, and kube-router's network services controller is one of those alternatives.
+
+In iptables mode, kube-proxy programs chains of netfilter rules. That mode is widely understood and works well for many clusters, but each Service and endpoint adds rule state that must be synchronized. The Kubernetes IPVS deep dive explains the scale motivation: large numbers of Services and endpoints create many iptables records, and updating those chains can become expensive. The key point is not a made-up latency number; it is the data structure difference. iptables is rule-chain oriented, while IPVS is a kernel load balancer designed around virtual services, real servers, and scheduling algorithms.
+
+IPVS, or IP Virtual Server, implements Layer 4 load balancing inside the Linux kernel. Kube-router configures each Kubernetes Service as an IPVS virtual service and each endpoint as a real server. When a packet arrives for the Service virtual IP, IPVS selects a backend using a scheduling algorithm such as round robin, least connection, source hashing, destination hashing, shortest expected delay, or never queue. That makes Service behavior easier to inspect with `ipvsadm` because you can see virtual services and real servers directly.
+
+Kube-router's IPVS proxy should not be understood as "faster because the module says so." The defensible claim is that IPVS was designed for load balancing and uses more appropriate data structures for Service lookup and scheduling than large linear firewall chains. The practical result is often better scaling behavior in clusters with many Services or endpoints, but you still need to test your workload, kernel, conntrack settings, and Service traffic patterns. Service proxy performance is affected by more than the proxy mode, including DNS, endpoint churn, node CPU, and network policy rules.
+
+Direct Server Return changes the response path for specific external or LoadBalancer service scenarios. Normally, a service proxy node may receive a request, forward it to a backend pod, and remain in the response path. With DSR, kube-router can arrange for the backend to reply directly to the client, bypassing the service proxy on the return leg. That can be valuable for asymmetric traffic patterns where responses are much larger than requests, but it also comes with requirements around external IP ranges, tunneling details, MTU, port mapping, and workload compatibility.
+
+There is one migration rule worth repeating: do not let kube-proxy and kube-router both own the same Service dataplane. If you use kube-router as the service proxy, remove or disable kube-proxy according to a tested plan, clean up old rules where appropriate, and verify IPVS state after the change. If you only want kube-router for routing or policy, leave `--run-service-proxy=false` and keep Service ownership elsewhere. Overlapping owners can create a cluster that sometimes works, which is worse than a cluster that fails loudly.
+
+## Part 7: NetworkPolicy Through iptables and ipset
+
+NetworkPolicy is an intent API. It describes which pods are allowed to communicate with which other pods or IP blocks at L3/L4, but the API server does not enforce that policy by itself. Enforcement depends on the networking implementation watching NetworkPolicy objects, resolving selectors to current pods, and programming the dataplane. Kube-router's network policy controller does this with iptables, ipset, and conntrack, which means policy decisions are enforced by the Linux packet filter on the node.
+
+The default behavior of Kubernetes networking is allow-all traffic in a namespace until policies select pods for isolation. A default-deny policy is just a policy that selects pods and provides no allow rules for a direction. That model is easy to misunderstand because creating a policy for one app can change isolation only for selected pods and only for the directions named in `policyTypes`. Kube-router does not change those semantics; it implements the standard Kubernetes NetworkPolicy behavior with Linux primitives.
+
+ipset is the piece that keeps selector-based policies manageable. A policy may allow traffic from all pods with `app=frontend` to all pods with `app=backend`. The membership of those groups changes as pods roll, restart, and reschedule. Kube-router can maintain sets of source and destination pod IPs, then reference those sets from iptables rules. Instead of creating one rule per source-destination pair, it can use set membership lookups that better match the dynamic nature of Kubernetes labels.
+
+The limitation is that standard Kubernetes NetworkPolicy is not an application authorization system. It can match pods, namespaces, IP blocks, protocols, and ports, but it does not understand HTTP paths, JWT claims, gRPC methods, or database users. If you need L7-aware policy, DNS-aware egress controls, identity-based policy beyond the Kubernetes API, or rich flow observability, compare kube-router with Cilium, Calico policy features, or a service mesh. Kube-router's value is standard policy enforcement in the same daemon that handles routing and optional Services.
+
+Troubleshooting policy should follow the same desired-state to local-state pattern as routing. First confirm the policy selects the destination pods you think it selects. Then confirm the source selector or namespace selector matches the clients. After that, inspect kube-router logs, ipsets, and iptables chains on the node hosting the destination pod. If the expected set membership is wrong, the issue may be labels, namespaces, or controller sync. If set membership is right but packets are dropped, inspect rule order, conntrack state, and whether traffic enters the expected chain.
+
+## Part 8: Installation and Verification Patterns
+
+The safest time to choose a full kube-router stack is during cluster creation, before another CNI and kube-proxy have written a lot of persistent node state. A kubeadm-style install would skip kube-proxy if kube-router will own Services, set a pod CIDR, and apply an upstream kube-router DaemonSet that matches the desired controller combination. In an existing cluster, treat the migration as a network change: drain nodes in stages, know how to roll back, and capture route, IPVS, iptables, and CNI configuration before changing ownership.
+
+The following commands show the inspection pattern rather than a universal production manifest. Upstream manifests and flags change, so pin a tested kube-router image tag and read the current docs before applying anything to a real cluster. In a lab, you can apply the upstream all-service DaemonSet and then inspect whether nodes become ready, whether pod CIDR routes appear, whether IPVS virtual services exist, and whether NetworkPolicy changes produce ipset and iptables state. The important skill is verifying each controller's local artifact.
 
 ```bash
-# Designate nodes as route reflectors
-kubectl annotate node node1 \
-  kube-router.io/node.bgp.routereflector.cluster-id=1.0.0.1
+# Lab-only example: inspect current kube-router pods.
+kubectl -n kube-system get pods -l k8s-app=kube-router -o wide
 
-# Client nodes peer only with reflectors (configured via kube-router flags)
-# --nodes-full-mesh=false
-# --peer-router-asns=64512
-# --peer-router-ips=192.168.1.10,192.168.1.11
+# Pick one kube-router pod for host-network inspection.
+KR_POD="$(kubectl -n kube-system get pod -l k8s-app=kube-router \
+  -o jsonpath='{.items[0].metadata.name}')"
+
+# BGP-learned pod CIDR routes should appear when routing is enabled.
+kubectl -n kube-system exec "$KR_POD" -- ip route show
+
+# Service proxy ownership should be visible as IPVS virtual services.
+kubectl -n kube-system exec "$KR_POD" -- ipvsadm -Ln
+
+# NetworkPolicy enforcement should produce kube-router-related sets and rules.
+kubectl -n kube-system exec "$KR_POD" -- ipset list -name
+kubectl -n kube-system exec "$KR_POD" -- iptables -S | grep KUBE-ROUTER
 ```
 
-### When Overlays Are Still Needed
+When kube-router is installed as a full replacement, your verification should prove that all three planes work independently. Pod-to-pod traffic by pod IP proves the pod network and routes. Traffic to a Service ClusterIP proves the Service proxy path. A default-deny policy followed by a narrow allow policy proves NetworkPolicy enforcement. Do not accept "the pods are Ready" as sufficient proof, because node readiness can hide a broken Service path, and a working Service path can hide missing policy enforcement.
 
-BGP routing only works when the underlying network can route pod CIDRs. This means:
-- **Same L2 network**: Nodes on the same switch or VLAN -- BGP works perfectly
-- **Across L3 boundaries**: Nodes on different subnets -- you need either overlay or your physical routers to participate in BGP
-- **Cloud environments**: Cloud VPCs usually do not forward arbitrary IP ranges -- overlay required
-
-Kube-router supports IPIP and VXLAN overlays as fallback for cross-subnet communication. You can even mix: native routing within a subnet, overlay between subnets.
-
----
-
-## Part 3: IPVS Service Proxy (Network Services Controller)
-
-### The iptables Problem at Scale
-
-This is the core insight that makes kube-router compelling. Let's understand why iptables falls apart.
-
-When kube-proxy uses iptables mode, every Kubernetes Service gets a chain of rules. For each Service, there are rules for ClusterIP, NodePort (if applicable), and one rule per endpoint (pod). The packet must traverse these rules sequentially:
-
-```
-IPTABLES SERVICE ROUTING (kube-proxy default)
-═══════════════════════════════════════════════════════════════════
-
-Packet arrives for Service ClusterIP 10.96.0.100:80
-
-  Rule 1:  Does packet match Service A? No → next rule
-  Rule 2:  Does packet match Service B? No → next rule
-  Rule 3:  Does packet match Service C? No → next rule
-  ...
-  Rule 437: Does packet match Service D? YES!
-    → Sub-rule 1: 33% chance → endpoint 10.244.1.5:8080
-    → Sub-rule 2: 50% chance → endpoint 10.244.2.8:8080
-    → Sub-rule 3: 100% chance → endpoint 10.244.3.2:8080
-
-Performance: O(n) — every packet walks the chain.
-500 services × ~10 rules each = 5,000+ rules to traverse.
-```
-
-### IPVS: O(1) Service Routing
-
-IPVS (IP Virtual Server) is a Linux kernel module built specifically for load balancing. It uses hash tables internally, so looking up a service is O(1) regardless of how many services you have:
-
-```
-IPVS SERVICE ROUTING (kube-router)
-═══════════════════════════════════════════════════════════════════
-
-Packet arrives for Service ClusterIP 10.96.0.100:80
-
-  Step 1: Hash lookup: 10.96.0.100:80 → found!
-  Step 2: Apply scheduling algorithm (round-robin, least-connections, etc.)
-  Step 3: Forward to selected endpoint: 10.244.2.8:8080
-
-Performance: O(1) — constant time regardless of service count.
-500 services or 50,000 services — same lookup speed.
-```
-
-Here are real numbers that illustrate the difference:
-
-| Services | iptables Rules | iptables Latency | IPVS Latency | Improvement |
-|----------|---------------|------------------|--------------|-------------|
-| 100 | ~1,500 | ~1ms | ~0.1ms | 10x |
-| 500 | ~7,000 | ~5ms | ~0.1ms | 50x |
-| 1,000 | ~14,000 | ~15ms | ~0.1ms | 150x |
-| 5,000 | ~65,000 | ~100ms+ | ~0.1ms | 1000x |
-| 10,000 | ~130,000 | ~200ms+ | ~0.1ms | 2000x |
-
-The scaling characteristics are completely different. IPVS does not care how many services you have.
-
-### Scheduling Algorithms
-
-Unlike kube-proxy's iptables mode (which can only do random probability-based balancing), IPVS supports real load-balancing algorithms:
-
-| Algorithm | Flag | How It Works | Best For |
-|-----------|------|-------------|----------|
-| **Round Robin** | `rr` | Rotate through backends equally | Equal-capacity backends |
-| **Least Connection** | `lc` | Send to backend with fewest active connections | Variable request duration |
-| **Weighted Least Connection** | `wlc` | Like `lc` but respects backend weights | Mixed-capacity backends |
-| **Source Hashing** | `sh` | Same client IP always hits same backend | Session affinity |
-| **Destination Hashing** | `dh` | Same destination always uses same route | Caching proxies |
-| **Shortest Expected Delay** | `sed` | Minimizes expected delay based on connections | Latency-sensitive apps |
-| **Never Queue** | `nq` | Send to idle server, or fall back to `sed` | Avoiding request queuing |
-
-Configure the algorithm in kube-router:
-
-```bash
-# Set scheduling algorithm globally
-kube-router --run-service-proxy=true \
-            --service-proxy-scheduling-algorithm=lc
-
-# Or per-service via annotation
-kubectl annotate service my-service \
-  kube-router.io/service.scheduler=wlc
-```
-
-### Direct Server Return (DSR)
-
-This is one of kube-router's most powerful features for performance-sensitive workloads. Normally, return traffic from a backend pod travels back through the same node that received the original request. With DSR, the response goes directly to the client:
-
-```
-NORMAL SERVICE ROUTING (without DSR)
-═══════════════════════════════════════════════════════════════════
-
-Client ──request──▶ Node 1 (IPVS) ──forward──▶ Pod on Node 2
-Client ◀─response── Node 1 (IPVS) ◀─response── Pod on Node 2
-                     ▲
-                     └── Return path goes back through Node 1.
-                         Extra hop. Extra latency. Extra load
-                         on Node 1's network stack.
-
-
-DIRECT SERVER RETURN (with DSR)
-═══════════════════════════════════════════════════════════════════
-
-Client ──request──▶ Node 1 (IPVS) ──forward──▶ Pod on Node 2
-Client ◀─response────────────────────────────── Pod on Node 2
-                                                 ▲
-                     Response goes DIRECTLY back to client.
-                     Node 1 only handles the inbound packet.
-                     Response packets (often much larger than
-                     requests) bypass the proxy entirely.
-```
-
-DSR is especially valuable for:
-- **Streaming workloads**: Video, large file downloads -- response is much bigger than request
-- **High-throughput services**: Reduces load on the proxy node by ~50%
-- **Latency-sensitive paths**: Eliminates one network hop from the response
-
-Enable DSR:
-
-```bash
-kube-router --run-service-proxy=true \
-            --service-proxy-dsr=true
-```
-
-> **Did You Know?** DSR is a technique borrowed from traditional hardware load balancers like F5 and Citrix. In the hardware world, it is called "Direct Server Return" or "nPath routing." Kube-router brought this enterprise load-balancing technique to Kubernetes, making it available for free on commodity hardware.
-
----
-
-## Part 4: NetworkPolicy Enforcement (Network Policy Controller)
-
-### iptables + ipsets = Efficient Matching
-
-Kube-router implements the standard Kubernetes NetworkPolicy API using iptables rules combined with ipsets. The key insight is using ipsets for group matching rather than individual iptables rules per IP.
-
-Without ipsets:
-```bash
-# Blocking 50 IPs requires 50 individual rules:
-iptables -A INPUT -s 10.244.1.5 -j DROP
-iptables -A INPUT -s 10.244.1.6 -j DROP
-iptables -A INPUT -s 10.244.1.7 -j DROP
-# ... 47 more rules
-# Packet must check each rule sequentially
-```
-
-With ipsets:
-```bash
-# Same 50 IPs in a single hash set:
-ipset create blocked-pods hash:ip
-ipset add blocked-pods 10.244.1.5
-ipset add blocked-pods 10.244.1.6
-# ... add all IPs
-
-# One iptables rule matches the entire set:
-iptables -A INPUT -m set --match-set blocked-pods src -j DROP
-# O(1) hash lookup regardless of set size
-```
-
-Kube-router creates ipsets for each NetworkPolicy selector and references them in iptables rules. This means even with hundreds of pods matching a policy, the matching overhead stays constant.
-
-### Example: Default Deny + Allow
-
-```yaml
-# Default deny all ingress in namespace
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-ingress
-  namespace: production
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
----
-# Allow frontend to reach backend on port 8080
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-to-backend
-  namespace: production
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-    ports:
-    - protocol: TCP
-      port: 8080
-```
-
-What kube-router does behind the scenes:
-
-```bash
-# Creates ipsets for the selectors
-ipset list | grep kube-router
-# kube-router-frontend-pods: {10.244.1.5, 10.244.1.6, 10.244.2.3}
-# kube-router-backend-pods:  {10.244.2.8, 10.244.3.2}
-
-# Creates iptables rules referencing ipsets
-iptables -A KUBE-ROUTER-INPUT \
-  -m set --match-set kube-router-backend-pods dst \
-  -m set --match-set kube-router-frontend-pods src \
-  -p tcp --dport 8080 \
-  -j ACCEPT
-
-iptables -A KUBE-ROUTER-INPUT \
-  -m set --match-set kube-router-backend-pods dst \
-  -j DROP
-```
-
-This is standard Kubernetes NetworkPolicy. No custom CRDs, no vendor-specific extensions. If you later switch to Calico or Cilium, your policies work unchanged.
-
-> **Did You Know?** Kube-router was the first Kubernetes networking solution to combine all three functions -- CNI, service proxy, and network policy -- into a single binary. Before kube-router, the minimum viable networking stack required at least two components (a CNI plugin and kube-proxy), and network policies needed a third.
-
----
-
-## Part 5: Installation and Configuration
-
-### Deploying Kube-Router
-
-Kube-router runs as a DaemonSet. The deployment varies depending on which controllers you enable.
-
-#### Full Replacement (CNI + Service Proxy + NetworkPolicy)
-
-For a new cluster where kube-router handles everything:
-
-```bash
-# Step 1: Create cluster without kube-proxy
-# If using kubeadm:
-kubeadm init --pod-network-cidr=10.244.0.0/16 --skip-phases=addon/kube-proxy
-
-# Step 2: Deploy kube-router as DaemonSet
-kubectl apply -f https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm/kube-router-all-features.yaml
-```
-
-Or with a custom DaemonSet for more control:
-
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: kube-router
-  namespace: kube-system
-  labels:
-    k8s-app: kube-router
-spec:
-  selector:
-    matchLabels:
-      k8s-app: kube-router
-  template:
-    metadata:
-      labels:
-        k8s-app: kube-router
-    spec:
-      hostNetwork: true
-      tolerations:
-      - effect: NoSchedule
-        operator: Exists
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoExecute
-        operator: Exists
-      serviceAccountName: kube-router
-      containers:
-      - name: kube-router
-        image: docker.io/cloudnativelabs/kube-router:latest
-        args:
-        - --run-router=true
-        - --run-firewall=true
-        - --run-service-proxy=true
-        - --bgp-graceful-restart=true
-        - --kubeconfig=/var/lib/kube-router/kubeconfig
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: lib-modules
-          mountPath: /lib/modules
-          readOnly: true
-        - name: cni-conf-dir
-          mountPath: /etc/cni/net.d
-        - name: kubeconfig
-          mountPath: /var/lib/kube-router
-          readOnly: true
-      volumes:
-      - name: lib-modules
-        hostPath:
-          path: /lib/modules
-      - name: cni-conf-dir
-        hostPath:
-          path: /etc/cni/net.d
-      - name: kubeconfig
-        configMap:
-          name: kube-router-cfg
-```
-
-#### Service Proxy Only (Replacing kube-proxy)
-
-If you already have a CNI and just want IPVS service routing:
-
-```bash
-# Delete kube-proxy first
-kubectl -n kube-system delete ds kube-proxy
-# Clean up kube-proxy's iptables rules
-kubectl -n kube-system exec <kube-router-pod> -- kube-router --cleanup-config
-
-# Deploy kube-router with only service proxy
-# Args:
-# --run-router=false       (don't manage routes)
-# --run-firewall=false     (don't manage network policies)
-# --run-service-proxy=true (replace kube-proxy)
-```
-
-#### NetworkPolicy Only
-
-If you use Flannel (which has no NetworkPolicy support) and just want policy enforcement:
-
-```bash
-# Deploy kube-router alongside Flannel
-# Args:
-# --run-router=false         (Flannel handles routes)
-# --run-firewall=true        (enforce NetworkPolicies)
-# --run-service-proxy=false  (kube-proxy handles services)
-```
-
-### Key Configuration Flags
-
-| Flag | Default | What It Does |
-|------|---------|-------------|
-| `--run-router` | `true` | Enable BGP routing (CNI) |
-| `--run-firewall` | `true` | Enable NetworkPolicy enforcement |
-| `--run-service-proxy` | `true` | Enable IPVS service proxy |
-| `--nodes-full-mesh` | `true` | BGP full mesh between all nodes |
-| `--enable-overlay` | `false` | Use IPIP/VXLAN overlay for cross-subnet |
-| `--overlay-type` | `subnet` | `subnet` (IPIP) or `full` (always overlay) |
-| `--service-proxy-scheduling-algorithm` | `rr` | IPVS scheduling: rr, lc, wlc, sh, dh |
-| `--service-proxy-dsr` | `false` | Enable Direct Server Return |
-| `--bgp-graceful-restart` | `false` | BGP graceful restart on kube-router restart |
-| `--cluster-asn` | `64512` | BGP Autonomous System Number |
-| `--hairpin-mode` | `false` | Allow pod to reach itself via Service IP |
-| `--metrics-port` | `0` (disabled) | Prometheus metrics port |
-
-### Verifying the Installation
-
-```bash
-# Check kube-router pods are running
-kubectl -n kube-system get pods -l k8s-app=kube-router
-
-# Check BGP peering status
-kubectl -n kube-system exec <kube-router-pod> -- \
-  kube-router --show-bgp-peers
-
-# Check IPVS virtual servers
-kubectl -n kube-system exec <kube-router-pod> -- ipvsadm -Ln
-
-# Check ipsets for network policies
-kubectl -n kube-system exec <kube-router-pod> -- ipset list
-
-# Check routing table on a node
-kubectl -n kube-system exec <kube-router-pod> -- ip route show
-# You should see routes like:
-# 10.244.1.0/24 via 192.168.1.11 dev eth0 proto 17
-# 10.244.2.0/24 via 192.168.1.12 dev eth0 proto 17
-```
-
----
-
-## Part 6: When to Use Kube-Router
-
-### The Sweet Spot
-
-Kube-router shines in specific scenarios. Here is an honest assessment.
-
-**Use kube-router when:**
-
-- **Small-to-medium bare-metal clusters (5-50 nodes)**: This is kube-router's home turf. No cloud load balancer integration needed, BGP just works on L2 networks, and the single binary keeps operational overhead minimal.
-
-- **Resource-constrained environments**: Edge deployments, IoT gateways, Raspberry Pi clusters. Kube-router's single binary uses significantly less memory and CPU than Calico's multi-component stack or Cilium's eBPF infrastructure.
-
-- **Teams that value simplicity**: If your team does not need L7 policies, eBPF observability, or encryption, kube-router does the basics really well. One binary, one config, one log stream to debug.
-
-- **Flannel users who need NetworkPolicy**: Flannel does not support NetworkPolicy. Instead of migrating your entire CNI, you can add kube-router's firewall controller alongside Flannel.
-
-- **Replacing kube-proxy on any cluster**: Even if you use a different CNI, kube-router's IPVS service proxy is a solid kube-proxy replacement.
-
-**Do NOT use kube-router when:**
-
-- **Large clusters (100+ nodes)**: BGP full mesh does not scale. You can use route reflectors, but at that scale, Calico or Cilium have more mature BGP implementations with better tooling.
-
-- **You need L7 policies**: Kube-router implements standard Kubernetes NetworkPolicy only (L3/L4). If you need HTTP method/path-based policies, you need Cilium or a service mesh.
-
-- **You need eBPF-level observability**: Kube-router has no equivalent to Hubble. If you need per-flow visibility, packet drop reasons, and DNS-aware policies, Cilium is the answer.
-
-- **You need encryption**: Kube-router does not provide transparent encryption (WireGuard/IPsec). You would need a service mesh or Cilium for mTLS.
-
-- **Cloud-managed Kubernetes**: EKS, GKE, and AKS come with their own CNI and service proxy integrations. Replacing them with kube-router would lose cloud-specific features (like security group integration, VPC routing).
-
-### Comparison Table
-
-| Feature | kube-router | Calico | Cilium | Flannel |
-|---------|------------|--------|--------|---------|
-| **Architecture** | Single binary | Multiple daemons | Agent + Operator | Single binary |
-| **CNI** | Yes (BGP) | Yes (BGP/VXLAN/IPIP) | Yes (eBPF/VXLAN) | Yes (VXLAN) |
-| **Service proxy** | Yes (IPVS) | Yes (eBPF/iptables) | Yes (eBPF) | No |
-| **NetworkPolicy** | Yes (iptables/ipsets) | Yes (iptables/eBPF) | Yes (eBPF) | No |
-| **L7 policy** | No | No (basic) | Yes | No |
-| **Encryption** | No | Yes (WireGuard) | Yes (WireGuard/IPsec) | No |
-| **Observability** | Basic (metrics) | Flow logs | Hubble (rich) | None |
-| **BGP support** | Full mesh + RR | Full mesh + RR + peering | Basic BGP | No |
-| **DSR** | Yes | No | Yes | No |
-| **eBPF** | No | Optional | Core | No |
-| **Memory (per node)** | ~30-50 MB | ~100-200 MB | ~200-400 MB | ~30-50 MB |
-| **Maturity** | Medium | High | High | High |
-| **CNCF status** | Not CNCF | CNCF Graduated | CNCF Graduated | CNCF project |
-| **Best for** | Bare-metal, simple | Enterprise, hybrid | Modern, feature-rich | Development, simple |
-
----
-
-## Part 7: Monitoring and Troubleshooting
-
-### Prometheus Metrics
-
-Enable metrics by setting `--metrics-port=8080`:
-
-```bash
-kube-router --run-service-proxy=true \
-            --run-router=true \
-            --run-firewall=true \
-            --metrics-port=8080
-```
-
-Key metrics to monitor:
-
-```bash
-# BGP session status
-kube_router_bgp_session_up{neighbor="192.168.1.11"} 1
-
-# IPVS connections
-kube_router_service_proxy_ipvs_connections_total
-
-# NetworkPolicy rule count
-kube_router_firewall_iptables_rules_total
-
-# Controller sync time
-kube_router_controller_sync_duration_seconds
-```
-
-### Common Troubleshooting
-
-```bash
-# 1. Check if BGP peers are established
-kubectl -n kube-system exec <kube-router-pod> -- \
-  gobgp neighbor
-# Look for "Established" state
-
-# 2. Check if IPVS is programming services correctly
-kubectl -n kube-system exec <kube-router-pod> -- \
-  ipvsadm -Ln
-# Every ClusterIP should appear as a virtual server
-
-# 3. Verify routes are learned
-ip route show proto 17
-# Should see routes to other nodes' pod CIDRs
-
-# 4. Check iptables rules for network policies
-kubectl -n kube-system exec <kube-router-pod> -- \
-  iptables -L KUBE-ROUTER-INPUT -n -v
-# Should show rules matching your NetworkPolicies
-
-# 5. Check ipsets
-kubectl -n kube-system exec <kube-router-pod> -- \
-  ipset list -name
-# Should show sets like KUBE-ROUTER-<hash>
-
-# 6. Check kube-router logs
-kubectl -n kube-system logs -l k8s-app=kube-router --tail=50
-```
-
----
+When kube-router is installed as a partial replacement, verification must prove that disabled controllers are truly disabled. If Flannel owns pod networking and kube-router only enforces NetworkPolicy, kube-router should not be programming competing pod routes. If another CNI owns routing and kube-router only replaces kube-proxy, the route table should remain under that CNI's control while IPVS state belongs to kube-router. Partial mode is useful precisely because it narrows ownership, so your checks should confirm that narrow boundary.
 
 ## Common Mistakes
 
-| Mistake | Why It Hurts | How to Avoid |
-|---------|-------------|--------------|
-| **Forgetting to disable kube-proxy** | Both kube-proxy and kube-router try to manage IPVS/iptables rules, causing conflicts and flapping services | Always delete the kube-proxy DaemonSet and clean its rules before enabling kube-router's service proxy |
-| **Using full-mesh BGP on 100+ nodes** | BGP session count grows quadratically (n*(n-1)/2). At 100 nodes that is 4,950 sessions, causing CPU and memory pressure | Switch to route reflectors (`--nodes-full-mesh=false`) for clusters larger than 50 nodes |
-| **Enabling DSR without understanding limitations** | DSR does not work with NodePort services or when source and destination pods are on the same node (hairpin). Packets may be silently dropped | Test DSR in staging first; only enable for LoadBalancer and ClusterIP services that do not need hairpin |
-| **Not enabling `--bgp-graceful-restart`** | When kube-router restarts, BGP sessions drop and routes disappear. Pods lose connectivity for 30-90 seconds until sessions re-establish | Always set `--bgp-graceful-restart=true` to preserve routes during restarts |
-| **Mixing CNI plugins** | Running kube-router's router controller alongside Calico or Cilium's routing creates conflicting routes, breaking pod networking | Use only ONE routing solution. If you want kube-router's service proxy only, set `--run-router=false` |
-| **Forgetting IPVS kernel modules** | IPVS requires kernel modules (`ip_vs`, `ip_vs_rr`, `ip_vs_wrr`, etc.). If not loaded, kube-router silently falls back to iptables mode | Load IPVS modules at boot: `modprobe ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh` and verify with `lsmod | grep ip_vs` |
-| **Not setting `--cluster-asn` in multi-cluster** | Default ASN 64512 is the same for all clusters. If clusters share a network, BGP routes will leak between them causing cross-cluster routing chaos | Use unique ASNs per cluster: `--cluster-asn=64512` for cluster A, `--cluster-asn=64513` for cluster B |
-| **Skipping hairpin mode for self-referencing services** | Pods that call their own Service IP (common with leader election and health checks) get packets dropped | Enable `--hairpin-mode=true` if pods need to reach themselves via Service IPs |
-
----
+| Mistake | Why It Hurts | Better Approach |
+|---|---|---|
+| Running kube-router's service proxy while kube-proxy still owns Services | Two controllers can program overlapping rules and virtual service state, producing intermittent or confusing Service behavior | Decide one Service owner, disable the other, and clean up old dataplane state during a staged migration |
+| Treating BGP as a data tunnel | Teams look for encapsulated traffic in the wrong place and miss ordinary kernel route problems | Remember that BGP distributes reachability; inspect BGP sessions and the Linux routing table separately |
+| Choosing native routing when the fabric cannot route pod CIDRs | Packets leave the node with pod source or destination addresses that the network refuses to forward | Confirm underlay behavior, route-table limits, anti-spoofing rules, and external peering requirements before deployment |
+| Ignoring MTU during overlay fallback or DSR | Small probes pass while larger packets fragment or fail, especially when tunnels reduce effective payload size | Calculate MTU for the actual path, test larger payloads, and configure MSS or interface MTU deliberately |
+| Assuming NetworkPolicy is enforced because YAML exists | Kubernetes stores the policy object even if the active CNI does not enforce it | Verify with a deny-and-allow test and inspect kube-router ipsets and iptables rules on the destination node |
+| Using full-mesh BGP without a scale plan | Peer count and update chatter grow quickly as nodes are added, even though the early cluster looked simple | Plan route reflectors or external router peering before node growth makes full mesh uncomfortable |
+| Migrating a live cluster without ownership inventory | Existing CNI files, kube-proxy rules, routes, and policy chains may survive and conflict with the new design | Capture current CNI config, kube-proxy mode, route tables, IPVS state, and firewall chains before making changes |
+| Comparing CNIs by feature lists alone | A long feature matrix can hide fabric requirements, kernel requirements, operational skills, and migration risk | Compare capabilities against your network constraints, policy needs, Service ownership model, and team expertise |
 
 ## Quiz
 
 ### Question 1
-What are the three controllers inside kube-router, and which Kubernetes component does each replace?
+
+A team says, "Kube-router is a CNI, so it must be the thing that directly assigns every pod IP." What is incomplete about that statement?
 
 <details>
 <summary>Show Answer</summary>
 
-1. **Network Routes Controller** -- Replaces the CNI plugin (Flannel, Calico's routing). Uses BGP to distribute pod CIDR routes between nodes, enabling direct pod-to-pod communication without overlay networks.
-
-2. **Network Services Controller** -- Replaces kube-proxy. Uses IPVS instead of iptables for Service routing, providing O(1) lookup performance and real load-balancing algorithms.
-
-3. **Network Policy Controller** -- Replaces network policy enforcement (which Flannel lacks entirely). Uses iptables with ipsets to implement the standard Kubernetes NetworkPolicy API.
-
-Each controller can be independently enabled or disabled using `--run-router`, `--run-service-proxy`, and `--run-firewall` flags.
+The statement mixes the CNI contract, IPAM, and distributed routing into one vague label. CNI is the runtime-to-plugin interface used when a pod sandbox is attached to the network, and IPAM is the responsibility that allocates an address for that sandbox. Kube-router can participate in pod networking by using node pod CIDRs and advertising those CIDRs with BGP, but address allocation and reachability are separate concerns. A correct explanation names the plugin lifecycle, the IPAM source, and the route distribution mechanism.
 
 </details>
 
 ### Question 2
-Why does IPVS outperform iptables for service routing at scale? What is the algorithmic difference?
+
+Why does kube-router's BGP design avoid the usual VXLAN overlay overhead when native routing is possible?
 
 <details>
 <summary>Show Answer</summary>
 
-**iptables** processes rules sequentially. Every packet walks the rule chain from top to bottom until a match is found. With 5,000 services generating ~65,000 rules, every single packet must potentially traverse all 65,000 rules. This is **O(n)** where n is the number of rules.
-
-**IPVS** uses hash tables internally. When a packet arrives for a Service IP, IPVS computes a hash of the destination IP and port, then does a single lookup in its hash table. This is **O(1)** -- constant time regardless of whether you have 50 services or 50,000 services.
-
-Additionally, iptables rule updates require rewriting the entire chain (which takes seconds at scale), while IPVS can add/remove individual virtual servers atomically in milliseconds.
+In native routing mode, kube-router advertises each node's pod CIDR to peers and installs learned routes into the Linux routing table. A packet from one pod to another remains the original pod packet; the kernel forwards it toward the node that owns the destination pod CIDR. VXLAN overlay mode wraps the original packet in an outer packet addressed between node IPs, which adds headers and reduces effective MTU. Kube-router avoids that wrapping only when the underlay can actually route the pod CIDR paths.
 
 </details>
 
 ### Question 3
-Your 80-node bare-metal cluster uses kube-router with default settings. BGP CPU usage is climbing. What is happening and how do you fix it?
+
+A small bare-metal cluster uses kube-router successfully, then grows and sees BGP session management become noisy. What design change should the team evaluate before blaming Kubernetes?
 
 <details>
 <summary>Show Answer</summary>
 
-The default setting is full-mesh BGP (`--nodes-full-mesh=true`). With 80 nodes, that creates `80 * 79 / 2 = 3,160` BGP sessions. Each session requires keepalive messages, route updates, and state tracking.
-
-**Fix**: Switch to BGP route reflectors.
-
-1. Designate 2-3 nodes as route reflectors:
-```bash
-kubectl annotate node rr-node-1 \
-  kube-router.io/node.bgp.routereflector.cluster-id=1.0.0.1
-kubectl annotate node rr-node-2 \
-  kube-router.io/node.bgp.routereflector.cluster-id=1.0.0.1
-```
-
-2. Disable full mesh and configure peering:
-```bash
-kube-router --nodes-full-mesh=false \
-            --peer-router-ips=192.168.1.10,192.168.1.11
-```
-
-Now each node has only 2 BGP sessions (one per reflector) instead of 79. Total sessions: `80 * 2 = 160` instead of 3,160.
+The team should evaluate moving away from node-to-node full mesh toward route reflectors or intentional external router peering. Full mesh is simple because every node learns directly from every other node, but the number of sessions grows quickly as the cluster grows. Route reflectors reduce the number of sessions ordinary nodes maintain while still distributing pod CIDR reachability. The team should also review route filters, autonomous system numbers, graceful restart behavior, and operational monitoring before changing peering topology.
 
 </details>
 
 ### Question 4
-Explain Direct Server Return (DSR). When would you enable it, and what are its limitations?
+
+What problem does kube-router's IPVS service proxy solve, and what claim should you avoid making without testing?
 
 <details>
 <summary>Show Answer</summary>
 
-**DSR** changes the return path for service traffic. Normally, response packets travel back through the IPVS node that received the original request. With DSR, the backend pod sends its response directly to the client, bypassing the proxy node entirely.
-
-**When to enable DSR**:
-- Streaming or download-heavy workloads where response packets are much larger than requests
-- High-throughput services where the proxy node becomes a bottleneck
-- Latency-sensitive paths where eliminating the extra hop matters
-
-**Limitations**:
-- Does not work with NodePort services (the client expects a response from the node's IP)
-- Hairpin traffic (pod reaching itself via Service IP) will not work
-- Backend pods must be able to route directly to the client (which is usually fine within a cluster)
-- Health checks from the proxy node may not work as expected since the response does not return through IPVS
-- Not compatible with all scheduling algorithms
+The IPVS service proxy solves the Kubernetes Service virtual IP problem by programming IPVS virtual services and real servers from Service and EndpointSlice state. Compared with iptables-mode kube-proxy, IPVS is a kernel load balancer designed for virtual services, scheduling algorithms, and efficient lookup structures, while iptables mode relies on rule chains that grow with Services and endpoints. You should avoid claiming a specific latency improvement without testing your kernel, workload, endpoint count, conntrack settings, and policy state in your own environment.
 
 </details>
 
 ### Question 5
-You want to add NetworkPolicy enforcement to a cluster that uses Flannel for CNI and kube-proxy for services. How do you deploy kube-router for this use case?
+
+A cluster uses Flannel for pod connectivity and kube-proxy for Services. The team only wants standard Kubernetes NetworkPolicy. How could kube-router fit without replacing everything?
 
 <details>
 <summary>Show Answer</summary>
 
-Deploy kube-router with only the firewall controller enabled:
-
-```bash
-# In the kube-router DaemonSet args:
-args:
-- --run-router=false         # Don't touch routing (Flannel handles it)
-- --run-service-proxy=false  # Don't touch services (kube-proxy handles it)
-- --run-firewall=true        # Enable NetworkPolicy enforcement
-```
-
-This way:
-- Flannel continues to manage pod-to-pod networking via VXLAN
-- kube-proxy continues to manage Service routing via iptables
-- Kube-router watches NetworkPolicy resources and enforces them using iptables + ipsets
-
-This is a common pattern because Flannel has zero NetworkPolicy support. You get policy enforcement without migrating your entire networking stack.
+Kube-router can be run with only the firewall controller enabled, leaving routing to Flannel and Services to kube-proxy. In that mode, `--run-router=false`, `--run-service-proxy=false`, and `--run-firewall=true` express the ownership boundary. The team still needs to verify enforcement with a real deny-and-allow test and inspect kube-router's ipsets and iptables chains. The key is that partial deployment is valid only when disabled controllers truly stay out of the dataplane owned by other components.
 
 </details>
 
 ### Question 6
-A team switches from kube-proxy (iptables mode) to kube-router's IPVS service proxy. After the migration, some pods cannot reach themselves via their own Service ClusterIP. What is the issue?
+
+Why is NetworkPolicy not enforced automatically by the Kubernetes API server?
 
 <details>
 <summary>Show Answer</summary>
 
-This is the **hairpin problem**. When a pod sends traffic to its own Service ClusterIP, the packet goes to IPVS, which may load-balance it back to the same pod. The packet arrives at the pod with a source IP that is the pod's own IP, which confuses the kernel's connection tracking.
-
-**Fix**: Enable hairpin mode in kube-router:
-
-```bash
-kube-router --run-service-proxy=true \
-            --hairpin-mode=true
-```
-
-Hairpin mode configures the network bridge to allow packets to be sent back out on the same interface they arrived on. This is needed when:
-- Pods call their own Service IP (common with leader election, self-health-checks)
-- A Service has only one endpoint and that endpoint calls the Service
-
-Kube-proxy in iptables mode handles this automatically via masquerade rules, but IPVS requires explicit hairpin configuration.
+The API server stores NetworkPolicy objects as desired state, but packet filtering happens on nodes where traffic actually flows. A networking implementation must watch policies, pods, and namespaces, resolve selectors into current endpoints, and program a dataplane such as iptables, nftables, eBPF, or a cloud firewall. Kube-router uses iptables and ipset for this job. Without an enforcing CNI or policy controller, policy YAML can exist in the cluster while traffic remains allowed by the default Kubernetes networking behavior.
 
 </details>
 
----
+### Question 7
 
-## Hands-On Exercise: Deploy Kube-Router on a Kind Cluster
+What should you check before peering kube-router with external routers?
+
+<details>
+<summary>Show Answer</summary>
+
+You should check which prefixes kube-router will advertise, which prefixes it is allowed to import, what autonomous system numbers are used, and whether route filters prevent accidental default-route import or broad pod CIDR export. You should also confirm that the physical or virtual network will forward pod IP traffic symmetrically enough for your workloads, and that monitoring can distinguish BGP session failure from ordinary packet loss. External peering is a network integration project, not just a Kubernetes manifest.
+
+</details>
+
+### Question 8
+
+When would Multus appear in the same design conversation as kube-router even though it is not a replacement for kube-router?
+
+<details>
+<summary>Show Answer</summary>
+
+Multus appears when pods need more than the default Kubernetes network interface, such as a storage data network, telecom data plane, SR-IOV interface, or separated management and workload networks. Kube-router can provide the default pod network, Service proxy, and policy enforcement, while Multus acts as a meta-plugin that calls additional CNI plugins for secondary interfaces. The two tools answer different questions: kube-router can own primary cluster networking, while Multus attaches extra networks to selected pods.
+
+</details>
+
+## Hands-On Exercise
+
+This exercise is designed as an inspection lab rather than a production installation guide. You will create a disposable kind cluster without the default CNI and without kube-proxy, install kube-router from the upstream lab manifest, verify the three dataplane responsibilities, and then delete the cluster. Upstream manifests change, so use this lab to practice the mental model and consult current kube-router docs before adapting any command to a long-lived cluster.
 
 ### Objective
 
-Deploy a Kubernetes cluster with kube-router as the networking solution, verify BGP routing, test IPVS service proxying, and enforce a NetworkPolicy.
+Deploy kube-router in a local test cluster, verify that pod networking produces routes, verify that Services appear in IPVS, and verify that NetworkPolicy changes alter connectivity. The goal is not to tune BGP for a laptop; the goal is to connect Kubernetes objects to the Linux artifacts kube-router programs on each node.
 
 ### Prerequisites
 
-- `kind` installed
-- `kubectl` installed
-- `docker` installed
+- [ ] `kind` is installed and can create Docker-backed clusters
+- [ ] `kubectl` points to the kind cluster after creation
+- [ ] The host can pull images from the public registries used by kind and kube-router
+- [ ] You are using a disposable lab environment, not a shared production cluster
 
-### Part 1: Create a Cluster Without Default Networking
+### Part 1: Create a Cluster Without Default CNI or kube-proxy
+
+The cluster starts without a pod network and without kube-proxy so kube-router can own both responsibilities. Nodes may be `NotReady` until the CNI is installed, which is expected in this lab because kubelet cannot mark the pod network ready before a CNI writes valid node configuration.
 
 ```bash
-# Create a kind cluster without kube-proxy and default CNI
 cat > kind-kube-router.yaml << 'EOF'
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -961,113 +311,50 @@ nodes:
 EOF
 
 kind create cluster --config kind-kube-router.yaml --name kube-router-lab
-
-# Verify nodes are NotReady (no CNI yet)
-kubectl get nodes
-# NAME                             STATUS     ROLES           AGE   VERSION
-# kube-router-lab-control-plane    NotReady   control-plane   30s   v1.31.0
-# kube-router-lab-worker           NotReady   <none>          15s   v1.31.0
-# kube-router-lab-worker2          NotReady   <none>          15s   v1.31.0
+kubectl get nodes -o wide
 ```
 
 ### Part 2: Install Kube-Router
 
+Apply the upstream all-service DaemonSet for a lab cluster and wait for kube-router pods to become ready. For production, pin an image tag, review RBAC, review host mounts, and read the current upstream deployment guide instead of applying a moving branch manifest directly.
+
 ```bash
-# Deploy kube-router with all features enabled
 kubectl apply -f https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kube-router-all-service-daemonset.yaml
 
-# Wait for kube-router pods to be running
 kubectl -n kube-system wait --for=condition=Ready \
-  pod -l k8s-app=kube-router --timeout=120s
+  pod -l k8s-app=kube-router --timeout=180s
 
-# Verify nodes are now Ready
 kubectl get nodes
-# NAME                             STATUS   ROLES           AGE   VERSION
-# kube-router-lab-control-plane    Ready    control-plane   2m    v1.31.0
-# kube-router-lab-worker           Ready    <none>          90s   v1.31.0
-# kube-router-lab-worker2          Ready    <none>          90s   v1.31.0
 ```
 
-### Part 3: Verify BGP Routing
+### Part 3: Verify Routing and Service State
+
+These checks connect the control-plane story to the node dataplane. Routes show whether pod CIDRs are reachable through node IPs, and IPVS state shows whether Services are being represented as virtual services with real endpoint servers.
 
 ```bash
-# Check routing table on a node (via kube-router pod)
-KR_POD=$(kubectl -n kube-system get pod -l k8s-app=kube-router \
-  -o jsonpath='{.items[0].metadata.name}')
+KR_POD="$(kubectl -n kube-system get pod -l k8s-app=kube-router \
+  -o jsonpath='{.items[0].metadata.name}')"
 
-# See the BGP-learned routes (proto 17 = BGP)
-kubectl -n kube-system exec $KR_POD -- ip route show proto 17
-# Expected output like:
-# 10.244.1.0/24 via 172.18.0.3 dev eth0
-# 10.244.2.0/24 via 172.18.0.4 dev eth0
+kubectl -n kube-system exec "$KR_POD" -- ip route show
+kubectl -n kube-system exec "$KR_POD" -- ipvsadm -Ln
 ```
 
-### Part 4: Deploy Test Workloads and Verify IPVS
+### Part 4: Create a Service and Test NetworkPolicy
+
+This workload gives you one Service path and one policy path to test. The default-deny policy should block ingress to selected pods, and the allow policy should permit only the labeled client to reach the web pods on port 80.
 
 ```bash
-# Create test namespace
-kubectl create namespace test
+kubectl create namespace kr-test
 
-# Deploy a simple web server
-kubectl -n test apply -f - << 'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: web
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: web
-  template:
-    metadata:
-      labels:
-        app: web
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: web
-spec:
-  selector:
-    app: web
-  ports:
-  - port: 80
-    targetPort: 80
-EOF
+kubectl -n kr-test create deployment web --image=nginx:alpine --replicas=2
+kubectl -n kr-test expose deployment web --port=80 --target-port=80
+kubectl -n kr-test run client --image=busybox:1.36 --restart=Never -- sleep 3600
+kubectl -n kr-test wait --for=condition=Available deployment/web --timeout=90s
+kubectl -n kr-test wait --for=condition=Ready pod/client --timeout=60s
 
-# Wait for pods
-kubectl -n test wait --for=condition=Ready pod -l app=web --timeout=60s
+kubectl -n kr-test exec client -- wget -qO- --timeout=5 http://web
 
-# Check IPVS virtual servers -- the web service should appear
-kubectl -n kube-system exec $KR_POD -- ipvsadm -Ln | grep -A5 "$(kubectl -n test get svc web -o jsonpath='{.spec.clusterIP}')"
-# Expected: virtual server with 3 real servers (one per pod)
-
-# Deploy a client pod and test connectivity
-kubectl -n test run client --image=busybox:1.36 --restart=Never -- sleep 3600
-kubectl -n test wait --for=condition=Ready pod/client --timeout=30s
-
-# Test service routing
-kubectl -n test exec client -- wget -qO- http://web
-# Should return nginx welcome page
-echo "Service routing via IPVS works!"
-```
-
-### Part 5: Test NetworkPolicy Enforcement
-
-```bash
-# First, verify the client can reach the web service
-kubectl -n test exec client -- wget -qO- --timeout=5 http://web > /dev/null 2>&1 \
-  && echo "BEFORE POLICY: client -> web: ALLOWED"
-
-# Apply a default deny policy
-kubectl -n test apply -f - << 'EOF'
+kubectl -n kr-test apply -f - << 'EOF'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1078,12 +365,12 @@ spec:
   - Ingress
 EOF
 
-# Test again -- should be blocked
-kubectl -n test exec client -- wget -qO- --timeout=5 http://web > /dev/null 2>&1 \
-  || echo "AFTER DENY: client -> web: BLOCKED (expected!)"
+kubectl -n kr-test exec client -- wget -qO- --timeout=5 http://web \
+  && echo "unexpected allow" || echo "blocked as expected"
 
-# Now allow traffic from client to web
-kubectl -n test apply -f - << 'EOF'
+kubectl -n kr-test label pod client access=web
+
+kubectl -n kr-test apply -f - << 'EOF'
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1098,72 +385,80 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          run: client
+          access: web
     ports:
     - protocol: TCP
       port: 80
 EOF
 
-# Test again -- should work now
-kubectl -n test exec client -- wget -qO- --timeout=5 http://web > /dev/null 2>&1 \
-  && echo "AFTER ALLOW: client -> web: ALLOWED (policy working!)"
-
-# Deploy a second client that should NOT have access
-kubectl -n test run unauthorized --image=busybox:1.36 --restart=Never -- sleep 3600
-kubectl -n test wait --for=condition=Ready pod/unauthorized --timeout=30s
-
-kubectl -n test exec unauthorized -- wget -qO- --timeout=5 http://web > /dev/null 2>&1 \
-  || echo "UNAUTHORIZED: unauthorized -> web: BLOCKED (policy enforced!)"
+kubectl -n kr-test exec client -- wget -qO- --timeout=5 http://web
 ```
 
-### Part 6: Inspect What Kube-Router Created
+### Part 5: Inspect What Changed
+
+After the workload and policies exist, inspect the Linux state again. You should be able to connect the Service to an IPVS virtual server and connect the NetworkPolicy to kube-router-created sets and firewall chains. Exact names can vary by version, so inspect patterns rather than memorizing one chain name from a lab.
 
 ```bash
-# Check ipsets created for the NetworkPolicy
-kubectl -n kube-system exec $KR_POD -- ipset list -name 2>/dev/null | head -20
-
-# Check iptables rules
-kubectl -n kube-system exec $KR_POD -- \
-  iptables -L -n -v 2>/dev/null | grep -A5 "KUBE-ROUTER" | head -30
-
-# Check the number of IPVS services
-kubectl -n kube-system exec $KR_POD -- \
-  ipvsadm -Ln --stats 2>/dev/null | head -20
+kubectl -n kube-system exec "$KR_POD" -- ipvsadm -Ln
+kubectl -n kube-system exec "$KR_POD" -- ipset list -name | grep KUBE
+kubectl -n kube-system exec "$KR_POD" -- iptables -S | grep KUBE-ROUTER
 ```
 
 ### Success Criteria
 
-- [ ] Cluster nodes reach `Ready` status with kube-router as CNI
-- [ ] BGP routes visible in routing table (`ip route show proto 17`)
-- [ ] IPVS virtual servers created for the `web` Service
-- [ ] Client pod can reach `web` Service via ClusterIP
-- [ ] Default deny policy blocks all ingress traffic
-- [ ] Specific allow policy permits `client` to reach `web`
-- [ ] Unauthorized pod remains blocked by NetworkPolicy
+- [ ] Nodes become `Ready` after kube-router is installed
+- [ ] Pod-to-pod routing works by direct pod IP or through the test Service
+- [ ] `ipvsadm -Ln` shows virtual service state for Kubernetes Services
+- [ ] The default-deny policy blocks the unlabeled client path
+- [ ] The allow policy restores access for the labeled client
+- [ ] `ipset` and `iptables` inspection shows kube-router policy artifacts
+- [ ] The lab cluster is deleted after testing
 
 ### Cleanup
 
 ```bash
 kind delete cluster --name kube-router-lab
+rm -f kind-kube-router.yaml
 ```
 
----
+## Key Takeaways
 
-## Further Reading
+Kube-router is most useful as a teaching case because it exposes the three jobs every Kubernetes networking stack must cover. Pod networking makes pod IPs reachable, Service proxying turns stable virtual IPs into endpoint traffic, and NetworkPolicy enforcement turns API intent into node-level packet decisions. Kube-router can do all three with one daemon, but the deeper lesson is how to verify each job separately.
 
-- [Kube-Router Documentation](https://www.kube-router.io/) -- Official docs with architecture details
-- [Kube-Router GitHub](https://github.com/cloudnativelabs/kube-router) -- Source code and issue tracker
-- [IPVS-Based In-Cluster Load Balancing Deep Dive](https://kubernetes.io/blog/2018/07/09/ipvs-based-in-cluster-load-balancing-deep-dive/) -- Kubernetes blog on IPVS
-- [GoBGP Documentation](https://github.com/osrg/gobgp) -- The BGP library kube-router uses
-- [LVS Documentation](http://www.linuxvirtualserver.org/) -- Linux Virtual Server project (IPVS)
-- [BGP in the Data Center (O'Reilly)](https://www.oreilly.com/library/view/bgp-in-the/9781491983416/) -- Deep BGP knowledge for networking teams
+Native Layer 3 routing and overlay networking are tradeoffs, not moral categories. Overlay networks are easy to deploy because the underlay only needs to route node IPs, while native routing avoids encapsulation overhead when the fabric can carry pod CIDRs. Kube-router's BGP design is attractive when your network can participate in that route model, and risky when your fabric, cloud, or operations process cannot support it.
 
----
+IPVS service proxying changes the Service dataplane from rule-chain forwarding toward a kernel load-balancer model with virtual services, real servers, and scheduling algorithms. That can improve scaling characteristics compared with large iptables rule sets, but responsible engineering avoids invented benchmark claims and tests the actual workload. Service proxy ownership also must be exclusive: kube-proxy and kube-router should not both manage the same Service path.
+
+Standard Kubernetes NetworkPolicy remains L3/L4 intent even when a capable plugin enforces it well. Kube-router's iptables and ipset approach is understandable with familiar Linux tools and is enough for many segmentation needs. If you need richer policy language, built-in flow observability, or application-layer decisions, compare the capability requirements against Cilium, Calico policy features, or service mesh controls rather than expecting standard NetworkPolicy to become something it is not.
+
+## Sources
+
+- [Kube-router official site](https://www.kube-router.io/)
+- [Kube-router architecture docs](https://www.kube-router.io/docs/architecture/)
+- [Kube-router user guide](https://www.kube-router.io/docs/user-guide/)
+- [Kube-router DSR docs](https://www.kube-router.io/docs/dsr/)
+- [Kube-router GitHub repository](https://github.com/cloudnativelabs/kube-router)
+- [Kube-router release page](https://github.com/cloudnativelabs/kube-router/releases)
+- [Kube-router how-it-works docs](https://github.com/cloudnativelabs/kube-router/blob/master/docs/how-it-works.md)
+- [CNI specification](https://github.com/containernetworking/cni/blob/main/SPEC.md)
+- [Kubernetes Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/)
+- [Kubernetes Network Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/)
+- [Kubernetes NetworkPolicy docs](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+- [Kubernetes Virtual IPs and Service Proxies](https://kubernetes.io/docs/reference/networking/virtual-ips/)
+- [Kubernetes IPVS-based load balancing deep dive](https://kubernetes.io/blog/2018/07/09/ipvs-based-in-cluster-load-balancing-deep-dive/)
+- [Linux Virtual Server IPVS reference](https://kb.linuxvirtualserver.org/wiki/IPVS)
+- [GoBGP repository](https://github.com/osrg/gobgp)
+- [BGP RFC 4271](https://datatracker.ietf.org/doc/html/rfc4271)
+- [Flannel repository](https://github.com/flannel-io/flannel)
+- [Calico BGP peering docs](https://docs.tigera.io/calico/latest/networking/configuring/bgp)
+- [Calico overlay networking docs](https://docs.tigera.io/calico/latest/networking/configuring/vxlan-ipip)
+- [Cilium kube-proxy replacement docs](https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/)
+- [Cilium routing docs](https://docs.cilium.io/en/stable/network/concepts/routing/)
+- [Cilium BGP control plane docs](https://docs.cilium.io/en/stable/network/bgp-control-plane/bgp-control-plane/)
+- [Multus CNI repository](https://github.com/k8snetworkplumbingwg/multus-cni)
+- [CNCF CNI project page](https://www.cncf.io/projects/container-network-interface-cni/)
+- [CNCF announcement of Cilium graduation](https://www.cncf.io/announcements/2023/10/11/cloud-native-computing-foundation-announces-cilium-graduation/)
 
 ## Next Module
 
-Continue to [Module 5.1: Cilium](../module-5.1-cilium/) for the full-featured eBPF-powered CNI, or explore [Module 5.4: MetalLB](../module-5.4-metallb/) to pair load balancing with kube-router's BGP capabilities.
-
----
-
-*"Simplicity is the ultimate sophistication. Kube-router proves that one binary, doing three things well, can outperform three binaries each doing one thing poorly."*
+Continue to [Module 5.8: Multus](../module-5.8-multus/) to learn how Kubernetes attaches multiple networks to selected pods, or revisit [Module 5.5: Flannel](../module-5.5-flannel/) to compare overlay-first simplicity with kube-router's native Layer 3 routing model.
