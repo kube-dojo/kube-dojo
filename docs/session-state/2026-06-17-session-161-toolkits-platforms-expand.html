@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 161 — Toolkits platforms expand (backstage/crossplane/cert-manager + kubebuilder/vcluster) (#1996)</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --card:#111827; --border:#243044; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin:0; padding:2rem; max-width:1100px; }
+  h1 { font-size:1.5rem; border-bottom:2px solid var(--border); padding-bottom:.5rem; }
+  h2 { font-size:1.15rem; color:var(--accent); margin-top:2rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+  h3 { font-size:1rem; color:var(--fg); margin-top:1.3rem; }
+  code { background:#1b2433; padding:.1rem .35rem; border-radius:4px; font-size:.88em; }
+  pre { background:#1b2433; padding:1rem; border-radius:8px; overflow:auto; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.92em; }
+  th,td { border:1px solid var(--border); padding:.45rem .6rem; text-align:left; vertical-align:top; }
+  th { background:var(--card); color:var(--accent); }
+  .tldr { background:var(--card); border:1px solid var(--border); border-left:4px solid var(--accent); padding:1rem 1.2rem; border-radius:8px; }
+  .good { color:var(--good); } .warn { color:var(--warn); } .muted { color:var(--muted); }
+  ul { padding-left:1.3rem; }
+</style>
+</head>
+<body>
+<h1>Session 161 — Toolkits <code>infrastructure-networking/platforms</code> expand (IDP services + operator/multi-tenancy)</h1>
+
+<p class="muted">Date: 2026-06-17 · Branch: main · PRs: #2016 (Batch A), #2017 (Batch B), #2011 (Dependabot) · Issues filed: #2015 · Epic: #1996 · Role: standalone orchestrator</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Drove <strong>5 modules to <code>done</code></strong> in Toolkits/infrastructure-networking, completing the <strong>platforms sub-section (5/5)</strong>; section <strong>31 → 36 done / 6 not-done</strong>. Two batches, opus-inline cross-family R1 + web-verification throughout:
+<ul>
+<li><strong>Batch A — IDP services</strong> (PR #2016): 7.1-backstage / 7.2-crossplane / 7.3-cert-manager → T0. CNCF maturity web-verified all three (authors' training is stale on these).</li>
+<li><strong>Batch B — operator/multi-tenancy</strong> (PR #2017): 3.4-kubebuilder / 3.6-vcluster → T0. Both web-verified <em>not</em> CNCF projects (k8s SIG subproject / Loft Labs OSS).</li>
+</ul>
+PR hygiene: <strong>Dependabot #2011</strong> (js-yaml) merged after byte-exact integrity verification; <strong>filed #2015</strong> — the supply-chain <code>[lockfile-only]</code> marker is invisible to PR CI (reads the merge commit, not the PR head). Both consolidated PRs cherry-picked into integration worktrees, built green (2169 pages), rebase-merged, finalized via <code>finalize_module.sh</code> (COMMITTED + telemetry + APPROVE records).
+</div>
+
+<h2>What shipped — Batch A: IDP services (PR #2016)</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>Tier / prose-w / src</th><th>Cross-family review (opus-inline, web-verified)</th></tr>
+<tr><td><strong>7.1 Backstage</strong></td><td>cursor (auto)</td><td>T0 / 5000 / 13</td><td>IDP spine (catalog/scaffolding/TechDocs/plugins/portal-as-product). <strong>CNCF Incubating</strong> (accepted 2020-09-08, Incubating 2022-03-15, NOT Graduated) ✓; created by Spotify + donated to CNCF ✓; v1.52.0 ✓. War story relabeled; framework-you-self-host framed honestly.</td></tr>
+<tr><td><strong>7.2 Crossplane</strong></td><td>codex gpt-5.5</td><td>T0 / 5460 / 18</td><td>Control-plane/infra-as-API spine (reconcile vs client-side IaC, providers, Compositions/XRDs/Functions). <span class="good"><strong>CNCF Graduated 2025-10-28</strong> — codex got the RECENT promotion right</span> (training-stale "Incubating" avoided); v2.3.2 ✓; version-pinned URLs (CLI v2.3, function-patch-and-transform v0.10.7) HTTP 200. Includes meta-pedagogy on why volatile facts live in a dated snapshot.</td></tr>
+<tr><td><strong>7.3 cert-manager</strong></td><td>deepseek-v4-pro</td><td>T0 / 5099 / 11</td><td>Cert-automation spine (PKI, ACME HTTP-01 vs DNS-01, Issuer/Certificate, renewal, Ingress shim). <strong>CNCF Graduated 2024-09-29</strong> ✓; uses <code>cert-manager.io/v1</code> throughout + correctly flags the removed <code>certmanager.k8s.io</code> group ✓. (deepseek self-claimed "verbatim from brief" though the brief was not in its worktree — facts ground-checked CORRECT against the file.)</td></tr>
+</table>
+
+<h2>What shipped — Batch B: operator/multi-tenancy (PR #2017) → platforms sub-section 5/5</h2>
+<table>
+<tr><th>Module</th><th>Author</th><th>Tier / prose-w / src</th><th>Cross-family review (opus-inline, web-verified)</th></tr>
+<tr><td><strong>3.4 Kubebuilder</strong></td><td>codex gpt-5.5 + orchestrator fix</td><td>T0 / 6033 / 24</td><td>Operator-pattern/controller-runtime spine (CRD+controller, level-triggered idempotent reconcile, owner refs vs finalizers, status/conditions/observedGeneration, webhooks). <strong>NOT a standalone CNCF project — k8s SIG subproject</strong> (kubernetes-sigs/kubebuilder), Apache-2.0, v4.15.0 ✓ (cncf.io 404 confirms; states the "Kubernetes is Graduated, Kubebuilder is a sub-project" distinction precisely). <span class="warn"><strong>Fix:</strong> codex pasted the brief's locked-fact block verbatim into the snapshot, leaking authoring meta-instructions ("Do NOT label…", 'Say "verify…"', "do not invent fields") → rewrote 3 lines as learner prose, facts unchanged.</span></td></tr>
+<tr><td><strong>3.6 vCluster</strong></td><td>cursor (auto)</td><td>T0 / 5005 / 13</td><td>Multi-tenancy-spectrum spine (shared namespace → virtual cluster [own API server, syncer to host] → separate clusters; isolation/cost tradeoff). <strong>NOT a CNCF project — open-source Apache-2.0 by Loft Labs</strong> (loft-sh/vcluster), v0.35.0 ✓; OSS-core-vs-commercial-vCluster-Platform distinction named honestly; correctly removed a broken CNCF-vcluster link.</td></tr>
+</table>
+
+<h2>Web-verification scorecard (the load-bearing work)</h2>
+<p>Every CNCF/governance fact was verified against <code>cncf.io</code> project pages + the GitHub releases API <em>before</em> trusting the author. Training data (~Jan 2026) is stale on three of five:</p>
+<ul>
+<li><strong>Crossplane Graduated 2025-10-28</strong> — post-cutoff promotion; "Incubating" is the stale answer authors gravitate to. codex got it right (inline prompt hint + its own web search).</li>
+<li><strong>cert-manager Graduated 2024-09-29</strong> — also commonly mis-stated as Incubating.</li>
+<li><strong>Backstage still Incubating</strong> (since 2022-03-15) — NOT Graduated.</li>
+<li><strong>Kubebuilder &amp; vCluster are NOT CNCF projects</strong> (cncf.io 404 for both) — Kubebuilder is a Kubernetes SIG subproject; vCluster is Loft Labs OSS with a separate commercial Platform layer.</li>
+</ul>
+
+<h2>PR hygiene — Dependabot #2011 + the marker bug (#2015)</h2>
+<ul>
+<li><strong>#2011</strong> (js-yaml 4.1.1→4.2.0, a <em>transitive</em> dep) tripped the supply-chain lockfile-integrity tripwire. <strong>Integrity-verified</strong> the new hash <code>sha512-ePWsvanv…WQlOw==</code> as a byte-exact match to the official npm registry entry for js-yaml@4.2.0 (published 2026-05-31, past the 7-day cooldown) → not a poisoned tarball → rebase-merged (all 4 required checks green).</li>
+<li><span class="warn"><strong>Filed #2015:</strong></span> the <code>[lockfile-only]</code> ack marker is structurally invisible to PR CI. <code>check_lockfile_integrity.py</code> reads <code>git log -1 HEAD</code>, but on a <code>pull_request</code> event the default <code>actions/checkout</code> checks out the synthetic <strong>merge commit</strong> (<code>refs/pull/N/merge</code>, message "Merge X into Y") — the marker lives on parent-2 (the PR head), so it never suppresses the failure. A human-reviewed transitive lockfile bump can never turn <code>detect</code> green via the marker. <code>detect</code> is non-required (so we merge after manual review, as s160 did for #2005), but it is a recurring papercut. Proposed fix in the issue: scan the PR commit range for the marker (or pass <code>--head ${{ pull_request.head.sha }}</code>), plus a unit test.</li>
+</ul>
+
+<h2>Lessons / reusables</h2>
+<ul>
+<li><span class="warn"><strong>Brief files in <code>logs/remediation/briefs/</code> are gitignored → they do NOT reach author worktrees.</strong></span> Batch A authors reported the per-module brief files were "not present" and fell back to web search + the inline prompt. It worked out (all facts verified correct), but it is fragile. <strong>Fix applied mid-session for Batch B: inline the LOCKED facts directly into the dispatch prompt</strong> (not just a file path). The one critical fact I had inlined in Batch A ("Crossplane is now CNCF Graduated, not Incubating") is exactly what saved 7.2. For worktree dispatches, either commit the brief to main first or inline the facts.</li>
+<li><span class="warn"><strong>codex pastes inlined brief blocks verbatim into content.</strong></span> Given the locked facts inline, codex (kubebuilder) copied the entire block — including authoring meta-instructions ("Do NOT label…", 'Say "verify…"', "do not invent fields", "state this precisely") — into the learner-facing snapshot. cursor and deepseek rephrased into prose; codex did not. <strong>When inlining facts for codex, phrase them as the desired learner sentence, not as an instruction</strong>, and grep the output for instruction-leak phrasing (<code>do not | say " | state this precisely</code>) at review.</li>
+<li><strong>The <code>revision_pending:false</code> brief rule held</strong> — all 5 flipped to <code>done</code> on <code>finalize_module.sh</code> with no manual frontmatter flip (the s130/s160 bug stays fixed).</li>
+<li><strong>Process-liveness check gotcha:</strong> <code>ps</code> is aliased to <code>procs</code> here (rejects <code>aux</code>/<code>-A</code>). Use <code>/bin/ps -axo …</code> to see real dispatch processes — I briefly mis-diagnosed two live dispatches as dead because the alias filtered them out. The s160 rule holds: check <code>git -C &lt;wt&gt; log/status</code> (the worktree was being modified) before declaring a dispatch dead.</li>
+<li><strong>Reusables:</strong> <code>logs/remediation/briefs/platforms-idp-expand.md</code> (shared rules), <code>logs/remediation/briefs/platforms-idp/</code> (per-module specs + <code>REVIEW-TRUTH.md</code> ground-truth + <code>_finalize.sh</code> [Batch A] + <code>_finalize_mt.sh</code> [Batch B]).</li>
+</ul>
+
+<h2>State — infrastructure-networking after this session</h2>
+<p><strong>36 done / 6 not-done</strong> (platforms sub-section 5/5; iac-tools 17/17; k8s-distros 24/26). The 6 remaining are all genuine expands:</p>
+<ul>
+<li><strong>networking (3):</strong> 5.2-service-mesh, 5.3-dns-deep-dive (both heavy stubs, ~240–790 prose-w); 5.6-calico (shipped_unreviewed, ~2132w — review-then-likely-expand; already has <code>## Sources</code>).</li>
+<li><strong>k8s-distros (2):</strong> 14.5-openshift (~302 prose-w, <code>## Further Reading</code>→<code>## Sources</code>), 14.7-rke2 (~2914 prose-w + 0 sources → +2000w &amp; ≥10 src; its <code>.pipeline/reviews</code> file is a gemini write-log, NOT an approve).</li>
+<li><strong>storage (1):</strong> 16.1-rook-ceph (~302 prose-w).</li>
+</ul>
+
+<h2>Next</h2>
+<ul>
+<li><strong>#1996 infrastructure-networking</strong> — finish the last 6. Natural batches: networking (5.2/5.3/5.6) then k8s-distros (14.5/14.7) + storage (16.1). Same loop: ≤3 mixed-pool authors → opus-inline R1 → ground-check + <strong>web-verify each tool's maturity/CNCF status both ways</strong> (Calico=Tigera NOT CNCF; service-mesh covers Istio[CNCF Graduated]/Linkerd[CNCF]/Cilium-mesh; Rook=CNCF Graduated; CoreDNS=CNCF Graduated — verify all) → consolidated PR → build → finalize. <strong>Inline locked facts in the prompt</strong> (briefs are gitignored) and <strong>grep codex output for instruction-leak phrasing</strong>.</li>
+<li>Then <strong>#1911 UK</strong> currency, <strong>#1876</strong> AI-history book review.</li>
+<li>Standing admin (user/branch-protection): <strong>#2015</strong> (fix the lockfile-marker-on-PR bug), <strong>#1965</strong> make <code>Unit tests (vitest)</code> required, make <code>arXiv citation check</code> required.</li>
+<li>Latent (from s159): <code>7.1-terraform</code> has a dead Sources URL <code>/blog/terraform-announcement</code>→<code>/blog/terraform</code> (board-done, cleanup pass).</li>
+</ul>
+
+<p class="muted">Worktrees <code>.worktrees/{backstage-expand,crossplane-expand,certmgr-expand,kubebuilder-expand,vcluster-expand,platforms-idp-batch,platforms-mt-batch}</code> + branches deleted on merge. <code>g2-craft</code> worktree retained (unrelated, unmerged s104).</p>
+</body>
+</html>
