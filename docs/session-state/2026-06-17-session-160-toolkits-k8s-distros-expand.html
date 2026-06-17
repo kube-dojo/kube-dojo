@@ -26,7 +26,12 @@
 <p class="muted">Date: 2026-06-17 · Branch: main · PRs: #2010 (squash → <code>a6fa4ad2a</code> chain), #2004 + #2005 (Dependabot) · Epic: #1996 · Role: standalone orchestrator</p>
 
 <div class="tldr">
-<strong>TL;DR.</strong> Drove <strong>3 modules to <code>done</code></strong> in Toolkits/infrastructure-networking/k8s-distributions (#1996) — the lightweight-distro trio <strong>14.1-k3s / 14.2-k0s / 14.3-MicroK8s</strong>, code-heavy-but-teaching-thin stubs (~300 prose words) expanded to T0 (≥5000 prose words, durable spine + dated snapshot + cross-distro Rosetta). Section is now <strong>24 done / 18 not-done</strong> (was 21/21). Plus PR hygiene: <strong>both open Dependabot PRs merged</strong> (#2004 npm group; #2005 dompurify after integrity-verifying the tarball and clearing the supply-chain tripwire). All CI green; all 3 finalized (COMMITTED + telemetry + APPROVE records).
+<strong>TL;DR.</strong> Drove <strong>7 modules to <code>done</code></strong> in Toolkits/infrastructure-networking (#1996), section <strong>21 → 28 done / 14 not-done</strong>, plus both open Dependabot PRs merged. Two batches:
+<ul>
+<li><strong>k8s-distributions trio</strong> 14.1-k3s / 14.2-k0s / 14.3-MicroK8s (PR #2010) — code-heavy-thin stubs (~300 prose words) → T0 on the durable distro spine. <strong>Fixed deepseek's verifier-blind stale MicroK8s snap channels</strong> (1.28→1.34/1.35).</li>
+<li><strong>iac-tools cluster</strong> 7.6-bicep / 7.7-winglang / 7.9-system-initiative / 7.10-nitric (PRs #2012 + #2013) — the 4 worst-scored Toolkits modules → T0 on the "infrastructure-from-code" spine; <strong>iac-tools sub-section now 17/17 (100%)</strong>. <strong>Web-verify caught TWO discontinued projects the authors presented as live</strong> (Wing Cloud wound down 2025; System Initiative archived 2026-02) → corrected to honest illustrative framing.</li>
+</ul>
+PR hygiene: #2004 (npm group) + #2005 (dompurify, integrity-verified + lockfile-swap tripwire cleared). All CI green; all 7 finalized (COMMITTED + telemetry + APPROVE records). The s130/s160 <code>revision_pending:false</code> brief-bug was fixed in the iac-tools brief → those flipped to <code>done</code> with no manual step.
 </div>
 
 <h2>What shipped — k8s-distributions expand (PR #2010)</h2>
@@ -61,6 +66,17 @@
 <li><strong>The one real defect was verifier-blind</strong> — deepseek's MicroK8s module passed T0 + all density gates while carrying a 7-minor-version-stale channel list in a doc dated 2026-06. Only a web ground-check of the snapshot cell caught it. Confirms again: <em>verifier tier ≠ factual currency</em> on fast-moving vendor content.</li>
 </ul>
 
+<h2>What shipped — iac-tools cluster (PRs #2012 + #2013) → iac-tools 17/17 (100%)</h2>
+<p>The 4 worst-scored Toolkits modules on <code>/quality</code> (score 1.5), the "infrastructure-from-code" cluster. ~270–390-prose-word stubs → T0 on the durable IaC-evolution spine (imperative → declarative templates → infrastructure-from-application-code → model-based), each tool a worked example with volatile facts in a dated snapshot + a Bicep/Wing/Nitric·Terraform·Pulumi Rosetta.</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>Web-verified outcome</th></tr>
+<tr><td><strong>7.6 Bicep</strong></td><td>deepseek</td><td>v0.44.1 (2026-06-09) ✓, MIT/Microsoft/GA ✓ (correctly GA-despite-0.x), Azure-only ✓, no-state-file/ARM-history ✓. <strong>Fix:</strong> dropped an unverified "single engineer / side project" origin — kept the verified Anthony Martin attribution (EM for Bicep &amp; ARM Deployments + top <code>Azure/bicep</code> contributor).</td></tr>
+<tr><td><strong>7.7 Wing</strong></td><td>cursor</td><td><span class="warn">Load-bearing fix.</span> Author presented Wing Cloud as an active steward / "still evolving". Web-verified: <strong>last release v0.85.49 (2025-02-03); Wing Cloud wound down 2025</strong> (The New Stack); repo not archived but dormant. Corrected snapshot/Rosetta/stewardship to honest dormant/pre-1.0 illustrative framing.</td></tr>
+<tr><td><strong>7.9 System Initiative</strong></td><td>codex</td><td><span class="warn">Discontinued.</span> Browser-before-brief locked the status in; codex followed it AND independently re-verified — <strong><code>systeminit/si</code> archived 2026-02-06, 31/32 org repos archived, project wound down</strong>. Exemplary: model-based/digital-twin spine, "illustration not production pick", hands-on avoids the dead runtime. Adam Jacob + Mahir Lupinacci / Apache-2.0 / $18M ✓.</td></tr>
+<tr><td><strong>7.10 Nitric</strong></td><td>codex</td><td>Exemplary, no fix — every fact exact (v1.27.6 2026-02-04, CLI v1.61.1, Apache-2.0, AWS/GCP/Azure via Pulumi/Terraform, TF AWS provider = Preview). Explicitly refuses to assert funding/adoption/origin.</td></tr>
+</table>
+<p><strong>The web-verification earned its keep twice this batch.</strong> Two niche Toolkits projects — Wing and System Initiative — turned out to be <em>discontinued/dormant</em>, facts the authors' ~Jan-2026 training predates; without the ground-check both modules would have taught dead projects as thriving tools. This is the exact durable-vendor failure mode the rule targets, and the lesson for the remaining 14: <strong>web-verify every niche tool's maturity/activity both ways before trusting the author's framing.</strong></p>
+
 <h2>PR hygiene — both open Dependabot PRs merged</h2>
 <ul>
 <li><strong>#2004</strong> (npm-minor-patch group, 4 updates) — fully green incl. the required Astro build + unit tests → rebase-merged.</li>
@@ -78,18 +94,25 @@
 </ul>
 
 <h2>State — infrastructure-networking after this session</h2>
-<p><strong>24 done / 18 not-done.</strong> The 18 remaining are all genuine expands (heavy stubs &lt;1000 prose-w plus a few mediums + 1 shipped_unreviewed):</p>
+<p><strong>28 done / 14 not-done</strong> (iac-tools 17/17 done). The 14 remaining are all genuine expands (heavy stubs &lt;1000 prose-w plus a few mediums + 1 shipped_unreviewed):</p>
 <ul>
-<li><strong>iac (4):</strong> 7.6-bicep, 7.7-winglang, 7.9-system-initiative, 7.10-nitric — these 4 are the <em>worst-scored Toolkits modules on the dashboard</em> (the durable-vendor rule applies hard; these are IaC/cloud-programming tools, a natural Rosetta cluster).</li>
 <li><strong>k8s-distros (2):</strong> 14.5-openshift, 14.7-rke2 (rke2 = 2914 prose-w + 0 sources; needs +2000w &amp; ≥10 sources — its <code>.pipeline/reviews</code> file is a gemini write-log, NOT an approve).</li>
 <li><strong>networking (5):</strong> 5.2-service-mesh, 5.3-dns-deep-dive, 5.5-flannel (2190w + an <code>XXX</code> leak token + density fails), 5.7-kube-router, 5.8-multus; + <strong>5.6-calico</strong> (shipped_unreviewed, 4125w — density/structure fix-then-review).</li>
 <li><strong>platforms (5):</strong> 3.4-kubebuilder, 3.6-vcluster, 7.1-backstage, 7.2-crossplane, 7.3-cert-manager.</li>
 <li><strong>storage (1):</strong> 16.1-rook-ceph.</li>
 </ul>
 
+<h2>Lessons / reusables (this session)</h2>
+<ul>
+<li><strong><code>revision_pending:false</code> in the brief works.</strong> The k8s-distros batch's brief said "leave frontmatter intact" → all 3 stayed <code>needs_rewrite</code> until a manual flip. The iac-tools brief said "set <code>revision_pending:false</code>" → all 4 flipped to <code>done</code> on finalize with no manual step. Keep this in every expand brief.</li>
+<li><strong>Niche Toolkits projects keep turning out dormant/discontinued.</strong> Wing (wound down 2025) and System Initiative (archived 2026-02) were both presented as live by the authors' training. Browser-before-brief (web-verify the tool's repo/release/company status, lock it into the brief) is the fix — and a fab-prone author given the locked facts (codex on SI) produces exemplary honest content.</li>
+<li><strong>Content-PR merge needs a <code>## Learner check</code></strong> section (a verbatim <code>&gt; </code> blockquote ≥30 chars from a touched module) in the PR body, or the <code>block-content-merge-without-learner-check</code> hook denies the merge. Add it at PR-create time.</li>
+<li><strong>Emoji trip the anti-leak gate</strong> (⚠ tripped it; the ✅ checkmarks inside an ASCII-art box did not — but avoid emoji in prose). Use text markers.</li>
+</ul>
+
 <h2>Next</h2>
 <ul>
-<li><strong>#1996 infrastructure-networking</strong> — continue the 18-module expand drive (≤3 authors/batch, opus-inline R1, durable-vendor rule hard, set <code>revision_pending:false</code> in the brief). Natural next batch: the iac-tools cluster (7.6/7.7/7.9/7.10) or the networking CNIs (5.5/5.7/5.8). 5.6-calico is review-then-likely-expand.</li>
+<li><strong>#1996 infrastructure-networking</strong> — continue the 14-module expand drive (≤3 authors/batch, opus-inline R1, durable-vendor rule hard, set <code>revision_pending:false</code> + <code>## Further Reading</code>→<code>## Sources</code> in the brief, add a <code>## Learner check</code> to the PR body). Natural next batch: the networking CNIs (5.5/5.7/5.8 + 5.6-calico) or platforms (3.4/3.6/7.1/7.2/7.3). <strong>Web-verify each niche tool's maturity both ways</strong> before trusting the author's framing.</li>
 <li>Then <strong>#1911 UK</strong> currency, <strong>#1876</strong> AI-history book review.</li>
 <li>Standing admin (branch-protection toggles, user): <strong>#1965</strong> make <code>Unit tests (vitest)</code> required; make <code>arXiv citation check</code> required.</li>
 <li>Latent (from s159, untouched): <code>7.1-terraform</code> has a dead Sources URL <code>/blog/terraform-announcement</code>→<code>/blog/terraform</code> (board-done, cleanup pass).</li>
