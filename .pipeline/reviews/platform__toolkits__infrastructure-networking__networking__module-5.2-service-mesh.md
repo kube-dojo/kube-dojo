@@ -1,0 +1,5 @@
+## 2026-06-17T22:22:56Z — `REVIEW` — `APPROVE`
+
+**Reviewer:** opus-inline cross-family R1 (Anthropic ≠ author cursor; NO gemini) + web-verification. **PR (#1996).**
+
+Author: cursor (auto). Stub (242 body-w) → T0 (floor met, 13 src all-200). Durable service-mesh spine: data/control plane, sidecar→ambient→eBPF dataplane evolution, four pillars (traffic mgmt, security/mTLS+SPIFFE, observability, policy), GAMMA/Gateway-API convergence, when-NOT-to-adopt Decision Framework. Service Mesh Rosetta (Istio·Linkerd·Cilium). **Web-verified:** Istio/Linkerd/Cilium all CNCF **Graduated** (Jul-2023 / Jul-2021 / Oct-2023) ✓ correct dates; Istio ambient GA v1.24 ✓; current Istio 1.30.1, Linkerd 2.19 ✓. **De-fab:** unsourced "War Story" → `Hypothetical scenario:` ✓; literal `47` + emoji stripped (anti_leak T) ✓; outcomes_aligned T (the previously-uncovered traffic-splitting outcome now has a section). 8 quiz, 4 hands-on; dated 2026-06 snapshot; no leadership/market claims; `revision_pending:false`. **APPROVE.**

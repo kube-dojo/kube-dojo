@@ -1,0 +1,5 @@
+## 2026-06-17T22:22:56Z — `REVIEW` — `APPROVE`
+
+**Reviewer:** opus-inline cross-family R1 (Anthropic ≠ author deepseek; NO gemini) + web-verification (deepseek = fabrication-prone → hard ground-check). **PR (#1996).**
+
+Author: deepseek-v4-pro. Half-module (2132 body-w) → T0 (floor met, 10 src). Durable CNI/dataplane spine: CNI spec + IPAM, BGP pure-L3 vs overlay routing (Felix/Typha/BIRD), NetworkPolicy vs Calico GlobalNetworkPolicy + tiers/order, dataplanes (iptables/eBPF/nftables), WireGuard, OSS-vs-Enterprise-vs-Cloud edition split. CNI Rosetta. **CRITICAL accuracy nailed:** governance para correctly states Calico is **Tigera-stewarded, NOT a CNCF-hosted project** (no maturity tier; corporate membership ≠ project hosting) — contrasted vs Cilium-is-Graduated ✓. **Version ground-checked vs GitHub API:** deepseek's "v3.32.0" is CORRECT (latest tag, published 2026-04-30 — fresher than my snapshot; install manifest URL HTTP 200) — a web-verify-both-ways win, did NOT downgrade. 3.29 nftables dataplane ✓. 8 quiz, DYK 0→4, anti_fab/anti_leak clean; `revision_pending:false`. **APPROVE.**
