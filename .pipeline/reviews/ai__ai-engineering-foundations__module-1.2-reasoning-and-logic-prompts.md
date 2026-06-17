@@ -1,0 +1,3 @@
+## 2026-06-17T23:34:38Z — `REVIEW` — `APPROVE`
+
+**Reviewer:** codex (OpenAI) R1 + opus-inline verification + web-verify. **#2020 Wave 1.** Dense T0. **P1 found + fixed (durable-vendor rule):** volatile model/vendor landscape (OpenAI o-series, GPT-5 reasoning, Claude thinking, Gemini `thinkingBudget`/`thinkingLevel`, DeepSeek-R1) was woven through prose — moved into a dated 2026-06 Landscape snapshot with provider-neutral durable framing. All reasoning-research citations (Kojima/Wang/Zhou/Yao ToT+ReAct/DeepSeek-R1) + current API controls web-verified accurate; ReAct mini-harness executed. T0, clean. **APPROVE.**

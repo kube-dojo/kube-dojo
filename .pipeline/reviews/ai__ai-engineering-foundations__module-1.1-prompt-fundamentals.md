@@ -1,0 +1,3 @@
+## 2026-06-17T23:34:38Z — `REVIEW` — `APPROVE`
+
+**Reviewer:** codex (OpenAI) R1 + opus-inline verification (Anthropic) + web-verify. **#2020 Wave 1.** Dense T0; never previously reviewed. **P1 found + fixed:** OpenAI prompt-objects were taught as a durable provider-native option — **web-confirmed OpenAI deprecated reusable prompt objects 2026-06-03, `v1/prompts` shutdown 2026-11-30** (official migrate-from-prompt-objects guide). Fixed (cursor/codex): dated 2026-06 Landscape snapshot + reframed to repo-owned/code-managed prompt versioning as the durable pattern. Caching/XML-tag/reasoning-effort facts web-verified accurate. T0, anti-leak/fab clean. **APPROVE.**
