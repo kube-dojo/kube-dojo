@@ -457,7 +457,7 @@ The most expensive edge mistakes usually come from mismatched operating models r
 
 Continue to [Module 3.1: Dagger](../../../cicd-delivery/ci-cd-pipelines/module-3.1-dagger/) to connect cluster decisions with CI/CD execution, or return to [Module 14.1: k3s](../module-14.1-k3s/) if this landscape showed that lightweight single-node Kubernetes is the next decision to test.
 
-## References
+## Sources
 
 - [JYSK edge deployment case study](https://www.siderolabs.com/case-studies/supporting-jysks-digital-transformation-with-3400-strong-edge-deployment/)
 - [CNCF Cloud Native Glossary: Edge Computing](https://glossary.cncf.io/edge-computing/)
