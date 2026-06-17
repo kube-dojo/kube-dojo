@@ -19,7 +19,7 @@ By the end of this module, you will be able to:
 - **Design** reasoning-eliciting prompts for math, diagnosis, planning, classification, and decision tasks without turning every request into a long chain-of-thought ritual.
 - **Distinguish** reasoning prompts from reasoning models by deciding when prompt scaffolding helps an ordinary model and when a model with native thinking budget should be left to use its own internal trace.
 - **Compare** zero-shot CoT, few-shot CoT, self-consistency, least-to-most prompting, plan-and-execute, verifier prompts, ReAct, and Tree-of-Thoughts as different cost and control points.
-- **Evaluate** reasoning effort controls across Claude, OpenAI, and Gemini APIs by naming what they budget, what they do not guarantee, and when the extra latency is justified.
+- **Evaluate** native reasoning-budget controls across provider APIs by naming what they budget, what they do not guarantee, and when the extra latency is justified.
 - **Build** a small experiment that prompts one task with three reasoning strategies, compares outputs against a rubric, and records which strategy should enter a reusable prompt library.
 
 ## Why This Module Matters
@@ -34,7 +34,7 @@ The lesson was never that every prompt should expose a long scratchpad.
 
 The lesson was that some models needed an external cue to stop answering by pattern completion and begin decomposing a task.
 Modern reasoning models changed the baseline.
-OpenAI o-series models, GPT-5-series reasoning controls, DeepSeek-R1-style systems, and Claude models with thinking modes are built or served so the model can spend extra hidden or structured thinking budget before the final answer.
+Frontier providers now expose native reasoning or thinking controls, so a model can spend extra hidden or structured thinking budget before the final answer.
 
 That means the prompt engineer's job shifts from "force a chain of thought" to "choose the right reasoning surface."
 Sometimes the best prompt says "solve carefully and return only the final answer plus checks."
@@ -62,7 +62,7 @@ Hypothetical scenario: a platform team had a mature incident-triage prompt writt
 The old prompt began with a long scaffold: identify symptoms, list hypotheses, reason step by step, score each cause, revise the score after each log line, then answer.
 On the old model, that scaffold helped because it slowed the model down and forced the answer into an inspectable diagnostic shape.
 
-The team later migrated the same workflow to a Claude Sonnet deployment with thinking enabled.
+The team later migrated the same workflow to a frontier reasoning deployment with thinking enabled.
 At first, quality dropped.
 The model followed the inherited scaffold too literally, over-weighted early hypotheses, and spent visible output budget narrating checks that the new model could already perform internally.
 
@@ -101,7 +101,7 @@ It is a model family or serving mode trained and configured to spend extra compu
 
 The reasoning process may be hidden, summarized, encrypted as state, or exposed only through metadata depending on the vendor and model.
 The important control is not the phrase "think step by step."
-The important control is the model's ability to allocate reasoning compute, sometimes through an API knob such as `reasoning.effort`, `thinking.budget_tokens`, adaptive thinking, or `thinkingBudget`.
+The important control is the model's ability to allocate reasoning compute, sometimes through a native API knob that sets effort, token budget, or adaptive behavior.
 
 The distinction changes prompt design.
 On an older instruction model, a zero-shot CoT cue can convert a one-hop answer into a multi-step attempt.
@@ -279,7 +279,7 @@ If the task is a format conversion, use a schema or example rather than a reason
 
 If the model already solves the task directly with high reliability, the scaffold is mostly latency and style.
 CoT is also redundant when the model's native reasoning mode is doing the heavy work.
-For Claude thinking, OpenAI reasoning effort, and Gemini thinking budgets, the provider is already allocating hidden or structured thinking resources.
+For native thinking modes, reasoning effort settings, and thinking-budget controls, the provider is already allocating hidden or structured thinking resources.
 
 In that setting, your prompt should define the goal, constraints, evidence boundaries, and final answer shape.
 Prescribing a human-designed step list can be useful for compliance or audit, but it should be tested rather than assumed.
@@ -746,19 +746,15 @@ They do not replace task context, evidence boundaries, or evaluation.
 
 They allocate or guide additional model-side thinking budget before or during response generation.
 That budget can improve difficult reasoning tasks, but it also consumes time, tokens, context, and money.
-Anthropic's Claude docs describe extended and adaptive thinking modes.
 
-Older manual extended thinking uses a `thinking` object with a `budget_tokens` value.
-Current Claude docs also describe adaptive thinking for newer models, where the model decides when and how much to think, guided by effort and query complexity.
-Anthropic's prompting guidance explicitly prefers general thinking guidance over overly prescriptive human step lists for many extended-thinking tasks.
+Most native controls fall into three buckets: an effort level, an explicit thinking-token budget, or an adaptive mode where the model decides how much work the request deserves.
+Those controls guide model-side work, but they do not prove that the answer is correct or that the extra spend is justified.
 
-OpenAI's reasoning docs describe reasoning models that think before answering and expose controls such as `reasoning.effort` in current API guidance.
-The exact supported values vary by model generation, but the practical effect is the same: lower effort can reduce latency and reasoning-token use, while higher effort can spend more compute on difficult tasks.
-OpenAI's docs and cookbook examples also emphasize that reasoning tokens may be hidden from the user while still consuming context and budget.
-
-Gemini's API docs describe `thinkingBudget` for Gemini 2.5-series models and `thinkingLevel` for Gemini 3 models.
-The docs state that `thinkingBudget` guides the number of thinking tokens, that zero can disable thinking for supported models, and that dynamic thinking can let the model adjust budget to request complexity.
-They also warn that the model may underflow or overflow the requested budget depending on the prompt.
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> Current examples include OpenAI o-series models and GPT-5-series reasoning controls, Claude thinking modes, Gemini thinking-budget controls, and DeepSeek-R1-style reasoning systems. Gemini's API docs describe `thinkingBudget` for Gemini 2.5-series models and `thinkingLevel` for Gemini 3 models; `thinkingBudget` guides thinking-token use, zero can disable thinking for supported models, dynamic thinking can adapt budget to request complexity, and actual usage may underflow or overflow the requested budget. Treat this as a dated map for API lookup, not as the durable lesson.
+>
+> The durable lesson is to route native reasoning-budget controls with eval-backed evidence instead of assuming a provider knob improves every task.
 
 The API lesson is straightforward.
 Reasoning effort is a serving control, not a prompt incantation.
@@ -767,11 +763,11 @@ Use it when a task is hard enough that extra model computation is likely to chan
 Avoid it when the task is a simple extraction, formatting job, or lookup.
 Measure both quality and cost before making it the default.
 
-| Provider surface | What you control | What it buys | What it costs | Prompt implication |
+| Control type | What you control | What it buys | What it costs | Prompt implication |
 |---|---|---|---|---|
-| Claude extended or adaptive thinking | Thinking mode, budget, or effort depending on model | More internal reflection for hard tasks | Latency, output or thinking budget, cached thinking considerations | Prefer high-level goals and criteria before prescriptive step lists |
-| OpenAI reasoning effort | Model-native effort level for reasoning models | More or less hidden reasoning compute | Reasoning tokens, context use, latency, price | Keep visible prompt focused on task, evidence, and final answer contract |
-| Gemini thinking budget or level | Thinking tokens or model-specific thinking level | Guided reasoning budget for Gemini thinking models | Token budget variance, latency, state handling complexity | Treat budget as a hint and evaluate actual outputs |
+| Effort level | A coarse low-to-high reasoning setting | More or less hidden reasoning compute | Latency, context use, token spend, price | Keep visible prompt focused on task, evidence, and final answer contract |
+| Thinking-token budget | A maximum or target budget for internal work | More controlled internal reflection for hard tasks | Budget variance, latency, state handling complexity | Treat the budget as a hint and evaluate actual outputs |
+| Adaptive thinking mode | Permission for the model to decide when extra work is needed | Less manual routing for mixed-difficulty traffic | Less predictable spend and latency | Prefer high-level goals and criteria before prescriptive step lists |
 
 ### When Reasoning Effort Pays Off
 
