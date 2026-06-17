@@ -1,4 +1,5 @@
 ---
+revision_pending: false
 title: "Module 9.9: Seldon Core — Multi-Framework Model Serving with Inference Graphs"
 slug: module-9.9-seldon-core
 sidebar:
@@ -101,6 +102,12 @@ Core 2 is the better default when you want shared servers, Kafka-backed dataflow
 That does not make Core 2 simpler in every case.
 It adds moving parts, especially Kafka when pipelines are enabled.
 It earns those moving parts when model serving is no longer a single endpoint.
+
+The control-plane components deserve a closer look because they explain why Core 2 behaves differently from a hand-rolled Deployment. The Scheduler is the placement brain: it watches `Model`, `Server`, `Pipeline`, and `Experiment` objects, decides which server replica should load which artifact, and tracks memory reservations so shared farms do not accept more models than they can hold. The Agent runs beside each runtime pod and performs the mechanical work of downloading artifacts, loading them into MLServer or Triton, unloading evicted models, and exposing per-model metrics. When a model fails to become ready, the first signals usually appear in Agent logs rather than in the client-facing HTTP response. Envoy is the dataplane front door. It terminates inference traffic, applies routing rules for models, pipelines, and experiments, and forwards requests to the correct Agent or pipeline gateway without forcing every client to understand the internal graph. The model gateway and pipeline gateway sit behind Envoy when dataflow is enabled; they translate synchronous HTTP or gRPC calls into step execution while optional Kafka topics preserve intermediate tensors for audit, replay, or asynchronous detector paths. Understanding that split matters during incidents: a Scheduler outage may freeze new placements while already-loaded models keep serving, whereas an Envoy misconfiguration blocks all traffic immediately.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> Since **2024-01-22**, Seldon has licensed **all new releases of Seldon Core (v1 and v2) and the Alibi libraries (Alibi Explain, Alibi Detect)** under the **Business Source License (BSL 1.1)** — a source-available license, not an OSI-open-source license. Each release converts to **Apache-2.0 four years after its release date** per the license parameters in the upstream repositories. **MLServer** remains permissively open-source under Apache-2.0. **Seldon Core+** and the **Enterprise Platform** are commercial-only tiers. Non-production use of Core and Alibi under BSL is free; production use requires a commercial subscription unless your organization qualifies for Seldon's limited additional-use grant for non-profit and educational production workloads. Before adopting Seldon Core 2 or Alibi in a regulated environment, read the current [Seldon licensing FAQs](https://www.seldon.io/licensing-faqs/) and confirm which tier covers your deployment — license posture is the most durable adoption constraint for this stack today.
 
 **Pause and predict:** if you deploy ten sklearn models with nearly identical dependencies, should each one become its own Kubernetes Deployment, or should they share a Seldon `Server` farm?
 Sharing a server farm is usually the better Seldon Core 2 shape because the `Server` owns the runtime capacity and each `Model` declares requirements.
@@ -389,6 +396,8 @@ The reconciliation loop for an `Experiment` is:
 4. Inference requests route according to candidate weights.
 5. Status reflects whether the experiment is active.
 
+At the mesh layer, `Experiment` is how Seldon expresses canary, shadow, and A/B behavior without pushing routing logic into application code. A canary split assigns weighted traffic between candidate models or pipelines — for example 90% to a stable `risk-v1` and 10% to `risk-v2` — while the default endpoint name stays unchanged for downstream consumers. Shadow or mirror traffic sends a copy of live requests to a candidate path that does not return its response to the caller, which is useful when you want to compare latency, error rates, or score distributions before promoting a variant. A/B routing at this layer is declarative: weights live in Kubernetes, show up in `kubectl get experiment`, and can be rolled back by editing one resource instead of redeploying every client SDK. The tradeoff is operational visibility — you must define success metrics, monitor both arms, and know that experiment stickiness headers help route consistency but do not replace stateful-model design when replicas hold session data.
+
 ## Multi-Framework Model Loading
 
 Multi-framework serving is one of the reasons teams choose Seldon.
@@ -563,6 +572,8 @@ If model teams own runtime images independently, you will get fast experimentati
 If the platform owns all runtime images, you will get consistency and slower dependency updates.
 Many organizations split the difference: platform owns the base MLServer and Triton images, while model teams can request a reviewed dependency bundle exposed as a capability.
 
+MLServer and custom inference runtimes solve different problems, and the choice is about ownership boundaries rather than raw performance alone. MLServer is Seldon's default open-source runtime: it implements the Open Inference Protocol, loads many framework artifacts through standard model-settings files, and integrates Alibi explainers and detectors when the server image advertises the matching capabilities. That makes MLServer the low-friction path for sklearn, XGBoost, MLflow pyfunc, and many HuggingFace models when dependencies fit a reviewed base image. Custom runtimes — often Triton model repositories, bespoke Python servers, or vendor-optimized GPU images — earn their place when latency, batching, TensorRT compilation, or proprietary preprocessing cannot be expressed as a capability tag on a shared farm. The platform pattern is to keep MLServer as the default `ServerConfig` and promote a custom `Server` only after a workload proves it needs isolated drivers, non-standard libraries, or GPU shapes that would destabilize a shared pool. Model teams should not treat `storageUri` as a license to install packages at container start; runtime images belong in the platform pipeline, while artifacts stay versioned object storage paths on the `Model`.
+
 **Before running this, what output do you expect?**
 If a `Model` requests `xgboost` but no `Server` exposes `xgboost`, the model should not become ready.
 The failure is a scheduling mismatch, not an HTTP serving failure.
@@ -637,6 +648,8 @@ Walk the request through that graph:
 The important point is that the graph owns the data movement.
 If the feature normalization step changes tensor names, you update the pipeline mapping.
 You do not hide the change in a client library or a web wrapper.
+
+Think of a production inference graph as a directed acyclic pipeline rather than a single model call. A typical credit or fraud flow might chain a transformer step that normalizes raw features, a scoring model that consumes tensor outputs from that step, and a combiner or business-rules model that merges scores with policy outputs before the synchronous response returns. Each step is usually its own `Model` resource with an explicit name; the `Pipeline` CRD wires `inputs`, `tensorMap`, and optional `batch` settings so the Scheduler knows which tensors must exist before a downstream step runs. Join steps merge multiple upstream outputs when a ranker needs both user features and catalog embeddings. Conditional routes branch on tensors emitted by a router model — for example sending retail applicants to one scorer and business applicants to another — while `stepsJoin: any` ensures only the active branch contributes to the response. Detector and explainer steps often sit on side paths so monitoring and explainability observe the same normalized tensors without adding latency to the user-facing prediction. That DAG mental model is what separates a maintainable inference application from a brittle wrapper that encodes graph logic in Python middleware.
 
 ### Chains, Joins, Conditional Routing, and A/B Routing
 
@@ -920,6 +933,8 @@ If an upstream team changes categorical encoding, drift can tell you the input d
 The hard part is response policy: what happens when drift is detected?
 Good teams predefine whether to alert, shadow a fallback model, pause rollout, or start data review.
 
+Alibi Detect deserves explicit WHY-before-HOW treatment because drift and outlier signals are easy to misapply. Outlier detection answers whether a single request looks unlike training data — malformed payloads, sensor glitches, adversarial perturbations, or rare edge cases — and is most valuable when you want fast rejection or alerting before a score influences a decision. Drift detection compares batches or streams of live inputs against a reference distribution and warns when the world changed even though your pods are healthy and HTTP success rates look fine; that is the pattern that catches seasonal shifts, upstream encoding changes, and silent feature pipeline regressions. In Core 2 you deploy both as `Model` resources with `alibi-detect` requirements and place them in pipeline side paths with batching so inference latency stays predictable. The operational lesson is policy, not math: decide in advance whether drift triggers an alert, a human review queue, a paused experiment, or a route to a safer fallback model. Detectors produce evidence; platform teams still own the response playbook.
+
 ## Production Concerns: Kafka, Observability, Tenancy, and Scaling
 
 Seldon Core 2 is a platform, not a tiny library.
@@ -974,7 +989,7 @@ That can be efficient for long-tail model fleets.
 It can also add reload latency when an evicted model receives traffic.
 Use overcommit for workloads that tolerate occasional reload costs, not for strict low-latency paths.
 
-War story: a platform team placed dozens of small tabular models on a shared MLServer farm and saved a meaningful amount of cluster overhead.
+Hypothetical scenario: a platform team placed dozens of small tabular models on a shared MLServer farm and saved a meaningful amount of cluster overhead.
 Then a model team deployed one large NLP model with a low memory estimate.
 The Scheduler accepted it, but the server started evicting active models under load.
 The incident looked like random p95 latency spikes until the team correlated model load events with prediction latency.
