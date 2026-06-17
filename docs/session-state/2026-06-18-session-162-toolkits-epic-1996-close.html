@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 162 — #1996 Platform Toolkits epic CLOSED (Platform Engineering 100%)</title>
+<style>
+  body { font: 16px/1.55 -apple-system, system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #1e40af; }
+  h3 { font-size: 1rem; margin-top: 1.2rem; color: #374151; }
+  code { background: #f1f5f9; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #d1d5db; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; }
+  .done { color: #16a34a; font-weight: 600; }
+  .warn { color: #d97706; font-weight: 600; }
+  blockquote { border-left: 3px solid #94a3b8; margin: .6rem 0; padding: .2rem .8rem; background: #f8fafc; }
+  ul { margin: .4rem 0; }
+</style>
+</head>
+<body>
+<h1>Session 162 — #1996 Platform Toolkits epic CLOSED → Platform Engineering 100%</h1>
+<p><strong>Date:</strong> 2026-06-18 · <strong>Role:</strong> standalone orchestrator · <strong>Branch:</strong> main @ <code>106577b6b</code></p>
+
+<blockquote>
+<strong>Headline:</strong> Closed epic <strong>#1996</strong> (Platform Toolkits 112/112 done). With Foundations (#1897, s148) and
+Disciplines (#1953, s155) already complete, <strong>the entire Platform Engineering track is now 100% done.</strong>
+Two consolidated PRs, 13 modules touched, opus-inline cross-family R1 + web-verification throughout, both PRs 10/10 CI green.
+</blockquote>
+
+<h2>What shipped</h2>
+
+<h3>Wave A — <code>infrastructure-networking</code> section close (PR #2018, merged)</h3>
+<p>The 6 modules the s161 handoff named as "Next." All were genuine expands (stub/half → T0); none pure flips. Authored by ≤3 concurrent mixed-pool agents in own worktrees, cherry-picked → one integration worktree → build green (2169p) → rebase-merged → <code>finalize_module.sh</code> ×6.</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>From</th><th>Key fixes + web-verified facts</th></tr>
+<tr><td>5.2-service-mesh</td><td>cursor</td><td>242 bw</td><td>de-fab War Story; strip <code>47</code>/emoji; outcomes aligned. Istio/Linkerd/Cilium all CNCF <strong>Graduated</strong> (Jul-23/Jul-21/Oct-23); ambient GA v1.24; Istio 1.30.1</td></tr>
+<tr><td>5.3-dns-deep-dive</td><td>codex</td><td>794 bw</td><td>27 <code>k</code>-aliases → <code>kubectl</code>; 4→7 quizzes + hands-on. CoreDNS Graduated, default cluster DNS. (Excellent "post-office sorting desks" pedagogy)</td></tr>
+<tr><td>5.6-calico</td><td>deepseek</td><td>2132 bw</td><td><strong>Calico = Tigera-stewarded, NOT CNCF-hosted</strong> (no maturity tier). <strong>v3.32.0</strong> ground-checked correct vs GitHub API (fresher than reviewer snapshot)</td></tr>
+<tr><td>14.5-openshift</td><td>codex</td><td>302 bw</td><td>de-fab <code>$340K</code> incident + <code>47</code>. <strong>OCP 4.22</strong> (K8s 1.35) — codex web-verified ahead of snapshot, flagged "4.20-as-latest is stale"</td></tr>
+<tr><td>14.7-rke2</td><td>cursor</td><td>2914 bw, <strong>0 src</strong></td><td>+11 sources (the main gap). FIPS/CIS/air-gap spine; RKE2 v1.36; narrative properly <code>Hypothetical scenario:</code>-labeled</td></tr>
+<tr><td>16.1-rook-ceph</td><td>deepseek</td><td>302 bw</td><td>Rook CNCF <strong>Graduated</strong>; Ceph = Linux Foundation (not CNCF). Intricate <strong>ceph-csi-operator</strong> 1.20 change + ceph-csi-drivers chart ordering — verified accurate vs upstream Rook docs</td></tr>
+</table>
+
+<h3>Wave B — 7 <code>shipped_unreviewed</code> stragglers (PR #2019, merged)</h3>
+<p>The board showed 7 more Toolkits modules UNAUDITED at score 5.0 in <em>other</em> sections — dense T0 but never cross-family-reviewed and <strong>none carried a dated Landscape snapshot</strong> (durable-vendor rule applies HARD per #1996 AC4). 9.8-kserve even omitted its now-true CNCF status. Light-touch fixes (add snapshot + currency) + 2 real repairs.</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>Fix</th></tr>
+<tr><td>9.8-kserve</td><td>codex</td><td>+snapshot: <strong>CNCF Incubating 2025-09-29</strong> (was missing); v0.19.0 (Jun-2026, lab pins v0.17.0)</td></tr>
+<tr><td>9.9-seldon-core</td><td>cursor</td><td>de-fab War story; +snapshot: <strong>BSL license since 2024-01-22</strong> (Core v2 + Alibi source-available; MLServer stays Apache); floor 4660→5716</td></tr>
+<tr><td>9.10-bentoml</td><td>deepseek</td><td>+snapshot: not-CNCF; v1.4.39 (May-2026) confirmed vs GitHub/PyPI</td></tr>
+<tr><td>9.11-bare-metal-mlops</td><td>cursor</td><td>structure fix (<code>## Complexity</code> H2→blockquote, Learning Outcomes→What You'll Be Able to Do, outcomes aligned); floor→5515</td></tr>
+<tr><td>1.11-ebpf-tracing-tools</td><td>deepseek</td><td>+snapshot: per-tool maturity (Cilium/Tetragon Graduated, IG/Pixie Sandbox, bpftrace/BCC/Parca not-CNCF)</td></tr>
+<tr><td>1.12-otel-collector-production</td><td>codex</td><td>+snapshot: <strong>OTel CNCF Graduated 2026-05-21</strong> (codex found the actual CNCF announcement URL — resolved reviewer's search ambiguity); Collector v0.154.0</td></tr>
+<tr><td>2.5-dapr-buildpacks</td><td>deepseek</td><td>+snapshot: Dapr Graduated 2024-10-30; Cloud Native Buildpacks Incubating</td></tr>
+</table>
+
+<h2>Findings / lessons (for future waves)</h2>
+<ul>
+<li><strong>verify_module body_words UNDER-COUNTS vs density.py (~12%).</strong> 9.9 measured 4660 (verifier) vs 5322 (density.py) on identical content. The 2 T3 stragglers (9.9/9.11) failed the canonical <code>body_words_floor_met</code> gate despite being genuinely dense — they needed a small genuine top-up to clear the verifier's floor. <span class="warn">The briefing's flagged "verify_module paragraph under-count" is real and confirmed.</span> Worth a small tooling issue to reconcile the two counters.</li>
+<li><strong>Modules shipped outside the v2 pipeline have NO state file → <code>finalize_module.sh</code> fails "no state for &lt;slug&gt;".</strong> The 7 stragglers had only a stale <code>.json.lock</code>, no <code>.json</code>. Fix: <code>python -m scripts.quality.pipeline bootstrap</code> (idempotent — it created 178 missing states repo-wide), then <code>reset-stage … COMMITTED</code>. <code>.pipeline/quality-pipeline/</code> is gitignored so the 178 new states don't pollute git. <span class="warn">~171 OTHER repo modules also lacked pipeline state — now inducted at UNAUDITED; not a content problem, but the pipeline DB was incomplete.</span></li>
+<li><strong>Web-verify-both-ways earned its keep repeatedly.</strong> Authors' fresher data BEAT the reviewer's search snapshot 4×: Calico v3.32.0, OpenShift 4.22, KServe v0.19.0, BentoML v1.4.39 — all confirmed correct vs GitHub/PyPI, none downgraded. And codex confirmed the OTel CNCF graduation that the reviewer's own search left ambiguous.</li>
+<li><strong>Inline-locked-facts-as-learner-sentences held</strong> (no s161-style instruction-leak this session). Briefs are gitignored → won't reach worktrees → facts inlined in the prompt as the desired learner sentence, not meta-instructions.</li>
+<li><strong>Git discipline:</strong> the user's uncommitted <code>start-claude.sh</code> (headroom guard) and <code>start-codex.sh</code> (codex-default worktree→main) were left untouched all session; every commit was surgical (only owned files).</li>
+</ul>
+
+<h2>State at handoff</h2>
+<ul>
+<li><span class="done">Platform Engineering track: 100% done</span> — Foundations + Disciplines + Toolkits all COMMITTED. #1996 / #1953 / #1897 all closed.</li>
+<li>main @ <code>106577b6b</code>, pushed, clean. No open PRs. 0 worktrees left (all cleaned).</li>
+<li>Tasks #1–5 all complete.</li>
+</ul>
+
+<h2>Next (no longer Platform-Engineering)</h2>
+<ul>
+<li><strong>#1911 UK</strong> — translation currency (~14%); detector-driven calque review on new pages as bulk-translation lands. Largest remaining curriculum stream.</li>
+<li><strong>#1876</strong> — AI-history book review (73 chapters, never cross-family reviewed).</li>
+<li><strong>Continuous improvement</strong> — software watchlist refresh / "What's New" changelog post (the dated <code>as of 2026-06</code> snapshots added this session are fresh anchors).</li>
+<li><strong>Infra papercuts:</strong> #1965 (make vitest a required check — admin toggle), #2015 (lockfile-only marker invisible to PR CI), arXiv-citation-check required-toggle. Plus the new <em>verify_module vs density.py body_words reconciliation</em> finding above.</li>
+</ul>
+</body>
+</html>
