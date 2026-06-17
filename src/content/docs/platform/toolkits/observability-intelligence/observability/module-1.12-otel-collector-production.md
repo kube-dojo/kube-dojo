@@ -2,6 +2,7 @@
 citations_verified: true
 title: "Module 1.12: OpenTelemetry Collector at Production Scale"
 slug: platform/toolkits/observability-intelligence/observability/module-1.12-otel-collector-production
+revision_pending: false
 sidebar:
   order: 13
 ---
@@ -35,6 +36,14 @@ The most expensive mistakes are subtle because telemetry often keeps flowing whi
 The module is intentionally not a runnable operator lab. You will see realistic configuration fragments because production collector work is configuration-heavy, but the goal is design literacy. You should finish with the ability to review a collector pull request and ask the right questions: where does tenant identity come from, which tier owns sampling, what protects memory, which attributes are allowed, and what happens when a backend slows down. Those questions catch more real failures than memorizing every component option.
 
 This is also why the module keeps cost visible from the beginning. Observability platforms often fail socially before they fail technically: the platform team adds more detail because incidents are painful, finance pushes back because the bill grows, security asks for redaction after data has already spread, and application teams bypass shared policy because the default path feels too restrictive. A production Collector design gives those groups a common control surface. Sampling, routing, batching, and attribute policy become explicit platform decisions instead of scattered application defaults.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> OpenTelemetry is a CNCF Graduated project. CNCF announced graduation on May 21, 2026 and described OTel as having the second-highest project velocity in CNCF after Kubernetes. That maturity applies to the project as a whole; the Collector still requires per-component review when you build a production distribution.
+>
+> The Collector is versioned separately from the specification and from many language SDKs. As of this snapshot, the core Collector release is v1.60.0/v0.154.0, published on June 8, 2026, and the contrib distribution is v0.154.0, published on June 9, 2026. The paired versioning is intentional: stable core modules can be in the v1.x line while the broader collector distribution and contrib components remain in the v0.1xx line.
+>
+> Component stability is mixed. The OpenTelemetry status page says core collector components have mixed stability levels, and each receiver, processor, exporter, connector, and extension documents its own alpha, beta, stable, deprecated, or unmaintained status in its README. Production reviews should therefore check the exact components you enable, not just the Collector binary version.
 
 ## Collector Deployment Topologies
 
@@ -540,6 +549,10 @@ Continue to the [GitOps & Deployments toolkit](../../cicd-delivery/gitops-deploy
 ## Sources
 
 - [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) - General Collector role and architecture.
+- [CNCF OpenTelemetry graduation announcement](https://www.cncf.io/announcements/2026/05/21/cloud-native-computing-foundation-announces-opentelemetrys-graduation-solidifying-status-as-the-de-facto-observability-standard/) - CNCF maturity and project activity snapshot.
+- [OpenTelemetry project status](https://opentelemetry.io/status/) - Collector mixed stability status and per-component stability guidance.
+- [OpenTelemetry Collector v1.60.0/v0.154.0 release](https://github.com/open-telemetry/opentelemetry-collector/releases/tag/v0.154.0) - Current core Collector release at this snapshot.
+- [OpenTelemetry Collector Contrib v0.154.0 release](https://github.com/open-telemetry/opentelemetry-collector-contrib/releases/tag/v0.154.0) - Current contrib distribution release at this snapshot.
 - [OpenTelemetry Collector configuration](https://opentelemetry.io/docs/collector/configuration/) - Receivers, processors, exporters, connectors, and service pipelines.
 - [OpenTelemetry Collector agent deployment pattern](https://opentelemetry.io/docs/collector/deploy/agent/) - Agent collectors alongside applications or hosts.
 - [OpenTelemetry Collector gateway deployment pattern](https://opentelemetry.io/docs/collector/deploy/gateway/) - Gateway collectors, load balancing, and tail-sampling topology guidance.

@@ -1,6 +1,7 @@
 ---
 title: "Module 9.8: KServe — Production-Grade Model Inference on Kubernetes"
 slug: platform/toolkits/data-ai-platforms/ml-platforms/module-9.8-kserve
+revision_pending: false
 sidebar:
   order: 9
 ---
@@ -49,6 +50,14 @@ Knative should handle request-driven serverless behavior when that mode is appro
 Istio or another gateway layer should manage ingress, mTLS, and traffic policy.
 Your model runtime should load artifacts and answer inference requests.
 When those boundaries are clear, model serving becomes operable instead of mysterious.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> KServe is now a CNCF Incubating project. CNCF lists September 29, 2025 as the Incubating acceptance date, and the public CNCF project post appeared during the KubeCon North America 2025 week. The lineage matters for trust: KServe began in 2019 as KFServing under Kubeflow through work by Google, IBM, Bloomberg, NVIDIA, and Seldon, moved to LF AI & Data in February 2022, rebranded from KFServing to standalone KServe in September 2022, and later moved into CNCF.
+>
+> The current release train is still the v0.1x line: GitHub marks v0.19.0, published on June 14, 2026, as the latest release, while these exercises remain pinned to v0.17.0 as a lab baseline. Treat that pin as a reproducibility choice for this module, not as production install guidance.
+>
+> The durable idea is that KServe standardizes model inference on Kubernetes for both predictive and generative workloads. It composes with nearby cloud-native layers such as Knative for serverless predictive serving, Istio or Envoy Gateway for traffic and gateway concerns, and vLLM-oriented paths for large language model serving, but it should be evaluated as one serving API in a wider platform design rather than as a universal answer for every team.
 
 ## KServe Architecture: Control Plane and Data Plane
 
@@ -1413,6 +1422,7 @@ Next: Module 9.9: Seldon Core will compare another Kubernetes-native inference p
 ## Sources
 
 - https://kserve.github.io/website/docs/getting-started/quickstart-guide
+- https://kserve.github.io/website/docs/intro
 - https://kserve.github.io/website/docs/concepts/architecture
 - https://kserve.github.io/website/docs/concepts/architecture/control-plane
 - https://kserve.github.io/website/docs/concepts/architecture/data-plane
@@ -1428,7 +1438,10 @@ Next: Module 9.9: Seldon Core will compare another Kubernetes-native inference p
 - https://kserve.github.io/website/docs/model-serving/predictive-inference/explainers/alibi/tabular-explainer
 - https://kserve.github.io/website/docs/admin-guide/serverless
 - https://kserve.github.io/website/docs/admin-guide/kubernetes-deployment
+- https://www.cncf.io/projects/kserve/
+- https://www.cncf.io/blog/2025/11/11/kserve-becomes-a-cncf-incubating-project/
 - https://github.com/kserve/kserve
+- https://github.com/kserve/kserve/releases/tag/v0.19.0
 - https://github.com/kserve/kserve/releases/download/v0.17.0/kserve-knative-mode-full-install-with-manifests.sh
 - https://knative.dev/docs/serving/
 - https://istio.io/latest/docs/tasks/security/authentication/mtls-migration/
