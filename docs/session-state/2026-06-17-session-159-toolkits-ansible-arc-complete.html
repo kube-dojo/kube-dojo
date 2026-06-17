@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 159 — Toolkits Ansible Operator arc COMPLETE (7.13/7.16/7.17 flipped; #1996)</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --card:#111827; --border:#243044; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin:0; padding:2rem; max-width:1100px; }
+  h1 { font-size:1.5rem; border-bottom:2px solid var(--border); padding-bottom:.5rem; }
+  h2 { font-size:1.15rem; color:var(--accent); margin-top:2rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+  h3 { font-size:1rem; color:var(--fg); margin-top:1.3rem; }
+  code { background:#1b2433; padding:.1rem .35rem; border-radius:4px; font-size:.88em; }
+  pre { background:#1b2433; padding:1rem; border-radius:8px; overflow:auto; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.92em; }
+  th,td { border:1px solid var(--border); padding:.45rem .6rem; text-align:left; vertical-align:top; }
+  th { background:var(--card); color:var(--accent); }
+  .tldr { background:var(--card); border:1px solid var(--border); border-left:4px solid var(--accent); padding:1rem 1.2rem; border-radius:8px; }
+  .good { color:var(--good); } .warn { color:var(--warn); } .muted { color:var(--muted); }
+  ul { padding-left:1.3rem; }
+</style>
+</head>
+<body>
+<h1>Session 159 — Toolkits <code>infrastructure-networking</code>: Ansible Operator arc COMPLETE</h1>
+
+<p class="muted">Date: 2026-06-17 · Branch: main · PR: #2006 (squash-merged → <code>957e3e7cb</code>) · Epic: #1996 · Role: standalone orchestrator</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Closed the Ansible Operator arc deferred in s158: <strong>7.13 / 7.16 / 7.17 fixed and flipped to <code>done</code></strong>, completing the coherent arc 7.12–7.17. The defects were <strong>verifier-blind fabricated/wrong Operator-SDK API surface</strong> (cursor R1 found them last session). I <strong>independently web-verified every disputed API fact against upstream docs <em>before</em> the fix</strong>, locked the ground truth into the brief, dispatched <strong>codex gpt-5.5</strong> to apply it, then ran a web-grounded <strong>opus-inline cross-family R2</strong> (Anthropic ≠ codex/OpenAI) confirming every finding resolved with 0 residual fabrications. CI all green (incl. the required 2000-page Astro build), merged, finalized (COMMITTED + telemetry). infrastructure-networking not-done dropped by 3.
+</div>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Module</th><th>Defect class (verifier-blind)</th><th>Fix → verified upstream truth</th><th>Result</th></tr>
+<tr>
+  <td><code>7.13</code> advanced-watches-yaml</td>
+  <td>Fabricated concurrency API; wrong default</td>
+  <td><code>ANSIBLE_WORKERS</code> (does not exist) → <code>--max-concurrent-reconciles</code> flag + <code>MAX_CONCURRENT_RECONCILES_&lt;KIND&gt;_&lt;GROUP&gt;</code> env; default <code>1</code> → real <code>runtime.NumCPU()</code> (throughput-math example sets <code>=1</code> explicitly); lab vars → 7.12 convention; stale next-link</td>
+  <td class="good">T0, 5645 bw</td>
+</tr>
+<tr>
+  <td><code>7.16</code> production-patterns</td>
+  <td>Densest fabrication cluster</td>
+  <td>Fabricated <code>dependentWatches</code>/<code>maxConcurrentReconciles</code>-in-watches → <code>watchDependentResources: true</code>; fabricated <code>ANSIBLE_OPERATOR_PLUGINS_*</code> → <code>MAX_CONCURRENT_RECONCILES_*</code>/<code>ANSIBLE_VERBOSITY_*</code>; manual <code>finalizers: []</code> patch → SDK auto-removal; <code>AnsibleFailed</code> → <code>Failure</code>; <code>controller_runtime_reconcile_queue_length</code> → <code>workqueue_depth</code></td>
+  <td class="good">T0, 5238 bw</td>
+</tr>
+<tr>
+  <td><code>7.17</code> testing (Molecule/Kuttl)</td>
+  <td>Wrong test-injection contract</td>
+  <td>Fabricated <code>_demoapp_</code> var prefix → top-level <code>replicas</code>/<code>image</code>/<code>port</code> + <code>ansible_operator_meta</code> mock; Kuttl asserts aligned to 7.12 child labels (<code>app.kubernetes.io/name: demoapp</code> + <code>instance: kuttl-test-app</code>)</td>
+  <td class="good">T0, 5735 bw</td>
+</tr>
+</table>
+
+<h2>Method (what made this correct, not just green)</h2>
+<ul>
+<li><strong>Browser-before-brief.</strong> The whole defect class is "wrong API names." Trusting cursor's R1 verbatim or the module text would re-risk a valid-but-wrong fix. I WebFetch/WebSearch-verified each fact against <code>sdk.operatorframework.io</code> (advanced_options, watches, finalizers, information-flow, status) + controller-runtime workqueue metrics, then locked the verified truth into the codex brief so it could not re-fabricate or re-research wrongly.</li>
+<li><strong>Caught a discrepancy in the R1 spec:</strong> cursor said default image <code>nginx:1.25</code>; 7.12 actually uses <code>nginx:1.27-alpine</code>. Locked the real value — trusting the source, not the review.</li>
+<li><strong>codex = fixer (OpenAI), opus-inline = R2 (Anthropic)</strong> → cross-family floor satisfied without a redundant cursor R2 (which would re-check the same upstream docs I already verified). This is the endorsed cheapest-default review pattern.</li>
+<li><strong>Ground-checked the diff myself:</strong> 0 residual fabricated tokens across all 3 files; every real replacement present in the documented format (e.g. <code>MAX_CONCURRENT_RECONCILES_WEBAPP_PLATFORM_EXAMPLE_COM</code>); frontmatter untouched; density floor held.</li>
+</ul>
+
+<h2>Authoritative remaining split — infrastructure-networking (sweep this session, trust the LIVE files)</h2>
+<p>Ran <code>verify_module.py</code> + review-record + <code>## Sources</code> presence on all 42 section modules. The Ansible arc (7.12–7.17) is done. Remaining, by cost:</p>
+
+<h3 class="good">Cheap FLIP candidates — T0, already ≥5000 bw, never cross-family reviewed (review-only → flip)</h3>
+<ul>
+<li><code>7.8-sst</code> (5155 bw, T0)</li>
+<li><code>7.11-hcp-terraform-workflows</code> (6648 bw, T0)</li>
+<li><code>14.8-edge-distros-landscape</code> (5292 bw, T0)</li>
+</ul>
+<p class="warn">⚠ These PASS the verifier but have NEVER been cross-family reviewed — the Ansible arc proved T0 ≠ correct (fabricated API passes the verifier). Each needs a genuine web-grounded review (durable-content: IaC/edge = vendor/version churn) before flipping, not a rubber-stamp.</p>
+
+<h3>Gate-fix near-flips — over the 5000 floor but T3 on a non-density gate</h3>
+<ul>
+<li><code>7.1-terraform</code> (5059 bw, T3) — over floor, failing a non-density gate; check which.</li>
+<li><code>14.6-managed-kubernetes</code> (5658 bw, T3) — likely just <code>outcomes_aligned</code> (per s158 note); small deterministic fix.</li>
+</ul>
+
+<h3>Moderate expands (3000–4800 bw → ~+500–1700w to floor)</h3>
+<ul>
+<li>iac: <code>7.2-opentofu</code> (4203)</li>
+<li>k8s-distros: <code>14.4-talos</code> (4505), <code>14.7-rke2</code> (2914; has a gemini WRITE-log in .pipeline/reviews — NOT an approve)</li>
+<li>networking: <code>5.4-metallb</code> (4760), <code>5.5-flannel</code> (2190), <code>5.6-calico</code> (2132), <code>5.1-cilium</code> (1589), <code>5.8-multus</code> (1533), <code>5.7-kube-router</code> (1119)</li>
+<li>platforms: <code>3.5-cluster-api</code> (4609)</li>
+<li>storage: <code>16.2-minio</code> (3503, T2), <code>16.3-longhorn</code> (3300)</li>
+</ul>
+
+<h3>Heavy stubs (&lt;1000 bw → major expand)</h3>
+<ul>
+<li>iac: <code>7.3-pulumi</code>, <code>7.4-ansible</code>, <code>7.5-cloudformation</code>, <code>7.6-bicep</code>, <code>7.7-winglang</code>, <code>7.9-system-initiative</code>, <code>7.10-nitric</code></li>
+<li>k8s-distros: <code>14.1-k3s</code>, <code>14.2-k0s</code>, <code>14.3-microk8s</code>, <code>14.5-openshift</code></li>
+<li>networking: <code>5.2-service-mesh</code>, <code>5.3-dns-deep-dive</code> (794)</li>
+<li>platforms: <code>3.4-kubebuilder</code>, <code>3.6-vcluster</code>, <code>7.1-backstage</code>, <code>7.2-crossplane</code>, <code>7.3-cert-manager</code></li>
+<li>storage: <code>16.1-rook-ceph</code></li>
+</ul>
+
+<h2>Lessons / reusables</h2>
+<ul>
+<li><strong>codex <code>OK:False</code> ≠ failed.</strong> The dispatch wrapper flagged exit 1 only on the "danger-mode left origin stale (branch not pushed)" check — the work committed cleanly (<code>9c634bdb8</code>). Push the branch yourself before the PR.</li>
+<li><strong>Browser-before-brief is the right shape for any "wrong-API/wrong-fact" fix wave</strong> — verify upstream, lock into the brief, dispatch, then the reviewer confirms against the same locked truth. Removes re-fabrication risk and makes the inline cross-family review authoritative.</li>
+<li><strong>A file in <code>.pipeline/reviews/</code> is not necessarily an APPROVE</strong> — 14.7-rke2's is a gemini write-log. Check the verdict before treating a module as reviewed.</li>
+<li>Reusable brief: <code>logs/remediation/briefs/ansible-arc-fix.md</code> (fact-locked fix brief) + <code>ansible-arc-r2-review.md</code> (cross-family R2 template).</li>
+</ul>
+
+<h2>Next</h2>
+<ul>
+<li><strong>#1996 infrastructure-networking</strong> — cheapest next chunk: the 3 T0 flip candidates (7.8 / 7.11 / 14.8) via genuine web-grounded review, plus the 14.6/7.1 gate-fix flips. Then the moderate expands and heavy stubs (≤3 authors/batch, opus-inline R1, durable-vendor rule hard).</li>
+<li>Then <strong>#1911 UK</strong> currency, <strong>#1876</strong> AI-history book review.</li>
+<li>Standing admin: <strong>#1965</strong> make <code>Unit tests (vitest)</code> a required check; make <code>arXiv citation check</code> required (branch-protection toggles, user).</li>
+</ul>
+
+<p class="muted">Worktree <code>.worktrees/ansible-arc-fix</code> + branch deleted on merge. <code>g2-craft</code> worktree retained (unrelated, unmerged s104).</p>
+</body>
+</html>
