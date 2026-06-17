@@ -52,11 +52,11 @@ The analogy is a thermostat, but with an important twist. A thermostat does not 
 
 > **Landscape snapshot — as of 2026-06**
 >
-> Kubebuilder is NOT a standalone CNCF project. It is a Kubernetes SIG subproject (kubernetes-sigs/kubebuilder), part of the Kubernetes ecosystem, Apache-2.0. Do NOT label it CNCF Sandbox/Incubating/Graduated. (Kubernetes itself is CNCF Graduated; Kubebuilder is a k8s sub-project — state this precisely.)
+> Kubebuilder is not a standalone CNCF project. It is a Kubernetes SIG subproject (`kubernetes-sigs/kubebuilder`), part of the Kubernetes ecosystem, licensed Apache-2.0. The distinction matters: Kubernetes itself is a CNCF Graduated project, but Kubebuilder is a Kubernetes *sub-project* rather than a separately governed CNCF project, so it carries no CNCF maturity level of its own.
 >
-> Latest release as of 2026-06: v4.15.0 (2026-06-15). Say "verify at github.com/kubernetes-sigs/kubebuilder/releases".
+> Latest release as of 2026-06: v4.15.0 (2026-06-15); check [github.com/kubernetes-sigs/kubebuilder/releases](https://github.com/kubernetes-sigs/kubebuilder/releases) for the current version.
 >
-> Built on controller-runtime (sigs.k8s.io/controller-runtime). Verify scaffolded code/markers (+kubebuilder:object:root=true, the Reconciler signature) against current Kubebuilder — do not invent fields.
+> Kubebuilder is built on controller-runtime (`sigs.k8s.io/controller-runtime`). API markers such as `+kubebuilder:object:root=true` and the `Reconcile` signature track the current controller-runtime release, so confirm them against the version you scaffold with.
 
 ---
 
