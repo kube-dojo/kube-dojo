@@ -26,12 +26,13 @@
 <p class="muted">Date: 2026-06-17 · Branch: main · PRs: #2010 (squash → <code>a6fa4ad2a</code> chain), #2004 + #2005 (Dependabot) · Epic: #1996 · Role: standalone orchestrator</p>
 
 <div class="tldr">
-<strong>TL;DR.</strong> Drove <strong>7 modules to <code>done</code></strong> in Toolkits/infrastructure-networking (#1996), section <strong>21 → 28 done / 14 not-done</strong>, plus both open Dependabot PRs merged. Two batches:
+<strong>TL;DR.</strong> Drove <strong>10 modules to <code>done</code></strong> in Toolkits/infrastructure-networking (#1996), section <strong>21 → 31 done / 11 not-done</strong>, plus both open Dependabot PRs merged. Three batches:
 <ul>
 <li><strong>k8s-distributions trio</strong> 14.1-k3s / 14.2-k0s / 14.3-MicroK8s (PR #2010) — code-heavy-thin stubs (~300 prose words) → T0 on the durable distro spine. <strong>Fixed deepseek's verifier-blind stale MicroK8s snap channels</strong> (1.28→1.34/1.35).</li>
 <li><strong>iac-tools cluster</strong> 7.6-bicep / 7.7-winglang / 7.9-system-initiative / 7.10-nitric (PRs #2012 + #2013) — the 4 worst-scored Toolkits modules → T0 on the "infrastructure-from-code" spine; <strong>iac-tools sub-section now 17/17 (100%)</strong>. <strong>Web-verify caught TWO discontinued projects the authors presented as live</strong> (Wing Cloud wound down 2025; System Initiative archived 2026-02) → corrected to honest illustrative framing.</li>
+<li><strong>networking CNIs</strong> 5.5-flannel / 5.7-kube-router / 5.8-multus (PR #2014) — CNI/pod-networking spine. All 3 web-verified active. <strong>Fixed deepseek's fabricated "CNCF Graduated" labels for Flannel + Calico</strong> (neither is CNCF-hosted) — codex's kube-router module independently got every CNCF status right (cross-validation).</li>
 </ul>
-PR hygiene: #2004 (npm group) + #2005 (dompurify, integrity-verified + lockfile-swap tripwire cleared). All CI green; all 7 finalized (COMMITTED + telemetry + APPROVE records). The s130/s160 <code>revision_pending:false</code> brief-bug was fixed in the iac-tools brief → those flipped to <code>done</code> with no manual step.
+PR hygiene: #2004 (npm group) + #2005 (dompurify, integrity-verified + lockfile-swap tripwire cleared). All CI green; all 10 finalized (COMMITTED + telemetry + APPROVE records). The s130/s160 <code>revision_pending:false</code> brief-bug was fixed from the iac-tools batch on → those flipped to <code>done</code> with no manual step. Checkpointed after 3 author+review+finalize cycles for context hygiene.
 </div>
 
 <h2>What shipped — k8s-distributions expand (PR #2010)</h2>
@@ -77,6 +78,16 @@ PR hygiene: #2004 (npm group) + #2005 (dompurify, integrity-verified + lockfile-
 </table>
 <p><strong>The web-verification earned its keep twice this batch.</strong> Two niche Toolkits projects — Wing and System Initiative — turned out to be <em>discontinued/dormant</em>, facts the authors' ~Jan-2026 training predates; without the ground-check both modules would have taught dead projects as thriving tools. This is the exact durable-vendor failure mode the rule targets, and the lesson for the remaining 14: <strong>web-verify every niche tool's maturity/activity both ways before trusting the author's framing.</strong></p>
 
+<h2>What shipped — networking CNI batch (PR #2014)</h2>
+<p>Three CNI-plugin stubs (1100–2200 prose words, high short-paragraph density) → T0 on the durable <strong>CNI spec + pod-networking</strong> spine (CNI lifecycle/IPAM, overlay vs L3/BGP vs underlay, who owns NetworkPolicy/Service) with a Flannel/Calico/Cilium/kube-router/Multus Rosetta. All three projects web-verified <em>active</em> this batch (Flannel v0.28.5, kube-router v2.10.0, Multus v4.3.0).</p>
+<table>
+<tr><th>Module</th><th>Author</th><th>Web-verified outcome</th></tr>
+<tr><td><strong>5.5 Flannel</strong></td><td>cursor</td><td>Clean. Density fully fixed (short-rate 0.456→0.0), <code>XXX</code> leak token removed, 4 war stories → <code>Hypothetical scenario:</code>. Teaches the durable "Flannel does NOT enforce NetworkPolicy" point; correctly states Flannel is not a CNCF project. v0.28.5 ✓.</td></tr>
+<tr><td><strong>5.7 kube-router</strong></td><td>codex</td><td>Exemplary, no fix. v2.10.0 (2026-05-27) ✓ exact + GoBGP v4.5.0; all-in-one model (BGP routing / IPVS service proxy / iptables policy); <strong>every CNCF status correct</strong>; explicit no-brand-contest framing.</td></tr>
+<tr><td><strong>5.8 Multus</strong></td><td>deepseek + fix</td><td>Strong meta-plugin/delegation + NPWG teaching, honest limitations. <span class="warn">Fix:</span> the Rosetta falsely labeled <strong>Flannel AND Calico "CNCF Graduated"</strong> — neither is CNCF-hosted (Flannel=flannel-io, Calico=Tigera; only Cilium graduated, 2023). Corrected; softened "most widely deployed" → "reference implementation". (CNI spec = CNCF Incubating, which it claimed, IS correct.)</td></tr>
+</table>
+<p><strong>Cross-validation worth noting:</strong> deepseek (5.8) fabricated "CNCF Graduated" for Flannel and Calico; codex (5.7), reviewing the same five projects independently, got every CNCF status right and even cited the CNCF CNI page + Cilium graduation announcement. Running a fab-prone and a careful author over overlapping facts in the same batch surfaces exactly these errors.</p>
+
 <h2>PR hygiene — both open Dependabot PRs merged</h2>
 <ul>
 <li><strong>#2004</strong> (npm-minor-patch group, 4 updates) — fully green incl. the required Astro build + unit tests → rebase-merged.</li>
@@ -94,10 +105,10 @@ PR hygiene: #2004 (npm group) + #2005 (dompurify, integrity-verified + lockfile-
 </ul>
 
 <h2>State — infrastructure-networking after this session</h2>
-<p><strong>28 done / 14 not-done</strong> (iac-tools 17/17 done). The 14 remaining are all genuine expands (heavy stubs &lt;1000 prose-w plus a few mediums + 1 shipped_unreviewed):</p>
+<p><strong>31 done / 11 not-done</strong> (iac-tools 17/17). The 11 remaining are all genuine expands (heavy stubs plus 1 shipped_unreviewed):</p>
 <ul>
 <li><strong>k8s-distros (2):</strong> 14.5-openshift, 14.7-rke2 (rke2 = 2914 prose-w + 0 sources; needs +2000w &amp; ≥10 sources — its <code>.pipeline/reviews</code> file is a gemini write-log, NOT an approve).</li>
-<li><strong>networking (5):</strong> 5.2-service-mesh, 5.3-dns-deep-dive, 5.5-flannel (2190w + an <code>XXX</code> leak token + density fails), 5.7-kube-router, 5.8-multus; + <strong>5.6-calico</strong> (shipped_unreviewed, 4125w — density/structure fix-then-review).</li>
+<li><strong>networking (3):</strong> 5.2-service-mesh, 5.3-dns-deep-dive; + <strong>5.6-calico</strong> (shipped_unreviewed, 4125w — density/structure fix-then-review).</li>
 <li><strong>platforms (5):</strong> 3.4-kubebuilder, 3.6-vcluster, 7.1-backstage, 7.2-crossplane, 7.3-cert-manager.</li>
 <li><strong>storage (1):</strong> 16.1-rook-ceph.</li>
 </ul>
@@ -106,13 +117,14 @@ PR hygiene: #2004 (npm group) + #2005 (dompurify, integrity-verified + lockfile-
 <ul>
 <li><strong><code>revision_pending:false</code> in the brief works.</strong> The k8s-distros batch's brief said "leave frontmatter intact" → all 3 stayed <code>needs_rewrite</code> until a manual flip. The iac-tools brief said "set <code>revision_pending:false</code>" → all 4 flipped to <code>done</code> on finalize with no manual step. Keep this in every expand brief.</li>
 <li><strong>Niche Toolkits projects keep turning out dormant/discontinued.</strong> Wing (wound down 2025) and System Initiative (archived 2026-02) were both presented as live by the authors' training. Browser-before-brief (web-verify the tool's repo/release/company status, lock it into the brief) is the fix — and a fab-prone author given the locked facts (codex on SI) produces exemplary honest content.</li>
+<li><strong>CNCF maturity is a top fabrication target — verify every claim.</strong> deepseek's Multus module asserted "CNCF Graduated" for both Flannel and Calico; neither is CNCF-hosted (Flannel=flannel-io, Calico=Tigera). Only Cilium is graduated; the CNI <em>spec</em> is Incubating. Grep every `CNCF/Sandbox/Incubating/Graduated` token and confirm against cncf.io. A useful structural defense: in a mixed batch, give a fab-prone and a careful author overlapping facts (deepseek+codex both covered the Flannel/Calico/Cilium Rosetta) — the disagreement surfaces the fabrication.</li>
 <li><strong>Content-PR merge needs a <code>## Learner check</code></strong> section (a verbatim <code>&gt; </code> blockquote ≥30 chars from a touched module) in the PR body, or the <code>block-content-merge-without-learner-check</code> hook denies the merge. Add it at PR-create time.</li>
 <li><strong>Emoji trip the anti-leak gate</strong> (⚠ tripped it; the ✅ checkmarks inside an ASCII-art box did not — but avoid emoji in prose). Use text markers.</li>
 </ul>
 
 <h2>Next</h2>
 <ul>
-<li><strong>#1996 infrastructure-networking</strong> — continue the 14-module expand drive (≤3 authors/batch, opus-inline R1, durable-vendor rule hard, set <code>revision_pending:false</code> + <code>## Further Reading</code>→<code>## Sources</code> in the brief, add a <code>## Learner check</code> to the PR body). Natural next batch: the networking CNIs (5.5/5.7/5.8 + 5.6-calico) or platforms (3.4/3.6/7.1/7.2/7.3). <strong>Web-verify each niche tool's maturity both ways</strong> before trusting the author's framing.</li>
+<li><strong>#1996 infrastructure-networking</strong> — continue the 11-module expand drive (≤3 authors/batch, opus-inline R1, durable-vendor rule hard, set <code>revision_pending:false</code> + <code>## Further Reading</code>→<code>## Sources</code> in the brief, add a <code>## Learner check</code> to the PR body at create time). Natural next batch: platforms (3.4-kubebuilder / 3.6-vcluster / 7.1-backstage / 7.2-crossplane / 7.3-cert-manager) or k8s-distros (14.5-openshift / 14.7-rke2). 5.6-calico is review-then-likely-expand. <strong>Web-verify each tool's maturity + CNCF status both ways</strong> before trusting the author's framing.</li>
 <li>Then <strong>#1911 UK</strong> currency, <strong>#1876</strong> AI-history book review.</li>
 <li>Standing admin (branch-protection toggles, user): <strong>#1965</strong> make <code>Unit tests (vitest)</code> required; make <code>arXiv citation check</code> required.</li>
 <li>Latent (from s159, untouched): <code>7.1-terraform</code> has a dead Sources URL <code>/blog/terraform-announcement</code>→<code>/blog/terraform</code> (board-done, cleanup pass).</li>
