@@ -49,7 +49,7 @@ After completing this module, you will be able to:
 
 - **Implement** a production-grade status conditions block on a custom resource that follows the Kubernetes API Conditions convention, distinguishing between a `status.conditions` array and scalar status fields, and preserving `lastTransitionTime` semantics correctly.
 - **Diagnose** and resolve finalizer race conditions including interrupted reconciles, cross-CR ordering deadlocks, and the phantom-deletion pattern where cleanup runs succeed but the finalizer is never removed.
-- **Design** an idempotency strategy for an Ansible Operator managing thousands of custom resource instances, applying `maxConcurrentReconciles`, `RateLimitedRequeue`, and early-exit patterns to bound API server load.
+- **Design** an idempotency strategy for an Ansible Operator managing thousands of custom resource instances, applying `--max-concurrent-reconciles`, per-GVK concurrency overrides, rate-limited requeue behavior, and early-exit patterns to bound API server load.
 - **Configure** CRD upgrade paths and OLM bundle manifests for production operator releases, distinguishing when a conversion webhook is required from when backwards-compatible role field fallbacks suffice, and applying `Manual` approval channels for change-controlled environments.
 - **Instrument** an Ansible Operator with structured JSON logs, controller-runtime Prometheus metrics, and OpenTelemetry span propagation, then verify reconciliation correctness by injecting controlled failures under leader loss, queue bursts, and task-level errors.
 
@@ -78,14 +78,14 @@ status:
       reason: DeploymentUnavailable
       message: "Deployment demoapp-sample has 0/3 ready replicas"
       lastTransitionTime: "2026-05-15T09:32:11Z"
-    - type: ReconcileFailed
+    - type: Failure
       status: "False"
-      reason: ""
+      reason: Failed
       message: ""
       lastTransitionTime: "2026-05-15T09:28:04Z"
 ```
 
-When does an Ansible Operator surface conditions properly versus swallow them? By default, `manageStatus: true` in `watches.yaml` causes the Ansible Operator to publish a generic `Running` condition after each successful role run and an `AnsibleFailed` condition on role failure. This is better than nothing, but it loses the domain semantics that make conditions useful for automation. An external alerting rule cannot fire on `AnsibleFailed` with reason `"TaskFailed"` and distinguish "deployment is unavailable" from "external API rate-limited" without parsing the freeform message string. A well-designed conditions block expresses that distinction in the `reason` field, enabling consuming controllers and alertmanager rules to respond programmatically without fragile string matching.
+When does an Ansible Operator surface conditions properly versus swallow them? By default, `manageStatus: true` in `watches.yaml` causes the Ansible Operator to publish a generic `Running` condition after each successful role run and a `Failure` condition with reason `Failed` on role failure. This is better than nothing, but it loses the domain semantics that make conditions useful for automation. An external alerting rule cannot fire on `Failure` with reason `Failed` and distinguish "deployment is unavailable" from "external API rate-limited" without parsing the freeform message string. A well-designed conditions block expresses that distinction in the `reason` field, enabling consuming controllers and alertmanager rules to respond programmatically without fragile string matching.
 
 The correct approach is to set `manageStatus: false` and publish conditions explicitly with `operator_sdk.util.k8s_status`. The role should maintain the full conditions array rather than overwriting it on each reconcile, preserving conditions set by previous passes or by external controllers. Most critically, the `lastTransitionTime` field must only change when `status` changes — not on every reconcile. If you update `lastTransitionTime` on every run, monitoring systems cannot measure how long a condition has been in its current state, which makes SLO tracking and alerting for stuck resources unreliable.
 
@@ -159,9 +159,9 @@ Pause and predict: if `manageStatus: true` remains enabled but the role also cal
 
 ## Finalizer Race Conditions and Safe Deletion
 
-Finalizers are the mechanism Kubernetes provides for controllers to run cleanup logic before a resource is permanently removed. When a user runs `kubectl delete`, the API server sets `metadata.deletionTimestamp` rather than removing the object immediately. The object remains visible and watchable until every finalizer string is removed from `metadata.finalizers`. A controller that owns a finalizer is responsible for performing its cleanup work and then patching the finalizer away.
+Finalizers are the mechanism Kubernetes provides for controllers to run cleanup logic before a resource is permanently removed. When a user runs `kubectl delete`, the API server sets `metadata.deletionTimestamp` rather than removing the object immediately. The object remains visible and watchable until every finalizer string is removed from `metadata.finalizers`. In an Ansible Operator with `finalizer` configured in `watches.yaml`, the deletion role is responsible for making cleanup idempotently succeed; after that role or playbook completes successfully, the SDK removes the configured finalizer string from the CR.
 
-The failure modes with finalizers appear at two levels: the task level and the ordering level. At the task level, an interrupted reconcile during deletion is the most common source of permanently stuck resources. If an Ansible role removes an external resource and then crashes before removing the finalizer, the next reconciliation must detect that the external cleanup already happened and not attempt it again. This requires the role to inspect actual external state rather than assume that "finalizer still present means cleanup is needed." An idempotent cleanup role handles the "cleanup ran twice" case gracefully by treating a 404 from the external API as a success, not an error.
+The failure modes with finalizers appear at two levels: the task level and the ordering level. At the task level, an interrupted reconcile during deletion is the most common source of permanently stuck resources. If an Ansible role removes an external resource and then crashes before the SDK can observe a successful completion and remove the finalizer, the next reconciliation must detect that the external cleanup already happened and not attempt it again. This requires the role to inspect actual external state rather than assume that "finalizer still present means cleanup is needed." An idempotent cleanup role handles the "cleanup ran twice" case gracefully by treating a 404 from the external API as a success, not an error.
 
 ```yaml
 # roles/demoapp_delete/tasks/main.yml
@@ -183,23 +183,17 @@ The failure modes with finalizers appear at two levels: the task level and the o
   register: dns_delete
   failed_when: "dns_delete.status not in [200, 204, 404]"
 
-- name: Remove finalizer after confirming external cleanup is complete
-  kubernetes.core.k8s:
-    api_version: app.example.com/v1
-    kind: DemoApp
-    name: "{{ demoapp_name }}"
-    namespace: "{{ demoapp_namespace }}"
-    definition:
-      metadata:
-        finalizers: []
+- name: Report cleanup completion for operator logs
+  ansible.builtin.debug:
+    msg: "External DNS cleanup complete for {{ demoapp_name }}.example.com"
 ```
 
 The ordering level is subtler. Deadlocks happen when two resource types have circular finalizer dependencies. Resource A holds a finalizer that waits for Resource B to finalize before the A finalizer is removed. Resource B holds a finalizer that waits for Resource A. This scenario is common in operators that manage parent-child relationships between custom resources: a `DatabaseCluster` CR manages `DatabaseInstance` CRs, and both have finalizers that reference the other. The deadlock prevention rule is to establish a strict ownership hierarchy and ensure that cleanup flows in only one direction — children finalize before parents, and parents never wait for a child to exist before removing their own finalizer.
 
-The phantom deletion pattern is a variant where the controller crashes or loses leadership between removing the external resource and patching the finalizer away. The resource reappears in the reconcile queue on the next watch event. The deletion path runs again, the external resource check returns 404 (it was already removed in the previous partial run), and the finalizer is successfully patched away. This behavior is correct only when the deletion check is idempotent. A deletion role that treats a 404 as a hard error will loop forever on a resource that was partially cleaned up. Always handle absence explicitly with `failed_when: false` and an explicit `when` guard on the cleanup task.
+The phantom deletion pattern is a variant where the controller crashes or loses leadership between removing the external resource and reporting successful finalizer-role completion to the SDK. The resource reappears in the reconcile queue on the next watch event. The deletion path runs again, the external resource check returns 404 because it was already removed in the previous partial run, and then the SDK removes the finalizer after the role completes successfully. This behavior is correct only when the deletion check is idempotent. A deletion role that treats a 404 as a hard error will loop forever on a resource that was partially cleaned up. Always handle absence explicitly with `failed_when: false` and an explicit `when` guard on the cleanup task.
 
 <!-- code-verified-against: controller-runtime workqueue semantics — the per-key exclusion guarantee means only ONE worker processes a given CR key at a time; the race is sequential (interrupted then retried), not concurrent -->
-A related hazard is the interrupted-reconcile sequence. controller-runtime's workqueue guarantees that a given CR key is processed by at most one worker at a time — two workers cannot simultaneously run the cleanup role for the same CR. The real danger arises when a single worker runs the cleanup role, successfully removes the external resource, and then crashes or loses the leader lease before removing the finalizer. On the next watch event the same CR re-enters the queue, a fresh worker picks it up, and the cleanup role runs again. Because the external resource was already deleted in the previous pass, the second run encounters a 404. This sequential re-execution is expected and correct, but only if the cleanup role treats 404 as a success rather than an error. Defence requires idempotent cleanup logic, graceful 404 handling in every delete task, and the understanding that the cleanup role may legitimately run more than once for the same CR across sequential reconcile passes.
+A related hazard is the interrupted-reconcile sequence. controller-runtime's workqueue guarantees that a given CR key is processed by at most one worker at a time — two workers cannot simultaneously run the cleanup role for the same CR. The real danger arises when a single worker runs the cleanup role, successfully removes the external resource, and then crashes or loses the leader lease before the SDK records successful completion and removes the finalizer. On the next watch event the same CR re-enters the queue, a fresh worker picks it up, and the cleanup role runs again. Because the external resource was already deleted in the previous pass, the second run encounters a 404. This sequential re-execution is expected and correct, but only if the cleanup role treats 404 as a success rather than an error. Defence requires idempotent cleanup logic, graceful 404 handling in every delete task, and the understanding that the cleanup role may legitimately run more than once for the same CR across sequential reconcile passes.
 
 ```yaml
 # watches.yaml with finalizer and deletion role wired
@@ -209,7 +203,6 @@ A related hazard is the interrupted-reconcile sequence. controller-runtime's wor
   kind: DemoApp
   role: demoapp
   manageStatus: false
-  maxConcurrentReconciles: 4
   reconcilePeriod: 10m
   finalizer:
     name: app.example.com/cleanup
@@ -222,10 +215,10 @@ The `finalizer.name` and `finalizer.role` keys in `watches.yaml` instruct the An
 
 A single-instance development operator that behaves correctly on five CRs may fail in subtle ways on five thousand. The failure modes differ in kind, not just in degree. When scale increases, the reconcile queue grows faster than it drains, per-run Ansible startup overhead compounds, the Kubernetes API server receives proportionally more traffic from the operator, and resource contention between concurrent reconcile workers becomes a real operational concern. Each of these is a design problem, not an infrastructure problem. Adding more CPU to the controller Pod does not fix an operator that makes three unnecessary API calls per reconcile or runs a full role even when all child resources are already converged.
 
-The first principle at scale is aggressive cache use. Controller-runtime's informer cache is a local, in-memory snapshot of Kubernetes objects that the manager has registered to watch. When an Ansible Operator calls `kubernetes.core.k8s_info`, it reads from the Kubernetes API server by default rather than the local cache. At small scale, this is imperceptible. At ten thousand CRs each reconciling every ten minutes, the accumulated API reads become a measurable load on the API server. The fix is to ensure that informer-backed resource types are declared as dependent watches in `watches.yaml` so controller-runtime subscribes to them, and then to understand when module calls will use the cache versus bypass it.
+The first principle at scale is aggressive cache use. Controller-runtime's informer cache is a local, in-memory snapshot of Kubernetes objects that the manager has registered to watch. When an Ansible Operator calls `kubernetes.core.k8s_info`, it reads from the Kubernetes API server by default rather than the local cache. At small scale, this is imperceptible. At ten thousand CRs each reconciling every ten minutes, the accumulated API reads become a measurable load on the API server. The fix is to enable `watchDependentResources: true` when owned child-resource changes should trigger reconciliation, add `blacklist` entries for high-churn kinds, and then understand when module calls will use the cache versus bypass it.
 
 ```yaml
-# watches.yaml with dependent watches for cache registration
+# watches.yaml with owned child-resource watches enabled
 ---
 - version: v1
   group: app.example.com
@@ -233,17 +226,19 @@ The first principle at scale is aggressive cache use. Controller-runtime's infor
   role: demoapp
   manageStatus: false
   watchDependentResources: true
-  dependentWatches:
+  blacklist:
     - version: v1
-      kind: ConfigMap
-    - apiVersion: apps/v1
-      kind: Deployment
+      group: ""
+      kind: Event
+    - version: v1
+      group: ""
+      kind: Pod
 ```
 
-The second principle is rate-limited requeue. Controller-runtime provides exponential backoff on reconcile errors via `RateLimitedRequeue`, which defers the next reconcile by an increasing interval rather than immediately requeuing on failure. Without rate limiting, a single misbehaving CR can monopolize the worker queue by continuously failing and requeuing. With rate limiting, transient failures back off progressively, and healthy CRs continue to reconcile in parallel. The Ansible Operator exposes per-run requeue control through the `ANSIBLE_OPERATOR_PLUGINS_RECONCILE_PERIOD` environment variable and through the `reconcilePeriod` field in `watches.yaml`.
+The second principle is rate-limited requeue. Controller-runtime provides exponential backoff on reconcile errors via rate-limited workqueue behavior, which defers the next reconcile by an increasing interval rather than immediately requeuing on failure. Without rate limiting, a single misbehaving CR can monopolize the worker queue by continuously failing and requeuing. With rate limiting, transient failures back off progressively, and healthy CRs continue to reconcile in parallel. Periodic reconciliation is configured with the `reconcilePeriod` field in `watches.yaml`, the manager-wide `--reconcile-period` flag, or the `ansible.sdk.operatorframework.io/reconcile-period` annotation on a CR when a specific instance needs a different timer.
 
 ```yaml
-# config/manager/manager.yaml excerpt — concurrency and requeue tuning
+# config/manager/manager.yaml excerpt — concurrency, periodic reconcile, and verbosity tuning
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -253,12 +248,13 @@ spec:
     spec:
       containers:
         - name: manager
+          args:
+            - "--max-concurrent-reconciles=8"
+            - "--reconcile-period=600s"
           env:
-            - name: ANSIBLE_OPERATOR_PLUGINS_MAX_CONCURRENT_RECONCILES
+            - name: MAX_CONCURRENT_RECONCILES_DEMOAPP_EXAMPLE_COM
               value: "8"
-            - name: ANSIBLE_OPERATOR_PLUGINS_RECONCILE_PERIOD
-              value: "600s"
-            - name: ANSIBLE_OPERATOR_PLUGINS_VERBOSITY
+            - name: ANSIBLE_VERBOSITY_DEMOAPP_EXAMPLE_COM
               value: "1"
 ```
 
@@ -285,9 +281,9 @@ The third principle is deduplication of work through early-exit. At scale, many 
 
 Cache invalidation at scale requires special attention when the operator manages external resources that do not produce Kubernetes events. An operator that creates a cloud load balancer for each CR cannot rely on watch events from the load balancer to trigger reconciles when external state drifts. Periodic reconciliation via `reconcilePeriod` fills this gap, but the period must be long enough that it does not flood the queue under normal operation. A useful guideline is to set `reconcilePeriod` to at least twice the expected maximum latency for external state changes to propagate, then add per-CR exponential backoff for resources that are actively failing reconciles.
 
-The `maxConcurrentReconciles` setting controls how many `ansible-runner` processes execute in parallel. The optimal value depends on the controller Pod's CPU and memory limits, the cost of each role run (network calls, collection loading, Ansible startup time), and the rate of incoming events. Setting this too low serializes reconciles and creates queue backpressure at scale. Setting it too high creates CPU contention between workers and may cause API server throttling. A practical starting point for most operators is four to eight concurrent reconciles, measured under realistic load before deploying to production and adjusted based on observed queue depth and error rates.
+The `--max-concurrent-reconciles` flag and `MAX_CONCURRENT_RECONCILES_<KIND>_<GROUP>` override control how many `ansible-runner` processes execute in parallel. The optimal value depends on the controller Pod's CPU and memory limits, the cost of each role run (network calls, collection loading, Ansible startup time), and the rate of incoming events. Setting this too low serializes reconciles and creates queue backpressure at scale. Setting it too high creates CPU contention between workers and may cause API server throttling. A practical starting point for most operators is four to eight concurrent reconciles, measured under realistic load before deploying to production and adjusted based on observed queue depth and error rates.
 
-Pause and predict: if you set `maxConcurrentReconciles: 100` for an operator managing 10,000 CRs that all need reconciliation after a cluster upgrade, what is likely to happen to the Kubernetes API server? One hundred simultaneous `ansible-runner` processes, each making several `k8s` and `k8s_info` calls, will generate a burst of hundreds of API requests per second from a single operator Pod. Most production API servers have admission rate limits that begin throttling the operator, causing reconcile failures that themselves trigger requeue events, amplifying the burst further. The correct response is a lower `maxConcurrentReconciles` combined with a jitter mechanism to spread the reconcile load after burst-inducing events.
+Pause and predict: if you set `--max-concurrent-reconciles=100` for an operator managing 10,000 CRs that all need reconciliation after a cluster upgrade, what is likely to happen to the Kubernetes API server? One hundred simultaneous `ansible-runner` processes, each making several `k8s` and `k8s_info` calls, will generate a burst of hundreds of API requests per second from a single operator Pod. Most production API servers have admission rate limits that begin throttling the operator, causing reconcile failures that themselves trigger requeue events, amplifying the burst further. The correct response is a lower concurrency setting combined with a jitter mechanism to spread the reconcile load after burst-inducing events.
 
 ## Upgrade Safety: CRD Schema Migrations
 
@@ -371,7 +367,7 @@ An Ansible Operator running in a production cluster typically deploys multiple r
 
 Operator SDK wires leader election automatically when `--leader-elect=true` is passed to the manager binary. The lease is stored as a `Lease` object in the same namespace as the operator, named after the operator's `leader-election-id` argument. The holder renews the lease on a schedule derived from `leaseDuration` and `renewDeadline`. If the holder fails to renew within `renewDeadline`, the lease expires and any of the waiting pods can claim it. The default values in controller-runtime are `leaseDuration: 15s`, `renewDeadline: 10s`, `retryPeriod: 2s`, which means a failed leader will be replaced within approximately 15 seconds under normal network conditions.
 
-What happens to a reconcile that is in progress when the leader loses its lease? The outgoing leader's manager receives a context cancellation signal. `ansible-runner` processes that are already executing are not immediately killed; they continue until they complete or until the manager's `terminationGracePeriodSeconds` elapses. If the Ansible role completes before the timeout, it will attempt to patch CR status and remove finalizers. Those API calls use optimistic concurrency via `resourceVersion`, so if the new leader has already patched the same fields, the outgoing leader's write will fail with a conflict error rather than silently overwriting the new leader's work. This is the correct behavior: the conflict error is logged, the resource is requeued, and the new leader reconciles it on the next pass.
+What happens to a reconcile that is in progress when the leader loses its lease? The outgoing leader's manager receives a context cancellation signal. `ansible-runner` processes that are already executing are not immediately killed; they continue until they complete or until the manager's `terminationGracePeriodSeconds` elapses. If the Ansible role completes before the timeout, the manager may still try to publish CR status or record successful finalizer-role completion so the SDK can remove its configured finalizer. Those API calls use optimistic concurrency via `resourceVersion`, so if the new leader has already updated the same fields, the outgoing leader's write will fail with a conflict error rather than silently overwriting the new leader's work. This is the correct behavior: the conflict error is logged, the resource is requeued, and the new leader reconciles it on the next pass.
 
 ```yaml
 # config/manager/manager.yaml with HA and leader election settings
@@ -485,7 +481,7 @@ containers:
       - "--zap-encoder=json"
       - "--zap-stacktrace-level=error"
     env:
-      - name: ANSIBLE_OPERATOR_PLUGINS_VERBOSITY
+      - name: ANSIBLE_VERBOSITY_DEMOAPP_EXAMPLE_COM
         value: "1"
 ```
 
@@ -578,7 +574,7 @@ The Molecule testing framework supports scenario-based testing for Ansible Opera
 | Conditions array with machine-readable `reason` codes | Any operator going to production | Enables alertmanager rules and consuming controllers to respond to specific conditions without parsing message strings |
 | Separate `finalizer.role` for deletion logic | Operators managing any external resources | Isolates deletion path for independent testing; prevents deletion logic from contaminating the create/update path |
 | Early-exit on already-converged state | Operators managing more than 100 CRs | Reduces API write traffic and Ansible overhead for the common "nothing changed" case |
-| `maxConcurrentReconciles` tuned under realistic load | All operators before production | Prevents queue serialization at scale without triggering API server throttling |
+| `--max-concurrent-reconciles` tuned under realistic load | All operators before production | Prevents queue serialization at scale without triggering API server throttling |
 | OLM bundle with `Manual` upgrade approval | Production cluster deployments | Adds a change-control gate before new operator versions reach tenant workloads |
 | `--zap-encoder=json` on the manager binary | All operators in shared clusters | Makes reconcile events queryable by Loki and Elasticsearch without custom log parsing |
 
@@ -587,7 +583,7 @@ The Molecule testing framework supports scenario-based testing for Ansible Opera
 | Overwriting `lastTransitionTime` on every reconcile | Simpler to write; avoids the read-before-write pattern | Read current condition status first; update `lastTransitionTime` only when `status` changes from one value to another |
 | Circular finalizer dependencies between two CR types | Parent-child relationships invite mutual cleanup guards | Establish a strict ownership hierarchy; children always finalize before parents; parents never wait on children |
 | Setting `reconcilePeriod: 30s` for "safety" | Assumption that frequent checks prevent drift | Use dependent watches for child resources; keep period at 10m or longer; rely on watch events for prompt reactions |
-| Not setting `maxConcurrentReconciles` before scaling beyond 200 CRs | Default of 1 feels safe; nobody revisits defaults | Profile queue depth under realistic load at 50 CRs and set concurrency based on measured API throughput budget |
+| Not profiling concurrency before scaling beyond 200 CRs | The default `runtime.NumCPU()` may look adequate in a small test; nobody revisits it under realistic event volume | Profile queue depth under realistic load at 50 CRs and set `--max-concurrent-reconciles` or the per-GVK override based on measured API throughput budget |
 | Skipping `operator-sdk bundle validate` before publishing | Build succeeds; warnings seem cosmetic | OperatorHub rejects bundles with schema warnings; all validate output should be treated as errors before publishing |
 | Using `wait: true` in `kubernetes.core.k8s` without a meaningful timeout | Module default of 120s seems conservative | A 120s block starves other reconciles; set timeout proportional to your SLO and handle `failed` results with rescue blocks |
 | Assuming a "minor" field rename needs no conversion strategy | Rename feels like a backwards-compatible change | Any field name change breaks old CRs unless the role accepts both names; use `x-kubernetes-validations` or a conversion webhook |
@@ -604,7 +600,7 @@ Does this operator create external resources (cloud APIs, DNS, databases)?
     NO  → Owner references plus Kubernetes garbage collection are sufficient.
 
 Does the operator manage more than 50 CRs per cluster?
-    YES → Profile reconcile duration; set maxConcurrentReconciles;
+    YES → Profile reconcile duration; set --max-concurrent-reconciles;
           add early-exit for already-converged resources.
     NO  → SDK defaults are adequate; revisit at 200+ CRs.
 
@@ -643,7 +639,7 @@ Is reconcile observability required for SLO tracking?
 | Embedding deletion logic in the main role with `when: demoapp_deleting` | Seems like fewer files to manage | Move deletion to a separate role via `finalizer.role` in `watches.yaml`; test it independently with a dedicated Molecule scenario |
 | Omitting `demoapps/status` from the ClusterRole | Granting `demoapps` looks sufficient; subresource is easy to miss | Explicitly add `demoapps/status` and `demoapps/finalizers` as separate resources in the RBAC rules |
 | Using the same `--leader-election-id` for two operators in one namespace | Copy-paste from an existing operator deployment template | Each operator must have a unique `leader-election-id` to avoid competing for the same Lease resource |
-| Not profiling or tuning `maxConcurrentReconciles` before production | Default of 1 works fine at 10 CRs; nobody revisits defaults | Profile under realistic CR count and event rates; start at 4, measure API throughput and queue depth, adjust |
+| Not profiling or tuning `--max-concurrent-reconciles` before production | A small test works fine, so nobody revisits concurrency under realistic CR counts | Profile under realistic CR count and event rates; start at 4, measure API throughput and queue depth, adjust |
 | Publishing an OLM bundle with `operator-sdk bundle validate` warnings | Build pipeline passes; warnings appear non-blocking | OperatorHub and many enterprise catalogs reject bundles with schema warnings; run `validate` with `--select-optional name=operatorhub` and treat all output as blocking |
 | Setting `wait: true` without a bounded `wait_timeout` in `kubernetes.core.k8s` | Default seems conservative; explicit timeout feels like extra YAML | A 120s blocking call starves the worker for other CRs; set an explicit timeout matched to your p99 reconcile budget and add a `rescue` block for timeout failures |
 | Treating 404 from an external API as an error in the deletion role | Fail-fast principle; absence seems like a problem | During deletion, 404 means the resource is already gone — that is the success state; use `failed_when: false` with `when: check.status == 200` on the delete task |
@@ -660,7 +656,7 @@ The `lastTransitionTime` for the `Ready` condition is almost certainly being res
 <details>
 <summary>A custom resource with finalizer `app.example.com/cleanup` has had `deletionTimestamp` set for 45 minutes. The resource is still present. Operator logs show no recent errors. What sequence of events should you investigate, and what commands would you run?</summary>
 
-The most common explanation is that the cleanup role ran, handled the external resource (returning success on a 404), but never patched the finalizer away. This can happen if the role exits before reaching the finalizer-removal task due to a `failed_when` mismatch, or if the `kubernetes.core.k8s` task patching `finalizers: []` silently fails because the service account lacks `update` permission on `demoapps/finalizers`. Start by checking the operator service account's RBAC: run `kubectl auth can-i update demoapps/finalizers --as=system:serviceaccount:demoapp-operator-system:demoapp-operator-controller-manager -n <namespace>`. Then check whether the deletion role is being triggered at all by searching operator logs for the CR name around the `deletionTimestamp` time. Finally, verify that `watches.yaml` has a `finalizer.role` entry and that the deletion role includes the `kubernetes.core.k8s` task that patches `finalizers` to an empty list.
+The most common explanation is that the finalizer role is not completing successfully from the SDK's perspective, even if one cleanup task appears to have handled the external resource. Start by checking whether the deletion role is being triggered at all by searching operator logs for the CR name around the `deletionTimestamp` time. Then inspect the role output for any later task failure, undefined variable, missing collection, or `failed_when` mismatch after the external cleanup step. Finally, verify that `watches.yaml` has a `finalizer.role` entry and that the deletion role only deletes external resources idempotently; it should not clear the CR finalizer list itself, because the SDK removes the configured finalizer after the role completes successfully.
 
 </details>
 
@@ -686,9 +682,9 @@ Two distinct risks deserve explicit flags. First, `AllNamespaces` mode with Serv
 </details>
 
 <details>
-<summary>Your operator manages 8,000 DemoApp CRs with maxConcurrentReconciles set to 20. After a cluster version upgrade, all 8,000 CRs are requeued simultaneously. What do you expect to observe, and what changes would you make before the next planned upgrade?</summary>
+<summary>Your operator manages 8,000 DemoApp CRs with `--max-concurrent-reconciles=20`. After a cluster version upgrade, all 8,000 CRs are requeued simultaneously. What do you expect to observe, and what changes would you make before the next planned upgrade?</summary>
 
-With 8,000 CRs queued and 20 concurrent workers, and assuming each reconcile takes approximately 4 seconds, the queue drains at roughly 5 reconciles per second. Full queue drain takes over 26 minutes. During that window, CRs near the end of the queue have stale status, and the operator's status-update metric will show a sustained burst of activity that may look like an incident to any SLO alerts configured on status freshness. The API server will receive 20 simultaneous Ansible-runner processes each making several calls. Before the next upgrade, three changes are worth making: first, add a small random `requeue_after` value to spread the initial burst across the first few minutes instead of hitting the queue simultaneously; second, increase `maxConcurrentReconciles` from 20 to 40 after profiling that the API server can handle the increased throughput; third, add a Prometheus alert on `controller_runtime_reconcile_queue_length` so the team is notified when the queue grows unusually long and can distinguish a planned upgrade burst from an unexpected problem.
+With 8,000 CRs queued and 20 concurrent workers, and assuming each reconcile takes approximately 4 seconds, the queue drains at roughly 5 reconciles per second. Full queue drain takes over 26 minutes. During that window, CRs near the end of the queue have stale status, and the operator's status-update metric will show a sustained burst of activity that may look like an incident to any SLO alerts configured on status freshness. The API server will receive 20 simultaneous Ansible-runner processes each making several calls. Before the next upgrade, three changes are worth making: first, add a small random `requeue_after` value to spread the initial burst across the first few minutes instead of hitting the queue simultaneously; second, increase `--max-concurrent-reconciles` from 20 to 40 only after profiling that the API server can handle the increased throughput; third, add a Prometheus alert on `workqueue_depth` labeled by controller `name` so the team is notified when the queue grows unusually long and can distinguish a planned upgrade burst from an unexpected problem.
 
 </details>
 
@@ -729,11 +725,9 @@ spec:
           args:
             - "--leader-elect=true"
             - "--leader-election-id=demoapp-operator"
+            - "--max-concurrent-reconciles=4"
             - "--zap-log-level=info"
             - "--zap-encoder=json"
-          env:
-            - name: ANSIBLE_OPERATOR_PLUGINS_MAX_CONCURRENT_RECONCILES
-              value: "4"
 ```
 
 Build and deploy.
@@ -813,7 +807,7 @@ Record the total time from first apply to last `Ready` phase. You will compare t
 <details>
 <summary>Solution guidance for Task 3</summary>
 
-With `maxConcurrentReconciles: 4` and assuming each reconcile takes 3-6 seconds including Ansible startup, you should observe the 100 CRs drain over approximately 1.5-3 minutes. If all 100 show `Ready` near-simultaneously, your actual concurrency may be higher than the configured value — check whether the environment variable setting took effect in the deployed Pod. The `uniq -c` output lets you track how many CRs remain in each phase over time.
+With `--max-concurrent-reconciles=4` and assuming each reconcile takes 3-6 seconds including Ansible startup, you should observe the 100 CRs drain over approximately 1.5-3 minutes. If all 100 show `Ready` near-simultaneously, your actual concurrency may be higher than the configured value — check whether the manager argument took effect in the deployed Pod. The `uniq -c` output lets you track how many CRs remain in each phase over time.
 
 </details>
 
@@ -853,12 +847,12 @@ The lease transition should occur within 10-15 seconds. After the new leader acq
 
 ### Task 5: Increase Concurrency and Compare Drain Time
 
-Update `ANSIBLE_OPERATOR_PLUGINS_MAX_CONCURRENT_RECONCILES` to 10, redeploy, and create another 100 CRs in a new namespace to compare drain time against the measurement from Task 3.
+Update the per-GVK concurrency override to 10, redeploy, and create another 100 CRs in a new namespace to compare drain time against the measurement from Task 3.
 
 ```bash
 kubectl set env deployment/demoapp-operator-controller-manager \
   -n demoapp-operator-system \
-  ANSIBLE_OPERATOR_PLUGINS_MAX_CONCURRENT_RECONCILES=10
+  MAX_CONCURRENT_RECONCILES_DEMOAPP_EXAMPLE_COM=10
 
 kubectl rollout status deployment/demoapp-operator-controller-manager \
   -n demoapp-operator-system --timeout=60s
@@ -885,10 +879,10 @@ The drain time should be measurably shorter with 10 concurrent workers compared 
 ### Success Criteria
 
 - [ ] You deployed the operator with two replicas and confirmed leader election by reading `spec.holderIdentity` from the Lease object.
-- [ ] You created 100 DemoApp CRs and measured the full queue drain time with `maxConcurrentReconciles: 4`.
+- [ ] You created 100 DemoApp CRs and measured the full queue drain time with `--max-concurrent-reconciles=4`.
 - [ ] You deleted the leader pod and observed the Lease transition to the standby pod within the `leaseDuration` window.
 - [ ] You verified that all CRs recovered to `Ready` status after the leader transition without manual intervention.
-- [ ] You measured queue drain time again at `maxConcurrentReconciles: 10` and compared the result, noting whether API server throttling was a factor.
+- [ ] You measured queue drain time again at `MAX_CONCURRENT_RECONCILES_DEMOAPP_EXAMPLE_COM=10` and compared the result, noting whether API server throttling was a factor.
 - [ ] You can explain why increasing concurrency beyond the API server's throughput budget produces worse drain times due to retry amplification, not better ones.
 
 ## Sources

@@ -28,7 +28,7 @@ After completing this module, you will be able to:
 - **Implement** per-namespace operator scoping using the `WATCH_NAMESPACE` environment variable and articulate the RBAC boundary shift when switching between namespace-scoped and cluster-wide modes.
 - **Diagnose** watch-related reconciliation failures by correlating operator logs, CR status conditions, RBAC denial events, and the specific watches.yaml field responsible for the behavior.
 - **Configure** finalizer mappings in `watches.yaml` and evaluate whether a given cleanup scenario requires a dedicated finalizer role, a deletion-timestamp branch in the main role, or Kubernetes garbage collection alone.
-- **Tune** operator reconciliation throughput by controlling worker concurrency via the `ANSIBLE_WORKERS` environment variable or `--max-concurrent-reconciles` flag, blacklisting high-churn child resource kinds, and choosing `reconcilePeriod` values appropriate to each resource's external drift rate.
+- **Tune** operator reconciliation throughput by controlling worker concurrency with the manager's `--max-concurrent-reconciles` flag or the per-GVK `MAX_CONCURRENT_RECONCILES_<KIND>_<GROUP>` environment override, blacklisting high-churn child resource kinds, and choosing `reconcilePeriod` values appropriate to each resource's external drift rate.
 
 ---
 
@@ -58,7 +58,7 @@ graph TD
 
     NS --> RBAC["Role (namespace)\nvs ClusterRole (cluster)"]
 
-    WY --> PERF["Performance knobs\nANSIBLE_WORKERS, blacklist\nmanageStatus, selector"]
+    WY --> PERF["Performance knobs\nmax-concurrent flag, blacklist\nmanageStatus, selector"]
 
     E1 --> SEL["selector.matchLabels\nfilters watched CRs"]
     E2 --> CS["watchClusterScopedResources\nfor Node, PV, ClusterRole..."]
@@ -266,7 +266,7 @@ For purely Kubernetes-native resources where the watch covers all meaningful cha
 
 The telemetry signal that reveals a reconcile period is causing overload is a flat, clock-like reconciliation rate that does not correlate with cluster activity. If the operator exposes Prometheus metrics via `--metrics-bind-address`, the counter `controller_runtime_reconcile_total{controller="<kind>"}` should grow at a steady rate equal to `CR_count ÷ reconcilePeriod`. Deviations above this baseline indicate that dependent watch events or event storms are layering on top of the timer. The diagnostic procedure is to temporarily set `reconcilePeriod: 0s` on the suspect entry and observe whether the reconciliation rate drops toward zero; if the rate stays elevated, event-driven triggers rather than timers are the dominant source, and the fix is an expanded `blacklist` or setting `watchDependentResources: false`.
 
-Scaling to ten thousand or more custom resources under timer-driven reconciliation requires explicit capacity planning that the default configuration does not provide. At 10,000 CRs with a `reconcilePeriod: 30m`, the timer generates 333 reconciliations per minute—one every 0.18 seconds—sustained continuously regardless of cluster activity. With a single worker (the default when `ANSIBLE_WORKERS` is unset) and an Ansible role that takes 500 milliseconds per run (a reasonable estimate for roles with one or two API calls), the worker saturates at two reconciliations per second maximum, meaning the full CR population cycles in 83 minutes rather than the configured 30. The queue depth grows monotonically under these conditions. The remediation has three levers: lengthen the period if the external drift rate allows, raise the worker count via `ANSIBLE_WORKERS` or `--max-concurrent-reconciles` if CR reconciliations are independent of each other, or optimize the role's no-op path. A well-tuned no-op path—a single `kubernetes.core.k8s_info` task to read current state followed by `meta: end_play` when desired state already matches—can complete in under 100 milliseconds, delivering a five-times throughput improvement without touching worker count.
+Scaling to ten thousand or more custom resources under timer-driven reconciliation requires explicit capacity planning that the default configuration does not provide. At 10,000 CRs with a `reconcilePeriod: 30m`, the timer generates 333 reconciliations per minute—one every 0.18 seconds—sustained continuously regardless of cluster activity. The SDK's default concurrency is `runtime.NumCPU()`, the logical CPU count visible to the manager process, so the exact baseline depends on the controller Pod's CPU environment. If you deliberately cap a lab or production rollout to `--max-concurrent-reconciles=1`, and the Ansible role takes 500 milliseconds per run, that single-worker scenario saturates at two reconciliations per second maximum, meaning the full CR population cycles in 83 minutes rather than the configured 30. The queue depth grows monotonically under those explicit conditions. The remediation has three levers: lengthen the period if the external drift rate allows, raise concurrency with `--max-concurrent-reconciles` or a per-GVK `MAX_CONCURRENT_RECONCILES_<KIND>_<GROUP>` override if CR reconciliations are independent of each other, or optimize the role's no-op path. A well-tuned no-op path—a single `kubernetes.core.k8s_info` task to read current state followed by `meta: end_play` when desired state already matches—can complete in under 100 milliseconds, delivering a five-times throughput improvement without touching worker count.
 
 The interaction between `reconcilePeriod` and `watchDependentResources` compounds. Configuring both a non-zero period and `watchDependentResources: true` without a comprehensive `blacklist` means reconciliation fires from two independent sources: event-driven from child changes and timer-driven from the period. On a cluster with many CRs, the queues grow faster than the workers process them. The rule: use `reconcilePeriod` for resources with external state that cannot be observed through Kubernetes events; disable `watchDependentResources` for purely external operators where no Kubernetes-native drift needs event-driven detection; avoid combining a short period with broad dependent watches and a minimal blacklist.
 
@@ -372,7 +372,7 @@ The `selector` field supports the full Kubernetes label selector syntax, includi
 
 This selector watches resources in `production` or `canary` environments while excluding any resource labeled `skip-operator`—a useful pattern for emergency bypass when a CR needs to be pinned outside operator control temporarily without deleting it.
 
-Ansible operator worker concurrency is controlled at the operator binary level, not per `watches.yaml` entry. The two levers are the `ANSIBLE_WORKERS` environment variable on the manager Pod and the `--max-concurrent-reconciles` flag passed to the manager process. Both apply globally across all CRD entries the operator manages. The default is 1, meaning all reconciliation requests across all entries share one worker pool processed serially. Raising the worker count is appropriate when CRs across different entries are demonstrably independent and reconciliation takes long enough—due to external API calls or long-running Ansible tasks—that the single worker becomes a latency bottleneck:
+Ansible operator worker concurrency is controlled outside `watches.yaml`. The global lever is the `--max-concurrent-reconciles` flag passed to the manager process, and administrators can override a specific GVK with `MAX_CONCURRENT_RECONCILES_<KIND>_<GROUP>` on the manager Pod. The default is `runtime.NumCPU()`, meaning the controller starts with a concurrency value based on the logical CPUs available to the process rather than a fixed value of one. Raising concurrency is appropriate when CRs across different entries are demonstrably independent and reconciliation takes long enough—due to external API calls or long-running Ansible tasks—that queue latency becomes a bottleneck:
 
 <!-- code-verified-against: https://sdk.operatorframework.io/docs/building-operators/ansible/reference/watches/ -->
 ```yaml
@@ -385,12 +385,14 @@ spec:
     spec:
       containers:
       - name: manager
+        args:
+        - "--max-concurrent-reconciles=3"
         env:
-        - name: ANSIBLE_WORKERS
+        - name: MAX_CONCURRENT_RECONCILES_WEBAPP_PLATFORM_EXAMPLE_COM
           value: "3"
 ```
 
-The API server rate limit, not CPU, is almost always the binding constraint when raising worker count. Each concurrent worker issues Kubernetes API calls for every task that uses `kubernetes.core.k8s` or `kubernetes.core.k8s_info`. At three workers, API call frequency triples. Monitor the operator's API server request rate and watch for 429 `TooManyRequests` responses in the operator logs before raising the count above 3. A value above 5 rarely improves throughput in practice because the API server backpressure dominates.
+The API server rate limit, not CPU, is almost always the binding constraint when raising worker count. Each concurrent reconcile issues Kubernetes API calls for every task that uses `kubernetes.core.k8s` or `kubernetes.core.k8s_info`. At three concurrent reconciles, API call frequency can roughly triple. Monitor the operator's API server request rate and watch for 429 `TooManyRequests` responses in the operator logs before raising the count above 3. A value above 5 rarely improves throughput in practice because the API server backpressure dominates.
 
 The `manageStatus` field determines whether the SDK writes `status.conditions` after each Ansible runner invocation. When `manageStatus: true` (the default), the operator automatically records whether the run succeeded and when the last reconcile occurred. When `manageStatus: false`, the status subresource is untouched by the SDK; the Ansible role owns it entirely through explicit `kubernetes.core.k8s` tasks that update the status. Using both simultaneously—`manageStatus: true` and status-writing tasks in the role—creates a last-writer-wins conflict that produces inconsistent status conditions. Choose one ownership model per entry and document the decision in the watches.yaml comment for the team.
 
@@ -414,7 +416,7 @@ The `manageStatus` field determines whether the SDK writes `status.conditions` a
 | `ClusterRole` for a namespace-scoped operator | One bug or exploit has cluster-wide read access | Set `WATCH_NAMESPACE`; use a namespace-scoped `Role` with a `RoleBinding` |
 | Finalizer without idempotent cleanup role | Network failures during cleanup cause the role to fail on retry; CR stuck in `Terminating` | Use `state: absent` with `ignore_errors: true`; verify cleanup tasks are safe to run multiple times |
 | Both `manageStatus: true` and role-managed status | SDK and role write the same status fields; last-writer-wins produces inconsistent conditions | Pick one ownership model; set `manageStatus: false` when the role manages status |
-| `ANSIBLE_WORKERS=10` without rate limit testing | API server returns 429; operator enters exponential backoff; CR reconciliation lags | Start at 1–3 workers; load test with realistic CR counts; monitor for 429 responses |
+| `--max-concurrent-reconciles=10` without rate limit testing | API server returns 429; operator enters exponential backoff; CR reconciliation lags | Start with a modest value such as 2–3; load test with realistic CR counts; monitor for 429 responses |
 | Selector on a shared CRD without label enforcement | New CRs created without the required label are silently ignored forever | Enforce labels via a mutating admission webhook or CRD schema defaulting |
 
 ---
@@ -431,7 +433,7 @@ The central decision when configuring a `watches.yaml` entry is the trust and bl
 | Does the role create external resources (S3, RDS, IAM, DNS)? | Set `reconcilePeriod` matching external drift rate (5–30m) | Set `reconcilePeriod: 0s` (purely event-driven) |
 | Does deletion require cleanup of external resources or ordered teardown? | Add `finalizer.name` + `finalizer.role` for complex cleanup | Rely on Kubernetes garbage collection via owner references |
 | Does the operator share this CRD with another operator instance? | Add `selector.matchLabels` with a labeling convention; enforce via admission | No selector needed |
-| Is reconciliation latency a bottleneck (runs >30s for independent CRs)? | Raise `ANSIBLE_WORKERS` to 2–3; monitor for 429 API errors | Leave `ANSIBLE_WORKERS` unset (default: 1) |
+| Is reconciliation latency a bottleneck (runs >30s for independent CRs)? | Set `--max-concurrent-reconciles=2` or `3`; monitor for 429 API errors | Keep the default `runtime.NumCPU()` value and revisit after profiling |
 | Does the role manage status manually via `kubernetes.core.k8s`? | Set `manageStatus: false` | Leave `manageStatus: true` (default) |
 
 ---
@@ -458,7 +460,7 @@ The central decision when configuring a `watches.yaml` entry is the trust and bl
 | Finalizer cleanup role that does not handle already-deleted resources | External resources are gone after the first cleanup attempt; subsequent retries fail hard; CR stuck in `Terminating` | Use `state: absent` with `ignore_errors: true` on all deletion tasks; verify idempotency by running the role twice on a test CR |
 | `manageStatus: true` with role-managed status tasks | SDK and role both write `status.conditions`; last-writer-wins produces unexpected conditions visible to users | Set `manageStatus: false` when the role writes any status field; ensure the role writes all status fields on every run |
 | Non-zero `reconcilePeriod` on a high-CR-count namespace-scoped deployment | 500 CRs × 1-minute period = 500 reconciliations/minute from timers alone; API server throttles the operator | Audit all `watches.yaml` entries with non-zero periods; use periods matching actual external drift frequency, not a conservative safety margin |
-| `ANSIBLE_WORKERS` above 3 without 429 monitoring | API server rate limiting causes backoff that is invisible without log monitoring | Enable API server error logging in the operator; alert on 429 responses; validate worker count with a load test before production |
+| High `--max-concurrent-reconciles` values without 429 monitoring | API server rate limiting causes backoff that is invisible without log monitoring | Enable API server error logging in the operator; alert on 429 responses; validate worker count with a load test before production |
 | Using a `selector` without enforcing labels at admission | CRs created without the required labels are silently ignored; users see no error and no reconciliation | Add a mutating admission webhook or CRD schema default values to ensure the label is always present on new CRs |
 
 ---
@@ -489,7 +491,7 @@ The most likely explanation is that the finalizer role succeeded on the first at
 <details>
 <summary>You have a `watches.yaml` with two entries: `AppService` (reconcilePeriod 0s, `watchDependentResources: true`, no blacklist) and `AppConfig` (reconcilePeriod 0s, `watchDependentResources: false`). During a batch creation of 50 `AppService` CRs, `AppConfig` CRs stop being reconciled for several minutes. Explain why, and propose a fix.</summary>
 
-The Ansible runner process pool is shared across all entries in `watches.yaml`. When 50 `AppService` CRs are created simultaneously, they flood the reconciliation queue with creation events plus a cascade of Pod and Event events from `watchDependentResources: true`. With a single worker (the default when `ANSIBLE_WORKERS` is unset), only one reconciliation runs at a time, each taking several seconds. The queue grows faster than it drains, and because the queue is shared with `AppConfig` events, those events wait at the back of the combined queue. `AppConfig` reconciliation effectively pauses until the `AppService` burst clears. The fix has two parts: first, add a `blacklist` for `Event` and `Pod` in the `AppService` entry to eliminate the cascade of secondary events from the batch creation. Second, set `ANSIBLE_WORKERS=3` on the manager Pod to drain the reconciliation queue faster during bursts. Monitor API server error rates after the change to ensure the increased concurrency does not trigger 429 throttling.
+The Ansible runner process pool is shared across all entries in `watches.yaml`. When 50 `AppService` CRs are created simultaneously, they flood the reconciliation queue with creation events plus a cascade of Pod and Event events from `watchDependentResources: true`. If this operator was explicitly started with `--max-concurrent-reconciles=1` for a conservative rollout, only one reconciliation runs at a time, each taking several seconds. The queue grows faster than it drains, and because the queue is shared with `AppConfig` events, those events wait at the back of the combined queue. `AppConfig` reconciliation effectively pauses until the `AppService` burst clears. The fix has two parts: first, add a `blacklist` for `Event` and `Pod` in the `AppService` entry to eliminate the cascade of secondary events from the batch creation. Second, raise the manager to `--max-concurrent-reconciles=3` or set the matching per-GVK `MAX_CONCURRENT_RECONCILES_APPSERVICE_PLATFORM_EXAMPLE_COM=3` override to drain the reconciliation queue faster during bursts. Monitor API server error rates after the change to ensure the increased concurrency does not trigger 429 throttling.
 
 </details>
 
@@ -598,39 +600,53 @@ Overwrite the generated `watches.yaml` with a configuration that exercises the p
 
 ### Task 2: Write the reconciliation and cleanup roles
 
-Write the main reconciliation task for `PlatformApp`. This task creates a Deployment owned by the CR using explicit owner references, enabling Kubernetes garbage collection to clean up the Deployment automatically if the finalizer role fails or is bypassed. The `spec.replicas` and `spec.image` fields are read from the CR spec with defaults as fallbacks:
+Write the main reconciliation task for `PlatformApp`. This task creates a Deployment owned by the CR using explicit owner references, enabling Kubernetes garbage collection to clean up the Deployment automatically if the finalizer role fails or is bypassed. The SDK injects CR spec fields as top-level Ansible variables, so the role first derives the same defaults used in Module 7.12: `replicas | default(1)` and `image | default('nginx:1.27-alpine')`.
 
 ```bash
 cat > roles/platformapp/tasks/main.yml << 'EOF'
 ---
+- name: Derive PlatformApp desired values
+  ansible.builtin.set_fact:
+    demoapp_name: "{{ ansible_operator_meta.name }}"
+    demoapp_namespace: "{{ ansible_operator_meta.namespace }}"
+    demoapp_replicas: "{{ replicas | default(1) | int }}"
+    demoapp_image: "{{ image | default('nginx:1.27-alpine') }}"
+
 - name: Deploy application
   kubernetes.core.k8s:
     definition:
       apiVersion: apps/v1
       kind: Deployment
       metadata:
-        name: "{{ ansible_operator_meta.name }}-app"
-        namespace: "{{ ansible_operator_meta.namespace }}"
+        name: "{{ demoapp_name }}-app"
+        namespace: "{{ demoapp_namespace }}"
+        labels:
+          app.kubernetes.io/name: demoapp
+          app.kubernetes.io/instance: "{{ demoapp_name }}"
+          app.kubernetes.io/managed-by: ansible-operator
         ownerReferences:
         - apiVersion: apps.platform.example.com/v1alpha1
           kind: PlatformApp
-          name: "{{ ansible_operator_meta.name }}"
+          name: "{{ demoapp_name }}"
           uid: "{{ ansible_operator_meta.uid }}"
           controller: true
           blockOwnerDeletion: true
       spec:
-        replicas: "{{ spec.replicas | default(1) }}"
+        replicas: "{{ demoapp_replicas }}"
         selector:
           matchLabels:
-            app: "{{ ansible_operator_meta.name }}"
+            app.kubernetes.io/name: demoapp
+            app.kubernetes.io/instance: "{{ demoapp_name }}"
         template:
           metadata:
             labels:
-              app: "{{ ansible_operator_meta.name }}"
+              app.kubernetes.io/name: demoapp
+              app.kubernetes.io/instance: "{{ demoapp_name }}"
+              app.kubernetes.io/managed-by: ansible-operator
           spec:
             containers:
             - name: app
-              image: "{{ spec.image | default('nginx:1.25') }}"
+              image: "{{ demoapp_image }}"
 EOF
 ```
 
@@ -717,7 +733,7 @@ metadata:
     managed-by: watches-lab
 spec:
   replicas: 1
-  image: nginx:1.25
+  image: nginx:1.27-alpine
 EOF
 ```
 
@@ -736,20 +752,20 @@ kubectl scale deployment demo-app-app -n platform-tenants --replicas=3
 Verify that the operator restores the replica count. Because Deployment is not in the `blacklist`, the scale event triggers a reconciliation within seconds rather than waiting for the 5-minute `reconcilePeriod`—this is the core behavioral difference between event-driven and timer-driven reconciliation paths:
 
 ```bash
-kubectl get deployment demo-app-app -n platform-tenants -o jsonpath='{.spec.replicas}'
+kubectl get deployment demo-app-app -n platform-tenants -o go-template='{{ index .spec "replicas" }}'
 ```
 
 <details>
 <summary>Expected behavior and timing</summary>
 
-Because Deployment is not in the `blacklist` and `watchDependentResources: true`, the scale event triggers reconciliation quickly—usually within a few seconds. The operator re-applies the role with `spec.replicas: 1`, restoring the Deployment to one replica. If you had set `watchDependentResources: false`, the operator would only detect the drift after the 5-minute `reconcilePeriod`.
+Because Deployment is not in the `blacklist` and `watchDependentResources: true`, the scale event triggers reconciliation quickly—usually within a few seconds. The operator re-applies the role with the CR's `replicas` variable still set to 1, restoring the Deployment to one replica. If you had set `watchDependentResources: false`, the operator would only detect the drift after the 5-minute `reconcilePeriod`.
 
 </details>
 
 **Success criteria**:
 - [ ] Initial reconciliation creates the Deployment without errors
 - [ ] Scaling the Deployment to 3 triggers reconciliation visible in the logs
-- [ ] After reconciliation, `spec.replicas` returns to 1
+- [ ] After reconciliation, the Deployment replica count returns to 1
 
 ### Task 5: Test the finalizer lifecycle
 
@@ -791,7 +807,7 @@ metadata:
   namespace: platform-tenants
 spec:
   replicas: 1
-  image: nginx:1.25
+  image: nginx:1.27-alpine
 EOF
 ```
 
@@ -828,4 +844,4 @@ The `ignored-app` CR should have no status conditions because the operator never
 
 ## Next Module
 
-*Next module coming soon.*
+[Module 7.14: Ansible Operator with AWX/AAP](../module-7.14-awx-aap-operator-integration/)

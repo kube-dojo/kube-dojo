@@ -125,16 +125,18 @@ The `converge.yml` applies your role against localhost with the Ansible connecti
   gather_facts: false
 
   vars:
-    _demoapp_replicas: 2
-    _demoapp_image: "nginx:1.27-alpine"
-    _demoapp_name: "test-app"
-    _demoapp_namespace: "default"
+    replicas: 2
+    image: "nginx:1.27-alpine"
+    port: 80
+    ansible_operator_meta:
+      name: "test-app"
+      namespace: "default"
 
   roles:
     - role: demoapp
 ```
 
-Notice the variable names follow the operator convention: the Ansible Operator SDK passes CR fields as `_<kind_lowercase>_<field>` variables. Replicating that naming in your Molecule scenario means the same role runs identically in tests and in production reconciliation.
+Notice the variable names follow the operator convention from Module 7.12: the Ansible Operator SDK passes CR `spec` fields as top-level Ansible variables, converting camelCase field names to snake_case by default. Replicating `replicas`, `image`, and `port`, plus the reserved `ansible_operator_meta.name` and `ansible_operator_meta.namespace` values, means the same role runs identically in tests and in production reconciliation.
 
 The `verify.yml` asserts the outcomes of the converge. For a delegated scenario, this often means checking rendered template files, checking output registers, or verifying that expected files were written. Since a delegated run does not have a real API server, your role tasks that call `kubernetes.core.k8s` will fail unless you mock the Kubernetes connection. There are two approaches: add `check_mode: true` to skip the actual API calls and only validate the task definitions, or use the `k8s` Molecule driver for the scenario that exercises Kubernetes tasks.
 
@@ -185,10 +187,12 @@ The `converge.yml` for the Kubernetes scenario applies the role with variables d
   gather_facts: false
 
   vars:
-    _demoapp_replicas: 2
-    _demoapp_image: "nginx:1.27-alpine"
-    _demoapp_name: "molecule-test-app"
-    _demoapp_namespace: "molecule-test"
+    replicas: 2
+    image: "nginx:1.27-alpine"
+    port: 80
+    ansible_operator_meta:
+      name: "molecule-test-app"
+      namespace: "molecule-test"
 
   roles:
     - role: demoapp
@@ -232,7 +236,8 @@ The `verify.yml` then uses `kubernetes.core.k8s_info` to read back the child res
       ansible.builtin.assert:
         that:
           - svc_info.resources | length == 1
-          - svc_info.resources[0].spec.selector['app.kubernetes.io/name'] == 'molecule-test-app'
+          - svc_info.resources[0].spec.selector['app.kubernetes.io/name'] == 'demoapp'
+          - svc_info.resources[0].spec.selector['app.kubernetes.io/instance'] == 'molecule-test-app'
         fail_msg: "Service selector does not match expected labels"
 ```
 
@@ -351,7 +356,8 @@ metadata:
   namespace: default
 spec:
   selector:
-    app.kubernetes.io/name: e2e-test-app
+    app.kubernetes.io/name: demoapp
+    app.kubernetes.io/instance: e2e-test-app
 ---
 apiVersion: app.example.com/v1
 kind: DemoApp
@@ -809,7 +815,7 @@ verifier:
   name: ansible
 ```
 
-Create `roles/demoapp/molecule/default/converge.yml`. This playbook is the test driver: it invokes the `demoapp` role with variables that replicate what the Ansible Operator SDK injects from a real CR spec at reconciliation time. The `_demoapp_` prefix convention is not arbitrary — the SDK generates these exact variable names from the CR's `spec` field names, so using the same prefix in the test scenario ensures the role runs with inputs identical to what it would receive from a live CR:
+Create `roles/demoapp/molecule/default/converge.yml`. This playbook is the test driver: it invokes the `demoapp` role with variables that replicate what the Ansible Operator SDK injects from a real CR spec at reconciliation time. The SDK injects spec fields as top-level variables, converting camelCase to snake_case by default, and exposes CR identity through `ansible_operator_meta`. The Molecule scenario mirrors those names directly so the role receives `replicas`, `image`, `port`, and metadata exactly as it would during a live reconcile:
 
 ```yaml
 ---
@@ -818,10 +824,12 @@ Create `roles/demoapp/molecule/default/converge.yml`. This playbook is the test 
   connection: local
   gather_facts: false
   vars:
-    _demoapp_replicas: 2
-    _demoapp_image: "nginx:1.27-alpine"
-    _demoapp_name: "molecule-unit-app"
-    _demoapp_namespace: "default"
+    replicas: 2
+    image: "nginx:1.27-alpine"
+    port: 80
+    ansible_operator_meta:
+      name: "molecule-unit-app"
+      namespace: "default"
     molecule_no_k8s: true
   roles:
     - role: demoapp
@@ -897,10 +905,12 @@ Create `roles/demoapp/molecule/k8s/converge.yml`. This converge playbook omits t
   connection: local
   gather_facts: false
   vars:
-    _demoapp_replicas: 3
-    _demoapp_image: "nginx:1.27-alpine"
-    _demoapp_name: "k8s-test-app"
-    _demoapp_namespace: "molecule-k8s-test"
+    replicas: 3
+    image: "nginx:1.27-alpine"
+    port: 80
+    ansible_operator_meta:
+      name: "k8s-test-app"
+      namespace: "molecule-k8s-test"
   roles:
     - role: demoapp
 ```
@@ -1010,6 +1020,10 @@ metadata:
   name: kuttl-test-app
   namespace: default
 spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demoapp
+      app.kubernetes.io/instance: kuttl-test-app
   replicas: 2
 ---
 apiVersion: v1
@@ -1017,6 +1031,10 @@ kind: Service
 metadata:
   name: kuttl-test-app
   namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: demoapp
+    app.kubernetes.io/instance: kuttl-test-app
 ```
 
 Create the delete command manifest for step 02. A `TestStep` resource lets you run arbitrary `kubectl` commands as part of a step, rather than just applying manifests. The `--wait=true` flag ensures the command blocks until the CR's deletion is acknowledged by the API server:

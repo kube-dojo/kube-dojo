@@ -1,0 +1,10 @@
+## 2026-06-17 — `REVIEW` — `APPROVE`
+**Reviewer:** opus-inline cross-family R2 (Anthropic ≠ codex/OpenAI who applied the fix; ≠ cursor/Kimi R1) + independent web-verification of every disputed API fact against upstream docs BEFORE the fix. **#1996, PR (Ansible-arc fix-pass).** Fix author: codex gpt-5.5 (`9c634bdb8`).
+Cursor R1 (`logs/dispatch_responses/smart-cursor-review-1781649152.txt`) flagged this module NEEDS CHANGES for verifier-blind fabricated/wrong concurrency API. The orchestrator web-verified the corrections, locked them into the fix brief, and confirmed the applied diff matches ground truth.
+**Defects fixed (web-verified vs https://sdk.operatorframework.io/docs/building-operators/ansible/reference/advanced_options/ + watches reference):**
+- `ANSIBLE_WORKERS` env var is **fabricated** — removed everywhere (learning outcome, mermaid "Performance knobs" node, prose, manager-Pod `env:` block, all table cells). Replaced with the real `--max-concurrent-reconciles` manager flag and per-GVK `MAX_CONCURRENT_RECONCILES_<KIND>_<GROUP>` env override (format confirmed: `MAX_CONCURRENT_RECONCILES_WEBAPP_PLATFORM_EXAMPLE_COM`).
+- Default concurrency corrected from a fabricated "1 / single worker" to the real **`runtime.NumCPU()`**. The 10,000-CR throughput-math worked example is preserved by setting `--max-concurrent-reconciles=1` **explicitly** as a deliberate conservative-rollout scenario, not as the default.
+- Lab role variable convention aligned to Module 7.12 (`replicas | default(1)`, `image | default('nginx:1.27-alpine')`) so the drift-restore demo reconciles to the intended state.
+- Stale "Next module coming soon" replaced with a link to 7.14.
+**Ground-checks:** verifier **T0 PASS**, body_words **5645** (floor 5000); 0 residual fabricated tokens (`ANSIBLE_WORKERS`/`dependentWatches`/`ANSIBLE_OPERATOR_PLUGINS`/`AnsibleFailed`/`_demoapp_`); no NEW fabricated API introduced; frontmatter untouched; 11 reachable Sources; war stories carry `Hypothetical scenario:` labels.
+**APPROVE.**
