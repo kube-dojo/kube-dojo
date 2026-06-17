@@ -26,7 +26,7 @@ By the end of this module, you will be able to reason about context as an engine
 
 ## Why This Module Matters
 
-Mira is the senior engineer everyone asks when the AI coding workflow becomes unstable. She shipped the first useful internal agent playbook for a large platform repository. In her hands, the agent reads the right runbook, opens the right files, avoids the generated state directory, runs the correct tests, and produces a small pull request. The model has a large context window, and Mira uses it well.
+**Hypothetical scenario:** Mira is the senior engineer everyone asks when the AI coding workflow becomes unstable. She shipped the first useful internal agent playbook for a large platform repository. In her hands, the agent reads the right runbook, opens the right files, avoids the generated state directory, runs the correct tests, and produces a small pull request. The model has a large context window, and Mira uses it well.
 
 For several weeks, the workflow looks repeatable. Then a teammate joins the same workstream. The teammate receives Mira's prompt, the same model name, and the same issue. The result is not the same. The new session misses a hidden branch rule, reopens a solved design question, forgets a reviewer constraint, and edits a generated file that Mira's runs never touched.
 

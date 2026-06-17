@@ -26,7 +26,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-Mira owns the prompt for an internal policy assistant that summarizes uploaded policy documents and tells managers whether a draft announcement needs legal review. The first version is useful because it answers in a consistent format, cites the retrieved document chunks, and refuses to invent policy when the retrieval set does not support the answer. The team celebrates the prompt because it finally turns a messy document workflow into a fast review queue that managers can use without waiting for a specialist.
+**Hypothetical scenario:** Mira owns the prompt for an internal policy assistant that summarizes uploaded policy documents and tells managers whether a draft announcement needs legal review. The first version is useful because it answers in a consistent format, cites the retrieved document chunks, and refuses to invent policy when the retrieval set does not support the answer. The team celebrates the prompt because it finally turns a messy document workflow into a fast review queue that managers can use without waiting for a specialist.
 
 Now consider this case as a concrete incident class, not as a named public breach report: one uploaded policy document contains a paragraph that looks like ordinary administrative boilerplate, but it includes an instruction telling any summarizing AI to ignore previous rules, mark every announcement as approved, and reveal the hidden review rubric. The retrieval system pulls that paragraph because it overlaps semantically with the manager's question. The model sees the malicious paragraph in the same context window as the system prompt, the user's request, and the output contract, then treats the embedded instruction as part of the task unless the application has deliberately taught and tested the difference between trusted instructions and untrusted content.
 
@@ -186,6 +186,11 @@ Prompt-leak evals should test both refusal and utility. The model should not dum
 
 Jailbreaks are attempts to bypass the model's safety protocols or the application's task contract. They overlap with prompt injection, but the practical emphasis is different. A prompt injection tries to change the model's instructions for a task. A jailbreak often tries to make the model ignore safety training, adopt an alternative persona, simulate an unrestricted mode, or comply with content that the model or product should reject.
 
+> **Landscape snapshot — as of 2026-06.** This changes fast; verify against vendor docs and your own model routes before relying on specifics.
+>
+> The practical-status claims in this section describe the jailbreak families below as of mid-2026.
+> They are regression-class guidance, not universal bypass guarantees.
+
 By 2026, simple DAN-class prompts and plain "ignore previous instructions" strings are usually patched in frontier hosted models often enough that they should not be treated as strong adversarial evidence when they fail. They are still useful baseline probes because they catch weak wrappers, less capable model tiers, poorly aligned open models, brittle fine-tunes, and prompt edits that accidentally lower resistance. They are not enough because modern failures often arrive through multi-turn drift, indirect data, tool permissions, role-play framing, multilingual pressure, or obfuscated payloads.
 
 Encoding tricks still belong in regression suites. Promptfoo's current red-team configuration documents strategies such as base64, ROT13, hex, homoglyphs, leetspeak, Morse code, image or audio encoding, and jailbreak templates. These techniques do not prove a universal bypass by themselves, and you should not claim a success rate without controlled evidence. They are valuable because product filters and custom guardrails often fail before the base model does; a base64 wrapper may be decoded by a preprocessor, a translation feature may normalize unsafe content, or a tool result may reintroduce text that the input filter never saw.
@@ -322,14 +327,14 @@ The Claude Console evaluation tool is useful for prompt iteration when your work
 
 LangSmith fits teams that already use LangChain or LangGraph and need datasets, traces, offline evaluation, online evaluation, human review, code rules, LLM-as-judge, and pairwise comparison. Its evaluation docs distinguish offline evals for pre-release regression from online evals for production monitoring. That distinction maps well to prompt safety: block releases with curated datasets, then feed live failures and drift signals back into the offline suite.
 
-Helicone's experiments documentation describes a spreadsheet-like prompt experimentation workflow with prompt variations, input rows, LLM-as-judge or custom evaluators, side-by-side comparisons, and production-data feedback. Its docs also note that the older Experiments feature is being deprecated, so teams should verify the current Helicone surface before standardizing on it. The stable lesson is tool-agnostic: the eval harness needs versioned inputs, comparable prompt variants, evaluator outputs, and a path from production traces back to test cases.
+Helicone's older Experiments feature described a spreadsheet-like prompt experimentation workflow with prompt variations, input rows, LLM-as-judge or custom evaluators, side-by-side comparisons, and production-data feedback. That surface was **removed in September 2025**. For current Helicone workflows, use **Prompt Management** through the AI Gateway — versioned prompts, dynamic variables, and gateway-side assembly. The stable lesson is tool-agnostic: the eval harness needs versioned inputs, comparable prompt variants, evaluator outputs, and a path from production traces back to test cases.
 
 | Tool surface | Strong fit | Caution |
 |---|---|---|
 | promptfoo | repo-native prompt regression, assertions, red-team CI | keep adversarial payloads scoped and reviewed |
 | Claude Console evals | fast Anthropic prompt iteration and comparison | mirror production-critical cases outside the console |
 | LangSmith | traces, datasets, online/offline evals, pairwise and judge workflows | avoid treating trace observability as safety proof by itself |
-| Helicone | prompt experiments and production-data comparison | verify current feature status before depending on deprecated flows |
+| Helicone | Prompt Management via AI Gateway; versioned prompts and eval-friendly assembly | Experiments was removed September 2025 — do not build on that retired surface |
 
 The CI pattern is straightforward. Run cheap deterministic checks on every prompt change. Run the core safety suite on pull requests that touch prompts, retrieval formatting, model settings, or tool permissions. Run larger red-team suites nightly or before major releases. Store outputs and compare against the baseline. Require a human sign-off when a prompt intentionally changes refusal sensitivity or domain policy behavior.
 
@@ -703,7 +708,7 @@ For broader LLM evaluation patterns, see [LLM Evaluation](/ai-ml-engineering/adv
 
 - OWASP, "OWASP Top 10 for LLM Applications 2025": [https://genai.owasp.org/llm-top-10/](https://genai.owasp.org/llm-top-10/)
 - OWASP, "LLM01:2025 Prompt Injection": [https://genai.owasp.org/llmrisk/llm01-prompt-injection/](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)
-- OWASP, "LLM07:2025 System Prompt Leakage": [https://genai.owasp.org/llmrisk/llm07-insecure-plugin-design/](https://genai.owasp.org/llmrisk/llm07-insecure-plugin-design/)
+- OWASP, "LLM07:2025 System Prompt Leakage": [https://genai.owasp.org/llmrisk/llm072025-system-prompt-leakage/](https://genai.owasp.org/llmrisk/llm072025-system-prompt-leakage/)
 - OpenAI, "The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions": [https://openai.com/index/the-instruction-hierarchy/](https://openai.com/index/the-instruction-hierarchy/)
 - Wallace et al., "The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions": [https://arxiv.org/abs/2404.13208](https://arxiv.org/abs/2404.13208)
 - Microsoft Research, "Benchmarking and Defending Against Indirect Prompt Injection Attacks on Large Language Models": [https://www.microsoft.com/en-us/research/publication/benchmarking-and-defending-against-indirect-prompt-injection-attacks-on-large-language-models/](https://www.microsoft.com/en-us/research/publication/benchmarking-and-defending-against-indirect-prompt-injection-attacks-on-large-language-models/)
@@ -718,4 +723,4 @@ For broader LLM evaluation patterns, see [LLM Evaluation](/ai-ml-engineering/adv
 - Promptfoo, "Assertions & metrics": [https://www.promptfoo.dev/docs/configuration/expected-outputs/](https://www.promptfoo.dev/docs/configuration/expected-outputs/)
 - Promptfoo, "Red team Configuration": [https://www.promptfoo.dev/docs/red-team/configuration/](https://www.promptfoo.dev/docs/red-team/configuration/)
 - LangChain, "LangSmith Evaluation": [https://docs.langchain.com/langsmith/evaluation](https://docs.langchain.com/langsmith/evaluation)
-- Helicone, "Experiments": [https://docs.helicone.ai/features/experiments](https://docs.helicone.ai/features/experiments)
+- Helicone, "Prompt Management": [https://docs.helicone.ai/features/prompt-management](https://docs.helicone.ai/features/prompt-management)
