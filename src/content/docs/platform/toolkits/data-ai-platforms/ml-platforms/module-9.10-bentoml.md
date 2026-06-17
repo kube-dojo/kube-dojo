@@ -1,6 +1,7 @@
 ---
 title: "Module 9.10: BentoML — Python-First Model Packaging and Serving"
 slug: module-9.10-bentoml
+revision_pending: false
 sidebar:
   order: 11
 ---
@@ -32,6 +33,10 @@ The incident did not bankrupt the company, but it forced manual review of more t
 The people who understood the model did not own the request path. The people who owned Kubernetes did not understand the feature transforms. In practice, that ownership split turned every serving change into a translation exercise. The result was a serving architecture where every change required translation.
 
 BentoML matters because many ML teams live in Python first. They train in Python, validate in Python, and write preprocessing logic in Python. When the serving layer asks them to express behavior through a Kubernetes custom resource first, the tool may be powerful but the feedback loop slows down. BentoML starts from the Python service and then packages it for local serving, containerization, and Kubernetes scale-out. This module teaches how that flow works, where it shines, where it gets operationally complicated, and how to deploy it responsibly on K8s 1.35+.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> BentoML is an independent open-source Python framework for building model-inference services, maintained by the BentoML company. It is not a CNCF project. The current release line is v1.4.x; the latest patch release as of mid-2026 is v1.4.39 (May 2026). The v1.4 major release shipped in February 2025, bringing adaptive micro-batching, improved runner separation, and container-build enhancements. BentoML's Python-first serving model contrasts with CRD-driven platforms like KServe (CNCF Incubating) and Seldon Core — it starts from the Python Service and packages it for containerization and scale-out, making it a good fit for ML teams that want to keep their development loop close to training code.
 
 ## BentoML's Python-First Serving Model
 

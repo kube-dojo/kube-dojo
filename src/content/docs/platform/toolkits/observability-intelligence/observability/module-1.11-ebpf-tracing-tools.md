@@ -4,6 +4,7 @@ title: "Module 1.11: eBPF Tracing Tools (bpftrace, BCC, Inspektor Gadget)"
 slug: platform/toolkits/observability-intelligence/observability/module-1.11-ebpf-tracing-tools
 sidebar:
   order: 12
+revision_pending: false
 ---
 
 ## Complexity: [MEDIUM]
@@ -69,6 +70,10 @@ That imperative mindset changes the tool choice. bpftrace is the scalpel for one
 Exercise scenario: A checkout endpoint is slow only during traffic spikes. Prometheus shows elevated p99 latency, but CPU and memory are normal. The application team has traces for the checkout process itself, yet the trace usually ends at a generic HTTP client span. A platform engineer lists TCP tracepoints, attaches a short `bpftrace` program to `tracepoint:tcp:tcp_retransmit_skb`, and sees retransmission events climb when the checkout pods call a downstream inventory service. That does not prove root cause by itself, but it changes the incident from "the API is slow" to "the API is waiting behind packet loss or congestion on one dependency path."
 
 The lesson is not that bpftrace magically replaces metrics, logs, or traces. The lesson is that eBPF tracing can reveal behavior at the kernel boundary when the permanent telemetry is too coarse. You still need ordinary observability to decide impact, confirm recovery, and explain user-facing consequences. You still need application instrumentation for business semantics. The ad-hoc eBPF tools help you bridge the missing minutes between a vague symptom and the next precise investigation step.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> **bpftrace** and **BCC** are foundational open-source tracing tools maintained under the iovisor project; they are not CNCF projects. **Cilium** (which includes **Tetragon**) is a CNCF **Graduated** project (graduated October 11, 2023). **Inspektor Gadget** is CNCF **Sandbox** (accepted March 7, 2023). **Pixie** is CNCF **Sandbox** (accepted June 22, 2021). **Parca** is an independent open-source project (Apache 2 License) created by Polar Signals — it is not a CNCF project and has never been accepted into any CNCF maturity level. All of these tools occupy different points on the imperative-to-declarative spectrum: bpftrace and BCC are imperative terminal tools; Inspektor Gadget wraps common probes behind a Kubernetes-aware CLI; Pixie, Parca, and Pyroscope are persistent always-on observability and profiling platforms.
 
 ---
 
