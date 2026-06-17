@@ -1,9 +1,8 @@
 #!/bin/bash
 # KubeDojo - Codex Wrapper
-# Default: starts Codex in a dedicated git worktree so it has its own
-# .git/index and never races with another agent on git locks.
-# Optional: pass --main (or set CODEX_TARGET=main) to run in the repository's
-# primary main checkout instead when Codex needs to take over that workspace.
+# Default: starts Codex in the repository's primary main checkout.
+# Optional: pass --worktree (or set CODEX_TARGET=worktree) to use a dedicated
+# git worktree when Codex needs isolated git state.
 
 set -e
 
@@ -15,7 +14,7 @@ hash -r 2>/dev/null || true
 # primary main checkout so the launcher behaves consistently from any worktree.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
-CODEX_TARGET="${CODEX_TARGET:-worktree}"
+CODEX_TARGET="${CODEX_TARGET:-main}"
 CODEX_ARGS=()
 CODEX_FLAGS=(--dangerously-bypass-approvals-and-sandbox)
 
@@ -30,8 +29,8 @@ while [ "$#" -gt 0 ]; do
 Usage: ./start-codex.sh [--main|--worktree] [codex args...]
 
 KubeDojo Codex launcher:
-  - runs Codex in .worktrees/codex-interactive by default
-  - use --main only when intentionally running in the primary checkout
+  - runs Codex in the primary main checkout by default
+  - use --worktree to run in .worktrees/codex-interactive instead
   - always adds --dangerously-bypass-approvals-and-sandbox
   - enables Codex multi-agent support by default
   - set CODEX_ENABLE_MULTI_AGENT=0 to disable multi-agent support
