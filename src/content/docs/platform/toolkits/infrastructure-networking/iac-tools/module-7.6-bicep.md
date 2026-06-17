@@ -52,7 +52,7 @@ This module grounds you in the Bicep mental model — the transpilation pipeline
 
 ## Did You Know?
 
-1. **Bicep was created by a single engineer** (Anthony Martin) at Microsoft who was frustrated with ARM template JSON. It started as a side project before becoming an official Azure product, demonstrating how a well-targeted developer-experience improvement can reshape an entire ecosystem's tooling defaults.
+1. **Bicep grew out of the Azure team's frustration with ARM template JSON.** Anthony Martin — now Engineering Manager for Bicep & ARM Deployments at Microsoft and a top contributor on `Azure/bicep` — is among the engineers most associated with its creation. Microsoft announced Project Bicep publicly in late 2020, and it shows how a well-targeted developer-experience improvement can reshape an ecosystem's tooling defaults.
 
 2. **The name "Bicep"** is a playful reference to ARM (Azure Resource Manager) — biceps are part of your arm. The `az bicep` CLI command continues the theme, and the name has become a recognizable brand in the Azure infrastructure community.
 
