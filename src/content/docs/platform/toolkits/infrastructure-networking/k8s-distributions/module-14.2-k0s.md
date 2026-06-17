@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 14.2: k0s - Zero Friction Kubernetes"
 slug: platform/toolkits/infrastructure-networking/k8s-distributions/module-14.2-k0s
 sidebar:

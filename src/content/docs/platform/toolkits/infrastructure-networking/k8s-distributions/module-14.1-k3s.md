@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 14.1: k3s - Lightweight Kubernetes for Edge"
 slug: platform/toolkits/infrastructure-networking/k8s-distributions/module-14.1-k3s
 sidebar:
