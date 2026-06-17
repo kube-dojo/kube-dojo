@@ -3,6 +3,7 @@ title: "Module 5.6: Project Calico - The Full-Stack Networking and Security Plat
 slug: platform/toolkits/infrastructure-networking/networking/module-5.6-calico
 sidebar:
   order: 7
+revision_pending: false
 ---
 > **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 90-120 minutes
 
@@ -40,16 +41,7 @@ sidebar:
 
 One wrong number. Four characters. $180,000 in lost revenue and a very uncomfortable post-mortem. The engineer followed the runbook -- but the runbook had rack 6's ASN, not rack 7's. The lesson was not about blame. It was about automation: after this incident, the team moved to Calico's BGPPeer CRDs managed through GitOps, where every change was reviewed in a pull request before applying.
 
-This module teaches you Calico from the ground up -- architecture, BGP, IPAM, policy, eBPF, WireGuard -- so that you understand every moving piece well enough to prevent incidents like this one.
-
-**What You'll Learn**:
-- Calico's architecture: Felix, BIRD, Typha, and how they work together
-- BGP networking: node-to-node mesh, route reflectors, peering with physical infrastructure
-- IP address management: pools, blocks, affinity, and borrowing
-- Network policy: Kubernetes native, Calico-specific, tiers, L7, and DNS-based policies
-- eBPF dataplane: when to use it and how to enable it
-- WireGuard encryption: zero-config pod-to-pod encryption
-- Scaling Calico to 1,000+ nodes
+This module teaches you Calico from the ground up -- architecture, BGP, IPAM, policy, eBPF, WireGuard, and operations -- so that you understand every moving piece well enough to prevent incidents like this one.
 
 **Prerequisites**:
 - Kubernetes networking basics (Services, Pods, CNI)
@@ -64,32 +56,42 @@ This module teaches you Calico from the ground up -- architecture, BGP, IPAM, po
 After completing this module, you will be able to:
 
 - **Deploy Calico with BGP-based networking for high-performance Kubernetes pod networking**
-- **Configure Calico network policies using both Kubernetes and Calico-specific policy resources**
-- **Implement Calico's eBPF dataplane for improved performance and native service handling**
-- **Integrate Calico with enterprise firewalls and network infrastructure using BGP peering**
+- **Configure Calico network policies using both Kubernetes and Calico-specific policy resources, including tiers and global policies**
+- **Select the appropriate Calico dataplane (iptables, eBPF, or nftables) based on cluster requirements and kernel support**
+- **Implement Calico's eBPF dataplane for improved performance and native kube-proxy replacement**
+- **Integrate Calico with enterprise firewalls and network infrastructure using BGP peering, and choose the right Tigera edition for your organization**
 
+---
 
 ## Why This Module Matters
 
-Calico is not just a CNI plugin. It is a full networking and security platform that runs on everything from a single-node kind cluster to thousand-node bare-metal deployments peered with physical routers. While Cilium innovates with eBPF, Calico has been the production workhorse of Kubernetes networking since before Kubernetes was mainstream.
+Calico is a full networking and security platform that runs on everything from a single-node kind cluster to thousand-node bare-metal deployments peered with physical routers. While Cilium innovates with eBPF, Calico has been the production workhorse of Kubernetes networking since before Kubernetes was mainstream -- and it has evolved well beyond its iptables origins.
 
 Here is what makes Calico different from every other CNI:
 
-**It speaks BGP natively.** Calico does not use overlay networks by default. It assigns real, routable IP addresses to pods and distributes routes using the same protocol that runs the internet. This means your pods can talk to physical servers, VMs, and legacy infrastructure without NAT, encapsulation, or tunnels. For organizations with existing network infrastructure, this is transformative.
+**It speaks BGP natively.** Calico does not require overlay networks. It assigns real, routable IP addresses to pods and distributes routes using the same protocol that powers the global internet. This means your pods can talk to physical servers, VMs, and legacy infrastructure without NAT, encapsulation, or tunnels. For organizations with existing network infrastructure, this capability transforms how Kubernetes integrates into the datacenter -- pods become first-class network citizens alongside bare-metal servers.
 
-**It has the most comprehensive policy model in the ecosystem.** Standard Kubernetes NetworkPolicy is limited -- it cannot do host-level protection, DNS-based rules, application-layer filtering, or policy ordering. Calico extends all of these with GlobalNetworkPolicy, HostEndpoint, policy tiers, and L7 rules.
+**It has the most comprehensive policy model in the ecosystem.** Standard Kubernetes NetworkPolicy is limited -- it cannot do host-level protection, DNS-based rules, application-layer filtering, or policy ordering across teams. Calico extends all of these with GlobalNetworkPolicy, HostEndpoint, policy tiers, and L7 rules that compose cleanly across security, platform, and application teams. No other CNI gives you policy tiers with explicit pass-through delegation.
 
-**It scales to thousands of nodes.** With the Typha proxy layer, Calico handles clusters that would overwhelm the Kubernetes API server if every agent talked to it directly.
+**It scales to thousands of nodes.** With the Typha proxy layer, Calico handles clusters that would overwhelm the Kubernetes API server if every agent talked to it directly. The architecture was designed from the start for carrier-grade deployments where routing tables may contain tens of thousands of entries and where failure domains must be rigorously isolated.
 
-> **Did You Know?**
->
-> 1. Calico was originally developed by Tigera (founded in 2015 by engineers from Metaswitch Networks, a telecoms company). The BGP expertise came directly from building carrier-grade routing software -- the same technology that routes phone calls across continents now routes your Kubernetes pods.
->
-> 2. Over 8 million nodes run Calico worldwide, making it the most widely deployed Kubernetes networking solution. It powers clusters at major banks, telecoms, government agencies, and 3 of the top 5 cloud providers. When AWS launched EKS, Calico was one of the first supported CNI options alongside their own VPC CNI.
->
-> 3. Calico's eBPF dataplane can replace kube-proxy entirely -- just like Cilium -- eliminating iptables overhead for Service routing. In benchmarks, Calico's eBPF mode matches or exceeds traditional iptables performance by 30-40%, with consistent latency regardless of the number of Services in the cluster.
->
-> 4. Project Calico is named after a calico cat. The project's creators wanted a name that was friendly and memorable. The calico cat's distinctive patches of different colors inspired the metaphor of networking patches -- connecting different network segments into one cohesive fabric.
+**An important clarification on project governance.** Calico is a Tigera-stewarded open-source project. It is not a CNCF-hosted project -- it has no CNCF maturity tier (sandbox, incubating, or graduated). Tigera participates in the CNCF ecosystem as a member organization, but corporate membership is fundamentally different from donating a project to the CNCF for community governance. For comparison, Calico's peer Cilium is a CNCF Graduated project, meaning it has passed the CNCF's due diligence for project maturity, community health, and adoption. Calico follows a vendor-stewarded model where Tigera drives the roadmap and maintains the core repositories. Both models can produce excellent software -- Calico has been production-grade since 2015 and Cilium has thrived under CNCF governance since its graduation -- but the governance structure affects how features are prioritized, how the community participates in decision-making, and how the project responds to security vulnerabilities. Understanding this distinction matters when you are making a long-term platform commitment that may span five or more years of Kubernetes operations.
+
+These four characteristics — BGP-native routing, comprehensive policy, architecture-level scalability, and clear (if vendor-stewarded) governance — converge on a single proposition: Calico treats Kubernetes networking as a first-class enterprise infrastructure concern, not as a container-specific hack layered on top of whatever your cloud provider gives you. Whether you are running on bare metal with spine-leaf fabrics, in a hybrid cloud spanning multiple providers, or in a regulated environment where security auditors need to see network segmentation at the IP level, Calico provides a consistent networking model that does not change when your infrastructure changes.
+
+### Landscape snapshot — as of 2026-06
+
+This changes fast; verify against vendor docs before relying on specifics. The current **Calico Open Source** release is **v3.32.0**, with the documentation site tracking version 3.32 as "latest." Version **3.29 introduced the nftables dataplane**, giving operators a third dataplane option alongside iptables and eBPF. Tigera ships three editions built on the open-source project: **Calico Open Source** (free, Apache 2.0 licensed), **Calico Enterprise** (self-managed commercial with additional security and compliance features), and **Calico Cloud** (SaaS offering with managed control plane and global visibility). All three share the same core dataplane and policy engine, differing in management capabilities, observability depth, and enterprise integrations. If you are reading this module more than six months after June 2026, check the Calico release page on GitHub and the Tigera documentation for the current version — the dataplane options and edition feature split are the most likely things to change between releases.
+
+---
+
+## CNI Fundamentals: Where Calico Fits
+
+Before diving into Calico's architecture, it is worth understanding the problem that every CNI plugin solves. The Container Network Interface (CNI) specification defines a standard for how container runtimes configure network connectivity for containers. When the kubelet creates a pod, it calls a CNI plugin with three operations: ADD (attach a network interface to the pod's network namespace), DEL (tear it down), and CHECK (verify the configuration is still valid). The plugin receives a JSON configuration blob and is expected to return the result, including the assigned IP address, routes, and DNS configuration.
+
+Under the hood, a pod's network lifecycle starts when the container runtime creates a new network namespace -- an isolated network stack with its own interfaces, routing table, and firewall rules. The runtime then creates a virtual Ethernet pair (veth): one end stays in the host's root namespace, and the other end is moved into the pod's namespace. At this point, the pod has a network interface but no IP address and no connectivity. The CNI plugin is invoked to assign an IP from its IPAM subsystem, configure routes so the pod can reach other pods and the outside world, and set up any necessary policy rules. The plugin is also responsible for cleaning up when the pod is deleted -- releasing the IP back to the pool and removing the veth pair. This entire ADD/DEL cycle happens in milliseconds on a healthy node, but when something goes wrong -- a misconfigured IP pool, a missing route, a policy that blocks the pod's own DNS requests -- the failure manifests as a pod that starts but cannot communicate, and the troubleshooting path leads directly into the CNI plugin's logs and configuration.
+
+Calico implements this CNI contract with a distinctive approach: it does not create a network bridge per node. Instead, it programs the Linux kernel's routing table directly, treating every pod as a routable endpoint on a flat L3 network. When a pod is created, Calico's CNI plugin creates the veth pair, assigns an IP from the node's allocated block, and installs a route in the host's routing table pointing that pod's IP to the veth interface. Other nodes learn about this pod through BGP route distribution, so every node knows how to reach every pod without any overlay encapsulation. This design trades the simplicity of L2 bridging for the scalability and operability of L3 routing -- a tradeoff that pays enormous dividends when your cluster grows beyond a handful of nodes and when you need to integrate with existing network infrastructure. The absence of a per-node bridge also eliminates a common failure mode: bridge ARP table overflows that can cause "mysterious" connectivity failures in L2-based CNI plugins when pod density exceeds a few hundred per node.
 
 ---
 
@@ -144,13 +146,7 @@ CALICO ARCHITECTURE ON A KUBERNETES CLUSTER
 
 #### Felix: The Policy Engine (Per-Node)
 
-Felix is the brain on every node. It watches the Kubernetes API (or Typha) for changes to pods, services, network policies, and Calico-specific resources. When something changes, Felix programs the dataplane -- either iptables rules or eBPF programs -- to enforce the desired state.
-
-What Felix does on every update cycle:
-1. **Routes**: Programs the Linux routing table so the kernel knows how to reach pods on other nodes
-2. **ACLs**: Creates iptables chains (or eBPF maps) that implement network policies
-3. **IPIP/VXLAN**: Configures tunnel interfaces when overlay mode is needed
-4. **Health**: Reports node health and connectivity status back to the API
+Felix is the brain on every node. It watches the Kubernetes API (or Typha) for changes to pods, services, network policies, and Calico-specific resources. When something changes, Felix programs the dataplane -- either iptables rules, eBPF programs, or nftables rules -- to enforce the desired state. Felix is responsible for four distinct tasks on every reconciliation cycle: programming routes in the Linux routing table so the kernel knows how to reach pods on other nodes, creating ACLs that implement network policies in whichever dataplane is active, configuring tunnel interfaces when overlay mode (IPIP or VXLAN) is needed, and reporting node health and connectivity status back to the Calico datastore.
 
 ```bash
 # See Felix's logs on a node
@@ -160,13 +156,11 @@ kubectl logs -n calico-system -l k8s-app=calico-node -c calico-node | grep Felix
 kubectl get felixconfiguration default -o yaml
 ```
 
-Felix is remarkably efficient. It uses a batching algorithm that collects changes over a short window and applies them as a single atomic update. This prevents the "iptables thrashing" problem where rapid pod creation would cause rule table rebuilds dozens of times per second.
+Felix is remarkably efficient in how it handles rapid change. It uses a batching algorithm that collects changes over a short window (configurable, typically 2-10 seconds) and applies them as a single atomic update. This prevents the "iptables thrashing" problem where rapid pod creation would cause rule table rebuilds dozens of times per second. Instead of one expensive operation per change, Felix accumulates all pending changes and replays them in one efficient batch.
 
 #### BIRD: The BGP Daemon (Per-Node)
 
-BIRD (BIRD Internet Routing Daemon) runs on every node and speaks BGP with other nodes (or external routers). Its job is simple but critical: tell the rest of the network which pod CIDRs live on this node.
-
-When a pod is created on Node A with IP 10.244.1.15, BIRD on Node A announces to all its BGP peers: "To reach 10.244.1.0/26, send traffic to me." Every other node's BIRD daemon receives this announcement and programs a route.
+BIRD (BIRD Internet Routing Daemon) runs on every node and speaks BGP with other nodes (or external routers). Its job is simple but critical: tell the rest of the network which pod CIDRs live on this node. When a pod is created on Node A with IP 10.244.1.15, BIRD on Node A announces to all its BGP peers: "To reach 10.244.1.0/26, send traffic to me." Every other node's BIRD daemon receives this announcement and programs a route into its local routing table.
 
 ```
 HOW BIRD DISTRIBUTES ROUTES
@@ -185,19 +179,15 @@ Result on Node A:                   Result on Node B:
   10.244.2.0/26 → via 10.0.1.11    10.244.2.0/26 → local
 ```
 
-**Important**: When using Calico's eBPF dataplane, BIRD is still used for route distribution. eBPF replaces iptables for policy enforcement and Service handling, not BGP.
+**Important**: When using Calico's eBPF dataplane, BIRD is still used for route distribution. eBPF replaces iptables for policy enforcement and Service handling, not BGP route propagation. The routing plane and the dataplane are independent concerns, and Calico keeps them cleanly separated.
 
 #### confd: The Configuration Generator
 
-confd watches the Calico datastore for BGP configuration changes (peers, ASN settings, route reflectors) and generates BIRD configuration files. When you create a BGPPeer CRD, confd translates it into BIRD syntax and triggers BIRD to reload.
-
-You rarely interact with confd directly, but it is the glue between Calico's declarative CRDs and BIRD's imperative configuration files.
+confd watches the Calico datastore for BGP configuration changes -- peers, ASN settings, route reflector configurations -- and generates BIRD configuration files in BIRD's native syntax. When you create a BGPPeer CRD, confd translates that declarative resource into imperative BIRD configuration and triggers BIRD to reload. You rarely interact with confd directly, but it is the glue between Calico's declarative Kubernetes-native CRDs and BIRD's imperative configuration files. Without confd, you would need to write BIRD configuration by hand and restart BIRD manually whenever the topology changes -- a fragile approach that the opening incident demonstrates is not just inconvenient but dangerous.
 
 #### Typha: The Scaling Proxy
 
-On a 50-node cluster, every Felix instance opens a watch connection to the Kubernetes API server. That is 50 watch connections -- manageable. On a 500-node cluster? 500 connections. On 2,000 nodes? The API server starts struggling.
-
-Typha sits between Felix and the API server. A small number of Typha instances (typically 3-5) watch the API server, then fan out updates to all the Felix instances on their assigned nodes. This reduces API server load from O(n) to O(k), where k is the number of Typha replicas.
+On a 50-node cluster, every Felix instance opens a watch connection to the Kubernetes API server. That is 50 watch connections -- manageable. On a 500-node cluster, however, 500 simultaneous watches would overwhelm the API server. Typha sits between Felix and the API server, acting as a fan-out proxy. A small number of Typha instances (typically 3-5) maintain watch connections to the API server, then fan out updates to all the Felix instances on their assigned nodes. This reduces API server load from O(n) to O(k), where k is the number of Typha replicas.
 
 ```
 WITHOUT TYPHA (Small Clusters, < 100 nodes)
@@ -226,41 +216,25 @@ WITH TYPHA (Large Clusters, 100+ nodes)
    Felix instances (hundreds per Typha)
 ```
 
-The Tigera operator automatically deploys Typha when needed. For clusters over 200 nodes, Typha is not optional -- it is required for stability.
+The Tigera operator automatically deploys Typha when needed, scaling the replica count based on node count. For clusters over 200 nodes, Typha is not optional -- it is required for stability, and production deployments should monitor Typha's own resource consumption since a misbehaving Typha instance can delay policy propagation across the cluster.
 
 #### Calico API Server
 
-The Calico API server extends the Kubernetes API with Calico-specific resource types. It handles validation and admission control for resources like:
-
-- `IPPool`, `IPReservation`
-- `BGPPeer`, `BGPConfiguration`
-- `FelixConfiguration`
-- `GlobalNetworkPolicy`, `NetworkPolicy` (Calico-flavored)
-- `HostEndpoint`, `GlobalNetworkSet`
-- `CalicoNodeStatus`
-
-This means you can manage Calico entirely through `kubectl` -- no separate CLI required (though `calicoctl` still exists and is useful for diagnostics).
+The Calico API server extends the Kubernetes API with Calico-specific resource types. It handles validation and admission control for resources including `IPPool`, `IPReservation`, `BGPPeer`, `BGPConfiguration`, `FelixConfiguration`, `GlobalNetworkPolicy`, `NetworkPolicy` (Calico-flavored), `HostEndpoint`, `GlobalNetworkSet`, and `CalicoNodeStatus`. This means you can manage Calico entirely through `kubectl` -- no separate CLI required, though `calicoctl` still exists and is particularly useful for diagnostics like `calicoctl node status` and `calicoctl ipam show`.
 
 ---
 
 ## Part 2: BGP Deep Dive
 
-BGP (Border Gateway Protocol) is the protocol that holds the internet together. Every ISP, every cloud provider, every content delivery network uses BGP to exchange routing information. Calico brings this same proven, battle-tested protocol to Kubernetes networking.
+BGP (Border Gateway Protocol) is the protocol that holds the internet together. Every ISP, every cloud provider, every content delivery network uses BGP to exchange routing information. Calico brings this same proven, battle-tested protocol to Kubernetes networking, and understanding its fundamentals is essential for any operator running Calico on bare metal or in hybrid environments.
 
 ### Why BGP Matters for Kubernetes
 
-Most CNI plugins use **overlay networks** -- they encapsulate pod traffic inside VXLAN or Geneve tunnels to cross node boundaries. This works, but it adds overhead:
-
-- Extra headers (50 bytes per packet for VXLAN)
-- Encapsulation/decapsulation CPU cost
-- Debugging difficulty (tcpdump shows tunnel packets, not the real traffic)
-- MTU reduction (1500 - 50 = 1450 effective MTU)
-
-Calico's BGP mode uses **native routing**. Pod IPs are real, routable addresses on the network. No encapsulation, no tunnels, no overhead. Packets go directly from one node to another using standard Linux routing.
+Most CNI plugins use **overlay networks** -- they encapsulate pod traffic inside VXLAN or Geneve tunnels to cross node boundaries. This approach works reliably, but it imposes real costs: extra headers consume 50 bytes per packet for VXLAN, encapsulation and decapsulation consume CPU cycles on every node, debugging becomes harder because tcpdump shows tunnel packets instead of real application traffic, and the effective MTU drops from 1500 to 1450, which can cause subtle TCP performance issues with path MTU discovery. Calico's BGP mode uses **native routing** instead. Pod IPs are real, routable addresses on the network. No encapsulation, no tunnels, no overhead. Packets go directly from one node to another using standard Linux routing, and a network engineer with a packet capture can see exactly which pod is talking to which other pod.
 
 ### Node-to-Node Mesh (Default)
 
-Out of the box, Calico configures a **full mesh** BGP topology. Every node peers with every other node. This is simple and works well for small clusters.
+Out of the box, Calico configures a **full mesh** BGP topology. Every node peers with every other node. This is simple, requires zero configuration, and works well for small to medium clusters. But the number of BGP sessions grows quadratically: N nodes produce N×(N−1)/2 sessions. Four nodes means 6 sessions, which is trivial. Twenty nodes means 190 sessions, which is manageable. Fifty nodes means 1,225 sessions, which starts to strain BIRD's memory and CPU. One hundred nodes means 4,950 sessions, which is well past the point where the full mesh becomes a liability rather than an asset.
 
 ```
 NODE-TO-NODE MESH (Full Mesh BGP)
@@ -285,8 +259,6 @@ NODE-TO-NODE MESH (Full Mesh BGP)
   100 nodes = 4,950 sessions ✗ Too many
 ```
 
-The full mesh is the default because it is zero-configuration. But the number of BGP sessions grows quadratically: O(n^2). Above 50 nodes, you should switch to route reflectors.
-
 ```bash
 # Check current BGP mesh status
 calicoctl node status
@@ -304,9 +276,11 @@ calicoctl node status
 # +--------------+-------------------+-------+----------+-------------+
 ```
 
+Above approximately 50 nodes, the full mesh becomes a scaling bottleneck, not because BGP itself cannot handle it but because every node must maintain a TCP session with every other node and process every route update from every peer. This is where route reflectors enter the picture.
+
 ### Route Reflectors (50+ Nodes)
 
-Instead of every node peering with every other node, you designate a few nodes as **route reflectors**. All other nodes peer only with the route reflectors. The reflectors forward routes between their clients.
+Instead of every node peering with every other node, you designate a few nodes as **route reflectors**. All other nodes (called clients) peer only with the route reflectors. The reflectors forward routes between their clients, drastically reducing the session count. In a 100-node cluster with 3 route reflectors, the session count drops from 4,950 to approximately 303 -- a 94% reduction. For redundancy, always deploy at least two route reflectors so that a single reflector failure does not partition the BGP topology.
 
 ```
 ROUTE REFLECTOR TOPOLOGY
@@ -340,7 +314,7 @@ ROUTE REFLECTOR TOPOLOGY
 
 #### Setting Up Route Reflectors
 
-First, disable the full mesh:
+First, disable the full mesh so nodes stop peering with each other directly:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -354,7 +328,7 @@ spec:
   asNumber: 64512
 ```
 
-Label the nodes that will be route reflectors:
+Label the nodes that will serve as route reflectors. These should be nodes with stable networking and sufficient CPU and memory, since they will process every route in the cluster:
 
 ```bash
 # Designate specific nodes as route reflectors
@@ -363,7 +337,7 @@ kubectl label node worker-02 calico-route-reflector=true
 kubectl label node worker-03 calico-route-reflector=true
 ```
 
-Configure the route reflector nodes with a cluster ID:
+Configure the route reflector nodes with a cluster ID so that BGP can correctly identify which reflector originated a route and prevent loops when multiple reflectors peer with each other:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -377,7 +351,7 @@ spec:
     routeReflectorClusterID: 224.0.0.1
 ```
 
-Create BGPPeer resources so non-reflector nodes peer with reflectors:
+Create BGPPeer resources so non-reflector nodes peer with reflectors, and reflectors peer with each other:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -389,11 +363,7 @@ spec:
   nodeSelector: "!has(calico-route-reflector)"
   # ...peers with every node that IS a route reflector
   peerSelector: has(calico-route-reflector)
-```
-
-And ensure route reflectors peer with each other:
-
-```yaml
+---
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -405,7 +375,7 @@ spec:
 
 ### Peering with Physical Infrastructure
 
-This is where Calico truly shines in enterprise environments. You can peer Calico nodes directly with your datacenter's Top-of-Rack (ToR) switches, giving pod IPs full reachability across your physical network.
+This is where Calico truly distinguishes itself in enterprise environments. You can peer Calico nodes directly with your datacenter's Top-of-Rack (ToR) switches, spine switches, or even external routers. This gives pod IPs full reachability across your physical network without any NAT or tunneling -- a pod can be reached from outside the cluster at its native IP address, subject only to policy rules.
 
 ```
 PEERING WITH PHYSICAL INFRASTRUCTURE
@@ -429,7 +399,7 @@ PEERING WITH PHYSICAL INFRASTRUCTURE
         their ToR)        their ToR)
 ```
 
-Configure peering with a specific ToR switch:
+Configure peering with a specific ToR switch using a node selector so that only nodes in the correct rack establish peering with that rack's switch:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -445,7 +415,7 @@ spec:
 
 ### BGPConfiguration CRD
 
-The BGPConfiguration resource controls global BGP behavior:
+The BGPConfiguration resource controls global BGP behavior, including whether to advertise Service ClusterIPs, external IPs, and LoadBalancer IPs via BGP -- a feature that lets external routers reach Kubernetes Services without a separate load balancer:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -479,10 +449,7 @@ spec:
 
 ### AS Number Management
 
-In BGP, every autonomous system (AS) needs a unique number. Calico supports:
-
-- **Private ASNs**: 64512-65534 (16-bit) or 4200000000-4294967294 (32-bit). Use these for internal cluster networking.
-- **Per-node ASN override**: Different nodes can use different AS numbers, useful when nodes span multiple racks or datacenters.
+In BGP, every autonomous system (AS) needs a unique number. Calico supports both private ASNs in the range 64512-65534 (16-bit) or 4200000000-4294967294 (32-bit) for internal cluster networking, and per-node ASN overrides for deployments where nodes span multiple racks or datacenters with different AS assignments:
 
 ```yaml
 # Override ASN for a specific node
@@ -500,11 +467,11 @@ spec:
 
 ## Part 3: IPAM (IP Address Management)
 
-Calico's IPAM is more sophisticated than most CNI plugins. It pre-allocates blocks of IPs to nodes, supports multiple pools, and handles edge cases like IP exhaustion gracefully.
+Calico's IPAM is more sophisticated than most CNI plugins. It pre-allocates blocks of IPs to nodes, supports multiple pools, and handles edge cases like IP exhaustion gracefully through borrowing. Understanding how Calico manages IP addresses is essential for capacity planning and for troubleshooting connectivity problems that trace back to IP pool configuration.
 
 ### IP Pools
 
-An IP Pool defines a range of IP addresses available for pod allocation:
+An IP Pool defines a range of IP addresses available for pod allocation. The pool configuration controls encapsulation mode, NAT behavior, block size, and which nodes are eligible to use the pool:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -525,6 +492,8 @@ spec:
 ```
 
 #### Encapsulation Modes Explained
+
+The choice of encapsulation mode has significant implications for performance, debuggability, and compatibility with your network infrastructure. The fundamental question is whether your physical network can route pod CIDRs natively. If it can, you should use no encapsulation at all -- this gives you the best performance and the most transparent networking. If it cannot, you need an overlay, and the choice between IPIP and VXLAN depends on your network's capabilities.
 
 ```
 ENCAPSULATION DECISION TREE
@@ -558,7 +527,7 @@ NOTE: VXLAN is preferred over IPIP because:
 
 ### Block Sizes and Affinity
 
-Calico does not assign IPs one at a time. Instead, it carves the IP pool into **blocks** (default: /26 = 64 addresses) and assigns entire blocks to nodes. Pods on a node get IPs from that node's block.
+Calico does not assign IPs one at a time. Instead, it carves the IP pool into **blocks** (default: /26 = 64 addresses) and assigns entire blocks to nodes. Pods on a node get IPs from that node's block. Why blocks? **Route aggregation.** Instead of advertising one route per pod (potentially thousands), each node advertises one route per block. A node with 50 pods might only need one /26 block -- a single route entry. This design is what makes Calico's BGP-based approach scale: the routing table size is proportional to the number of blocks, not the number of pods.
 
 ```
 IP BLOCK ALLOCATION
@@ -577,8 +546,6 @@ Pod on Node A gets: 10.244.0.13
 Pod on Node B gets: 10.244.0.78
 ```
 
-Why blocks? **Route aggregation.** Instead of advertising one route per pod (potentially thousands), each node advertises one route per block. A node with 50 pods might only need one /26 block -- a single route entry.
-
 ```bash
 # View IPAM block allocations
 calicoctl ipam show --show-blocks
@@ -595,7 +562,7 @@ calicoctl ipam show --show-blocks
 
 ### Per-Namespace IP Pool Assignment
 
-You can assign different IP pools to different namespaces. This is powerful for multi-tenancy, compliance, or network segmentation:
+You can assign different IP pools to different namespaces, which is powerful for multi-tenancy, compliance, or network segmentation. All pods in a namespace receive IPs from a dedicated CIDR range, making firewall rules and audit controls dramatically simpler:
 
 ```yaml
 # Create a dedicated pool for the finance namespace
@@ -622,13 +589,11 @@ metadata:
     cni.projectcalico.org/ipv4pools: '["finance-pool"]'
 ```
 
-Every pod in the `finance` namespace will now get an IP from 10.245.0.0/24. This makes firewall rules trivial: "All traffic from 10.245.0.0/24 is the finance team."
+Every pod in the `finance` namespace will now get an IP from 10.245.0.0/24. This makes firewall rules trivial: "All traffic from 10.245.0.0/24 is the finance team." Compliance auditors can verify network segmentation without understanding Kubernetes internals.
 
 ### IP Borrowing
 
-What happens when a node's block is full but there are free IPs in other blocks? Calico supports **IP borrowing** -- a node can allocate individual IPs from blocks that belong to other nodes, if those blocks have spare capacity.
-
-This is a safety mechanism. It prevents pod scheduling failures due to IP exhaustion on a single node, even when the overall pool has plenty of capacity. The trade-off is slightly less efficient routing (the borrowed IP creates an additional /32 route).
+What happens when a node's block is full but there are free IPs in other blocks? Calico supports **IP borrowing** -- a node can allocate individual IPs from blocks that belong to other nodes, if those blocks have spare capacity. This is a safety mechanism that prevents pod scheduling failures due to IP exhaustion on a single node, even when the overall pool has plenty of capacity. The trade-off is slightly less efficient routing: the borrowed IP creates an additional /32 host route instead of being covered by the block's aggregate route.
 
 ```bash
 # Check for borrowed IPs
@@ -660,7 +625,7 @@ spec:
 
 ## Part 4: Network Policy
 
-Calico's network policy engine is the most feature-rich in the Kubernetes ecosystem. It supports everything from basic Kubernetes NetworkPolicy to advanced features that no other CNI offers.
+Calico's network policy engine is the most feature-rich in the Kubernetes ecosystem. It supports everything from basic Kubernetes NetworkPolicy to advanced features that no other CNI offers, including policy tiers, host endpoint protection, and DNS-based egress rules.
 
 ### Standard Kubernetes NetworkPolicy
 
@@ -688,17 +653,11 @@ spec:
       protocol: TCP
 ```
 
-But standard NetworkPolicy has significant limitations:
-- Cannot apply to host traffic (only pod traffic)
-- No deny rules (only allow rules when a policy selects a pod)
-- No global policies (must be created per-namespace)
-- No policy ordering (all policies are OR'd together)
-- No L7 rules (cannot filter by HTTP method or path)
-- No DNS-based rules (cannot allow/deny by domain name)
+However, standard Kubernetes NetworkPolicy has significant limitations that become apparent as soon as you move beyond basic allow-listing: it cannot apply to host traffic (only pod traffic), it has no explicit deny rules, policies are namespace-scoped with no global baseline capability, all matching policies are OR'd together with no ordering or priority, there is no L7 filtering by HTTP method or path, and there is no ability to write rules based on DNS domain names rather than IP addresses. Each of these limitations makes sense for the minimal viable NetworkPolicy API, but each becomes a blocker in production environments with multiple teams and compliance requirements.
 
 ### Calico NetworkPolicy (Namespace-Scoped)
 
-Calico's own NetworkPolicy CRD extends the standard with all the missing features:
+Calico's own NetworkPolicy CRD extends the standard with all the missing features, adding explicit Allow and Deny actions, egress rules alongside ingress, and richer selector syntax:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -731,7 +690,7 @@ spec:
 
 ### GlobalNetworkPolicy
 
-GlobalNetworkPolicy applies across all namespaces. This is essential for platform teams that need cluster-wide security baselines:
+GlobalNetworkPolicy applies across all namespaces, which is essential for platform teams that need cluster-wide security baselines that no individual team can override. A typical pattern is a global egress policy that blocks all outbound internet access by default, then allows specific destinations:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -762,7 +721,7 @@ spec:
 
 ### HostEndpoint Protection
 
-Unlike any other CNI, Calico can protect the host itself -- not just pods. HostEndpoints let you apply policies to the node's physical interfaces:
+Unlike any other CNI, Calico can protect the host itself -- not just pods. HostEndpoints let you apply policies to the node's physical interfaces, treating the Kubernetes worker as a managed network endpoint with the same policy engine that governs pod traffic:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -779,7 +738,7 @@ spec:
   - 10.0.1.10
 ```
 
-Now you can write policies for the host:
+Now you can write policies for the host that allow SSH only from a bastion, restrict which IP ranges can reach the kubelet, and ensure that host-level rules compose cleanly with pod-level policies:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -820,7 +779,7 @@ spec:
 
 ### Policy Tiers and Ordering
 
-This is one of Calico's most powerful features. Policy tiers let different teams manage policies at different priority levels:
+This is one of Calico's most powerful and distinctive features. Policy tiers let different teams manage policies at different priority levels, with explicit pass-through semantics that prevent teams from accidentally blocking each other. The security team can enforce compliance rules at the highest tier, the platform team can define infrastructure-level rules in the middle, and application teams can write their own allow-list policies at the lowest tier -- all without coordination or conflict.
 
 ```
 POLICY TIERS (Evaluated Top to Bottom)
@@ -865,7 +824,7 @@ POLICY TIERS (Evaluated Top to Bottom)
   └─────────────────────────────────────────────────────┘
 ```
 
-Create a tier:
+Create a tier and assign a policy to it. The **Pass** action is the key mechanism: it means "I have no opinion on this traffic -- let the next tier decide." This is how tiers compose without stepping on each other:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -874,11 +833,7 @@ metadata:
   name: security
 spec:
   order: 100
-```
-
-Assign a policy to a tier:
-
-```yaml
+---
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -899,11 +854,9 @@ spec:
   - action: Pass
 ```
 
-The **Pass** action is key. It means "I don't have an opinion on this traffic -- let the next tier decide." This is how tiers compose without stepping on each other.
-
 ### Application Layer Policy (L7)
 
-Calico can integrate with Envoy to provide L7 (HTTP) policy enforcement:
+Calico can integrate with Envoy to provide L7 (HTTP) policy enforcement, allowing rules that filter by HTTP method and URL path:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -931,11 +884,11 @@ spec:
       selector: app == "frontend"
 ```
 
-L7 policies require the Envoy proxy (deployed as a DaemonSet or sidecar). This adds some overhead but enables powerful HTTP-aware security.
+L7 policies require the Envoy proxy deployed as a DaemonSet or sidecar, which adds some operational overhead but enables powerful HTTP-aware security that goes well beyond what IP-and-port rules can express.
 
 ### DNS-Based Policies
 
-Allow pods to reach specific domains without knowing their IP addresses:
+Allow pods to reach specific domains without knowing their IP addresses. Calico intercepts DNS responses and dynamically creates IP-based rules for the resolved addresses, transparently and without application changes:
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -967,13 +920,11 @@ spec:
   - action: Deny
 ```
 
-DNS policies work by intercepting DNS responses and dynamically creating IP-based rules for the resolved addresses. This is done transparently -- no application changes needed.
-
 ---
 
 ## Part 5: eBPF Dataplane
 
-Calico's eBPF dataplane replaces iptables for packet processing, delivering better performance and more consistent behavior at scale.
+Calico's eBPF dataplane replaces iptables for packet processing, delivering better performance and more consistent behavior at scale. Instead of traversing linear chains of iptables rules, eBPF programs use hash maps for O(1) lookups regardless of how many Services or policies exist in the cluster.
 
 ### When to Use eBPF vs iptables
 
@@ -997,9 +948,9 @@ USE IPTABLES WHEN:
   ✓ Team is more familiar with iptables debugging
 ```
 
-### Performance Numbers
+### Performance Characteristics
 
-Benchmarks from the Calico project (your numbers will vary):
+The key advantage of eBPF is **constant-time lookups**. With iptables, every packet traverses a chain of rules sequentially -- more Services means more rules means higher and higher latency. With eBPF hash maps, lookup time is constant regardless of table size. The following figures come from Calico project benchmarks and represent illustrative orders of magnitude; your specific results will depend on hardware, kernel version, and workload patterns.
 
 | Metric | iptables | eBPF | Improvement |
 |--------|----------|------|-------------|
@@ -1009,11 +960,9 @@ Benchmarks from the Calico project (your numbers will vary):
 | **Rule update time** (adding a Service) | 120ms | 8ms | -93% |
 | **Latency scaling** (10→10,000 Services) | Linear increase | Constant | O(1) vs O(n) |
 
-The key advantage is **constant-time lookups**. With iptables, every packet traverses a chain of rules -- more Services means more rules means more latency. With eBPF hash maps, lookup time is constant regardless of table size.
-
 ### Enabling eBPF Mode
 
-Using the Tigera operator:
+Using the Tigera operator, you enable the eBPF dataplane with a single field in the Installation resource. Once eBPF is active, you can remove kube-proxy entirely since Calico's eBPF programs handle Service routing natively:
 
 ```yaml
 apiVersion: operator.tigera.io/v1
@@ -1030,8 +979,6 @@ spec:
       blockSize: 26
 ```
 
-After enabling eBPF, you can remove kube-proxy:
-
 ```bash
 # Disable kube-proxy (Calico eBPF handles Services natively)
 kubectl patch ds -n kube-system kube-proxy -p \
@@ -1044,13 +991,7 @@ kubectl get felixconfiguration default -o yaml | grep -i bpf
 
 ### eBPF Limitations
 
-Be aware of these limitations before enabling eBPF mode:
-
-- **Kernel version**: Requires Linux 5.3+, recommended 5.8+ for full feature support
-- **HostEndpoint policies**: Some HostEndpoint features are limited or unavailable in eBPF mode (check the release notes for your version)
-- **IPIP encapsulation**: eBPF mode supports VXLAN but not IPIP (use VXLAN or no encapsulation)
-- **Debugging tools**: Traditional iptables debugging tools (iptables-save, conntrack) do not show eBPF decisions; use `calico-bpf` tool instead
-- **Feature parity**: Some newer eBPF features are in tech preview; check compatibility matrix
+Be aware of these constraints before enabling eBPF mode. It requires Linux kernel 5.3 or newer, with 5.8 or later recommended for full feature support. Some HostEndpoint features are limited or unavailable in eBPF mode (check the release notes for your specific version). eBPF mode supports VXLAN encapsulation but not IPIP, so use VXLAN or no encapsulation. Traditional iptables debugging tools like `iptables-save` and `conntrack` do not show eBPF decisions -- instead, you use Calico's built-in BPF diagnostic commands:
 
 ```bash
 # Debug eBPF dataplane
@@ -1064,20 +1005,19 @@ kubectl exec -n calico-system calico-node-xxxxx -- calico-node -bpf conntrack du
 kubectl exec -n calico-system calico-node-xxxxx -- calico-node -bpf routes dump
 ```
 
+### The nftables Dataplane (v3.29+)
+
+Starting with Calico v3.29, a third dataplane option became available: **nftables**. The nftables dataplane uses the modern Linux kernel nftables subsystem, which replaces the legacy iptables framework with a more efficient, unified API. The nftables dataplane sits between iptables and eBPF in the performance spectrum: it outperforms iptables by avoiding the linear rule-chain traversal that plagues large iptables rulesets, but it does not match eBPF's O(1) hash-map lookups. Its primary value is for operators who cannot meet eBPF's kernel version requirements (they may be on kernels between 4.x and 5.3, or on distributions that ship without eBPF support) but still want better performance and maintainability than iptables provides. Configuration is straightforward: set `linuxDataplane: NFTables` in the Installation resource. The nftables dataplane supports the same policy model as iptables, making it a drop-in upgrade path for clusters that have outgrown iptables but cannot yet adopt eBPF.
+
 ---
 
 ## Part 6: WireGuard Encryption
 
-Calico can encrypt all pod-to-pod traffic using WireGuard, a modern VPN protocol built into the Linux kernel. No certificates, no PKI infrastructure, no sidecars.
+Calico can encrypt all pod-to-pod traffic using WireGuard, a modern VPN protocol built into the Linux kernel. No certificates, no PKI infrastructure, no sidecars -- just kernel-level encryption with minimal overhead.
 
 ### Why WireGuard?
 
-Traditional options for pod traffic encryption:
-- **Service mesh mTLS**: Adds a sidecar to every pod, 50-100MB memory overhead per pod, complex certificate management
-- **IPsec**: Heavyweight, complex configuration, CPU-intensive
-- **WireGuard**: Kernel-level, ~3-5% CPU overhead, zero configuration per pod
-
-WireGuard encrypts traffic between nodes transparently. Pods do not know encryption is happening -- it occurs at the node level, below the pod network stack.
+Traditional options for pod traffic encryption each carry significant costs. Service mesh mTLS adds a sidecar to every pod, consuming 50-100MB of memory per pod and requiring complex certificate management infrastructure. IPsec is heavyweight, configuration-intensive, and CPU-hungry. WireGuard, by contrast, runs in the kernel with approximately 3-5% CPU overhead and requires zero per-pod configuration. WireGuard encrypts traffic between nodes transparently -- pods do not know encryption is happening because it occurs at the node level, below the pod network stack. Every node generates a WireGuard keypair, exchanges keys through the Calico datastore, and establishes encrypted tunnels to every peer automatically.
 
 ### Enabling WireGuard
 
@@ -1092,7 +1032,7 @@ spec:
   wireguardEnabledV6: true
 ```
 
-That is it. No per-node configuration, no certificate rotation, no sidecars. Every node generates a WireGuard keypair, exchanges keys through the Calico datastore, and establishes encrypted tunnels to every peer automatically.
+That is the entire configuration. No per-node setup, no certificate rotation, no sidecars:
 
 ```bash
 # Verify WireGuard is active on nodes
@@ -1112,7 +1052,7 @@ kubectl exec -n calico-system calico-node-xxxxx -- wg show
 
 ### Performance Overhead
 
-WireGuard is fast because it runs in the kernel and uses modern cryptography (ChaCha20-Poly1305):
+WireGuard is fast because it runs in the kernel and uses modern, efficient cryptography (ChaCha20-Poly1305):
 
 | Metric | Without WireGuard | With WireGuard | Overhead |
 |--------|-------------------|----------------|----------|
@@ -1121,30 +1061,23 @@ WireGuard is fast because it runs in the kernel and uses modern cryptography (Ch
 | **CPU per node** | 1.4% | 2.1% | +0.7% |
 | **MTU overhead** | 0 bytes | 60 bytes | Reduces effective MTU |
 
-For most workloads, WireGuard overhead is negligible. The main consideration is the MTU reduction -- ensure your pod MTU accounts for the WireGuard header (typically set to 1440 when using WireGuard without other encapsulation).
+For most workloads, WireGuard overhead is negligible. The main consideration is the MTU reduction -- ensure your pod MTU accounts for the WireGuard header, typically set to 1440 when using WireGuard without other encapsulation.
 
 ### WireGuard + eBPF
 
-WireGuard works with both iptables and eBPF dataplanes. When combined with eBPF, you get:
-- Kernel-level packet processing (eBPF)
-- Kernel-level encryption (WireGuard)
-- No kube-proxy
-- No sidecars
-- No iptables
-
-This is arguably the most streamlined Kubernetes networking stack possible.
+WireGuard works with both iptables and eBPF dataplanes. When combined with eBPF, you get kernel-level packet processing (eBPF), kernel-level encryption (WireGuard), no kube-proxy, no sidecars, and no iptables. This is arguably the most streamlined Kubernetes networking stack possible -- every critical path runs in the kernel with minimal userspace involvement.
 
 ---
 
-## Part 7: Installation
+## Part 7: Installation and Operations
 
 ### Tigera Operator (Recommended)
 
-The Tigera operator is the recommended installation method. It manages the Calico lifecycle, handles upgrades, and ensures components are configured correctly.
+The Tigera operator is the recommended installation method. It manages the Calico lifecycle, handles upgrades, and ensures components are configured correctly:
 
 ```bash
 # Install the Tigera operator
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/tigera-operator.yaml
 
 # Create the Installation resource
 cat <<EOF | kubectl apply -f -
@@ -1187,22 +1120,20 @@ watch kubectl get tigerastatus
 
 ### Manifest-Based Installation
 
-For environments where operators are not preferred:
+For environments where operators are not preferred, Calico also supports direct manifest installation, though this gives you less lifecycle management:
 
 ```bash
 # Direct manifest installation (includes CRDs, DaemonSets, Deployments)
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calico.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml
 ```
-
-The manifest method gives you less lifecycle management but is simpler for testing and development.
 
 ### calicoctl CLI Tool
 
-While Calico resources can be managed with `kubectl`, the `calicoctl` CLI provides additional diagnostics:
+While Calico resources can be managed with `kubectl`, the `calicoctl` CLI provides additional diagnostics that are essential for troubleshooting:
 
 ```bash
 # Install calicoctl
-curl -L https://github.com/projectcalico/calico/releases/download/v3.28.0/calicoctl-linux-amd64 -o calicoctl
+curl -L https://github.com/projectcalico/calico/releases/download/v3.32.0/calicoctl-linux-amd64 -o calicoctl
 chmod +x calicoctl
 sudo mv calicoctl /usr/local/bin/
 
@@ -1222,13 +1153,25 @@ calicoctl get networkpolicy --all-namespaces
 calicoctl get globalnetworkpolicy
 ```
 
+### Editions: Open Source, Enterprise, and Cloud
+
+Tigera ships three editions built on the same core open-source project, and understanding the differences is essential when planning a production deployment. **Calico Open Source** is the free, Apache 2.0 licensed project available on GitHub. It includes the full dataplane (iptables, eBPF, nftables), BGP routing, WireGuard encryption, and the complete policy model with tiers. This is what most clusters run, and it is fully production-grade on its own. The Open Source edition is where all dataplane innovation happens first -- eBPF support, nftables, and WireGuard all landed in Open Source before becoming available in the commercial editions.
+
+**Calico Enterprise** adds self-managed commercial features on top of the same dataplane: a web console called Calico Whisker for policy visualization and management, compliance reporting with audit-ready output, SIEM integrations for security operations teams, multi-cluster management, and enterprise support with defined SLAs. Enterprise is deployed on your own infrastructure, so you retain full control of the data plane while gaining the operational tooling that larger organizations require.
+
+**Calico Cloud** is a SaaS offering that adds a managed control plane with global visibility across all connected clusters, dynamic threat detection and scoring, and a free tier for individual clusters running Calico Open Source 3.30 or higher. The managed control plane reduces the operational burden of running Calico API servers and Typha at scale, while providing a single pane of glass for policy, compliance, and observability across your entire fleet. All three editions share the same dataplane and policy engine, so policies you develop on the open-source edition work identically on Enterprise and Cloud, and a cluster can be upgraded from Open Source to Enterprise or connected to Cloud without recreating any policy resources.
+
+### Observability
+
+Calico Open Source provides basic flow logs through the calico-node containers, and `calicoctl` gives you node-level diagnostics including BGP session status, IPAM block allocation, and policy evaluation. For deeper observability, you can inspect BIRD's BGP logs to trace route propagation events, Felix's per-node policy programming logs to understand why a specific rule is or is not being applied to a pod, and the IPAM state to audit IP utilization across blocks. These logs are structured and can be forwarded to your existing logging infrastructure for correlation with application and infrastructure events. For teams needing richer observability, Calico Enterprise and Cloud add flow visualizers that show traffic patterns as interactive service graphs, dynamic threat detection that scores flows against known-bad indicators, and integration with external logging and SIEM platforms for centralized security operations. The open-source edition gives you enough signal to troubleshoot most issues; the commercial editions give you the dashboards and alerting that make proactive monitoring practical at scale.
+
 ---
 
 ## Part 8: Scaling Calico to 1,000+ Nodes
 
 ### Typha Deployment
 
-For large clusters, Typha is essential. The Tigera operator handles this automatically, but here are the guidelines:
+For large clusters, Typha is essential. The Tigera operator handles this automatically, but understanding the resource implications and failure modes will help you configure it correctly. Typha acts as a fan-out proxy: it maintains a small number of watch connections to the Kubernetes API server and relays updates to all Felix instances assigned to it. This means Typha's memory consumption scales with the number of connected Felix instances and the volume of watched resources (pods, network policies, IP pools), not with the raw node count. In practice, a single Typha replica can comfortably serve 200-300 Felix instances, and the operator deploys additional replicas as the cluster grows. Each Typha replica is stateless, so losing one simply means its Felix instances reconnect to another replica — there is no data loss and no manual intervention required. The operational guidelines below are starting points; you should monitor Typha's own CPU and memory usage and adjust replica counts based on actual utilization rather than blindly following a static table.
 
 | Cluster Size | Typha Replicas | Notes |
 |--------------|----------------|-------|
@@ -1280,70 +1223,77 @@ HIERARCHICAL ROUTE REFLECTORS (1,000+ Nodes)
 
 ### etcd Performance (Kubernetes Datastore)
 
-Calico stores all its state in the Kubernetes API (backed by etcd). At scale, this means:
-
-- **Watch connections**: Typha dramatically reduces these
-- **Object count**: Thousands of WorkloadEndpoint objects (one per pod)
-- **Update rate**: Pod churn creates update storms; Typha batches these
-
-Recommendations for large clusters:
-1. Use SSDs for etcd storage (mandatory above 500 nodes)
-2. Monitor etcd latency: `etcd_disk_wal_fsync_duration_seconds` should be < 10ms
-3. Consider dedicated etcd nodes (not co-located with control plane workloads)
-4. Enable etcd compaction and defragmentation on a schedule
+Calico stores all its state in the Kubernetes API (backed by etcd). At scale, this means thousands of WorkloadEndpoint objects (one per pod), high watch connection counts mitigated by Typha, and update storms during pod churn that Typha batches. Recommendations for large clusters: use SSDs for etcd storage (mandatory above 500 nodes), monitor `etcd_disk_wal_fsync_duration_seconds` and keep it below 10ms, consider dedicated etcd nodes rather than co-locating with control plane workloads, and enable etcd compaction and defragmentation on a regular schedule.
 
 ---
 
-## Comparison: Calico vs Cilium vs Flannel
+## CNI / Dataplane Rosetta
 
-| Feature | **Calico** | **Cilium** | **Flannel** |
-|---------|-----------|-----------|------------|
-| **Primary technology** | BGP + iptables/eBPF | eBPF | VXLAN overlay |
-| **NetworkPolicy** | Full K8s + extended | Full K8s + extended | None (requires Calico addon) |
-| **BGP support** | Native, first-class | Limited (via MetalLB) | None |
-| **eBPF dataplane** | Yes (optional) | Yes (default) | No |
-| **Overlay options** | IPIP, VXLAN, none | VXLAN, Geneve, none | VXLAN only |
-| **WireGuard encryption** | Yes | Yes | No |
-| **Host protection** | Yes (HostEndpoint) | Yes (Host Policies) | No |
-| **L7 policy** | Yes (via Envoy) | Yes (native eBPF) | No |
-| **DNS-based policy** | Yes | Yes | No |
-| **Policy tiers** | Yes | No | No |
-| **Observability** | Basic flow logs | Hubble (advanced) | None |
-| **Service mesh** | No (integrates with others) | Sidecar-free mesh | No |
-| **Replace kube-proxy** | Yes (eBPF mode) | Yes (default) | No |
-| **Maturity** | Since 2015 (oldest) | Since 2017 | Since 2014 |
-| **Scaling (tested)** | 5,000+ nodes | 5,000+ nodes | 5,000+ nodes |
-| **Enterprise version** | Calico Cloud/Enterprise | Isovalent Enterprise | None |
-| **Best for** | BGP, bare metal, enterprise policy | eBPF-first, observability | Simple overlay, getting started |
-| **Complexity** | Medium-High | Medium-High | Low |
+This table compares durable capabilities across three commonly deployed CNI plugins on Kubernetes. The capabilities listed are design characteristics that change slowly; implementation details (kernel version requirements, exact performance numbers, specific feature flags) are volatile and should be checked against vendor documentation.
 
-### When to Choose What
+| Capability | **Calico** | **Cilium** | **Flannel** |
+|---|---|---|---|
+| **Routing model** | BGP native L3 routing (optionally VXLAN/IPIP overlay) | Overlay (VXLAN/Geneve) with eBPF-based routing | VXLAN overlay only |
+| **Policy model** | K8s NetworkPolicy + extended CRDs + tiers + host endpoints | K8s NetworkPolicy + CiliumNetworkPolicy + DNS-based rules | None (requires Calico or Cilium add-on) |
+| **Dataplanes** | iptables, eBPF, nftables, Windows, VPP | eBPF (primary), iptables (fallback) | iptables only |
+| **No-kube-proxy** | Yes (eBPF and nftables modes) | Yes (eBPF mode, default) | No |
+| **Encryption** | WireGuard (node-to-node) | WireGuard or IPsec (node-to-node) | None |
+| **Host protection** | Yes (HostEndpoint CRD with policy tiers) | Yes (CiliumHostPolicy) | No |
+| **Observability** | Basic flow logs; richer in Enterprise/Cloud editions | Hubble (advanced flow observability, service map) | None |
+| **Governance** | Tigera-stewarded (vendor-led) | CNCF Graduated (community-governed) | CNCF Graduated |
+| **Best fit** | BGP integration, bare-metal, enterprise policy tiers, hybrid cloud | eBPF-first stack, Hubble observability, sidecar-free service mesh | Simple overlay for small to medium clusters |
 
-```
-CHOOSING YOUR CNI
-═══════════════════════════════════════════════════════════════
+No single CNI is "best" -- the right choice depends on your existing network infrastructure, team expertise, security requirements, and observability needs. Calico's unique strengths are BGP-native routing and policy tiers; Cilium's are eBPF-native observability and the sidecar-free mesh; Flannel's is operational simplicity. Many organizations run Calico on bare metal and Cilium in cloud environments within the same company, choosing the right tool for each deployment context.
 
-"I need to peer with physical network infrastructure"
-└──▶ Calico (BGP is first-class, not bolted on)
+---
 
-"I want the best observability (Hubble)"
-└──▶ Cilium (Hubble is unmatched)
+## Patterns and Anti-Patterns
 
-"I just need something simple that works"
-└──▶ Flannel (but add Calico for NetworkPolicy)
+### Patterns
 
-"My security team needs policy tiers and HostEndpoint"
-└──▶ Calico (only CNI with policy tiers)
+1. **GitOps-managed BGPPeer resources.** Store all BGP peer configurations as version-controlled YAML and require pull request review for any ASN or peer IP change. The opening incident of this module -- a $180,000 outage from a single wrong ASN -- would have been caught in code review. Use `nodeSelector` and `peerSelector` to target peer configurations to specific racks or availability zones rather than maintaining per-node BGPPeer resources.
 
-"I'm all-in on eBPF and want a sidecar-free service mesh"
-└──▶ Cilium (eBPF-native from the ground up)
+2. **Three-tier policy architecture.** Deploy three tiers in every cluster: a `security` tier owned by the security team for compliance rules, a `platform` tier owned by the platform team for infrastructure policies like DNS and monitoring access, and an `application` tier where development teams write their own allow-list policies. End the security and platform tiers with `action: Pass` rules so unmatched traffic delegates to the next tier. This pattern eliminates the coordination overhead of a single shared policy namespace.
 
-"I'm running bare metal with spine/leaf networking"
-└──▶ Calico (designed for this exact use case)
+3. **Route reflectors before 50 nodes.** Do not wait until the full mesh becomes painful. Deploy two or three route reflector nodes when your cluster crosses 50 worker nodes. The migration is straightforward -- disable `nodeToNodeMeshEnabled`, label the reflector nodes, and create the BGPPeer resources. Doing this proactively avoids an emergency migration when BIRD memory exhaustion starts causing session flaps.
 
-"I want both options open"
-└──▶ Calico with eBPF dataplane (BGP + eBPF)
-```
+4. **Per-namespace IP pools for compliance segmentation.** Assign dedicated IP pools to namespaces that fall under specific regulatory regimes (PCI-DSS, HIPAA, SOX) so that network-level firewall rules and audit tools can distinguish compliance-scoped traffic from general workload traffic without understanding Kubernetes internals. The IP address becomes the compliance boundary.
+
+### Anti-Patterns
+
+1. **Disabling `natOutgoing` without return routes.** If your pod CIDR is not routable from your infrastructure (common in cloud environments where pod IPs are private and unknown to the VPC router), pods will be unable to reach external services because the return traffic has no path back to the source pod. The pod sends a packet to an external IP, the packet reaches the destination, but the destination's reply is routed to a black hole because no route exists for the pod's source IP. This manifests as pods that can resolve DNS but cannot establish TCP connections to external endpoints — a classic troubleshooting dead end. Always set `natOutgoing: true` on every IPPool unless you have explicit return routes for pod CIDRs configured on your physical or cloud network infrastructure and have verified those routes end-to-end.
+
+2. **Enabling eBPF on unsupported kernels.** If the kernel does not meet the minimum version (5.3, ideally 5.8+ for full feature support), Felix may crash on startup with a BPF program load error or silently fall back to iptables with only partial functionality enabled, leaving you with a mix of behaviors that is nearly impossible to reason about. Always run `calicoctl node checksystem` before enabling a new dataplane, verify the kernel version with `uname -r` on every node (not just the control plane), and test in a staging cluster before promoting to production.
+
+3. **Using `action: Deny` without `action: Pass` as the last rule in a tier.** A tier that ends with an explicit Deny as its final rule silently blocks all unmatched traffic from ever reaching lower tiers, making application-level policies completely ineffective — your developers' carefully crafted allow-list policies simply never get evaluated. Always end non-terminal tiers with `action: Pass` as the final rule to delegate unmatched traffic downward to the next tier. Reserve `action: Deny` as a terminal rule for the last tier only, where there is no lower tier to delegate to.
+
+4. **Allowing IP pool CIDR overlap.** If two IPPools share overlapping CIDR ranges, Calico's IPAM may assign the same IP address to two different pods on different nodes, causing intermittent and nearly impossible-to-diagnose connectivity failures — one pod works, the other gets TCP RSTs, and the failure moves when either pod restarts. Audit all IPPool CIDRs regularly with `calicoctl get ippool -o yaml` and ensure they do not overlap with each other or with the Service CIDR, node CIDR, or any other routable prefix in your network.
+
+### Decision Framework: Choosing Your Calico Stack
+
+When designing a Calico deployment, work through these questions in order. Each choice constrains the options available for subsequent decisions, so resist the temptation to jump ahead:
+
+1. **Networking model**: Can your physical network route pod CIDRs? If yes, use BGP with no encapsulation for maximum performance and the ability to peer directly with your datacenter's spine-leaf fabric. If no, use VXLAN -- it is preferred over IPIP because it supports IPv6 and traverses NAT devices more reliably. The CrossSubnet variants give you the best of both worlds when nodes span subnets: encapsulation only when needed.
+
+2. **Dataplane**: Are you on kernel 5.8+ and comfortable with eBPF debugging? Use the eBPF dataplane and remove kube-proxy entirely for consistent, O(1) Service routing. On kernels between 4.x and 5.3 where eBPF is not available? Use the nftables dataplane (v3.29+) for better performance and maintainability than iptables. On older kernels or in environments where your team needs traditional debugging tools? Use iptables.
+
+3. **Policy model**: Do you have multiple teams needing independent policy management? Deploy policy tiers from day one, even if you start with only the platform tier. Adding the security tier later is a single CRD operation -- setting up tiers proactively costs nothing and prevents a migration project when compliance requirements appear. End every non-terminal tier with `action: Pass` to ensure unmatched traffic delegates properly.
+
+4. **Encryption**: Do you have a compliance requirement for encryption in transit? Enable WireGuard. It has negligible overhead, zero per-pod configuration, and encrypts all node-to-node traffic automatically. For per-service identity with cryptographic SPIFFE certificates, you can layer a service mesh on top, but for blanket compliance encryption, WireGuard alone is sufficient and dramatically simpler to operate.
+
+5. **Edition**: Are you running a single cluster with basic networking and policy needs? Calico Open Source is sufficient, and it is fully production-grade. Do you need multi-cluster visibility, compliance reporting with audit trails, a web console for policy management, or enterprise support with SLAs? Evaluate Calico Enterprise. Are you operating a SaaS platform and want to offload the control plane management? Calico Cloud provides a managed experience with a free tier for qualifying clusters running Calico Open Source 3.30 or higher.
+
+---
+
+## Did You Know?
+
+1. **Calico was born from carrier-grade telecom routing.** Tigera was founded in 2015 by engineers from Metaswitch Networks, a telecommunications company that built carrier-grade routing software for phone networks. The BGP expertise that routes phone calls across continents is the same technology that now routes Kubernetes pod traffic. This is not a CNI built by generalists learning networking -- it was built by networking experts learning containers.
+
+2. **Calico powers over 8 million nodes across 166 countries.** It is deployed at major banks, telecoms, government agencies, and three of the top five cloud providers. When AWS launched EKS, Calico was one of the first supported CNI options alongside AWS's own VPC CNI. This breadth of deployment means Calico has been tested against an extraordinary range of network topologies and failure modes.
+
+3. **Calico's eBPF dataplane can replace kube-proxy entirely**, eliminating iptables overhead for Service routing just as Cilium does. In benchmarks, Calico's eBPF mode maintains consistent latency regardless of the number of Services in the cluster, while iptables latency grows linearly with the rule count.
+
+4. **Project Calico is named after a calico cat.** The project's creators wanted a name that was friendly and memorable, and the calico cat's distinctive patches of different colors inspired the metaphor of networking patches -- connecting different network segments into one cohesive fabric. The project mascot, a calico cat, appears throughout the documentation and community materials.
 
 ---
 
@@ -1352,15 +1302,13 @@ CHOOSING YOUR CNI
 | # | Mistake | What Happens | How to Fix |
 |---|---------|-------------|------------|
 | 1 | **Using full mesh BGP on 100+ nodes** | Thousands of BGP sessions, BIRD memory exhaustion, slow convergence | Switch to route reflectors; disable `nodeToNodeMeshEnabled` and deploy 2-3 RR nodes |
-| 2 | **Wrong ASN in BGP peer config** | Asymmetric routing, session flapping, intermittent packet loss that is incredibly hard to diagnose | Manage BGPPeer CRDs in Git; require PR review for all BGP changes; use `calicoctl node status` to verify sessions |
-| 3 | **Forgetting natOutgoing on IP pools** | Pods cannot reach the internet; DNS to external domains fails silently | Set `natOutgoing: true` on the IPPool unless you have explicit return routes for pod CIDRs on your infrastructure |
+| 2 | **Wrong ASN in BGP peer config** | Asymmetric routing, session flapping, intermittent packet loss | Manage BGPPeer CRDs in Git; require PR review for all BGP changes; verify with `calicoctl node status` |
+| 3 | **Forgetting natOutgoing on IP pools** | Pods cannot reach the internet; DNS to external domains fails silently | Set `natOutgoing: true` on the IPPool unless you have explicit return routes for pod CIDRs |
 | 4 | **Enabling eBPF without checking kernel version** | Felix crashes or falls back to iptables silently; partial functionality | Verify kernel 5.3+ with `uname -r`; check `calicoctl node checksystem` before enabling |
 | 5 | **Not deploying Typha on large clusters** | API server overwhelmed by watch connections; Felix instances disconnected; policies not applied | Deploy Typha when cluster exceeds 100 nodes; the Tigera operator does this automatically |
-| 6 | **Overlapping IP pools** | IPAM assigns the same IP to two pods; conflict causes intermittent connectivity failures | Audit all IPPool CIDRs with `calicoctl get ippool -o yaml`; ensure CIDRs do not overlap with each other or with Service/node CIDRs |
+| 6 | **Overlapping IP pools** | IPAM assigns the same IP to two pods; conflict causes intermittent connectivity failures | Audit all IPPool CIDRs; ensure they do not overlap with each other or with Service/node CIDRs |
 | 7 | **Using `action: Deny` without `action: Pass`** in tiered policies | Traffic blocked by a higher-tier policy never reaches lower tiers; application policies silently ignored | Use `action: Pass` as the final rule in a tier to delegate unmatched traffic to the next tier |
-| 8 | **IPIP mode in cloud environments that block IP protocol 4** | Pods on different nodes cannot communicate; only same-node pods work | Switch to VXLAN encapsulation (uses UDP, not a custom IP protocol); check cloud security group rules |
-| 9 | **Block size too large for small clusters** | Wasted IPs; only a few pods per node but each node claims a /26 (64 IPs) | Reduce `blockSize` to 28 (16 IPs) or 29 (8 IPs) for dev/test clusters |
-| 10 | **Not setting MTU correctly with encapsulation** | Packet fragmentation, degraded throughput, intermittent TCP connection hangs | Set MTU to 1450 for VXLAN, 1480 for IPIP, 1440 for WireGuard + VXLAN; check with `ping -s 1472 -M do <pod-ip>` |
+| 8 | **Not setting MTU correctly with encapsulation** | Packet fragmentation, degraded throughput, intermittent TCP connection hangs | Set MTU to 1450 for VXLAN, 1480 for IPIP, 1440 for WireGuard + VXLAN; verify with `ping -s 1472 -M do <pod-ip>` |
 
 ---
 
@@ -1373,7 +1321,7 @@ Test your understanding of Calico's architecture, BGP, policy model, and operati
 
 **Answer:**
 
-1. **Felix** -- The policy engine. Watches the Calico datastore (via API server or Typha) for changes and programs the Linux dataplane (iptables rules or eBPF programs) to enforce network policy, routes, and IPAM.
+1. **Felix** -- The policy engine. Watches the Calico datastore (via API server or Typha) for changes and programs the Linux dataplane (iptables rules, eBPF programs, or nftables rules) to enforce network policy, routes, and IPAM.
 
 2. **BIRD** -- The BGP daemon. Distributes routing information between nodes so that each node knows how to reach pods on other nodes. Speaks standard BGP protocol.
 
@@ -1440,7 +1388,7 @@ With 3 Typha replicas, the API server handles 3 watches instead of 500 -- a 99.4
 <details>
 <summary><strong>Question 6</strong>: You want to encrypt all pod-to-pod traffic. Compare WireGuard encryption in Calico to mTLS via a service mesh. When would you choose each?</summary>
 
-**Answer:**
+**Answer:** WireGuard encryption in Calico operates fundamentally differently from service mesh mTLS, and understanding their tradeoffs helps you choose the right tool for each compliance and security requirement.
 
 **WireGuard (Calico)**:
 - Operates at the node level (Layer 3) -- encrypts all traffic between nodes transparently
@@ -1462,75 +1410,47 @@ With 3 Typha replicas, the API server handles 3 watches instead of 500 -- a 99.4
 
 **Choose mTLS** when you need per-service identity, L7 authorization, or traffic management features alongside encryption.
 
-**Use both** when compliance requires node-level encryption AND you need service-level identity.
+**Use both** when compliance requires node-level encryption AND you need service-level identity. This combination is common in regulated financial environments where PCI-DSS or equivalent frameworks demand encryption at every layer: WireGuard covers the network layer transparently, and the service mesh provides cryptographic workload identity for audit purposes.
 
 </details>
 
 <details>
-<summary><strong>Question 7</strong>: You configure a BGPPeer with the wrong ASN and traffic starts dropping. How would you diagnose this issue?</summary>
+<summary><strong>Question 7</strong>: You configure a BGPPeer with the wrong ASN and traffic starts dropping. How would you diagnose this issue step by step?</summary>
 
 **Answer:**
 
-Step-by-step diagnosis:
+1. **Check BGP session status** with `calicoctl node status`. Look for sessions in "Connect" or "Active" state (not "Established"). Flapping sessions will alternate between states.
 
-1. **Check BGP session status**:
-   ```bash
-   calicoctl node status
-   ```
-   Look for sessions in "Connect" or "Active" state (not "Established"). Flapping sessions will alternate between states.
+2. **Check BIRD logs** with `kubectl logs -n calico-system -l k8s-app=calico-node -c calico-node | grep -i bgp`. Look for "BGP Error" or "Notification" messages indicating ASN mismatch.
 
-2. **Check BIRD logs**:
-   ```bash
-   kubectl logs -n calico-system -l k8s-app=calico-node -c calico-node | grep -i bgp
-   ```
-   Look for "BGP Error" or "Notification" messages indicating ASN mismatch.
+3. **Verify the BGPPeer configuration** with `calicoctl get bgppeer -o yaml`. Cross-reference the `asNumber` with the actual ASN configured on the peer device.
 
-3. **Verify the BGPPeer configuration**:
-   ```bash
-   calicoctl get bgppeer -o yaml
-   ```
-   Cross-reference the `asNumber` with the actual ASN configured on the peer device.
-
-4. **Check routing tables**:
-   ```bash
-   ip route | grep bird
-   ```
-   Missing or incorrect routes indicate BGP is not exchanging information correctly.
+4. **Check routing tables** with `ip route | grep bird`. Missing or incorrect routes indicate BGP is not exchanging information correctly.
 
 5. **Fix**: Update the BGPPeer CRD with the correct ASN. BGP sessions will re-establish within the hold timer interval (default 90 seconds).
 
 </details>
 
 <details>
-<summary><strong>Question 8</strong>: Explain how Calico's per-namespace IP pool assignment works and give a use case where it solves a real problem.</summary>
+<summary><strong>Question 8</strong>: Explain how Calico's per-namespace IP pool assignment works and describe a real compliance scenario where it solves a genuine operational problem.</summary>
 
 **Answer:**
 
 You annotate a namespace with `cni.projectcalico.org/ipv4pools: '["pool-name"]'`, and all pods created in that namespace receive IPs from the specified IPPool.
 
-**Use case: PCI-DSS compliance for a payment service.**
-
-A company runs a mixed Kubernetes cluster. The payment processing service must comply with PCI-DSS, which requires network segmentation -- the cardholder data environment (CDE) must be isolated and auditable.
-
-By creating a dedicated IP pool (e.g., 10.245.0.0/24) for the `payment` namespace:
-- All payment pods get IPs from a known, documented range
-- Firewall rules on physical infrastructure can specifically allow/deny 10.245.0.0/24
-- Network flow logs can be audited by CIDR range
-- Compliance auditors can verify segmentation without understanding Kubernetes internals
-
-Without per-namespace pools, pod IPs are scattered across the global pool, making network-level segmentation much harder without Calico-specific policies throughout the cluster.
+**Use case: PCI-DSS compliance for a payment service.** A company runs a mixed Kubernetes cluster where the payment processing service must comply with PCI-DSS, which requires network segmentation -- the cardholder data environment (CDE) must be isolated and auditable. By creating a dedicated IP pool (e.g., 10.245.0.0/24) for the `payment` namespace, all payment pods get IPs from a known, documented range. Firewall rules on physical infrastructure can specifically allow or deny 10.245.0.0/24. Network flow logs can be audited by CIDR range. Compliance auditors can verify segmentation without understanding Kubernetes internals. Without per-namespace pools, pod IPs are scattered across the global pool, making network-level segmentation much harder.
 
 </details>
 
 ---
 
+Now that you understand Calico's architecture, policy model, dataplanes, and operational considerations, it is time to put that knowledge into practice. The following hands-on exercise walks you through deploying Calico on a local kind cluster, creating a three-tier policy architecture, and verifying that the policies correctly enforce the intended traffic flows. You will also have the opportunity to enable WireGuard encryption and confirm it is protecting your pod traffic.
+
 ## Hands-On Exercise: Deploy Calico on kind and Implement Tiered Policies
 
 ### Objective
 
-Deploy a Calico-powered kind cluster, create policy tiers, implement namespace-scoped policies, and verify BGP peering between nodes.
-
-**Time**: 45-60 minutes
+Deploy a Calico-powered kind cluster, create policy tiers, implement namespace-scoped policies, and verify BGP peering between nodes. This exercise takes approximately 45 to 60 minutes to complete, depending on your internet connection speed for pulling container images.
 
 ### Step 1: Create a kind Cluster with Calico
 
@@ -1542,8 +1462,6 @@ apiVersion: kind.x-k8s.io/v1alpha4
 networking:
   # Disable default CNI so we can install Calico
   disableDefaultCNI: true
-  # Disable kube-proxy if you want to test eBPF (optional)
-  # kubeProxyMode: "none"
   podSubnet: "10.244.0.0/16"
   serviceSubnet: "10.96.0.0/12"
 nodes:
@@ -1560,7 +1478,7 @@ kind create cluster --name calico-lab --config calico-kind-config.yaml
 
 ```bash
 # Install the Tigera operator
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/tigera-operator.yaml
 
 # Wait for the operator to be ready
 kubectl wait --for=condition=Available deployment/tigera-operator \
@@ -1600,11 +1518,7 @@ echo "Calico is ready!"
 
 ```bash
 # Install calicoctl as a kubectl plugin
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/calicoctl.yaml
-
-# Or install as a standalone binary (Linux example)
-# curl -L https://github.com/projectcalico/calico/releases/download/v3.28.0/calicoctl-linux-amd64 -o calicoctl
-# chmod +x calicoctl && sudo mv calicoctl /usr/local/bin/
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calicoctl.yaml
 
 # Check node status and BGP peering
 kubectl calico node status
@@ -1708,7 +1622,6 @@ spec:
   - action: Pass
 EOF
 
-# Security tier: Default pass (let other tiers decide)
 echo "Security tier policies applied."
 ```
 
@@ -1923,15 +1836,15 @@ rm -f calico-kind-config.yaml
 
 ## Key Takeaways
 
-1. **Calico is a platform, not just a CNI.** It handles routing (BGP), policy (L3-L7), encryption (WireGuard), and IPAM in a single integrated system.
+1. **Calico is a platform, not just a CNI.** It handles routing (BGP), policy (L3-L7), encryption (WireGuard), and IPAM in a single integrated system. Calico is Tigera-stewarded (vendor-led), not a CNCF-hosted project -- its peer Cilium is CNCF Graduated.
 
-2. **BGP gives you native routing.** No overlays, no encapsulation overhead, full integration with existing datacenter networking -- this is Calico's unique strength.
+2. **BGP gives you native routing.** No overlays, no encapsulation overhead, full integration with existing datacenter networking -- this is Calico's unique strength. Use route reflectors to avoid the O(n²) full-mesh scaling problem above 50 nodes.
 
-3. **Policy tiers solve the multi-team problem.** Security teams, platform teams, and developers can all write policies without stepping on each other.
+3. **Policy tiers solve the multi-team problem.** Security teams, platform teams, and developers can all write policies without stepping on each other, using `action: Pass` to delegate unmatched traffic downward.
 
 4. **Typha is mandatory at scale.** Without it, the API server becomes the bottleneck. Deploy it before you hit 100 nodes, not after.
 
-5. **eBPF and WireGuard are the future.** Together they give you kernel-level packet processing and encryption with no sidecars and minimal overhead.
+5. **eBPF, nftables, and WireGuard represent the modern dataplane.** Together they give you kernel-level packet processing and encryption with no sidecars and minimal overhead. The nftables dataplane (v3.29+) provides a middle ground for clusters that cannot meet eBPF's kernel requirements.
 
 6. **calicoctl is your best friend.** `calicoctl node status` and `calicoctl ipam show` will save you hours of debugging.
 
@@ -1945,6 +1858,10 @@ rm -f calico-kind-config.yaml
 - [Calico eBPF Dataplane](https://docs.tigera.io/calico/latest/operations/ebpf/) - Full guide to enabling and operating eBPF mode
 - [calicoctl Reference](https://docs.tigera.io/calico/latest/reference/calicoctl/) - CLI command reference
 - [Calico Network Policy Guide](https://docs.tigera.io/calico/latest/network-policy/) - Comprehensive policy documentation
+- [Calico Product Editions](https://docs.tigera.io/calico/latest/about/calico-product-editions) - Comparison of Open Source, Enterprise, and Cloud
+- [Calico VXLAN and IPIP Configuration](https://docs.tigera.io/calico/latest/networking/configuring/vxlan-ipip) - Overlay networking details
+- [CNI Specification](https://github.com/containernetworking/cni/blob/main/SPEC.md) - The Container Network Interface spec that defines how every Kubernetes CNI plugin works
+- [CNCF Cilium Project](https://www.cncf.io/projects/cilium/) - Governance and maturity comparison; Cilium is a CNCF Graduated project
 - *Kubernetes Networking* by James Strong and Vallery Lancey (O'Reilly) - Covers Calico in depth
 
 ---
@@ -1960,5 +1877,13 @@ Continue to [Module 5.1: Cilium](../module-5.1-cilium/) if you have not already,
 ## Sources
 
 - [Project Calico GitHub Repository](https://github.com/projectcalico/calico) — Primary upstream project entry point for releases, code, and high-level feature references.
+- [Calico Documentation](https://docs.tigera.io/calico/latest/) — Authoritative source for architecture, configuration, and operational guidance.
+- [Calico Product Editions](https://docs.tigera.io/calico/latest/about/calico-product-editions) — Official comparison of Calico Open Source, Enterprise, and Cloud editions.
+- [Tigera: About Calico](https://docs.tigera.io/calico/latest/about/about-calico) — Project overview, stewardship model, and community information.
 - [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — Authoritative baseline for what the core Kubernetes NetworkPolicy API does and does not provide.
+- [Kubernetes Network Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/) — CNI plugin overview, how Calico fits into the Kubernetes networking model.
+- [CNI Specification](https://github.com/containernetworking/cni/blob/main/SPEC.md) — The Container Network Interface specification that defines ADD/DEL/CHECK operations.
 - [RFC 4456: BGP Route Reflection](https://www.rfc-editor.org/rfc/rfc4456) — Canonical reference for the route-reflector model used to avoid full-mesh BGP scaling problems.
+- [Calico eBPF Dataplane](https://docs.tigera.io/calico/latest/operations/ebpf/) — Complete guide to enabling, operating, and debugging the eBPF dataplane.
+- [Calico Network Policy](https://docs.tigera.io/calico/latest/network-policy/) — Comprehensive policy documentation covering tiers, GlobalNetworkPolicy, and L7 rules.
+- [CNCF: Cilium](https://www.cncf.io/projects/cilium/) — CNCF project page for Cilium, referenced for governance comparison.
