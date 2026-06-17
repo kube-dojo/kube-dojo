@@ -1,20 +1,21 @@
 ---
+revision_pending: false
 title: "Module 9.11: Bare-Metal MLOps — Building a Production ML Platform Without Managed Cloud"
 sidebar:
   order: 12
 slug: module-9.11-bare-metal-mlops
 ---
 
-## Complexity: [COMPLEX]
-
-**Time to Complete**: Plan for 60-70 minutes if you already know Kubernetes fundamentals, and reserve extra time if you want to run the production-realistic lab path.
-
-**Prerequisites**: This capstone assumes you can read Kubernetes manifests, recognize common control-plane and workload failures, and connect storage, networking, GPU, and serving behavior into one operational picture.
-
-- Kubernetes basics with a kubeadm cluster or equivalent
-- Module 9.7: GPU Scheduling, because the GPU Operator and MIG appear throughout this module
-- At least one serving module: Module 9.8 KServe, Module 9.9 Seldon Core, or Module 9.10 BentoML
-- Comfort reading Kubernetes manifests, Helm values, and production troubleshooting output
+> **Complexity**: `[COMPLEX]`
+>
+> **Time to Complete**: Plan for 60-70 minutes if you already know Kubernetes fundamentals, and reserve extra time if you want to run the production-realistic lab path.
+>
+> **Prerequisites**: This capstone assumes you can read Kubernetes manifests, recognize common control-plane and workload failures, and connect storage, networking, GPU, and serving behavior into one operational picture.
+>
+> - Kubernetes basics with a kubeadm cluster or equivalent
+> - Module 9.7: GPU Scheduling, because the GPU Operator and MIG appear throughout this module
+> - At least one serving module: Module 9.8 KServe, Module 9.9 Seldon Core, or Module 9.10 BentoML
+> - Comfort reading Kubernetes manifests, Helm values, and production troubleshooting output
 
 For command examples, configure the `kubectl` alias once so the later troubleshooting flow stays readable while still using standard Kubernetes commands underneath:
 
@@ -26,9 +27,9 @@ From here on, commands use `k`, and all Kubernetes examples target Kubernetes **
 
 ---
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
-After completing this module, you will be able to reason about a self-hosted ML platform as a connected system rather than a bag of individually installed tools:
+After completing this module, you will be able to:
 
 - **Design** a seven-layer bare-metal ML platform that replaces managed-cloud services with Kubernetes-native components.
 - **Evaluate** storage, networking, GPU, serving, registry, orchestration, and observability trade-offs for production ML workloads.
@@ -59,6 +60,10 @@ It can give you data sovereignty, predictable cost at scale, direct control over
 It also moves work back onto your team.
 You own the storage layer, load balancer bring-up, CNI policy, GPU operator lifecycle, metrics stack, trace plumbing, and backup story.
 This module is the capstone recipe for assembling the tools you have already met into a coherent production platform.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> **KServe** joined the CNCF as an **Incubating** project on **2025-09-29** after graduating from Kubeflow; it remains a strong Kubernetes-native default for `InferenceService` resources, canary rollouts, and multi-framework predictors when you want CNCF-neutral governance. **MLflow** (Apache-2.0) is still the most common self-hosted experiment tracker and model registry in bare-metal stacks; pair it with PostgreSQL metadata and MinIO or another S3-compatible artifact root rather than pod-local storage. The **NVIDIA GPU Operator** is the practical bare-metal default for driver, device-plugin, DCGM, and MIG lifecycle on supported data-center GPUs — consumer cards such as RTX 4090 lack MIG and usually rely on whole-GPU allocation or time-slicing with weaker isolation. **Serving peers** each fit different shapes: KServe for standard inference endpoints and GitOps-friendly rollouts, Seldon Core for graph-style pipelines and Alibi monitoring when license tier fits your organization, BentoML for developer-packaged services. Compare tools on operational tradeoffs — isolation, autoscaling model, registry integration, and team ownership — rather than treating any single runtime as universally best.
 
 ---
 
@@ -437,6 +442,8 @@ For those nodes, time-slicing can improve utilization for inference and developm
 Time-slicing shares a GPU across multiple pods through software scheduling.
 It does not provide the same memory isolation as MIG, so use it for lower-criticality workloads and set expectations with users.
 
+The NVIDIA device plugin is the Kubernetes-facing half of GPU scheduling: it registers with kubelet, advertises `nvidia.com/gpu` or MIG profile resources on the Node object, and implements Allocate so containers receive the correct device files and libraries at start time. On bare metal you rarely install the device plugin alone because driver version skew, missing container toolkit hooks, or stale DCGM exporters produce the worst class of failures — pods schedule successfully yet CUDA calls fail at runtime. That is why the GPU Operator bundles driver management, toolkit configuration, device plugin, GPU Feature Discovery labels such as `nvidia.com/gpu.product`, DCGM metrics, and MIG manager reconciliation into one upgrade surface. MIG partitioning on A100 or H100 class GPUs exposes finer-grained resources like `nvidia.com/mig-1g.10gb`, which helps platform teams sell predictable inference slices instead of whole accelerators, but reconfiguration is disruptive and must be change-managed like any capacity-altering maintenance. Time-slicing on consumer GPUs improves utilization for dev and batch inference by multiplexing contexts in software, yet two noisy neighbors can still contend for memory bandwidth; treat time-sliced pools as a lower isolation tier with explicit SLO disclaimers. The durable design habit is to match GPU sharing mode to workload criticality before users discover isolation limits during an incident.
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -539,6 +546,8 @@ CloudNativePG is a strong production PostgreSQL option when you want operator-ma
 A plain PostgreSQL Helm chart is acceptable for a learning environment.
 The important design point is that the MLflow pod is stateless.
 It can be rescheduled without losing experiments or artifacts.
+
+Registry governance on bare metal fails in predictable ways when teams treat promotion as a spreadsheet exercise instead of a platform contract. A registered model version in MLflow records lineage — which run produced the artifact, which parameters were logged, and which alias such as `Production` or `Staging` should point serving systems at an approved binary — but KServe, Seldon, or BentoML will not automatically reload when someone clicks promote in the UI unless you wired registry events to GitOps or a deployment controller. The durable pattern is to keep human approval in MLflow or your change-management tool, then express the approved artifact URI or model version in Git so ArgoCD reconciles the `InferenceService` or serving manifest. That separation prevents the common outage where registry metadata says version 7 is live while the cluster still pulls version 5 from an old storage path. For multi-team platforms, scope credentials so training jobs can write runs and artifacts but only platform automation or release roles can move aliases; shared MinIO keys make forensics painful after a mistaken delete. Backup drills should restore PostgreSQL and the referenced object keys together, because registry rows without artifact bytes — or buckets without metadata — are both incomplete recovery stories.
 
 ### MLflow Helm Values
 
@@ -1438,6 +1447,12 @@ Tekton is attractive when the organization already uses it for application CI/CD
 Avoid running both for the same team unless there is a clear operational reason.
 </details>
 
+<details>
+<summary>KServe shows Ready, but clients receive HTTP 502 from the public endpoint. How do you diagnose failures across the request path from ingress through the service mesh, transformer, predictor pod, GPU, and response?</summary>
+
+Work from the edge inward instead of restarting random pods. Confirm ingress routes and TLS terminate on the expected host, then verify the service mesh or CNI path allows traffic to the KServe gateway revision. Inspect transformer logs for schema validation errors before the predictor runs, because many 502 responses are actually upstream validation failures masked at the edge. On the predictor pod, check model-load init containers, runtime stack traces, and whether the pod received the expected GPU allocation or hit an OOM event. Use trace spans and structured logs with a shared request ID at ingress, mesh, transformer, predictor, and GPU hops so you can diagnose whether latency or errors originate before or after the model runtime. This systematic diagnose-across-the-path habit turns a vague gateway error into a bounded fix at the layer that actually failed.
+</details>
+
 ---
 
 ## Hands-On Exercise
@@ -1761,6 +1776,13 @@ If Prometheus does not scrape KServe metrics, verify ServiceMonitor labels match
 
 ---
 
+## Next Module
+
+**End of ML Platforms Toolkit.** Continue to the next category in the Data & AI Platforms family:
+[Cloud-Native Databases Toolkit](/platform/toolkits/data-ai-platforms/cloud-native-databases/) — CockroachDB, CloudNativePG, Neon/PlanetScale, and Vitess for production database management on Kubernetes.
+
+---
+
 ## Sources
 
 - NVIDIA GPU Operator documentation: https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/index.html
@@ -1783,8 +1805,3 @@ If Prometheus does not scrape KServe metrics, verify ServiceMonitor labels match
 - OpenTelemetry Python instrumentation documentation: https://opentelemetry.io/docs/instrumentation/python/
 - CloudNativePG documentation: https://cloudnative-pg.io/documentation/current/
 - Velero documentation: https://velero.io/docs/main/
-
----
-
-**End of ML Platforms Toolkit.** Continue to the next category in the Data & AI Platforms family:
-[Cloud-Native Databases Toolkit](/platform/toolkits/data-ai-platforms/cloud-native-databases/) — CockroachDB, CloudNativePG, Neon/PlanetScale, and Vitess for production database management on Kubernetes.
