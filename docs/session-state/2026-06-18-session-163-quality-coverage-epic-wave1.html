@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 163 — Quality-coverage epic #2020 launched + Wave 1 done</title>
+<style>
+  body { font: 16px/1.55 -apple-system, system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #1e40af; }
+  code { background: #f1f5f9; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #d1d5db; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; }
+  .done { color: #16a34a; font-weight: 600; }
+  .warn { color: #d97706; font-weight: 600; }
+  blockquote { border-left: 3px solid #94a3b8; margin: .6rem 0; padding: .2rem .8rem; background: #f8fafc; }
+</style>
+</head>
+<body>
+<h1>Session 163 — Quality-coverage epic #2020 launched + Wave 1 complete</h1>
+<p><strong>Date:</strong> 2026-06-18 · <strong>Role:</strong> standalone orchestrator · <strong>main @</strong> <code>7699a4e38</code> · continues s162 (same calendar session, distinct workstream)</p>
+
+<blockquote>
+<strong>Headline:</strong> User asked to "cover" the modules flagged on the quality API "just in case — quality is most important."
+Triaged the real gap (96 un-reviewed curriculum modules), filed <strong>#2020</strong>, and completed <strong>Wave 1</strong> (6 AI-engineering-foundations modules) — which immediately caught a <strong>systemic currency defect</strong>, validating the concern.
+</blockquote>
+
+<h2>0. First: fixed a self-inflicted side-effect</h2>
+<p>The s162 straggler-flip used repo-wide <code>pipeline bootstrap</code> to induct 7 modules — but it created <strong>178 state files</strong>, surfacing ~171 previously-untracked modules as <code>UNAUDITED</code> on the quality dashboard ("suddenly problematic modules"). <span class="warn">Reverted</span>: removed the 171 collateral (local + gitignored), `pipeline status` back to pre-session (UNAUDITED 10), the 7 stragglers intact as COMMITTED. <strong>Lesson:</strong> never repo-wide <code>bootstrap</code> to induct a few modules — use the diff-based flip pattern (snapshot the state-file set before bootstrap, delete exactly the new collateral after finalizing your targets). Codified in <code>logs/remediation/briefs/quality-coverage/_wave1-flip.sh</code>.</p>
+
+<h2>1. Triage — the real coverage gap (#2020)</h2>
+<p>The board's ~169 "not-done" = <strong>73 ai-history book chapters</strong> (that's #1876, its own epic) + <strong>96 curriculum modules</strong> that the agent system authored but never independently cross-family reviewed. The 96, classified by what each needs:</p>
+<table>
+<tr><th>Class</th><th>Count</th><th>Action</th></tr>
+<tr><td>FLIP (has review record, lost state)</td><td>3</td><td>surgical induct + flip</td></tr>
+<tr><td><strong>REVIEW</strong> (dense T0, no record)</td><td>78</td><td>genuine cross-family review</td></tr>
+<tr><td>EXPAND (under verifier floor; ~7 genuine stubs)</td><td>15</td><td>expand then review</td></tr>
+</table>
+<p>The bulk is the <strong>AI/ML Engineering track (66 modules)</strong> — never had a review epic, and the highest currency/fabrication risk. <code>/tmp/triage_full.tsv</code> has the per-module classification (regenerate with the triage script if lost). Filed <strong>#2020</strong> with ACs.</p>
+
+<h2>2. Wave 1 — 6 AI-engineering-foundations modules (PR #2021, merged + flipped)</h2>
+<p>Dense T0, never reviewed. Cross-family review (codex/cursor/deepseek — no gemini), <strong>every P1 ground-checked by orchestrator (opus-inline) before fixing.</strong></p>
+<table>
+<tr><th>Module</th><th>R1 reviewer</th><th>Finding (web-verified) + fix</th></tr>
+<tr><td>1.1 prompt-fundamentals</td><td>codex</td><td><strong>OpenAI prompt-objects taught as durable</strong> → deprecated 2026-06-03 / shutdown 2026-11-30 → dated snapshot + code-managed reframe</td></tr>
+<tr><td>1.2 reasoning-prompts</td><td>codex</td><td>model/vendor landscape in prose → quarantined into dated snapshot (durable-vendor rule)</td></tr>
+<tr><td>1.3 prompt-safety</td><td>cursor</td><td>Helicone "deprecated" → removed Sept-2025; stale OWASP LLM07 slug → canonical</td></tr>
+<tr><td>1.4 prompt-libraries</td><td>cursor</td><td>same OpenAI prompt-object staleness + <strong>promptfoo lab that wouldn't run</strong> → tool-agnostic</td></tr>
+<tr><td>2.1 context-fundamentals</td><td>deepseek</td><td>narrative label; arXiv:2311.04934 ground-checked correct (Gim et al. Prompt Cache)</td></tr>
+<tr><td>2.2 repo-engineering</td><td>deepseek</td><td>AGENTS.md <code>project_doc_max_bytes</code> default 65536 → <strong>32 KiB</strong>; precedence phrasing</td></tr>
+</table>
+<p><strong>Key finding:</strong> codex and cursor <em>independently</em> flagged the same OpenAI prompt-object deprecation in different modules → <strong>systemic across the AI track</strong> (modules written before OpenAI's June-2026 deprecation). This is the staleness that hides in AI content and exactly why coverage matters. All 6 → T0, clean, COMMITTED. Board: AI-foundations 12→6 not-done; whole-repo 169→163.</p>
+
+<h2>State at handoff</h2>
+<ul>
+<li>main @ <code>7699a4e38</code>, clean, no open PRs, 0 of my worktrees left.</li>
+<li><span class="done">#1996 closed (s162)</span>; <span class="done">#2020 Wave 1 done</span>.</li>
+<li>Pipeline status restored: total 765 (759 + 6 Wave 1), UNAUDITED 10, no collateral.</li>
+</ul>
+
+<h2>Next — #2020 remaining ~90 modules, in waves</h2>
+<ul>
+<li><strong>Cadence (proven Wave 1):</strong> ≤3 reviewers (codex needs <code>--worktree</code>; cursor/deepseek advisory) on a batch → rigorous brief (<code>logs/remediation/briefs/quality-coverage/_review-brief.md</code>) → orchestrator ground-checks every P1 → consolidated fix → PR → build → merge → diff-based flip (<code>_wave1-flip.sh</code> pattern).</li>
+<li><strong>Priority order:</strong> finish ai-engineering-foundations (5 REVIEW + 1 EXPAND left) → ai-ml-engineering deep-learning (25) → machine-learning (19, 8 expands) → synthesis-apps/ai-infrastructure/reinforcement-learning/advanced-genai → then on-prem/cloud/platform stragglers. Expect more systemic AI-currency findings (model ids, framework versions).</li>
+<li><strong>3 quick FLIPs</strong> (already have records): data-engineering 1.7/1.8, devsecops 4.7 — surgical induct + flip.</li>
+<li><strong>#1876</strong> ai-history book (73 chapters) stays its own review epic.</li>
+</ul>
+</body>
+</html>
