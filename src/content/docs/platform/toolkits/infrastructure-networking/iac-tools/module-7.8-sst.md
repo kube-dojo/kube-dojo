@@ -503,7 +503,7 @@ T+0:20  Deploy to production
 TOTAL: 20 minutes, including deployment
 ```
 
-The metrics table should be read as a decision model, not a universal benchmark. If your team deploys twice a day and already has excellent integration tests, SST may still help, but the financial case will be smaller. If your team is shipping dozens of serverless changes daily and spending most debugging time on integration behavior, the return can be substantial because the framework attacks the dominant delay in the workflow.
+The metrics table below holds illustrative figures from a hypothetical migration to make the decision model concrete; they are not measured benchmarks. If your team deploys twice a day and already has excellent integration tests, SST may still help, but the financial case will be smaller. If your team is shipping dozens of serverless changes daily and spending most debugging time on integration behavior, the return can be substantial because the framework attacks the dominant delay in the workflow.
 
 | Metric | Before (Serverless Framework) | After (SST) | Change |
 |--------|-------------------------------|-------------|--------|
@@ -511,7 +511,6 @@ The metrics table should be read as a decision model, not a universal benchmark.
 | Daily wait time | 60-80 min | 10-15 min | -80% |
 | Bugs caught locally | 30% | 95% | +216% |
 | Production incidents | 8/month | 2/month | -75% |
-| Developer satisfaction | "Painful" | "Actually fun" | ∞ |
 
 Financial models are only useful when the assumptions are visible. The table below preserves the original module’s calculation, but a real team should replace every number with local data: engineer cost, deploy count, average wait, defect rate, incident cost, and onboarding time. The exercise is valuable even if the result argues against migration, because it forces the team to describe the problem in operational terms instead of arguing about tool preference.
 
