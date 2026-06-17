@@ -1,0 +1,3 @@
+## 2026-06-17T22:45:31Z — `REVIEW` — `APPROVE`
+
+**Reviewer:** opus-inline cross-family R1 (Anthropic ≠ author codex; NO gemini) + web-verification. **#1996 straggler flip.** Dense T0 already; codex ADDED the missing dated Landscape snapshot + maturity. **Web-verified (codex ahead of reviewer snapshot, all confirmed):** KServe CNCF **Incubating** accepted **2025-09-29** (was the genuine currency gap — module previously stated no CNCF status) ✓; lineage KFServing-2019(Kubeflow)→LF AI&Data 2022→rebrand 2022→CNCF ✓; latest **v0.19.0** (GitHub 2026-06-14) ✓ with lab honestly pinned v0.17.0 for reproducibility. T0, all gates pass; no leadership claims. **APPROVE.**

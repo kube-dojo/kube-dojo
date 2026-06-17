@@ -1,0 +1,3 @@
+## 2026-06-17T22:45:31Z — `REVIEW` — `APPROVE`
+
+**Reviewer:** opus-inline cross-family R1 (Anthropic ≠ author cursor; NO gemini) + web-verification. **#1996 straggler fix+flip.** Fixed 2 failing gates: de-fabbed the unsourced War story → `Hypothetical scenario:` (anti_fab T); +genuine prose to clear canonical floor (verifier body_words 4660→**5716**). Added dated snapshot teaching the **critical license currency fact**: Seldon Core (v1+v2) + Alibi under **BSL 1.1 since 2024-01-22** (source-available, converts Apache-2.0 after 4yr); MLServer stays Apache-2.0; Core+/Enterprise commercial — web-verified vs seldon.io ✓. T0, all gates pass. **APPROVE.**
