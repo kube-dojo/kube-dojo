@@ -26,12 +26,13 @@
 <p class="muted">Date: 2026-06-17 · Branch: main · PR: #2006 (squash-merged → <code>957e3e7cb</code>) · Epic: #1996 · Role: standalone orchestrator</p>
 
 <div class="tldr">
-<strong>TL;DR.</strong> Drove <strong>6 modules to <code>done</code></strong> in Toolkits/infrastructure-networking (#1996); the section is now <strong>18 done / 24 not-done</strong> (was ~30 not-done at session start). Two batches:
+<strong>TL;DR.</strong> Drove <strong>9 modules to <code>done</code></strong> in Toolkits/infrastructure-networking (#1996); the section is now <strong>21 done / 21 not-done</strong> (half), from ~30 not-done at session start. Three batches:
 <ul>
 <li><strong>Ansible Operator arc 7.13 / 7.16 / 7.17</strong> (PR #2006) — the s158-deferred <strong>verifier-blind fabricated/wrong Operator-SDK API</strong>. Browser-verified every disputed fact <em>before</em> the fix, locked ground truth into the brief, codex gpt-5.5 applied, opus-inline web-grounded R2 confirmed. Completes the arc 7.12–7.17.</li>
-<li><strong>Flip batch 7.8-sst / 7.11-hcp-terraform / 14.8-edge-distros</strong> (PRs #2007 + #2008) — T0-but-never-cross-family-reviewed modules, genuine opus-inline web-grounded review. 7.8 got a small anti-fab polish (illustrative metrics framing); 7.11 + 14.8 verified clean (pricing/maturity web-confirmed); 14.8 needed a follow-up <code>## References</code>→<code>## Sources</code> rename to clear the heuristic-score cap.</li>
+<li><strong>Flip batch 7.8-sst / 7.11-hcp-terraform / 14.8-edge-distros</strong> (PRs #2007 + #2008) — T0-but-never-cross-family-reviewed modules, genuine opus-inline web-grounded review. 7.8 anti-fab polish (illustrative metrics framing); 7.11 + 14.8 verified clean (pricing/maturity web-confirmed); 14.8 needed a follow-up <code>## References</code>→<code>## Sources</code> rename to clear the heuristic-score cap.</li>
+<li><strong>Expand batch 7.3-pulumi / 7.4-ansible / 7.5-cloudformation</strong> (PR #2009) — code-heavy-but-teaching-thin stubs (~200–300 <em>prose</em> words) → T0. ≤3 authors mixed pool (cursor/codex/deepseek), opus-inline review + dead-link sweep: fixed 3 reorganized Pulumi URLs, web-verified deepseek's <code>ansible-core 2.21.0/2026-05-18</code> (real) and codex's AWS quotas, de-fabbed both war stories.</li>
 </ul>
-All 6 verified <code>status=done</code> on the board; all CI green; finalized (COMMITTED state + telemetry).
+All 9 verified <code>status=done</code> on the board; all CI green; finalized (COMMITTED state + telemetry).
 </div>
 
 <h2>What shipped</h2>
@@ -70,14 +71,15 @@ All 6 verified <code>status=done</code> on the board; all CI green; finalized (C
 
 <p class="warn"><strong>Correction to the earlier verifier-tier sweep:</strong> the board's "done" is the <em>review-status</em> axis (score≥4 + state/verdict), NOT the verifier tier. So several modules the tier-sweep called "moderate expands" — <code>7.1-terraform</code>, <code>14.4-talos</code>, <code>14.6-managed-kubernetes</code>, <code>5.1-cilium</code>, <code>5.4-metallb</code>, <code>3.5-cluster-api</code>, <code>16.2-minio</code>, <code>16.3-longhorn</code> — are <strong>already board-<code>done</code></strong>. (Latent quality note: <code>7.1-terraform</code> has a dead Sources URL <code>/blog/terraform-announcement</code> → should be <code>/blog/terraform</code>; T3 on <code>sources_all_reachable</code> but board-done. Worth a cleanup pass.)</p>
 
-<h3 class="good">Done this session (6)</h3>
+<h3 class="good">Done this session (9)</h3>
 <ul>
 <li>Ansible arc: <code>7.13</code>, <code>7.16</code>, <code>7.17</code> (PR #2006)</li>
 <li>Flip batch: <code>7.8-sst</code>, <code>7.11-hcp-terraform</code>, <code>14.8-edge-distros</code> (PRs #2007 + #2008)</li>
+<li>Expand batch: <code>7.3-pulumi</code>, <code>7.4-ansible</code>, <code>7.5-cloudformation</code> (PR #2009)</li>
 </ul>
 
-<h3>Remaining not-done in the section (24, board review-status axis)</h3>
-<p>Almost all are genuine <strong>expands</strong> (heavy stubs &lt;1000 bw plus a few mediums) — these need authoring, not just review. <code>5.6-calico</code> is <code>shipped_unreviewed</code> (review-then-likely-expand).</p>
+<h3>Remaining not-done in the section (21, board review-status axis)</h3>
+<p>All are genuine <strong>expands</strong> (heavy stubs &lt;1000 bw plus a few mediums) — these need authoring, not just review. <code>5.6-calico</code> is <code>shipped_unreviewed</code> (review-then-likely-expand). The heavy-stub list below is now: 7.6-bicep / 7.7-winglang / 7.9-system-initiative / 7.10-nitric (iac); 14.1-k3s / 14.2-k0s / 14.3-microk8s / 14.5-openshift (k8s-distros); 5.2-service-mesh / 5.3-dns (networking); 3.4-kubebuilder / 3.6-vcluster / 7.1-backstage / 7.2-crossplane / 7.3-cert-manager (platforms); 16.1-rook-ceph (storage); + mediums 5.5-flannel / 5.7-kube-router / 5.8-multus / 14.7-rke2.</p>
 <ul>
 <li>iac: <code>7.3-pulumi</code>, <code>7.4-ansible</code>, <code>7.5-cloudformation</code>, <code>7.6-bicep</code>, <code>7.7-winglang</code>, <code>7.9-system-initiative</code>, <code>7.10-nitric</code></li>
 <li>k8s-distros: <code>14.1-k3s</code>, <code>14.2-k0s</code>, <code>14.3-microk8s</code>, <code>14.5-openshift</code></li>
