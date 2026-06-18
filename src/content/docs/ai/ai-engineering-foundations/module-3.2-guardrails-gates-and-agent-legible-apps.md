@@ -94,22 +94,44 @@ The primary execution gate for agent outputs that feed tools or Git is **schema 
 
 JSON Schema is the interchange format teams standardize on across languages. Pydantic and Zod both generate JSON Schema from types, which lets Python services and TypeScript CLIs share one contract file in `docs/contracts/`. The gate belongs in CI and in local pre-commit hooks, not inside a prompt paragraph that says "respond in JSON."
 
-```yaml
-# docs/contracts/agent-deploy-manifest.schema.json (excerpt)
+`docs/contracts/agent-deploy-manifest.schema.json` (excerpt):
+
+```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["apiVersion", "kind", "metadata", "spec", "securityContext"],
+  "required": ["apiVersion", "kind", "metadata", "spec"],
   "properties": {
-    "securityContext": {
+    "spec": {
       "type": "object",
-      "required": ["runAsNonRoot", "seccompProfile"],
+      "required": ["template"],
       "properties": {
-        "runAsNonRoot": { "const": true },
-        "seccompProfile": {
+        "template": {
           "type": "object",
-          "required": ["type"],
-          "properties": { "type": { "enum": ["RuntimeDefault", "Localhost"] } }
+          "required": ["spec"],
+          "properties": {
+            "spec": {
+              "type": "object",
+              "required": ["securityContext"],
+              "properties": {
+                "securityContext": {
+                  "type": "object",
+                  "required": ["runAsNonRoot", "seccompProfile"],
+                  "properties": {
+                    "runAsNonRoot": { "const": true },
+                    "seccompProfile": {
+                      "type": "object",
+                      "required": ["type"],
+                      "properties": { "type": { "enum": ["RuntimeDefault", "Localhost"] } }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -131,9 +153,9 @@ Wire the gate close to the agent loop. A pattern that scales is **validate-then-
 {
   "ok": false,
   "code": "SCHEMA_VIOLATION",
-  "path": "/securityContext/runAsNonRoot",
+  "path": "/spec/template/spec/securityContext/runAsNonRoot",
   "message": "must be true",
-  "remediation": "Set spec.securityContext.runAsNonRoot to true and re-run validate_manifest.sh"
+  "remediation": "Set spec.template.spec.securityContext.runAsNonRoot to true and re-run validate_manifest.sh"
 }
 ```
 
@@ -421,7 +443,7 @@ mkdir -p ~/agent-guardrails-lab/{manifests,scripts}
 cd ~/agent-guardrails-lab
 ```
 
-Create `manifests/good.yaml` with a minimal Deployment that includes a top-level `securityContext` object containing `runAsNonRoot: true` and a `seccompProfile.type` of `RuntimeDefault`. Create `manifests/bad-missing-context.yaml` identical except omit the entire `securityContext` key.
+Create `manifests/good.yaml` with a minimal Deployment whose pod template includes `spec.template.spec.securityContext` with `runAsNonRoot: true` and `seccompProfile.type: RuntimeDefault`. Create `manifests/bad-missing-context.yaml` identical except omit the pod-level `securityContext` block.
 
 Pause before coding: predict whether your validator should accept `runAsNonRoot: "true"` as a string. JSON Schema and YAML loaders often disagree about boolean coercion; decide explicitly and encode the rule in Python so agents learn precise types instead of ambiguous truthiness.
 
@@ -449,8 +471,8 @@ fi
 
 ### Task 2 — Parse YAML and enforce security context
 
-- [ ] Invoke embedded Python (stdlib plus PyYAML if available) to load YAML and verify `securityContext.runAsNonRoot` is boolean `true`.
-- [ ] Verify `securityContext.seccompProfile.type` is `RuntimeDefault` or `Localhost`.
+- [ ] Invoke embedded Python (stdlib plus PyYAML if available) to load YAML and verify `spec.template.spec.securityContext.runAsNonRoot` is boolean `true`.
+- [ ] Verify `spec.template.spec.securityContext.seccompProfile.type` is `RuntimeDefault` or `Localhost`.
 - [ ] On failure, print a single-line JSON object with keys `ok`, `code`, `field`, `remediation`, and `manifest`.
 
 <details>
@@ -469,23 +491,26 @@ except ImportError:
                       "field": "$", "remediation": "pip install pyyaml or use repo .venv"}))
     sys.exit(1)
 data = yaml.safe_load(manifest.read_text()) or {}
-sec = data.get("securityContext")
+spec = data.get("spec") or {}
+template = spec.get("template") or {}
+pod_spec = template.get("spec") or {}
+sec = pod_spec.get("securityContext")
 if not isinstance(sec, dict):
     print(json.dumps({"ok": False, "code": "MISSING_SECURITY_CONTEXT",
-                      "field": "/securityContext",
-                      "remediation": "Add securityContext with runAsNonRoot true and seccompProfile.type RuntimeDefault",
+                      "field": "/spec/template/spec/securityContext",
+                      "remediation": "Add spec.template.spec.securityContext with runAsNonRoot true and seccompProfile.type RuntimeDefault",
                       "manifest": str(manifest)}))
     sys.exit(1)
 if sec.get("runAsNonRoot") is not True:
     print(json.dumps({"ok": False, "code": "MISSING_SECURITY_CONTEXT",
-                      "field": "/securityContext/runAsNonRoot",
-                      "remediation": "Set securityContext.runAsNonRoot to true",
+                      "field": "/spec/template/spec/securityContext/runAsNonRoot",
+                      "remediation": "Set spec.template.spec.securityContext.runAsNonRoot to true",
                       "manifest": str(manifest)}))
     sys.exit(1)
 profile = sec.get("seccompProfile") or {}
 if profile.get("type") not in ("RuntimeDefault", "Localhost"):
     print(json.dumps({"ok": False, "code": "MISSING_SECURITY_CONTEXT",
-                      "field": "/securityContext/seccompProfile/type",
+                      "field": "/spec/template/spec/securityContext/seccompProfile/type",
                       "remediation": "Set seccompProfile.type to RuntimeDefault",
                       "manifest": str(manifest)}))
     sys.exit(1)

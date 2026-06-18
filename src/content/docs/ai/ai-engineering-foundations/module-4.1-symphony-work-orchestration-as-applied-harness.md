@@ -59,9 +59,9 @@ The practical mechanism that makes a PM tracker a control plane rather than a pa
 +-----------------------------+--------------------------------------+
 ```
 
-The claim workflow deserves precise attention because it is where concurrency bugs appear. When the orchestrator polls the tracker and finds five issues labeled `agent:active`, it must claim each one atomically so two workers cannot both claim the same issue. The claim operation is an API mutation — add a label like `agent:claimed` or set an assignee, with an ETag or conditional request to detect races — not a local variable assignment. If the claim API call fails because another worker beat this one to the issue, the orchestrator skips that issue and moves to the next. If the claim succeeds, the orchestrator writes the claim timestamp into a workpad comment so subsequent failure analysis can determine whether a stalled issue was actually running or was abandoned mid-claim.
+The claim workflow deserves precise attention because it is where concurrency bugs appear. When the orchestrator polls the tracker and finds five issues labeled `agent:active`, it must claim each one so two workers cannot both claim the same issue. The claim operation is an API mutation — add a label like `agent:claimed` or set an assignee — followed by a read-back verification step, not a local variable assignment. A robust pattern is optimistic claiming: POST the claim label, GET the issue labels, and if another worker's claim label is already present (or your claim did not stick), back off and skip that issue. If the read-back confirms your claim, write the claim timestamp into a workpad comment so subsequent failure analysis can determine whether a stalled issue was actually running or was abandoned mid-claim.
 
-This pattern uses the tracker API's native consistency guarantees rather than building a distributed locking layer on top of it. GitHub's Issues API supports conditional requests via ETag headers; Linear's GraphQL API supports optimistic concurrency control through mutation IDs. The orchestrator does not need to coordinate with other workers through a separate service — it lets the tracker resolve conflicts the same way it resolves conflicts when two humans try to assign the same issue simultaneously. This keeps the architecture boring, which is exactly the property you want in a component that controls whether autonomous agents can modify production code.
+This pattern uses the tracker API's observable state rather than building a distributed locking layer on top of it. GitHub's REST API does not support conditional requests (ETag/`If-Match`) on unsafe label-mutation endpoints, so GitHub fleets rely on label read-back and reconciliation after the POST. Linear's GraphQL API supports optimistic concurrency control through mutation IDs and returns authoritative issue state on read. The orchestrator does not need to coordinate with other workers through a separate service — it lets the tracker resolve conflicts the same way it resolves conflicts when two humans try to assign the same issue simultaneously. This keeps the architecture boring, which is exactly the property you want in a component that controls whether autonomous agents can modify production code.
 
 The tracker also solves the handoff problem that session-first architectures struggle with. When an issue moves to `agent:rework`, the next poll cycle reads the workpad comment, inspects what changed since the last attempt, and launches a new attempt with full context — no operator reconstruction required. When a human reviewer needs to understand why a particular change was merged, they open the issue, read the workpad, inspect the linked PR CI results, and close the issue. The evidence chain starts and ends on the tracker, not scattered across terminal session logs on a machine that was recycled last Tuesday.
 
@@ -240,7 +240,7 @@ should fix the mock before retrying the full integration.
 
 ### Confusions
 - Should backoff reset when a single poll cycle succeeds, or decay gradually?
-- Not clear from WORKFLOW.md whether `max_concurrent_agents` interacts with
+- Not clear from WORKFLOW.md whether `agent.max_concurrent_agents` interacts with
   backoff (e.g., should concurrency drop when backoff is active?)
 
 ---
@@ -259,7 +259,7 @@ One of the most operationally significant properties of a well-designed Symphony
 
 The implementation requirement is straightforward: the polling loop must read and parse `WORKFLOW.md` at the start of each cycle, apply any changes to its in-memory runtime configuration, and use the refreshed values for the current cycle's dispatch decisions. The contract should be read from the repository's current state — the file on disk as of the most recent poll — not from a cached in-memory copy from process start. This makes the repository the operational dashboard for the fleet: editing a file changes fleet behavior, and the change is versioned, reviewed, and revertible like any other code change.
 
-The hot-reload property is most valuable during incidents. When a deployment window opens and the team wants to reduce the fleet's blast radius, lowering `polling.max_concurrent_agents` from 20 to 2 limits parallelism without stopping work entirely. When a rate-limiting incident hits the tracker API, increasing `polling.interval_seconds` from 30 to 120 reduces API pressure across the fleet. When a vulnerability is discovered in a dependency and the team wants to pause all changes to affected repositories, adding a `blocked:security` label to the `rework_labels` set stops the fleet from claiming new issues while the security investigation proceeds. Each of these changes is a single YAML edit, a commit, and a poll cycle — no SSH, no process management, no coordination across twenty agent terminals.
+The hot-reload property is most valuable during incidents. When a deployment window opens and the team wants to reduce the fleet's blast radius, lowering `agent.max_concurrent_agents` from 20 to 2 limits parallelism without stopping work entirely. When a rate-limiting incident hits the tracker API, increasing `polling.interval_ms` from 30000 to 120000 reduces API pressure across the fleet. When a vulnerability is discovered in a dependency and the team wants to pause all changes to affected repositories, adding a `blocked:security` label to the `rework_labels` set stops the fleet from claiming new issues while the security investigation proceeds. Each of these changes is a single YAML edit, a commit, and a poll cycle — no SSH, no process management, no coordination across twenty agent terminals.
 
 ```
 +------------------------------------------------------------------+
@@ -271,7 +271,7 @@ The hot-reload property is most valuable during incidents. When a deployment win
 +-----------------+-----------------+---------------+---------------+
 ```
 
-Hot-reload does introduce a sharp edge: a bad contract edit takes effect across the entire fleet within one poll cycle. If an engineer accidentally sets `max_concurrent_agents` to 0, the fleet stops claiming work but stays running — silently producing no output until someone notices. If an engineer removes the `active_labels` entry entirely, the poller may interpret the missing key as "no filter" and attempt to claim every issue in the repository.
+Hot-reload does introduce a sharp edge: a bad contract edit takes effect across the entire fleet within one poll cycle. If an engineer accidentally sets `agent.max_concurrent_agents` to 0, the fleet stops claiming work but stays running — silently producing no output until someone notices. If an engineer removes the `active_labels` entry entirely, the poller may interpret the missing key as "no filter" and attempt to claim every issue in the repository.
 
 This sharp edge is not an argument against hot-reload. It is an argument for treating the contract file with the same operational caution as a production database migration. You would not apply a migration without a dry run; you should not commit a contract change without validating it against a representative poller instance first. Teams that add a CI check that parses the contract and prints the effective configuration — active labels, concurrency cap, hook paths — can review the intended effect before the commit reaches the fleet. A one-line CI output that says "Active labels: agent:active, agent:priority" gives a reviewer more confidence than the raw YAML alone.
 
@@ -282,13 +282,13 @@ These failure modes argue for validation: before the poller applies a freshly re
 validate_contract() {
     local errors=0
     local max_agents
-    max_agents=$(yq '.polling.max_concurrent_agents' WORKFLOW.md 2>/dev/null)
+    max_agents=$(yq '.agent.max_concurrent_agents' WORKFLOW.md 2>/dev/null)
     if [ -z "$max_agents" ] || [ "$max_agents" -le 0 ] 2>/dev/null; then
-        echo '{"severity":"fatal","field":"polling.max_concurrent_agents","reason":"missing_or_invalid"}' >&2
+        echo '{"severity":"fatal","field":"agent.max_concurrent_agents","reason":"missing_or_invalid"}' >&2
         errors=$((errors + 1))
     fi
     if [ "$max_agents" -gt 100 ] 2>/dev/null; then
-        echo '{"severity":"warn","field":"polling.max_concurrent_agents","reason":"unusually_high"}' >&2
+        echo '{"severity":"warn","field":"agent.max_concurrent_agents","reason":"unusually_high"}' >&2
     fi
     return "$errors"
 }
@@ -446,7 +446,7 @@ The decision framework is not static. A task class that scores low risk today ma
 
 3. In Symphony's documented design, the orchestrator distinguishes two categories of failure: "hard stop" conditions that should pause the entire fleet (contract parsing failure, authentication breakage, required label set corruption) and "suspension" conditions that should pause a single issue while the rest continue (transient hook timeout, rate-limit backoff, cleanup drift). Treating every failure as a fleet-wide stop is the single most common cause of fleet fragility at scale.
 
-4. The `max_concurrent_agents` field in `WORKFLOW.md` serves a dual operational purpose that is not obvious from the YAML specification alone. It controls parallelism during normal operations, but it is also the blast-radius limiter during abnormal operations. Setting concurrency to a value that saturates the team's review capacity during steady state means that a single bad contract edit can produce more agent output than the team can audit before the next merge window. The field should be set to a value that the team can review in one working day, not to the maximum the tracker API rate limit allows.
+4. The `agent.max_concurrent_agents` field in `WORKFLOW.md` serves a dual operational purpose that is not obvious from the YAML specification alone. It controls parallelism during normal operations, but it is also the blast-radius limiter during abnormal operations. Setting concurrency to a value that saturates the team's review capacity during steady state means that a single bad contract edit can produce more agent output than the team can audit before the next merge window. The field should be set to a value that the team can review in one working day, not to the maximum the tracker API rate limit allows.
 
 ## Common Mistakes
 
@@ -462,9 +462,9 @@ The decision framework is not static. A task class that scores low risk today ma
 ## Quiz
 
 <details>
-<summary>Your team's Symphony poller processes twenty issues per cycle. On a Tuesday morning release day, you reduce `polling.max_concurrent_agents` from 20 to 3. Within one cycle, the poller reads the new value and caps concurrency. A junior engineer asks why you didn't need to restart the poller process. Explain the architectural property that made the change take effect without a restart, and identify one risk this property introduces.</summary>
+<summary>Your team's Symphony poller processes twenty issues per cycle. On a Tuesday morning release day, you reduce `agent.max_concurrent_agents` from 20 to 3. Within one cycle, the poller reads the new value and caps concurrency. A junior engineer asks why you didn't need to restart the poller process. Explain the architectural property that made the change take effect without a restart, and identify one risk this property introduces.</summary>
 
-The poller re-reads the `WORKFLOW.md` contract at the start of every poll cycle rather than caching it from process startup. This hot-reload property is the architectural feature that applies the new `max_concurrent_agents` value within one cycle. The risk it introduces is that a malformed contract edit — a YAML syntax error, a missing required key, a negative integer — takes effect across the entire fleet in the same one-cycle window with no guard. This is why contract validation before application is necessary: the poller must check that required keys exist, numeric fields are within sane bounds, and label lists are non-empty before accepting a freshly read contract.
+The poller re-reads the `WORKFLOW.md` contract at the start of every poll cycle rather than caching it from process startup. This hot-reload property is the architectural feature that applies the new `agent.max_concurrent_agents` value within one cycle. The risk it introduces is that a malformed contract edit — a YAML syntax error, a missing required key, a negative integer — takes effect across the entire fleet in the same one-cycle window with no guard. This is why contract validation before application is necessary: the poller must check that required keys exist, numeric fields are within sane bounds, and label lists are non-empty before accepting a freshly read contract.
 
 </details>
 
@@ -547,13 +547,13 @@ A mock is used instead of real API calls so the exercise is self-contained and r
 
 ### Task 1 — Write the minimal WORKFLOW.md contract
 
-Create `WORKFLOW.md` with the six required top-level sections: `tracker`, `polling`, `workspace`, `hooks`, `agent`, and `codex`. Use `simulated` as the tracker kind since this exercise uses a mock API. Set `max_concurrent_agents: 2`, `interval_seconds: 10`, and `max_retries: 3`. Point `workspace.root` to the local `worktrees/` directory and use `worktrees/issue-{{ number }}/` as the clone template. Point each hook to a script under `hooks/`.
+Create `WORKFLOW.md` with the six required top-level sections: `tracker`, `polling`, `workspace`, `hooks`, `agent`, and `codex`. Use `kind: linear` per the upstream SPEC (the lab's `mock-api/` adapter stands in for the real Linear API). Set `agent.max_concurrent_agents: 3` so all three mock issues can be claimed in one cycle, `polling.interval_ms: 10000`, and `agent.max_retries: 3`. Point `workspace.root` to the local `worktrees/` directory and use `worktrees/issue-{{ number }}/` as the clone template. Point each hook to a script under `hooks/`.
 
 <details><summary>Solution</summary>
 
 ```yaml
 tracker:
-  kind: simulated
+  kind: linear
   owner: lab
   repo: test-repo
   active_labels:
@@ -563,8 +563,7 @@ tracker:
   terminal_labels:
     - agent:done
 polling:
-  interval_seconds: 10
-  max_concurrent_agents: 2
+  interval_ms: 10000
 workspace:
   root: worktrees
   clone_template: "worktrees/issue-{{ number }}/"
@@ -576,6 +575,7 @@ hooks:
 agent:
   max_turns: 30
   max_retries: 3
+  max_concurrent_agents: 3
 codex:
   command: echo "agent simulated"
   approval_policy: never
@@ -661,8 +661,11 @@ while true; do
     echo "=== Cycle $CYCLE ==="
 
     # Hot-reload: re-read contract
-    MAX_AGENTS=$(yq '.polling.max_concurrent_agents' "$CONTRACT" 2>/dev/null || echo "1")
+    MAX_AGENTS=$(yq '.agent.max_concurrent_agents' "$CONTRACT" 2>/dev/null || echo "1")
+    INTERVAL_MS=$(yq '.polling.interval_ms' "$CONTRACT" 2>/dev/null || echo "10000")
+    INTERVAL=$((INTERVAL_MS / 1000))
     echo "max_concurrent_agents: $MAX_AGENTS"
+    echo "polling_interval_sec: $INTERVAL"
 
     # Read mock active issues
     ACTIVE_ISSUES=$(cat mock-api/active-issues.json 2>/dev/null | python3 -c "
@@ -692,7 +695,7 @@ print('\n'.join(str(i['number']) for i in data.get('issues', [])))
     done
 
     echo "Cycle $CYCLE complete. Processed $COUNT issues."
-    sleep "${INTERVAL:-10}"
+    sleep "$INTERVAL"
 done
 ```
 
@@ -724,11 +727,11 @@ After three cycles, inspect `workpads/issue-3.md`. It should contain the failed 
 
 ### Task 5 — Test hot-reload by changing max_concurrent_agents during polling
 
-While the poller is running, edit `WORKFLOW.md` to change `max_concurrent_agents` from 2 to 1. Wait for the next cycle. Confirm that the poller prints the new value and processes at most one issue. Then change it to 5 and confirm that the poller adopts the new cap without restarting. Document which line of the poller code enables this behavior.
+While the poller is running, edit `WORKFLOW.md` to change `agent.max_concurrent_agents` from 3 to 1. Wait for the next cycle. Confirm that the poller prints the new value and processes at most one issue. Then change it to 5 and confirm that the poller adopts the new cap without restarting. Document which line of the poller code enables this behavior.
 
 <details><summary>Solution</summary>
 
-The line that enables hot-reload is the `yq` invocation at the start of each cycle: `MAX_AGENTS=$(yq '.polling.max_concurrent_agents' "$CONTRACT")`. Because the poller re-executes this line on every cycle, it reads the current file content rather than a cached value from process start. After reducing to 1, the poller should print "max_concurrent_agents: 1" and process at most one issue per cycle. After increasing to 5, it should print "max_concurrent_agents: 5" and process up to five.
+The line that enables hot-reload is the `yq` invocation at the start of each cycle: `MAX_AGENTS=$(yq '.agent.max_concurrent_agents' "$CONTRACT")`. Because the poller re-executes this line on every cycle, it reads the current file content rather than a cached value from process start. After reducing to 1, the poller should print "max_concurrent_agents: 1" and process at most one issue per cycle. After increasing to 5, it should print "max_concurrent_agents: 5" and process up to five.
 
 </details>
 
@@ -769,17 +772,17 @@ echo "Proof of Work written to $POW_DIR/issue-${ISSUE}.md"
 
 - [ ] `WORKFLOW.md` defines all six required top-level sections and parses correctly via `yq`.
 - [ ] All four hook scripts exist, are executable, and emit structured JSON output.
-- [ ] The polling loop re-reads `WORKFLOW.md` on each cycle and prints the active `max_concurrent_agents` value.
+- [ ] The polling loop re-reads `WORKFLOW.md` on each cycle and prints the active `agent.max_concurrent_agents` value.
 - [ ] Issue 3's workpad survives the simulated `after_run` failure and contains entries from multiple attempts.
-- [ ] Changing `max_concurrent_agents` in `WORKFLOW.md` takes effect within one poll cycle without restarting the poller.
+- [ ] Changing `agent.max_concurrent_agents` in `WORKFLOW.md` takes effect within one poll cycle without restarting the poller.
 - [ ] Each completed issue produces a Proof of Work file under `proof-of-work/` with workpad contents, CI status, and a diff summary.
 
 ## Sources
 
 - [Symphony SPEC.md](https://github.com/openai/symphony/blob/main/SPEC.md) — canonical specification defining lifecycle hooks, state machine semantics, and WORKFLOW.md contract structure
 - [Symphony README.md](https://github.com/openai/symphony/blob/main/README.md) — architectural overview describing proof-of-work artifacts and the tracker-as-control-plane paradigm
-- [OpenAI Harness Engineering](https://openai.com/index/harness-engineering/) — Lopopolo's foundational post on harness layers, system-of-record discipline, and the three-tier governance model
-- [Anthropic Claude Code Hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) — lifecycle hook documentation for Claude Code, describing `before_run`, `after_run`, and conditional execution semantics
+- [OpenAI Harness Engineering](https://openai.com/index/harness-engineering/) — foundational post on harness layers, system-of-record discipline, and the three-tier governance model
+- [Anthropic Claude Code Hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) — lifecycle hook documentation for Claude Code, describing events such as `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, and `Stop`, plus conditional execution semantics
 - [Anthropic Tool Use](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) — schema-constrained tool definitions and structured output patterns that underpin agent-legible hook contracts
 - [OpenAI Model Spec](https://model-spec.openai.com/2025-09-12.html) — the platform-level instruction hierarchy defining authority boundaries between platform, developer, and user instructions
 - [GitHub Issues REST API](https://docs.github.com/en/rest/issues/issues) — API reference for programmatic issue creation, label mutation, and comment management

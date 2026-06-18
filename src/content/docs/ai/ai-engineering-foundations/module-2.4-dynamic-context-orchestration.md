@@ -829,6 +829,7 @@ def simulate_turn(
     add_tool_log: bool = False,
     compact: bool = False,
     idle_gap_sec: float = 0,
+    evict: bool = True,
 ) -> None:
     state.turn += 1
     state.tokens_used = 0
@@ -848,9 +849,10 @@ def simulate_turn(
         state.cache_written_at = now
         note_parts.append("cache_miss")
 
-    freed = evict_stale_snippets(state, now)
-    if freed:
-        note_parts.append(f"evicted_stale={freed}")
+    if evict:
+        freed = evict_stale_snippets(state, now)
+        if freed:
+            note_parts.append(f"evicted_stale={freed}")
 
     if compact and state.tool_log_tokens:
         state.tokens_used += SUMMARY_COST
@@ -865,7 +867,6 @@ def simulate_turn(
 
     if inject_snippet:
         state.snippets.append(inject_snippet)
-        state.tokens_used += inject_snippet.tokens
         note_parts.append(f"inject:{inject_snippet.snippet_id}")
 
     for snip in state.snippets:
@@ -910,7 +911,7 @@ def main() -> None:
     t0 = time.time()
 
     # Phase A — baseline without stale eviction discipline
-    simulate_turn(conn, state, now=t0, action="prime", add_tool_log=True)
+    simulate_turn(conn, state, now=t0, action="prime", add_tool_log=True, evict=False)
     simulate_turn(
         conn,
         state,
@@ -918,10 +919,11 @@ def main() -> None:
         action="retrieve_old",
         inject_snippet=Snippet("r1", "deploy", 900, captured_at=t0 - 200),
         add_tool_log=True,
+        evict=False,
     )
-    simulate_turn(conn, state, now=t0 + 60, action="followup", add_tool_log=True)
+    simulate_turn(conn, state, now=t0 + 60, action="followup", add_tool_log=True, evict=False)
 
-    # Phase B — same shape but eviction-by-staleness enabled (implicit in harness)
+    # Phase B — same shape but eviction-by-staleness enabled
     simulate_turn(conn, state, now=t0 + 90, action="compact", compact=True)
     simulate_turn(
         conn,

@@ -398,9 +398,9 @@ Write an AGENTS.md that maps three task classes to their policy files using expl
 
 | Task Class | Policy File | Enforcement Gates |
 |---|---|---|
-| bug-fix | docs/harness/policy/branches.md | branch-guard.sh, pre-commit-tests.sh |
-| deploy | docs/harness/policy/deploy.md | deploy-guard.sh |
-| feature | docs/harness/policy/branches.md | branch-guard.sh, pre-commit-tests.sh |
+| bug-fix | docs/harness/policy/branches.md | scripts/branch-guard.sh, scripts/pre-commit-tests.sh |
+| deploy | docs/harness/policy/deploy.md | scripts/deploy-guard.sh |
+| feature | docs/harness/policy/branches.md | scripts/branch-guard.sh, scripts/pre-commit-tests.sh |
 
 ## Platform Overrides
 
@@ -426,7 +426,7 @@ Write `scripts/deploy-guard.sh` to enforce a deployment precondition: the target
 
 ## Enforcement
 
-- deploy-guard.sh: blocks deploy unless the commit message includes `env: staging` or `env: production`
+- scripts/deploy-guard.sh: blocks deploy unless the commit message includes `env: staging` or `env: production`
 
 ## Remediation
 
@@ -463,7 +463,7 @@ Simulate how an agent would resolve a deployment request using only command-line
 cd harness-lab
 
 # Step 1: Agent reads AGENTS.md and finds the deploy policy path
-POLICY=$(grep -A1 '^| deploy ' AGENTS.md | tail -1 | grep -o 'docs/harness/policy/[^ ]*')
+POLICY=$(grep '^| deploy ' AGENTS.md | grep -oE 'docs/harness/policy/[^ |]+')
 echo "Resolved policy file: $POLICY"
 
 # Step 2: Agent reads the policy file and finds the enforcement script
@@ -495,25 +495,25 @@ errors=0
 echo "=== Anchor validation ==="
 
 # Extract all paths from AGENTS.md policy table (skip header and separator)
-grep -oP 'docs/[^ ]+' AGENTS.md | sort -u | while read -r path; do
+while read -r path; do
     if [ -f "$path" ]; then
         echo "OK: $path"
     else
         echo "BROKEN: $path does not exist"
         errors=$((errors + 1))
     fi
-done
+done < <(grep -oP 'docs/[^ ]+' AGENTS.md | sort -u)
 
 # Also validate enforcement script references inside policy files
 for policy in docs/harness/policy/*.md; do
-    grep -oP 'scripts/[^ ]+\.sh' "$policy" 2>/dev/null | while read -r script_path; do
+    while read -r script_path; do
         if [ -f "$script_path" ] && [ -x "$script_path" ]; then
             echo "OK: $script_path (referenced from $policy)"
         else
             echo "BROKEN: $script_path referenced from $policy but missing or not executable"
             errors=$((errors + 1))
         fi
-    done
+    done < <(grep -oP 'scripts/[^ ]+\.sh' "$policy" 2>/dev/null)
 done
 
 if [ "$errors" -gt 0 ]; then
