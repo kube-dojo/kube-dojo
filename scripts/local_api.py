@@ -4338,6 +4338,7 @@ def _render_top_nav(active: str) -> str:
         ("benchmarks", "/benchmarks", "Benchmarks"),
         ("agents", "/agents", "Agents"),
         ("telemetry", "/telemetry", "Telemetry"),
+        ("headroom", "/headroom", "Headroom"),
         ("channels", "/channels", "Channels"),
         ("decisions", "/decisions", "Decisions"),
         ("health", "/health", "Health"),
@@ -9123,6 +9124,14 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             except (TypeError, ValueError):
                 since_val = None
         return 200, build_agent_telemetry(repo_root, since=since_val), "application/json; charset=utf-8"
+    if path == "/headroom":
+        from headroom_stats_page import render_headroom_stats_page_html
+
+        return 200, render_headroom_stats_page_html(
+            top_nav=_render_top_nav("headroom"),
+            nav_css=_TOP_NAV_CSS,
+            ds_link=_design_system_link(),
+        ), "text/html; charset=utf-8"
     if path == "/telemetry":
         from module_build_telemetry_page import render_module_builds_page_html
 
@@ -9131,6 +9140,25 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             nav_css=_TOP_NAV_CSS,
             ds_link=_design_system_link(),
         ), "text/html; charset=utf-8"
+    if path == "/api/headroom/stats":
+        import urllib.request as _hr_u
+        import os as _hr_os
+
+        _hr_host = _hr_os.environ.get("HEADROOM_HOST", "127.0.0.1")
+        _hr_port = _hr_os.environ.get("HEADROOM_PORT", "8787")
+        _hr_url = f"http://{_hr_host}:{_hr_port}/stats"
+        try:
+            with _hr_u.urlopen(_hr_url, timeout=3) as _hr_resp:
+                _hr_raw = json.loads(_hr_resp.read().decode("utf-8"))
+            _hr_payload = {
+                "ok": True,
+                "url": _hr_url,
+                "summary": _hr_raw.get("summary", {}),
+                "agent_usage": _hr_raw.get("agent_usage", {}),
+            }
+        except Exception as _hr_exc:  # noqa: BLE001 - graceful proxy-down state
+            _hr_payload = {"ok": False, "url": _hr_url, "error": f"{type(_hr_exc).__name__}: {_hr_exc}"}
+        return 200, _hr_payload, "application/json; charset=utf-8"
     if path == "/api/telemetry/module-builds":
         from telemetry_store import build_module_build_payload
 
