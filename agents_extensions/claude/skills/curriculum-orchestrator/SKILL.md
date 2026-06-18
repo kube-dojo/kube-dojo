@@ -124,6 +124,23 @@ Per user policy refinement: every shipped module must carry a composer-2.5 cross
 - Pending Decision Cards live in `docs/decisions/pending/`. On user decision, move to `docs/decisions/{date}-{slug}.md`.
 - Per [[.claude/rules/decision-card]]: cards emitted on disagreement only. Don't emit on consensus.
 
+## Headroom — compress big context, keep handoffs tight
+
+Headroom (the `headroom` MCP, shared compression + memory layer) is ON — the session
+and every `dispatch_smart` agent route through the proxy (`127.0.0.1:8787`). Use it:
+
+- **Large content** (`npm run build` output, codex/cursor/deepseek review verdicts,
+  dispatch responses, search/grep bundles, validation output — roughly >200 lines /
+  20 KB): call `headroom_compress` FIRST, reason over the hash + a one-line summary,
+  and `headroom_retrieve` only the exact detail. Single biggest context-saver on a
+  long orchestration session — default to it instead of letting big outputs truncate.
+- **Handoffs:** `docs/session-state/YYYY-MM-DD-<topic>.html` (indexed in `STATUS.md`,
+  parsed by the briefing API) stays the durable cross-session SSOT. The proxy memory
+  store is local-only with no MCP write tool yet — keep git as the backstop and push
+  bulky evidence behind Headroom hashes. Migrate the handoff body to Headroom only
+  once the durable memory-write tool lands (#2024).
+- Full rule: [[.claude/rules/headroom]]. Never run `headroom learn --apply`.
+
 ## Service troubleshooting
 
 - `./services.sh status` is read-only and safe.
