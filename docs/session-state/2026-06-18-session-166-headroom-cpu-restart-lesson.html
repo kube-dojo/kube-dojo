@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 166 — Headroom CPU hog + the restart-regenerates-config lesson</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.warn { background: #fff3cd; color: #856404; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+.ok { background: #d4edda; color: #155724; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+blockquote { border-left: 3px solid #e0a800; padding-left: 1rem; color: #555; background:#fffdf5 }
+</style></head><body>
+
+<h1>Session 166 — Headroom CPU hog + the restart lesson</h1>
+<p class="meta"><strong>2026-06-18</strong> · standalone orchestrator · continues s165 (same calendar session, Headroom workstream). TLDR: user reported the Mac was being eaten by CPU. Root cause = the Headroom proxy's <code>--memory</code> mode running the Kompress compression model on <strong>CPU via PyTorch instead of the Neural Engine via ONNX/CoreML</strong> (80–264% / load 18 over 18h). <strong>agy (Gemini) found + fixed the real 2-line bug.</strong> The hard lesson: <strong>every <code>headroom install restart/start/apply</code> regenerates the launcher + manifest from defaults, wiping the fix and reverting <code>--memory</code></strong> — so my "restart to verify" repeatedly undid agy's fix (the exact thing the user was frustrated about). No KubeDojo PRs this episode; it was infra firefighting.</p>
+
+<h2>What was eating the CPU</h2>
+<p>Top process: <code>python -m headroom.cli proxy ... --memory --memory-db-path ~/.headroom/memory.db</code> at <strong>80–264% CPU, 18h uptime</strong>, dragging <code>syspolicyd</code> (164%) + <code>trustd</code> (53%) via its outbound API traffic. Load average 18 on a 10-core box and climbing. The <code>--memory</code> subsystem runs vector/graph embedding work on every request; the model was on CPU.</p>
+
+<h2>agy's fix (verified correct + working)</h2>
+<p>agy found a real bug in <code>headroom/transforms/kompress_compressor.py</code> (v0.26.0, the latest):</p>
+<pre><code>-  is_onnx = backend == "onnx"          # lines 785 + 1048
++  is_onnx = backend.startswith("onnx")</code></pre>
+<p>The selector only took the ONNX path when backend was exactly <code>"onnx"</code>, so <code>"onnx_coreml"</code>/<code>"onnx_cpu"</code> fell back to <strong>PyTorch-on-CPU</strong>. The fix makes all ONNX variants take the accelerated path. agy also set <code>HEADROOM_KOMPRESS_BACKEND=onnx_coreml</code> in the launcher. Verified: logs show <code>CoreMLExecutionProvider ... 137 nodes supported by CoreML</code>; CPU dropped 264% → ~0% idle; load 18 → ~4. Credit agy — it found the root cause; I was treating the symptom (turn memory off).</p>
+
+<h2>⚠ THE LESSON — do NOT restart Headroom to apply config tweaks</h2>
+<blockquote>
+<strong><code>headroom install restart</code> / <code>start</code> / <code>apply</code> REGENERATE <code>~/.headroom/deploy/default/run-headroom.sh</code> AND <code>manifest.json</code> from CLI flags/defaults on every run.</strong> They wipe any hand-edit (agy's <code>HEADROOM_KOMPRESS_BACKEND</code> export, a manifest <code>base_env</code> addition) and revert <code>--memory</code> to off. So file-patching the launcher canNOT survive a Headroom restart, and "restart to verify a config edit" is the exact move that keeps undoing agy's fix.
+</blockquote>
+<ul>
+<li>The macOS <code>launchctl</code> path is also flaky here: <code>kickstart -k</code> → exit 37 when the service is unloaded; <code>bootstrap</code> → exit 5 when it's still loaded (KeepAlive resurrects it). <code>headroom install start</code> on a running service is the only reliably-working verb seen.</li>
+<li>My durability attempt (self-heal guard in <code>run-headroom.sh</code> + env var in manifest <code>base_env</code>) was written to disk, then a single <code>install restart</code> regenerated both files and dropped <code>--memory</code> — net effect: I reproduced the breakage the user complained about.</li>
+<li><strong>Rule for next session: do not run <code>headroom install restart/start/apply</code> to apply a tweak.</strong> The proxy self-restarts via launchd KeepAlive; let it. The durable fix is upstream (below), not file edits + restart.</li>
+</ul>
+
+<h2>Current proxy state (read-only, end of session)</h2>
+<table>
+<tr><th>Health</th><td><span class="ok">UP / healthy</span>, compressing (core job works), CPU ~10% / load ~3.7 — the 18-load burn is gone</td></tr>
+<tr><td>Memory mode</td><td><span class="warn">OFF</span> — my last <code>install restart</code> dropped it (regenerated manifest, <code>--memory</code> not re-passed)</td></tr>
+<tr><td>CoreML env var</td><td><span class="warn">gone from launcher</span> (regenerated away) — but the <strong>source patch is still live</strong> in the venv</td></tr>
+<tr><td>Version</td><td><code>headroom-ai 0.26.0</code> (latest on PyPI; bug is in the current release)</td></tr>
+</table>
+<p>So today it's fine as the compression proxy (token/cost savings, low CPU). Memory — the feature for the #2024 handoff migration — is off, but nothing consumes it yet, and memory-off is what cured the CPU.</p>
+
+<h2>Artifacts saved (insurance) — <code>~/.headroom/patches/</code></h2>
+<ul>
+<li><code>agy-onnx-coreml-fix.diff</code> — the 2-line patch (re-apply after a <code>pipx upgrade</code>: <code>patch &lt;file&gt; &lt; diff</code>).</li>
+<li><code>kompress_compressor.py.{agy-onnx-coreml-fix,pristine}-0.26.0.bak</code>, <code>run-headroom.sh.bak</code> (agy's launcher).</li>
+</ul>
+
+<h2>The genuinely durable fix (not done — needs decision)</h2>
+<ul>
+<li><strong>Upstream the 2-line patch</strong> to headroom-ai so 0.27 ships it (then the source patch isn't needed; only the backend env var selects CoreML). I have the diff ready to file.</li>
+<li><strong>Find a first-class persisted home</strong> for <code>HEADROOM_KOMPRESS_BACKEND=onnx_coreml</code> that survives <code>install apply</code> (headroom has no CLI flag for it today — that's the gap to raise upstream too).</li>
+<li>Until then: leave the proxy alone (memory off, lean). Re-enable memory only when #2024 actually needs it, and pin CoreML at the same time — via agy, since its method worked and survives without my flaky restarts.</li>
+</ul>
+
+<h2>Project status snapshot (user asked)</h2>
+<p>Authoring essentially done: board <strong>901 modules / 828 done (92%)</strong>; the 73 not-done = the AI-history book (#1876). <strong>9 open issues:</strong></p>
+<table>
+<tr><th>Group</th><th>Issues</th></tr>
+<tr><td>The book</td><td>#1876 AI-history review (73 ch)</td></tr>
+<tr><td>Quality/coverage</td><td>#2020 review ~84 AI/ML modules · #386 CKA/CKAD/CKS lab audit</td></tr>
+<tr><td>Translation</td><td>#1911 UK re-baseline (~14% current)</td></tr>
+<tr><td>Gap-fill</td><td>#1623 G2 operator software-craft</td></tr>
+<tr><td>Infra/bugs</td><td>#2024 Headroom (mostly done) · #2015 lockfile CI marker · #1823 Mermaid parens (13 files)</td></tr>
+<tr><td>Standing</td><td>#14 Curriculum monitoring</td></tr>
+</table>
+<p>Not "only the book" — #2020 (review coverage, found 12 real bugs in 12 modules this calendar session) and #1911 (UK) are the bigger real remaining effort.</p>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>Headroom: leave it alone.</strong> Do not <code>install restart/start/apply</code> for tweaks. Re-enable memory + pin CoreML via agy when #2024 needs it. Optionally draft the upstream bug report (diff ready).</li>
+<li><strong>Curriculum: #2020 next batch</strong> — ai-ml-engineering deep-learning (25) → machine-learning (19). Same s164 cadence (codex executes labs + opus ground-check; check <code>density.py</code> before treating "expands" as real).</li>
+<li>Then the book (#1876) and UK (#1911). Small papercuts: #2015, #1823.</li>
+<li><strong>Optional:</strong> <code>./services.sh restart api</code> to make the new <code>/headroom</code> dashboard live (PR #2027, merged; routes 404 until the API restarts).</li>
+</ul>
+
+</body></html>
