@@ -86,7 +86,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 | Mechanical / deterministic | cursor or codex (cheap tier) | self-verify | gate/link fixes, batched edits |
 | External primary-source fetch | `mcp__claude-in-chrome__*` | hermes grok-4.3 (x.com only) | Browser BEFORE writer brief ([[feedback_chrome_for_primary_source_fetch]]) |
 
-**Cross-family map:** OpenAI=codex · Anthropic=opus · Google=agy+gemini · DeepSeek=deepseek · **Cursor Composer=cursor (composer-2.5, built on Kimi K2.5/Moonshot — its OWN family, NOT xAI)** · xAI=grok-build/grok-4.x. cursor(composer) and `grok-composer-2.5` are the SAME model (xAI serves Cursor's Composer) → can't co-review; grok-build is a distinct line. Soft caution: cursor(Kimi) vs deepseek = different labs but both Chinese-origin (prefer a Western-lab reviewer for top-stakes). (Corrected s140 — see `feedback_cursor_composer_base_is_kimi_not_xai`.)
+**Cross-family map:** OpenAI=codex · Anthropic=opus · Google=agy+gemini · DeepSeek=deepseek · xAI=cursor(composer)+grok (cursor==grok-composer, can't co-review; grok-4.x is a distinct line).
 
 **During Anthropic throttle window** (2026-05-23/24 instance, recurs):
 - CUT sonnet headless (review/edit/draft/judge1) to preserve shared cap for opus orchestrator.
@@ -118,12 +118,28 @@ Per user policy refinement: every shipped module must carry a composer-2.5 cross
 ## Operational rules
 
 - Quality-gate numbers live in `scripts/quality/verify_module.py` and `scripts/config.py`. Change the test fixture in the same commit as the gate ([[feedback_three_way_rule_agreement]]).
-- **Finalize a module with `scripts/finalize_module.sh`** (the standard finalize unit, #1978) — after writing the bespoke `.pipeline/reviews/<__path>.md` APPROVE record, run `scripts/finalize_module.sh <dash-slug> <review-record-path> -- <record-build args…>`. It GUARDS that the latest review verdict is APPROVE, then `reset-stage COMMITTED` **and** `record-build` (telemetry) together — so `/telemetry` is auto-populated every wave instead of `record-build` being a forgotten manual step. `--dry-run` to preview; `--help` for the worked example. Per-wave `_finalize.sh` scripts call this once per module.
 - `STATUS.md` is an INDEX, not a log. Full handoffs go in `docs/session-state/YYYY-MM-DD-<topic>.html` per HTML-first artifact policy ([[feedback_html_over_markdown_for_artifacts]]).
 - HTML artifacts MUST be served via `http://127.0.0.1:8768/`, never `open <file>` or `file://` ([[feedback_html_artifacts_via_local_api]]).
 - Briefing API parses `## TODO` (unchecked `- [ ]`) and `## Blockers` (`- `) from STATUS.md. Keep those headings populated.
 - Pending Decision Cards live in `docs/decisions/pending/`. On user decision, move to `docs/decisions/{date}-{slug}.md`.
 - Per [[.claude/rules/decision-card]]: cards emitted on disagreement only. Don't emit on consensus.
+
+## Headroom — compress big context, keep handoffs tight
+
+Headroom (the `headroom` MCP, shared compression + memory layer) is ON — the session
+and every `dispatch_smart` agent route through the proxy (`127.0.0.1:8787`). Use it:
+
+- **Large content** (`npm run build` output, codex/cursor/deepseek review verdicts,
+  dispatch responses, search/grep bundles, validation output — roughly >200 lines /
+  20 KB): call `headroom_compress` FIRST, reason over the hash + a one-line summary,
+  and `headroom_retrieve` only the exact detail. Single biggest context-saver on a
+  long orchestration session — default to it instead of letting big outputs truncate.
+- **Handoffs:** `docs/session-state/YYYY-MM-DD-<topic>.html` (indexed in `STATUS.md`,
+  parsed by the briefing API) stays the durable cross-session SSOT. The proxy memory
+  store is local-only with no MCP write tool yet — keep git as the backstop and push
+  bulky evidence behind Headroom hashes. Migrate the handoff body to Headroom only
+  once the durable memory-write tool lands (#2024).
+- Full rule: [[.claude/rules/headroom]]. Never run `headroom learn --apply`.
 
 ## Service troubleshooting
 
