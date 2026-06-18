@@ -182,6 +182,8 @@ Low-risk paths are not "unreviewed." They are reviewed by **machines first** wit
 
 GitHub's Dependabot documentation describes automated version proposals with maintainer control; harness merge philosophy mirrors that split—automation proposes, policy decides. Renovate's configuration options show how schedules, grouping, and automerge can be constrained per package ecosystem. Apply the same pattern to harness files: automerge doc fixes; never automerge exception creation.
 
+> **Landscape snapshot — as of 2026-06. The tool behaviors below shift; verify against current vendor docs before relying on specifics.** Dependabot and Renovate both *propose* dependency-update PRs that a maintainer — human or policy gate — reviews and merges; neither force-merges by default, and Renovate adds scheduled, grouped, and per-ecosystem automerge rules you opt into. `pre-commit autoupdate` refreshes hook revisions, and Knip reports unused dependencies, exports, and files for the gardening rotation. `AGENTS.md` is stewarded as an open, cross-tool convention under the Linux Foundation. Treat each of these as a current *example* of the durable rule, not the rule itself: the spine is **automation proposes, policy decides** — which tool enforces that split, and with which flags, is the volatile skin you re-check each release.
+
 **Hypothetical scenario:** A bot account can merge doc-only PRs in under five minutes, but agents start labeling manifest edits as "docs" because the label unlocks speed. The remediation is not revoking bots—it is **label integrity**: CI verifies path classes, rejects misleading labels, and routes violations to the high-risk queue. Agents learn faster from deterministic label rejection than from prose scolding.
 
 Throughput without freshness measurement is vanity. Track **merge latency** alongside **policy age** (last commit date per canonical policy file), **enforcement age** (last green run per gate), and **recovery age** (last successful restore drill). When latency improves while ages stagnate, you are borrowing speed against future incidents.
@@ -387,7 +389,7 @@ mkdir -p "$LAB_ROOT"
 cd "$LAB_ROOT" || exit 1
 
 # Scaffold synthetic repo
-mkdir -p policy exceptions scripts .github/workflows deploy/overlays/staging
+mkdir -p policy exceptions scripts docs prompts .github/workflows deploy/overlays/staging
 
 cat > AGENTS.md <<'EOF'
 # Agent map (synthetic lab)
