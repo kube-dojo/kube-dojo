@@ -440,7 +440,7 @@ The decision framework is not static. A task class that scores low risk today ma
 
 ## Did You Know?
 
-1. The Symphony specification explicitly states that its runtime is "technically just a SPEC.md file" — there is no required binary, no required database, and no required infrastructure beyond a repository and a tracker API. This design choice is deliberate: it makes the entire orchestration system reviewable, forkable, and auditable within the same Git workflows teams already use for code.
+1. Symphony keeps its orchestration policy in a checked-in `WORKFLOW.md` contract, and the protocol itself is defined by an open `SPEC.md` — so the rules an agent fleet follows are reviewable, forkable, and auditable in the same Git workflow teams already use for code. The scheduler holds its state in memory and recovers from the tracker and filesystem rather than a persistent database. It does still require a coding-agent executable (Codex in app-server mode) to do the actual work — the lightweight, Git-native part is the *contract and protocol*, not a binary-free runtime.
 
 2. The "single workpad comment updated in place" pattern emerged from operational experience with fleet-scale agent loops that initially appended a comment per attempt. Teams observed that issues with more than twelve attempts became unreadable for humans, and the signal-to-noise ratio of the issue timeline degraded to the point where reviewers skipped reading comments entirely and relied on CI badges alone.
 

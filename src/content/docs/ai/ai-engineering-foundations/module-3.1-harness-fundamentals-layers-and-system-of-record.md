@@ -281,13 +281,13 @@ A smaller set of rules sits on the boundary. A commit-message format convention,
 
 ## Did You Know?
 
-- Did You Know: OpenAI published its harness-engineering guidance in February 2026, and by May 2026 the AGENTS.md convention — initially a community-driven pattern — had been adopted as a first-class control surface in both Codex CLI and Claude Code, making it the closest thing the AI-engineering community has to a cross-platform governance standard.
+- Did You Know: OpenAI published its harness-engineering guidance in February 2026, and through 2026 the AGENTS.md convention — initially a community-driven pattern — was adopted as a first-class control surface across Codex CLI and a range of agent tools (Cursor, Amp, and others) and is now stewarded as an open, cross-tool format. Claude Code, by contrast, reads its own `CLAUDE.md` file rather than `AGENTS.md` natively (native AGENTS.md support remains an open community request) — so the two ecosystems converge on the same *idea* (a checked-in, machine-readable rules file) even where the filename and loader differ.
 
 - Did You Know: Claude Code's `@` syntax is a file-import mechanism: writing `@.claude/rules/branches.md` inside a CLAUDE.md file inlines the entire contents of the referenced file into the CLAUDE.md context at agent boot time. The agent does not navigate to the referenced file at run time — it receives the inlined content as part of CLAUDE.md itself, which means the import chain is explicit, auditable, and version-controlled through the file that declares it. The `.claude/rules/` directory convention is a project-level organizational pattern (adopted by repositories including KubeDojo) where scoped rule files are imported by the project's CLAUDE.md through explicit `@` directives, rather than auto-loaded by the runtime.
 
 - Did You Know: OpenAI's Model Spec (published September 2025, updated regularly) defines a formal hierarchy for instruction authority — platform instructions override developer instructions, and developer instructions override user instructions — a design that maps directly to the three-tier harness model described in this module, where platform rules sit above repository rules and repository enforcement rules sit above task-specific instructions.
 
-- Did You Know: A study of agent failure modes across open-source repositories found that the single most common cause of non-deterministic agent behavior was not model variance or tool failure, but ambiguity in which policy file the agent should consult for a given task class — a finding that directly validates the anchored-path-resolution approach taught in this module.
+- Did You Know: A recurring, hard-to-debug failure mode in multi-agent setups is *not* model variance or tool failure but ambiguity over which policy file governs a given task class — two rule files disagree, or no single artifact says which one wins, so the agent's behavior drifts unpredictably between runs. The anchored-path-resolution approach taught in this module exists to remove exactly that ambiguity: one task-class table, one resolution order, one place to look.
 
 ## Common Mistakes
 
