@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 164 — #2020 Quality-coverage Wave 2 (ai-engineering-foundations 12/12)</title>
+<style>
+  body { font: 16px/1.55 -apple-system, system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #2563eb; padding-bottom: .3rem; }
+  h2 { font-size: 1.15rem; margin-top: 1.8rem; color: #1e40af; }
+  code { background: #f1f5f9; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #d1d5db; padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; }
+  .done { color: #16a34a; font-weight: 600; }
+  .warn { color: #d97706; font-weight: 600; }
+  blockquote { border-left: 3px solid #94a3b8; margin: .6rem 0; padding: .2rem .8rem; background: #f8fafc; }
+</style>
+</head>
+<body>
+<h1>Session 164 — #2020 Quality-coverage Wave 2</h1>
+<p><strong>Date:</strong> 2026-06-18 · <strong>Role:</strong> standalone orchestrator · <strong>main @</strong> <code>87405f98d</code> · continues s163 (same epic, next waves)</p>
+
+<blockquote>
+<strong>Headline:</strong> Drained the rest of <strong>ai-engineering-foundations</strong> on epic <strong>#2020</strong> — 6 modules reviewed (5 batch + the false-flagged "expand" 3.3) + 3 scattered lost-state flips. <strong>Cross-family review (codex gpt-5.5 R1 + opus-inline ground-check) found 12 real P1s</strong> — currency/fabrication AND lab-correctness bugs (broken labs, invalid K8s, stale upstream schema). Section now <strong>12/12 reviewed-and-COMMITTED</strong> — the first fully-reviewed #2020 section. Strong validation of "review just in case."
+</blockquote>
+
+<h2>1. Surgical FLIPs — 3 lost-state modules (no PR; local board)</h2>
+<p>data-engineering <code>1.7-event-streaming</code> / <code>1.8-cloudevents</code> + reliability-security <code>4.7-ai-agent-security</code> had prior <strong>APPROVE</strong> records (epic #1953, PRs #1987/#1994; content already on main) but lost local pipeline state. Diff-based induct+flip (<code>_wave2-flip3.sh</code>): snapshot → bootstrap → finalize 3 → delete exactly the 162 collateral. UNAUDITED unchanged; tree clean. Pipeline state is gitignored → board-only, no PR.</p>
+
+<h2>2. Wave 2 review batch — 5 modules (PR #2022)</h2>
+<p>Cadence: codex gpt-5.5 R1 (independent, executed labs in danger mode) + opus-inline ground-check (web/source-verified every volatile claim) → cursor fix → opus re-review → diff-based flip. <strong>codex did a much deeper code/lab review than my currency sweep</strong> — exactly why the cross-family reviewer matters.</p>
+<table>
+<tr><th>Module</th><th>P1s fixed</th></tr>
+<tr><td>2.3 retrieval/memory</td><td><span class="done">APPROVE</span> (clean; 2 P2s noted)</td></tr>
+<tr><td>2.4 dynamic-context</td><td>token ledger double-counted injected snippets; "no-eviction baseline" still evicted → <code>evict</code> flag + count-once</td></tr>
+<tr><td>3.1 harness-fundamentals</td><td>false "AGENTS.md in Claude Code" (uses CLAUDE.md); fabricated "A study… found"; traversal lab resolved <code>branches.md</code> not <code>deploy.md</code> (<code>grep -A1|tail -1</code> grabbed next row) + subshell errors falsely passed</td></tr>
+<tr><td>3.2 guardrails</td><td><code>securityContext</code> validated at <strong>manifest root</strong> — invalid K8s; would pass insecure pods → moved to <code>spec.template.spec.securityContext</code> (schema+validator+manifest+messages)</td></tr>
+<tr><td>4.1 symphony-capstone</td><td>fabricated SPEC.md quote + false "no binary"; stale WORKFLOW.md schema vs upstream (<code>interval_ms</code>, <code>agent.max_concurrent_agents</code>, <code>kind: linear</code>); Claude Code hooks misattributed (→PreToolUse/PostToolUse); GitHub ETag atomic-claim wrong (→optimistic label read-back); poller cap contradicted the issue-3 exercise</td></tr>
+</table>
+<p><strong>Excluded 2 codex over-reach items</strong> where it misapplied our <em>internal</em> repo rules to <em>learner</em> content: <code>python3</code>→<code>.venv/bin/python</code>, "no <code>git worktree</code> in labs". Those are not bugs.</p>
+<p><strong>Web-verified-current claims defended against false-flag</strong> (training cutoff "denies real new features"): OpenAI prompt caching up-to-80% latency / 90% cost (raised from the 50% Oct-2024 launch figure); MCP spec <code>2025-11-25</code> (latest stable); OpenAI Model Spec <code>2025-09-12</code>; AGENTS.md/Linux Foundation stewardship; OpenAI harness post Feb 2026.</p>
+
+<h2>3. Module 3.3 operating-the-harness (PR #2023)</h2>
+<p><strong>False-flagged "expand"</strong> — verifier <code>body_words: 4999</code> (1 under floor) but <code>density.py: 5129 PASS</code> (the known ~12% under-count; briefing tooling-issue candidate). Treated as review-and-flip. codex <em>ran the setup block</em> and hit a real bug: <code>mkdir -p</code> omitted <code>docs</code>/<code>prompts</code> while the scaffold writes into both → "No such file or directory". Fixed + added a dated <code>Landscape snapshot — as of 2026-06</code> callout (durable-vendor remedy) that quarantines the verified-current tool facts <em>and</em> clears the floor → module now <strong>T0</strong>. All vendor claims web-verified current.</p>
+
+<h2>Mechanics / lessons</h2>
+<ul>
+<li><strong>Background dispatch:</strong> never combine the Bash tool's <code>run_in_background</code> with an inner <code>&</code> — the launcher shell exits after <code>sleep</code> and SIGHUPs the detached dispatch (cost a wasted codex run). Let the tool background it.</li>
+<li><strong>Cross-family review is the floor (again):</strong> my currency sweep was clean on 3 of 5; codex found the lab/code bugs in those same modules. Run BOTH: orchestrator currency/web-verify + an independent reviewer that executes the labs.</li>
+<li><strong>Ground-check the reviewer:</strong> codex marked the same "facts woven in prose" class P2 in siblings but P1 in 3.3; and over-applied internal repo rules to learner labs. Every P1 verified before fixing; 2 excluded.</li>
+<li><strong>Diff-based flip</strong> (snapshot → bootstrap → finalize targets → delete exactly the new collateral) used for all 9 flips; dry-run leaves bootstrap collateral, so revert to baseline before the real run.</li>
+<li><strong>Verifier under-counts density.py</strong> (~2–12%) — a T2/T3 on <code>body_words_floor_met</code> alone may already be over by density.py; check before treating as a real expand.</li>
+</ul>
+
+<h2>State</h2>
+<p>main @ <code>87405f98d</code>, clean, no open PRs, 0 my worktrees (qc-* all removed; <code>codex-interactive</code> detached + <code>g2-craft</code> pre-existing, untouched). Board: total 774, COMMITTED 754, UNAUDITED 10. ai-engineering-foundations <strong>12/12</strong> reviewed. #2020 progress comment posted. Reusable scripts in <code>logs/remediation/briefs/quality-coverage/</code> (<code>_review-brief.md</code>, <code>_wave2-labfix.md</code>, <code>_wave2-flip3.sh</code>, <code>_wave2-flip5.sh</code>, <code>_wave2-flip-33.sh</code>).</p>
+
+<h2>Next — #2020 remaining (~84 modules)</h2>
+<ul>
+<li><strong>ai-ml-engineering deep-learning (25)</strong> → <strong>machine-learning (19, ~8 genuine expands)</strong> → synthesis-apps / ai-infrastructure / reinforcement-learning / advanced-genai → scattered cloud/platform. Triage in <code>/tmp/triage_full.tsv</code> (stale — regenerate; several "EXPAND" rows are likely false-flags like 3.3, check density.py first).</li>
+<li>Same cadence: ≤3 reviewers/batch (codex needs <code>--worktree</code>; cursor/deepseek advisory) → ground-check EVERY P1 → consolidated fix → PR → build → merge → diff-based flip.</li>
+<li>Expect more lab-correctness bugs in the code-heavy ML modules (codex executing labs earns its keep). Durable-vendor rule applies hard.</li>
+<li>Standing: <strong>#1876</strong> AI-history book (73 ch, separate epic); <strong>#1911</strong> UK translation currency.</li>
+</ul>
+</body>
+</html>
