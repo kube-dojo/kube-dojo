@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 165 — Headroom integration (pickup port + stats dashboard)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.deferred { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 165 — Headroom integration</h1>
+<p class="meta"><strong>2026-06-18</strong> · standalone orchestrator · main @ <code>e5c631682</code> · continues s164 (same calendar session, distinct workstream — kicked off by user Qs about Headroom). TLDR: user asked whether I was actively using Headroom (proxy + MCP) and pushed to move session handoffs out of git. Diagnosed the real state, corrected my own wrong "add a memory server" framing, ported the Headroom <em>pickup</em> into kubedojo (parity with learn-ukrainian #3534), and shipped a Headroom stats endpoint + dashboard in the Local Monitor. 2 PRs merged.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#2025</td><td><span class="pill merged">MERGED</span></td><td>Port Headroom pickup into kubedojo orchestrator + rule (#2024)</td><td>investigate → port (rule + skill section) → CI green → rebase-merge</td></tr>
+<tr><td>#2027</td><td><span class="pill merged">MERGED</span></td><td>Headroom stats endpoint + dashboard page (#2026)</td><td>build → e2e test (throwaway port, happy + down) → CI green → rebase-merge</td></tr>
+</table>
+<p>Issues: <strong>#2024</strong> reframed + still OPEN (the handoff-off-git migration is <span class="pill deferred">DEFERRED</span>); <strong>#2026</strong> CLOSED (delivered by #2027).</p>
+
+<h2>What the user asked + what was actually true</h2>
+<p><strong>Q1 "are you using Headroom for both proxy and MCP?"</strong> Honest answer: proxy YES (active; this session + all dispatches route through <code>127.0.0.1:8787</code>; ~22–25% token savings, ~13M tokens removed per <code>/stats</code>), MCP compress NO — I was letting big outputs truncate instead of calling <code>headroom_compress</code>. Root cause: the agent <em>instruction</em> to use it was never ported to kubedojo (the proxy was wired in s161, the pickup was not). Fixed in #2025; adopted the compress-first habit.</p>
+
+<p><strong>Q2 "MCP is great for session handoff — we should not save handoffs to git."</strong> Right goal, but I pushed back on timing. Found the authoritative design: learn-ukrainian commit <code>66de2717f3</code> (#3534, "all claude agents should pick them up") — Headroom is the shared <em>compression + memory</em> layer, the handoff mechanism is <code>headroom_compress</code> → hash+summary → <code>headroom_retrieve</code>, and <strong>git stays the cross-session SSOT until the durable memory-write tool lands</strong> (<code>native_tool</code>/<code>bridge</code> off; the <code>headroom memory</code> store is empty + CLI-only; import schema unconfirmed). Cutting git before the cold-start read-path is proven would blind every future cold-start. So handoffs stay in <code>docs/session-state/*.html</code> for now; migration tracked in #2024.</p>
+
+<p><strong>Q3 "if we have other memory MCP we should disable those, right?"</strong> Verified: <strong>no other memory MCP exists</strong> — only <code>headroom</code> + <code>sources</code> are configured (kubedojo <code>.mcp.json</code> has only <code>sources</code>; headroom comes from user-level <code>~/.claude.json</code>). The phantom <code>memory_*</code> tools (<code>memory_save</code>/<code>memory_search</code>/<code>memory_list</code>) are an inert Claude-Code "memory" powerup surface with no backing server — they error "No such tool available". Nothing to disable; headroom is already the sole memory layer. (Separate + complementary: the curated file-based <code>MEMORY.md</code> store.)</p>
+
+<h2>Diagnosis corrections (where I was initially wrong)</h2>
+<ul>
+<li>Initially framed it as "add a mem0/OpenMemory server (A) vs headroom CLI (B)". <strong>Wrong</strong> — Headroom itself is the compression+memory layer; <code>headroom mcp serve</code> exposes only <code>compress</code>/<code>retrieve</code>/<code>stats</code> (its own docs confirm), and the handoff mechanism is the hash-based compress/retrieve, not a separate server.</li>
+<li>Initially scoped the diagnosis to kubedojo only and missed that codex + I had already set this up in learn-ukrainian (the user's "lu and codex was already setting this up, you cannot see it?"). The gap was simply that kubedojo never picked up the agent-instruction half.</li>
+<li>Lesson: when the user says a thing "should be up", check ALL scopes (sibling repo, user-level config, recent commits) before concluding it's absent.</li>
+</ul>
+
+<h2>Headline data (session end)</h2>
+<ul>
+<li>Headroom proxy: ~960 API requests, ~854 compressed, ~13M tokens removed, ~25% cost savings (per <code>/stats</code>).</li>
+<li>Quality board (carried from s164): total 774, COMMITTED 754; ai-engineering-foundations 12/12 reviewed.</li>
+<li>Local Monitor services: <code>api</code> (pid running, :8768), <code>dev</code> (:4333) up; <code>feedback</code> stopped.</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Work</th><th>Agent</th><th>Mode</th><th>Outcome</th></tr>
+<tr><td>Headroom diagnosis + corrections</td><td>opus (orchestrator, inline)</td><td>web-verify + CLI probes</td><td>state established; #2024 reframed</td></tr>
+<tr><td>Pickup port (rule + skill section, #2025)</td><td>opus inline</td><td>edit + deploy.sh</td><td>merged</td></tr>
+<tr><td>Stats endpoint + page (#2027)</td><td>opus inline</td><td>new module + local_api wiring</td><td>e2e tested, merged</td></tr>
+</table>
+<p>No external dispatches this workstream (all inline). Note: a <strong>parallel codex agent</strong> was active in <code>.worktrees/crossplane-expand</code> (authoring 7.2-crossplane for #1996, a separate session) — I deliberately did NOT restart the shared <code>:8768</code> API to avoid disturbing it.</p>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>Restart <code>:8768</code> to make the page live:</strong> <code>./services.sh restart api</code> → then <code>http://127.0.0.1:8768/headroom</code>. Held off this session due to the parallel codex agent.</li>
+<li><strong>#2024 (deferred):</strong> migrate handoff body → Headroom + cut git to a thin pointer ONLY once the durable memory-write tool lands; prove a cross-session read-path round-trip first (wire <code>cold-start.sh</code> to read it). Until then git stays SSOT.</li>
+<li><strong>Habit:</strong> orchestrator + dispatched agents call <code>headroom_compress</code> on big outputs (&gt;~200 lines/20 KB) per <code>.claude/rules/headroom.md</code>.</li>
+<li><strong>#2020 (main curriculum stream, ~84 modules left):</strong> ai-ml-engineering deep-learning (25) → machine-learning (19) → scattered. Check <code>density.py</code> before treating any "expand" as real (verifier under-counts). Expect lab-correctness bugs in code-heavy ML modules.</li>
+<li>Standing: #1876 AI-history book review (73 ch); #1911 UK translation currency.</li>
+</ul>
+
+<h2>Files touched</h2>
+<ul>
+<li><code>.claude/rules/headroom.md</code> (new) — Headroom rule: runtime, compress-first usage rule, handoff-stays-in-git policy.</li>
+<li><code>agents_extensions/claude/skills/curriculum-orchestrator/SKILL.md</code> + deployed <code>.claude/skills/.../SKILL.md</code> — "## Headroom — compress big context, keep handoffs tight" section.</li>
+<li><code>scripts/headroom_stats_page.py</code> (new) — dashboard page module (mirrors telemetry page; shared design-system tokens).</li>
+<li><code>scripts/local_api.py</code> — <code>GET /api/headroom/stats</code> (proxy fetch + graceful down state) + <code>/headroom</code> page route + nav tab.</li>
+</ul>
+
+<h2>Memory</h2>
+<ul>
+<li>Updated <code>reference_headroom_proxy_setup.md</code> — Headroom = compression+memory; USE compress actively (pickup #2025); no separate memory MCP (inert <code>memory_*</code> powerup); handoffs stay in git until memory-write tool lands (#2024).</li>
+</ul>
+
+</body></html>
