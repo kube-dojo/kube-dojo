@@ -1,0 +1,2 @@
+## 2026-06-19T20:20:20Z — `REVIEW` — `APPROVE`
+#2037 cross-family review (s168). Reviewer: deepseek-v4-pro; GCN/GAT/GraphSAGE formulas match canonical papers, PyG API (Data/MessagePassing/NeighborLoader) correct, graph-blind-baseline pedagogy strong. Content APPROVE. Was verifier-T3 (body_words floor, unassessed Build-PyG outcome, Next-Steps heading broke section-order/next-link) -> orchestrator gate-cleared: renamed to Next Module, added a build-PyG-pipeline hands-on step, +synthesis paragraph. Re-verified T0 PASS.

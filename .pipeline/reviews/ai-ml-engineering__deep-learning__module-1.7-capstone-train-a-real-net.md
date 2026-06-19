@@ -1,0 +1,2 @@
+## 2026-06-19T20:20:20Z — `REVIEW` — `APPROVE`
+#2037 cross-family review (s168). Reviewer: codex gpt-5.5; executed labs. Two P1s (orchestrator-confirmed): (1) validation inherited train-time random augmentation via random_split Subset of a train_transform dataset -> fixed to split indices once + deterministic val/test transforms (orchestrator verified runnable); (2) 'torch.cuda.amp removed in 2.x' -> it is a deprecated alias, not removed (PyTorch 2.12, web-verified) -> corrected. Re-verified T0 PASS.

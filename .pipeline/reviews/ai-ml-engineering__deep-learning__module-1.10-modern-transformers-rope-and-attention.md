@@ -1,0 +1,2 @@
+## 2026-06-19T20:20:20Z — `REVIEW` — `APPROVE`
+#2037 cross-family review (s168). Reviewer: deepseek-v4-pro; RoPE rotation identity + KV-estimator + vLLM benchmark traced. Orchestrator web-verified the headline volatile claim — DeepSeek-V2 93.3% KV reduction CONFIRMED (arXiv 2405.04434 abstract). Non-blocking P2s noted as follow-up (MLA KV formula comparability; table-vs-estimate_kv_gb mismatch ~3-14%). T0 PASS, no content change this wave.
