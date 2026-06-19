@@ -57,7 +57,7 @@ batch = np.random.randn(8, 4)            # shape (8, 4)  -> 8 samples, 4 feature
 
 **Axis conventions** matter because NumPy reductions and broadcasts refer to axis indices. For a batch matrix `X` with shape `(n, d)`, `X.mean(axis=0)` averages over samples and returns one mean per feature; `X.mean(axis=1)` averages within each sample across features. Neural code almost always keeps **axis 0 as batch** so `X[i]` is the `i`-th example. Libraries like PyTorch default to the same layout for tabular and MLP data, which is why transposing without documenting it is a recurring source of silent bugs.
 
-**dtype** chooses memory and numerical behavior. `float64` is the NumPy default; many neural nets run in `float32` because it halves memory bandwidth and matches GPU tensor cores. You can cast explicitly: `X = X.astype(np.float32)`. For this module’s tiny examples, either dtype is fine; for training loops you will standardize on `float32` unless you have a numerical reason not to. Integer dtypes appear for labels (`int64` class indices) but never for learnable weights.
+**dtype** chooses memory and numerical behavior. `float64` is the NumPy default; many neural nets run in `float32` because it halves memory bandwidth and aligns with GPU tensor-core accumulation precision (the low-precision multiply is fp16/bf16/tf32 under mixed precision). You can cast explicitly: `X = X.astype(np.float32)`. For this module’s tiny examples, either dtype is fine; for training loops you will standardize on `float32` unless you have a numerical reason not to. Integer dtypes appear for labels (`int64` class indices) but never for learnable weights.
 
 ```python
 rng = np.random.default_rng(0)
@@ -335,7 +335,7 @@ Keep the API boring on purpose. Karpathy’s teaching stacks work because each l
 
 ## Did You Know?
 
-- **Broadcasting predates the NumPy name:** Numeric, NumPy’s predecessor, already implemented broadcasting via zero strides; see the [NumPy internals note on broadcasting](https://numpy.org/devdocs/dev/internals.code-explanations.html#broadcasting).
+- **Broadcasting predates the NumPy name:** Numeric, NumPy’s predecessor, already implemented broadcasting via zero strides; see the [NumPy internals note on broadcasting](https://numpy.org/doc/stable/dev/internals.code-explanations.html#broadcasting).
 - **Finite differences scale poorly but never lie:** A full neural net with millions of parameters cannot be gradient-checked parameter-by-parameter in production, but checking **one layer** or **a few synthesized weights** catches sign and transpose bugs before week-long training runs.
 - **The `@` operator was added in Python 3.5** specifically to make matrix multiplication readable; before that, tutorials mixed `np.dot` calls that confused batched stacks.
 - **CS231n’s first assignment** is still largely linear algebra fluency; teams interview for framework knowledge, but the course assumes you can implement a vectorized loss gradient by hand.
