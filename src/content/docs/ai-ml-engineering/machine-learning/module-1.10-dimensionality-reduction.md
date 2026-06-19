@@ -462,6 +462,16 @@ import numpy as np
 
 from sklearn.decomposition import IncrementalPCA
 
+rng = np.random.default_rng(0)
+
+
+def stream_of_batches(n_batches=10, batch_size=2000, n_features=100):
+    """Stand-in for a real chunked source (memory-mapped file, DB cursor,
+    Parquet row groups). It only needs to yield fixed-width arrays."""
+    for _ in range(n_batches):
+        yield rng.normal(size=(batch_size, n_features))
+
+
 ipca = IncrementalPCA(n_components=50, batch_size=2000)
 
 for batch in stream_of_batches():
@@ -471,7 +481,8 @@ for batch in stream_of_batches():
 X_reduced = np.vstack([ipca.transform(batch) for batch in stream_of_batches()])
 ```
 
-The `stream_of_batches` placeholder is intentional.
+The `stream_of_batches` generator here is a stand-in: swap it for your real
+chunked source (a memory-mapped array, a database cursor, Parquet row groups).
 The estimator does not care where the batches come from, only that they
 have consistent feature dimensionality and represent the data
 distribution well enough that the components stabilize.
@@ -662,7 +673,9 @@ and lives in the `umap-learn` package, which installs separately from
 scikit-learn but follows the sklearn estimator API.
 
 UMAP has three practical advantages over t-SNE for many datasets.
-It is generally faster.
+It is often faster on large datasets, though the exact margin depends on
+dataset size, dimensionality, and parameter choices, so benchmark on your
+own data rather than assuming a fixed speedup.
 It tends to preserve more global structure, which means inter-cluster
 distances in a UMAP plot are more meaningful than in a t-SNE plot,
 though they are still not literal.
@@ -680,7 +693,9 @@ emphasize local structure, large values blur into global structure.
 values produce dense clusters, larger values produce smoother
 distributions.
 
-A typical exploratory snippet looks like this.
+A typical exploratory snippet looks like this. UMAP is not bundled with
+scikit-learn, so install it first with `pip install umap-learn` (the import
+name is `umap`, not `umap-learn`).
 
 ```python
 import umap
@@ -1025,9 +1040,11 @@ TF-IDF matrix and avoids densifying it into a much larger memory
 footprint.
 It produces a deterministic linear projection with a proper `transform`
 method, so it slots cleanly into a supervised pipeline.
-Regular PCA would force the matrix to dense, and t-SNE or UMAP would
-not be appropriate because they are visualization tools rather than
-generalizing feature extractors.
+Regular PCA would force the sparse matrix to dense. t-SNE would not be
+appropriate either, because it has no out-of-sample `transform` and is a
+visualization tool rather than a feature extractor. UMAP does expose a
+`transform`, but its stochastic non-linear embedding is better suited to
+exploration than to a stable, reproducible production feature pipeline.
 </details>
 
 5. A practitioner sets `n_components=0.95` in PCA and is surprised to

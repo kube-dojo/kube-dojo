@@ -381,8 +381,10 @@ import numpy as np
 
 class GroupMeanEncoder(BaseEstimator, TransformerMixin):
     """Replace a categorical column with the in-group mean of the
-    target. Demonstration only — for production target encoding,
-    prefer category_encoders.TargetEncoder which adds smoothing.
+    target. Demonstration only — for production target encoding, prefer
+    sklearn's built-in `sklearn.preprocessing.TargetEncoder` (added in
+    scikit-learn 1.3, with cross-fitting to limit leakage) or
+    `category_encoders.TargetEncoder` (adds smoothing). Module 1.4 covers both.
     """
 
     def __init__(self, column, default=0.0):
@@ -513,7 +515,7 @@ A practitioner-grade workflow ties every concept above into a single object. Rea
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin, clone
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -705,6 +707,9 @@ When all six checkboxes are green, you have internalized the contract this modul
 - [Cross-validation: evaluating estimator performance](https://scikit-learn.org/stable/modules/cross_validation.html)
 - [Metrics and scoring (overview)](https://scikit-learn.org/stable/modules/model_evaluation.html)
 - [`sklearn.base` API reference (`BaseEstimator`, `TransformerMixin`, `clone`)](https://scikit-learn.org/stable/api/sklearn.base.html)
+- [`sklearn.pipeline` API reference (`Pipeline`, `FeatureUnion`, `make_pipeline`)](https://scikit-learn.org/stable/api/sklearn.pipeline.html)
+- [`sklearn.compose` API reference (`ColumnTransformer`, `make_column_selector`)](https://scikit-learn.org/stable/api/sklearn.compose.html)
+- [`sklearn.model_selection` API reference (splitters, `GridSearchCV`, `RandomizedSearchCV`)](https://scikit-learn.org/stable/api/sklearn.model_selection.html)
 - [Joblib persistence guide](https://joblib.readthedocs.io/en/stable/persistence.html)
 
 ## Next Module

@@ -493,7 +493,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.datasets import make_moons
 from sklearn.preprocessing import StandardScaler
 
-X, _ = make_moons(random_state=0)
+X, _ = make_moons(n_samples=300, noise=0.08, random_state=0)
 
 X_scaled = StandardScaler().fit_transform(X)
 
@@ -1089,7 +1089,7 @@ be only as a supporting exploratory step, not the main detection method.
 
 ### Step 3: Compare DBSCAN on non-convex structure
 
-- [ ] Generate `make_moons` data and apply scaling before fitting.
+- [ ] Generate `make_moons(n_samples=300, noise=0.08, random_state=0)` and apply scaling before fitting (a denser sample gives DBSCAN enough local density to form the two arcs; the very sparse default would label every point as noise).
 - [ ] Fit `DBSCAN(eps=0.3, min_samples=10)`.
 - [ ] Count how many non-noise clusters were found.
 - [ ] Count how many points were assigned label `-1`.
