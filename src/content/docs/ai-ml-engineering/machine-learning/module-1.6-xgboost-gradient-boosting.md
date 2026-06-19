@@ -188,7 +188,7 @@ reduction required to make a split, which is another path to controlling tree co
 
 XGBoost also ships alternative boosters. `gbtree` is the standard tree booster. `dart` adds dropout
 to trees during boosting, which can reduce overfitting at the cost of more tuning complexity.
-`gblinear` fits a linear booster instead of trees and is a different tool entirely. For multi-target
+`gblinear` fits a linear booster instead of trees and is a different tool entirely (note: `booster=gblinear` is deprecated as of XGBoost 3.3 and slated for removal in a future release, so prefer `gbtree` or `dart`). For multi-target
 regression, recent XGBoost versions support vector-leaf trees that emit multiple outputs from one
 tree structure; monotonic constraints may not apply to every multi-output configuration, so read the
 release notes before relying on them in that mode.
@@ -321,7 +321,7 @@ X_tr, X_val, y_tr, y_val = train_test_split(
 
 hgb = HistGradientBoostingClassifier(
     max_iter=500,
-    learning_rate=0.05,
+    learning_rate=0.2,
     max_depth=4,
     min_samples_leaf=20,
     l2_regularization=1.0,
@@ -501,7 +501,7 @@ segment = rng.integers(0, 4, size=n)
 # True effect: higher price never increases demand in this synthetic setup.
 demand = 120 - 0.8 * price + segment * 2 + rng.normal(0, 3, size=n)
 
-df = pd.DataFrame({"price": price, "segment": segment.astype("category"), "demand": demand})
+df = pd.DataFrame({"price": price, "segment": pd.Categorical(segment), "demand": demand})
 X = df[["price", "segment"]]
 y = df["demand"]
 
