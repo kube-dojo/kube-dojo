@@ -167,7 +167,7 @@ During backpropagation, the gradient with respect to the layer input is (from A6
 
 ### 2.3 Effect of activations
 
-Nonlinearities modify variance in activation-dependent ways, as summarized in the table below. The factor of one-half for ReLU is critical: even if the linear pre-activation has unit variance, the ReLU output has half the variance because roughly half the entries are zeroed. He initialization compensates with a factor of 2 in the weight variance (Part 4). Tanh and sigmoid introduce a different failure mode — not variance explosion but **saturation**, where outputs cluster near plus or minus one and local derivatives approach zero, starving the backward pass regardless of how carefully you scaled the weights.
+Nonlinearities modify variance in activation-dependent ways, as summarized in the table below. The factor of one-half for ReLU is critical: even if the linear pre-activation has unit variance, ReLU zeros roughly half the entries, which halves the *mean squared activation* `E[a^2]` — and it is `E[a^2]`, not the literal variance, that sets the next layer's pre-activation variance. He initialization compensates with a factor of 2 in the weight variance (Part 4). Tanh and sigmoid introduce a different failure mode — not variance explosion but **saturation**, where outputs cluster near plus or minus one and local derivatives approach zero, starving the backward pass regardless of how carefully you scaled the weights.
 
 ### 2.4 Worked numeric example
 
@@ -175,7 +175,7 @@ Nonlinearities modify variance in activation-dependent ways, as summarized in th
 |---|---|---|
 | Identity (linear) | Preserves variance exactly under the linear rule | Same as forward |
 | `tanh` / sigmoid | Saturates: large inputs produce outputs near plus or minus one, variance bounded | Gradients vanish when saturated |
-| ReLU | Zeros negative half: `Var(out)` is about half of `Var(pre_activation)` | Gradient is 0 or 1 — no shrinkage, but dead neurons |
+| ReLU | Zeros negative half: mean square `E[out^2]` is about half of `Var(pre_activation)` | Gradient is 0 or 1 — no shrinkage, but dead neurons |
 
 Suppose `n_in = 256`, inputs have `Var(x) = 1`, and weights are `N(0, 1)`. Then `Var(y) = 256`, so `std(y)` is about 16, and to target `std(y)` near 1 you need `Var(W) = 1/256`, giving `std(W) = 1/16 = 0.0625`. The following PyTorch snippet verifies this single-layer relationship before you trust it in a deep stack:
 
@@ -243,7 +243,7 @@ Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun (2015) analyzed variance p
 
 ### 4.1 Deriving the factor of 2
 
-For a pre-activation `z` with zero mean and unit variance, ReLU output is `a = max(0, z)`. Because ReLU zeros the negative half of the distribution, `Var(a) = 0.5 * Var(z)`, so the linear part must produce pre-activation variance 2 rather than 1 to maintain unit output variance after ReLU. Since `Var(pre) = n_in * Var(W) * Var(x_in)`, preserving unit output variance after ReLU requires `n_in * Var(W) * Var(x_in) = 2 * Var(x_in)`, which simplifies to `Var(W) = 2 / n_in`. Equivalently, `std(W) = sqrt(2 / n_in)`. This is the **He (Kaiming) initialization** — the default philosophy for modern convolutional and transformer feed-forward blocks using ReLU, GELU, or similar non-saturating activations. Compare to your A7 NumPy code: `W = rng.normal(0, np.sqrt(2.0 / d_in), ...)`. That line was He initialization. PyTorch's `nn.init.kaiming_normal_` computes the same scale.
+For a pre-activation `z` with zero mean and unit variance, ReLU output is `a = max(0, z)`. Because ReLU zeros the negative half of a zero-mean distribution, its *mean squared value* is exactly half the input variance: `E[a^2] = 0.5 * Var(z)`. (The literal `Var(a)` is smaller, about `0.34 * Var(z)`, because the surviving half has a nonzero mean — but it is the mean square `E[a^2]`, not `Var(a)`, that drives the next layer's pre-activation variance.) The next layer's pre-activation variance is `Var(z_next) = n_in * Var(W) * E[a^2]`, so holding the signal at unit scale across the layer requires `n_in * Var(W) * 0.5 = 1`, which simplifies to `Var(W) = 2 / n_in`. Equivalently, `std(W) = sqrt(2 / n_in)`. This is the **He (Kaiming) initialization** — the default philosophy for modern convolutional and transformer feed-forward blocks using ReLU, GELU, or similar non-saturating activations. Compare to your A7 NumPy code: `W = rng.normal(0, np.sqrt(2.0 / d_in), ...)`. That line was He initialization. PyTorch's `nn.init.kaiming_normal_` computes the same scale.
 
 ### 4.2 Uniform and normal forms
 

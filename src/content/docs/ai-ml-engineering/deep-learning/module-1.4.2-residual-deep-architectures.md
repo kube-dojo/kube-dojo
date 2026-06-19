@@ -557,14 +557,14 @@ losses_resid = train(resid, x, target)
 print(f"Final loss — plain: {losses_plain[-1]:.4f}, residual: {losses_resid[-1]:.4f}")
 ```
 
-**Success criteria:** Run `python exercise_residual.py` and verify that:
+**Success criteria:** Save the code block above as `exercise_residual.py`, run it with `.venv/bin/python exercise_residual.py` (or any PyTorch 2.12 environment), and verify that:
 
 - [ ] Loss curves printed or plotted: residual final loss should be lower than plain final loss.
 - [ ] Plain stack's loss curve may plateau early or diverge; residual stack's loss decreases steadily.
 - [ ] Output the first-layer gradient norm for both models after the final training step.
 
 ```bash
-python exercise_residual.py
+.venv/bin/python exercise_residual.py
 ```
 
 ---

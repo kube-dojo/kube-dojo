@@ -357,21 +357,27 @@ val_test_transform = T.Compose([
     T.Normalize(CIFAR10_MEAN, CIFAR10_STD),
 ])
 
-# Re-create datasets with proper transforms
-# Note: we re-load because random_split returns Subset objects that reference
-# the original dataset; we need to apply transforms at the Dataset level.
-full_train = torchvision.datasets.CIFAR10(
+# Validation must use DETERMINISTIC transforms, never the random augmentation
+# used for training. A Subset from random_split inherits its parent dataset's
+# transform, so we load two views of the training data (one augmented, one not),
+# split the indices once, and take the matching subset from each view.
+train_full = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=train_transform
+)
+val_full = torchvision.datasets.CIFAR10(
+    root='./data', train=True, download=True, transform=val_test_transform
 )
 test_set_final = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=val_test_transform
 )
 
-# Re-split with the same seed
-train_set_final, val_set_final = random_split(
-    full_train, [45000, 5000],
+# Split the index set once (same seed -> consistent partition across both views).
+train_idx, val_idx = random_split(
+    range(len(train_full)), [45000, 5000],
     generator=torch.Generator().manual_seed(42)
 )
+train_set_final = torch.utils.data.Subset(train_full, list(train_idx))   # augmented
+val_set_final   = torch.utils.data.Subset(val_full, list(val_idx))       # deterministic
 
 # DataLoaders with sensible defaults
 train_loader = DataLoader(train_set_final, batch_size=128, shuffle=True,
@@ -788,7 +794,7 @@ That is the only number you should ever report as your model's test accuracy. If
 | Reporting a single run with no variance | A lucky seed can inflate accuracy by 1–2% | Run at least three seeds, report mean ± standard deviation |
 | Forgetting `model.eval()` during validation | BatchNorm and Dropout behave differently in train vs eval mode | Call `model.eval()` before validation and `model.train()` after. Use a context manager or a validation helper that enforces this |
 | Not checkpointing the best validation model | Training continues past the best epoch, and the final model is overfit | Save `state_dict` whenever validation loss reaches a new minimum; restore after training |
-| Using `torch.cuda.amp` instead of `torch.amp.autocast` | The old API was deprecated in PyTorch 1.10 and removed in 2.x | Use `torch.amp.autocast('cuda')` and `torch.amp.GradScaler('cuda')` |
+| Using `torch.cuda.amp` instead of `torch.amp.autocast` | The `torch.cuda.amp` namespace is deprecated in favor of the device-generic `torch.amp` API; it still works as an alias but should not be used in new code | Use `torch.amp.autocast('cuda')` and `torch.amp.GradScaler('cuda')` |
 
 ---
 

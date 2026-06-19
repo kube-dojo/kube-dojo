@@ -480,7 +480,7 @@ Vision Transformers split an image into fixed-size patches (commonly 16×16), li
 - LeNet-5 and its descendants were deployed by NCR and other vendors in the late 1990s to read handwritten digits on bank cheques — one of the earliest large-scale commercial uses of convolutional neural networks, years before the ImageNet moment made deep learning fashionable in Silicon Valley.
 - AlexNet's 2012 ImageNet top-5 error rate of about 15.3% was roughly ten percentage points better than the second-place entry that year — a gap so wide it convinced many researchers overnight that deep convolutional networks had become the default tool for large-scale visual recognition.
 - The VGG team's 2014 systematic comparison showed that a stack of three 3×3 convolutional layers has the same receptive field as one 7×7 layer but with fewer parameters and three ReLU nonlinearities instead of one — a design rule still echoed in modern head architectures and depthwise-separable conv designs.
-- Kaiming He's ResNet paper enabled training of networks with more than 100 layers on ImageNet by adding identity skip connections; the residual formulation is now cited more than 100,000 times and underpins both modern vision backbones and the transformer blocks you assembled in Block C.
+- Kaiming He's ResNet paper enabled training of networks with more than 100 layers on ImageNet by adding identity skip connections; the residual formulation underpins both modern vision backbones and the transformer blocks you assembled in Block C.
 
 ---
 
