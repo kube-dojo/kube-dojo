@@ -120,6 +120,7 @@ SUPPORTED_AGENTS = (
     "cursor",
     "deepseek",
     "gemini",
+    "grok",
     "hermes",
     "opencode",
     "qwen",
@@ -149,6 +150,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.4-mini",
             "deepseek": "deepseek-v4-flash",
             "gemini": "gemini-3.1-flash-lite-preview",
+            "grok": "grok-build",
             "cursor": "composer-2.5-fast",
             "hermes": "qwen-3.6-flash",
             "opencode": "openrouter/qwen/qwen3.6-flash",
@@ -166,6 +168,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "grok": "grok-build",
             "cursor": "composer-2.5",
             "hermes": "grok-4.3",
             "opencode": "openrouter/qwen/qwen3.7-max",
@@ -183,6 +186,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "grok": "grok-build",
             "cursor": "composer-2.5",
             "hermes": "grok-4.3",
             "opencode": "openrouter/qwen/qwen3.7-max",
@@ -200,6 +204,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "grok": "grok-build",
             "cursor": "auto",
             "hermes": "claude-sonnet-4-6",
             "opencode": "openrouter/qwen/qwen3.7-max",
@@ -217,6 +222,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "grok": "grok-build",
             "cursor": "composer-2.5",
             "hermes": "claude-opus-4-6",
             "opencode": "openrouter/anthropic/claude-sonnet-4.5",
@@ -478,6 +484,15 @@ def _cursor_binary() -> str:
     )
 
 
+def _grok_binary() -> str:
+    """Resolve the grok CLI path with an env override for local installs."""
+    return (
+        os.environ.get("KUBEDOJO_GROK_CMD")
+        or shutil.which("grok")
+        or str(Path.home() / ".local" / "bin" / "grok")
+    )
+
+
 def _hermes_provider_for_model(model: str) -> str:
     """Pick a Hermes provider from the model name, unless env overrides it."""
     override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
@@ -518,6 +533,8 @@ def _router_command(agent: str, model: str, prompt: str) -> list[str]:
             "text",
             prompt,
         ]
+    if agent == "grok":
+        return [_grok_binary(), "-p", prompt, "-m", model, "--output-format", "plain"]
     if agent == "hermes":
         cli_model = _hermes_cli_model(model)
         # --oneshot (-z): one-shot mode; PROMPT must be a single argv token.
@@ -591,7 +608,7 @@ def fire(
     if worktree:
         print(f"[smart] cwd={worktree}")
     print(f"[smart] task_id={task_id}")
-    if agent in {"cursor", "hermes", "opencode"}:
+    if agent in {"cursor", "hermes", "opencode", "grok"}:
         print("[smart] mode is advisory for this router CLI")
 
     started = time.time()
@@ -606,7 +623,7 @@ def fire(
         env = os.environ.copy()
         env["KUBEDOJO_DISPATCHED"] = "1"
         os.environ.update(env)
-        if agent in {"cursor", "hermes", "opencode"}:
+        if agent in {"cursor", "hermes", "opencode", "grok"}:
             ok, response, stderr_excerpt = _run_router_agent(
                 agent=agent,
                 prompt=prompt,
@@ -910,7 +927,7 @@ def main() -> int:
         print("[dry-run] prompt_begin")
         print(prompt)
         print("[dry-run] prompt_end")
-        if args.agent in {"cursor", "hermes", "opencode"}:
+        if args.agent in {"cursor", "hermes", "opencode", "grok"}:
             print(f"[dry-run] argv={_router_command(args.agent, model, prompt)!r}")
         elif tool_config and args.agent in MCP_SUPPORTED_AGENTS:
             print(
