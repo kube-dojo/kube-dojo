@@ -408,7 +408,7 @@ aider --model ollama/qwen2.5-coder:7b src/user_profile.py tests/test_user_profil
 aider --model ollama/deepseek-coder-v2:16b src/billing_rules.py tests/test_billing_rules.py
 
 # API model only when the task needs stronger reasoning or broad context
-aider --model gemini/gemini-2.5-flash src/auth_design.md src/auth_service.py
+aider --model gemini/gemini-3.5-flash src/auth_design.md src/auth_service.py
 ```
 
 Cost control is not only about reducing the bill. It is about making experimentation cheap enough that developers can ask better questions. If a local model can generate ten variants for no token cost, the developer can compare approaches, find edge cases, and sharpen the final prompt before using a paid model. That often improves the paid model's answer because the expensive request becomes more specific.
@@ -519,7 +519,7 @@ aider --model ollama/qwen2.5-coder:7b tests/test_parser.py
 aider --model ollama/deepseek-coder-v2:16b src/parser.py tests/test_parser.py
 
 # API fallback when the reasoning risk is higher than the local model can handle
-aider --model gemini/gemini-2.5-flash src/parser.py tests/test_parser.py docs/parser-contract.md
+aider --model gemini/gemini-3.5-flash src/parser.py tests/test_parser.py docs/parser-contract.md
 ```
 
 The senior move is to make these decisions visible to the team. Document which local model is the daily default, which one is the heavier local option, which API model is approved for escalation, and what kinds of code must not be sent to external providers. Without that shared agreement, each developer invents their own policy, and the team's privacy and cost posture becomes accidental.

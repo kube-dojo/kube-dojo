@@ -27,7 +27,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-A platform team at a healthcare software company adopted AI coding assistants across every repository in one quarter. At first, the story looked like a success. Small endpoints appeared faster, unit tests grew overnight, and junior engineers could navigate unfamiliar services with less waiting. Leadership saw the first metrics and assumed the organization had simply become more productive.
+**Hypothetical scenario:** A platform team at a healthcare software company adopted AI coding assistants across every repository in one quarter. At first, the story looked like a success. Small endpoints appeared faster, unit tests grew overnight, and junior engineers could navigate unfamiliar services with less waiting. Leadership saw the first metrics and assumed the organization had simply become more productive.
 
 Then an incident review told a different story. An AI-generated caching decorator had been accepted during a rushed performance fix, and nobody noticed that it had no eviction policy, no size limit, and no monitoring. The service behaved well in staging, where data volume was small, but production traffic turned the cache into an unbounded memory sink. The outage lasted long enough to trigger contractual penalties, and the most uncomfortable sentence in the review was not technical at all: "The assistant wrote it, and we trusted it."
 
@@ -38,6 +38,8 @@ This module teaches AI-assisted development as an engineering discipline rather 
 The examples in this module are intentionally ordinary: API routes, tests, caches, prompts, and review loops. That is where most teams either gain real leverage or quietly accumulate risk. You will not learn a magic incantation that makes an assistant reliable; you will learn how to surround probabilistic generation with deterministic evidence. When Kubernetes appears in later practice, assume Kubernetes 1.35 or newer and define the standard shortcut with `alias k=kubectl` before using `k` in commands, but the main lesson here is broader than any one platform.
 
 ## 1. The Mental Model: Assistants Are Different Tools, Not One Tool
+
+> **Landscape snapshot — tool names as of 2026-06.** The product roster churns fast; the durable skill is matching the *form factor* (autocomplete · IDE-native · terminal/agentic · general-chat) to the task, not memorizing today's tools. Verify the current roster and capabilities against vendor docs before relying on specifics. See the **AI Coding Harness Rosetta** in [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) for the cross-tool capability matrix.
 
 The first mistake many teams make is treating every AI coding assistant as a smarter version of autocomplete. That mental model hides the important differences between tools. Some assistants are optimized for fast local suggestions, some for codebase-wide editing, some for terminal-native patching, and some for long-context reasoning. A senior workflow does not ask, "Which assistant is best?" It asks, "Which assistant matches this task, this risk level, and this review budget?"
 
@@ -84,6 +86,10 @@ A useful rule is to spend the least reasoning power that can responsibly solve t
 | Secret-bearing or regulated code | Local model or manual workflow | The exposure risk dominates convenience | The task can be reduced to redacted structure and synthetic examples |
 
 This routing table is not a law. It is a starting point for disciplined judgment. The table becomes useful when you treat each row as a hypothesis: "This tool should be enough because the task has these properties." If the hypothesis fails, you escalate deliberately instead of thrashing between assistants.
+
+### Open standards: the durable anchor
+
+Across every assistant above, the durable anchors are not the products but the open standards they share. **MCP (Model Context Protocol)** is the cross-vendor protocol for connecting tools, data, and services to any assistant, so an integration you build once is portable across harnesses. The rules-file conventions — **`AGENTS.md`** (read by Codex, Cursor, Aider, and others) and **`CLAUDE.md`** (Claude Code) — let a repository declare its own instructions, commands, and boundaries once, independent of which tool a developer runs. Learn these standards and the skill transfers to whichever assistant your team adopts next; see [Module 1.1](/ai-ml-engineering/ai-native-development/module-1.1-ai-coding-tools-landscape/) for the full treatment.
 
 That escalation should be explicit in your notes or pull request summary. If a simple autocomplete-generated test exposed an unclear contract, say that the work moved from local generation to codebase reasoning because the contract was ambiguous. If a terminal agent proposed a dependency that violated your supply-chain policy, say that implementation stopped until the dependency decision was reviewed. These small records make AI-assisted work auditable, and they help the next engineer understand whether the assistant was used as a shortcut, a reviewer, or a reasoning partner.
 
