@@ -10,14 +10,11 @@ sidebar:
 **Phase**: 6 - Deep Learning Foundations
 ---
 
-In the mid-2000s, Travis Oliphant was working on numerical-computing problems that exposed the limits of Python's existing array libraries. As an astronomer, he needed to process massive arrays of telescope data—millions of numbers representing distant galaxies. Python was perfect for writing analysis scripts, but the existing numerical libraries were a mess. There were two competing packages, Numeric and numarray, and neither could handle his data efficiently.
+In the mid-2000s, Travis Oliphant was working on biomedical imaging and scientific Python problems at the Mayo Clinic, exposing limits in Python's existing array libraries. Python was perfect for writing analysis scripts, but the existing numerical libraries were a mess. There were two competing packages, Numeric and numarray, and neither could handle data efficiently.
 
 So Oliphant did what any frustrated scientist would do: he merged them. Working nights and weekends, he rewrote core components in C, unified the competing APIs, and released something called "NumPy 1.0" in October 2006.
 
 He had no idea he was building the foundation for the AI revolution.
-
-> "I just needed to process telescope data. I never imagined that the same operations—matrix multiplication, broadcasting, vectorization—would become the core primitives of deep learning."
-> — Travis Oliphant, NumPy creator and founder of Anaconda
 
 Modern ML software stacks rely heavily on array operations and numerical kernels descended from the scientific Python ecosystem.
 
@@ -36,7 +33,7 @@ By the end of this module, you will:
 
 ## Introduction: The Scientific Python Ecosystem
 
-You've spent 24 modules building AI applications using APIs, frameworks, and high-level tools. Now we're going deeper. **Phase 6** is about understanding how neural networks actually work—not just using them, but building them from scratch.
+You've spent earlier modules building AI applications using APIs, frameworks, and high-level tools. Now we're going deeper. **Phase 6** is about understanding how neural networks actually work—not just using them, but building them from scratch.
 
 But before we can build neural networks, we need the right tools. Imagine trying to build a house with your bare hands versus having power tools. NumPy, pandas, and matplotlib are your power tools for machine learning.
 
@@ -60,21 +57,23 @@ This led to a snowball effect:
 
 Each library attracted more users. More users meant more contributors. More contributors built more libraries. By 2020, Python's ML ecosystem was so extensive that switching to another language meant abandoning thousands of battle-tested tools.
 
+> **Landscape snapshot — ecosystem state as of 2026-06; verify before relying.**
+
 **The Network Effect**
 
-Today, Python's dominance is self-reinforcing:
-- Job postings require Python → Students learn Python
-- Research papers use Python → Practitioners use Python
-- Libraries are written in Python → New tools support Python first
+Today, Python is widely used across ML workflows because its ecosystem compounds:
+- Job postings often require Python → Students learn Python
+- Research papers often use Python → Practitioners use Python
+- Libraries are written in Python → New tools commonly support Python early
 
-The few alternatives that exist (Julia, R, MATLAB) are fighting an uphill battle against this network effect. Even Julia, which is genuinely faster than Python for many tasks, struggles to build ecosystem momentum.
+Alternatives exist (Julia, R, MATLAB), each with tradeoffs. Julia can be faster than Python for many tasks, R remains strong in statistics, and MATLAB remains common in some engineering settings, while Python's library depth makes switching costly.
 
-### Why Python Dominates ML/AI
+### Why Python Is Common in ML/AI
 
-In 2024, Python handles:
-- Python is used in a large share of machine-learning projects
-- Python is one of the dominant languages in modern data-science workflows
-- The major deep-learning frameworks expose mature Python interfaces
+As of this 2026-06 snapshot, Python commonly supports:
+- Large shares of machine-learning project work
+- Many modern data-science workflows
+- Mature interfaces for major deep-learning frameworks
 
 But Python is slow! Pure Python loops are often much slower than optimized native code. So how does it dominate computationally intensive ML?
 
@@ -109,11 +108,9 @@ In the early 2000s, Python had a problem: TWO competing array libraries.
 
 The community was split. Code written for one library wouldn't work with the other. It was chaos.
 
-Enter **Travis Oliphant**, a grad student at the Mayo Clinic who needed both libraries' features. In 2005, he did something audacious: he merged them into **NumPy**.
+Enter **Travis Oliphant**, working in biomedical imaging and scientific Python at the Mayo Clinic, who needed both libraries' features. In 2005, he did something audacious: he merged them into **NumPy**.
 
-> "I had about 3 months of time between finishing my PhD and starting my new job. I thought, 'How hard can it be?'" — Travis Oliphant
-
-It took him those 3 months, working 80-hour weeks, rewriting both libraries into one cohesive package. NumPy 1.0 was released in 2006.
+NumPy unified competing APIs and became one cohesive package. NumPy 1.0 was released in 2006.
 
 **The impact**: NumPy became the foundation for all of scientific Python. pandas, scikit-learn, TensorFlow, PyTorch—all built on NumPy arrays.
 
@@ -452,13 +449,7 @@ print(f"Vectorized: {time.time() - start:.3f}s")  # ~0.05s
 
 This is why machine learning frameworks often transpose matrices or specify column-major ("Fortran-style") order for certain operations.
 
-### Production War Story: The $3 Million Cache Miss
-
-A hedge fund's trading algorithm was mysteriously slow. Their quantitative team had spent months optimizing the math—better signal processing, smarter predictions. But the system was still 10x slower than competitors.
-
-The problem? Their feature matrix was stored column-major (Fortran-style), but their code iterated row-by-row. Nearly every data access caused a cache miss. The CPU spent more time fetching data than computing.
-
-The fix was two characters: changing `np.array(data, order='F')` to `np.array(data, order='C')`. Trading latency dropped from 50ms to 5ms. In latency-sensitive systems, memory-layout fixes can have meaningful business impact.
+**Hypothetical scenario:** A team profiles a feature-generation job and discovers the math is not the bottleneck. The feature matrix is stored in column-major order, but the hot loop walks it row by row, so each access jumps across memory and defeats CPU caching. Rebuilding the array with row-major layout, or rewriting the loop to follow the stored layout, can turn a slow path into a predictable one without changing the model at all.
 
 > **Lesson learned**: Profile your code. The bottleneck is almost never where you think it is.
 
@@ -593,7 +584,7 @@ df.dropna()            # Drop rows with any missing
 df.dropna(subset=['age'])  # Drop rows missing age
 df.fillna(0)           # Fill missing with 0
 df.fillna(df.mean())   # Fill with column means
-df.fillna(method='ffill')  # Forward fill
+df.ffill()  # Forward fill
 
 # Duplicates
 df.duplicated()        # Boolean mask
@@ -796,7 +787,7 @@ plt.barh(categories, values)  # Horizontal
 plt.hist(data, bins=30, density=True)  # density=True normalizes
 
 # Box plot
-plt.boxplot([data1, data2, data3], labels=['A', 'B', 'C'])
+plt.boxplot([data1, data2, data3], tick_labels=['A', 'B', 'C'])
 
 # Pie chart (use sparingly!)
 plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
@@ -1018,32 +1009,26 @@ df = pd.read_csv('large_file.csv', dtype={'status': 'category'})
 
 ## Production War Stories: pandas at Scale
 
-### The Data Scientist Who Crashed Production
-
-A data scientist at a fintech company wrote a feature engineering pipeline that worked perfectly in development. On 100,000 rows, it ran in 3 seconds.
-
-In production, with 50 million rows, the system crashed. Not slow—*crashed*. The server ran out of memory.
-
-The culprit? A single line: `df.apply(custom_function, axis=1)`. The function created intermediate strings, and pandas kept them all in memory. At production scale, row-wise apply patterns can create large temporary-object spikes and exhaust memory.
+**Hypothetical scenario:** A feature-engineering pipeline works in development, then fails when the dataset grows beyond what the machine can hold in memory. The culprit is a row-wise `df.apply(custom_function, axis=1)` that creates many temporary Python strings and objects. At larger scale, those temporaries can spike memory even before the final output column is materialized.
 
 **The fix**: Vectorization.
 
 ```python
-# BEFORE: apply() creating millions of temporary objects
+# BEFORE: apply() creating many temporary objects
 def calculate_risk(row):
     if row['amount'] > 10000:
         return f"HIGH:{row['category']}"
     else:
         return f"LOW:{row['category']}"
 
-df['risk'] = df.apply(calculate_risk, axis=1)  # 10 GB memory, 45 minutes
+df['risk'] = df.apply(calculate_risk, axis=1)
 
 # AFTER: Vectorized with np.where
 df['risk'] = np.where(
     df['amount'] > 10000,
     'HIGH:' + df['category'].astype(str),
     'LOW:' + df['category'].astype(str)
-)  # 200 MB memory, 3 seconds
+)
 ```
 
 ### The Billion-Row Challenge
@@ -1077,9 +1062,9 @@ TensorFlow 1.x had a data loading bottleneck. Input pipelines can become a train
 
 Google's fix: **tf.data**, a pipeline that prefetches data while the GPU computes. The secret sauce? It uses the same memory layout principles as NumPy—contiguous arrays that can be transferred to GPU memory efficiently.
 
-> ** Did You Know?**
+> **Did You Know?**
 >
-> The largest pandas DataFrame ever created (that we know of) was at Jane Street Capital—a quantitative trading firm. Large event-stream datasets can reach billions of rows, where engine and storage-format choices dominate performance. They used chunked loading, memory-mapped files, and 2TB of RAM. Processing a single backtest query against this DataFrame took 12 minutes. After converting to Apache Arrow format with Polars (a Rust-based DataFrame library), the same query took 8 seconds.
+> Large event-stream datasets can reach billions of rows, where engine and storage-format choices dominate performance. Columnar formats such as Apache Arrow and engines such as Polars can speed up analytical scans by reducing Python-object overhead and improving cache-friendly column access.
 
 ---
 
@@ -1204,6 +1189,7 @@ print(f"Determinant: {det:.2e}")  # Often very large!
 ```python
 import pandas as pd
 import seaborn as sns
+import numpy as np
 
 # Load from seaborn's built-in datasets
 df = sns.load_dataset('titanic')
@@ -1388,7 +1374,7 @@ import polars as pl
 df = pl.scan_csv('large_file.csv')  # Doesn't read yet
 result = (
     df.filter(pl.col('amount') > 1000)
-    .groupby('category')
+    .group_by('category')
     .agg([
         pl.col('amount').sum().alias('total'),
         pl.col('amount').mean().alias('avg')
@@ -1446,9 +1432,9 @@ result = gdf.groupby('category')['value'].mean()  # Computed on GPU
 
 For datasets that fit in GPU memory, RAPIDS can deliver large speedups on some workloads. The catch: you need an NVIDIA GPU, and not all pandas features are supported.
 
-### The Data Science Stack in 2025
+### Data Science Stack Snapshot
 
-Here's what the modern Python ML stack looks like:
+Here's what a common modern Python ML stack can look like as of the 2026-06 snapshot:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1478,7 +1464,7 @@ Apache Arrow has become an important interchange format across modern data tools
 
 ## Performance Benchmarks: Know Your Tools
 
-Understanding relative performance helps you choose the right tool:
+Understanding relative performance helps you choose the right tool. Treat the numbers below as illustrative, workload-dependent comparisons rather than stable benchmark claims:
 
 ### Illustrative Operation Speed Comparison
 
@@ -1549,7 +1535,7 @@ You've now mastered the three pillars of Python's ML ecosystem:
 
 5. **The ecosystem is evolving**: Polars, JAX, and Arrow are reshaping the landscape. Stay curious about new tools, but master the fundamentals first.
 
-With these tools, you're ready to build neural networks from scratch in Module 26. The NumPy operations you've learned—matrix multiplication, broadcasting, vectorization—are exactly what neural networks need.
+With these tools, you're ready to build neural networks from scratch in later modules in this track. The NumPy operations you've learned—matrix multiplication, broadcasting, vectorization—are exactly what neural networks need.
 
 ---
 
@@ -1668,7 +1654,6 @@ def create_features(df):
 
 ## Did You Know? Fun Facts
 
-### The Billion-Dollar Bug
 ### NumPy in Space
 Scientific-imaging and astronomy workflows commonly rely on NumPy-based tooling. The famous first images required processing petabytes of data through NumPy arrays. When you see those stunning space images, you're seeing NumPy at work.
 
@@ -1686,12 +1671,6 @@ with plt.xkcd():
 ### The Hadley Wickham Effect
 Hadley Wickham created R's ggplot2 and tidyverse. His influence on data science was so strong that Python libraries started copying his approach. seaborn's "grammar of graphics" is directly inspired by ggplot2.
 
-### The Secret NumPy Test at Google
-
-Strong NumPy fundamentals are often treated as a useful proxy for practical ML engineering ability. Candidates who used Python loops instead of vectorized operations for a simple matrix problem were typically flagged quickly. The reasoning? If you don't understand vectorization, you don't understand how neural networks actually compute—and you'll write training code that's 100x slower than necessary.
-
-While Google has likely evolved their interview process, the principle remains: NumPy proficiency is a proxy for understanding computational thinking at scale.
-
 ### Travis Oliphant's Dual Legacy
 
 Travis Oliphant didn't just create NumPy. In 2012, he founded Continuum Analytics (now Anaconda), which created:
@@ -1701,19 +1680,15 @@ Travis Oliphant didn't just create NumPy. In 2012, he founded Continuum Analytic
 
 His work touches virtually every data scientist's daily workflow. When you type `conda install` or `import numpy`, you're using his creations.
 
-### The Matplotlib Rebellion
+### Matplotlib and Seaborn
 
-In 2013, a group of frustrated matplotlib users started a project called **seaborn**. They wanted "high-level statistical visualization"—defaults that were beautiful instead of ugly, APIs that were intuitive instead of verbose.
-
-The project's creator, Michael Waskom, was a neuroscience PhD student at Stanford. He built seaborn because he was tired of writing 50 lines of matplotlib code for simple plots. His frustration became the community's solution.
+Michael Waskom created **seaborn**, with its first release in 2012, to provide a higher-level interface for statistical visualization on top of matplotlib. It focused on better statistical defaults, convenient dataset-aware APIs, and plots that were faster to express for exploratory data analysis.
 
 Today, seaborn's success has pushed matplotlib to improve. The gap between them has narrowed, but seaborn remains the go-to for quick statistical plots.
 
-### The $10 Million Library
+### Open-Source Leverage
 
-pandas has created substantial economic value by reducing the time required for routine data-wrangling work. With an estimated 5 million pandas users, each saving perhaps 100 hours per year compared to manual data manipulation, and valuing their time at $50/hour... the math adds up.
-
-And pandas is free. This is the magic of open source: billions of dollars in value, available to anyone who types `import pandas`.
+pandas has created substantial economic value by reducing the time required for routine data-wrangling work. And pandas is free. This is the magic of open source: useful infrastructure, available to anyone who types `import pandas`.
 
 ### The Fortran Connection You Didn't Know About
 
@@ -1785,7 +1760,7 @@ Use chunked processing with `pd.read_csv(..., chunksize=...)`. The module descri
 <!-- /v4:generated -->
 ## Next Steps
 
-With NumPy, pandas, and visualization mastered, you're ready for **Module 26: Neural Networks from Scratch**.
+With NumPy, pandas, and visualization mastered, you're ready for later modules in this track on neural networks from scratch.
 
 You'll use these exact tools to:
 - Create weight matrices with NumPy
@@ -1796,7 +1771,7 @@ The foundation is laid. Now let's build neural networks!
 
 ---
 
-_Module 25 Complete! You now have the tools for machine learning._
+_Module complete! You now have the tools for machine learning._
 
 ****
 

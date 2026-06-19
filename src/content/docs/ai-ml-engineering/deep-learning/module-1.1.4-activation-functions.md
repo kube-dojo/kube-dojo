@@ -486,4 +486,4 @@ print(f"Backward Output: {grad}")
 
 ## Next Module
 
-The next module in this from-scratch arc is **A5 — Loss Functions & Output Heads** (not yet published in this track). Continue the sequence from the [Deep Learning section index](/ai-ml-engineering/deep-learning/), where new modules appear as the wave lands.
+The next module in this from-scratch arc is **A5 — [Loss Functions & Output Heads](/ai-ml-engineering/deep-learning/module-1.1.5-loss-functions-output-heads/)**. Continue the sequence from the [Deep Learning section index](/ai-ml-engineering/deep-learning/), where new modules appear as the wave lands.
