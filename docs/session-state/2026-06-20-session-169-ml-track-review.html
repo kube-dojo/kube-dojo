@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 169 — #2020 machine-learning track review complete (19/19)</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:1.8rem}
+  code{background:#0d1626;padding:.1rem .35rem;border-radius:4px;color:#c9d6e6}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:4px solid var(--accent);padding:1rem;border-radius:6px}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top;font-size:.92rem}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+  ul{margin:.4rem 0}li{margin:.25rem 0}
+  .pill{display:inline-block;background:#0d1626;border:1px solid var(--bd);border-radius:999px;padding:.05rem .55rem;font-size:.82rem;color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>Session 169 — #2020 machine-learning track review complete (19/19)</h1>
+<p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s168 (deep-learning 27/27).</strong>
+Cross-family reviewed all 19 <code>ai-ml-engineering/machine-learning</code> modules — the track #2020 named NEXT.
+14 clean APPROVE, 3 NEEDS_CHANGES (real code P1s) fixed + verified, 2 mis-slotted legacy modules discovered &amp;
+fully rewritten. 1 stale-reviewer false-positive caught via web-verify. 3 PRs merged (#2038 fixes, #2039 1.6 rewrite,
+#2040 1.12 rewrite) + 19 APPROVE records finalized (<code>e8bf3c470</code>). #2020 ML track DONE.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>PR</th><th>Content</th><th>Status</th></tr>
+<tr><td>#2038</td><td>Review fixes: 1.8 DBSCAN, 1.10 IncrementalPCA+UMAP, 2.4 <code>implicit</code> int32, 1.1 sources gate</td><td class="ok">MERGED</td></tr>
+<tr><td>#2039</td><td>1.6 <strong>XGBoost &amp; Gradient Boosting</strong> — full rewrite (mis-slotted legacy)</td><td class="ok">MERGED</td></tr>
+<tr><td>#2040</td><td>1.12 <strong>Time Series Forecasting</strong> — full rewrite (mis-slotted legacy)</td><td class="ok">MERGED</td></tr>
+<tr><td>—</td><td>19 <code>.pipeline/reviews/</code> APPROVE records</td><td class="ok">finalize <code>e8bf3c470</code> (direct-main)</td></tr>
+</table>
+
+<h2>Review scoreboard (17 reviewable + 2 rewrites)</h2>
+<ul>
+<li><strong class="ok">APPROVE (14):</strong> 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.9, 1.11, 2.1, 2.2, 2.3, 2.5, 2.6, 2.7</li>
+<li><strong class="warn">NEEDS_CHANGES → fixed (3):</strong> 1.8, 1.10, 2.4 (PR #2038)</li>
+<li><strong class="accent">REWRITES (2):</strong> 1.6 (PR #2039), 1.12 (PR #2040)</li>
+</ul>
+<p>Reviewers (mixed family, every P1 ground-checked by orchestrator): <span class="pill">codex/OpenAI — executed sklearn labs</span> <span class="pill">cursor/Kimi — executed labs</span> <span class="pill">deepseek/DeepSeek</span>. agy flaked (returned a conversational non-review) → re-routed to cursor.</p>
+
+<h2>The 3 blocking P1s (all reproduced + fix-verified locally)</h2>
+<ul>
+<li><strong>1.8 DBSCAN</strong>: lab used <code>make_moons()</code> default (n=100, clean) with <code>eps=0.3/min_samples=10</code> → printed <code>Clusters found: 0, Noise points: 100</code> — the <em>opposite</em> of the density-clustering lesson. Fixed to <code>make_moons(n_samples=300, noise=0.08)</code> → 2 clusters, 3 noise (empirically verified; hands-on synced).</li>
+<li><strong>1.10 IncrementalPCA</strong>: <code>stream_of_batches()</code> undefined → <code>NameError</code>. Replaced with a concrete runnable generator. Also corrected a self-contradiction (prose called UMAP a non-generalizing "visualization tool" while the module documents <code>UMAP.transform()</code>), added the <code>umap-learn</code> install note, softened an unscoped "faster" claim.</li>
+<li><strong>2.4 recommenders</strong>: <code>PopularityRecommender</code> returned int64 IDs (<code>np.argsort</code>, NumPy 2.x) into <code>implicit</code>'s Cython <code>ndcg_at_k</code> expecting int32 → <code>ValueError: Buffer dtype mismatch</code>. Reproduced the crash + verified <code>np.int32</code> cast fixes it (ndcg=0.1125). Added HKV→<code>implicit</code> API-mapping clarification.</li>
+</ul>
+
+<h2>Two mis-slotted legacy modules (filenames lied about content)</h2>
+<ul>
+<li><strong>1.6</strong> (slug <code>xgboost-gradient-boosting</code>) held time-series-with-boosting content on the legacy War-Stories/Economics template, version claims woven into prose ("scikit-learn 1.8.0 released Dec 2025", "XGBoost 3.2.0"), "Amazon: 300M Forecasts Daily". → rewritten (cursor) as the XGBoost <em>algorithm</em> module: boosting mechanics, three libraries as <strong>peers</strong>, hyperparameters, leakage-safe early stopping, monotonic/categorical, SHAP. codex R1 NEEDS_CHANGES (categorical <code>astype</code> TypeError, early-stopping demo never stopped, gblinear deprecation) → all fixed/verified. T0.</li>
+<li><strong>1.12</strong> (slug <code>time-series-forecasting</code>) held AutoML/Feature-Store content ("The Intern Who Beat the Team", Feast/AutoGluon, "$50M Inventory Mistake"). → rewritten (codex) as Time Series Forecasting: stationarity/ACF/PACF, ARIMA/SARIMA/ETS/Prophet, ML-as-regression, walk-forward backtesting. cursor R1 APPROVE — <em>executed every lab end-to-end</em> (arima MASE 0.376 vs seasonal-naive 1.239). 3 P2 polish fixed. T0.</li>
+</ul>
+<p>Both off the fabrication template, onto the durable spine, with dated <code>Landscape snapshot</code> callouts. Web-verified current versions: <strong>sklearn 1.9.0, XGBoost 3.3.0, LightGBM 4.6.0, statsmodels 0.14.6, prophet 1.3.0</strong>.</p>
+
+<h2 class="bad">Headline finding — a stale reviewer flagged CURRENT content as fabrication</h2>
+<p>deepseek marked module <strong>1.2</strong> NEEDS_CHANGES, calling its sklearn <code>penalty</code> deprecation + <code>multi_class</code> removal an "invented" fabrication. <strong>Web-verify against the scikit-learn 1.9.0 docs proved both are real and current</strong> (<code>penalty</code> deprecated in 1.8 → removal 1.10, migrate to <code>l1_ratio</code>+<code>C</code>; <code>multi_class</code> removed). The reviewer's knowledge predated sklearn 1.8. <strong>1.2 was correctly left unchanged — a "fix" would have introduced staleness into accurate content.</strong> This is the canonical "verify both ways / ground-check every P1" failure mode (reviewers invent removed features AND deny real new ones). Recorded in the 1.2 review record + #2038 PR body.</p>
+
+<h2>Operational notes / gotchas</h2>
+<ul>
+<li><strong>verify_module body_words is prose-only</strong> — code-heavy modules (1.1 @ 2131, 1.6 @ 5024) legitimately undershoot the prose floor; that's not a stub. Judge pedagogical completeness, not prose-word-count. The <code>sources_all_reachable</code> tier flickers on network blips (1.6 read T2/4696 then T0/5024 minutes later).</li>
+<li><strong>Reading inside <code>.worktrees/</code> re-injects the full CLAUDE.md + rules bundle</strong> (~15-20K tokens). For worktree files use <code>git show</code>/<code>sed</code> + a Bash-python edit with single-occurrence assertions, not Read/Edit. (Headroom also compresses the displayed file text — match on code/identifier anchors, not prose word-for-word.)</li>
+<li><code>## Learner check</code> merge hook requires a verbatim module blockquote (≥30 chars) in the PR body — add at create time (cost a blocked merge).</li>
+<li>ML modules are NOT on the v2 pipeline board (<code>stage: None</code>) → no COMMITTED flip; the deliverable is the <code>.pipeline/reviews/</code> APPROVE records (gitignored → <code>git add -f</code>, finalize-to-done direct-on-main per precedent).</li>
+<li>#2030 still live: omit <code>--worktree</code> for read-only reviews (agy/deepseek).</li>
+</ul>
+
+<h2>NEXT</h2>
+<ul>
+<li><strong>#2020 remaining AI/ML:</strong> synthesis-apps (4), ai-infrastructure (3), reinforcement-learning (2), advanced-genai (1) → then scattered cloud/platform (on-prem 6, platform-disciplines-data-ai-mlops 6, cloud-azure 5, etc.). Same cadence: ≤3 mixed-family reviewers (codex executes labs), ground-check every P1, consolidated fix PR, finalize records.</li>
+<li><strong>#1911 UK translation currency</strong> — largest remaining curriculum stream (~14% current).</li>
+<li><strong>#1876 AI-history book</strong> review (73 chapters) — separate epic.</li>
+<li>Continuous-improvement What's-New post (software-watchlist refresh).</li>
+<li>Reusable briefs in <code>logs/remediation/briefs/quality-coverage/</code> (<code>_ml-brief-body.md</code>, <code>_ml-rewrite-*.md</code>, <code>_ml-write-review-records.py</code>).</li>
+</ul>
+</body>
+</html>
