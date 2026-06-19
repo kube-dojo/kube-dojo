@@ -574,12 +574,12 @@ As a capstone habit, keep a single page in your lab notebook with three columns:
 Each node's `_backward` distributes `out.grad` to parents. That `out.grad` must already include contributions from **all** nodes that consume `out`. Reverse topological order ensures every consumer runs before the producer's backward closure. Running early would partial-sum upstream gradients and under-estimate parent gradients, especially on shared nodes.
 </details>
 
-2. **For expression `y = x * x + x`, your engine returns `x.grad = 6` at `x = 3`. What implementation bug does that indicate?**
+2. **For expression `y = x * x + x`, your engine returns `x.grad = 3` at `x = 3`. What implementation bug does that indicate?**
 
 <details>
 <summary>Answer</summary>
 
-The analytic gradient is `2x + 1 = 7`. A result of `6` means one path contributed (`2x`) but the `+ x` path's unit contribution was dropped — classic **assignment instead of accumulation** or an addition backward that never ran. Fix local `_backward` to use `+=` and verify both edges from `x` are in the graph.
+The analytic gradient is `2x + 1 = 7`. A result of `3` means the local `_backward` methods used **assignment (`=`) instead of accumulation (`+=`)**: each write overwrote the previous one, so only the last contribution survived — the multiply branch `out.grad * x.data = 1 * 3 = 3` — wiping out both the addition's `+1` and the multiply's other branch. Fix every local `_backward` to use `+=` so contributions from all paths and all edges sum.
 </details>
 
 3. **A model has one million parameters and one scalar cross-entropy loss. Why is reverse-mode automatic differentiation preferred over forward-mode AD for training?**

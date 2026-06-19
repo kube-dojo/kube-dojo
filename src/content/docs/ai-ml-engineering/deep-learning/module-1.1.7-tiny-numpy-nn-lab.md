@@ -125,6 +125,10 @@ bug:
 ```python
 import numpy as np
 
+def sigmoid(z):
+    z_clipped = np.clip(z, -500, 500)
+    return 1.0 / (1.0 + np.exp(-z_clipped))
+
 def train_loop(model, X_train, y_train, loss_fn, epochs, batch_size, lr, rng=None):
     """Mini-batch SGD loop for an MLP model (see Part 8)."""
     if rng is None:
@@ -176,8 +180,9 @@ hand-derived chain rule you coded layer by layer; each `Layer` caches its own ac
 `model.parameters()` — plain SGD with no momentum or Adam yet. Nothing here is new mathematics
 — it is the same `dW` and `db` tensors your `Layer.backward()` populated, now applied on every
 mini-batch instead of a single toy example. When you run this loop, watch the printed loss:
-epoch 1 should be near `ln(K)` for `K` classes (Part 7.2), then trend downward if forward,
-backward, and update are wired correctly.
+for multiclass softmax-CE, epoch 1 should be near `ln(K)` for `K` classes (Part 7.2). For the
+single-logit binary BCE branch, the comparable random-start loss is near `ln(2)` (~0.693). Either
+case should trend downward if forward, backward, and update are wired correctly.
 
 Three implementation details deserve explicit attention because they are the most common silent
 bugs in student trainers. First, the loss is multiplied by `len(batch_idx)` before accumulating
@@ -224,6 +229,13 @@ block, re-run the finite-difference check from A4 on a single batch: numerical g
 `(probs - y_onehot) / N` should agree within floating-point tolerance.
 
 ### 1.4 The `Layer` with backward
+
+> **Standalone lab API**
+>
+> This capstone lab uses a self-contained, simplified `nn.py` with function-based activations
+> (`relu`, `relu_deriv`, and friends) and standalone loss functions. Use this lab's version here
+> rather than your cumulative A6/A5 `Activation` and `Loss` interfaces; the goal is a runnable
+> end-to-end training lab, not API continuity.
 
 The `Layer` class from A2/A3 holds `W`, `b`, `Z`, and `A`. For the training loop we extend
 it with a `backward(dA)` method that computes gradients with respect to `W`, `b`, and the
@@ -559,7 +571,7 @@ for epoch in range(epochs):
         A_val = layer.forward(A_val)
     v_loss, _ = softmax_cross_entropy(A_val, y_val_oh)
     val_losses.append(v_loss)
-    val_acc = (A_val.argmax(axis=1) == y_val.argmax(axis=1)).mean()
+    val_acc = (A_val.argmax(axis=1) == y_val).mean()
     val_accs.append(val_acc)
 
     if epoch % 60 == 0 or epoch == epochs - 1:
@@ -582,7 +594,7 @@ The validation set serves a specific purpose that the training loss alone cannot
 training loss always decreases (or at least trends downward) because SGD directly optimises
 it. The validation loss is the honest signal: if it stops decreasing while the training loss
 continues to fall, the model is memorising noise in the training set rather than learning
-general patterns. For two-moons with 300 samples and noise 0.15, a 2×16×16×2 MLP should
+general patterns. For two-moons with 600 samples (300 per moon) and noise 0.15, a 2×16×16×2 MLP should
 achieve >95% accuracy on both train and validation sets, with the gap between them staying
 below a few percentage points.
 
@@ -607,7 +619,7 @@ backward. That separation is deliberate: in Block B you will replace Keras loadi
 `torchvision.datasets.FashionMNIST` while keeping the same normalise-flatten-one-hot recipe:
 
 ```python
-# Data loading — requires: pip install tensorflow  (or keras directly)
+# Data loading — requires tensorflow >=2.x (`pip install tensorflow`), which exposes keras.datasets.
 # If you do not have Keras, you can download the raw IDX files from
 # https://github.com/zalandoresearch/fashion-mnist and parse them with
 # numpy.frombuffer — but the Keras loader is the standard route.
