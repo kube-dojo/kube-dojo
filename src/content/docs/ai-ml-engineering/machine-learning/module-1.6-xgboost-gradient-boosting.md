@@ -1,1677 +1,937 @@
 ---
 title: "XGBoost & Gradient Boosting"
+description: "Learn how gradient boosting fits shallow trees to pseudo-residuals, compare scikit-learn HistGradientBoosting, XGBoost, and LightGBM as peers, and control overfitting with regularization and leakage-safe early stopping."
 slug: ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting
 sidebar:
   order: 6
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours
+> Track: AI/ML Engineering | Complexity: `[COMPLEX]` | Time: 90-120 minutes
+> Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), and [Module 1.5: Decision Trees & Random Forests](../module-1.5-decision-trees-and-random-forests/).
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
-- **Design** distributed training workflows using XGBoost 3.2.0 on CPU clusters via Dask.
-- **Evaluate** the performance of scikit-learn's `HistGradientBoostingRegressor` against classical statistical models for sequential tabular data.
-- **Diagnose** data leakage and target look-ahead bias in temporal feature engineering pipelines.
-- **Debug** convergence issues, flat-line predictions, and monotonic constraint violations in gradient boosting trees.
-- **Implement** robust forecasting pipelines combining classical statistics, tree-based models, and modern deep learning methodologies.
+1. **Implement** a leakage-safe gradient boosting workflow with a held-out validation surface or
+   cross-validation folds, early stopping, and explicit metric reporting rather than default
+   `score()` output.
+
+2. **Compare** scikit-learn `HistGradientBoostingClassifier`, XGBoost, and LightGBM on growth
+   policy, categorical handling, missing-value behavior, distributed execution options, and
+   regularization knobs — without treating any library as a universal winner.
+
+3. **Diagnose** overfitting in boosted trees by reading learning curves, `n_estimators` versus
+   `learning_rate` tradeoffs, and validation-metric plateaus rather than training-set accuracy alone.
+
+4. **Configure** monotonic constraints and native categorical feature handling when business rules or
+   high-cardinality encoded columns make naive one-hot expansion expensive or misleading.
+
+5. **Evaluate** global feature-importance claims for boosted trees, explain why impurity-based
+   rankings are biased, and justify when TreeSHAP from [Module 2.2: ML Interpretability + Failure
+   Slicing](../module-2.2-interpretability-and-failure-slicing/) is the more trustworthy attribution
+   tool.
 
 ## Why This Module Matters
 
-Large logistics and operations teams sometimes move from per-series statistical models to global tree-based models when they need to forecast many related series with shared calendar, weather, and operational effects.
+**Hypothetical scenario:** A pricing team already has a calibrated logistic regression from [Module
+1.2](../module-1.2-linear-and-logistic-regression-with-regularization/) and a Random Forest from
+[Module 1.5](../module-1.5-decision-trees-and-random-forests/). Both models respect the evaluation
+contract from [Module 1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/). The
+forest captures local interaction pockets that the linear model misses, but the product owner still
+sees a stubborn error band on mid-tier customers where tenure, usage intensity, and support-contact
+history interact in ways no single split can stabilize. The team does not need a new feature
+engineering story. They need a model family that keeps improving predictions by focusing each new
+tree on what the current ensemble still gets wrong.
 
-With well-engineered lag and rolling features, boosted tree models can improve operational forecasts and reduce the manual overhead of brittle classical pipelines when the data contains missing values and nonlinear calendar effects.
+That is the gradient boosting lane. Where Random Forests average many independent trees trained on
+bootstrap samples to reduce variance, boosting builds an additive model in stages. Each new shallow
+tree is trained to correct the remaining error of the ensemble so far. The result is often the
+strongest default choice for medium-to-large tabular classification and regression problems when you
+have mixed numeric and categorical signals, missing values, and nonlinear interactions — provided
+you regularize it honestly and evaluate it without leakage.
 
-Understanding how to bridge the rigid world of Gradient Boosting with the fluid nature of classical time series gives you a massive competitive advantage as an AI/ML Engineer. It represents the intersection of structured tabular mastery and temporal sequence awareness. If you can translate temporal relationships into tabular features, you can apply the sheer computational force of modern boosting libraries to almost any real-world forecasting or anomaly detection problem.
+This module is not a product tour of one library. XGBoost is the name many teams say first, but
+production tabular stacks routinely include scikit-learn's histogram booster for sklearn-native
+pipelines, XGBoost for mature distributed training integrations, and LightGBM when leaf-wise growth
+and categorical handling match the workload. Your job is to understand the shared algorithm, the
+library tradeoffs, and the operational guardrails — early stopping, monotonic constraints, and
+interpretation discipline — that keep boosted trees from becoming pretty leaderboard numbers with
+fragile deployment behavior.
 
-## The Gradient Boosting Revolution
+> **The correction relay analogy**
+>
+> Imagine a relay team where each runner only sees the remaining distance error left by the previous
+> runners. Runner one gets you most of the way. Runner two does not repeat runner one's work; runner
+> two targets the gap. Runner three targets whatever gap remains after runner two. Gradient boosting
+> is that relay on pseudo-residuals: each shallow tree chases the negative gradient of the loss left
+> by the ensemble built so far. The learning rate shrinks each runner's contribution so later trees
+> refine instead of thrashing.
 
-Gradient boosting builds an ensemble of shallow decision trees sequentially. Each new tree focuses exclusively on correcting the residual errors left behind by the previous trees. Modern frameworks have heavily optimized this mathematical approach for scale and hardware acceleration, abandoning the exhaustive search approaches of early implementations.
+## Section 1: Gradient Boosting Mechanics
 
-### The Foundation: scikit-learn 1.8.0
+Gradient boosting is forward stagewise additive modeling. You maintain a prediction function
+`F_m(x)` after `m` stages. Stage `m + 1` adds a weak learner `h_{m+1}(x)`, usually a shallow
+decision tree, that points in the direction that most reduces the loss on the training sample. For
+squared error regression, the negative gradient of the loss with respect to the current prediction
+is simply the residual `y - F_m(x)`. Each new tree is fit to those pseudo-residuals. For
+classification and other losses, the pseudo-residuals come from the loss gradient with respect to
+the model's raw margin or score, not from literal label minus probability in every case.
 
-Released in December 2025, scikit-learn 1.8.0 establishes a robust foundation for modern machine learning pipelines. The classic `sklearn.ensemble.GradientBoostingRegressor` is an additive, forward stage-wise boosting model that fits trees on negative gradients. By default, it operates with `loss='squared_error'` and `n_estimators=100`. While highly accurate, this implementation evaluates every potential split point across all features, making it notoriously slow for massive datasets.
+The update rule with shrinkage adds each new weak learner's prediction scaled by the learning rate
+`eta`, so the ensemble grows by small corrections instead of lurching toward every residual spike in
+one step. In notation, the recurrence is `F_{m+1}(x) = F_m(x) + eta * h_{m+1}(x)`, where `F_m` is the
+model after `m` stages and `h_{m+1}` is the tree fit to pseudo-residuals at that stage.
 
-To solve this, engineers turn to `sklearn.ensemble.HistGradientBoostingRegressor`. Designed specifically for datasets where `n_samples >= 10_000`, this histogram-based variant bins continuous features into discrete intervals, drastically accelerating the training process. Version 1.8.0 also expands native Array API support and introduces compatibility with CPython 3.14 free-threading. By executing in a free-threaded Python environment, multi-core CPU inference can bypass the Global Interpreter Lock (GIL), enabling massive parallelism for real-time model serving.
+Here `eta` is the learning rate. A smaller learning rate makes each tree's contribution modest, which
+usually means you need more trees to reach the same training fit but often generalizes better. A
+larger learning rate converges faster in training steps but can overshoot useful regions of function
+space if you do not pair it with stronger regularization or early stopping.
 
-Furthermore, `HistGradientBoostingRegressor` allows developers to enforce physical realities through monotonic constraints. These constraints are encoded as `1` (strictly increasing), `0` (no constraint), and `-1` (strictly decreasing). For example, you can force the model to learn that as an item's price increases, predicted consumer demand must either stay flat or decrease, preventing the trees from overfitting to historical noise.
+Why shallow trees? A deep tree is a strong learner. Boosting theory and practice both lean on weak
+learners: models that are only slightly better than trivial baselines on the current pseudo-residual
+task. Shallow trees provide flexible local corrections without instantly memorizing noise. Depth
+three to six is a common operational band for tabular problems, but the right depth is always a
+validation question rather than a slogan.
 
-### Distributed Scale: XGBoost 3.2.0
+Contrast this with bagging from [Module
+1.5](../module-1.5-decision-trees-and-random-forests/). Random Forests train many trees in parallel
+on bootstrap samples and average their votes or means to reduce variance. Individual forest trees
+are intentionally decorrelated. Boosting trains trees sequentially. Later trees see the mistakes of
+earlier trees and are rewarded for fixing them. Bagging tames a high-variance base learner. Boosting
+reduces bias by composing many small corrections. That difference drives the bias-variance intuition:
+forests stabilize a volatile tree; boosting builds a richer function by iterating on residual
+structure.
 
-When datasets grow beyond the memory capacity of a single machine, engineers rely on XGBoost. XGBoost is an optimized distributed gradient boosting library licensed under Apache-2.0. It provides parallel tree boosting and is explicitly designed for seamless execution in distributed environments.
+Neither story replaces evaluation discipline. A boosted model can still leak if preprocessing uses
+future information, still overfit if you tune on the test split, and still produce miscalibrated
+probabilities if you skip the calibration checks from [Module
+1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/). The algorithm change does
+not relax any of those contracts.
 
-XGBoost 3.2.0 introduces several critical architectural capabilities required for modern deployments:
-- **Vector-Leaf Multi-Target Trees**: Trees can now output multi-dimensional vectors natively, eliminating the need for wrapper regressors when predicting multiple targets. Note that monotonic constraints are currently unavailable for vector outputs.
-- **Global Device Execution**: Hardware targeting is now controlled by the global `device` parameter, which defaults to `cpu`. It accepts specific targets like `cuda`, `cuda:<ordinal>`, `gpu`, and `gpu:<ordinal>`.
-- **Tree Construction Methods**: The `tree_method` parameter controls the splitting algorithm (`auto`, `exact`, `approx`, and `hist`). When set to `auto`, it is functionally equivalent to the highly optimized `hist` method.
-- **Gradient-Based Sampling**: This statistical optimization is now supported on both CPU and GPU for supported hardware configurations.
-- **CLI Deprecation**: The legacy command-line interface has been entirely removed as of 3.2.0, enforcing Python/C++ API usage.
+```text
+Bagging (Random Forest):          Boosting (gradient boosted trees):
 
-XGBoost distributes Python wheels across Linux (x86_64 and aarch64), Windows (x86_64), and macOS (x86_64 and Apple Silicon), with `pip install xgboost` remaining the canonical installation command. For GPU workloads, XGBoost requires CUDA 12.0 and compute capability 5.0. Models are structurally interoperable; a model trained on a heavy GPU cluster can be serialized and deployed for inference on lightweight CPU edges without modification. XGBoost has official distributed integrations for Dask, Spark, and PySpark, and these workloads can also be run in clustered environments such as Kubernetes.
-
-## Real-World Success Stories
-
-To understand the sheer power of gradient boosting in production environments, consider how top engineering organizations leverage these models at scale.
-
-**Amazon: 300 Million Forecasts Daily**
-Large retail forecasting systems operate at enormous scale, and global forecasting models can transfer useful signal across related products, locations, and seasons.
-
-**Industry Implementations**
-- Large mobility platforms often use tabular features such as route history, traffic, and weather to improve ETA prediction, but the exact model stack and latency profile depend on the system.
-- Gradient-boosted trees are widely used in fraud detection because they handle missing values well and can capture nonlinear interactions, though their performance should be measured against problem-specific baselines.
-- Content-demand forecasting often mixes short-term bursts with longer-term trend signals, and teams commonly combine localized time-series features with broader contextual indicators.
-- Grocery demand forecasting often uses hierarchical signals, perishability, substitutions, and weather features to reduce waste and stockouts.
-
-## Sequential Data: The Special Case for Boosting
-
-While XGBoost and `HistGradientBoostingRegressor` are the undisputed champions of tabular data, they are frequently adapted for sequences by applying sliding chronological windows. This technique converts raw temporal data into structured tabular features.
-
-> **Pause and predict**: If you feed an XGBoost model raw timestamps and target values, will it be able to extrapolate a trend into the future?
-> *Answer: No. Tree-based models cannot extrapolate values outside the range seen in training. You must engineer trend features or detrend the data first.*
-
-### What Makes It Special?
-
-Unlike static tabular data, the chronological order of sequential data is the primary source of truth. You cannot randomly shuffle the rows of a time series without destroying the underlying signal and introducing catastrophic data leakage.
-
-```mermaid
-graph TD
-    subgraph REGULAR TABULAR DATA
-    R1[Row 1: features --> label]
-    R2[Row 2: features --> label]
-    R3[Row 3: features --> label]
-    end
-    subgraph TIME SERIES DATA
-    T1[t=1: value1] --> T2[t=2: value2]
-    T2 --> T3[t=3: value3]
-    T3 --> T4[t=4: value4]
-    end
+  Tree1  Tree2  Tree3  Tree4        Tree1 -> residual
+     \    |    /   /                      |
+      \   |   /   /                   Tree2 -> residual
+       \  |  /   /                          |
+        [ average ]                     Tree3 -> residual
+                                              |
+                                         [ weighted sum ]
 ```
 
-Every temporal sequence can be mathematically decomposed into three distinct components:
+> **Pause and predict** — If you double `n_estimators` but leave the learning rate unchanged, will
+> validation metric always improve? Before reading on, decide whether more trees without more
+> regularization can hurt generalization.
 
-```mermaid
-graph TD
-    Orig[Original Signal] --> Trend[TREND long-term]
-    Orig --> Seas[SEASONALITY repeating]
-    Orig --> Res[RESIDUAL random noise]
-```
+The honest answer is no. After a point, additional trees fit noise in the pseudo-residuals. That is
+why early stopping and learning-rate pairing matter more than chasing the largest possible tree
+count. Teams that report only the final training loss curve often ship models that peaked on
+validation ten rounds earlier.
 
-**The Grocery Store Analogy**: Imagine tracking daily milk sales:
-- **Trend**: Sales slowly increasing as neighborhood population grows
-- **Seasonality**: Higher on weekends (families cook more), lower mid-week
-- **Weekly pattern**: People buy on payday (biweekly)
-- **Residual**: Random - maybe a recipe went viral on social media today
+### Bias, variance, and where boosting sits versus bagging
 
-This structural pattern appears across many engineering domains:
+[Module 1.5](../module-1.5-decision-trees-and-random-forests/) framed Random Forests as variance
+reduction machines: many decorrelated trees averaged together tame the instability of any single deep
+tree. Gradient boosting walks a different bias-variance path. Each stage reduces training error by
+adding capacity targeted at the remaining structure in the residuals. That tends to lower bias faster
+than bagging when interactions matter, but it also raises the risk of variance if you allow too many
+stages, too deep trees, or too large a learning rate without shrinkage.
 
-```mermaid
-graph TD
-    Where[Where Time Series Lives] --> Finance
-    Where --> Operations
-    Where --> IoT[IoT & Sensors]
-    Where --> Business
-    Finance --> F1[Stock prices hourly, daily]
-    Finance --> F2[Trading volumes]
-    Finance --> F3[Economic indicators]
-    Operations --> O1[Server load prediction]
-    Operations --> O2[Inventory forecasting]
-    Operations --> O3[Energy demand]
-    IoT --> I1[Temperature monitoring]
-    IoT --> I2[Equipment vibration]
-    IoT --> I3[Network traffic]
-    Business --> B1[Sales forecasting]
-    Business --> B2[Customer demand]
-    Business --> B3[Resource planning]
-```
+A shallow boosted ensemble can outperform a forest on the same features because it composes sequential
+corrections instead of averaging parallel guesses. A boosted ensemble that is too aggressive looks
+like the single unconstrained tree from Module 1.5: perfect on training, disappointing on validation.
+The debugging vocabulary is similar — depth, leaf population, subsampling — but the sequential
+dependency means later trees amplify earlier mistakes unless shrinkage and stopping discipline hold
+them in check.
 
-### Stationarity
+Neither bagging nor boosting removes extrapolation limits. Tree-based models still predict by routing
+rows through regions seen during training. Boosting sharpens within-region fits; it does not invent
+continuations beyond the support of numeric features. That distinction matters when stakeholders expect
+trend extrapolation from a model family that only memorizes partitions.
 
-A series is defined as strictly stationary if its statistical properties—specifically its mean, variance, and autocorrelation—remain constant over time. Most classical statistical models assume or require stationarity to generate valid predictions. While tree models like XGBoost handle non-stationarity slightly better because they can split nodes based on structural shifts, they still fail at trend extrapolation.
+When you benchmark against a Random Forest baseline, compare on the same metric, split, and seed
+policy. Forests train in parallel and expose OOB estimates; boosters train sequentially and usually
+need an explicit validation curve. A fair comparison acknowledges those operational differences instead
+of treating them as interchangeable runs of the same button.
 
-```mermaid
-graph TD
-    S1[STATIONARY Like a Calm Lake] --> S2[Mean, Variance constant]
-    NS1[NON-STATIONARY Like a River to Ocean] --> NS2[Properties change over time]
-```
+## Section 2: Three Libraries as Peers
 
-```python
-# Non-stationary: Yesterday's patterns don't apply to tomorrow
-# Because the underlying process is changing!
+Modern tabular gradient boosting in Python usually means one of three implementations. They share
+histogram-based split finding for speed on large numeric matrices, but they differ in API shape,
+growth policies, categorical handling, distributed integrations, and the exact names of regularization
+parameters. Treat them as peers with tradeoffs, not as a single winner and two runners-up.
 
-# Example: Stock price in 2020 vs 2024
-# - Different economic conditions
-# - Different company size
-# - Different market sentiment
-# Can't just extrapolate!
+### scikit-learn `HistGradientBoostingClassifier` and `HistGradientBoostingRegressor`
 
-# Solution: Make it stationary through DIFFERENCING
-# Instead of predicting price, predict CHANGE in price
-#
-# price_t → change_t = price_t - price_{t-1}
-```
+scikit-learn's histogram booster is the natural choice when the rest of your pipeline already lives
+inside sklearn `Pipeline` and `ColumnTransformer` objects from [Module
+1.1](../module-1.1-scikit-learn-api-and-pipelines/). It bins continuous features into histograms,
+evaluates splits on bins rather than every distinct value, and supports missing values natively during
+training. It also supports monotonic constraints through `monotonic_cst` and native categorical
+features through `categorical_features` without requiring an external encoding step for ordinally
+stored category columns.
 
-To mathematically verify stationarity, engineers use the Augmented Dickey-Fuller (ADF) test. The ADF test evaluates a null hypothesis that the series possesses a unit root (making it non-stationary).
+The estimator uses `max_iter` instead of `n_estimators`, `learning_rate` for shrinkage, and
+`max_depth` to cap tree depth. Early stopping is first-class: set `early_stopping=True`,
+`validation_fraction` to reserve an internal validation slice from the training data passed to
+`fit`, and `n_iter_no_change` to define the patience window. For leakage-safe workflows outside a
+simple holdout, prefer passing a manually created validation split or using cross-validation rather
+than repeatedly peeking at a final test set.
 
-```mermaid
-graph TD
-    A[ADF TEST INTERPRETATION] --> B[H0 Null: Non-stationary]
-    A --> C[H1 Alt: Stationary]
-    B --> D[p-value < 0.05: Reject H0, is stationary]
-    C --> E[p-value >= 0.05: Fail to reject, is non-stationary]
-```
+### XGBoost (`xgboost`)
 
-## Classical Baselines: ARIMA and Prophet
+XGBoost exposes both a low-level `xgboost.train` API with `DMatrix` objects and sklearn-compatible
+`XGBClassifier` / `XGBRegressor` estimators. The `tree_method='hist'` path is the fast default for
+large tabular data on CPU or GPU. Hardware targeting flows through the `device` parameter. L1 and L2
+penalties appear as `reg_alpha` and `reg_lambda`. The `gamma` parameter increases the minimum loss
+reduction required to make a split, which is another path to controlling tree complexity.
 
-Before investing compute resources into distributed XGBoost clusters, senior ML engineers establish rigorous baselines using simpler models. This ensures that the complexity of a gradient boosting pipeline is actually yielding mathematical dividends.
+XGBoost also ships alternative boosters. `gbtree` is the standard tree booster. `dart` adds dropout
+to trees during boosting, which can reduce overfitting at the cost of more tuning complexity.
+`gblinear` fits a linear booster instead of trees and is a different tool entirely. For multi-target
+regression, recent XGBoost versions support vector-leaf trees that emit multiple outputs from one
+tree structure; monotonic constraints may not apply to every multi-output configuration, so read the
+release notes before relying on them in that mode.
 
-### The ARIMA Family
+Distributed training integrations — Dask, Spark, and clustered Kubernetes-style execution — are a
+major reason teams pick XGBoost even when a single-node sklearn model would suffice for prototyping.
+The low-level API makes early stopping explicit through `evals` and `early_stopping_rounds`, and the
+documentation notes that `xgboost.train` returns the final iteration while `best_iteration` marks the
+validation-optimal round unless you slice or use callback-based `save_best` behavior.
 
-ARIMA (AutoRegressive Integrated Moving Average) models are the traditional gold standard of forecasting. They rely exclusively on the series' own autocorrelations and differencing rules to project future states.
+The `dart` booster mode deserves a mention because it appears in production tuning guides when teams
+fight overfitting without reducing depth. Dropout applied to trees during boosting changes which
+weak learners survive each stage, which can stabilize validation metrics on noisy tabular data at the
+cost of longer training and more hyperparameter sensitivity. Treat `dart` as an optional experiment
+after a honest `gbtree` baseline rather than the default starting point.
 
-```mermaid
-graph TD
-    A[ARIMA COMPONENTS] --> B[AR p: AutoRegressive - Today depends on past]
-    A --> C[I d: Integrated - differencing to make stationary]
-    A --> D[MA q: Moving Average - Today depends on forecast errors]
-    E[SARIMA p, d, q P, D, Q, s] --> F[Non-seasonal components]
-    E --> G[Seasonal components with period s]
-```
+### LightGBM (`lightgbm`)
 
-#### Understanding SARIMA Parameters
-The SARIMA model extends standard ARIMA architectures by explicitly modeling seasonal structural components. The full notation is expressed as $\text{SARIMA}(p, d, q)(P, D, Q)_s$, representing two distinct sets of behavioral rules.
-- **Non-seasonal components:**
-  - $p$: Trend autoregression order (the number of historical lag observations integrated into the regression).
-  - $d$: Trend difference order (the number of times raw observations must be differenced to achieve stationarity).
-  - $q$: Trend moving average order (the scope of the moving average window applied to historical forecast errors).
-- **Seasonal components:**
-  - $P$: Seasonal autoregressive order, controlling how current cycles depend on equivalent periods in previous cycles.
-  - $D$: Seasonal difference order, applied to explicitly remove repeating seasonal trends.
-  - $Q$: Seasonal moving average order.
-  - $s$: The exact number of sequential time steps that constitute a single full seasonal period (e.g., 12 for monthly data with an annual cycle, or 24 for hourly data tracking daily patterns).
+LightGBM is the third peer in many tabular stacks. Its default growth policy is leaf-wise: choose
+the leaf with the largest loss reduction and split it, subject to `num_leaves` and depth limits.
+That often yields deeper asymmetric trees than depth-first level-wise growth policies. LightGBM
+handles categorical features by optimal split finding on category subsets, supports missing values,
+and exposes GOSS (Gradient-based One-Side Sampling) and EFB (Exclusive Feature Bundling) as optional
+optimizations for large datasets. Mention them as mechanisms, not as magic switches: they change
+sampling and feature bundling behavior and require validation on your own data.
 
-#### Choosing p and q: Analyzing ACF and PACF Plots
+LightGBM's regularization vocabulary uses `num_leaves`, `min_data_in_leaf` (similar spirit to
+`min_child_samples`), `lambda_l1`, `lambda_l2`, `min_gain_to_split`, `feature_fraction`, and
+`bagging_fraction`. The parameter names differ from XGBoost, but the ideas map cleanly once you
+translate the dictionary.
 
-Configuring an ARIMA model requires identifying the correct order for the AR ($p$) and MA ($q$) terms. This is achieved by plotting the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF).
-- **ACF** measures the correlation between a time series and its delayed (lagged) variations.
-- **PACF** measures the correlation between a time series and its lags, but critically removes the indirect effects of the time steps in between.
+> **Landscape snapshot — as of 2026-06. Library versions move fast; verify against the project's
+> release notes before relying on specifics.**
+>
+> - scikit-learn **1.9.0** (latest stable, 2026). `HistGradientBoostingRegressor` and
+>   `HistGradientBoostingClassifier` support native categorical features, missing values, and
+>   monotonic constraints.
+> - XGBoost **3.3.0** (latest stable, 2026). The `device` parameter selects CPU or GPU execution;
+>   `tree_method='hist'` is the default fast method; vector-leaf multi-target trees are available;
+>   the legacy CLI was removed in 3.x.
+> - LightGBM **4.6.0** (latest stable, 2026).
 
-By analyzing the decay patterns of these plots, you can deduce the optimal statistical architecture:
-
-| Pattern Manifestation | Autoregressive AR(p) | Moving Average MA(q) | Mixed ARMA(p,q) |
+| Dimension | scikit-learn HistGradientBoosting | XGBoost | LightGBM |
 |---|---|---|---|
-| **ACF Plot** | Tails off exponentially | Cuts off abruptly after lag *q* | Tails off exponentially |
-| **PACF Plot** | Cuts off abruptly after lag *p* | Tails off exponentially | Tails off exponentially |
-
-```mermaid
-graph TD
-    A[Pattern Selection] --> B[AR p: ACF Exp decay, PACF Cuts off]
-    A --> C[MA q: ACF Cuts off, PACF Exp decay]
-    A --> D[ARMA p,q: ACF Exp decay, PACF Exp decay]
-```
-
-### Facebook Prophet
-
-Developed by Facebook's core data science team, Prophet takes a vastly different approach. Instead of calculating historical lags, Prophet frames forecasting as a curve-fitting optimization problem utilizing an additive formulation.
-
-#### The Mathematical Architecture of Prophet
-The core additive equation driving Prophet's forecasting engine is formulated as:
-$y(t) = g(t) + s(t) + h(t) + \epsilon_t$
-
-Where the components operate independently:
-- **Trend $g(t)$**: Modeled primarily as a piecewise linear structure, $g(t) = (k + a(t))t + (m + b(t))$, where $k$ is the baseline growth rate, $a(t)$ introduces explicit rate adjustments at algorithmically detected changepoints, $m$ serves as the offset parameter, and $b(t)$ guarantees continuous connectivity across shifts. For systems bound by physical limits, this is swapped for a logistic growth model incorporating a maximum carrying capacity constraint $C$.
-- **Seasonality $s(t)$**: Modeled dynamically using a robust Fourier series, allowing the algorithm to trace continuous and arbitrary periodic shapes: $s(t) = \sum_{n=1}^N \left( a_n \cos\left(\frac{2\pi nt}{P}\right) + b_n \sin\left(\frac{2\pi nt}{P}\right) \right)$. The variable $P$ dictates the expected cyclical period (such as 365.25 for annual tracking).
-- **Holidays $h(t)$**: A categorical indicator matrix for distinct operational anomalies that behave outside natural seasonality.
-
-```mermaid
-graph TD
-    A[y t = g t + s t + h t + error] --> B[Trend growth]
-    A --> C[Seasonality Fourier series]
-    A --> D[Holidays/events]
-```
-
-Prophet is exceptionally skilled at identifying changepoints—moments in time where the fundamental trajectory of the dataset shifts.
-
-```mermaid
-graph TD
-    A[Before Algorithm Change] --> B[Changepoint detected!]
-    B --> C[New Trend Growth]
-```
-
-```mermaid
-graph TD
-    P[PROPHET ADVANTAGES] --> P1[Handles Missing Data]
-    P --> P2[Robust to Outliers]
-    P --> P3[Changepoint Detection]
-    P --> P4[Holiday Effects]
-    P --> P5[Interpretable Components]
-    P --> P6[Uncertainty Intervals]
-```
-
-```mermaid
-graph TD
-    W[TRADITIONAL ARIMA WORKFLOW] --> W1[1. Check stationarity]
-    W1 --> W2[2. Apply differencing]
-    W2 --> W3[3. Examine ACF/PACF]
-    P[PROPHET WORKFLOW] --> P1[1. prophet.fit]
-    P1 --> P2[2. prophet.predict]
-```
-
-## Deep Learning vs Gradient Boosting
-
-A frequent architectural debate arises: when do you choose an LSTM or Transformer network over a distributed XGBoost model? The decision almost entirely depends on the dataset volume, noise ratio, and the complexity of cross-series relationships.
-
-```mermaid
-graph TD
-    A[CLASSICAL vs DEEP LEARNING] --> B[CLASSICAL/BOOSTING: Single/Multiple series, clear seasonality, interpretability, <1M pts]
-    A --> C[DEEP LEARNING: Complex non-linear patterns, state-of-the-art accuracy, >10,000 points]
-```
-
-### Recurrent Neural Networks (RNN) and LSTMs
-
-Unlike XGBoost, which evaluates isolated rows of tabular features, LSTMs (Long Short-Term Memory networks) possess internal memory cells. They inherently process chronological ordering step-by-step, bypassing the need for manual lag feature engineering. However, basic RNNs suffer from vanishing gradients when sequence dependencies stretch too far into the past.
-
-```mermaid
-sequenceDiagram
-    participant x1
-    participant RNN1
-    participant RNN2
-    participant h2
-    x1->>RNN1: input
-    RNN1->>RNN2: hidden state h1
-    RNN2->>h2: output
-    Note over RNN1,RNN2: Vanishing Gradients problem over time!
-```
-
-To counter vanishing gradients, LSTMs employ complex gating mechanisms to explicitly control what information is remembered, forgotten, and outputted at each chronological step.
-
-```mermaid
-graph TD
-    A[LSTM CELL ARCHITECTURE] --> B[Forget Gate]
-    A --> C[Input Gate]
-    A --> D[Output Gate]
-    A --> E[New Memory]
-```
-
-```mermaid
-graph TD
-    A[GRU vs LSTM] --> B[LSTM: 3 gates, slower, better long deps]
-    A --> C[GRU: 2 gates, faster, similar performance]
-```
-
-### Transformers
-
-For many large sequential-data problems, Transformer architectures are now a common alternative to LSTMs. Transformers process the entire sequence simultaneously [via self-attention mechanisms, granting the network direct, unmitigated access to all historical time steps](https://arxiv.org/abs/1706.03762) without relying on sequential hidden states.
-
-```mermaid
-graph TD
-    A[Traditional RNN] --> B[t=1 to t=2 to t=100]
-    C[Transformer] --> D[Direct connections to ALL timesteps via Attention]
-```
-
-```mermaid
-graph TD
-    A[TFT ARCHITECTURE] --> B[Output Layer Quantile]
-    B --> C[Temporal Self-Attention]
-    C --> D[LSTM Encoder-Decoder]
-    D --> E[Variable Selection Network]
-    E --> F[Input Embedding]
-```
-
-## Feature Engineering for XGBoost
-
-Because tree-based algorithms lack native chronological awareness, engineers must translate time into discrete tabular columns. This process—feature engineering—is the single most important determinant of an XGBoost model's success. 
-
-```mermaid
-graph TD
-    A[Extract from 2024-11-28] --> B[Calendar: year, month, day, day_of_week]
-    A --> C[Cyclical: hour_sin, hour_cos]
-    A --> D[Holiday: is_holiday, days_to_holiday]
-```
-
-```mermaid
-graph TD
-    A[LAG FEATURES] --> B[Date, Sales, lag_1, lag_2, lag_7]
-```
-
-```mermaid
-graph TD
-    A[ROLLING WINDOW] --> B[roll_mean_7, roll_std_7, roll_max_7]
-    C[EXPANDING WINDOW] --> D[expanding_mean, days_since_start]
-    E[EXPONENTIAL MOVING AVERAGE] --> F[EMA gives more weight to recent observations]
-```
-
-*Note on EMA:* `EMA_t = α × value_t + (1-α) × EMA_{t-1}`. A lower α (e.g. 0.1) produces a slow EMA with long memory, while a higher α (e.g. 0.5) focuses on recent values.
-
-> **Stop and think**: If you utilize a rolling mean spanning the past 7 days to engineer a feature column, what mathematically happens to the very first 6 rows of your dataset?
-> *Answer: You will generate missing values (NaNs). You must architecturally decide whether to drop these initial rows entirely, apply backfilling techniques, or implement an expanding window calculation for the beginning of the sequence before passing the tensor to XGBoost.*
-
-## Model Selection and Ensembles
-
-Navigating model selection requires assessing the cardinality of your series alongside data volume.
-
-Think of choosing a time series model like choosing a transportation method. **Simple Exponential Smoothing** is like walking: basic, reliable, works for short distances. **ARIMA** is like driving a car: more powerful, handles trends and patterns, but requires skill. **Prophet** is like using a taxi: easy to call, good default choices. **Deep Learning (LSTM/Transformer)** is like operating a commercial aircraft: powerful, efficient at scale, but absolute overkill for short trips.
-
-```mermaid
-graph TD
-    A[Start] --> B{How many series?}
-    B -->|< 10| C[ARIMA/Prophet]
-    B -->|> 100| D[Global Model]
-    D --> E{> 10k points?}
-    E -->|Yes| F[Transformer/TFT]
-    E -->|No| G[LightGBM/XGBoost + Lags]
-```
-
-```mermaid
-graph TD
-    A[ENSEMBLE HYBRID] --> B[LightGBM/XGBoost + Lags]
-    A --> C[Stacking]
-    A --> D[Weighted Avg Classical + DL]
-```
-
-```mermaid
-graph TD
-    A[CLASSICAL METHODS] --> B[ARIMA/SARIMA]
-    A --> C[Prophet]
-    D[DEEP LEARNING] --> E[LSTM/GRU]
-    D --> F[Transformer/TFT]
-```
-
-## Anomaly Detection
-
-In production systems, forecasting models establish the expected baseline. When real-world telemetry deviates from this baseline by a statistically significant margin, it triggers anomaly alerts.
-
-```mermaid
-graph TD
-    A[TYPES OF ANOMALIES] --> B[POINT ANOMALY: single unusual value]
-    A --> C[CONTEXTUAL ANOMALY: normal in summer, anomaly in winter]
-    A --> D[COLLECTIVE ANOMALY: sequence that is unusual]
-```
-
-```mermaid
-graph TD
-    A[Statistical Methods] --> B[Z-SCORE METHOD]
-    A --> C[IQR METHOD Robust to outliers]
-    D[Machine Learning] --> E[ISOLATION FOREST]
-    D --> F[AUTOENCODERS]
-```
-
-#### Autoencoders for Deep Anomaly Detection
-Autoencoders are specialized feedforward neural networks explicitly designed to identify complex structural anomalies. They are constructed in two mirrored halves: an encoder that compresses sequential input into a restricted, lower-dimensional latent space manifold, and a decoder that attempts to reconstruct the original sequence from this compressed state.
-
-During the training phase, the autoencoder exclusively ingests "normal" historical sequences, learning the foundational statistical shape of the system. Once deployed, the network calculates the Reconstruction Error (typically Mean Squared Error) between incoming live telemetry and its attempted reconstruction. If a sequence contains structural anomalies, the network's compressed latent space will lack the required feature vocabulary to rebuild it accurately. Anomalies are definitively flagged when this reconstruction error exceeds a dynamically calculated statistical threshold, frequently set at $\mu + 3\sigma$ of the historical training error distribution. This architecture is uniquely capable of detecting subtle, multi-variate collective anomalies that traditional point-based Z-score evaluations entirely miss.
-
-```mermaid
-graph TD
-    A[REAL-WORLD EXAMPLES] --> B[Fraud Detection]
-    A --> C[Server Monitoring]
-    A --> D[Manufacturing]
-    A --> E[Finance]
-```
-
-Anomalies must be calculated and routed efficiently to prevent alert fatigue.
-
-```mermaid
-flowchart TD
-    Metrics --> Kafka --> FlinkProcessor --> AnomalyScorer
-    AnomalyScorer --> FeatureStore[Feature Store Redis+S3]
-    AnomalyScorer --> AlertRouter --> PagerDuty
-```
-
-## Multiple Time Series and Hierarchies
-
-The true advantage of XGBoost emerges when modeling thousands of distinct series concurrently. By vectorizing the output and feeding contextual identity flags into the input tensor, engineers can execute singular, highly accurate global models.
-
-```mermaid
-graph TD
-    A[SINGLE TIME SERIES] --> B[One model per series, O n to train]
-    C[MULTIPLE TIME SERIES] --> D[One global XGBoost model for ALL series]
-```
-
-```mermaid
-graph TD
-    A[Total Company] --> B[Region A]
-    A --> C[Region B]
-    B --> D[Store 1]
-    B --> E[Store 2]
-```
-
-## Practical Considerations
-
-Executing these methodologies requires meticulous defensive programming.
-
-### Handling Missing Data
-
-```mermaid
-graph TD
-    A[STRATEGIES FOR MISSING VALUES] --> B[Forward Fill LOCF]
-    A --> C[Backward Fill]
-    A --> D[Linear Interpolation]
-    A --> E[Seasonal Interpolation]
-    A --> F[Model-Based Imputation]
-```
-
-### Evaluation Metrics
-
-Selecting the correct metric dictates how the model's loss function prioritizes errors. 
-
-#### Mathematical Formulas for Forecasting Efficacy
-- **MAE (Mean Absolute Error)**: $\text{MAE} = \frac{1}{n} \sum_{t=1}^n |y_t - \hat{y}_t|$
-  This strictly treats all errors linearly. It is highly interpretable for business stakeholders as it reports error magnitude directly in the units of the original dataset.
-- **RMSE (Root Mean Square Error)**: $\text{RMSE} = \sqrt{\frac{1}{n} \sum_{t=1}^n (y_t - \hat{y}_t)^2}$
-  By squaring the error differentials before averaging them, RMSE aggressively and exponentially penalizes large algorithmic deviations and unexpected outliers.
-- **MAPE (Mean Absolute Percentage Error)**: $\text{MAPE} = \frac{100\%}{n} \sum_{t=1}^n \left| \frac{y_t - \hat{y}_t}{y_t} \right|$
-  This provides a strictly scale-independent percentage. However, the calculation catastrophically fails (producing infinite outputs) if the target value $y_t$ is zero or close to zero.
-- **SMAPE (Symmetric MAPE)**: $\text{SMAPE} = \frac{100\%}{n} \sum_{t=1}^n \frac{|y_t - \hat{y}_t|}{(|y_t| + |\hat{y}_t|)/2}$
-  SMAPE resolves the infinite output issue found in traditional MAPE while retaining scale independence, though it artificially biases forecasts lower.
-- **MASE (Mean Absolute Scaled Error)**: $\text{MASE} = \frac{\text{MAE}}{\text{MAE}_{\text{naive}}}$
-  MASE compares the engineered model's absolute error against the baseline absolute error of a naive, one-step-ahead forecast generated purely on the training set. If MASE < 1, the model is mathematically outperforming the naive baseline.
-
-```mermaid
-graph TD
-    A[FORECASTING METRICS] --> B[MAE: Mean Absolute Error]
-    A --> C[RMSE: Root Mean Square Error]
-    A --> D[MAPE: Mean Absolute Percentage Error]
-    A --> E[SMAPE: Symmetric MAPE]
-    A --> F[MASE: Mean Absolute Scaled Error]
-```
-
-```mermaid
-graph TD
-    A[WHICH TO USE?] --> B[Business: MAE]
-    A --> C[Scale comparison: MAPE/SMAPE]
-    A --> D[Academic: MASE]
-    A --> E[Optimization: RMSE]
-```
-
-### Avoiding Data Leakage
-
-Randomly splitting time series data guarantees catastrophic failure in production due to look-ahead bias. You must implement sequential Walk-Forward validation arrays.
-
-```mermaid
-graph TD
-    A[WRONG: Random k-fold] --> B[Future leaks into Past!]
-    C[CORRECT: Time-based Walk-forward] --> D[Train on past, Test on future]
-```
-
-```mermaid
-graph TD
-    subgraph Walk-Forward Validation
-    Fold1[Fold 1: Train Jan-Mar --> Test Apr]
-    Fold2[Fold 2: Train Jan-Apr --> Test May]
-    Fold3[Fold 3: Train Jan-May --> Test Jun]
-    end
-    Fold1 --> Fold2
-    Fold2 --> Fold3
-```
-
-## Production War Stories
-
-Theoretical algorithms frequently fail against harsh production realities.
-
-### The $50 Million Inventory Mistake
-A forecasting model can overfit to an unusual regime such as panic-buying behavior and then badly over-forecast when conditions normalize.
-**The Fix**: In most production settings, implement automated regime change detection to verify the foundational integrity of the data stream before trusting the model.
+| API fit | Native sklearn `Pipeline` integration | sklearn estimators plus `xgboost.train` / `DMatrix` | sklearn wrapper plus `lightgbm.train` / `Dataset` |
+| Growth policy | Depth-bounded histogram trees | Depth-bounded histogram trees by default | Leaf-wise growth controlled by `num_leaves` |
+| Categoricals | `categorical_features` indices | Multiple encoding paths; see docs for `enable_categorical` | Native categorical column support |
+| Missing values | Native during training | Native during training | Native during training |
+| Monotonic constraints | `monotonic_cst` per feature | `monotone_constraints` tuple in params | `monotone_constraints` parameter |
+| Distributed scale | Single-node sklearn | Dask, Spark, PySpark integrations | Dask and distributed clients |
+| Early stopping | `early_stopping=True` on estimator | `early_stopping_rounds` in `train` / `fit` | `early_stopping` callback in `train` |
+
+None of those rows automatically picks the library for you. If your deployment artifact must remain a
+pure sklearn pipeline, start with HistGradientBoosting. If your training cluster already standardizes
+on Spark or Dask for tabular workloads, XGBoost or LightGBM may fit the operations story better.
+If leaf-wise growth and categorical split finding match your dataset shape, LightGBM deserves a fair
+benchmark. Let validation metrics and maintenance cost break ties.
+
+## Section 3: Key Hyperparameters and Regularization
+
+Boosted trees expose many knobs because no single knob controls both capacity and generalization.
+Think in groups: iteration budget, tree shape, stochasticity, and explicit penalties.
+
+**Iteration budget.** `n_estimators` in XGBoost and LightGBM sklearn wrappers, `num_boost_round` in
+the low-level APIs, and `max_iter` in HistGradientBoosting all cap how many boosting stages you allow.
+This parameter should almost never be tuned alone. It interacts directly with learning rate and early
+stopping patience.
+
+**Learning rate (`learning_rate`, `eta`).** Shrinkage per tree. Lower rates usually demand more trees
+but produce smoother improvement curves. A practical pattern is to pick a moderately small rate such
+as `0.03` to `0.1` for many tabular problems, pair it with a high upper bound on rounds, and let
+early stopping choose the effective number of trees.
+
+**Tree shape.** Depth limits (`max_depth`), leaf counts (`num_leaves` in LightGBM), and minimum leaf
+population (`min_child_weight` in XGBoost, `min_child_samples` in sklearn, `min_data_in_leaf` in
+LightGBM) control how complex each weak learner is. Increasing depth or leaves raises capacity fast.
+If validation improves on training but degrades on holdout data, reduce tree complexity before you
+abandon boosting entirely.
+
+**Stochasticity.** Row subsampling (`subsample`, `bagging_fraction`) and column subsampling
+(`colsample_bytree`, `feature_fraction`) inject randomness that often reduces overfitting. They are
+the boosted-tree cousin of Random Forest randomness, but applied within a sequential ensemble where
+each tree still sees the residual structure left by prior trees.
+
+**Explicit penalties.** L1 (`reg_alpha`, `lambda_l1`) encourages sparsity in leaf weights. L2
+(`reg_lambda`, `lambda_l2`) penalizes large leaf values. Split gain thresholds (`gamma`,
+`min_split_gain`, `min_gain_to_split`) demand stronger evidence before a split is accepted. These
+penalties do not replace early stopping, but they change the frontier where additional trees help.
+
+A useful tuning order on a new dataset is: fix a conservative learning rate, set a high round cap,
+enable early stopping on inner validation, then adjust tree complexity (`max_depth` or `num_leaves`),
+then stochasticity, then explicit L1/L2 penalties. Jumping straight to exhaustive grid search across
+every knob wastes compute and obscures which regularizer actually moved the metric. The [Module
+1.11](../module-1.11-hyperparameter-optimization/) search tools matter, but they work best after you
+understand which parameter family is responding.
+
+| Symptom on validation | Knob to touch first | Why |
+|---|---|---|
+| Metric improves then degrades while training still improves | early stopping patience / lower `learning_rate` | Later trees are fitting noise |
+| Strong training metric, weak validation from round one | reduce `max_depth` or `num_leaves`; raise `min_child_samples` | Each weak learner is too strong |
+| Slow training, unstable curves | raise `subsample` / `colsample` slightly; verify histogram path | Stochasticity and algorithm choice affect variance |
+| Model violates known directional rules | `monotonic_cst` / `monotone_constraints` | Constrain splits rather than chase depth |
+| High-cardinality ID dominates importance | feature policy + regularization; not more trees | Capacity is misallocated to memorization |
+
+The learning-rate versus `n_estimators` tradeoff is the conceptual heart of tuning boosted trees. A
+model with `learning_rate=0.2` and `n_estimators=50` is not equivalent to `learning_rate=0.05` and
+`n_estimators=200` even if training loss looks similar. The second configuration spreads capacity
+across more small corrections and often responds differently to early stopping. Tune them jointly or
+fix a conservative learning rate and let early stopping select the effective tree count.
 
 ```python
-# The Fix: Regime detection before forecasting
-def detect_regime_change(series, window=30, threshold=2.0):
-    """Detect when the underlying pattern has fundamentally changed."""
-    rolling_mean = series.rolling(window).mean()
-    rolling_std = series.rolling(window).std()
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
+from sklearn.ensemble import HistGradientBoostingClassifier
 
-    # Check if recent data is wildly different from historical patterns
-    recent_zscore = (series.iloc[-window:].mean() - rolling_mean.iloc[-window*2:-window].mean()) / rolling_std.iloc[-window*2:-window].mean()
+X, y = make_classification(
+    n_samples=8000,
+    n_features=16,
+    n_informative=8,
+    n_redundant=2,
+    random_state=42,
+)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
+X_tr, X_val, y_tr, y_val = train_test_split(
+    X_train, y_train, test_size=0.2, stratify=y_train, random_state=42
+)
 
-    if abs(recent_zscore) > threshold:
-        print(f"REGIME CHANGE DETECTED: z-score = {recent_zscore:.2f}")
-        print("   Consider retraining on post-change data only!")
-        return True
-    return False
-
-# Usage: Run before every forecast cycle
-if detect_regime_change(sales_data):
-    model = retrain_on_recent_data(sales_data, months=3)
-else:
-    model = use_full_historical_model(sales_data)
+hgb = HistGradientBoostingClassifier(
+    max_iter=500,
+    learning_rate=0.05,
+    max_depth=4,
+    min_samples_leaf=20,
+    l2_regularization=1.0,
+    early_stopping=True,
+    validation_fraction=0.15,
+    n_iter_no_change=15,
+    random_state=42,
+)
+hgb.fit(X_tr, y_tr)
+val_auc = roc_auc_score(y_val, hgb.predict_proba(X_val)[:, 1])
+test_auc = roc_auc_score(y_test, hgb.predict_proba(X_test)[:, 1])
+print("stopped at iteration:", hgb.n_iter_)
+print("validation AUC:", round(val_auc, 4))
+print("test AUC:", round(test_auc, 4))
 ```
 
-### The 0.01% That Cost Millions
-A trading model can appear unrealistically accurate in backtests if technical indicators are computed with future data leaking into earlier timestamps.
+The snippet keeps the final test split untouched during model development. Use the validation score
+for stopping and iteration diagnosis; touch the test set once at the end.
+
+## Section 4: Early Stopping Without Leakage
+
+Early stopping is the cheapest regularizer for boosted trees when you have enough labeled data to
+reserve a validation surface. The training loop tracks a metric on validation data each boosting round.
+If the metric fails to improve for `patience` consecutive rounds, training halts. The best iteration
+is typically the one with the strongest validation score, not necessarily the final tree added before
+stopping triggered.
+
+Leakage enters when the validation surface is not independent of the training process you claim to
+evaluate. Calling `fit` on all labeled data including rows that later appear in your test benchmark,
+tuning hyperparameters on the test split because it is convenient, or running feature selection on
+the full dataset before cross-validation all break the story early stopping is supposed to tell.
+
+The leakage-safe pattern from [Module
+1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/) still applies in the same
+order every time you touch a boosted model. Split train and test first, then freeze the test set so
+it never informs stopping patience or tree counts. Within the training split, carve out a validation
+holdout or cross-validation folds that exist only for development decisions. Run early stopping on
+that inner surface rather than on the benchmark you plan to report as final. When hyperparameter search
+enters the picture, nest the loops: outer cross-validation estimates generalization, while inner
+validation within each outer training fold handles early stopping for round selection. After you lock
+hyperparameters, retrain on the full training split if deployment policy requires consuming every
+labeled training row, and still reserve the untouched test split for a single closing evaluation pass.
+
+scikit-learn bakes a simple version of step two into the estimator when `early_stopping=True` by
+holding out `validation_fraction` of the `X` passed to `fit`. That is convenient for notebooks but is
+not a substitute for nested CV when data is scarce or when your preprocessing must be refit per fold.
+
+XGBoost low-level training makes the validation contract explicit because `evals` and
+`early_stopping_rounds` are visible arguments rather than hidden inside an estimator wrapper. The
+pattern below trains on `X_tr`, monitors `X_val`, and slices to `best_iteration` before scoring the
+frozen test split, which matches the documentation note that `xgboost.train` returns the last round
+unless you trim the booster yourself.
 
 ```python
-# WRONG: Look-ahead bias (what they did)
-def calculate_rsi_wrong(df):
-    """This code looks at the ENTIRE series, including future!"""
-    df['RSI'] = talib.RSI(df['close'], timeperiod=14)  # Calculated on ALL data
-    return df
+import xgboost as xgb
+from sklearn.metrics import roc_auc_score
 
-# CORRECT: Point-in-time calculation
-def calculate_rsi_correct(df, current_idx):
-    """Only use data available at the time of prediction."""
-    # Only calculate on data up to current_idx
-    historical_data = df.loc[:current_idx, 'close']
-    return talib.RSI(historical_data, timeperiod=14).iloc[-1]
-
-# Or use expanding window approach
-def create_features_safely(df):
-    """Create features using only past data at each point."""
-    features = pd.DataFrame(index=df.index)
-
-    for i in range(14, len(df)):
-        # At time i, we only know prices 0 to i-1
-        historical = df['close'].iloc[:i]
-        features.loc[df.index[i], 'RSI'] = calculate_rsi_on_history(historical)
-
-    return features
+dtrain = xgb.DMatrix(X_tr, label=y_tr)
+dval = xgb.DMatrix(X_val, label=y_val)
+params = {
+    "objective": "binary:logistic",
+    "tree_method": "hist",
+    "device": "cpu",
+    "eval_metric": "auc",
+    "eta": 0.05,
+    "max_depth": 4,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 1.0,
+    "seed": 42,
+}
+booster = xgb.train(
+    params,
+    dtrain,
+    num_boost_round=500,
+    evals=[(dval, "validation")],
+    early_stopping_rounds=20,
+    verbose_eval=False,
+)
+best_iter = booster.best_iteration
+print("best iteration:", best_iter)
+# Documentation: train returns the last iteration; slice if you want the best round.
+best_model = booster[: best_iter + 1]
+dtest = xgb.DMatrix(X_test)
+test_auc = roc_auc_score(y_test, best_model.predict(dtest))
+print("test AUC:", round(test_auc, 4))
 ```
 
-### The Anomaly That Wasn't
-Static anomaly thresholds can generate large numbers of false positives when systems have strong time-of-day or day-of-week traffic patterns.
+LightGBM follows the same idea with callbacks passed to `lgb.train`, which keeps the validation
+`Dataset` separate from training data and records the best iteration when improvement stalls. The
+verbosity callback suppresses per-round noise while early stopping still watches the metric you name
+in `lgb_params`.
 
 ```python
-# WRONG: Static threshold (what they did)
-def detect_anomaly_naive(value, historical_mean, historical_std):
-    z_score = (value - historical_mean) / historical_std
-    return abs(z_score) > 3  # Static threshold
+import lightgbm as lgb
 
-# CORRECT: Seasonally-adjusted detection
-def detect_anomaly_seasonal(value, timestamp, historical_data):
-    """Account for hour-of-day and day-of-week patterns."""
-    hour = timestamp.hour
-    day = timestamp.dayofweek
-
-    # Get historical values for same hour and day
-    similar_times = historical_data[
-        (historical_data.index.hour == hour) &
-        (historical_data.index.dayofweek == day)
-    ]
-
-    if len(similar_times) < 10:
-        # Not enough history for this time slot
-        return False, "Insufficient history"
-
-    seasonal_mean = similar_times.mean()
-    seasonal_std = similar_times.std()
-
-    z_score = (value - seasonal_mean) / (seasonal_std + 1e-6)
-
-    if abs(z_score) > 3:
-        return True, f"Anomaly: z={z_score:.2f} vs typical for {hour}:00 on {day}"
-    return False, "Normal"
+train_set = lgb.Dataset(X_tr, label=y_tr)
+val_set = lgb.Dataset(X_val, label=y_val, reference=train_set)
+lgb_params = {
+    "objective": "binary",
+    "metric": "auc",
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "feature_fraction": 0.8,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 1,
+    "lambda_l2": 1.0,
+    "verbosity": -1,
+    "seed": 42,
+}
+gbm = lgb.train(
+    lgb_params,
+    train_set,
+    num_boost_round=500,
+    valid_sets=[val_set],
+    callbacks=[lgb.early_stopping(20), lgb.log_evaluation(0)],
+)
+print("best iteration:", gbm.best_iteration)
+test_auc = roc_auc_score(y_test, gbm.predict(X_test))
+print("test AUC:", round(test_auc, 4))
 ```
 
-## Debugging and Troubleshooting
+For sklearn-compatible XGBoost estimators, the same validation data can be passed through `fit` via
+`eval_set` and `early_stopping_rounds` when your installed version exposes those arguments on the
+estimator. Always read the constructor and `fit` signature for the version pinned in your
+environment; the high-level wrapper parameters moved across major releases.
 
-When architectural complexities scale, forecasting implementations inevitably break. Below are the definitive symptoms, diagnostic steps, and resolutions for core pipeline failures.
+When your pipeline already uses `sklearn.model_selection.GridSearchCV` or randomized search from
+[Module 1.11](../module-1.11-hyperparameter-optimization/), wrap the booster in a `Pipeline` and pass
+early-stopping parameters only to the final estimator step. The search must not pass test data into
+`eval_set`. A common pattern is an inner `validation_fraction` for quick sweeps and an outer
+cross-validation loop for honest scores once the hyperparameter region narrows. Document which split
+each reported metric used, because stakeholders will otherwise assume the headline number is the final
+test result when it is only an inner fold.
 
-### Building the Ensemble Baseline
-Before debugging a complex model, it is critical to construct a baseline ensemble. If your hyper-tuned XGBoost model fails to outperform a naive combination of classical models, your feature engineering is flawed.
+Early stopping is not a license to skip held-out testing. It chooses a round count and helps you avoid
+overshooting. The final test split still answers whether the model generalizes to untouched data.
+
+## Section 5: Monotonic Constraints and Native Categorical Support
+
+Monotonic constraints encode domain directionality: as feature `x_j` increases, the model output must
+not move in the forbidden direction. Pricing models often require non-increasing demand as list price
+rises. Risk scores may require non-decreasing predicted loss as utilization increases after other
+features are held fixed in the tree's local routing context. Boosted trees without constraints can
+fit noise that violates those rules because each split optimizes loss reduction, not business logic.
+
+scikit-learn expresses constraints with `monotonic_cst`, one entry per input feature: `1` increasing,
+`-1` decreasing, `0` unconstrained. XGBoost uses `monotone_constraints` as a tuple aligned with
+column order. LightGBM accepts `monotone_constraints` in params with similar semantics. Constraints
+reduce the set of allowable splits. They do not guarantee global causal correctness, and they do not
+replace legal or fairness review, but they prevent a class of embarrassing reversals on individual
+features.
+
+Native categorical support is the other modern convenience. Instead of exploding every category into
+sparse dummy columns, histogram boosters can treat category indices as categorical. sklearn expects
+you to mark columns with `categorical_features`. LightGBM can treat pandas `category` dtypes or
+column names in `categorical_feature`. XGBoost documents categorical support paths that depend on
+version and input container; consult the pinned release rather than assuming identical behavior to
+LightGBM.
+
+Native categorical handling saves memory and can improve split quality when cardinality is moderate.
+It does not remove the need for principled encoding in [Module
+1.4](../module-1.4-feature-engineering-and-preprocessing/). Rare categories, target leakage through
+response coding, and post-deployment category drift still belong to the feature contract. Constraints
+and native categoricals are tools for cleaner training geometry, not substitutes for problem
+definition.
 
 ```python
-def ensemble_forecast(series, forecast_horizon):
-    """
-    Simple ensemble combining ARIMA, Prophet, and naive baseline.
-    """
-    from statsmodels.tsa.arima.model import ARIMA
-    from prophet import Prophet
-    import pandas as pd
-    import numpy as np
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import HistGradientBoostingRegressor
 
-    forecasts = {}
+rng = np.random.default_rng(42)
+n = 6000
+price = rng.uniform(10, 100, size=n)
+segment = rng.integers(0, 4, size=n)
+# True effect: higher price never increases demand in this synthetic setup.
+demand = 120 - 0.8 * price + segment * 2 + rng.normal(0, 3, size=n)
 
-    # 1. Naive baseline (last value repeated)
-    forecasts['naive'] = np.full(forecast_horizon, series.iloc[-1])
+df = pd.DataFrame({"price": price, "segment": segment.astype("category"), "demand": demand})
+X = df[["price", "segment"]]
+y = df["demand"]
 
-    # 2. ARIMA
-    try:
-        arima = ARIMA(series, order=(5, 1, 2))
-        arima_fit = arima.fit()
-        forecasts['arima'] = arima_fit.forecast(steps=forecast_horizon).values
-    except:
-        forecasts['arima'] = forecasts['naive']
-
-    # 3. Prophet
-    try:
-        prophet_df = pd.DataFrame({'ds': series.index, 'y': series.values})
-        model = Prophet(yearly_seasonality=True, weekly_seasonality=True)
-        model.fit(prophet_df)
-        future = model.make_future_dataframe(periods=forecast_horizon)
-        forecasts['prophet'] = model.predict(future)['yhat'].iloc[-forecast_horizon:].values
-    except:
-        forecasts['prophet'] = forecasts['naive']
-
-    # Simple average ensemble
-    ensemble = np.mean([forecasts['naive'], forecasts['arima'], forecasts['prophet']], axis=0)
-
-    return ensemble, forecasts
+model = HistGradientBoostingRegressor(
+    max_iter=300,
+    learning_rate=0.05,
+    max_depth=4,
+    categorical_features=[1],
+    monotonic_cst=[-1, 0],
+    random_state=42,
+)
+model.fit(X, y)
+grid = np.linspace(20, 90, 8)
+segment_code = 1
+preds = [
+    model.predict(pd.DataFrame({"price": [p], "segment": pd.Categorical([segment_code])}))[0]
+    for p in grid
+]
+monotone_ok = all(preds[i] >= preds[i + 1] for i in range(len(preds) - 1))
+print("monotone non-increasing in price:", monotone_ok)
 ```
 
-### Symptom: Model Predicts a Flat Line
-**Symptoms:** You execute a forecasting run across a wide temporal horizon, and the output is a perfectly flat, horizontal line that ignores all recent trends.
-**Diagnosis:** The model cannot locate any mathematically exploitable signal, meaning the autocorrelation is practically zero. It determines that predicting the historical mean is the safest mathematical path to minimize the RMSE loss function.
-**Fix:** Analyze the ACF/PACF plots and coefficient of variation. Check if a naive forecast (repeating the last known value) outperforms the mean forecast. If so, structure exists but your model is failing to learn it.
+Use constraints when stakeholders can name a directional rule that must hold everywhere the model
+scores. Skip them when the relationship is not truly monotonic, because forcing the wrong shape hides
+real interaction effects and can inflate error on the very segments you care about.
 
-```python
-# Check if your series has predictable patterns
-from statsmodels.graphics.tsaplots import plot_acf
-import matplotlib.pyplot as plt
+Encoding rare categories before native handling still deserves explicit policy. Group rare levels into
+an `other` bucket during training, persist the mapping artifact, and apply the same rule at serving
+time so unseen categories do not crash the booster or silently map to index zero. That policy belongs
+alongside the monotonic discussion because both are constraints on how the model may use inputs, not
+substitutes for honest labels or leakage audits from [Module
+1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/).
 
-def diagnose_flat_predictions(series):
-    """Diagnose why model predicts flat line."""
-    # Check autocorrelation
-    fig, ax = plt.subplots(figsize=(10, 4))
-    plot_acf(series.dropna(), lags=40, ax=ax)
-    plt.title("Autocorrelation - Strong patterns = tall bars")
-    plt.show()
+When categorical cardinality is enormous, native split finding can still be expensive. In those cases
+compare against target encoding or hash encoding strategies from [Module
+1.4](../module-1.4-feature-engineering-and-preprocessing/) on validation data rather than assuming
+native support is automatically faster or more accurate. The peer-library table is about capability,
+not a promise that every column should stay raw.
 
-    # Check variance
-    print(f"Mean: {series.mean():.4f}")
-    print(f"Std Dev: {series.std():.4f}")
-    print(f"Coefficient of Variation: {series.std()/series.mean()*100:.1f}%")
+## Section 6: Interpretation — Importance Versus SHAP
 
-    # Check if naive forecast is better
-    naive_mae = abs(series - series.shift(1)).mean()
-    mean_mae = abs(series - series.mean()).mean()
-    print(f"\nNaive (y_t = y_{t-1}) MAE: {naive_mae:.4f}")
-    print(f"Mean prediction MAE: {mean_mae:.4f}")
+Boosted trees tempt teams into fast explanations. Every library prints a feature importance vector.
+Those numbers are easy to chart and dangerous to overread. Impurity-based importance — what sklearn's
+`feature_importances_` exposes for tree models — measures how much each feature reduced impurity or
+loss across splits in the trained ensemble. Features with many split opportunities or high cardinality
+can rank highly even when their held-out predictive value is modest. Importance type differs across
+libraries: gain, split count, and cover are not interchangeable labels.
 
-    if naive_mae < mean_mae:
-        print(" Series has predictable structure (naive beats mean)")
-    else:
-        print(" Series might be unpredictable (mean beats naive)")
-```
+XGBoost and LightGBM expose multiple importance definitions. Gain summarizes loss reduction contributed
+by a feature. Split count rewards how often a feature is selected. Cover relates to the number of
+samples affected. A feature can split often on noise with tiny gain and still look important by split
+count. That is why production reviews should treat built-in importance as a debugging hint, not as an
+allocation or compliance conclusion.
 
-### Symptom: Predictions Are Always One Step Behind
-**Symptoms:** Upon visual inspection, your predicted trend line perfectly matches the actual trend line, but it is visually shifted exactly one time step to the right.
-**Diagnosis:** Severe data leakage. The model discovered that the easiest way to minimize loss is to simply copy the value of the most recent lag feature (`lag_1`). It acts as a naive forecaster without actually learning the underlying generative pattern.
-**Fix:** Calculate the Pearson correlation coefficient between your predictions and the lag-1 actuals. If the correlation is higher than the prediction-to-actual correlation, you must aggressively prune overlapping lag features.
+TreeSHAP, covered in [Module 2.2](../module-2.2-interpretability-and-failure-slicing/), is the
+trustworthy attribution path for boosted trees when you need additive, locally faithful explanations
+with a clear background distribution. SHAP values decompose a prediction into per-feature
+contributions relative to a baseline expectation. They still describe the model, not causal reality,
+but they are far more disciplined than raw impurity rankings for comparing magnitude and direction on
+a single row or summarizing global behavior with summary plots.
 
-```python
-# Common leak: Target at t-1 included as feature for predicting t
-# The model learns: y_t ≈ y_{t-1} (just copy previous value)
+A practical interpretation ladder for boosted models starts with held-out permutation importance when
+the question is global ranking under correlated features, because shuffling on validation data reveals
+whether a feature actually moves predictions when its values are destroyed. When stakeholders need
+directional contribution stories on tabular inputs, escalate to SHAP summary plots built with a
+documented background distribution, remembering that SHAP explains the model rather than the world.
+When errors cluster by cohort rather than by single-feature extremes, failure slicing from [Module
+2.2](../module-2.2-interpretability-and-failure-slicing/) beats per-row attribution theater. If
+permutation importance and SHAP disagree on the same model, trust the held-out permutation story
+first and investigate encoding leakage or train-serve skew before you publish either chart to policy
+reviewers.
 
-# Check for this:
-def check_for_lag_leak(predictions, actuals):
-    """Detect if predictions are just lagged actuals."""
-    # Correlation with lag-1 actual
-    corr_lag1 = np.corrcoef(predictions[1:], actuals[:-1])[0, 1]
-    # Correlation with actual
-    corr_actual = np.corrcoef(predictions, actuals)[0, 1]
+## Section 7: When Boosting Beats Random Forest — and When It Does Not
 
-    print(f"Correlation with lag-1 actual: {corr_lag1:.4f}")
-    print(f"Correlation with actual: {corr_actual:.4f}")
+Model selection should follow problem structure, not leaderboard folklore, because the strongest
+offline score is worthless when the model family fights your data geometry, serving budget, or
+explanation requirements. Boosting is powerful tabular machinery, but power without fit creates
+monitoring debt.
 
-    if corr_lag1 > corr_actual:
-        print(" LEAK DETECTED: Predictions track lagged values!")
-        print("   Check your features for data leakage")
-```
+Reach for gradient boosting on medium-to-large tabular datasets with nonlinear interactions, mixed
+numeric and categorical features, and enough labeled rows to support validation and early stopping.
+Boosting is often the strongest default when you have already verified that a linear model from
+[Module 1.2](../module-1.2-linear-and-logistic-regression-with-regularization/) plateaus and you need
+more flexible decision boundaries than a single shallow tree provides. It is a common next step after
+the Random Forest baseline in [Module
+1.5](../module-1.5-decision-trees-and-random-forests/) when variance reduction alone is not enough.
 
-### Symptom: Production Performance is Catastrophic
-**Symptoms:** The model reports a phenomenal MAE during the training and validation phases, but can fail soon after deployment, sometimes predicting impossible values.
-**Diagnosis:** This indicates a fundamental divergence between the training environment and the production environment. This is typically caused by unmitigated overfitting, data leakage injected during the cross-validation setup, or a fundamental regime shift in the live telemetry.
-**Fix:** Validate the integrity ratios between train, validation, and production metrics.
+Stay with Random Forest or even a single regularized tree when training time must stay minimal, when
+parallel training without sequential dependency matters, or when OOB estimates give you a fast
+development signal without configuring validation callbacks. Forests are also simpler to explain at
+the ensemble level when stakeholders only need a coarse stability check rather than maximum tabular
+accuracy.
 
-```python
-def validate_training_integrity(model_metrics, production_metrics):
-    """Check if training performance is realistic."""
-    train_mae = model_metrics['train_mae']
-    val_mae = model_metrics['val_mae']
-    prod_mae = production_metrics['mae']
+Stay with linear models when the signal is mostly global and smooth, when calibrated coefficients
+matter for policy review, or when the feature space is ultra-high-dimensional and sparse such as
+textual bag-of-words representations. Boosting can technically run on sparse matrices in some
+setups, but it is rarely the first move compared with logistic regression or linear SVM baselines
+from [Module 1.7](../module-1.7-naive-bayes-knn-and-svms/).
 
-    print(f"Training MAE: {train_mae:.4f}")
-    print(f"Validation MAE: {val_mae:.4f}")
-    print(f"Production MAE: {prod_mae:.4f}")
+Skip boosting when data is tiny and sequential models overfit despite regularization, when labels are
+extremely scarce and nested CV variance dominates any point estimate, or when the problem is not
+tabular at all. Images, raw audio, long unstructured text, and native time-series forecasting without
+careful tabular featurization belong elsewhere — including [Module 1.12: Time Series
+Forecasting](../module-1.12-time-series-forecasting/) for sequence-native methods rather than
+bolting timestamps into a booster without a leakage audit.
 
-    # Warning signs
-    if train_mae < val_mae * 0.5:
-        print(" Training much better than validation - likely overfitting")
+The decision checklist is short: linear if the surface should be global; forest if you need a fast,
+parallel baseline with OOB; boosting if tabular interactions remain after those baselines and you can
+pay tuning and interpretation cost. Measure that cost with the same metric you will ship, not with
+default accuracy alone.
 
-    if prod_mae > val_mae * 2:
-        print(" Production 2x worse than validation - check for:")
-        print("   1. Data leakage in validation")
-        print("   2. Regime change in production")
-        print("   3. Feature pipeline differences")
+## Section 8: Operational Notes for Training and Serving
 
-    ratio = prod_mae / val_mae
-    if 0.8 < ratio < 1.2:
-        print(" Production performance matches expectations")
-```
+Boosted trees are not only a notebook algorithm. They are a training loop with stopping rules, a
+serialization format, and a serving path that must match how features arrive in production. Three
+operational themes recur in teams that ship them successfully: reproducibility, feature-contract
+stability, and honest round selection at inference time.
 
-### Symptom: ARIMA Convergence Failures
-**Symptoms:** Your `statsmodels` pipeline constantly throws maximum iteration warnings or fails to compute the Hessian matrix during optimization.
-**Diagnosis:** The optimization algorithm (like `lbfgs`) has encountered a complex topological space where the gradient is flat or unstable, preventing it from locating the global minimum for the AR and MA coefficients.
-**Fix:** Wrap the fitting process in a robust block that cycles through multiple solver methods (`bfgs`, `powell`, `nm`, `cg`) until a stable AIC score is achieved.
+**Reproducibility** starts with seeds and library versions. Set `random_state` in sklearn, `seed` in
+XGBoost params, and `seed` in LightGBM params when you need repeatable benchmarks. Histogram
+algorithms can still show tiny floating-point differences across hardware, so treat exact score
+equality across machines as a nice outcome rather than a guarantee. Log the library versions from the
+landscape snapshot in your experiment metadata so reviewers can interpret small metric drift later.
 
-```python
-from statsmodels.tsa.arima.model import ARIMA
-import warnings
+**Feature-contract stability** matters because boosters memorize split thresholds on encoded inputs.
+If training uses native categorical codes but serving accidentally sends string labels without the
+same mapping, predictions silently shift. If rare categories are grouped during training but appear as
+unseen levels online, each library has different fallback behavior for missing or unknown categories.
+The preprocessing contract from [Module
+1.4](../module-1.4-feature-engineering-and-preprocessing/) must be identical in batch retraining and
+online inference, including the decision to native-encode or one-hot-encode — never both on the same
+column.
 
-def fit_arima_robust(series, order, max_attempts=5):
-    """Fit ARIMA with multiple optimization attempts."""
+**Round selection at inference** is the XGBoost-specific footgun worth repeating. When early stopping
+chooses round fifty but training continued to one hundred twenty, the serialized booster may contain
+extra trees that hurt validation performance. Production inference should use the validation-best
+iteration unless you have a separate policy documented and tested. sklearn and LightGBM wrappers often
+hide this detail, but the underlying principle is the same: the model you score with must be the model
+you validated, not the longest training run your notebook happened to finish.
 
-    methods = ['lbfgs', 'bfgs', 'powell', 'nm', 'cg']
-    best_model = None
-    best_aic = np.inf
+**Distributed training** is where XGBoost and LightGBM frequently enter architecture discussions
+even if single-node sklearn was enough for prototyping. Spark and Dask integrations matter when
+historical training data no longer fits one machine's memory or when retraining must complete inside
+a nightly batch window. The algorithm does not change in distributed mode; synchronization of
+histogram statistics and validation metrics does. Read the vendor tutorial for your cluster stack
+before assuming a local notebook script drops into a production job unchanged.
 
-    for method in methods[:max_attempts]:
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+**Monitoring** after deployment should track score distributions, missing-value rates per feature, and
+category cardinality drift. Boosted models do not extrapolate outside training support the way linear
+models can. A sudden shift in a numeric feature's range can leave rows routed down suboptimal leaves
+without throwing errors. Pair model metrics with the slice discipline from [Module
+2.2](../module-2.2-interpretability-and-failure-slicing/) so you notice cohort regressions before
+aggregate accuracy masks them.
 
-                model = ARIMA(series, order=order)
-                fitted = model.fit(method=method)
-
-                if fitted.aic < best_aic:
-                    best_aic = fitted.aic
-                    best_model = fitted
-                    print(f"Method {method}: AIC={fitted.aic:.2f} ")
-
-        except Exception as e:
-            print(f"Method {method}: Failed ({str(e)[:50]})")
-
-    if best_model is None:
-        print("All methods failed. Try:")
-        print("1. Check for missing values")
-        print("2. Try simpler order (lower p, q)")
-        print("3. Ensure data is numeric")
-
-    return best_model
-```
-
-### Symptom: Prophet Training is Too Slow
-**Symptoms:** Fitting a Facebook Prophet model across a large historical dataset takes hours per series, breaking your SLA constraints.
-**Diagnosis:** Prophet is executing computationally expensive MCMC (Markov Chain Monte Carlo) sampling for uncertainty intervals and evaluating an excessive number of changepoint matrices.
-**Fix:** Force the model into a fast-execution mode using MAP (Maximum A Posteriori) estimation by setting `mcmc_samples=0` and aggressively reducing the Fourier terms for seasonality.
-
-```python
-from prophet import Prophet
-
-def fast_prophet_fit(df, quick_mode=True):
-    """Configure Prophet for faster training."""
-
-    if quick_mode:
-        model = Prophet(
-            # Reduce MCMC samples (default is 1000)
-            mcmc_samples=0,  # Use MAP estimation instead
-
-            # Reduce changepoint detection
-            n_changepoints=10,  # Default is 25
-
-            # Simplify seasonality
-            yearly_seasonality=5,  # Fewer Fourier terms (default 10)
-            weekly_seasonality=3,  # Default is 3
-
-            # Disable uncertainty intervals for speed
-            uncertainty_samples=0
-        )
-    else:
-        model = Prophet()  # Full accuracy mode
-
-    model.fit(df)
-    return model
-
-# Also consider: sample your data for initial exploration
-# Full data for final model only
-```
-
-## Economics of Forecasting
-
-Understanding the financial architecture of machine learning deployments ensures you design systems that actually generate ROI.
-
-| Industry | Use Case | 1% Accuracy Gain Value | Typical Investment |
-|----------|----------|------------------------|-------------------|
-| **Retail** | Demand forecasting | Potentially high but context-dependent | Varies widely by scope |
-| **Energy** | Load forecasting | Often financially significant | Depends on system size and regulation |
-| **Finance** | Trading signals | Can have very large upside or downside | Investment levels vary widely |
-| **Logistics** | Capacity planning | Can materially affect fleet and labor efficiency | Costs vary by operational scope |
-| **Healthcare** | Patient volume | Better forecasts can improve staffing efficiency and service quality | Costs depend on organization size |
-
-| Factor | Build Custom | Use Prophet/Auto-ARIMA | Buy Platform |
-|--------|-------------|------------------------|--------------|
-| Time series count | Very large portfolios may justify custom global systems | Small portfolios often fit simpler tools | Mid-sized portfolios may use either approach |
-| Customization need | High | Low | Medium |
-| Team expertise | Deep ML | Basic stats | Varies |
-| Time to value | Usually longer | Usually shorter | Intermediate |
-| Annual cost | Often higher | Often lower | Frequently mid-range |
-
-```mermaid
-graph TD
-    A[TOTAL ANNUAL COST: 500K to 2M] --> B[Infrastructure 40%]
-    A --> C[Personnel 50%]
-    A --> D[Tools & Services 10%]
-    B --> B1[Compute for training: 5K-50K/mo]
-    B --> B2[Real-time inference: 2K-20K/mo]
-    B --> B3[Data storage: 1K-10K/mo]
-    B --> B4[Monitoring systems: 1K-5K/mo]
-    C --> C1[Data scientists: 2-5 FTEs]
-    C --> C2[ML engineers: 1-3 FTEs]
-    C --> C3[Domain experts: 0.5-1 FTE]
-    D --> D1[Cloud ML platforms]
-    D --> D2[Feature stores]
-    D --> D3[Experiment tracking]
-```
-
-## Historical Context
-
-Understanding where time series methods came from helps appreciate their design decisions and limitations.
-
-### The Classical Era (1920s-1970s)
-Time series forecasting began with simple moving averages in the 1920s, used primarily for economic forecasting and quality control in manufacturing. The field was transformed in the 1950s when Robert Brown developed exponential smoothing while working at the U.S. Navy's Office of Operations Research. Brown needed to forecast demand for submarine spare parts—a problem where recent data should matter more than old data. His exponentially weighted moving average became the foundation for modern forecasting.
-
-A major milestone came with Box and Jenkins' ARIMA work, which helped standardize an identify-estimate-diagnose-forecast workflow and strongly shaped practical forecasting for many years.
-
-### The Machine Learning Era (2000s-2010s)
-The rise of machine learning brought new approaches to time series. Recurrent Neural Networks (RNNs) were proposed as early as 1986 by David Rumelhart, but the vanishing gradient problem limited their practical use. Sepp Hochreiter and Jürgen Schmidhuber solved this in 1997 with Long Short-Term Memory (LSTM) networks, but computing power wasn't sufficient to train them effectively until the 2010s.
-
-Meanwhile, practical forecasters discovered that gradient boosting with hand-crafted features often outperformed neural networks. The M Competitions (Makridakis Competitions), running since 1982, provided rigorous benchmarks. In the 2018 M4 competition, a hybrid approach combining exponential smoothing with neural networks won—showing that classical and modern methods could complement each other.
-
-### The Transformer Era (2017-Present)
-The introduction of Transformers in 2017 (Vaswani et al.'s "Attention Is All You Need") revolutionized natural language processing and eventually time series. The attention mechanism solved the fundamental problem that plagued RNNs: how to directly connect distant timesteps without information degrading through sequential processing.
-
-Google's Temporal Fusion Transformer (2020) adapted these ideas specifically for time series, adding variable selection networks to handle the many exogenous variables common in forecasting problems. Amazon's DeepAR and Facebook's Prophet (2017) democratized sophisticated forecasting, making it accessible to practitioners without deep statistical training.
-
-Today, we're in an exciting period where classical methods, gradient boosting, and deep learning each have their place. The key insight from decades of research: no single method dominates. The best practitioners understand the strengths of each approach and choose based on their specific problem, data, and constraints.
-
-## Further Reading
-
-### Papers
-- "Time Series Analysis: Forecasting and Control" (Box & Jenkins, 1970) - The foundational text that defined modern time series analysis
-- "Time Series Forecasting with Prophet" (Taylor & Letham, 2017) - Facebook's accessible forecasting framework
-- "Temporal Fusion Transformers" (Lim et al., 2020) - State-of-the-art deep learning for interpretable forecasting
-- "N-BEATS: Neural Basis Expansion Analysis" (Oreshkin et al., 2020) - Pure deep learning without hand-crafted features
-- "Deep Learning for Time Series Forecasting" (Lim & Zohren, 2021) - Comprehensive survey of modern methods
-- "The M5 Accuracy Competition: Results, Findings and Conclusions" (Makridakis et al., 2022) - Empirical insights from the largest forecasting competition
-
-### Libraries
-- **statsmodels**: ARIMA, exponential smoothing, and classical statistical methods
-- **Prophet**: Facebook's forecasting library, excellent for daily data with seasonality
-- **GluonTS**: Amazon's deep learning time series toolkit with DeepAR and other models
-- **Darts**: Unified interface for classical, ML, and deep learning methods
-- **sktime**: scikit-learn compatible time series with consistent API
-- **pytorch-forecasting**: PyTorch-based deep learning models including TFT
-- **NeuralProphet**: Prophet-like interface with neural network backends
-
-## Key Takeaways
-
-- **XGBoost's True Power**: Tree-based models like XGBoost and `HistGradientBoostingRegressor` excel on massive datasets by leveraging global cross-learning across thousands of temporal series concurrently, dramatically outperforming isolated statistical models.
-- **The Look-Ahead Bias Threat**: Temporal data structure cannot be randomly shuffled. Attempting a standard `train_test_split` on sequential data leads to data leakage, producing catastrophic failures in production. For most temporal forecasting tasks, utilize time-based walk-forward splits.
-- **Hardware Agnosticism**: XGBoost 3.2.0 allows seamless distributed execution across multi-GPU environments via the global `device` parameter, integrating seamlessly with Dask and PySpark on Kubernetes architectures.
-- **Stationarity Fundamentals**: Before modeling, utilize ADF tests to detect stationarity. Extrapolating non-stationary data requires strict differencing or engineered rolling features to ensure stability.
-- **Control Through Constraints**: You can tame unpredictable tree ensembles by imposing strict monotonic constraints, forcing the model to adhere to known physical and economic laws.
+**Hypothetical scenario:** A retraining job completes overnight with higher training AUC but flat
+validation AUC. The on-call engineer approves the release because training improved. The correct
+response is to block the release, compare validation curves to the prior artifact, and verify that
+early stopping and `best_iteration` were applied before serialization. Training improvement without
+validation improvement is the signature of a booster that started memorizing pseudo-residual noise.
 
 ## Did You Know?
-- Amazon's demand forecasting system processes over 300 million independent time series daily. Improving their ensemble accuracy by a mere 1% reliably saves the organization over $100 million annually in combined inventory and logistics costs.
-- George Box and Gwilym Jenkins developed the foundational ARIMA mathematical methodology in 1970, originally creating it to strictly predict and control the temperatures inside industrial gas furnaces.
-- The Long Short-Term Memory (LSTM) network architecture was originally published by researchers in 1997, yet it remained largely unutilized in industry until 2014 when GPU computational power made the matrix operations economically viable.
-- In the M5 forecasting competition, gradient-boosted tree approaches were highly competitive on large retail forecasting tasks.
+
+1. The scikit-learn ensemble documentation for `HistGradientBoostingClassifier` notes that native
+   missing values are handled during training by sending missing samples to the child that minimizes
+   loss, which avoids a separate imputation step for many tree models. Source:
+   https://scikit-learn.org/stable/modules/ensemble.html#histogram-based-gradient-boosting
+
+2. XGBoost's `xgboost.train` documentation states that when early stopping fires, the returned booster
+   corresponds to the last iteration, while `best_iteration` indexes the strongest validation round;
+   slicing `booster[: best_iteration + 1]` yields the validation-optimal model. Source:
+   https://xgboost.readthedocs.io/en/stable/python/python_intro.html
+
+3. LightGBM's leaf-wise growth can achieve lower loss with fewer leaves than level-wise growth on some
+   datasets, but unconstrained leaf-wise expansion is a known overfitting path on small noisy data —
+   which is why `num_leaves`, `min_data_in_leaf`, and early stopping matter together. Source:
+   https://lightgbm.readthedocs.io/en/latest/Features.html
+
+4. The SHAP documentation positions TreeSHAP as a polynomial-time exact algorithm for tree ensembles,
+   which is why boosted-tree explainability discussions converge on SHAP rather than generic
+   model-agnostic perturbation when trees are the production model. Source:
+   https://shap.readthedocs.io/en/latest/
 
 ## Common Mistakes
 
-| Mistake | Why | Fix |
+| Mistake | Why it's wrong | Safer pattern |
 |---|---|---|
-| **Random train/test split** | Destroys temporal order; leaks future to past. | Time-based walk-forward split (e.g. 80% past, 20% future). |
-| **First-order differencing seasonal data** | Removes trend but misses seasonality. | Difference the season (e.g. `diff(12)`) then `diff(1)`. |
-| **`center=True` on rolling means** | Uses future data in the window. | Use `center=False` and `.shift(1)`. |
-| **Too short training window** | Misses long-term cyclicality. | Use at least 2 full cycles of the longest seasonality. |
-| **Comparing MAPE across series** | Punishes low-volume series unfairly. | Use scale-independent MASE. |
-| **Ignoring Monotonic Constraints** | Tree models can overfit noise in trends. | Set monotonic_cst in HistGradientBoostingRegressor. |
-| **Running single models on 1M series** | Exponential training time; misses global patterns. | Use a global XGBoost model predicting all series together. |
-
-```python
-#  WRONG: Random train/test split destroys temporal structure
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-# Future data can leak into training!
-
-#  CORRECT: Time-based split preserves temporal order
-split_idx = int(len(X) * 0.8)
-X_train, X_test = X[:split_idx], X[split_idx:]
-y_train, y_test = y[:split_idx], y[split_idx:]
-# Training only sees past, testing only sees future
-```
-
-```python
-#  WRONG: Only first-order differencing for seasonal data
-diff_wrong = series.diff(1)  # Removes trend but not seasonality
-
-#  CORRECT: Seasonal differencing for seasonal data
-# For monthly data with yearly seasonality:
-diff_correct = series.diff(12)  # Remove yearly pattern
-diff_correct = diff_correct.diff(1)  # Then remove trend
-```
-
-```python
-#  WRONG: Rolling features that look into the future
-df['moving_avg'] = df['sales'].rolling(window=7, center=True).mean()
-#                                                    ^^^^^ Uses 3 future days!
-
-#  CORRECT: Only use past data
-df['moving_avg'] = df['sales'].rolling(window=7, center=False).mean().shift(1)
-#                                               ^^^^^ Only past ^^^^^^ Exclude current
-```
-
-```python
-#  WRONG: Training only on last 3 months
-model = Prophet()
-model.fit(df[df['ds'] > '2024-09-01'])  # Misses yearly seasonality!
-
-#  CORRECT: Include at least 2 full cycles of your longest seasonality
-# For yearly seasonality, use 2+ years of data
-model = Prophet()
-model.fit(df[df['ds'] > '2022-09-01'])  # Captures 2 full years
-```
-
-```python
-#  WRONG: Comparing MAPE across very different series
-mape_product_a = 5.2   # Sales: $1M/month
-mape_product_b = 45.3  # Sales: $100/month (!)
-
-# Product B seems terrible, but 45% of $100 is only $45 error!
-# Product A at 5% of $1M is $50,000 error!
-
-#  CORRECT: Use scale-independent metrics or absolute errors
-# Option 1: Compare MAE in dollars
-mae_a = 50000  # Much larger actual impact
-mae_b = 45     # Tiny actual impact
-
-# Option 2: Use MASE (Mean Absolute Scaled Error)
-# Compares your model to a naive baseline on the same series
-mase_a = 0.8   # 20% better than naive
-mase_b = 1.2   # 20% worse than naive (worry about this one!)
-```
+| Tuning `n_estimators` without early stopping or a validation surface | You either underfit with too few trees or overfit by continuing after validation metric peaks. | Set a high round cap, use early stopping on inner validation, and report `best_iteration` or `n_iter_`. |
+| Using the test split for `eval_set` during hyperparameter search | Test rows influence stopping and model selection, so the final metric is optimistically biased. | Keep a frozen test set; stop on train-internal validation or CV folds only. |
+| Assuming `feature_importances_` is safe for feature removal | Impurity importance favors high-cardinality features and reflects training splits, not held-out value. | Confirm with permutation importance on validation data or TreeSHAP summaries before dropping fields. |
+| Setting `learning_rate` high to "finish faster" | Large shrinkage steps need stronger regularization and often degrade generalization when paired with many trees. | Use a smaller learning rate with more rounds and let early stopping truncate. |
+| Applying `StandardScaler` in a boosting pipeline "because sklearn" | Tree splits depend on order, so scaling is unnecessary overhead for pure tree stages. | Keep encoders from [Module 1.4](../module-1.4-feature-engineering-and-preprocessing/); omit numeric scaling for tree boosters. |
+| Ignoring `best_iteration` after XGBoost `train` | Predictions from the final round can be worse than the validation-best round. | Slice to `best_iteration` or use callback `save_best=True` before scoring holdout data. |
+| Forcing monotonic constraints on features that are not truly monotonic | The model cannot represent real U-shaped or interaction-driven relationships on that feature. | Constrain only directionally safe business rules; leave other features unconstrained. |
+| Choosing LightGBM `num_leaves` as high as possible | Leaf-wise growth with huge leaf counts memorizes noise on small datasets. | Pair `num_leaves` with `min_data_in_leaf`, depth limits, and early stopping. |
 
 ## Quiz
 
-<details>
-<summary>1. A retail firm has 15,000 individual SKUs to forecast daily. Which architecture is most appropriate?</summary>
-A global model (like XGBoost or LightGBM) trained across all time series concurrently is the optimal choice here. Global models exploit cross-series learning by finding shared patterns across related items, drastically reducing the computational overhead compared to training 15,000 individual statistical instances. Furthermore, tree-based models natively handle sparse historical data, which is common in massive retail item catalogs.
+### 1. Your team retrains a booster monthly. Validation AUC improves for the first eighty rounds, then
+flatlines for twenty rounds before early stopping fires. Training AUC keeps climbing throughout the
+same window. What is the most likely diagnosis, and what should you change first?
+
+<details><summary>Answer</summary>
+
+The model is overfitting after round eighty. Training loss still improves because additional trees fit
+noise in pseudo-residuals, while validation stopped gaining useful signal. Do not add more trees
+with the same learning rate hoping validation will recover. Tighten regularization (`max_depth`,
+`min_child_samples`, `subsample`, L2 penalties), lower the learning rate while keeping early
+stopping, or roll back to the validation-best iteration. The first change should be early stopping at
+the best validation round, not reporting the final training AUC as success.
+
 </details>
 
-<details>
-<summary>2. Your HistGradientBoostingRegressor model captures long-term trends perfectly but makes nonsensical spikes in pricing predictions during standard validation. How can you constrain it?</summary>
-You must apply monotonic constraints via the `monotonic_cst` parameter during initialization. By mapping features like historical price to a strictly decreasing constraint (-1), the gradient boosted trees are mathematically forced to only execute node splits that obey the law of demand. This prevents the model from overfitting to short-term noisy periods where prices and sales may have spuriously spiked together.
+### 2. A pricing model must never predict higher expected demand when list price increases, holding
+other encoded features fixed in the routing sense trees use. Which tool choice fits, and what mistake
+breaks the guarantee?
+
+<details><summary>Answer</summary>
+
+Use monotonic constraints: `monotonic_cst=[-1]` on price for sklearn HistGradientBoosting, or the
+equivalent `monotone_constraints` tuple in XGBoost and LightGBM aligned to column order. The mistake
+is assuming constraints fix a leaky target or a mis-encoded discount field that inverts price
+semantics. Constraints apply to the modeled feature direction; they do not repair wrong feature
+definitions or causal leakage from future promotions encoded into past rows.
+
 </details>
 
-<details>
-<summary>3. Your team is migrating a massive sequential dataset to a multi-node Kubernetes cluster with NVIDIA GPUs. The legacy training pipeline uses `tree_method='exact'`, causing out-of-memory errors and extremely long training times. How should you reconfigure the XGBoost 3.2.0 parameters to solve this?</summary>
-To resolve out-of-memory constraints on large hardware, you must configure the `tree_method` parameter to `hist` (or `auto`, which automatically utilizes the histogram approach in version 3.2.0). The exact tree method evaluates every continuous feature's explicit split point, consuming unsustainable amounts of memory. By contrast, the histogram method bins continuous variables into discrete intervals, drastically slashing memory requirements while allowing the CUDA-enabled cluster to process the data in parallel.
+### 3. Scenario: You have twelve thousand labeled rows and use five-fold cross-validation for
+hyperparameter search. Where should early stopping run, and why is calling `fit` on all twelve
+thousand rows with internal `validation_fraction` inside each CV fold insufficient by itself?
+
+<details><summary>Answer</summary>
+
+Early stopping should run inside each training fold on an inner validation split or inner CV, never on
+the fold's validation data used for scoring the outer loop. If you only use `validation_fraction`
+inside a pipeline that already sits in outer CV, you still need to ensure preprocessing is fit on
+the outer training portion only. The mistake is leaking outer-fold validation rows into preprocessing
+statistics or using the outer fold's eval split as both stopping surface and generalization score.
+Nested validation separates stopping from selection.
+
 </details>
 
-<details>
-<summary>4. You train a forecasting model using a standard `train_test_split(X, y)` function from scikit-learn. Why is this a catastrophic mistake?</summary>
-A standard train/test split randomly shuffles rows before allocating them, fundamentally destroying the chronological integrity of the dataset. Sequence modeling mandates strict temporal ordering to prevent look-ahead bias and data leakage. By shuffling, the model inadvertently ingests data from the future to predict the past, resulting in a model that performs flawlessly during validation but fails catastrophically when deployed to production.
+### 4. Your XGBoost notebook prints feature importance by split count. A high-cardinality merchant
+identifier ranks at the top, but permutation importance on holdout data ranks it near zero. You need
+to evaluate global feature-importance claims before a stakeholder meeting. Which explanation is most
+plausible, and what should you show instead of the split-count chart?
+
+<details><summary>Answer</summary>
+
+Split-count importance rewards frequent splitting, which high-cardinality IDs invite even when they do
+not generalize. Merchant ID may memorize training merchants without helping on new merchants. When you
+evaluate global feature-importance claims for boosted trees, treat impurity-based and split-count
+rankings as training-time hints only. Permutation importance on held-out data is the better global
+evaluation signal here, and TreeSHAP summary plots from [Module
+2.2](../module-2.2-interpretability-and-failure-slicing/) are the next step if stakeholders need
+directional attribution. The operational response is not to ship the split-count chart; investigate
+whether the ID is a leakage proxy, group rare levels, or remove the column if policy allows.
+
 </details>
 
-<details>
-<summary>5. Why does XGBoost generally require engineered lag features, while an LSTM does not?</summary>
-XGBoost operates exclusively on independent, row-wise tabular data, possessing no inherent architectural awareness of chronological sequence or the passage of time. Consequently, temporal relationships must be explicitly encoded as discrete columns, such as `lag_1` or `rolling_mean_7`, before training can commence. Conversely, recurrent architectures like LSTMs maintain internal memory cell states via input and forget gates, allowing them to naturally ingest sequential tensors and parse dependencies over multiple time steps without manual feature engineering.
+### 5. Scenario: A sparse TF-IDF text classifier with five hundred thousand features and two thousand
+labeled documents currently works with logistic regression. A teammate proposes HistGradientBoosting
+because "boosting wins tabular benchmarks." How do you respond?
+
+<details><summary>Answer</summary>
+
+Decline the switch as a default. This is ultra-high-dimensional sparse text, not the tabular regime
+where boosting shines. Logistic regression aligns with the geometry of sparse linear separators and is
+far cheaper. Boosting on enormous sparse matrices may be feasible technically but is rarely the first
+move. Benchmark boosting only if a validation study on the same split discipline shows a meaningful
+gain that justifies serving cost and explanation complexity.
+
 </details>
 
-<details>
-<summary>6. You deploy a model utilizing scikit-learn 1.8.0. You notice memory and threading performance issues on multi-core CPU inference. How might Python 3.14 help?</summary>
-Scikit-learn version 1.8.0 introduced robust experimental support for Python 3.14's free-threading capabilities. Historically, Python's Global Interpreter Lock (GIL) prevented true parallel execution of threads in CPU-bound inference workloads. By executing the application within a free-threaded CPython environment, the HistGradientBoostingRegressor can leverage simultaneous multi-core inference, maximizing hardware utilization and substantially reducing latency in high-throughput prediction environments.
+### 6. XGBoost early stopping with best iteration
+
+After early stopping reports `best_iteration` fifty but training continued to one hundred twenty
+rounds, you call `predict` on the full `xgboost.train` booster without slicing to the validation-best
+iteration. What risk do you take?
+
+<details><summary>Answer</summary>
+
+You score with an ensemble that includes seventy rounds of validation-degrading trees. Holdout metrics
+can look worse than the validation story implied. Slice `booster[: best_iteration + 1]` or train
+with a callback that saves the best model before predicting. This mistake is common because the API
+returns the final iteration by default.
+
 </details>
 
-<details>
-<summary>7. Your team is forecasting daily energy grid loads. During exploratory data analysis, the ADF test yields a p-value of 0.85. The junior engineer suggests immediately fitting an ARIMA(2,0,1) model to the raw data. Why will this fail, and what sequence of transformations is required before applying the model?</summary>
-A p-value of 0.85 (which is >= 0.05) indicates that we fail to reject the null hypothesis; the series is definitively non-stationary. Classical methods like ARIMA rely on constant mean and variance over time to produce mathematically valid predictions. Fitting directly to raw non-stationary data will result in models that fail to extrapolate trends entirely. The team must first apply sequential differencing (creating a new series of changes between consecutive steps) until the ADF test yields a p-value < 0.05, thereby identifying the correct 'd' parameter required for the underlying ARIMA architecture.
+### 7. Forest versus boosting on the same protocol
+
+Your Random Forest OOB ROC AUC is `0.84`, and a tuned HistGradientBoosting model reaches `0.87` on
+the same split protocol with stable seeds. Does that automatically mean boosting should ship?
+
+<details><summary>Answer</summary>
+
+Not automatically. The gain must matter for the deployment metric, calibration requirements, latency,
+and maintenance. If the product needs stable probability thresholds and the gain is within noise
+across reruns, the forest's simpler training story may win. If the gain is stable across seeds and
+slices, boosting is justified. Also compare interpretation and monitoring cost per [Module
+2.2](../module-2.2-interpretability-and-failure-slicing/).
+
 </details>
 
-<details>
-<summary>8. Design a real-time anomaly detection system for server metrics processing 5 million points per minute.</summary>
-To handle five million events per minute, a highly concurrent streaming architecture utilizing Apache Kafka and Apache Flink is strictly required. The anomaly scoring mechanism must compute a dynamically adjusted seasonal baseline by constantly updating rolling statistical metrics within an in-memory datastore like Redis. To minimize alert fatigue for the operations team, the system should combine multiple continuous signals—such as a Z-score deviation cross-referenced against an Isolation Forest output—before transmitting a correlated incident payload to PagerDuty.
+### 8. Duplicate categorical encoding
+
+You enable native categorical handling in LightGBM but still one-hot encode the same column earlier
+in the pipeline. What problem appears?
+
+<details><summary>Answer</summary>
+
+You duplicate representation, inflate dimensionality, and can confuse split finding. Pick one
+strategy: either native categorical indices in the booster or explicit encoding in [Module
+1.4](../module-1.4-feature-engineering-and-preprocessing/), not both on the same column. Mixed pipelines
+are a frequent source of training-serving skew when one path is removed in production but not the
+other.
+
 </details>
 
-## Hands-On Exercises
+## Hands-On Exercise: Leakage-Safe Boosting Benchmark Across Three Libraries
 
-To successfully complete the lab sequence, you must execute these scripts sequentially within an isolated development environment.
+Build a small but honest benchmark that compares sklearn HistGradientBoosting, XGBoost, and LightGBM
+on the same tabular classification task, with frozen test data, inner validation for early stopping,
+and explicit ROC AUC reporting. Keep preprocessing aligned with [Module
+1.1](../module-1.1-scikit-learn-api-and-pipelines/), [Module
+1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/), and [Module
+1.4](../module-1.4-feature-engineering-and-preprocessing/).
 
-### Lab Setup
-Run the following commands to create the environment and bootstrap the synthetic temporal dataset.
+### Setup
 
-```bash
-# 1. Create and activate a virtual environment
-python3 -m venv xgboost_env
-source xgboost_env/bin/activate
+- [ ] Pick a tabular binary-classification dataset with at least several thousand rows and at least
+  one categorical column you can declare natively or encode cleanly.
+- [ ] Choose ROC AUC as the primary metric and write it down before training.
+- [ ] Reserve a final test split with stratification if classes are imbalanced.
+- [ ] Install pinned versions of scikit-learn, xgboost, and lightgbm compatible with your platform.
 
-# 2. Install dependencies (ensuring non-interactive deployment)
-pip install --quiet xgboost==3.2.0 scikit-learn==1.8.0 "dask[distributed]" prophet statsmodels torch matplotlib
-```
+### Step 1: Create leakage-safe splits
 
-Create a bootstrapping script named `setup_data.py`:
-```python
-import pandas as pd
-import numpy as np
+- [ ] Build `X_train`, `X_test`, `y_train`, and `y_test`.
+- [ ] Inside `X_train`, create `X_tr`, `X_val`, `y_tr`, and `y_val` for early stopping.
+- [ ] Keep the test set untouched until the final evaluation step.
 
-# Synthetic Data Generation
-np.random.seed(42)
-dates = pd.date_range(start='2020-01-01', end='2023-12-31', freq='D')
-trend = np.linspace(10, 50, len(dates))
-seasonality = 10 * np.sin(2 * np.pi * dates.dayofyear / 365.25)
-noise = np.random.normal(0, 2, len(dates))
+### Step 2: Fit sklearn HistGradientBoosting with early stopping
 
-sales = np.clip(trend + seasonality + noise, 0, None)
-df = pd.DataFrame({'date': dates, 'sales': sales, 'value': sales}).set_index('date')
+- [ ] Train `HistGradientBoostingClassifier` with `early_stopping=True`, `validation_fraction`, and
+  `n_iter_no_change`.
+- [ ] Record `n_iter_`, validation AUC, and test AUC using `predict_proba`.
+- [ ] Do not add `StandardScaler` to tree inputs.
 
-# Save for reference in below exercises
-df.to_csv('sales.csv')
-df.to_csv('data.csv')
-print("Synthetic data generated: sales.csv, data.csv")
-```
+### Step 3: Fit XGBoost with explicit validation
 
-Execute the payload generation:
-```bash
-python setup_data.py
-```
+- [ ] Train with `tree_method='hist'` and `device='cpu'` unless your environment documents GPU
+  setup.
+- [ ] Pass `evals=[(dval, 'validation')]` and `early_stopping_rounds` to `xgboost.train`, or use the
+  sklearn wrapper with `eval_set` if that matches your pinned version.
+- [ ] Slice to `best_iteration` before test prediction.
+- [ ] Record validation-best iteration and test AUC.
 
-Verify creation success:
-```bash
-ls -l *.csv
-```
+### Step 4: Fit LightGBM with callbacks
 
-### Exercise 1: Build Complete ARIMA Pipeline
-Engineer a robust ARIMA flow by writing the following to `task1_arima.py` and executing it.
+- [ ] Build `lgb.Dataset` objects for train and validation.
+- [ ] Use `lgb.early_stopping` and `lgb.log_evaluation(0)`.
+- [ ] Record `best_iteration` and test AUC.
 
-<details>
-<summary>View Solution</summary>
+### Step 5: Compare regularization sensitivity
 
-```python
-"""
-Complete ARIMA forecasting pipeline with proper evaluation.
-"""
-import pandas as pd
-import numpy as np
-from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-import matplotlib.pyplot as plt
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+- [ ] Rerun one library with a higher `learning_rate` and note how many effective rounds early
+  stopping allows before validation degrades.
+- [ ] Rerun with stronger L2 regularization (`l2_regularization`, `reg_lambda`, or `lambda_l2`).
+- [ ] Write two sentences on which knob moved validation AUC more for your dataset.
 
-def check_stationarity(series, significance=0.05):
-    """
-    Test for stationarity using Augmented Dickey-Fuller test.
+### Step 6: Monotonic or categorical experiment
 
-    Returns True if series is stationary (p-value < significance).
-    """
-    result = adfuller(series.dropna())
-    adf_stat = result[0]
-    p_value = result[1]
+- [ ] If your dataset has a naturally directional numeric feature, fit a constrained sklearn model
+  with `monotonic_cst` and verify direction on a grid.
+- [ ] If you have a categorical column, fit once with native categorical support and once with an
+  explicit encoder, comparing validation AUC and training time.
 
-    print(f"ADF Statistic: {adf_stat:.4f}")
-    print(f"p-value: {p_value:.4f}")
+### Step 7: Interpretation sanity check
 
-    if p_value < significance:
-        print(" Series IS stationary (reject null hypothesis)")
-        return True
-    else:
-        print(" Series is NOT stationary (fail to reject null)")
-        return False
+- [ ] Print impurity or gain importance from one booster.
+- [ ] Compute permutation importance on `X_val` for the same model.
+- [ ] Note any feature whose rank changes materially and hypothesize why.
+- [ ] Write one sentence on whether TreeSHAP from [Module 2.2](../module-2.2-interpretability-and-failure-slicing/)
+  would be the next step for stakeholder review.
 
-def make_stationary(series, max_diff=2):
-    """
-    Apply differencing until series is stationary.
+### Step 8: Model-selection memo
 
-    Returns (transformed_series, number_of_differences).
-    """
-    current = series.copy()
-    d = 0
+- [ ] Summarize which library sat on the validation plateau for your metric and budget.
+- [ ] State whether boosting beat a Random Forest baseline from [Module
+  1.5](../module-1.5-decision-trees-and-random-forests/) enough to justify complexity.
+- [ ] Document the frozen test AUC once, after all choices are fixed.
 
-    while not check_stationarity(current) and d < max_diff:
-        d += 1
-        current = current.diff().dropna()
-        print(f"\nAfter {d} difference(s):")
+### Completion Check
 
-    return current, d
-
-def select_arima_order(series, max_p=5, max_q=5):
-    """
-    Use information criteria to select best ARIMA(p,d,q) parameters.
-    """
-    # Make stationary first
-    stationary, d = make_stationary(series)
-
-    # Grid search over p and q
-    best_aic = np.inf
-    best_order = None
-
-    for p in range(max_p + 1):
-        for q in range(max_q + 1):
-            try:
-                model = ARIMA(series, order=(p, d, q))
-                fitted = model.fit()
-
-                if fitted.aic < best_aic:
-                    best_aic = fitted.aic
-                    best_order = (p, d, q)
-                    print(f"ARIMA({p},{d},{q}): AIC={fitted.aic:.2f}")
-            except:
-                continue
-
-    print(f"\nBest order: ARIMA{best_order} with AIC={best_aic:.2f}")
-    return best_order
-
-def walk_forward_validation(series, order, test_size=30):
-    """
-    Evaluate ARIMA using walk-forward validation (time-respecting CV).
-
-    At each step:
-    1. Train on all data up to time t
-    2. Predict time t+1
-    3. Move forward and repeat
-    """
-    history = list(series[:-test_size])
-    predictions = []
-    actuals = list(series[-test_size:])
-
-    for i in range(test_size):
-        # Fit model on history
-        model = ARIMA(history, order=order)
-        fitted = model.fit()
-
-        # Predict next value
-        forecast = fitted.forecast(steps=1)[0]
-        predictions.append(forecast)
-
-        # Add actual to history (simulates getting new data)
-        history.append(actuals[i])
-
-        if (i + 1) % 10 == 0:
-            print(f"Progress: {i + 1}/{test_size} predictions")
-
-    # Calculate metrics
-    mae = mean_absolute_error(actuals, predictions)
-    rmse = np.sqrt(mean_squared_error(actuals, predictions))
-
-    print(f"\nWalk-Forward Validation Results:")
-    print(f"MAE: {mae:.4f}")
-    print(f"RMSE: {rmse:.4f}")
-
-    return predictions, actuals, mae, rmse
-
-# Example usage:
-df = pd.read_csv('sales.csv', parse_dates=['date'], index_col='date')
-series = df['sales']
-order = select_arima_order(series)
-predictions, actuals, mae, rmse = walk_forward_validation(series, order)
-```
-</details>
-
-```bash
-python task1_arima.py
-```
-
-### Exercise 2: Prophet vs ARIMA Comparison
-Write `task2_compare.py` to calculate algorithmic divergence.
-
-<details>
-<summary>View Solution</summary>
-
-```python
-"""
-Head-to-head comparison of Prophet and ARIMA on the same dataset.
-"""
-import pandas as pd
-import numpy as np
-from prophet import Prophet
-from statsmodels.tsa.arima.model import ARIMA
-from sklearn.metrics import mean_absolute_error
-import matplotlib.pyplot as plt
-
-def prepare_prophet_data(series):
-    """Convert pandas Series to Prophet format (ds, y columns)."""
-    df = pd.DataFrame({
-        'ds': series.index,
-        'y': series.values
-    })
-    return df
-
-def compare_forecasters(series, forecast_horizon=30):
-    """
-    Compare Prophet vs ARIMA on the same train/test split.
-    """
-    # Split data
-    train = series[:-forecast_horizon]
-    test = series[-forecast_horizon:]
-
-    results = {}
-
-    # --- PROPHET ---
-    print("Training Prophet...")
-    prophet_df = prepare_prophet_data(train)
-    prophet_model = Prophet(
-        yearly_seasonality=True,
-        weekly_seasonality=True,
-        daily_seasonality=False
-    )
-    prophet_model.fit(prophet_df)
-
-    # Make future dataframe
-    future = prophet_model.make_future_dataframe(periods=forecast_horizon)
-    prophet_forecast = prophet_model.predict(future)
-    prophet_preds = prophet_forecast['yhat'].iloc[-forecast_horizon:].values
-
-    results['Prophet'] = {
-        'predictions': prophet_preds,
-        'mae': mean_absolute_error(test.values, prophet_preds)
-    }
-
-    # --- ARIMA ---
-    print("Training ARIMA...")
-    # Using auto-selected order (you'd use select_arima_order in practice)
-    arima_model = ARIMA(train, order=(5, 1, 2))
-    arima_fitted = arima_model.fit()
-    arima_preds = arima_fitted.forecast(steps=forecast_horizon)
-
-    results['ARIMA'] = {
-        'predictions': arima_preds,
-        'mae': mean_absolute_error(test.values, arima_preds)
-    }
-
-    # --- COMPARISON ---
-    print("\n" + "=" * 50)
-    print("COMPARISON RESULTS")
-    print("=" * 50)
-    for name, data in results.items():
-        print(f"{name:15} MAE: {data['mae']:.4f}")
-
-    # Determine winner
-    winner = min(results.keys(), key=lambda k: results[k]['mae'])
-    print(f"\n Winner: {winner}")
-
-    # Plot comparison
-    plt.figure(figsize=(12, 6))
-    plt.plot(test.index, test.values, 'k-', label='Actual', linewidth=2)
-    plt.plot(test.index, results['Prophet']['predictions'], 'b--', label='Prophet')
-    plt.plot(test.index, results['ARIMA']['predictions'], 'r--', label='ARIMA')
-    plt.legend()
-    plt.title('Prophet vs ARIMA Forecast Comparison')
-    plt.xlabel('Date')
-    plt.ylabel('Value')
-    plt.tight_layout()
-    plt.savefig('forecast_comparison.png')
-
-    return results
-
-# Analyze Prophet components
-def analyze_prophet_components(model, forecast):
-    """Visualize what Prophet learned about trend and seasonality."""
-    fig = model.plot_components(forecast)
-    plt.tight_layout()
-    plt.savefig('prophet_components.png')
-
-    # Extract component strengths
-    trend_range = forecast['trend'].max() - forecast['trend'].min()
-    yearly_range = forecast['yearly'].max() - forecast['yearly'].min()
-
-    print(f"\nComponent Analysis:")
-    print(f"Trend range: {trend_range:.2f}")
-    print(f"Yearly seasonality range: {yearly_range:.2f}")
-    print(f"Ratio (seasonality/trend): {yearly_range/trend_range:.2%}")
-
-df = pd.read_csv('sales.csv', parse_dates=['date'], index_col='date')
-compare_forecasters(df['sales'])
-```
-</details>
-
-```bash
-python task2_compare.py
-```
-```bash
-# Checkpoint: Verify that the diagnostic visualizations were generated successfully
-ls -l *.png
-```
-
-### Exercise 3: Evaluate HistGradientBoostingRegressor vs ARIMA
-Write `task3_hist_boost.py` to evaluate the 1.8.0 histogram capabilities.
-
-<details>
-<summary>View Solution</summary>
-
-```python
-"""
-Evaluate HistGradientBoostingRegressor with lag features.
-"""
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.metrics import mean_absolute_error
-
-# Load data
-df = pd.read_csv('sales.csv', parse_dates=['date'], index_col='date')
-
-# Engineer Features (Lag and cyclical)
-df['lag_1'] = df['sales'].shift(1)
-df['lag_7'] = df['sales'].shift(7)
-df['dayofyear'] = df.index.dayofyear
-df = df.dropna()
-
-X = df[['lag_1', 'lag_7', 'dayofyear']]
-y = df['sales']
-
-# Time-respecting split
-split_idx = int(len(X) * 0.8)
-X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
-
-# Define HistGradientBoostingRegressor with monotonic constraints on lag_1
-# lag_1 mapped to index 0 -> must be monotonically increasing (1)
-hgb = HistGradientBoostingRegressor(max_iter=100, monotonic_cst=[1, 0, 0])
-hgb.fit(X_train, y_train)
-
-# Predict and evaluate
-preds = hgb.predict(X_test)
-mae = mean_absolute_error(y_test, preds)
-print(f"HistGradientBoostingRegressor MAE: {mae:.4f}")
-```
-</details>
-
-```bash
-python task3_hist_boost.py
-```
-
-### Exercise 4: Distributed XGBoost Training with Dask
-Draft `task4_dask_xgboost.py` to establish local distributed topology.
-
-<details>
-<summary>View Solution</summary>
-
-```python
-"""
-Distributed training using Dask and XGBoost 3.2.0.
-"""
-import dask.dataframe as dd
-from dask.distributed import Client, LocalCluster
-import xgboost as xgb
-import pandas as pd
-
-# Setup local Dask cluster
-cluster = LocalCluster(n_workers=2, threads_per_worker=2)
-client = Client(cluster)
-print("Dask Cluster Initialized!")
-
-# Load data into distributed dataframe
-pdf = pd.read_csv('sales.csv')
-pdf['lag_1'] = pdf['sales'].shift(1)
-pdf = pdf.dropna()
-ddf = dd.from_pandas(pdf, npartitions=2)
-
-X = ddf[['lag_1']]
-y = ddf['sales']
-
-# Initialize Distributed XGBoost
-# In version 3.2.0, tree_method='auto' effectively acts as 'hist'
-dask_model = xgb.dask.DaskXGBRegressor(tree_method='auto', n_estimators=50)
-
-# Train the model over the cluster
-dask_model.client = client
-dask_model.fit(X, y)
-
-print("Distributed XGBoost Training Complete!")
-```
-</details>
-
-```bash
-python task4_dask_xgboost.py
-```
-
-### Exercise 5: LSTM Time Series Model
-Build `task5_lstm.py` to compare tree ensembles against deep memory cells.
-
-<details>
-<summary>View Solution</summary>
-
-```python
-"""
-LSTM model for time series forecasting with proper sequence creation.
-"""
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error
-
-class LSTMForecaster(nn.Module):
-    """
-    LSTM architecture for time series prediction.
-    """
-    def __init__(self, input_size=1, hidden_size=64, num_layers=2, dropout=0.2):
-        super().__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout
-        )
-
-        self.fc = nn.Linear(hidden_size, 1)
-
-    def forward(self, x):
-        # x shape: (batch, sequence_length, input_size)
-        lstm_out, _ = self.lstm(x)
-
-        # Take the last output
-        last_output = lstm_out[:, -1, :]
-
-        # Predict
-        prediction = self.fc(last_output)
-        return prediction
-
-def create_sequences(data, look_back=30):
-    """
-    Create input sequences and targets for LSTM training.
-
-    Given [1, 2, 3, 4, 5] with look_back=3:
-    X = [[1,2,3], [2,3,4]]
-    y = [4, 5]
-    """
-    X, y = [], []
-    for i in range(len(data) - look_back):
-        X.append(data[i:(i + look_back)])
-        y.append(data[i + look_back])
-    return np.array(X), np.array(y)
-
-def train_lstm_forecaster(series, look_back=30, epochs=100, batch_size=32):
-    """
-    Complete LSTM training pipeline with proper time split.
-    """
-    # Scale data to [0, 1]
-    scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(series.values.reshape(-1, 1))
-
-    # Create sequences
-    X, y = create_sequences(scaled_data.flatten(), look_back)
-
-    # Time-based split (80% train, 20% test)
-    split_idx = int(len(X) * 0.8)
-    X_train, X_test = X[:split_idx], X[split_idx:]
-    y_train, y_test = y[:split_idx], y[split_idx:]
-
-    print(f"Training samples: {len(X_train)}")
-    print(f"Test samples: {len(X_test)}")
-
-    # Convert to PyTorch tensors
-    X_train = torch.FloatTensor(X_train).unsqueeze(-1)
-    y_train = torch.FloatTensor(y_train).unsqueeze(-1)
-    X_test = torch.FloatTensor(X_test).unsqueeze(-1)
-    y_test = torch.FloatTensor(y_test).unsqueeze(-1)
-
-    # Create DataLoader
-    train_dataset = TensorDataset(X_train, y_train)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-    # Note: shuffle=False for time series!
-
-    # Initialize model
-    model = LSTMForecaster()
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-    # Training loop
-    model.train()
-    for epoch in range(epochs):
-        total_loss = 0
-        for batch_X, batch_y in train_loader:
-            optimizer.zero_grad()
-            outputs = model(batch_X)
-            loss = criterion(outputs, batch_y)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-
-        if (epoch + 1) % 20 == 0:
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.6f}")
-
-    # Evaluate
-    model.eval()
-    with torch.no_grad():
-        predictions = model(X_test)
-
-    # Inverse transform to original scale
-    preds_original = scaler.inverse_transform(predictions.numpy())
-    actuals_original = scaler.inverse_transform(y_test.numpy())
-
-    mae = mean_absolute_error(actuals_original, preds_original)
-    print(f"\nTest MAE: {mae:.4f}")
-
-    return model, scaler, mae
-
-df = pd.read_csv('data.csv', index_col='date', parse_dates=True)
-model, scaler, mae = train_lstm_forecaster(df['value'], look_back=30)
-```
-</details>
-
-```bash
-python task5_lstm.py
-```
-
-### Exercise 6: Build Anomaly Detection System
-Develop `task6_anomaly.py` to trigger statistical deviations.
-
-<details>
-<summary>View Solution</summary>
-
-```python
-"""
-Production-ready time series anomaly detection with seasonal baselines.
-"""
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from collections import defaultdict
-
-class SeasonalAnomalyDetector:
-    """
-    Anomaly detector that learns hour-of-day and day-of-week patterns.
-    """
-
-    def __init__(self, z_threshold=3.0, min_samples=20):
-        self.z_threshold = z_threshold
-        self.min_samples = min_samples
-        # Store baselines by (hour, day_of_week)
-        self.baselines = defaultdict(lambda: {'values': [], 'mean': None, 'std': None})
-
-    def fit(self, series):
-        """
-        Learn normal patterns from historical data.
-
-        series: pd.Series with DatetimeIndex
-        """
-        for timestamp, value in series.items():
-            key = (timestamp.hour, timestamp.dayofweek)
-            self.baselines[key]['values'].append(value)
-
-        # Calculate statistics for each time slot
-        for key, data in self.baselines.items():
-            values = np.array(data['values'])
-            if len(values) >= self.min_samples:
-                # Use robust statistics (median and MAD) for outlier resistance
-                data['mean'] = np.median(values)
-                mad = np.median(np.abs(values - data['mean']))
-                data['std'] = 1.4826 * mad  # Scale MAD to approximate std
-
-                # Fallback to regular std if MAD is 0
-                if data['std'] < 1e-6:
-                    data['std'] = np.std(values)
-            else:
-                data['mean'] = None
-                data['std'] = None
-
-        print(f"Fitted on {len(series)} points")
-        print(f"Unique time slots learned: {len(self.baselines)}")
-
-        return self
-
-    def detect(self, timestamp, value):
-        """
-        Check if a value is anomalous given its timestamp.
-
-        Returns (is_anomaly, details_dict)
-        """
-        key = (timestamp.hour, timestamp.dayofweek)
-        baseline = self.baselines[key]
-
-        if baseline['mean'] is None:
-            return False, {
-                'status': 'insufficient_history',
-                'message': f'Not enough data for {timestamp.hour}:00 on day {timestamp.dayofweek}'
-            }
-
-        z_score = (value - baseline['mean']) / (baseline['std'] + 1e-10)
-
-        is_anomaly = abs(z_score) > self.z_threshold
-
-        return is_anomaly, {
-            'status': 'anomaly' if is_anomaly else 'normal',
-            'value': value,
-            'expected': baseline['mean'],
-            'z_score': z_score,
-            'threshold': self.z_threshold,
-            'timestamp': timestamp
-        }
-
-    def detect_batch(self, series):
-        """
-        Run detection on a batch of data, returning all anomalies.
-        """
-        anomalies = []
-        for timestamp, value in series.items():
-            is_anomaly, details = self.detect(timestamp, value)
-            if is_anomaly:
-                anomalies.append(details)
-
-        print(f"Found {len(anomalies)} anomalies in {len(series)} points")
-        print(f"Anomaly rate: {len(anomalies)/len(series)*100:.2f}%")
-
-        return anomalies
-
-# Usage example:
-df = pd.read_csv('data.csv', index_col='date', parse_dates=True)
-train_data = df['value']['2020-01-01':'2022-06-30']
-detector = SeasonalAnomalyDetector(z_threshold=3.0)
-detector.fit(train_data)
-
-test_data = df['value']['2022-07-01':'2023-12-31']
-anomalies = detector.detect_batch(test_data)
-for a in anomalies[:5]:
-    print(f"{a['timestamp']}: value={a['value']:.2f}, expected={a['expected']:.2f}, z={a['z_score']:.2f}")
-```
-</details>
-
-```bash
-python task6_anomaly.py
-```
-
-## Next Steps
-You have now fully bridged gradient boosting architectures with complex temporal data sequencing workflows. 
-
-**Up Next:** [Module 1.12: Time Series Forecasting](/ai-ml-engineering/machine-learning/module-1.12-time-series-forecasting/) — Apply tree-based models to sequential business problems, understand deep leakage in temporal datasets, and learn exactly when boosted ensembles empirically outperform more complex neural network approaches.
+- [ ] Test data was never used for early stopping or hyperparameter selection.
+- [ ] All three libraries report explicit ROC AUC, not default `score()` accuracy alone.
+- [ ] XGBoost predictions use the validation-best iteration when applicable.
+- [ ] Numeric scaling was omitted from pure tree inputs.
+- [ ] Importance conclusions mention held-out permutation checks, not builtin gain alone.
+- [ ] Your memo names a simpler baseline you would ship if the boosting gain were negligible.
 
 ## Sources
 
-- [XGBoost: A Scalable Tree Boosting System](https://arxiv.org/abs/1603.02754) — Primary paper on XGBoost's design goals and scalable tree-boosting foundations.
-- [DeepAR: Probabilistic Forecasting with Autoregressive Recurrent Networks](https://arxiv.org/abs/1704.04110) — Useful counterpoint for global sequence forecasting with recurrent models instead of feature-engineered boosting.
-- [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/abs/1912.09363) — Covers a strong modern deep-learning baseline for multi-horizon forecasting and interpretability.
+- scikit-learn ensemble guide (histogram-based gradient boosting):
+  https://scikit-learn.org/stable/modules/ensemble.html#histogram-based-gradient-boosting
+- `HistGradientBoostingClassifier` API reference:
+  https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.HistGradientBoostingClassifier.html
+- `HistGradientBoostingRegressor` API reference:
+  https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.HistGradientBoostingRegressor.html
+- scikit-learn missing-value support in HistGradientBoosting:
+  https://scikit-learn.org/stable/modules/ensemble.html#missing-values-support
+- scikit-learn monotonic constraints:
+  https://scikit-learn.org/stable/auto_examples/ensemble/plot_monotonic_constraints.html
+- XGBoost Python introduction (training, early stopping, `best_iteration`):
+  https://xgboost.readthedocs.io/en/stable/python/python_intro.html
+- XGBoost Python API reference (`xgboost.train`, `XGBClassifier`):
+  https://xgboost.readthedocs.io/en/stable/python/python_api.html
+- XGBoost parameters documentation:
+  https://xgboost.readthedocs.io/en/stable/parameter.html
+- LightGBM Features documentation (leaf-wise growth, GOSS, EFB):
+  https://lightgbm.readthedocs.io/en/latest/Features.html
+- LightGBM Python API (`train`, early stopping callbacks):
+  https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.train.html
+- LightGBM parameters reference:
+  https://lightgbm.readthedocs.io/en/latest/Parameters.html
+- SHAP documentation (TreeSHAP):
+  https://shap.readthedocs.io/en/latest/
+
+## Next Module
+
+Continue to [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/) to study
+three compact classical learners that remain the right tool on sparse text, small-data margin
+problems, and similarity-driven workflows when gradient boosting would be the wrong complexity trade.
