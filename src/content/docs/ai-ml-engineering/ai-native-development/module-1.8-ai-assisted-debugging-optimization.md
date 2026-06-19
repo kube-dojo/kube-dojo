@@ -1325,7 +1325,7 @@ You have learned how to diagnose failures, challenge model-generated fixes, prot
 - [kubectl top reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_top) — Official `kubectl top` reference describing its dependency on Metrics Server.
 - [Metrics Server](https://github.com/kubernetes-sigs/metrics-server) — Upstream project documentation explaining Metrics Server's autoscaling focus and default 15-second scrape interval.
 - [kubectl top pod reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_top/kubectl_top_pod/) — Kubernetes reference noting Pod metrics availability details and common timing caveats.
-- [OpenAI Function Calling Guide](https://platform.openai.com/docs/guides/function-calling?api-mode=respon) — Primary OpenAI guide for tool-calling flow, strict mode, and structured argument validation.
+- [OpenAI Function Calling Guide](https://platform.openai.com/docs/guides/function-calling?api-mode=responses) — Primary OpenAI guide for tool-calling flow, strict mode, and structured argument validation.
 - [New tools and features in the Responses API](https://openai.com/index/new-tools-and-features-in-the-responses-api/) — OpenAI announcement summarizing Responses API support for remote MCP servers, image generation, Code Interpreter, and file search.
 - [OpenAI Docs MCP](https://platform.openai.com/docs/docs-mcp) — OpenAI documentation for the public read-only MCP server used to access developer docs.
 - [OpenAI Web Search Guide](https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses) — OpenAI guide for Responses web-search tool behavior, supported modes, and model availability constraints.

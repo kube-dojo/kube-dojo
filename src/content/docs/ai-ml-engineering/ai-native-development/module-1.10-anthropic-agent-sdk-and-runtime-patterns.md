@@ -42,9 +42,16 @@ Hypothetical scenario: a platform team ships an internal agent that looks impres
 
 The problem is not that the team used an AI model. The problem is that they built a chat loop and treated it like an agent runtime. A serious runtime has to decide which tools are available, which actions need approval, how sessions are resumed, how work is observed, and how each action is verified before the agent continues.
 
-The Claude Agent SDK matters because, as of 2026-06, Anthropic describes it as packaging many of the runtime patterns behind Claude Code into a programmable form. Instead of starting with a blank model client and rebuilding tool execution, permissions, hooks, sessions, MCP integration, and context management from scratch, a team can build on a harness designed for iterative agent work.
+The Claude Agent SDK matters because Anthropic describes it as packaging many of the runtime patterns behind Claude Code into a programmable form. Instead of starting with a blank model client and rebuilding tool execution, permissions, hooks, sessions, MCP integration, and context management from scratch, a team can build on a harness designed for iterative agent work.
 
 This module teaches the runtime design behind that harness. You will not only learn what the SDK exposes; you will learn how to reason about when it is appropriate, how to constrain it, and how to recognize the point where explicit workflow code is safer than agent autonomy.
+
+> **Landscape snapshot — Claude Agent SDK, as of 2026-06.** Vendor SDK surfaces churn; verify against Anthropic's current docs before relying on specifics.
+>
+> - **Name:** Claude Agent SDK (formerly the Claude Code SDK) — broadened beyond coding to general agents.
+> - **Languages:** Python and TypeScript.
+> - **Built-in capabilities:** file read / run / search / edit, MCP support, hooks, permissions (allow & deny rules, permission modes, approval callbacks), sessions (IDs, resume, result messages, compact-boundary events), and subagents.
+> - **Durable spine (this module's focus):** the agent-loop lifecycle, the permission/guardrail model, session/state boundaries, and runtime tradeoffs — these outlast any single SDK version.
 
 ---
 
@@ -54,7 +61,7 @@ A plain chat integration asks a model to respond to a user message. A plain clie
 
 That distinction matters because most production failures are not caused by the first prompt being poorly worded. They happen when the system gives the model a powerful tool without a permission boundary, loses track of state across a long task, fails to inspect tool output, or treats a generated answer as done before checking the external reality it claims to change.
 
-The Claude Agent SDK is Anthropic's library form of the agent harness behind Claude Code. As of 2026-06, the official Agent SDK overview describes agents that can read files, run commands, search the web, edit code, connect to MCP servers, use hooks, track sessions, and manage context. The SDK does not remove the need for engineering judgment; it moves many runtime concerns into a structured place where you can design and inspect them.
+The Claude Agent SDK is Anthropic's library form of the agent harness behind Claude Code. The official Agent SDK overview describes agents that can read files, run commands, search the web, edit code, connect to MCP servers, use hooks, track sessions, and manage context. The SDK does not remove the need for engineering judgment; it moves many runtime concerns into a structured place where you can design and inspect them.
 
 That packaging is valuable precisely because it makes the runtime visible. A hand-rolled loop can absolutely be correct, but it often spreads policy across prompt text, helper functions, API wrappers, and ad hoc logs. Once the loop becomes hard to inspect, it becomes hard to answer the operational questions that matter: which tool was called, why was it allowed, what evidence came back, which state was preserved, and what stopped the run from continuing forever.
 
@@ -120,7 +127,7 @@ The verify stage exists because agent reasoning is not self-validating. A model 
 
 This loop is a runtime pattern, not just a planning slogan. A real implementation has to give the agent tools for gathering, tools for acting, and a policy that treats verification as mandatory for meaningful actions. Otherwise the loop exists only in documentation.
 
-As of 2026-06, Anthropic's Agent SDK loop documentation describes a message lifecycle where the SDK initializes session metadata, the model evaluates the prompt, requested tools execute, results are fed back, and the cycle repeats until the agent returns a final result. That is the mechanical form of gather, act, verify. It is not merely "the model thinks again"; it is a stream of messages, tool results, limits, hooks, and session identifiers that your application can inspect.
+Anthropic's Agent SDK loop documentation describes a message lifecycle where the SDK initializes session metadata, the model evaluates the prompt, requested tools execute, results are fed back, and the cycle repeats until the agent returns a final result. That is the mechanical form of gather, act, verify. It is not merely "the model thinks again"; it is a stream of messages, tool results, limits, hooks, and session identifiers that your application can inspect.
 
 The practical implication is that you should design the loop before you design the prompt. If the loop allows unlimited turns, unrestricted Bash, no stop condition, and no audit of tool results, then even a strong prompt is operating inside a weak runtime. If the loop has a turn budget, a cost budget, scoped tools, and a stop policy, then the prompt has a healthier environment to work inside.
 
@@ -266,7 +273,7 @@ The basic permission question is, "What is the agent allowed to do without askin
 
 Hooks provide runtime interception points. They let your application log, validate, block, or transform behavior around tool use and session events. In a serious system, hooks are how you move policy from "the prompt said not to" into executable control.
 
-As of 2026-06, the SDK documentation describes permissions through allow rules, deny rules, permission modes, approval callbacks, and hook decisions. That means the runtime can do more than ask the model to behave. It can pre-approve read-only tools, block specific commands, ask a human before sensitive actions, and return a denial message to the model when a requested tool call crosses the boundary.
+The SDK documentation describes permissions through allow rules, deny rules, permission modes, approval callbacks, and hook decisions. That means the runtime can do more than ask the model to behave. It can pre-approve read-only tools, block specific commands, ask a human before sensitive actions, and return a denial message to the model when a requested tool call crosses the boundary.
 
 A pre-tool hook can block edits outside an allowed path before the write happens. A post-tool hook can log changed files after an edit. A stop hook can reject completion if verification evidence is missing. A session-start hook can attach run metadata, while a session-end hook can emit cost and audit events.
 
@@ -338,7 +345,7 @@ A mature runtime usually needs both prevention and detection. Prevention limits 
 
 Sessions are one of the reasons the Agent SDK is more than a tool wrapper. Real work often spans multiple exchanges, and a useful agent may need to remember what it read, which files it changed, which hypothesis failed, and what goal the user approved. Session continuity can reduce repeated context gathering and preserve momentum.
 
-As of 2026-06, Anthropic's SDK documentation describes session IDs, resume behavior, result messages, and compact-boundary events in the agent stream. Those details matter because session state is not an invisible convenience. It is part of the runtime contract. If your application cannot explain which session was resumed, what facts were carried forward, and where compaction happened, then it cannot reliably debug long-running behavior.
+Anthropic's SDK documentation describes session IDs, resume behavior, result messages, and compact-boundary events in the agent stream. Those details matter because session state is not an invisible convenience. It is part of the runtime contract. If your application cannot explain which session was resumed, what facts were carried forward, and where compaction happened, then it cannot reliably debug long-running behavior.
 
 Continuity also creates risk. If the agent carries forward a weak assumption from early in the run, later decisions may inherit that mistake. If the session grows cluttered with obsolete observations, the model may spend attention on stale context. If the user changes the goal and the runtime does not record that change clearly, the agent may optimize for yesterday's task.
 
@@ -590,7 +597,7 @@ Treat the SDK as a harness, not a guarantee. It can provide a disciplined loop, 
 
 ## Did You Know?
 
-- As of 2026-06, the Claude Agent SDK is the renamed and broader form of the Claude Code SDK, reflecting that the underlying harness can support non-coding agents as well as software-development workflows.
+- The Claude Agent SDK is the renamed and broader form of the Claude Code SDK, reflecting that the underlying harness can support non-coding agents as well as software-development workflows.
 - The SDK supports both Python and TypeScript, which lets teams embed agent loops into backend services, automation scripts, developer tools, and web-facing applications.
 - MCP is not a replacement for local tools; it is a protocol boundary for structured external integrations such as SaaS systems, databases, browsers, and internal APIs.
 - Context compaction can help long-running sessions continue, but it can also preserve stale assumptions unless the runtime separates verified facts from temporary hypotheses.
