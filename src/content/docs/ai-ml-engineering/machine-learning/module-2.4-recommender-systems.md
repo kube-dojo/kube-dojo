@@ -95,8 +95,8 @@ the target is visible. They also look cleaner than they usually are.
 
 Explicit feedback was the historical default in much of recommender-system education. That is why many older examples start with a rating matrix. The
 user gave item A five stars and item B two stars. The model predicts missing ratings. The evaluation computes rating error. This is a coherent problem
-when the product really asks users for ratings and uses predicted ratings operationally, but by 2026 it is rare in production compared with behavioral
-signals.
+when the product really asks users for ratings and uses predicted ratings operationally, but it has become much less common in modern production systems
+compared with implicit behavioral signals like clicks, watches, and purchases.
 
 It is less common in production systems now. Many modern surfaces do not ask users for ratings at all. They observe behavior. Clicks, views,
 purchases, dwell time, completed plays, saves, shares, add-to-cart events, skips, and repeat visits are implicit signals. They are abundant. They are
@@ -194,7 +194,10 @@ preference signals with different confidence weights. The common Hu, Koren, and 
 r_ui`, where `r_ui` is an interaction strength. More interactions increase confidence that the positive preference signal is real. Missing
 interactions still influence training, but they are not treated like equally confident negative ratings.
 
-The `implicit` ALS implementation documents this model at https://benfred.github.io/implicit/api/models/cpu/als.html. The library is useful because it
+The `implicit` ALS implementation documents this model at https://benfred.github.io/implicit/api/models/cpu/als.html. One mapping detail matters in
+practice: you do not build the `1 + alpha * r_ui` confidence matrix yourself. You pass `implicit` the raw interaction matrix (the `r_ui` values), and the
+library applies the `alpha` scaling internally while treating unobserved entries as the baseline confidence. Pre-multiplying the `+ 1` into the matrix you
+hand to the library double-counts that baseline. The library is useful because it
 makes the sparse implicit workflow feel like a normal Python workflow. That convenience should not hide the modeling assumption. ALS learns factors
 that reconstruct confidence-weighted preference patterns. It does not discover intent by magic.
 
@@ -705,7 +708,10 @@ popular_items = np.argsort(item_popularity)[::-1]
 
 class PopularityRecommender:
     def __init__(self, ranked_items):
-        self.ranked_items = np.asarray(ranked_items)
+        # implicit's Cython evaluation helpers (ndcg_at_k, precision_at_k) expect
+        # int32 item IDs. np.argsort returns int64 on 64-bit NumPy, so cast here
+        # to avoid a "Buffer dtype mismatch, expected 'int' but got 'long'" crash.
+        self.ranked_items = np.asarray(ranked_items, dtype=np.int32)
 
     def recommend(
         self,
