@@ -1,0 +1,2 @@
+## 2026-06-19T22:30:27Z — `REVIEW` — `APPROVE`
+Reviewer: deepseek. #2020 ML wave-1. deepseek R1 NEEDS_CHANGES (claimed sklearn `penalty` deprecation + `multi_class` removal were fabricated) — OVERRULED by orchestrator web-verify against scikit-learn 1.9.0 docs: BOTH are real and current (penalty deprecated 1.8 -> removal 1.10, migrate to l1_ratio+C; multi_class removed). Stale-reviewer false positive; module is accurate and left unchanged. APPROVE.

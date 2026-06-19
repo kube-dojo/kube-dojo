@@ -1,0 +1,2 @@
+## 2026-06-19T22:30:27Z — `REVIEW` — `APPROVE`
+Reviewer: codex. #2020 ML wave-1. codex R1 NEEDS_CHANGES, executed labs: P1 DBSCAN lab used make_moons() default (n=100, clean) with eps=0.3/min_samples=10 -> 0 clusters / 100 noise (taught the opposite lesson). Orchestrator-fixed (PR #2038): make_moons(n_samples=300, noise=0.08) -> 2 clusters/3 noise (empirically verified); hands-on checkbox synced. APPROVE.

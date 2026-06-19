@@ -1,0 +1,2 @@
+## 2026-06-19T22:30:27Z — `REVIEW` — `APPROVE`
+Reviewer: cursor. #2020 ML wave-1. cursor R1 NEEDS_CHANGES, executed labs: P1 PopularityRecommender returned int64 IDs (np.argsort, NumPy 2.x) into implicit Cython ndcg_at_k expecting int32 -> Buffer dtype mismatch crash. Orchestrator-fixed (PR #2038): cast np.int32 (reproduced crash + verified fix, ndcg=0.1125); +HKV 1+alpha*r_ui -> implicit API mapping clarified; dated market claim softened. APPROVE.

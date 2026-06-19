@@ -1,0 +1,2 @@
+## 2026-06-19T22:30:27Z — `REVIEW` — `APPROVE`
+Reviewer: codex. #2020 ML wave-1. codex R1 NEEDS_CHANGES, executed labs: P1 IncrementalPCA used undefined stream_of_batches() -> NameError; P1 prose called UMAP a non-generalizing 'visualization tool' contradicting its own UMAP.transform() claim; umap-learn not installed. Orchestrator-fixed (PR #2038): concrete runnable generator (verified), corrected t-SNE-vs-UMAP out-of-sample wording, added umap-learn install note, softened unscoped 'faster' claim. APPROVE.
