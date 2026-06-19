@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 167b — #2020 deep-learning review wave (11/27)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.warn { background: #fff3cd; color: #856404; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+.ok { background: #d4edda; color: #155724; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+blockquote { border-left: 3px solid #e0a800; padding-left: 1rem; color: #555; background:#fffdf5 }
+</style></head><body>
+
+<h1>Session 167b — #2020 deep-learning review wave</h1>
+<p class="meta"><strong>2026-06-19</strong> · standalone orchestrator · continues s167 (same session; after the ai-native-development wave). User: "drive 2020" + "keep the fleet busy, I don't want them to idle." TLDR: ran the #2020 cross-family review on the <code>ai-ml-engineering/deep-learning</code> track in 3 pipelined mixed-family batches. <strong>11 of 27 modules reviewed + finalized this session</strong> (PR #2032 batch-1 incl. a heavy 1.1-numpy de-fab, PR #2033 batch-2; records in <code>2309ad77d</code>). 16 remain, queued for next session.</p>
+
+<h2>Fleet roster (user asked where it's documented)</h2>
+<p>Not inline in <code>CLAUDE.md</code> — it lives in the skills CLAUDE.md auto-loads: <strong><code>dispatch-router</code></strong> (full Activity × lane matrix) and <strong><code>curriculum-orchestrator</code></strong> (condensed roster + parallelism caps), plus ~8 roster memory entries. Active fleet: <strong>cursor</strong> (`--model auto`, Pro+ 3× workhorse — fix/review/write), <strong>codex</strong> (gpt-5.5, code-heavy author + reviewer, executes labs), <strong>opus</strong> (inline orchestrator = the default review seat), <strong>deepseek</strong> (v4-pro, cheap 2nd reviewer/fixer, ground-check), <strong>agy</strong> (Gemini 3.1-pro write / 3.5-flash review — use instead of retired `gemini`), <strong>grok</strong> via hermes. Dispatch: <code>scripts/dispatch_smart.py &lt;class&gt; --agent X</code>.</p>
+
+<h2>What shipped — 11/27 reviewed + finalized</h2>
+<p>All 27 deep-learning modules are dense T0 (smallest 5,796 prose words) → all REVIEW, zero expands. 1.2 was pre-reviewed (2026-06-10). Triage said "25" — under-counted by 2 (it's 27, 26 needed review).</p>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Verdict → outcome</th></tr>
+<tr><td>1.1-numpy-pandas</td><td>cursor</td><td><span class="warn">NEEDS_CHANGES</span> → heavy de-fab (PR #2032)</td></tr>
+<tr><td>1.1.1-nn-math</td><td>deepseek</td><td>APPROVE → 2 P2 (tensor-core wording, stable URL)</td></tr>
+<tr><td>1.1.2-neuron</td><td>codex</td><td><span class="ok">APPROVE clean</span> (ran perceptron_checks.py)</td></tr>
+<tr><td>1.1.3-forward-prop</td><td>agy</td><td>APPROVE → 1 P2 (Rumelhart Nov→Oct 1986)</td></tr>
+<tr><td>1.1.4-activations</td><td>opus inline</td><td>APPROVE → 1 P2 (link 1.1.5)</td></tr>
+<tr><td>1.1.5-loss-functions</td><td>opus inline</td><td><span class="ok">APPROVE clean</span></td></tr>
+<tr><td>1.1.6-backprop</td><td>deepseek</td><td><span class="ok">APPROVE clean</span> (ran every cell)</td></tr>
+<tr><td>1.1.7-tiny-nn-lab</td><td>cursor</td><td><span class="warn">NEEDS_CHANGES</span> → 2 P1 (AxisError, API drift) (PR #2033)</td></tr>
+<tr><td>1.1.8-comp-graphs</td><td>agy</td><td><span class="warn">NEEDS_CHANGES</span> → 1 P1 (quiz math) (PR #2033)</td></tr>
+<tr><td>1.3-training</td><td>deepseek</td><td><span class="ok">APPROVE clean</span> (ran on PyTorch 2.12)</td></tr>
+</table>
+
+<h3>The 1.1-numpy de-fab (the heavy one)</h3>
+<p>This module still carried pre-#1835 fabrication. Removed: Jane Street "largest DataFrame" claim, "Secret NumPy Test at Google" folklore, "$50/hr × 5M users" invented economics, empty "Billion-Dollar Bug" heading, two unsourced Oliphant quotes. Relabeled 2 war stories ($3M Cache Miss, Crashed Production) as <code>Hypothetical scenario:</code> — kept the engineering lesson, stripped invented company/dollar/latency specifics. Fixed: seaborn history (Michael Waskom solo, 2012 — it self-contradicted "a 2013 group"), broken Polars <code>groupby</code>→<code>group_by</code>, missing <code>import numpy as np</code>, deprecated <code>fillna(method=)</code>/<code>boxplot(labels=)</code>, Oliphant bio inconsistency; added a dated Landscape snapshot. <strong>5,527 prose words post-fix</strong> (kept the legitimate Wes McKinney/AQR history).</p>
+
+<h2>Ground-check caught real errors AND excluded ~5 false-positives</h2>
+<ul>
+<li><strong>agy 1.1.8 — real P1, but fix adjusted:</strong> the quiz claimed <code>y = x*x + x</code> returning <code>x.grad = 6</code> indicates an assignment bug. Hand-traced: that bug actually yields <strong>3</strong> (the mul's two x-branches overwrite each other + the add). agy suggested switching to <code>x**2</code>, but the engine has no <code>__pow__</code> — so the fix changed the quiz value 6→3 instead. (gemini-3.1-pro earned its keep — also caught the Nov→Oct 1986 date.)</li>
+<li><strong>deepseek 1.1.1/1.1.8 FPs excluded:</strong> earlier in the session deepseek flagged "3 broken cross-ref links" (they exist) and a K8s-version claim (was correct). It runs all code by execution though — high signal on lab correctness.</li>
+<li><strong>1.3 date web-verified:</strong> "PyTorch 2.12 announced May 13 2026" — confirmed correct (official M6 release). No fix.</li>
+<li><strong>1.1.4 stale nav:</strong> said "A5 Loss Functions not yet published" — but 1.1.5 exists; linked it.</li>
+</ul>
+
+<h2>Process notes / lessons</h2>
+<ul>
+<li><strong>Stale-base trap (caught):</strong> the batch-2 fix worktree was branched off main <em>before</em> PR #2032 merged, so its diff vs the updated main showed batch-1's de-fab being <em>reverted</em>. codex had only edited 1.1.7/1.1.8 (base drift produced the rest). Fixed by committing then <code>git rebase origin/main</code> → diff reduced to only the 2 real files. <strong>Always rebase a fix branch onto the new main before PR when an earlier PR merged during its dispatch.</strong></li>
+<li><strong>#2030 (filed earlier this session):</strong> <code>dispatch_smart.py:922</code> gates <code>ensure_worktree</code> on <code>mode!="read-only"</code>, so a read-only review with <code>--worktree</code> crashes — <strong>omit <code>--worktree</code> for read-only (agy) reviews.</strong> codex/deepseek reviews use write modes → worktrees fine.</li>
+<li><strong>codex draft-class + <code>--timeout 3600</code></strong> for the big multi-file de-fab — no SIGKILL. opus diff-reviewed both fix PRs (cross-family; codex reviewed only the clean 1.1.2, so it was clean to fix the others).</li>
+<li>Both PRs: full CI green incl. required <em>Astro build (render + schema)</em>. Records finalized direct-to-main (the documented finalize-to-done exception).</li>
+</ul>
+
+<h2>NEXT — 16 deep-learning modules remain</h2>
+<p><code>1.3.1–1.3.6</code> (init/optimizers/regularization/normalization/diagnostics/numerical-stability), <code>1.4.1–1.4.4</code> (embeddings/residual/attention/transformer-block), <code>1.5</code> cnns, <code>1.6</code> rnns, <code>1.7</code> capstone, <code>1.8</code> self-supervised, <code>1.9</code> gnns, <code>1.10</code> modern-transformers. All dense T0 → review (not expand). Fire the next mixed-family batch via the proven pipeline:</p>
+<blockquote>
+For each module: <code>{ cat logs/remediation/briefs/quality-coverage/_review-brief.md; echo "- &lt;path&gt;"; } &gt; _dl-X.md</code> → dispatch codex(worktree)/deepseek(worktree)/cursor(no-wt)/agy(<strong>no</strong>-wt) one each + opus inline → ground-check every P1 → consolidated codex/cursor fix (draft-class) → PR → CI → merge → write APPROVE records + <code>finalize_module.sh</code>.
+</blockquote>
+<p>After deep-learning: machine-learning (19), then synthesis-apps / ai-infrastructure / RL / advanced-genai, then scattered cloud/platform (per #2020). Standing: #1911 UK (~14%), #1876 AI-history book (73 ch), #2030 dispatch_smart fix, #1623 (g2-craft worktree retained).</p>
+
+</body></html>
