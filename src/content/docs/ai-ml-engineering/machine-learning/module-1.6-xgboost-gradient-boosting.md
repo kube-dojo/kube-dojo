@@ -554,7 +554,9 @@ XGBoost and LightGBM expose multiple importance definitions. Gain summarizes los
 by a feature. Split count rewards how often a feature is selected. Cover relates to the number of
 samples affected. A feature can split often on noise with tiny gain and still look important by split
 count. That is why production reviews should treat built-in importance as a debugging hint, not as an
-allocation or compliance conclusion.
+allocation or compliance conclusion. When reviewers ask for a single chart, prefer a held-out
+permutation bar chart with confidence intervals or a SHAP summary with a documented background sample
+size and version hash of the training artifact.
 
 TreeSHAP, covered in [Module 2.2](../module-2.2-interpretability-and-failure-slicing/), is the
 trustworthy attribution path for boosted trees when you need additive, locally faithful explanations
@@ -661,6 +663,13 @@ validation AUC. The on-call engineer approves the release because training impro
 response is to block the release, compare validation curves to the prior artifact, and verify that
 early stopping and `best_iteration` were applied before serialization. Training improvement without
 validation improvement is the signature of a booster that started memorizing pseudo-residual noise.
+
+Serving latency is the final operational note teams forget during offline benchmarks. Boosted models
+with hundreds of shallow trees can be fast on CPU for wide batches yet expensive for single-row
+online inference if implementations traverse trees naively. Profile prediction paths with production
+batch sizes, not notebook vector shapes. If latency dominates, a smaller forest or a linear model with
+hand-built interactions from [Module 1.4](../module-1.4-feature-engineering-and-preprocessing/) may be
+the better product decision even when boosting wins offline AUC by a few points.
 
 ## Did You Know?
 
@@ -827,7 +836,8 @@ on the same tabular classification task, with frozen test data, inner validation
 and explicit ROC AUC reporting. Keep preprocessing aligned with [Module
 1.1](../module-1.1-scikit-learn-api-and-pipelines/), [Module
 1.3](../module-1.3-model-evaluation-validation-leakage-and-calibration/), and [Module
-1.4](../module-1.4-feature-engineering-and-preprocessing/).
+1.4](../module-1.4-feature-engineering-and-preprocessing/). Record library versions in your notes so
+you can explain any small metric differences if you rerun the benchmark after upgrading dependencies.
 
 ### Setup
 
@@ -935,3 +945,6 @@ and explicit ROC AUC reporting. Keep preprocessing aligned with [Module
 Continue to [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/) to study
 three compact classical learners that remain the right tool on sparse text, small-data margin
 problems, and similarity-driven workflows when gradient boosting would be the wrong complexity trade.
+Those models complete the classical tabular and text baseline picture before you move into specialized
+topics such as anomaly detection and hyperparameter search in the modules that follow this one in the
+track sequence for this section of the machine learning curriculum.
