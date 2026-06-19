@@ -1,0 +1,2 @@
+## 2026-06-19T07:50:03Z — `REVIEW` — `APPROVE`
+#2028 cross-family review (session 167, #2020 triage-miss wave). Reviewer: opus (inline orchestrator, cross-family). Durable-vendor compliant: harness⟂model split, dated 2026-06 model snapshot (illustrative names), `Hypothetical scenario:` opener label, real sources, no best-tool/market-share claims. Currency fix: `gemini-2.5-flash`→`gemini-3.5-flash` (2.5-flash shutdown 2026-10-16, web-verified) in 2 aider examples. T0 ~9.1k prose words. PR #2029 merged (fabdff83d).
