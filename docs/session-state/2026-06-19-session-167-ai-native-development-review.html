@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 167 — #2020 ai-native-development cross-family review (triage miss)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.warn { background: #fff3cd; color: #856404; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+.ok { background: #d4edda; color: #155724; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+blockquote { border-left: 3px solid #e0a800; padding-left: 1rem; color: #555; background:#fffdf5 }
+</style></head><body>
+
+<h1>Session 167 — #2020 ai-native-development cross-family review</h1>
+<p class="meta"><strong>2026-06-19</strong> · standalone orchestrator · user: "drive 2020" after a gaps-discovery interview. TLDR: user suspected we don't cover AI coding agents (OpenClaw, Hermes, Goose). <strong>Check-don't-assume corrected the scope twice:</strong> (1) those tools <em>are</em> covered well (durable-vendor Rosetta in <code>ai-native-development</code>); (2) 5 of the sub-track's 9 modules were already reviewed (s117/#1835), so the real gap was <strong>4 modules the s162 #2020 triage missed</strong> — 1.2/1.8/1.9/1.10. Reviewed all 4 (mixed families, every finding ground-checked), fixed, merged PR #2029, finalized records. The sub-track is now <strong>9/9 reviewed</strong>.</p>
+
+<h2>Gaps-discovery answer (the user's question)</h2>
+<p>OpenClaw, Hermes, Goose, Aider, opencode, Cline, Continue are all covered, built to the <code>.claude/rules/durable-vendor-content.md</code> standard: <code>ai-native-development</code> 1.1 has the harness⟂model split + AI Coding Harness Rosetta (OpenClaw + Hermes as columns) + the OpenClaw $1.3M Codex-token cost lesson; 1.2 BYO matrix; 1.5 dedicated Goose + Hermes sections; plus <code>ai/ai-engineering-foundations</code> harness fundamentals 3.1–3.3 / 4.1. Two things I initially flagged were <strong>non-issues on verification</strong>: missing <code>module-1.6</code> is intentional (prompt-fundamentals retired to the foundations track, #1639), and the Hermes "Feb vs June 2026" is Agent-release vs Desktop-preview (both stated correctly in 1.5).</p>
+
+<h2>The real gap: a #2020 triage miss</h2>
+<p>The s162 #2020 triage enumerated 66 AI/ML modules but listed <strong>zero</strong> from <code>ai-native-development</code>. Audit found 5 of 9 (1.1/1.3/1.4/1.5/1.7) <em>were</em> reviewed in the #1835 wave (PR #1837, all APPROVE). The other 4 had no <code>.pipeline/reviews/</code> record — <code>shipped_unreviewed</code> at stage COMMITTED. Filed <strong>#2028</strong> (sub-task of #2020) and drove it.</p>
+
+<h2>The 4 reviews (mixed families, every P1 orchestrator-ground-checked)</h2>
+<table>
+<tr><th>Module</th><th>Reviewer</th><th>Verdict</th><th>Real fixes (FPs excluded)</th></tr>
+<tr><td>1.2 local-models</td><td>opus (inline)</td><td><span class="ok">APPROVE</span></td><td><code>gemini-2.5-flash</code>→<code>gemini-3.5-flash</code> ×2 (web-verified: 2.5-flash shuts down 2026-10-16)</td></tr>
+<tr><td>1.8 debugging</td><td>deepseek-v4-pro</td><td><span class="ok">APPROVE</span></td><td>1 truncated URL param; executed all 7 Python labs (pass)</td></tr>
+<tr><td>1.9 building-with</td><td>agy gemini-3.1-pro</td><td><span class="warn">NEEDS_CHANGES</span></td><td>3 real P1s: <code>Hypothetical scenario:</code> label on invented opener; dated vendor snapshot + Rosetta xref; MCP/AGENTS.md open-standards anchor</td></tr>
+<tr><td>1.10 anthropic-sdk</td><td>codex gpt-5.5</td><td><span class="warn">NEEDS_CHANGES</span></td><td>consolidate 6 inline dated SDK facts into one snapshot (codex web-verified all SDK facts correct/current)</td></tr>
+</table>
+
+<h3>False positives excluded (ground-check earned its keep)</h3>
+<ul>
+<li><strong>deepseek "3 broken cross-ref links"</strong> — the 3 target modules <em>exist</em> under <code>src/content/docs/ai/ai-engineering-foundations/</code>. deepseek looked in the wrong path (the hallucination the roster warns about).</li>
+<li><strong>deepseek "K8s v1.35+ → v1.36"</strong> — the structured <code>/statusz</code> Accept-header format <em>was</em> introduced in v1.35 (zPages graduates to beta in 1.36); the module text is already hedged. Left as-is.</li>
+<li><strong>codex 1.10 P1 down-classified</strong> — the SDK facts were already inline-date-stamped and correct; the fix is placement (consolidate into one snapshot), not a stale-fact blocker. Applied as additive, not a rewrite.</li>
+</ul>
+
+<h2>Ship</h2>
+<ul>
+<li>Consolidated fix authored by <strong>cursor</strong> from a verified, literal-complete brief; opus diff-reviewed (cross-family per Decision Card C) — clean, all 6 of 1.10's inline-qualifier removals grammatical.</li>
+<li><strong>PR #2029</strong> rebase-merged; all CI green incl. the required <em>Astro build (render + schema)</em>, site-health, incident-dedup, unit tests, arXiv check. Merge commit <code>fabdff83d</code>.</li>
+<li>4 APPROVE records written + <code>finalize_module.sh</code> ×4 (idempotent — all already COMMITTED, this cleared <code>shipped_unreviewed</code>); committed direct-to-main <code>6d4a3dac4</code> (the documented finalize-to-done exception).</li>
+<li>#2020 scope corrected (comment); <strong>#2028 closed</strong> (all ACs met). ai-native-development now 9/9 reviewed.</li>
+</ul>
+
+<h2>Tooling + hygiene</h2>
+<ul>
+<li><strong>Filed #2030</strong> — <code>dispatch_smart.py:922</code> gates <code>ensure_worktree</code> on <code>mode != "read-only"</code>, so a read-only review with <code>--worktree</code> cwd's into an uncreated dir → <code>FileNotFoundError</code> (hit agy 1.9 twice). Workaround in use: omit <code>--worktree</code> for read-only reviews (the third attempt succeeded). Confirmed it is <em>not</em> a <code>git worktree add</code> race — write-mode parallel dispatches created their worktrees fine.</li>
+<li>Pruned 4 merged worktrees (anr-codex/anr-deepseek/anr-fix + the s161 detached <code>codex-interactive</code>) + 3 orphan branches → git-hygiene detached-HEAD alert cleared. <strong>Kept <code>g2-craft</code></strong>: its file <code>docs/research/gap-engineering-craft-stage1-2026-06-05.html</code> is unmerged (#1623) — not mine to destroy.</li>
+<li>Stale 0-byte <code>.git/index.lock</code> (from earlier parallel worktree ops) briefly blocked the post-merge pull; verified no live git process held it before removing.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ul>
+<li><strong>#2020 continues</strong> — next per plan: ai-ml-engineering <strong>deep-learning (25) → machine-learning (19)</strong> → synthesis-apps / ai-infrastructure / RL / advanced-genai → scattered cloud/platform. Expect lab-correctness bugs in code-heavy ML modules; check <code>density.py</code> before treating any "expand" as real (verifier under-counts ~12%).</li>
+<li>Standing: #1911 UK (~14% current) · #1876 AI-history book (73 ch) · #2030 dispatch_smart fix · #2015/#1823 papercuts · #1623 gap-fill (g2-craft worktree retained).</li>
+<li>Reusables: <code>logs/remediation/briefs/quality-coverage/_review-brief.md</code> (durable-vendor review template), <code>_anr-fix.md</code> (this wave's fix brief).</li>
+</ul>
+
+</body></html>
