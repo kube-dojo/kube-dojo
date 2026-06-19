@@ -80,7 +80,7 @@ Many classical time series methods assume some form of stationarity. A stationar
 
 Differencing is the most common transformation. A first difference models the change from one observation to the next rather than the level itself. Seasonal differencing models the change from one seasonal position to the corresponding previous seasonal position, such as this January minus last January. Differencing can remove trend or seasonal persistence, but unnecessary differencing can also erase useful signal and make forecasts unstable.
 
-Two standard tests help frame the stationarity question. The Augmented Dickey-Fuller test uses a null hypothesis of a unit root, so a low p-value is evidence against non-stationarity. The KPSS test reverses the framing by using a stationarity null, so a low p-value suggests the series is not stationary under the selected level or trend assumption. The tests are not magic judges; they are structured evidence to combine with plots and domain knowledge.
+Two standard tests help frame the stationarity question. The Augmented Dickey-Fuller test uses a null hypothesis of a unit root, so a low p-value rejects the unit-root null and is therefore evidence that the series is stationary. The KPSS test reverses the framing by using a stationarity null, so a low p-value suggests the series is not stationary under the selected level or trend assumption. The tests are not magic judges; they are structured evidence to combine with plots and domain knowledge.
 
 ACF and PACF plots help identify autoregressive and moving-average structure after appropriate transformation. The autocorrelation function shows correlation between the series and lagged versions of itself. The partial autocorrelation function estimates the relationship at a lag after accounting for shorter lags. In practice, ACF and PACF are diagnostic tools, not vending machines for perfect `(p, d, q)` orders.
 
@@ -473,7 +473,7 @@ A global model can share information across related series, which helps when ind
 
 **Task**: Build an ARIMA/SARIMA forecaster and a tree-based recursive forecaster on bundled CO2 data, then compare both against a seasonal-naive baseline with walk-forward validation.
 
-This lab uses `statsmodels.datasets.co2`, so it does not download external data. It assumes the forecasting libraries are installed in your environment. If you are using the project virtual environment, install any missing optional packages with an explicit venv command such as `.venv/bin/python -m pip install statsmodels scikit-learn pandas numpy`.
+This lab uses `statsmodels.datasets.co2`, so it does not download external data. It assumes the forecasting libraries are installed in your environment. If you are using the project virtual environment, install any missing optional packages with an explicit venv command such as `.venv/bin/python -m pip install statsmodels scikit-learn pandas numpy`. Two earlier snippets in this module need extra optional packages: `auto_arima` requires `pmdarima`, and the Prophet example requires `prophet` (which installs `cmdstanpy`). Install them with `.venv/bin/python -m pip install pmdarima prophet` if you want to run those blocks.
 
 ### Steps
 
@@ -629,6 +629,8 @@ print(results.groupby("model")[["MAE", "RMSE", "MASE"]].mean().round(3))
 - [ ] Your written interpretation names the best model, the baseline gap, and whether the improvement justifies the added complexity.
 
 ### Verification
+
+Save the complete script assembled from the Steps above as `time_series_backtest.py`, then run it:
 
 ```bash
 .venv/bin/python time_series_backtest.py
