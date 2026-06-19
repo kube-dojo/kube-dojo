@@ -656,6 +656,8 @@ for adaptation patterns and [Module 1.4: RLHF & Alignment](../../advanced-genai/
 for post-pretraining behavior shaping.
 Do not treat "SSL" as one undifferentiated recipe across all of deep learning.
 
+The thread running through all six regimes is a single cost-benefit question: does an unlabeled-data pretext task buy representation quality you cannot get more cheaply from labels, curation, or a public backbone? When the honest answer is no, the most senior move is to skip self-supervised pretraining entirely and redirect that compute toward evaluation, calibration, and failure analysis — the work that actually moves a deployed system.
+
 ## Decision-keyed regime table
 If you compress the module into one operator-facing artifact,
 it should be a regime table rather than a slogan.
@@ -770,8 +772,8 @@ It is that the hardware profile does not match the original SimCLR scaling story
 </details>
 
 6. A manager is impressed by DINO attention maps that highlight object regions and
-wants to skip probe evaluation.
-Why is that a mistake?
+wants to ship the backbone immediately, skipping linear-probe and fine-tune evaluation because the attention maps already look convincing.
+Why is treating attention visualizations as a substitute for a quantitative downstream metric a mistake here?
 <details>
 <summary>Answer</summary>
 Because attention visualization is not a downstream metric.
@@ -792,6 +794,16 @@ That amount of labeled data plus a mature public vision domain usually means a
 strong supervised or public pretrained backbone deserves first priority.
 The burden of proof is on the custom SSL plan,
 not on the baseline.
+</details>
+
+8. You must choose between contrastive, masked-modeling, and self-distillation families for a new domain. How should you decide, and what infrastructure cost does each choice imply?
+<details>
+<summary>Answer</summary>
+Match the family to its inductive bias and to the infrastructure you can afford.
+Contrastive methods (SimCLR, MoCo) assume aggressive augmentations preserve semantic identity and lean on large effective batch sizes or a memory queue for enough negatives, which raises GPU-memory and tuning cost.
+Masked-modeling methods (MAE for vision, BERT-style for text) need only a reconstruction target and scale cleanly to large unlabeled corpora without negatives, but bias the backbone toward local detail unless the masking ratio is tuned.
+Self-distillation methods (BYOL, DINO, DINOv2) drop explicit negatives and produce strong frozen features for linear probing, at the cost of a momentum teacher and care around representation collapse.
+Prefer contrastive when augmentations are trustworthy and batch budget is high, masked-modeling when unlabeled data is abundant and negatives are inconvenient, and self-distillation when you want strong off-the-shelf frozen features.
 </details>
 
 ## Hands-On Exercise

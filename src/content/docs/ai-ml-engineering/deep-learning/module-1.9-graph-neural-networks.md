@@ -654,6 +654,8 @@ They are the wrong tool when those conditions do not hold.
 > is shifted, neighborhood serving is added, monitoring is expanded — go
 > back to XGBoost.)
 
+Across these regimes the discipline is the same as everywhere else in deep learning: reach for the heavier tool only after a cheaper baseline has been given a fair chance and lost. A graph-structured model earns its operational cost — feature pipelines, neighborhood serving, extra monitoring, and the debugging surface of message passing — only when the graph carries signal that a graph-blind baseline on the same features genuinely cannot recover. When a tabular model or a plain MLP matches the GNN within the margin that the new infrastructure would cost, the senior decision is to ship the simpler system and revisit the graph approach only if the data situation changes. Treat a GNN as one option in a portfolio of models, not as the default, and let the fair-experiment result rather than architectural novelty decide what reaches production.
+
 ## Decision-keyed regime table
 
 | Regime | Algorithm | Why |
@@ -885,6 +887,11 @@ print("num_classes:", dataset.num_classes)
   validation and test accuracy peak around depth 2 to 3 and degrade as
   depth increases — this is over-smoothing in practice.
 
+- [ ] Assemble the full PyTorch Geometric pipeline end to end: build the
+  `Data` object, wire `MessagePassing` layers (`GCNConv` / `SAGEConv` /
+  `GATConv`) into a model, and use `NeighborLoader` so the same pipeline
+  scales to graph data that does not fit in GPU memory.
+
 - [ ] Write a short decision memo. State the homophily ratio. State each
   baseline's accuracy. Identify which architecture you would ship for
   Cora-style problems and why. Note explicitly whether the depth
@@ -913,7 +920,7 @@ print("num_classes:", dataset.num_classes)
 - [Zhu et al., 2020](https://arxiv.org/abs/2006.11468): introduced H2GCN and documented the heterophilic-graph regime where a plain MLP outperforms GCN, GraphSAGE, and GAT on standard benchmarks.
 - [Chen et al., 2020](https://arxiv.org/abs/2007.02133): introduced GCNII with initial residual and identity mapping to enable practically-deep GCN stacks without collapse.
 
-## Next Steps
+## Next Module
 
 This module closes the Tier-2 extension of the Deep Learning Foundations
 track. The KubeDojo curriculum continues in two adjacent tracks under
