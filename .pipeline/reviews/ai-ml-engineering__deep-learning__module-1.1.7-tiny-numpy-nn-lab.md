@@ -1,0 +1,2 @@
+## 2026-06-19T12:06:22Z — `REVIEW` — `APPROVE`
+#2031 cross-family review (s167). Reviewer: cursor; ran labs (XOR trace + param counts exact). R1 NEEDS_CHANGES → 2 P1 fixed: validation accuracy AxisError (y_val.argmax on 1-D → ==y_val); A6→A7 nn.py API drift (added Standalone-lab-API callout). 4 P2 fixed (skeleton sigmoid, 600 samples, ln(K)/ln(2) scope, keras note). codex authored fix, opus diff-reviewed. PR #2033 merged.
