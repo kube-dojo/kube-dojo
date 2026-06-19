@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 167c — fleet infra: grok-build adapter + roster correction + Goose decision</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.warn { background: #fff3cd; color: #856404; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+.ok { background: #d4edda; color: #155724; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold }
+blockquote { border-left: 3px solid #e0a800; padding-left: 1rem; color: #555; background:#fffdf5 }
+</style></head><body>
+
+<h1>Session 167c — fleet infra: grok-build adapter + roster correction + Goose decision</h1>
+<p class="meta"><strong>2026-06-19</strong> · standalone orchestrator · third workstream of session 167 (after ai-native review [167] + deep-learning review wave [167b]). User-driven fleet conversation → shipped a first-class grok-build adapter, corrected the roster docs, found a real deploy-rot landmine, and decided to skip a Goose "shadow-orchestrator". No curriculum content changed.</p>
+
+<h2>Shipped — `--agent grok` (grok-build) + roster correction (#2034, PR #2035, `d8552f9c5`)</h2>
+<p>grok-build (xAI code/review model) had no first-class dispatch lane — it's reachable <strong>only via the native grok CLI</strong> (hermes carries grok-4.* only, via <code>--provider xai-oauth</code>). Added grok to the router-CLI path (like cursor/hermes/opencode):</p>
+<ul>
+<li><code>SUPPORTED_AGENTS</code> += <code>grok</code>; <code>grok→grok-build</code> in all 5 task classes; <code>_grok_binary()</code> helper; <code>_router_command</code> branch → <code>grok -p &lt;prompt&gt; -m grok-build --output-format plain</code> (raw model). Verified flags first via <code>grok --help</code> / <code>grok models</code>.</li>
+<li>cursor authored, opus cross-family-reviewed (cursor even caught the 3rd router-set location my brief missed). ruff clean; dry-run verified across all 5 classes; <strong>live on main</strong>. Live runs need grok CLI auth (it was "not authenticated" at build time → dry-run only).</li>
+</ul>
+
+<h2>Corrected fleet model (now in the roster docs)</h2>
+<p><strong>Native CLIs</strong> (own binary): codex (OpenAI/gpt-5.5) · cursor (Composer, <strong>Kimi K2.5 base — NOT xAI</strong>) · grok (<strong>grok-build only</strong>) · agy (Gemini 3.1-pro / 3.5-flash) · claude/opus (inline). <strong>Transports</strong> (run a model behind them): <strong>hermes</strong> (preferred — deepseek-v4-pro <code>--provider deepseek</code> AND grok-4.* <code>--provider xai-oauth</code>) · opencode (deepseek fallback) · qwen. So <code>--agent deepseek</code> = deepseek-via-hermes; <code>--agent grok</code> = grok-build; grok-4.* = hermes only.</p>
+<p><strong>Cross-family (model lineage):</strong> 4 clean independents = OpenAI / Google / Anthropic / DeepSeek. <strong>⚠ xAI + Cursor are now ONE COMPANY (merged, user s167)</strong> → cursor↔grok carry a <em>soft shared-org caution</em>; <code>grok-composer-2.5-fast</code> == cursor's Composer = <em>hard same-model exclusion</em>. Keep BOTH the grok CLI and cursor CLI supported — unclear which becomes mainstream at the merged co.</p>
+
+<h2>⚠ Real finding — deploy.sh is destructive; skill sources have rotted (#2036)</h2>
+<blockquote>
+The headroom rule says <code>agents_extensions/claude/skills/**</code> is the SSOT, deployed to <code>.claude/skills/**</code> via <code>deploy.sh</code>. <strong>Reality is inverted:</strong> the deployed <code>.claude/skills/</code> copies are far AHEAD of their sources (recent sessions edited the deployed copies directly — cursor=Kimi correction, gemini-cli retirement, agy RAG details, the cross-family-reviewer "sandboxed from fact-check tools" section all live ONLY in deployed). <strong><code>deploy.sh</code> blindly overwrites deployed-from-source → running it REVERTS those live corrections.</strong> It clobbered dispatch-router + cross-family-reviewer on my first attempt; I <code>git checkout main -- .claude/ agents_extensions/</code> to recover.
+</blockquote>
+<p><strong>So Part B (roster docs) was applied to the DEPLOYED copies directly, NOT via deploy.sh.</strong> Filed <strong>#2036</strong>: reconcile source ← deployed (deployed is the truth) for ALL skills + add a guard so deploy.sh can't silently revert. <strong>Until #2036 is fixed: do NOT run <code>deploy.sh</code>; edit the deployed <code>.claude/skills/</code> copies directly.</strong></p>
+
+<h2>Goose — verified viable, then SKIPPED (decision)</h2>
+<p>User floated configuring Goose (Block's model-agnostic agent) with different models per tool and having it "shadow" the orchestrator. Web-verified Goose is capable: model-agnostic (deepseek via OpenAI-compatible API or Ollama), <strong>recipes</strong> (YAML workflows + subrecipes — could encode our module-writer/review prompts), <strong>lead/worker model split</strong> (<code>GOOSE_LEAD_MODEL</code>/<code>GOOSE_PLANNER_MODEL</code> — but exact upstream env vars + whether lead/worker can be <em>different families</em> is unverified; subrecipes are likely the cross-family-per-task path).</p>
+<p><strong>Decision (user + orchestrator agreed): SKIP the shadow-orchestrator.</strong> Rationale: the payoff of orchestration-automation scales with remaining work, and the work is shrinking (authoring ~92% done; what's left is bounded review + UK translation, already well-served by <code>dispatch_smart</code>); it's exactly the "agent-infra side-quest" the project flagged to prune; "shadow me" is the most speculative piece. <strong>Parked, not killed</strong> — it would genuinely pay off IF a standing autonomous workload appears (the continuous-improvement / refresh cadence: watchlist refresh, re-verifying dated snapshots each K8s cycle, What's-New). Build it then, not now. (The grok adapter WAS worth it — that was a real gap; the shadow-orchestrator is infra for a problem we don't have.)</p>
+
+<h2>NEXT — back to the remaining real work</h2>
+<ul>
+<li><strong>#2020 quality review continues</strong> — deep-learning <strong>16 left</strong> (1.3.1–1.3.6, 1.4.1–1.4.4, 1.5/1.6/1.7/1.8/1.9/1.10, all dense T0 = review) via the mixed-family pipeline (<code>_review-brief.md</code>), then <strong>machine-learning (19)</strong> → synthesis/ai-infra/RL/advanced-genai → scattered.</li>
+<li><strong>#1911 UK translation</strong> — despite "basically finished," only ~14% current — the biggest genuine remaining gap.</li>
+<li><strong>#1876 AI-history book</strong> — 73 chapters, never cross-family reviewed.</li>
+<li><strong>#2036</strong> — skill source/deployed reconciliation + deploy.sh guard (do before anyone runs deploy.sh again).</li>
+<li>Standing: #2030 (dispatch_smart read-only-worktree bug), #2015/#1823 papercuts, #1623 (g2-craft worktree retained).</li>
+</ul>
+<p><strong>Roster note:</strong> the fleet doc SSOT is the <em>deployed</em> <code>.claude/skills/</code> copies until #2036 reconciles them. New grok-build lane available: <code>dispatch_smart --agent grok</code> (needs grok CLI auth for live use).</p>
+
+</body></html>
