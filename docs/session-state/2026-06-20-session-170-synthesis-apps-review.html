@@ -20,14 +20,15 @@
 </style>
 </head>
 <body>
-<h1>Session 170 — #2020 synthesis-apps track review complete (4/4)</h1>
+<h1>Session 170 — #2020 synthesis-apps 4/4 + ai-infrastructure 8/8 complete</h1>
 <p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s169 (ML 19/19).</strong>
-Cross-family reviewed all 4 <code>ai-ml-engineering/synthesis-apps</code> modules (LLM-on-Kubernetes: inference/memory,
-orchestration, evals-in-CI, agent observability) — the track #2020 named NEXT. <strong>3 APPROVE, 1 NEEDS_CHANGES</strong>
-(3.4 — codex caught a missing Collector ConfigMap that made the lab non-runnable; deepseek missed it). All 4 P1s + a
-batch of currency/consistency P2s fixed in PR #2041 (merged <code>79161da07</code>, CI green incl. full Astro build);
-4 APPROVE records finalized (<code>f21c6be9e</code>). All 4 remain T0. <strong>Corrected the queue:</strong> the next batch
-<code>ai-infrastructure</code> is <strong>5 unreviewed, not 3</strong> — and 2 of them are T3 (expand-first), not pure-review.</p>
+Closed <strong>two #2020 sub-tracks</strong>. (1) <code>synthesis-apps</code> 4/4 (LLM-on-K8s) — 3 APPROVE, 3.4 NEEDS_CHANGES
+(codex caught a missing Collector ConfigMap deepseek missed); PR #2041 (<code>79161da07</code>) + records (<code>f21c6be9e</code>).
+(2) <code>ai-infrastructure</code> 8/8 — queue said "3" but real scope was 5 unreviewed + 2 T3 stubs; expanded 1.4/1.5 T3→T0
+(cursor authored, opus reviewed) and reviewed 1.6/1.7/1.8 (codex+deepseek); PR #2042 (<code>9051208</code>) + records (<code>09d4ce1bb</code>),
+plus 1.1-1.3 #1842 records committed for parity. Real web-verified fixes (ExLlamaV3 LoRA currency, vLLM benchmark deprecation,
+dated GPU/engine snapshots) and <strong>two reviewer false-positives rejected with hard evidence</strong> (deepseek GB200, codex "broken
+Python"). All 12 modules T0. <strong>NEXT: reinforcement-learning (2) → advanced-genai (1).</strong></p>
 
 <h2>What shipped</h2>
 <table>
@@ -66,20 +67,24 @@ batch of currency/consistency P2s fixed in PR #2041 (merged <code>79161da07</cod
 <li>Headroom proxy healthy this session (restarted ~08:41 via launchd KeepAlive after a SIGKILL; lifetime 43.2M tokens / $214 saved). memory backend still local-only (#2024).</li>
 </ul>
 
-<h2>NEXT — ai-infrastructure is a MIXED expand+review batch (queue count was stale)</h2>
-<p>Directory <code>ai-ml-engineering/ai-infrastructure</code> has 8 modules. 1.1/1.2/1.3 already reviewed (2026-06-09 #1842,
-opus APPROVE) <strong>but those records are gitignored/uncommitted</strong> — consider <code>git add -f</code> committing them for parity.
-The 5 unreviewed are not uniform:</p>
+<h2>ai-infrastructure 8/8 — COMPLETE this session (queue count was stale)</h2>
+<p>The queue listed "ai-infrastructure 3", but checking tiers showed <strong>5 unreviewed + 2 T3 stubs needing expansion first</strong>. All done (PR #2042 merged <code>9051208</code>; 5 records <code>09d4ce1bb</code>; 1.1-1.3 #1842 records committed for parity → 8/8).</p>
 <table>
-<tr><th>Module</th><th>Tier</th><th>Action</th></tr>
-<tr><td>1.6 memory-bandwidth-math</td><td class="ok">T0</td><td>review-ready</td></tr>
-<tr><td>1.7 production-inference-engines</td><td class="ok">T0</td><td>review-ready</td></tr>
-<tr><td>1.8 inference-benchmarking</td><td class="ok">T0</td><td>review-ready</td></tr>
-<tr><td>1.4 local-inference-stack-for-learners</td><td class="warn">T3</td><td>EXPAND: body_words 4306&lt;5000 + sources 4&lt;10</td></tr>
-<tr><td>1.5 home-ai-operations-cost-model</td><td class="bad">T3</td><td>EXPAND+FIX: body_words 4886 + sources 3&lt;10 + missing sections + outcomes-not-aligned</td></tr>
+<tr><th>Module</th><th>Was</th><th>Action → result</th></tr>
+<tr><td>1.4 local-inference-stack</td><td class="warn">T3</td><td>cursor expand (memory-fit math, GGUF tiers, latency phases, +6 src) → <span class="ok">T0 APPROVE</span></td></tr>
+<tr><td>1.5 home-ai-cost-model</td><td class="bad">T3</td><td>outcomes paragraphs→5 bullets + amortization/sensitivity content + 7 src → <span class="ok">T0 APPROVE</span></td></tr>
+<tr><td>1.6 memory-bandwidth-math</td><td class="warn">NEEDS_CHANGES</td><td>dated GPU snapshot + stale-ref (math confirmed correct) → <span class="ok">APPROVE</span></td></tr>
+<tr><td>1.7 production-inference-engines</td><td class="warn">NEEDS_CHANGES</td><td>ExLlamaV3-LoRA currency + engine snapshot → <span class="ok">APPROVE</span></td></tr>
+<tr><td>1.8 inference-benchmarking</td><td class="warn">NEEDS_CHANGES</td><td>vLLM benchmark_serving deprecation + CLI snapshot + frontmatter → <span class="ok">APPROVE</span></td></tr>
 </table>
-<p><strong>Recommended sequence:</strong> (1) dispatch an author to expand 1.4 and fix-structure+expand 1.5 to T0 (highest-currency-risk content — vLLM/SGLang flags, GPU VRAM/bandwidth specs, throughput benchmarks, cost-model prices → durable-vendor rule applies HARD: dated snapshots, web-verify every spec). (2) Cross-family review all 5 (codex executes inference labs where feasible; these are GPU-dependent so validate commands/specs). Then <code>reinforcement-learning</code> (2) → <code>advanced-genai</code> (1) → scattered cloud/platform.</p>
+<p><strong class="bad">Two reviewer false-positives rejected with evidence</strong> (the load-bearing quality move): deepseek's "GB200 = 192 GB" (web-verified a superchip pairs two B200s = 384 GB; module was right) and codex's "1.7 has broken Python (SyntaxError)" (extracted the heredoc and <code>py_compile</code>'d it — compiles clean; codex's quote dropped keywords). Both would have <em>introduced</em> errors. Real currency drifts (ExLlamaV3 LoRA shipped; vLLM <code>benchmark_serving.py</code> deprecated, exits with a pointer to <code>vllm bench serve</code>) were caught and fixed.</p>
 
-<p class="pill">Branch: main @ <code>f21c6be9e</code> · clean · worktrees: g2-craft (#1623, not mine — retained)</p>
+<h2>Operational note — new content-merge gate</h2>
+<p>The <code>## Learner check</code> hook (<code>.claude/hooks/block-content-merge-without-learner-check.sh</code>) blocks <code>gh pr merge</code> on content PRs unless the PR body has a <code>## Learner check</code> section with a verbatim module blockquote (≥30 chars). Add it before merging any module PR.</p>
+
+<h2>NEXT</h2>
+<p>AI/ML track tally: ai-engineering-foundations 12/12 · ai-native-development 9/9 · deep-learning 27/27 · machine-learning 19/19 · synthesis-apps 4/4 · <strong>ai-infrastructure 8/8</strong>. Remaining in the track: <code>reinforcement-learning</code> (2) → <code>advanced-genai</code> (1), then scattered cloud/platform. Reusable briefs/scripts: <code>logs/remediation/briefs/quality-coverage/_sa-*</code> + <code>_aiinfra-*</code>.</p>
+
+<p class="pill">Branch: main @ <code>09d4ce1bb</code> · clean · worktrees: g2-craft (#1623, not mine — retained)</p>
 </body>
 </html>
