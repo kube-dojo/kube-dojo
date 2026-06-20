@@ -14,15 +14,13 @@ sidebar:
 
 ## Learning Outcomes
 
-By the end of this module, you will be able to refactor notebook-only ML or LLM work into reviewable Python modules with explicit inputs, stable functions, and repeatable entry points.
+By the end of this module, you will be able to:
 
-You will be able to diagnose whether a notebook is still a useful exploration artifact or has become production risk through hidden state, manual ordering, duplicated logic, or unclear lineage.
-
-You will be able to design a minimal production handoff that separates training, evaluation, artifact governance, and serving contracts without overbuilding an enterprise platform.
-
-You will be able to evaluate whether a model or LLM workflow is ready for promotion by checking reproducibility, baseline comparison, dataset or prompt lineage, and rollback expectations.
-
-You will be able to compare notebook, script, pipeline, and service responsibilities so that each layer owns the right part of the ML lifecycle.
+- **Refactor** notebook-only ML or LLM work into reviewable Python modules with explicit inputs, stable functions, and repeatable entry points.
+- **Diagnose** whether a notebook is still a useful exploration artifact or has become a production risk through hidden state, manual ordering, duplicated logic, or unclear lineage.
+- **Design** a minimal production handoff that separates training, evaluation, artifact governance, and serving contracts without overbuilding an enterprise platform.
+- **Evaluate** whether a model or LLM workflow is ready for promotion by checking reproducibility, baseline comparison, dataset or prompt lineage, and rollback expectations.
+- **Compare** notebook, script, pipeline, and service responsibilities so that each layer owns the right part of the ML lifecycle.
 
 ## Why This Module Matters
 
@@ -717,7 +715,7 @@ Start with any notebook that currently owns important workflow behavior. If you 
 
 The exercise is intentionally staged. Do not begin by building a scheduler, API, registry, or dashboard; begin by making the workflow understandable from code, config, commands, and reports.
 
-**Step 1: Classify the notebook cells by responsibility.**
+**Step 1: Classify the notebook cells by responsibility.** Before moving any code, read the notebook from top to bottom and label what each cell is actually for, because that classification decides which logic becomes a durable module and which stays exploratory.
 
 - [ ] Identify cells that load data, parse files, query a warehouse, create labels, build prompts, create features, train models, call models, evaluate results, plot outputs, or inspect errors.
 
@@ -725,7 +723,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Write a short mapping table that names the destination for each durable cell, such as `src/project/data.py`, `src/project/features.py`, `src/project/prompts.py`, `src/project/evaluation.py`, or `src/project/inference.py`.
 
-**Step 2: Create the project structure for the handoff.**
+**Step 2: Create the project structure for the handoff.** A predictable directory layout is what lets scripts, tests, and teammates find code without asking the original author, so create the skeleton before moving any logic into it.
 
 - [ ] Create `notebooks/`, `src/project/`, `scripts/`, `configs/`, `outputs/`, `reports/`, and `tests/` so the workflow has a clear home for each responsibility.
 
@@ -733,7 +731,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Add `src/project/__init__.py` so the extracted modules can be imported consistently by scripts, tests, and notebooks.
 
-**Step 3: Extract one risky transformation first.**
+**Step 3: Extract one risky transformation first.** Start with the single transformation whose silent failure would do the most production damage, because extracting the riskiest logic first delivers the largest reduction in hidden-state risk.
 
 - [ ] Choose one feature builder, prompt builder, data cleaning function, retrieval formatter, or inference wrapper that would cause production damage if copied incorrectly.
 
@@ -743,7 +741,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Add at least two focused tests that prove the extracted function handles a normal case and an edge case.
 
-**Step 4: Create explicit configuration.**
+**Step 4: Create explicit configuration.** Configuration that lives inside code is invisible until a run fails, so lift every production-relevant value into a config file where it can be reviewed before execution begins.
 
 - [ ] Move dataset paths, model names, prompt template names, threshold values, artifact directories, and report directories into `configs/train.yaml`, `configs/eval.yaml`, or `configs/serve.yaml`.
 
@@ -751,7 +749,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Document any remaining notebook-only values as exploratory choices rather than production inputs.
 
-**Step 5: Create repeatable training and evaluation commands.**
+**Step 5: Create repeatable training and evaluation commands.** A workflow is only reproducible when another engineer can run it without your kernel, so wrap training and evaluation in scripts that depend only on config files and importable modules.
 
 - [ ] Write `scripts/train.py` so it reads a config file, calls reusable code from `src/project/`, writes an artifact under `outputs/`, and records run metadata.
 
@@ -759,7 +757,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Ensure neither script imports from `notebooks/` or depends on variables that exist only in an interactive kernel.
 
-**Step 6: Define the production candidate gate.**
+**Step 6: Define the production candidate gate.** Promotion is a decision, not a file copy, so record the evidence and the explicit verdict in a short review file that anyone on the team can audit later.
 
 - [ ] Write a short `reports/candidate-review.md` file that records the candidate ID, dataset or prompt reference, config path, baseline, metrics, known risks, and recommended decision.
 
@@ -767,7 +765,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Explain the decision using evidence from the evaluation report rather than demo impressions.
 
-**Step 7: Define the serving contract before building service code.**
+**Step 7: Define the serving contract before building service code.** Writing the serving contract before any service code forces the interface to be designed deliberately, rather than emerging by accident from whatever the notebook happened to return.
 
 - [ ] Write the expected request format, response format, validation rules, timeout target, fallback behavior, versioning rule, and rollback mechanism.
 
@@ -775,7 +773,7 @@ The exercise is intentionally staged. Do not begin by building a scheduler, API,
 
 - [ ] Confirm that serving would import reusable logic from `src/project/` instead of copying notebook cells.
 
-**Step 8: Run verification commands from a clean shell.**
+**Step 8: Run verification commands from a clean shell.** Run the verification commands from a brand-new shell so that nothing depends on hidden interactive state, which is exactly the failure mode this whole exercise is meant to eliminate.
 
 ```bash
 find notebooks src scripts configs outputs reports tests -maxdepth 3 -type f | sort
@@ -815,7 +813,7 @@ The final `grep` command should not show production code importing from notebook
 
 - [ ] The notebook still has a useful role for analysis, visualization, explanation, or error inspection, but it no longer owns the production workflow.
 
-## Next Modules
+## Next Module
 
 - [Small-Team Private AI Platform](./module-1.12-small-team-private-ai-platform/)
 - [ML Monitoring](./module-1.10-ml-monitoring/)
@@ -823,9 +821,13 @@ The final `grep` command should not show production code importing from notebook
 
 ## Sources
 
-- [MLOps: Continuous delivery and automation pipelines in machine learning](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Explains the transition from notebook-driven experimentation to modularized, automated ML pipelines and production delivery.
+- [MLOps: Continuous delivery and automation pipelines in machine learning](https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Google's MLOps architecture guide explains the transition from notebook experimentation to modular, automated pipelines, and states that evaluation produces quality metrics and validation confirms performance against a baseline before deployment.
+- [Rules of Machine Learning](https://developers.google.com/machine-learning/guides/rules-of-ml) — Google's engineering best practices for moving ML from prototype to a maintainable production system.
+- [Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper_files/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html) — Sculley et al. (NeurIPS 2015), the seminal account of how ad-hoc ML code accrues production risk — the failure mode this module prevents.
+- [Continuous Delivery for Machine Learning](https://martinfowler.com/articles/cd4ml.html) — Thoughtworks' end-to-end pattern for automating the path from experiment to production.
 - [MLOps machine learning model management](https://learn.microsoft.com/en-us/azure/machine-learning/concept-model-management-and-deployment?view=azureml-api-2) — Covers model registration, versioning, metadata, and deployment concerns that map directly to artifact governance and production handoff.
-- [Model Cards](https://huggingface.co/docs/hub/en/model-cards) — Useful for making model candidates reviewable by documenting datasets, evaluation results, intended use, and limitations.
-- [cloud.google.com: mlops continuous delivery and automation pipelines in machine learning](https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Google's MLOps architecture guide states that model evaluation produces quality metrics and model validation confirms performance is better than a baseline before deployment.
-- [learn.microsoft.com: concept endpoints online](https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online?view=azureml-api-2) — The Azure online-endpoints doc specifies model files, scoring script, environment, instance/scaling settings, and monitoring as deployment requirements.
-- [huggingface.co: model cards](https://huggingface.co/docs/hub/main/model-cards) — Hugging Face's Model Cards documentation explicitly lists intended uses, limitations, training information, datasets, and evaluation results as core contents.
+- [Online endpoints for real-time inference](https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online?view=azureml-api-2) — The Azure online-endpoints doc specifies model files, scoring script, environment, instance/scaling settings, and monitoring as deployment requirements.
+- [MLflow Models](https://mlflow.org/docs/latest/models/) — Standard packaging format for promotion-ready model artifacts with reproducible dependencies.
+- [Papermill](https://papermill.readthedocs.io/en/latest/) — Tool for parameterizing and executing notebooks as repeatable, non-interactive jobs during the transition off the lab bench.
+- [DVC Documentation](https://dvc.org/doc) — Data and model versioning that gives candidates reproducible dataset and artifact lineage.
+- [Model Cards](https://huggingface.co/docs/hub/en/model-cards) — Hugging Face's documentation on making model candidates reviewable by documenting intended uses, limitations, training data, and evaluation results.
