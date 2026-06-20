@@ -191,9 +191,9 @@ Model names, context limits, and pricing change quickly, so this module teaches 
 >
 > | Capability tier | Typical engineering use | Example hosted API families | Example open-weight families | Context-window ballpark |
 > |---|---|---|---|---|
-> | Frontier reasoning | Complex support escalations, code synthesis, multi-document synthesis | <!-- VERIFY: --> GPT-4.1 class, Claude Sonnet/Opus class, Gemini Pro class | <!-- VERIFY: --> Llama 3.x 70B-class, Mixtral 8x22B-class when self-hosted | <!-- VERIFY: --> roughly 128k–1M tokens depending on provider and SKU |
-> | Balanced general | Summaries, moderate reasoning, tool-assisted workflows | <!-- VERIFY: --> GPT-4.1 mini class, Claude Haiku/Sonnet mid-tier, Gemini Flash mid-tier | <!-- VERIFY: --> Llama 3.x 8B–70B, Mistral 7B/8x7B-class | <!-- VERIFY: --> often 32k–256k tokens |
-> | Fast / economical | Ticket tagging, intent routing, short rewriting, guardrail checks | <!-- VERIFY: --> GPT-4.1 nano/mini small tiers, Gemini Flash-Lite class | <!-- VERIFY: --> Phi-3/4-class, Gemma 2/3-class, small Llama/Mistral variants | <!-- VERIFY: --> often 8k–128k tokens |
+> | Frontier reasoning | Complex support escalations, code synthesis, multi-document synthesis | GPT-5.x class, Claude Opus 4.x / Sonnet 4.x class, Gemini 3.x Pro class | recent Llama, Qwen, and DeepSeek 70B+-class releases when self-hosted | roughly 128k–1M tokens depending on provider and SKU |
+> | Balanced general | Summaries, moderate reasoning, tool-assisted workflows | GPT-5 mini class, Claude Sonnet 4.x / Haiku 4.x, Gemini 3.x Flash | Llama, Qwen, and Mistral mid-size releases | often 32k–256k tokens |
+> | Fast / economical | Ticket tagging, intent routing, short rewriting, guardrail checks | GPT-5 nano/mini small tiers, Claude Haiku 4.x, Gemini Flash-Lite class | Phi-4-class, Gemma 2/3-class, and small Llama/Qwen variants | often 8k–128k tokens |
 > | Embeddings / encoders | Semantic search, clustering, reranking features | Provider embedding endpoints | Sentence-transformers, BGE, E5 families | N/A — encoder inputs, not open-ended chat generation |
 >
 > Pricing is usually quoted per million input tokens and per million output tokens on hosted APIs, while self-hosted cost is dominated by GPU hours, utilization, and engineering time. Treat every number in this table as a starting point for your own evaluation harness, not as curriculum truth.
