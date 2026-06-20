@@ -1,0 +1,2 @@
+## 2026-06-20T14:37:58Z — `REVIEW` — `APPROVE`
+Reviewer: opus. #2020 advanced-genai wave. Was T3 (4053 body_words, 3 sources, outcome-align). cursor (Cursor/Kimi) expanded to T0 (PR #2044): DDPM forward/reverse + denoising MSE objective, DDPM-vs-DDIM sampling tradeoff, classifier-free guidance, latent-diffusion VAE; +7 sources (diffusers/DDPM/DDIM/LDM/CFG papers). opus (Anthropic, cross-family) verified the diffusion math correct, diffusers snippet illustrative-labeled, durable-vendor compliant, assets preserved. T0, 5021 words. APPROVE.

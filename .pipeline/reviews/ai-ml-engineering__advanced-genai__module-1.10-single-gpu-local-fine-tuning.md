@@ -1,0 +1,2 @@
+## 2026-06-20T14:37:58Z — `REVIEW` — `APPROVE`
+Reviewer: opus. #2020 advanced-genai wave. Was T3 (4700 body_words, 2 sources). cursor expanded to T0 (PR #2044): QLoRA 4-bit NF4 + bitsandbytes double-quant, VRAM ledger (weights/optimizer/activations/KV), gradient checkpointing + accumulation, illustrative fit-check; +8 sources (PEFT/QLoRA/LoRA/bitsandbytes/trl/accelerate). opus cross-family verified the VRAM/QLoRA claims correct, no fabrication. T0, 5018 words. APPROVE.

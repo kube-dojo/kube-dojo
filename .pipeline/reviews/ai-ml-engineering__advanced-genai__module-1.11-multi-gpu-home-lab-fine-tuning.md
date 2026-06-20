@@ -1,0 +1,2 @@
+## 2026-06-20T14:37:58Z — `REVIEW` — `APPROVE`
+Reviewer: opus. #2020 advanced-genai wave. Was T3 (3538 body_words, 2 sources, structure_order + structure_sections failing). cursor expanded to T0 (PR #2044): DDP vs FSDP vs DeepSpeed ZeRO (stages 1/2/3 correct), accelerate/torchrun launch, nvidia-smi topo; ADDED 5 missing sections (h2 9->14, proper order) fixing the structure gates; +8 sources. opus cross-family verified FSDP/ZeRO-stage definitions correct, 'no best framework' durable framing, assets preserved. T0, 5003 words. APPROVE.
