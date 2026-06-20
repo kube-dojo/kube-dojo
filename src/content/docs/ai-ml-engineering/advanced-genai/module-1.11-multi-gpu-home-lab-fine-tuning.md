@@ -28,9 +28,7 @@ The failure starts three weeks later. The second GPU fits physically but runs th
 
 This module teaches the decision discipline behind home-lab multi-GPU fine-tuning. The goal is not to scare you away from multiple GPUs. The goal is to help you know when the extra hardware removes a real bottleneck, when it merely moves the bottleneck somewhere more expensive, and when a simpler design such as workload sharding gives most of the benefit with much less operational risk.
 
-## Core Content
-
-### 1. Start With the Bottleneck, Not the Shopping List
+## 1. Start With the Bottleneck, Not the Shopping List
 
 The first engineering question is not whether another GPU can be added. The first question is which constraint is limiting the learning loop right now. Multi-GPU fine-tuning is useful when it removes a named, repeated constraint, but it is wasteful when the existing workflow is still unclear, unstable, or poorly measured. A learner who cannot name the bottleneck will usually buy complexity instead of capacity.
 
@@ -84,7 +82,7 @@ PY
 
 These commands do not solve scaling by themselves. They establish the habit that every expansion decision starts with evidence. Once you can say what is limiting the run, you can choose between a bigger single box, a small cluster, or functional sharding with much less guessing.
 
-### 2. Understand the Three Home-Lab Expansion Shapes
+## 2. Understand the Three Home-Lab Expansion Shapes
 
 Most home labs grow into one of three shapes: a bigger single workstation, a small cluster of machines, or workload sharding across separate roles. The shapes are not merely physical layouts. They imply different failure modes, operational habits, and scaling ceilings. Choosing the shape is an architecture decision, not a shopping preference.
 
@@ -143,7 +141,7 @@ The simplest architecture that solves the bottleneck is usually the best home-la
 
 The operating model should match the architecture. A single workstation can rely on local scripts and disciplined directories for many learning scenarios. A small cluster needs host inventory, environment parity checks, network tests, and a restart plan. Workload sharding needs clear ownership of artifacts so evaluation, serving, and training do not overwrite each other or compare the wrong checkpoint.
 
-### 3. Choose the Right Parallelism Model
+## 3. Choose the Right Parallelism Model
 
 Parallelism terms are often used loosely, which causes poor design decisions. The useful distinction is what gets split and how tightly the parts must coordinate. Home-lab learners should understand the mechanisms well enough to avoid choosing data parallelism for a memory-fit problem or model parallelism for a workflow-concurrency problem.
 
@@ -191,7 +189,100 @@ CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 train.py \
 
 Use short smoke runs before long fine-tuning runs. A smoke run should prove that both devices are visible, the launcher works, logs are written, checkpoints land where expected, and failure messages are understandable. Do not use a full overnight job as the first test of a new topology. When a long run fails, the blast radius includes time, heat, power, disk writes, and trust in the setup.
 
-### 4. Worked Example: Decide Whether to Add a Second GPU
+### Data parallelism versus FSDP versus DeepSpeed ZeRO
+
+When a LoRA-tuned model already fits on one GPU, **data parallelism (DDP)** is the first multi-GPU lever: each rank holds a full copy of the model, processes a different micro-batch, and all-reduces gradients so every rank applies the same optimizer step. Memory per GPU stays roughly constant; throughput should rise if communication and the input pipeline keep up. Home-lab disappointment usually means PCIe bandwidth, small batch sizes, or checkpoint I/O—not that data parallelism is universally wrong.
+
+When the **full model or optimizer state** does not fit on one device, sharding strategies split memory across ranks:
+
+| Strategy | What is sharded | Memory savings | Communication pattern | Home-lab fit |
+|---|---|---|---|---|
+| DDP | Nothing (replicated weights) | None per rank | All-reduce gradients each step | Best when model fits; simplest ops |
+| FSDP (PyTorch) | Parameters, gradients, optimizer states in shards | High for large models | All-gather params before forward; reduce-scatter grads | Strong on 2–8 GPUs in one box with NVLink/PCIe |
+| ZeRO Stage 1 | Optimizer states | Moderate | Extra gather/scatter around optimizer | Easiest ZeRO entry via DeepSpeed |
+| ZeRO Stage 2 | Optimizer + gradients | Higher | More collectives per step | Useful when optimizer dominates VRAM |
+| ZeRO Stage 3 | Optimizer + gradients + parameters | Highest | Frequent parameter fetches | Needs fast interconnect; fragile on 1 GbE clusters |
+
+**FSDP** (Fully Sharded Data Parallel) wraps layers so each rank stores only a fraction of weights and optimizer state, gathering full parameters just-in-time for the layers about to execute. The durable trade-off is **memory versus communication**: you pay NVLink, PCIe, or Ethernet cycles to move shards, but each GPU's footprint drops. For PEFT fine-tuning, adapter-only training often keeps DDP sufficient; FSDP matters when you full-fine-tune or load very large base models without aggressive quantization.
+
+**DeepSpeed ZeRO** implements a similar sharding philosophy with explicit stages. Stage 1 shards optimizer states across ranks. Stage 2 adds gradient sharding. Stage 3 shards model parameters as well, minimizing per-device memory at the cost of the most collective traffic. ZeRO-Offload can push optimizer states to CPU DRAM—helpful on memory-starved home boxes, slower because PCIe becomes part of the training critical path.
+
+```mermaid
+flowchart LR
+    subgraph DDP["Data Parallel (DDP)"]
+        G0[GPU 0 full model]
+        G1[GPU 1 full model]
+        G0 <-->|all-reduce grads| G1
+    end
+    subgraph FSDP["FSDP / ZeRO-3 style"]
+        S0[GPU 0 shard]
+        S1[GPU 1 shard]
+        S0 <-->|gather / scatter| S1
+    end
+```
+
+### Communication cost versus memory savings
+
+Every sharding step exchanges bytes proportional to model size and batch geometry. A useful heuristic before buying a second GPU: if single-GPU utilization is already high and PCIe link width to the second slot is x4, expect **sub-linear scaling**—perhaps 1.3× throughput, not 2×. Measure `samples_per_second` or `tokens_per_second` on identical short runs rather than trusting marketing curves.
+
+Multi-GPU is worth the operational tax when the model fits per rank and repeated overnight runs block the learning loop, when full weights do not fit and sharding is the only alternative to shrinking the model, or when you have measured that communication time is smaller than the time saved by larger effective batch or faster epochs. Multi-GPU is **not** worth it when the bottleneck is evaluation delay, dirty data, or environment drift—fix those first.
+
+### Launching with Accelerate and torchrun
+
+Modern Hugging Face stacks route multi-GPU launches through **Accelerate**, which can spawn one process per device and configure DDP or FSDP based on a saved config. PyTorch **torchrun** (elastic launch) is the lower-level primitive: it sets `RANK`, `LOCAL_RANK`, and `WORLD_SIZE` so each process binds to one GPU.
+
+> **Landscape snapshot — as of 2026-06**
+>
+> Exact CLI flags (`accelerate launch --multi_gpu --num_processes 2`, FSDP plugin options, DeepSpeed JSON configs) change between Accelerate, Transformers, and DeepSpeed releases. Verify launch recipes against [Accelerate](https://huggingface.co/docs/accelerate/index), [Transformers multi-GPU performance guide](https://huggingface.co/docs/transformers/en/perf_train_gpu_many), [PyTorch FSDP](https://pytorch.org/docs/stable/fsdp.html), [PyTorch DDP tutorial](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html), and [torchrun / elastic](https://pytorch.org/docs/stable/elastic/run.html) for the versions in your `.venv`. Treat any "linear scaling to N GPUs" claim as invalid until you reproduce it on your topology.
+
+```bash
+# Smoke test — two processes on one host (verify flags for your accelerate version).
+accelerate config
+accelerate env
+
+CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 scripts/train_lora.py \
+  --max_steps 50 \
+  --output_dir runs/ddp-smoke
+```
+
+```bash
+# Equivalent torchrun pattern — useful when you need explicit control.
+torchrun --standalone --nproc_per_node=2 scripts/train_lora.py \
+  --max_steps 50 \
+  --output_dir runs/torchrun-smoke
+```
+
+DeepSpeed integration typically adds a JSON config referenced from Accelerate or the Trainer; ZeRO stage selection belongs in that file, not scattered across shell aliases. Keep one launch script under version control so incident responders can see exactly how ranks were created.
+
+When debugging launch failures, read errors from **rank 0 first**, then check whether other ranks died from NCCL timeouts. NCCL logs often implicate firewall rules, wrong `MASTER_ADDR`, or GPUs hidden by `CUDA_VISIBLE_DEVICES` mismatches—problems that look like training bugs but are pure topology issues.
+
+For home-lab learners comparing FSDP inside PyTorch against ZeRO inside DeepSpeed, the decision is rarely "which framework is best." The decision is which stack your training script already supports, which interconnect you actually have, and whether you need optimizer offload because DRAM on the host is plentiful while VRAM is not. A two-GPU workstation with NVLink may justify FSDP for a 13B full fine-tune; a pair of machines on Wi-Fi should default to workload sharding or single-GPU QLoRA until networking is upgraded.
+
+### When multi-GPU is worth it in a home lab
+
+Treat multi-GPU expansion like any other capacity project: justify it with a written threshold and a stop condition. A reasonable home-lab success criterion might read: "Two-GPU DDP must cut an eight-hour LoRA epoch below five hours on the same dataset slice, with peak GPU temperature below 85°C and checkpoint writes under two minutes, for three consecutive smoke runs." Without that specificity, you cannot distinguish a useful upgrade from an expensive space heater.
+
+Conversely, stay on one GPU when any of the following is true: the adapter already fits with QLoRA and the pain is evaluation throughput; your dataset is still changing daily; you have not automated baseline capture; or the second GPU would share a x4 PCIe link and a borderline power supply. In those cases, money often returns more value as faster NVMe storage, a dedicated evaluation box, or cleaner data contracts than as another training rank.
+
+Home labs also hit **social scaling limits** before they hit hardware limits. When three teammates share one cluster without run directories, naming conventions, or cleanup policy, the failure mode is human coordination—not NCCL. Establish a `runs/` prefix per owner, a maximum checkpoint retention count, and a shared spreadsheet of base model plus adapter hashes before adding a fourth GPU.
+
+```bash
+# Pre-flight checklist — run on every host before a multi-GPU job.
+.venv/bin/python - <<'PY'
+import torch
+print("cuda:", torch.cuda.is_available(), "count:", torch.cuda.device_count())
+for i in range(torch.cuda.device_count()):
+    props = torch.cuda.get_device_properties(i)
+    print(i, props.name, f"{props.total_memory // 1024**3} GiB")
+PY
+nvidia-smi topo -m 2>/dev/null || true
+```
+
+The topology matrix printed by `nvidia-smi topo -m` shows whether GPUs communicate over NVLink, PCIe switches, or CPU root complexes—information you need before expecting FSDP or ZeRO to scale. A PHB (PCIe Host Bridge) link between cards is not a moral failure; it is a measurement input.
+
+---
+
+## 4. Worked Example: Decide Whether to Add a Second GPU
 
 Consider a learner with a single workstation, one 24 GB GPU, 64 GB system RAM, a 2 TB NVMe drive, and a stable LoRA fine-tuning script. The model fits at the chosen sequence length, but each 3,000-step experiment takes eight hours. The learner wants to know whether adding a second 24 GB GPU is worthwhile or whether the money should go into storage, evaluation automation, or a separate inference box.
 
@@ -254,7 +345,7 @@ Suppose instead the two-GPU run is substantially faster, temperatures remain sta
 
 This example is deliberately ordinary. Most good home-lab decisions are ordinary decisions made with disciplined evidence. The senior skill is not knowing the flashiest distributed-training term. The senior skill is refusing to add a moving part until you know what work that part is supposed to do.
 
-### 5. Design the Lab Like a Small Production System
+## 5. Design the Lab Like a Small Production System
 
 A home lab does not need datacenter bureaucracy, but multi-GPU fine-tuning does need operational discipline. Once multiple devices or hosts participate in a run, the lab has shared state, dependencies, failure modes, and recovery costs. Treating those as “just home stuff” is how useful experiments turn into unreliable infrastructure.
 
@@ -312,6 +403,8 @@ Failure recovery is the final design layer. A multi-GPU job should have a known 
 
 A strong run directory usually contains the launch command, environment snapshot, selected configuration, training log, hardware watch output, checkpoint timestamps, and final decision notes. This is not excessive ceremony. It is the minimum context needed to learn from a failed distributed run instead of merely repeating it.
 
+For multi-host labs, extend the directory with **network evidence**: `ping` latency to peers, `iperf3` throughput samples, and the NCCL debug level used during the failing run. Many "it worked yesterday" incidents trace to a router firmware update, a VPN that started routing GPU traffic through a slow tunnel, or a teammate who changed `MASTER_PORT` without updating the shared launch script. Capturing network baselines when things are healthy gives you a comparison point when jobs suddenly hang at the first all-reduce.
+
 ```bash
 RUN_DIR="runs/$(date +%Y%m%d-%H%M%S)-two-gpu"
 mkdir -p "$RUN_DIR"
@@ -323,7 +416,7 @@ printf "Command: %s\n" "accelerate launch --num_processes 2 train.py" > "$RUN_DI
 nvidia-smi > "$RUN_DIR/nvidia-smi-start.txt"
 ```
 
-### 6. Measure, Debug, and Decide When to Stop
+## 6. Measure, Debug, and Decide When to Stop
 
 Multi-GPU home-lab work should end each experiment with a decision, not just another log directory. The decision may be to keep the design, simplify it, fix a specific bottleneck, or stop scaling at home. Without a decision habit, the lab becomes a collection of interesting failures that do not improve the model or the learner.
 
@@ -352,6 +445,24 @@ When a run fails, resist the urge to immediately change three things. Read the f
 There is also a point where home-lab scaling should stop. If the lab needs datacenter-style cooling, if several people depend on it, if backup and storage policy consume more attention than model quality, or if failed jobs are too expensive to repeat casually, the architecture has outgrown the learning environment. Moving to managed infrastructure or a more serious private training setup may be the mature decision.
 
 Stopping is not failure. A home lab is valuable because it creates fast, low-friction learning. When the lab becomes slow, fragile, noisy, expensive, and socially dependent, it may no longer be serving that purpose. Senior engineers notice when the system’s operating cost has overtaken its educational value.
+
+Document every multi-GPU experiment with a one-page decision memo stored beside the run logs. The memo should restate the bottleneck, list the launch command, note interconnect type (NVLink, PCIe x16, PCIe x4, 1 GbE), record scaling efficiency as `two_gpu_throughput / single_gpu_throughput`, and end with keep, simplify, or stop. That habit prevents the lab from accumulating hardware whose purpose nobody remembers six months later.
+
+Pair the memo with a short **failure taxonomy** so the team does not relitigate the same incident. Network timeouts belong in infrastructure notes; optimizer state OOM belongs in memory-configuration notes; rank desynchronization after a driver update belongs in environment-parity notes. When each failure class has a default first check, debugging multi-GPU jobs feels less like superstition and more like on-call runbooks for a tiny cluster you actually own.
+
+### Checkpoint and storage policy across ranks
+
+Distributed fine-tuning amplifies checkpoint mistakes because every rank may write partial state unless you configure a single writer rank or use framework helpers that consolidate shards. A home lab should default to **rank-0 checkpoints** with an explicit `save_total_limit` so NVMe does not fill during an overnight ZeRO run. If you resume training, record the global step, random seed, dataset epoch, and git commit hash in the same directory as the checkpoint. Without that bundle, "resume from step 1200" often means "resume from an unlabeled folder named `checkpoint-3`."
+
+When copying checkpoints between hosts for evaluation, prefer `rsync` with checksum verification over ad hoc USB drives. A corrupted optimizer shard produces NaN loss curves that look like hyperparameter failure. Storage policy is therefore part of parallelism design, not an afterthought once training already works on one GPU.
+
+Finally, rehearse **rollback** before you depend on a multi-GPU path for production adapters. Keep the last known-good single-GPU checkpoint, document how to load it without distributed launchers, and time how long rollback takes. If rollback is slower than retraining from scratch, your checkpoint policy is not yet trustworthy enough for shared team use.
+
+The same discipline applies to **hyperparameter sweeps** on multiple GPUs. It is tempting to launch four learning rates in parallel across devices, but without isolated output directories and a summary table, you will compare the wrong logs. Prefix each run with `lr1e-4-rank0` style names, cap parallel jobs below the number of GPUs if you need headroom for desktop display or inference smoke tests, and never share one `output_dir` across processes. Parallel sweeps are a workload-sharding pattern; treat them like separate experiments that happen to share a chassis.
+
+Before declaring a home-lab multi-GPU setup "production ready," run the same evaluation harness you would use for a single-GPU adapter: held-out prompts, baseline comparison, and explicit keep-or-discard notes. Faster training that produces worse adapters is not a win; it only helps you fail sooner. Measure quality first, then celebrate throughput. That ordering keeps multi-GPU expansion tied to model outcomes instead of hardware vanity metrics.
+
+---
 
 ## Did You Know?
 
@@ -592,13 +703,21 @@ Success criteria:
 - [ ] The decision considered throughput, memory fit, checkpoint behavior, thermals, power, storage, and operational complexity.
 - [ ] The final decision clearly chooses keep, simplify, fix another bottleneck first, or stop scaling for now.
 
-## Next Modules
+## Next Module
 
-- [Home AI Operations and Cost Model](../ai-infrastructure/module-1.5-home-ai-operations-cost-model/)
-- [Private AI Training Infrastructure](../../on-premises/ai-ml-infrastructure/module-9.2-private-ai-training/)
-- [Distributed Training Infrastructure](../../platform/disciplines/data-ai/ai-infrastructure/module-1.3-distributed-training/)
+- [Home AI Operations and Cost Model](../ai-infrastructure/module-1.5-home-ai-operations-cost-model/) — Operational cost, cooling, and reliability trade-offs after you expand beyond a single GPU workstation.
+
+See also [Private AI Training Infrastructure](../../on-premises/ai-ml-infrastructure/module-9.2-private-ai-training/) and [Distributed Training Infrastructure](../../platform/disciplines/data-ai/ai-infrastructure/module-1.3-distributed-training/) for datacenter-scale patterns once the home lab outgrows casual experimentation.
 
 ## Sources
 
-- [Accelerate Quicktour](https://huggingface.co/docs/accelerate/v1.9.0/en/quicktour) — Grounds the practical mechanics of moving from single-device training to multi-GPU or multi-node launches.
-- [Schedule GPUs in Kubernetes](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Useful next reading for learners who want to understand how GPU resources are requested and scheduled once workloads move beyond a single box.
+- [Accelerate documentation](https://huggingface.co/docs/accelerate/index) — Multi-GPU launch, FSDP integration, and config workflow.
+- [PyTorch FSDP](https://pytorch.org/docs/stable/fsdp.html) — Fully Sharded Data Parallel API and sharding strategies.
+- [DeepSpeed](https://www.deepspeed.ai/) — ZeRO optimizer stages, offload, and JSON configuration reference.
+- [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models](https://arxiv.org/abs/1910.02054) — Original ZeRO stage definitions and memory/communication trade-offs.
+- [Transformers multi-GPU training performance](https://huggingface.co/docs/transformers/en/perf_train_gpu_many) — Practical guidance for scaling Hugging Face training scripts.
+- [PyTorch DDP tutorial](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) — Process groups, gradient synchronization, and launcher basics.
+- [PEFT documentation](https://huggingface.co/docs/peft/index) — Adapter training patterns often combined with DDP on home-lab fine-tunes.
+- [torchrun / elastic agent](https://pytorch.org/docs/stable/elastic/run.html) — Low-level multi-process launch and environment variables for distributed jobs.
+- [Kubernetes GPU scheduling](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — Reference for learners who later move home-lab models into cluster schedulers with device plugins.
+- [NVIDIA NCCL documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/index.html) — Collective communication library underlying PyTorch distributed backends; useful when debugging timeout errors.

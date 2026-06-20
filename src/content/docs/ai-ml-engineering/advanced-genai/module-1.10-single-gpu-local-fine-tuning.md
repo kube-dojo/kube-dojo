@@ -301,6 +301,46 @@ QLoRA enters when the base model would be too memory-heavy without quantization.
 
 Use QLoRA when it solves a measured memory problem, not because it sounds more advanced. If a small model trains cleanly without quantization, a first workflow demonstration may be easier to debug without QLoRA. Once the process is sound, quantization becomes a controlled change rather than another variable mixed into an already uncertain run.
 
+### QLoRA 4-bit loading, NF4, and the VRAM budget
+
+QLoRA keeps the base model frozen in 4-bit NormalFloat (NF4) quantization while training low-rank adapter matrices in higher precision. bitsandbytes implements the storage format and double-quantization of quantization constants so the frozen weights occupy far less VRAM than fp16 baselines. The durable mental model is a **VRAM ledger** with four major buckets during training:
+
+| Bucket | What it holds | PEFT impact |
+|---|---|---|
+| Model weights | Frozen base parameters | QLoRA shrinks this bucket via 4-bit storage |
+| Optimizer state | Moments for trainable params | LoRA trains only adapter weights, so optimizer state stays small |
+| Activations | Forward/backward tensors per layer | Scales with sequence length, batch, and checkpointing policy |
+| Gradients | Updates for trainable params | LoRA limits gradients to adapter modules only |
+
+Gradient checkpointing trades compute for memory by recomputing activations during the backward pass instead of storing every intermediate tensor. Gradient accumulation simulates a larger batch by summing gradients over several micro-batches before an optimizer step. On a single GPU, the effective batch size is approximately `per_device_train_batch_size × gradient_accumulation_steps`; VRAM is dominated by the micro-batch size, not the effective batch.
+
+A conservative **fit-check** before a long run:
+
+```bash
+# Illustrative — replace model id and lengths with your experiment.
+.venv/bin/python - <<'PY'
+# Estimate whether a 7B-class model might fit with QLoRA on ~24 GB.
+# These are order-of-magnitude checks, not guarantees.
+params_b = 7
+bytes_fp16 = params_b * 2          # GB if fully fp16 weights
+bytes_4bit = params_b * 0.5        # rough NF4 storage
+adapter_mb = 200                   # typical small LoRA adapter + optimizer
+activation_gb = 8                    # highly sequence/batch dependent
+headroom_gb = 2
+needed = bytes_4bit + adapter_mb/1024 + activation_gb + headroom_gb
+print(f"illustrative minimum VRAM (GB): {needed:.1f}")
+print("verify with a short smoke run and nvidia-smi — do not trust this table alone")
+PY
+```
+
+> **Landscape snapshot — as of 2026-06**
+>
+> Library stacks for single-GPU fine-tuning move quickly. **PEFT** exposes `LoraConfig` and QLoRA helpers; **Transformers** `Trainer` and **TRL** `SFTTrainer` wrap training loops; **Accelerate** handles device placement; **bitsandbytes** 4-bit loaders depend on CUDA capability and package version. Confirm argument names (`bnb_4bit_compute_dtype`, `load_in_4bit`) against [PEFT](https://huggingface.co/docs/peft/index), [Transformers Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer), [TRL](https://huggingface.co/docs/trl/index), and [Accelerate](https://huggingface.co/docs/accelerate/index) for the versions pinned in your environment. Any published "fits in 24 GB" claim is valid only for the cited model, sequence length, batch, and driver stack.
+
+When OOM persists after QLoRA, reduce sequence length and micro-batch before increasing LoRA rank. Rank increases adapter capacity but also grows optimizer state and activation paths through adapted layers. The senior move is to change one pressure source, rerun a fifty-step smoke test, and record peak `memory.used` from `nvidia-smi` rather than chasing ten hyperparameters at once.
+
+Gradient checkpointing deserves an explicit experiment note because it changes the compute/memory trade-off in ways training loss alone will not reveal. Enable checkpointing when activation memory dominates the ledger; disable it when the run is already stable and you need shorter wall-clock time for iteration. Document the flag in `artifacts/config.yaml` so the next engineer knows whether slower steps were intentional frugality or accidental misconfiguration.
+
 A training command should be captured exactly. The command, package versions, GPU state, dataset checksum, and config belong in the experiment notes. If you cannot reproduce the command later, you cannot responsibly compare adapters or explain why one run improved.
 
 ```bash
@@ -991,5 +1031,13 @@ Success criteria:
 
 ## Sources
 
-- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Original LoRA paper for claims about freezing base weights, training low-rank adapters, parameter-count reduction, memory savings, and PEFT trade-offs versus full fine-tuning.
-- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — Primary source for 4-bit fine-tuning, NF4, double quantization, paged optimizers, and realistic single-GPU fine-tuning claims under constrained VRAM.
+- [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685) — Original LoRA paper for freezing base weights, training low-rank adapters, and PEFT trade-offs versus full fine-tuning.
+- [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314) — 4-bit NF4 quantization, double quantization, paged optimizers, and single-GPU memory claims.
+- [PEFT documentation](https://huggingface.co/docs/peft/index) — Library reference for LoRA/QLoRA configuration and adapter saving.
+- [bitsandbytes](https://github.com/bitsandbytes-foundation/bitsandbytes) — 4-bit and 8-bit CUDA kernels used by QLoRA loading paths.
+- [Transformers Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) — Training loop, checkpointing, and gradient accumulation integration.
+- [Accelerate](https://huggingface.co/docs/accelerate/index) — Device placement and mixed-precision helpers for local training scripts.
+- [TRL](https://huggingface.co/docs/trl/index) — Supervised fine-tuning trainers commonly paired with PEFT adapters.
+- [PyTorch AMP examples](https://pytorch.org/docs/stable/notes/amp_examples.html) — Autocast and gradient scaling patterns relevant to fp16/bf16 fine-tuning.
+- [Hugging Face Transformers documentation](https://huggingface.co/docs/transformers/index) — Model loading, tokenizers, and generation APIs used throughout the hands-on exercise.
+- [bitsandbytes installation guide](https://huggingface.co/docs/bitsandbytes/installation) — Hardware and CUDA prerequisites for 4-bit loaders used by QLoRA paths.
