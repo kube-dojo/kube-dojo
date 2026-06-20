@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 170 — #2020 synthesis-apps track review complete (4/4)</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:1.8rem}
+  code{background:#0d1626;padding:.1rem .35rem;border-radius:4px;color:#c9d6e6}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:4px solid var(--accent);padding:1rem;border-radius:6px}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top;font-size:.92rem}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.accent{color:var(--accent)}
+  ul{margin:.4rem 0}li{margin:.25rem 0}
+  .pill{display:inline-block;background:#0d1626;border:1px solid var(--bd);border-radius:999px;padding:.05rem .55rem;font-size:.82rem;color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>Session 170 — #2020 synthesis-apps track review complete (4/4)</h1>
+<p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s169 (ML 19/19).</strong>
+Cross-family reviewed all 4 <code>ai-ml-engineering/synthesis-apps</code> modules (LLM-on-Kubernetes: inference/memory,
+orchestration, evals-in-CI, agent observability) — the track #2020 named NEXT. <strong>3 APPROVE, 1 NEEDS_CHANGES</strong>
+(3.4 — codex caught a missing Collector ConfigMap that made the lab non-runnable; deepseek missed it). All 4 P1s + a
+batch of currency/consistency P2s fixed in PR #2041 (merged <code>79161da07</code>, CI green incl. full Astro build);
+4 APPROVE records finalized (<code>f21c6be9e</code>). All 4 remain T0. <strong>Corrected the queue:</strong> the next batch
+<code>ai-infrastructure</code> is <strong>5 unreviewed, not 3</strong> — and 2 of them are T3 (expand-first), not pure-review.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>PR / commit</th><th>Content</th><th>Status</th></tr>
+<tr><td>#2041 (<code>79161da07</code>)</td><td>synthesis-apps 3.1–3.4 cross-family review fixes (+112/−12, 4 files)</td><td class="ok">MERGED</td></tr>
+<tr><td><code>f21c6be9e</code></td><td>4 <code>.pipeline/reviews/</code> APPROVE records (force-added; dir is gitignored)</td><td class="ok">finalize (direct-main)</td></tr>
+</table>
+
+<h2>Review scoreboard</h2>
+<ul>
+<li><strong class="ok">APPROVE (3):</strong> 3.1 llm-native-stack, 3.2 orchestration-layer, 3.3 llm-evals-in-ci</li>
+<li><strong class="warn">NEEDS_CHANGES → fixed (1):</strong> 3.4 agent-observability-otel (4 P1s, all fixed in #2041)</li>
+</ul>
+<p>Reviewers (3 families, every P1 ground-checked by orchestrator): <span class="pill">codex/OpenAI — danger+worktree, ran <code>helm template</code>, cross-resource-parsed manifests</span> <span class="pill">deepseek/DeepSeek — traced manifests + cost math</span> <span class="pill">opus/Anthropic inline — currency/web-verify</span>. cursor reserved as fixer; fixes authored inline (surgical infra-YAML no gate validates).</p>
+
+<h2>3.4 — the NEEDS_CHANGES module (4 P1s, all reproduced/verified)</h2>
+<ul>
+<li><strong class="bad">P1.1 runnability (codex caught, deepseek missed):</strong> the Collector Deployment mounted ConfigMap <code>otel-collector-config</code>, but no <code>kind: ConfigMap</code> existed → lab non-runnable. Added a correct config matching the module's own mermaid pipeline (<code>otlp → tail_sampling/redaction/batch → tempo+langfuse</code>, health_check <code>:13133</code> declared). Embedded YAML validated (parses as ConfigMap/Deployment/Service; volume + probe cross-checked).</li>
+<li><strong>P1.2 currency:</strong> collector-contrib <code>0.121.0 → 0.154.0</code> (web-verified latest) + dated note.</li>
+<li><strong>P1.3 accuracy:</strong> "stable enough to rely on" → consensus/adoption + explicit <em>Development-status</em> note (OTel GenAI semconv is NOT Stable; <code>gen_ai.provider.name</code> current vs legacy <code>gen_ai.system</code> — web-verified).</li>
+<li><strong>P1.4 durable-vendor rule:</strong> model price table quarantined in a dated <code>Landscape snapshot — as of 2026-06</code> callout.</li>
+</ul>
+
+<h2>P2 / currency fixes (3.1 / 3.3 / 3.2)</h2>
+<ul>
+<li><strong>3.1:</strong> Qdrant <code>v1.15.3 → v1.18.2</code> (web-verified); qualified the NetworkPolicy exit-7 diagnostic (refused ≠ enforced unless allowed-probe succeeds + Service has endpoints); Qdrant NetworkPolicy note.</li>
+<li><strong>3.3:</strong> <code>promptfoo@latest → @0.121.17</code> (was contradicting its own pinning advice); <code>persist-credentials:false</code> on checkout (github-actions-security rule); added missing venv-setup so <code>.venv/bin/python</code> resolves; fixed invalid <code>orchestrator.staging.llm-apps</code> DNS + deployment name to align with 3.2 (<code>llm-orchestrator</code> / <code>llm-apps-staging</code>).</li>
+<li><strong>3.2:</strong> orchestrator↔Qdrant/Redis NetworkPolicy note (cross-module boundary consistency).</li>
+</ul>
+
+<h2>Operational notes / gotchas</h2>
+<ul>
+<li><strong>Review records are gitignored</strong> (<code>.pipeline/reviews/*.md</code>, .gitignore:98) — finalize force-adds (<code>git add -f</code>), same as the s169 ML batch. Direct-to-main commit is the sanctioned finalize for non-board modules (synthesis-apps has 0 board rows).</li>
+<li><strong>codex earns its keep on code-heavy modules:</strong> running <code>helm template</code> + cross-resource manifest parsing caught the absent-ConfigMap P1 a single-pass reviewer (deepseek) missed.</li>
+<li>Inline-opus review + inline fix worked cleanly (no <code>claude -p</code>/subagents). Worktree reads re-inject the CLAUDE.md+rules bundle — kept reads to line-ranges.</li>
+<li>Headroom proxy healthy this session (restarted ~08:41 via launchd KeepAlive after a SIGKILL; lifetime 43.2M tokens / $214 saved). memory backend still local-only (#2024).</li>
+</ul>
+
+<h2>NEXT — ai-infrastructure is a MIXED expand+review batch (queue count was stale)</h2>
+<p>Directory <code>ai-ml-engineering/ai-infrastructure</code> has 8 modules. 1.1/1.2/1.3 already reviewed (2026-06-09 #1842,
+opus APPROVE) <strong>but those records are gitignored/uncommitted</strong> — consider <code>git add -f</code> committing them for parity.
+The 5 unreviewed are not uniform:</p>
+<table>
+<tr><th>Module</th><th>Tier</th><th>Action</th></tr>
+<tr><td>1.6 memory-bandwidth-math</td><td class="ok">T0</td><td>review-ready</td></tr>
+<tr><td>1.7 production-inference-engines</td><td class="ok">T0</td><td>review-ready</td></tr>
+<tr><td>1.8 inference-benchmarking</td><td class="ok">T0</td><td>review-ready</td></tr>
+<tr><td>1.4 local-inference-stack-for-learners</td><td class="warn">T3</td><td>EXPAND: body_words 4306&lt;5000 + sources 4&lt;10</td></tr>
+<tr><td>1.5 home-ai-operations-cost-model</td><td class="bad">T3</td><td>EXPAND+FIX: body_words 4886 + sources 3&lt;10 + missing sections + outcomes-not-aligned</td></tr>
+</table>
+<p><strong>Recommended sequence:</strong> (1) dispatch an author to expand 1.4 and fix-structure+expand 1.5 to T0 (highest-currency-risk content — vLLM/SGLang flags, GPU VRAM/bandwidth specs, throughput benchmarks, cost-model prices → durable-vendor rule applies HARD: dated snapshots, web-verify every spec). (2) Cross-family review all 5 (codex executes inference labs where feasible; these are GPU-dependent so validate commands/specs). Then <code>reinforcement-learning</code> (2) → <code>advanced-genai</code> (1) → scattered cloud/platform.</p>
+
+<p class="pill">Branch: main @ <code>f21c6be9e</code> · clean · worktrees: g2-craft (#1623, not mine — retained)</p>
+</body>
+</html>
