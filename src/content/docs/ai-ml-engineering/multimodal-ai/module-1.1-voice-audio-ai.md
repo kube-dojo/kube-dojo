@@ -392,6 +392,8 @@ The practical implication is not that Moshi is “better.” It is that Moshi sh
 
 ### 4.5.3 GPT-4o Realtime as a commercial reference baseline
 
+> **Model names and pricing in this section are a dated snapshot — as of 2026-06. The realtime/speech model lineup, token-timing, and rates churn fast (OpenAI has since shipped successor `gpt-realtime` models); verify against the current OpenAI Realtime docs before relying on a specific model id or rate.**
+
 OpenAI’s Realtime docs position `GPT-4o Realtime` as a model capable of text and audio inputs/outputs “in realtime” over **WebRTC or WebSocket**, with a session model built around `session`, `conversation`, and `responses`. From the model pages, this is a speech-to-speech-capable product path where API-level orchestration is managed by the platform, not by your inference graph.
 
 #### Contract and interaction model
@@ -585,6 +587,8 @@ with open("streamed_output.mp3", "wb") as audio_file:
 Open-source TTS is useful when audio cannot leave your environment, when you need predictable unit economics, or when you want full control over the serving stack. The trade-off is operational responsibility. You own model loading, GPU allocation, cold starts, quality tuning, and scaling. That may be exactly right for regulated environments, but it is not automatically cheaper at low traffic.
 
 ```python
+# Install the maintained fork first: pip install coqui-tts
+# (the original `TTS` package is unmaintained and supports only Python <3.12)
 from TTS.api import TTS
 
 tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC")
@@ -851,7 +855,7 @@ spec:
         accelerator: nvidia
       containers:
         - name: api
-          image: ghcr.io/example/whisper-stt:1.0.0
+          image: ghcr.io/example/whisper-stt:1.0.0  # placeholder — build and push your own faster-whisper image; this tag is not published
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -1306,7 +1310,7 @@ Now that your AI can hear and speak, the next module adds visual perception. You
 - [developers.openai.com: text to speech](https://developers.openai.com/api/docs/guides/text-to-speech) — OpenAI's text-to-speech docs say the endpoint has built-in voices and can provide realtime audio output using streaming.
 - [aws.amazon.com: polly](https://aws.amazon.com/documentation-overview/polly/) — AWS's Polly documentation overview says the API returns audio streams and describes Brand Voice as a custom neural TTS offering.
 - [docs.cloud.google.com: docs](https://docs.cloud.google.com/text-to-speech/docs) — Google's Cloud Text-to-Speech docs say the service converts text or SSML into natural human speech and link supported voices plus streaming guides.
-- [github.com: TTS](https://github.com/coqui-ai/TTS) — The project's GitHub repository describes Coqui TTS as an open-source deep learning toolkit for text-to-speech.
+- [github.com: coqui-tts (maintained idiap fork)](https://github.com/idiap/coqui-ai-TTS) — The project's GitHub repository describes Coqui TTS as an open-source deep learning toolkit for text-to-speech.
 - [github.com: bark](https://github.com/suno-ai/bark) — The Bark repository describes the project as a text-prompted generative audio model.
 - [kubernetes.io: scheduling gpus](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — The Kubernetes GPU scheduling docs explicitly describe stable GPU support via device plugins and schedulable resources such as `nvidia.com/gpu`.
 - [OpenAI Realtime conversations](https://developers.openai.com/api/docs/guides/realtime-conversations) — Official Realtime API guide for sessions, WebRTC/WebSocket transport, function calling, and interruption/truncation behavior.
