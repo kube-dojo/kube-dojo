@@ -1,0 +1,2 @@
+## 2026-06-20T19:55:48Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator) cross-family R1 — module authored by non-Anthropic agent system. #2020 scattered. Dense T0; web-verified currency. Cilium eBPF datapath (XDP/tc/socket redirect, CT maps, BPF service-LB maps, kubeProxyReplacement coexistence/rollback) + Tetragon enforcement (TracingPolicy, kprobes/tracepoints/LSM BPF) mechanics accurate; correctly cross-links toolkit modules instead of duplicating install guides. body=5146, sources=12. No P1/P2. T0 passed=true. APPROVE.

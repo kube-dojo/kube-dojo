@@ -1,0 +1,2 @@
+## 2026-06-20T19:55:48Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator) cross-family R1 — module authored by non-Anthropic agent system. #2020 scattered. Dense T0; web-verified currency. IPv6-only K8s + brownfield migration: NAT64/DNS64 via Jool + CoreDNS, IPv4-mapped socket surprises, Java dual-stack defaults, four-phase migration playbook — accurate, durable. body=5022, sources=17. No P1/P2. T0 passed=true. APPROVE.
