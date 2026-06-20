@@ -330,7 +330,7 @@ prompts:
 providers:
   - id: http
     config:
-      url: http://orchestrator.staging.llm-apps.svc.cluster.local:8080/v1/chat
+      url: http://llm-orchestrator.llm-apps-staging.svc.cluster.local:8080/v1/chat
       method: POST
       headers:
         Content-Type: application/json
@@ -576,16 +576,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Deploy staging candidate
         run: |
           kubectl apply -k deploy/overlays/staging
-          kubectl rollout status deployment/orchestrator -n llm-apps --timeout=15m
+          kubectl rollout status deployment/llm-orchestrator -n llm-apps-staging --timeout=15m
+      - name: Set up Python for the threshold check
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install threshold-check dependencies
+        run: |
+          # The threshold script runs from a venv; create it before the eval step.
+          python -m venv .venv
+          .venv/bin/pip install --quiet pyyaml
       - name: Run promptfoo eval
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PROMPTFOO_CACHE_PATH: ~/.cache/promptfoo
         run: |
-          npx promptfoo@latest eval \
+          # Pin the CLI for reproducible CI (version verified current as of 2026-06).
+          npx promptfoo@0.121.17 eval \
             -c eval/promptfooconfig.yaml \
             -o eval/results.json
       - name: Enforce aggregate thresholds
@@ -706,7 +718,7 @@ eval-runner Job (llm-apps or ci namespace)
         |
         |  HTTP POST /v1/chat  (or your API)
         v
-orchestrator.staging.llm-apps.svc.cluster.local
+llm-orchestrator.llm-apps-staging.svc.cluster.local
         |
         +----> qdrant.llm-system.svc.cluster.local
         |
@@ -1093,7 +1105,7 @@ Identify:
 <summary>Solution</summary>
 
 1. Provider URL:
-   `http://orchestrator.staging.llm-apps.svc.cluster.local:8080/v1/chat`
+   `http://llm-orchestrator.llm-apps-staging.svc.cluster.local:8080/v1/chat`
 2. Prompt pin: HTTP header `X-Prompt-Version: "3.2.1"` on the provider config
 3. Assertions: `llm-rubric` for content policy and `javascript` for minimum length;
    adversarial case uses rubric requiring refusal
