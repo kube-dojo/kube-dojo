@@ -11,7 +11,7 @@ sidebar:
 >
 > **Prerequisites**: K8s basics. Basic understanding of VMware vSphere is helpful but not required.
 
-All shell examples use the full `kubectl` command name. Tanzu Kubernetes Grid (TKG) 2.5 standalone is in an end-of-life lifecycle: **2.5.4 is the final enterprise release**, and Broadcom directs new vSphere-integrated Kubernetes work toward **vSphere Kubernetes Service (VKS)** on vSphere Supervisor (formerly TKG Service). vSphere Supervisor and VKS clusters follow the vSphere 8.x and 9.x matrices in TechDocs. Kubernetes examples assume 1.35+ behavior unless a Tanzu release note pins an older supported minor for management clusters.
+All shell examples use the full `kubectl` command name. Tanzu Kubernetes Grid (TKG) 2.5 standalone is in an end-of-life lifecycle: **2.5.4 is the final enterprise release**, and Broadcom directs new vSphere-integrated Kubernetes work toward **vSphere Kubernetes Service (VKS)** on vSphere Supervisor (formerly TKG Service). vSphere Supervisor and VKS clusters follow the vSphere 8.x and 9.x matrices in TechDocs. Tanzu Mission Control's SaaS offering reached end-of-life on **November 15, 2025**, so where this module says "TMC," read it as the **Self-Managed (TMC-SM)** product unless you are migrating off the retired SaaS. Kubernetes examples assume 1.35+ behavior unless a Tanzu release note pins an older supported minor for management clusters.
 
 ---
 
