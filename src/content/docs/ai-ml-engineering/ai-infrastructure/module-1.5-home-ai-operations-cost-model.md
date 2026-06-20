@@ -14,15 +14,13 @@ sidebar:
 
 ## Learning Outcomes
 
-By the end of this module, you will be able to design a workload-based monthly cost model for a home AI workstation that separates acquisition cost, operating cost, and attention cost instead of treating the machine as free after purchase.
+By the end of this module, you will be able to:
 
-You will be able to evaluate whether a local, hybrid, API-first, or rented-cloud approach is economically sensible for a specific AI workflow by comparing the same workload pattern across alternatives.
-
-You will be able to debug misleading home-lab cost assumptions by identifying hidden cost drivers such as idle power, cooling load, storage growth, backup needs, failed experiments, and maintenance time.
-
-You will be able to build a simple break-even calculation using real measurements for power, hours, electricity rate, storage expansion, and equivalent API or cloud consumption.
-
-You will be able to recommend exit criteria for moving beyond home-scale AI operations when multi-user demand, uptime expectations, GPU contention, governance, or storage growth makes the home setup operationally brittle.
+- **Design** a workload-based monthly cost model for a home AI workstation that separates acquisition cost, operating cost, and attention cost instead of treating the machine as free after purchase.
+- **Evaluate** whether a local, hybrid, API-first, or rented-cloud approach is economically sensible for a specific AI workflow by comparing the same workload pattern across alternatives.
+- **Debug** misleading home-lab cost assumptions by identifying hidden cost drivers such as idle power, cooling load, storage growth, backup needs, failed experiments, and maintenance time.
+- **Build** a break-even calculation using real measurements for power, hours, electricity rate, storage expansion, and equivalent API or cloud consumption.
+- **Recommend** exit criteria for moving beyond home-scale AI operations when multi-user demand, uptime expectations, GPU contention, governance, or storage growth makes the home setup operationally brittle.
 
 ---
 
@@ -105,6 +103,8 @@ A practical learner model uses approximate whole-system watts for each mode and 
 **Pause and Predict:** if a workstation draws modest power while idle but stays on almost all month, while training runs draw high power for only a few hours, which mode might contribute more to the monthly bill? Write your prediction before reading the next paragraph.
 
 Idle can easily contribute more than expected because it runs for many more hours. A high training draw for a short burst may be less expensive than a moderate idle draw multiplied across weeks. This is why operating pattern matters more than peak specifications. Peak draw tells you what can happen under load. Monthly cost depends on how long each behavior persists.
+
+When you plan a GPU upgrade, fold it into acquisition cost as a forward-looking amortization line rather than treating the purchase as a one-time surprise. If a new GPU costs 600 dollars and you expect 24 months of useful life before the next upgrade, add 25 dollars per month to the model alongside electricity and storage. Compare that incremental line against the API or cloud cost of the workloads the upgrade is meant to unlock. A sensitivity check helps too: if changing idle hours by ±20 percent flips the local-versus-API recommendation, the decision is fragile and should be revisited monthly with real meter readings rather than treated as settled policy.
 
 ---
 
@@ -256,6 +256,8 @@ Alternative monthly estimate =
 ```
 
 The best break-even models include a decision rule. For example: stay local when daily private inference exceeds 50 hours per month and maintenance remains below 3 hours. Use API for non-sensitive experiments that require model quality beyond the local setup. Rent cloud GPUs when a job needs more VRAM than the home system and runs less than a few days per month. The numbers will differ by learner, but the rule should be explicit enough to test next month.
+
+Sensitivity analysis keeps break-even honest. After you build the first spreadsheet, vary one input at a time: idle hours ±20 percent, electricity rate ±15 percent, attention hours ±30 percent, and equivalent API spend ±25 percent. If a modest swing in any single input flips the recommendation between local and API-first, label the decision **fragile** and schedule a monthly re-measurement with plug-in meter readings and real usage logs. Fragile decisions are not wrong — they often mean the workload is near a crossover point — but they should not be treated as permanent architecture. Document which variable mattered most so the next review focuses on the driver that actually moves the number, not on re-litigating the whole purchase story. That discipline is especially useful after a GPU upgrade, when acquisition cost jumps but operating hours have not yet caught up to the new capability you purchased on the desk under normal weekly use.
 
 ---
 
@@ -432,6 +434,8 @@ find ~/models ~/checkpoints ~/datasets 2>/dev/null | wc -l
 
 - [ ] Write a decision rule that you can test next month. Examples include `stay local for frequent private inference`, `use API for non-sensitive high-quality comparisons`, `rent cloud GPUs for jobs that exceed local VRAM`, or `delay hardware upgrades until monthly usage exceeds the threshold`.
 
+- [ ] Recommend exit criteria for moving beyond home-scale operations when multi-user demand, uptime expectations, GPU contention, governance requirements, or storage growth would make the home setup operationally brittle.
+
 ```bash
 printf "Idle hours: ____\nInference hours: ____\nTraining/indexing hours: ____\nRate per kWh: ____\n"
 printf "Monthly power cost: ____\nMonthly storage/backup cost: ____\nMonthly attention cost: ____\n"
@@ -454,6 +458,8 @@ Success criteria:
 
 - [ ] Your decision rule is specific enough that another learner could update the numbers next month and decide whether the recommendation still holds.
 
+- [ ] Exit criteria for leaving home-scale operations are written down when multi-user demand, uptime expectations, GPU contention, or governance would make the desk setup brittle.
+
 ---
 
 ## Next Module
@@ -467,3 +473,10 @@ Success criteria:
 - [AI and ML Perspective: Cost Optimization](https://cloud.google.com/architecture/framework/perspectives/ai-ml/cost-optimization) — Supports the module's overall framing around measuring training, inference, storage, and operational costs instead of treating AI infrastructure cost as a single number.
 - [Design Storage for AI and ML Workloads in Google Cloud](https://cloud.google.com/architecture/ai-ml/storage-for-ai-ml) — Useful background for the module's storage-lifecycle discussion, especially separating active, archival, and reproducible data concerns.
 - [AWS Well-Architected Framework: Cost Optimization Pillar](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html) — Provides a second major-cloud reference for cost-model thinking, resource right-sizing, and recurring operational cost discipline.
+- [eia.gov: electricity](https://www.eia.gov/energyexplained/electricity/) — U.S. Energy Information Administration primer on electricity generation, delivery, and pricing context useful for grounding local rate assumptions in operating-cost estimates.
+- [learn.microsoft.com: Azure cost optimization](https://learn.microsoft.com/en-us/azure/well-architected/cost-optimization/) — Azure Well-Architected cost-optimization guidance on measuring recurring spend, right-sizing resources, and comparing workload alternatives.
+- [github.com: ollama](https://github.com/ollama/ollama) — Reference for local inference tooling whose model storage and always-on service patterns affect home-lab operating and attention costs.
+- [github.com: llama.cpp](https://github.com/ggml-org/llama.cpp) — Reference for direct local runtime workflows where GGUF storage, build maintenance, and hardware fit influence home-scale cost models.
+- [developer.nvidia.com: NVML](https://developer.nvidia.com/management-library-nvml) — NVIDIA Management Library documentation for GPU power and utilization telemetry used when estimating inference versus idle draw.
+- [docs.aws.amazon.com: AWS Backup](https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html) — AWS Backup documentation on recovery-point objectives and backup planning, used here as a durable reference for budgeting backup media and attention cost around irreplaceable model artifacts and experiment data.
+- [docs.vllm.ai: latest](https://docs.vllm.ai/en/latest/) — Official vLLM documentation relevant when comparing local serving-engine operating costs against API or rented-cloud alternatives.
