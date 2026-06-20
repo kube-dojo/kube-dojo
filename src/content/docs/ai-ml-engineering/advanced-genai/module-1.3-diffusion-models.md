@@ -34,6 +34,8 @@ On the same week, another team ships an AI-assisted code review bot. It catches 
 
 Diffusion models and code generation systems look different on the surface. One starts from noise and denoises continuous latent states into images. The other predicts discrete tokens under strict syntax, type, and repository constraints. For an AI/ML engineer, the shared skill is architectural reasoning: identify what the model is allowed to know, what it is optimizing, where it can fail, and what guardrails convert a clever demo into a dependable system.
 
+The comparison is not academic. Teams that ship both image and code endpoints behind the same API gateway must apply different SLOs, moderation policies, and validation gates to each path. An image endpoint might return HTTP 200 with a mildly off-brand render; a code endpoint that returns HTTP 200 with syntactically valid but malicious SQL still fails the product contract. Designing those gates up front—scheduler budgets for diffusion, execution harnesses for code—is what separates a generative demo from a generative platform.
+
 This module teaches diffusion from the beginner mental model to the senior production trade-offs. It then connects that understanding to advanced code generation architecture because modern generative platforms often serve both media and code workflows under the same reliability, cost, and governance constraints. You will practice reading model behavior as an engineering system rather than a magic endpoint.
 
 ---
@@ -80,6 +82,67 @@ Stable Diffusion 3 Medium adds another architectural layer by using a Multimodal
 | Decoding | Converts final latents back to pixels | Artifacts and memory spikes | Batch size, precision, and offloading |
 
 The important pattern is progressive control. First you learn the denoising mechanism, then the sampler, then the latent representation, then the conditioning path, and finally the deployment envelope. Each layer gives you a lever, but each lever also creates a way to misuse the system. That is why diffusion engineering is less about memorizing model names and more about matching architecture to constraints.
+
+### Forward diffusion, reverse denoising, and the training objective
+
+At the mathematical core, DDPM defines a forward Markov chain that gradually adds Gaussian noise to a data sample \(x_0\) across timesteps \(t = 1 \ldots T\). Each step applies a small variance schedule \(\beta_t\), so \(x_t\) becomes progressively noisier until it resembles an isotropic Gaussian. The reverse process learns to undo that corruption: a neural network \(\epsilon_\theta(x_t, t)\) predicts the noise that was added (or an equivalent score function), and generation starts from pure noise and walks backward toward a plausible image. The training loss is typically a weighted mean-squared error between predicted and actual noise at randomly sampled timesteps. This objective is durable because it does not require adversarial training and it scales to high-resolution data when combined with latent compression.
+
+The engineering consequence is that **quality and cost are tied to how many reverse steps you execute at inference time**, not only to parameter count. A model trained with a thousand-step forward schedule can still be sampled with fewer reverse steps if the scheduler approximates the same marginal distributions. That separation between training objective and inference trajectory is why sampler research (DDIM, DPM-Solver, Euler variants) remains valuable even when the underlying UNet or DiT weights stay fixed.
+
+### DDPM versus DDIM sampling trade-offs
+
+DDPM sampling follows the learned reverse Markov transitions and often needs hundreds of function evaluations per image because each step respects the stochastic forward process. DDIM treats the reverse path as a non-Markovian integration that can skip timesteps while targeting the same endpoint distribution class. In practice, DDIM-style deterministic jumps reduce wall-clock latency and make step count a direct product knob, but aggressive skipping can soften fine detail or shift color calibration. Teams usually benchmark a small matrix: scheduler family × step count × guidance scale × resolution, then pick the Pareto point for their latency budget rather than assuming the research-default step count is production-ready.
+
+| Sampler family | Typical step budget | Latency profile | Quality risk when pushed |
+|---|---|---|---|
+| DDPM / ancestral | High (hundreds+) | Slow, variable | Lower skip risk, high cost |
+| DDIM / deterministic solvers | Medium (20–50) | Predictable | Detail loss if steps too low |
+| Fast ODE solvers | Low (10–30) | Fastest | May need per-model retuning |
+
+### Classifier-free guidance and text conditioning
+
+Classifier-Free Guidance (CFG) strengthens prompt adherence without a separate classifier model. During training, the denoiser sometimes sees the text condition and sometimes sees an empty or null condition. At inference, the prediction blends conditional and unconditional outputs using a guidance scale \(w\): larger \(w\) pulls the sample toward the prompt but can oversaturate colors, amplify artifacts, or reduce diversity. Text conditioning itself usually flows through a frozen or co-trained text encoder (CLIP-style, T5-style, or multimodal transformers) whose token embeddings are injected via cross-attention into the denoising network. The durable lesson is that **prompt engineering and guidance scale are inference-time controls** on the same weights; they are not substitutes for fixing a weak base model or a mis-licensed checkpoint.
+
+### Why latent diffusion uses a VAE
+
+Pixel-space diffusion must denoise tensors with spatial resolution equal to the output image. A variational autoencoder (VAE) learns an encoder that maps pixels to a lower-dimensional latent grid and a decoder that reconstructs pixels from latents. The diffusion model operates in latent space, so each UNet or DiT forward pass touches far fewer values per spatial location. The trade-off is reconstruction fidelity: a weak VAE blurs fine texture or mishandles small text, and those errors survive even a perfect denoiser. Production teams therefore evaluate encoder/decoder quality, not only the denoising checkpoint.
+
+### Practical inference knobs (durable controls)
+
+Regardless of model family, these levers recur in every diffusion serving design:
+
+1. **Inference steps** — direct multiplier on GPU time per request.
+2. **Guidance scale** — trades prompt fidelity against diversity and artifact risk.
+3. **Scheduler / solver** — changes the integration path through noise levels without retraining.
+4. **Resolution and aspect ratio** — quadratic memory growth in pixel space; latent models still pay for larger latent grids.
+5. **Precision and offloading** — fp16/bf16, VAE tiling, and CPU offload reduce VRAM at latency cost.
+
+> **Landscape snapshot — as of 2026-06**
+>
+> Hugging Face **Diffusers** exposes these controls through pipeline objects such as `StableDiffusionPipeline`, `StableDiffusionXLPipeline`, and newer DiT-based pipelines. Exact class names, default schedulers, and memory helpers (`enable_model_cpu_offload`, `enable_vae_slicing`) change between minor releases. Before relying on a snippet from this module or a blog post, verify against the [Diffusers documentation](https://huggingface.co/docs/diffusers/index) for your installed version. Treat any quoted VRAM figure or steps-per-second throughput number as **hardware- and driver-specific** unless you measure it on your cluster.
+
+```python
+# Illustrative pattern — verify API names against your diffusers version.
+from diffusers import StableDiffusionPipeline, DDIMScheduler
+import torch
+
+pipe = StableDiffusionPipeline.from_pretrained(
+    "runwayml/stable-diffusion-v1-5",
+    torch_dtype=torch.float16,
+)
+pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+pipe = pipe.to("cuda")
+
+image = pipe(
+    prompt="a schematic diagram of a kubernetes pod",
+    num_inference_steps=30,
+    guidance_scale=7.5,
+).images[0]
+```
+
+The snippet is not a deployment recommendation. It shows how scheduler swap, step count, and guidance scale are ordinary Python arguments that your serving wrapper should expose as validated API fields with defaults tied to measured latency SLOs.
+
+Senior teams also log scheduler name, step count, guidance scale, and seed with every generated asset so incident reviewers can reproduce or diff outputs during quality regressions. Without that metadata, a "the images look worse after the upgrade" report devolves into guessing whether the model weights, the VAE, or the inference integration changed. Treat diffusion serving like any other stateful API: version the pipeline config alongside the container image digest.
 
 ---
 
@@ -161,6 +224,12 @@ k get deployment sd3-diffusers-api -n ai-inference
 | Latency budget | Too many denoising steps can break product UX | Test scheduler and step count under load |
 
 A production diffusion platform should also distinguish offline batch generation from interactive serving. Batch generation can tolerate longer queue times, larger images, and more expensive samplers because users are not waiting in an editor. Interactive serving needs tight timeouts, cancellation, progress feedback, and strict step budgets. When teams mix these workloads in one deployment, batch jobs often consume GPU capacity and make interactive requests unreliable.
+
+Observability for diffusion APIs should expose per-request scheduler metadata, denoising step count, guidance scale, wall-clock phase timings (encode, denoise loop, decode), and peak GPU memory. Those metrics let you correlate user complaints about "blurry faces" with a scheduler change rather than guessing. They also support cost attribution when multiple product teams share one GPU pool.
+
+Capacity planning should separate **cold start** from **steady-state** load. Cold start includes model weight download, CUDA kernel compilation, and first-pass memory allocation; steady-state is dominated by denoising steps times concurrent requests. Autoscaling rules that only watch CPU will miss GPU memory cliffs when ten pods each load a multi-gigabyte checkpoint simultaneously. A safer pattern warms a minimum pool of ready replicas, caps batch concurrency per GPU, and queues overflow requests with explicit timeout messaging rather than letting latency explode silently.
+
+Treat licensing review as part of capacity planning as well. A model that requires attribution or forbids commercial use may be fine for internal R&D replicas but must never share the same deployment pool as customer-facing generation without policy tags on the ingress route.
 
 ---
 
@@ -656,9 +725,9 @@ Syntax-constrained decoding only guarantees that the token sequence remains pars
 </details>
 
 <details>
-<summary><strong>Question 7: A product manager wants to use Stable Diffusion 3 Medium outputs in paid customer campaigns because the prototype works locally. What nontechnical gate must the engineering team enforce before production use?</strong></summary>
+<summary><strong>Question 7: Compare continuous-space diffusion image generation with discrete autoregressive code generation. Why does code require stronger validation than natural language or image output?</strong></summary>
 
-The team must enforce license review and confirm that the intended commercial use is permitted. A model can be technically deployable while legally restricted. Engineering should record the approved model identifier, license terms, and usage scope before allowing the deployment into a commercial workflow.
+Diffusion models denoise continuous latent or pixel values where small errors may be visually tolerable. Code generation predicts discrete tokens where a single syntax error, wrong import, or invalid API name makes the entire output unusable. String similarity metrics therefore fail for code, while execution-based checks (parse, type check, unit tests, repository tests) are mandatory. Image serving can ship with moderation and human spot checks; code serving needs automated validation loops before merge or deployment because the failure modes are brittle and security-sensitive.
 
 </details>
 
@@ -891,6 +960,13 @@ Success criteria:
 
 ## Sources
 
-- [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) — This is the foundational DDPM paper for the forward/reverse diffusion process and the original CIFAR-10 results.
-- [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) — This is the primary source for why latent-space diffusion reduces compute while preserving quality and enabling flexible conditioning.
-- [Diffusers Stable Diffusion 3 Pipeline Docs](https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/stable_diffusion_3) — This is the practical implementation reference for SD3 inference, guidance behavior, and memory/offloading considerations.
+- [Diffusers documentation](https://huggingface.co/docs/diffusers/index) — Primary reference for pipeline APIs, schedulers, and memory/offloading helpers; verify against your installed version before production use.
+- [Denoising Diffusion Probabilistic Models (DDPM)](https://arxiv.org/abs/2006.11239) — Foundational forward/reverse diffusion process and denoising objective.
+- [Denoising Diffusion Implicit Models (DDIM)](https://arxiv.org/abs/2010.02502) — Non-Markovian sampling that accelerates inference without retraining the denoiser.
+- [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) — Latent-space diffusion, VAE compression, and flexible conditioning architecture.
+- [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598) — Guidance scale mechanism blending conditional and unconditional predictions.
+- [Conditional image generation with Diffusers](https://huggingface.co/docs/diffusers/using-diffusers/conditional_image_generation) — Practical text-conditioning and inference patterns in the Diffusers library.
+- [PyTorch documentation](https://pytorch.org/docs/stable/index.html) — Tensor operations, autocast, and device semantics underlying diffusion training and serving stacks.
+- [Diffusers Stable Diffusion 3 Pipeline](https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/stable_diffusion_3) — SD3-specific pipeline reference for multimodal DiT architectures and memory behavior.
+- [Kubernetes GPU scheduling](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — How clusters request `nvidia.com/gpu` resources and device plugins for inference deployments covered in Section 2.
+- [Hugging Face Diffusers schedulers overview](https://huggingface.co/docs/diffusers/api/schedulers/overview) — Scheduler taxonomy and configuration objects referenced when tuning inference steps and solvers.
