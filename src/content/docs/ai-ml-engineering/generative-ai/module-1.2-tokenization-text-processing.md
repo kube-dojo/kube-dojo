@@ -866,7 +866,7 @@ The next module moves from how text enters a language model to how responses are
 ## Sources
 
 - [Neural Machine Translation of Rare Words with Subword Units](https://arxiv.org/abs/1508.07909) — Classic paper explaining why subword tokenization and BPE-style segmentation matter.
-- [OpenAI API Pricing](https://openai.com/api/pricing/) — Current official pricing page for validating any cost examples in the module.
+- [OpenAI API Pricing](https://platform.openai.com/docs/pricing) — Current official pricing page for validating any cost examples in the module.
 - [huggingface.co: tokenizer summary](https://huggingface.co/docs/transformers/en/tokenizer_summary) — The Hugging Face tokenizer summary directly explains that BPE starts with small units and repeatedly merges the most frequent adjacent pair.
 - [huggingface.co: 6](https://huggingface.co/docs/course/chapter6/6) — The Hugging Face WordPiece page explicitly describes the ## continuation prefix and explains the algorithm in BERT-style tokenization.
 - [rfc-editor.org: rfc3629](https://www.rfc-editor.org/rfc/rfc3629) — RFC 3629 is the primary UTF-8 specification and explicitly defines UTF-8 as encoding characters in sequences of 1 to 4 octets.

@@ -150,7 +150,7 @@ Senior teams rehearse these comparisons in post-incident reviews. When someone s
 
 Git is still the first pillar because training scripts, serving code, tests, configuration templates, infrastructure manifests, and documentation belong in ordinary source control. Git gives teams review, branching, history, and collaboration. The mistake is expecting Git to store every artifact directly, especially large datasets, model checkpoints, embeddings, and generated arrays.
 
-The correct pattern is a two-tier storage model with one logical history. Git stores small text files and pointers. Artifact storage stores large binary payloads. The pointer files connect the Git commit to the data or model object by hash, so a checkout can reconstruct the matching workspace. [DVC is a common tool for this pattern](https://github.com/treeverse/dvc), although the same principle also appears in lakehouse tables, feature stores, model registries, and object-storage-backed artifact systems.
+The correct pattern is a two-tier storage model with one logical history. Git stores small text files and pointers. Artifact storage stores large binary payloads. The pointer files connect the Git commit to the data or model object by hash, so a checkout can reconstruct the matching workspace. [DVC is a common tool for this pattern](https://github.com/iterative/dvc), although the same principle also appears in lakehouse tables, feature stores, model registries, and object-storage-backed artifact systems.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -317,7 +317,7 @@ graph TD
     Later --> L3[slow clone and push failures]
 ```
 
-DVC pipelines add another important idea: [stages should declare their dependencies and outputs](https://github.com/treeverse/dvc). If `prepare` depends on `data/raw/customers.csv` and `src/prepare.py`, DVC can rerun it when either changes and skip it when neither changes. If you forget to list a dependency, DVC can skip a stage incorrectly, which is a reproducibility bug disguised as a performance optimization.
+DVC pipelines add another important idea: [stages should declare their dependencies and outputs](https://github.com/iterative/dvc). If `prepare` depends on `data/raw/customers.csv` and `src/prepare.py`, DVC can rerun it when either changes and skip it when neither changes. If you forget to list a dependency, DVC can skip a stage incorrectly, which is a reproducibility bug disguised as a performance optimization.
 
 ```yaml
 stages:
@@ -1342,13 +1342,13 @@ Success criteria:
 - [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Defines Jobs as run-to-completion workloads that track completion and failure state.
 - [MLOps: Continuous delivery and automation pipelines in machine learning](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Google's architecture guide for ML pipeline maturity, automation layers, and production operating models.
 - [MLOps: CD4ML solution overview](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Explains why ML testing extends beyond ordinary software testing with additional validation layers.
-- [DVC documentation — Versioning data and models](https://dvc.org/doc/user-guide/data-management/versioning) — Official guide to content-addressed data versioning and Git pointer files.
+- [DVC documentation — Versioning data and models](https://dvc.org/doc/use-cases/versioning-data-and-models) — Official guide to content-addressed data versioning and Git pointer files.
 - [DVC pipelines](https://dvc.org/doc/user-guide/pipelines/defining-pipelines) — How to declare stage dependencies, outputs, and metrics for reproducible reruns.
 - [pre-commit framework](https://pre-commit.com/) — Hook framework for running fast local checks before commits land in shared history.
 - [MLflow Tracking](https://mlflow.org/docs/latest/tracking.html) — Experiment run logging: parameters, metrics, artifacts, and reproducibility metadata.
 - [pytest documentation — Getting started](https://docs.pytest.org/en/stable/getting-started.html) — Standard Python test runner used for unit, data-quality, and integration layers in ML repos.
-- [Git documentation — Working with large files](https://git-scm.com/book/en/v2/Git-Tools-Managing-Large-Files) — Why large binaries belong outside Git history and how pointer-based workflows avoid repository bloat.
-- [CNCF MLOps whitepaper (PDF)](https://tag-app-delivery.cncf.io/whitepapers/mlops/) — Vendor-neutral vocabulary for ML lifecycle stages and operational concerns across the CNCF ecosystem.
+- [Git LFS — versioning large files outside Git history](https://git-lfs.com/) — Why large binaries belong outside Git history and how pointer-based workflows avoid repository bloat.
+- [CNCF TAG App Delivery — MLOps working group](https://github.com/cncf/tag-app-delivery) — Vendor-neutral vocabulary for ML lifecycle stages and operational concerns across the CNCF ecosystem.
 
 ## Learner check
 
