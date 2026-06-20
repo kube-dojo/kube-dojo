@@ -48,6 +48,8 @@ RL run starts.
 
 ## Core Content
 
+> **Landscape snapshot — reasoning-RL tooling as of 2026-06.** The model names (DeepSeek-R1 and its `-Zero` variant), method labels (GRPO, RLVR, RLOO), and library surfaces (Hugging Face TRL `GRPOTrainer`, verifier/reward harnesses) named below move fast — methods get renamed, libraries change APIs, and new reasoning models ship monthly. Treat them as concrete illustrations of the *durable* ideas (group-relative advantage instead of a critic, verifiable rewards, KL control against a reference policy), not a fixed roster. Verify any specific API, model name, or paper section against the current upstream docs before relying on it.
+
 ### 1. From RLHF to Reasoning RL
 
 Classical RLHF starts with a model that already follows instructions reasonably well.
@@ -770,9 +772,17 @@ while penalizing large divergence from the reference policy.
 <summary>Solution</summary>
 
 ```python
+import math
+
+
 def add_objective(records: list[dict], beta: float = 0.05) -> list[dict]:
     for record in records:
-        kl_proxy = record["policy_logprob"] - record["reference_logprob"]
+        # Schulman's unbiased, nonnegative KL estimator — the form GRPO/DeepSeekMath use.
+        # KL(policy || ref) ≈ exp(r) - r - 1, where r = log π_ref - log π. It is always
+        # >= 0, so subtracting beta * kl_proxy genuinely penalizes divergence. (A raw
+        # log-prob delta would be signed and could *reward* moving away from the reference.)
+        log_ratio = record["reference_logprob"] - record["policy_logprob"]
+        kl_proxy = math.exp(log_ratio) - log_ratio - 1.0
         record["kl_proxy"] = kl_proxy
         record["objective"] = record["advantage"] * record["policy_logprob"] - beta * kl_proxy
     return records
@@ -825,7 +835,7 @@ Success criteria:
 
 ## Sources
 
-- [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948) - Primary source for DeepSeek-R1 and DeepSeek-R1-Zero; see Sections 2.2.1 and 2.2.2 for GRPO and rule-based rewards.
+- [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948) - Primary source for DeepSeek-R1 and DeepSeek-R1-Zero; see Section 2.1 (Group Relative Policy Optimization) and Section 2.2 (Reward Modeling / rule-based rewards) in the current arXiv version.
 - [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://arxiv.org/abs/2402.03300) - Primary GRPO source; see Section 4.1 and Appendix A.1.6 for PPO-to-GRPO and group-relative advantage analysis.
 - [Tulu 3: Pushing Frontiers in Open Language Model Post-Training](https://arxiv.org/abs/2411.15124) - Primary source for the Tulu 3 RLVR recipe; see Section 6 for reinforcement learning with verifiable rewards.
 - [Proximal Policy Optimization Algorithms](https://arxiv.org/abs/1707.06347) - Original PPO paper; see Section 3 for the clipped surrogate objective and Section 4 for adaptive KL penalty variants.
