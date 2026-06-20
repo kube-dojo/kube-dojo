@@ -16,19 +16,17 @@ sidebar:
 
 By the end of this module, you will be able to:
 
-| Outcome | Bloom Level | Evidence You Can Produce |
-|---------|-------------|--------------------------|
-| Compare exact, keyword, and vector search architectures and justify which one fits a RAG workload. | Analyze | A decision table that explains why SQL, BM25, pgvector, or a dedicated vector database is appropriate. |
-| Design a vector collection schema that aligns embeddings, distance metrics, metadata, and deterministic IDs. | Create | A collection plan that prevents dimension mismatch, duplicate ingestion, and inefficient filtering. |
-| Debug poor vector search results by checking embeddings, dimensions, distance metrics, filters, and score distributions. | Analyze | A repeatable troubleshooting checklist with commands or scripts that expose the failure mode. |
-| Evaluate HNSW tuning trade-offs between recall, latency, memory, and ingestion speed for production workloads. | Evaluate | A tuning recommendation for a specific scenario, including which parameter changes and why. |
-| Implement a small persistent vector search workflow with metadata filtering and verify it survives restart. | Apply | A working Qdrant lab with semantic search, filtered search, update, delete, and persistence checks. |
+- **Compare** exact, keyword, and vector search architectures and justify which storage pattern fits a RAG workload.
+- **Design** a vector collection schema that aligns embeddings, distance metrics, metadata, and deterministic IDs.
+- **Evaluate** HNSW and ANN tuning trade-offs between recall, latency, memory, and ingestion speed.
+- **Debug** poor vector search results by checking embeddings, dimensions, distance metrics, filters, and score distributions.
+- **Implement** a persistent vector search workflow with metadata filtering and verify it survives restart.
 
 ---
 
 ## Why This Module Matters
 
-A platform engineer at a healthcare company is asked to make clinical guidelines searchable by meaning rather than by exact wording. Doctors type questions like
+Hypothetical scenario: A platform engineer at a healthcare company is asked to make clinical guidelines searchable by meaning rather than by exact wording. Doctors type questions like
 "safe anticoagulant options before surgery," but the source documents use phrasing such as "perioperative management of blood thinning medication." A keyword system misses
 important material because the words do not line up, while a naive embedding demo works only on a small notebook-sized corpus and loses data whenever the process restarts.
 
@@ -364,51 +362,155 @@ logic. Senior practitioners keep exact search around as a diagnostic tool even w
 
 | Dataset Size and Need | Reasonable Starting Point | Why |
 |-----------------------|---------------------------|-----|
-| Fewer than ten thousand vectors, low traffic | Brute force, Chroma, FAISS, or pgvector | Simplicity matters more than distributed indexing. |
-| Tens of thousands to a few million vectors, production RAG | Qdrant, Weaviate, Pinecone, Milvus, or pgvector with HNSW | Persistence, filtering, and operational APIs become important. |
-| Many millions with strict latency | Dedicated vector database with tuned HNSW and payload indexes | Specialized storage and search controls become worth the complexity. |
+| Fewer than ten thousand vectors, low traffic | Brute force or an embedded ANN library | Simplicity matters more than distributed indexing. |
+| Tens of thousands to a few million vectors, production RAG | A persistent store with HNSW, payload filters, and operational APIs | Durability, filtering, and update semantics become load-bearing. |
+| Many millions with strict latency | A horizontally scalable vector service with tuned ANN indexes | Specialized storage and search controls become worth the complexity. |
 | Extremely large or memory-constrained corpus | Sharding, compression, tiered storage, and hybrid retrieval | Architecture choices dominate individual query syntax. |
 
 Do not over-engineer the first version, but do not ignore the migration path. A small prototype can use local storage, but it should still use deterministic IDs, recorded model names,
 consistent chunking rules, and a query interface that can move to a production backend. These habits reduce the cost of graduating from a demo to a service.
 
----
+### IVF and Product Quantization: When Graph Search Is Not Enough
 
-## 4. Choosing a Vector Database Architecture
+HNSW is the default mental model for many teams, but it is not the only ANN family. Inverted File (IVF) indexes partition the vector space into coarse clusters, often using k-means
+during an offline training phase. At query time, the engine compares the query vector only against a small set of nearby clusters rather than the entire corpus. IVF shines when the
+dataset is very large and vectors naturally form separable groups, but it can miss neighbors that sit near cluster boundaries if the coarse partition is too aggressive.
 
-Vector database selection is a design decision, not a popularity contest. The right choice depends on data sensitivity, operational skill, query volume, latency expectations, hybrid
-search needs, update frequency, budget model, and whether the platform team already runs stateful services well. The same company may use Chroma for local experiments, pgvector for a
-small product feature, Qdrant for self-hosted RAG, and Pinecone for a managed service where speed of delivery outweighs infrastructure control.
-
-| Option | Strong Fit | Watch Carefully |
-|--------|------------|-----------------|
-| Qdrant | Self-hosted production RAG, [rich payload filtering, Rust-based service, Docker-friendly operations](https://github.com/qdrant/qdrant). | You own backups, upgrades, capacity planning, and cluster operations. |
-| Pinecone | Managed vector search when the team wants minimal infrastructure work. | Pricing, quotas, vendor lock-in, data residency, and cold-start behavior for some capacity models. |
-| Weaviate | [Hybrid semantic and keyword search with schema-rich objects and managed or self-hosted options](https://github.com/weaviate/weaviate). | More concepts to learn, more resource planning, and GraphQL/API design decisions. |
-| Chroma | [Local development, teaching, small prototypes, and quick LangChain-style experiments](https://github.com/chroma-core/chroma). | Validate production scale, durability, concurrency, and filtering before relying on it heavily. |
-| pgvector | [Keeping smaller vector workloads beside relational data in PostgreSQL](https://github.com/pgvector/pgvector). | PostgreSQL remains responsible for operational load, memory, indexes, and query planning. |
-| FAISS | [High-performance local or embedded ANN search controlled by application code](https://github.com/facebookresearch/faiss). | Persistence, metadata filters, multi-user serving, and updates require additional engineering. |
-
-The vendor comparison should start from workload shape. A compliance-heavy enterprise may prefer self-hosting because data control and network boundaries matter. A small team racing
-toward a product demo may prefer a managed service because operational focus is expensive. A platform team standardizing internal RAG across many departments may choose an open
-service with strong filtering and automation hooks so it can provide a shared capability.
+Product Quantization (PQ) compresses each high-dimensional vector into a compact code built from sub-vector centroids. Search then operates on approximate distances between compressed
+codes, which dramatically reduces memory footprint for billion-scale corpora. [FAISS documents IVF and PQ combinations](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes)
+as a common pattern when RAM is the binding constraint. The trade-off is precision: aggressive quantization can blur fine-grained distinctions that matter for short text chunks or
+highly similar technical passages.
 
 ```text
-Decision path:
-  Is semantic search tiny and local?
-        |
-        +-- yes --> Chroma, FAISS, or pgvector may be enough.
-        |
-        +-- no --> Do you need managed operations?
-                    |
-                    +-- yes --> Evaluate Pinecone, managed Weaviate, managed Qdrant, or cloud-native options.
-                    |
-                    +-- no --> Evaluate Qdrant, Weaviate, Milvus, or pgvector depending on scale and team skills.
+IVF query path:
+  Query vector
+       |
+       v
+  Find nearest coarse clusters (nprobe clusters)
+       |
+       v
+  Search only vectors inside those clusters
+       |
+       v
+  Return approximate top-k
+
+PQ storage path:
+  Full vector --> split into sub-vectors --> assign centroid codes --> store compact code
+  Query vector --> same encoding --> approximate distance in code space
 ```
 
-This flow is intentionally conservative. Many teams adopt a dedicated vector database before they have enough traffic to justify it, then spend more time on infrastructure than on
-retrieval quality. Other teams stay too long on a notebook index and suffer outages when persistence, filtering, or updates become mandatory. The better path is to design the
-retrieval contract cleanly and move backends when requirements prove the need.
+Many production systems combine techniques. A graph index such as HNSW may serve low-latency online queries, while IVF+PQ or disk-backed segments handle cold archives. The durable
+lesson is to match the index family to the binding constraint: latency, memory, ingestion rate, or update frequency. When recall drops after switching index types, compare against a
+brute-force baseline on a sample before blaming the embedding model.
+
+| ANN Family | Core Idea | Typical Strength | Typical Weakness |
+|------------|-----------|------------------|------------------|
+| HNSW | Layered nearest-neighbor graph | Strong general-purpose recall/latency balance | Extra memory for graph links |
+| IVF | Coarse clustering then local search | Scales to very large static corpora | Boundary misses; needs training data |
+| PQ / SQ | Compressed vector codes | Memory efficiency at huge scale | Reduced ranking precision |
+| Brute force | Exact all-pairs comparison | Perfect recall for evaluation | Linear cost growth |
+
+**Pause and predict:** A corpus grows from two million to eighty million vectors and memory becomes the primary bottleneck, while p95 latency is still acceptable. Would you first
+raise HNSW `M`, add IVF partitioning, or enable product quantization? Write your prediction before continuing. In most architectures, compression or IVF-style partitioning addresses
+memory pressure more directly than adding graph connectivity, but the right answer depends on whether recall regressions are acceptable for your evaluation set.
+
+---
+
+## 4. Distance Metrics and Embedding Geometry
+
+Distance metrics define what "nearest" means in vector space. The embedding model and the database must agree on that definition, because changing metrics changes ranking even when
+vectors stay identical. Cosine similarity compares direction and ignores magnitude, which suits many normalized text embeddings. Dot product rewards both direction and magnitude and
+is common when models are trained with dot-product retrieval objectives. Euclidean distance measures straight-line separation and can be appropriate for certain image or sensor
+embeddings, but it should not be chosen by habit for text RAG without testing.
+
+```python
+from math import sqrt
+
+def cosine_similarity(left: list[float], right: list[float]) -> float:
+    dot = sum(a * b for a, b in zip(left, right))
+    left_norm = sqrt(sum(a * a for a in left))
+    right_norm = sqrt(sum(b * b for b in right))
+    return dot / (left_norm * right_norm)
+
+def l2_distance(left: list[float], right: list[float]) -> float:
+    return sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+
+def dot_product(left: list[float], right: list[float]) -> float:
+    return sum(a * b for a, b in zip(left, right))
+
+left = [0.6, 0.8, 0.0]
+right = [0.8, 0.6, 0.0]
+scaled = [1.2, 0.9, 0.0]
+
+print(f"cosine(left, right) directionally close: {cosine_similarity(left, right):.3f}")
+print(f"cosine(left, scaled) unchanged when scaled: {cosine_similarity(left, scaled):.3f}")
+print(f"dot(left, right): {dot_product(left, right):.3f}")
+print(f"dot(left, scaled): {dot_product(left, scaled):.3f}")
+print(f"l2(left, right): {l2_distance(left, right):.3f}")
+print(f"l2(left, scaled): {l2_distance(left, scaled):.3f}")
+```
+
+Run this snippet after the cosine helper from section 1. Notice that cosine similarity treats `left` and `scaled` as equally similar because scaling does not change direction, while
+dot product and Euclidean distance change when magnitude changes. If your ingestion pipeline normalizes embeddings but your database index assumes dot product on unnormalized vectors,
+rankings can drift silently. [Qdrant documents distance enums](https://qdrant.tech/documentation/concepts/vectors/#distance-metrics) including cosine, dot, and Euclidean; [Pinecone
+documents compatible metrics](https://docs.pinecone.io/guides/index-data/create-an-index#distance-metrics) for index creation. Pick one metric per collection and record it beside the
+embedding model name in deployment metadata.
+
+| Metric | What It Emphasizes | Common Text-Embedding Fit | Pitfall |
+|--------|--------------------|-----------------------------|---------|
+| Cosine / cosine distance | Direction in space | Normalized sentence embeddings | Mixing normalized queries with unnormalized stored vectors |
+| Dot product | Direction plus magnitude | Models trained with dot-product retrieval | Magnitude drift after model or preprocessing changes |
+| Euclidean (L2) | Absolute position | Some multimodal or custom spaces | Assuming familiarity equals suitability for text RAG |
+
+When embeddings are normalized to unit length, cosine similarity and Euclidean distance become monotonically related, so rankings may match even though scores differ. That relationship
+breaks when normalization is inconsistent. A practical acceptance test is to embed ten labeled query/chunk pairs, compute rankings under candidate metrics, and compare recall@k before
+you lock the collection configuration.
+
+---
+
+## 5. Choosing Vector Storage by Workload Shape
+
+Vector storage selection is a design decision about operational boundaries, not a product popularity contest. The durable axes are: whether vectors must live beside relational
+records, whether hybrid lexical+semantic retrieval is required, expected corpus size and query rate, update frequency, isolation requirements, and who operates stateful infrastructure.
+A compliance-heavy environment may require self-hosting inside a private network. A team optimizing for time-to-first-demo may accept a managed service and revisit portability later.
+A platform group offering shared retrieval may prioritize strong metadata filtering, backup hooks, and multi-tenant guardrails.
+
+```text
+Workload-shape decision (durable):
+  Must vectors join transactional rows in one database?
+        |
+        +-- yes --> consider an extension or colocated store (e.g., pgvector pattern)
+        |
+        +-- no --> Is hybrid lexical + vector retrieval a first-class requirement?
+                    |
+                    +-- yes --> evaluate engines with built-in inverted indexes + vector indexes
+                    |
+                    +-- no --> Is corpus scale or QPS the binding constraint?
+                                  |
+                                  +-- moderate --> single-node persistent vector service
+                                  +-- large --> sharded service + payload indexes + ANN tuning
+```
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+
+| Product / project | Typical deployment options | Capability areas to verify in current docs |
+|-------------------|----------------------------|---------------------------------------------|
+| Qdrant | self-hosted, managed cloud | payload filtering, HNSW, REST/gRPC APIs, snapshots |
+| Pinecone | managed SaaS | managed indexes, metadata filters, namespaces |
+| Weaviate | self-hosted, managed cloud | hybrid BM25+vector, schema objects, multi-tenancy |
+| Milvus / Zilliz | self-hosted, managed cloud | sharding, multiple index types, tiered storage |
+| pgvector | PostgreSQL extension | relational+vector colocation, HNSW/IVFFlat indexes |
+| Chroma | embedded, server mode | local prototyping, persistence options |
+| FAISS | C++/Python library | embedded ANN indexes, IVF/PQ combinations |
+| Elasticsearch / OpenSearch | self-hosted, managed | hybrid kNN + inverted index, aggregations |
+
+Use the table as a starting checklist, not a ranking. Match rows to your workload axes, then validate durability, filtering syntax, backup/restore, and pricing or capacity models in
+current vendor documentation before committing. The lab in this module uses Qdrant as a worked example because it makes collection contracts, filters, and persistence visible in a
+local Docker workflow; equivalent concepts exist across the other rows.
+
+This decision flow is intentionally conservative. Many teams adopt a dedicated vector service before traffic justifies the operational surface area, then spend more time on
+infrastructure than on retrieval quality. Other teams stay too long on an in-memory notebook index and suffer data loss when persistence, filtering, or updates become mandatory. The
+better path is to design the retrieval contract cleanly and migrate backends when requirements prove the need.
 
 **Stop and think:** Your team already runs PostgreSQL well, has fewer than one million vectors, and needs transactional joins between business records and embeddings. Would you start
 with a dedicated vector database or pgvector? Now change the scenario: the team has fifty million vectors, heavy semantic traffic, and independent scaling requirements. Explain why
@@ -443,7 +545,9 @@ first stage favors recall and the second stage favors precision.
 
 Hybrid search is especially important in technical education and operations content. Acronyms, version numbers, API fields, error messages, and command flags are not just words;
 they are exact artifacts. A high-quality KubeDojo retrieval system should understand that "pod cannot resolve service DNS" and "CoreDNS lookup failure" are semantically related, but
-it should also respect exact strings such as `CrashLoopBackOff`, `ImagePullBackOff`, `NetworkPolicy`, and `containerPort`.
+it should also respect exact strings such as `CrashLoopBackOff`, `ImagePullBackOff`, `NetworkPolicy`, and `containerPort`. When merging keyword and vector scores, prefer rank-fusion
+methods such as reciprocal rank fusion over naive score addition unless you have calibrated both score scales on representative traffic, because raw vector distances and BM25 scores
+live on incompatible numeric ranges.
 
 ### Storage, Sharding, and Replication
 
@@ -493,7 +597,7 @@ cases in a production AI system. They are the normal lifecycle of a service that
 
 ---
 
-## 5. Operating and Debugging Vector Search
+## 6. Operating and Debugging Vector Search
 
 Vector search quality problems often look mysterious because the result can be "kind of related" while still being wrong. The fastest debugging path is to split the system into
 layers: embedding generation, collection contract, filters, ANN search, candidate scoring, re-ranking, and final LLM prompt assembly. Each layer has different symptoms and different
@@ -564,6 +668,11 @@ Payload indexes matter when filters are common and selective. If every query fil
 so those fields are efficient filter keys. Otherwise the system may spend too much time intersecting semantic candidates with metadata constraints. The exact API varies by database,
 but the design principle is stable: repeatedly filtered fields deserve indexing.
 
+Consider a collection with ten million chunks but only two hundred thousand belong to `tenant_id = acme`. A query without a payload index may retrieve the global semantic top-k first,
+then discard most results during filtering. A selective payload index lets the engine restrict the ANN search space up front, which often improves both latency and relevance because
+the surviving candidates already satisfy authorization constraints. Measure filter selectivity during design reviews: if a field removes more than ninety percent of rows for typical
+queries, it is a strong payload-index candidate. If a field is rarely used, indexing it adds write overhead without meaningful query benefit.
+
 | Optimization | When It Helps | Risk If Misused |
 |--------------|---------------|-----------------|
 | Batched upserts | Ingestion sends many points to the database. | Very large batches can exceed request limits or cause long retries. |
@@ -601,6 +710,39 @@ latency, support multilingual queries, or solve another concrete problem. Upgrad
 
 Backups and restores deserve the same discipline. A snapshot is useful only if it can be restored into a working service. Test restore procedures on a schedule, verify collection
 counts and sample queries, and confirm that application configuration can point to the restored service. The time to discover a broken backup procedure is not during an outage.
+
+### Durability, WAL, and Recovery Expectations
+
+Production vector stores must survive process restarts, node failures, and partial write batches without silently corrupting the index. Most services persist vectors, payloads, and
+index structures to disk through a combination of write-ahead logs (WAL), periodic snapshots, and background index merges. The exact mechanics vary by engine, but the durable contract
+is the same: upserts should become durable before the API acknowledges them (or the client should receive an explicit failure), and deletes should become visible to search within a
+documented consistency window.
+
+```text
+Simplified durability lifecycle:
+  Client upsert batch
+        |
+        v
+  WAL append (crash-safe intent log)
+        |
+        v
+  In-memory index update + payload store
+        |
+        v
+  Background flush / snapshot to disk
+        |
+        v
+  Restart recovery replays WAL + loads last snapshot
+```
+
+Hypothetical scenario: An on-call engineer restarts a vector node during a heavy ingestion job. Without WAL-backed persistence, the in-memory HNSW graph may rebuild empty while
+payload files still exist on disk, producing searches that return IDs without vectors or scores that look random. With proper persistence, restart replays recent writes and returns
+the service to the last committed state, though ingestion backlog may temporarily increase latency. [Qdrant documents snapshots and storage paths](https://qdrant.tech/documentation/concepts/snapshots/);
+[Milvus documents backup and restore workflows](https://milvus.io/docs/milvus_backup_overview.md) for operators running larger clusters.
+
+Treat durability tests as part of the retrieval contract, not as optional infrastructure polish. After any backup/restore drill, rerun a fixed query set, verify collection point counts,
+and confirm that metadata filters still exclude revoked documents. If your domain requires immediate delete visibility, measure the time from delete API call to absent search result and
+compare it against policy requirements.
 
 ---
 
@@ -693,6 +835,18 @@ The first team can reasonably start with pgvector because the workload is modera
 <summary>Answer</summary>
 
 Design hybrid retrieval that combines keyword candidates with vector candidates, then deduplicates and optionally re-ranks them. Keyword search preserves exact error strings, command flags, and API names, while vector search captures paraphrased intent and related explanations. A re-ranker can then choose final context that is both semantically relevant and lexically grounded.
+
+</details>
+
+**Q8.** A collection uses cosine distance, but the ingestion pipeline stopped normalizing embeddings after a refactor. Rankings now favor longer chunks even when shorter chunks are
+more relevant. Which layer failed, and what is the fix?
+
+<details>
+<summary>Answer</summary>
+
+The failure is in the embedding contract, not necessarily in HNSW itself. Cosine distance assumes direction-based comparison; if stored vectors vary in magnitude because normalization
+was removed, rankings can drift toward high-magnitude vectors. Restore consistent normalization during both indexing and query embedding, or switch to a metric intentionally aligned
+with unnormalized vectors after re-evaluating recall on a labeled set. Record the normalization rule beside the model name so deployments cannot diverge silently.
 
 </details>
 
@@ -981,17 +1135,28 @@ Success criteria:
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Module 1.2 — Building RAG Systems](/ai-ml-engineering/vector-rag/module-1.2-building-rag-systems/) to assemble the full ingest→retrieve→generate pipeline: chunking,
+embedding, hybrid retrieval, re-ranking, and generation prompts that turn vector search into grounded answers.
+
+---
+
+## Learner check
+
+> A vector database does not create semantic meaning by itself: the embedding model creates the vector space, while the database stores, indexes, filters, updates, and retrieves vectors inside that space.
 
 ---
 
 ## Sources
 
-- [arxiv.org: 1603.09320](https://arxiv.org/abs/1603.09320) — The arXiv record directly gives the paper title, authors, and 2016 submission date.
-- [github.com: weaviate](https://github.com/weaviate/weaviate) — The GitHub README explicitly describes Weaviate as open-source and highlights hybrid/vector-plus-keyword search with filtering.
-- [github.com: chroma](https://github.com/chroma-core/chroma) — The GitHub README directly shows `pip install chromadb`, in-memory prototyping, and optional persistence.
-- [huggingface.co: all MiniLM L6 v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — The Hugging Face model card explicitly states that the model maps text to a 384-dimensional dense vector space.
-- [huggingface.co: e5 large v2](https://huggingface.co/intfloat/e5-large-v2) — The Hugging Face model card explicitly states that the embedding size is 1024.
-- [github.com: qdrant](https://github.com/qdrant/qdrant) — General lesson point for an illustrative rewrite.
-- [github.com: pgvector](https://github.com/pgvector/pgvector) — The pgvector README explicitly says it is vector similarity search for Postgres and supports exact and approximate nearest-neighbor search.
-- [github.com: faiss](https://github.com/facebookresearch/faiss) — The FAISS README directly describes it as a library for efficient similarity search and clustering of dense vectors, including sets that may not fit in RAM.
+- [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs (Malkov & Yashunin, 2016)](https://arxiv.org/abs/1603.09320) — Defines the HNSW graph structure and the `efConstruction` / search-width trade-offs used throughout this module.
+- [FAISS indexes wiki (Meta)](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes) — Explains IVF, PQ, and composite index families for memory-constrained approximate search.
+- [Qdrant: Distance metrics](https://qdrant.tech/documentation/concepts/vectors/#distance-metrics) — Official documentation for cosine, dot, and Euclidean distance configuration in collections.
+- [Qdrant: Snapshots](https://qdrant.tech/documentation/concepts/snapshots/) — Describes snapshot-based backup and restore for persisted vector collections.
+- [Pinecone: Create an index — distance metrics](https://docs.pinecone.io/guides/index-data/create-an-index#distance-metrics) — Documents metric selection constraints when creating managed indexes.
+- [Milvus: Index types](https://milvus.io/docs/index.md) — Catalog of HNSW, IVF, and disk-aware index options for large-scale vector search.
+- [Milvus: Backup and restore overview](https://milvus.io/docs/milvus_backup_overview.md) — Operator guidance for durable backups in distributed Milvus deployments.
+- [pgvector README](https://github.com/pgvector/pgvector) — PostgreSQL extension for exact and approximate nearest-neighbor search beside relational data.
+- [Qdrant GitHub repository](https://github.com/qdrant/qdrant) — Open-source vector search engine used as the hands-on worked example in this module.
+- [Weaviate GitHub repository](https://github.com/weaviate/weaviate) — Reference for hybrid semantic and keyword retrieval patterns.
+- [Chroma GitHub repository](https://github.com/chroma-core/chroma) — Embedded vector store commonly used for local prototyping workflows.
+- [sentence-transformers/all-MiniLM-L6-v2 model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) — Documents the 384-dimensional embedding space used in the lab collection.
