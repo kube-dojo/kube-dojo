@@ -1,0 +1,2 @@
+## 2026-06-20T19:51:42Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator) cross-family R1 — module authored by non-Anthropic agent system. #2020 scattered (cloud/azure-essentials). Dense T0; web-verified currency (Azure tier/SKU names + pricing framing). Application Gateway v2 SKU guidance ("v2 for new deployments"), WAF policy (Detection→Prevention workflow), Front Door + regional App Gateway pattern, /24 subnet sizing all accurate and durable. body=5345, sources=12. No P1/P2. T0 passed=true. APPROVE.

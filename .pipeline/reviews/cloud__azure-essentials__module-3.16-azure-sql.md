@@ -1,0 +1,2 @@
+## 2026-06-20T19:51:42Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator) cross-family R1 — module authored by non-Anthropic agent system. #2020 scattered (cloud/azure-essentials). Dense T0; web-verified currency (Azure tier/SKU names + pricing framing). Azure SQL Database compute/storage model accurate: DTU vs vCore, General Purpose / Business Critical / Hyperscale, Serverless (auto-pause, min vCore floor, resume delay), replicas, IO limits — all current durable service tiers. body=5962, sources=25. No P1/P2. T0 passed=true. APPROVE.
