@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 172b — #2020 scattered review wave (21 modules)</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;line-height:1.3;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:2rem;border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--accent);padding:1rem 1.2rem;border-radius:6px}
+  code{background:#0d1626;border:1px solid var(--bd);border-radius:4px;padding:.1rem .35rem;font-size:.86em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok);font-weight:600}.warn{color:var(--warn);font-weight:600}.bad{color:var(--bad);font-weight:600}
+  ul,ol{padding-left:1.2rem}li{margin:.3rem 0}a{color:var(--accent)}
+</style>
+</head>
+<body>
+<h1>Session 172b — #2020 scattered review wave (<span class="ok">21 modules cross-family reviewed</span>)</h1>
+
+<p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s172 (same session, after the ai-ml track close).</strong>
+With ai-ml-engineering at 124/124, drained the <strong>scattered #2020 clusters</strong> using a deterministic cadence: record-gap detection (module file with no <code>.pipeline/reviews/</code> entry) → <code>verify_module.py</code> tier triage → web-verified currency review → records direct-main; content fixes via worktree→PR. <strong>21 modules finalized</strong> across on-premises/multi-cluster (6), cloud/azure-essentials (5), pf/ebpf+advanced-networking+aws (6), cloud-custodian (1 expand), pf-mlops+nats (3). Two small currency PRs (<code>#2051</code>, <code>#2052</code>, both rebase-merged, CI green). The standout: <strong>codex installed c7n and ran <code>custodian validate</code></strong> on the Cloud Custodian module, catching 3 real schema bugs an eyeball review passed.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Cluster</th><th>Modules</th><th>Outcome</th><th>Refs</th></tr>
+<tr><td>on-premises/multi-cluster</td><td>5.6 gardener, 5.7 multi-cluster-on-prem, 5.8 openstack-on-k8s, 5.9 vmware-tanzu, 5.10 edge-fleet, 5.11 airgapped</td><td>4 clean + 2 currency touches</td><td>PR #2051, records <code>2d405226c</code></td></tr>
+<tr><td>cloud/azure-essentials</td><td>3.13 app-gateway, 3.14 app-service, 3.15 event-hub/grid, 3.16 azure-sql, 3.17 backup-site-recovery</td><td>all clean T0</td><td>records <code>9d7fe134a</code></td></tr>
+<tr><td>pf/ebpf + pf/advanced-networking + aws</td><td>ebpf 1.1/1.2, adv-net 1.7/1.8/1.9, aws 1.13 data-ingestion</td><td>all clean T0</td><td>records <code>b87c572c6</code></td></tr>
+<tr><td>cloud/enterprise-hybrid</td><td>10.11 cloud-custodian</td><td>expand T2→T0 + codex-validated fix</td><td>PR #2052, record <code>fde6bffa9</code></td></tr>
+<tr><td>pf-mlops + data-eng</td><td>mlops 5.11, 5.12, data-eng 1.9 nats-jetstream</td><td>all clean T0</td><td>records <code>f6bc6d622</code></td></tr>
+</table>
+
+<h2>Currency fixes (web-verified, applied)</h2>
+<ul>
+<li><strong>5.8 openstack</strong>: noted <strong>OpenStack 2026.1 (Gazpacho, Apr 2026)</strong> as latest upstream alongside the 2025.2 Flamingo example baseline. <em>(2026.2 Hibiscus still in development per cursor's check.)</em></li>
+<li><strong>5.9 vmware-tanzu</strong>: noted <strong>TMC SaaS reached EoL 2025-11-15</strong> → read "TMC" as Self-Managed (TMC-SM). The module was otherwise already current on Broadcom (TKG 2.5.4 final → VKS on vSphere 8 U3/VCF 9, Nov-22-2023 acquisition, 300-500% renewal reports — all verified correct).</li>
+<li>Both confirmed by <strong>cursor</strong> (Cursor/Kimi) cross-family per Decision Card C (orchestrator inline edits → cursor) — PR #2051.</li>
+</ul>
+
+<h2>Cloud Custodian expand — the codex-executes-the-labs win</h2>
+<p>10.11 was the one under-floor module (T2, 4144w). cursor expanded it to 5358w (T0): execution modes, <code>mark-for-op</code>/<code>offhour</code> patterns, <code>c7n-org</code>/<code>c7n-mailer</code>. <strong>codex R1 (Decision Card C: cursor→codex) installed c7n 0.9.51 and ran <code>custodian validate</code></strong> → NEEDS CHANGES, 3 P1s:</p>
+<ol>
+<li><code>onhour: 8</code> placed inside a <code>type: offhour</code> filter (invalid schema property — onhour is a separate filter).</li>
+<li>2 policy snippets missing the top-level <code>policies:</code> wrapper → <code>validate</code> rejects a bare list.</li>
+<li><code>c7n-mailer</code> claimed "Microsoft Teams" delivery — not a supported transport (SES/Slack/Splunk/DataDog).</li>
+</ol>
+<p><strong>opus fix + re-validate:</strong> fixed all 3; per the "fix ALL occurrences" rule a grep found <strong>2 more</strong> pre-existing <code>policies:</code>-wrapper omissions and fixed those too; Teams→Splunk/DataDog. Installed c7n+c7n-azure locally and ran <code>custodian validate</code> on every block → <strong>13/13 PASS</strong>. codex also independently confirmed the CNCF-Incubating and c7n-org-OCI claims accurate. The <code>fix(</code> commit carries a <code>Regression test:</code> line (custodian validate) to clear the bugfix merge hook.</p>
+
+<h2>Method notes for next agent</h2>
+<ul>
+<li><strong>Record-absence ≠ un-reviewed.</strong> A curriculum-wide scan finds ~124 record-less module files, but most platform/toolkits ones are board-done-from earlier epics without a <code>.pipeline/reviews/</code> file. Anchor on the <strong>#2020 issue's by-track scope</strong>, not raw record gaps. cka shows 7 record-less but #2020 scoped only 2 → disambiguate against the board before reviewing.</li>
+<li><strong>opus-inline review IS the cross-family check</strong> for these (authors were non-Anthropic agents). For newly-authored content this session (cursor expand) Decision Card C routing (cursor→codex) was honored with a real codex review.</li>
+<li><strong>Currency ground-check both ways:</strong> verified Tanzu/Broadcom state, OpenStack Gazpacho, TMC EoL, Cloud Custodian CNCF maturity, c7n-org OCI support — several were facts my training cutoff would miss. Pricing blocks in azure 3.15/3.17 follow the durable-vendor rule exemplarily ("at write time, not a contract").</li>
+<li><strong>Git discipline (clean throughout):</strong> edits in primary → patch → worktree (<code>git apply</code>) → PR (<code>feat(</code>/<code>review(</code> prefix + verbatim <code>## Learner check</code>) → green CI → rebase-merge → primary synced via verify-empty-diff → stash → <code>pull --ff-only</code> → drop. Records gitignored → <code>git add -f</code> direct-main.</li>
+<li><code>dispatch_smart.py</code> has <strong>no <code>--run</code> flag</strong> (errors on args, dispatch never fires; default fires).</li>
+</ul>
+
+<h2>NEXT — remaining #2020 scattered</h2>
+<ol>
+<li><strong class="warn">pf-mlops heavy remediation wave (9 modules):</strong> <code>5.1 mlops-fundamentals</code>, <code>5.2 feature-stores</code>, <code>5.4 model-serving</code>, <code>5.5 model-monitoring</code>, <code>5.6 ml-pipelines</code>, <code>5.7 dvc-data-versioning</code>, <code>5.8 great-expectations</code>, <code>5.9 ml-repository-hygiene</code>, <code>5.10 model-serving-traffic-patterns</code>. <strong>NOT clean review</strong> — this whole sub-track has a systematic short-paragraph authoring style: <em>all</em> density gates (<code>mean_wpp_30</code>, <code>median_wpp_28</code>, <code>short_rate_20pct</code>, <code>max_consecutive_short_2</code>, <code>sentence_length_12_28</code>) fail even on modules at 6000-8000 body-words, plus <code>sources_min_10</code> shortfalls and structural breaks. <strong class="bad"><code>5.2 feature-stores</code> is a 403-word stub</strong> needing full authoring (module-writer brief, not an edit-pass). Budget this as its own multi-session wave: density remediation = merge/expand short paragraphs (≤3 concurrent rewrites), not a currency sweep.</li>
+<li><strong>cka 7 record-less</strong> (<code>0.1, 0.3, 0.5, 1.1, 1.4, 2.7, 3.8</code>): #2020 scoped only 2 — disambiguate against <code>/api/quality/board</code> (the other 5 are likely board-done-without-record). Review the genuinely un-reviewed ones; backfill records for board-done ones.</li>
+<li>Standing streams unchanged: <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1911">#1911</a> UK currency · <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1876">#1876</a> AI-history book (73 ch) · What's-New post · open Dependabot <strong>#2045</strong> (dompurify) needs a maintainer merge call.</li>
+</ol>
+</body>
+</html>
