@@ -1,0 +1,2 @@
+## 2026-06-20T18:25:45Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline) + deepseek-v4-pro (DeepSeek) cross-family R1. #2020 ai-ml expand wave 3 (PR #2049). Expanded T3 (4502w) → T0 by cursor. deepseek APPROVE clean: all arXiv IDs resolve (Generative Agents 2304.03442, MemGPT 2310.08560, ReAct 2210.03629, ReWOO 2305.18323, Tree-of-Thoughts 2305.10601, Reflexion 2303.11366, Lost-in-the-Middle 2307.03172); MockLLM/budget-enforcement code correct; quiz 8/8; dated 2026-06 snapshot present; Moffatt v. Air Canada + K8s + LangChain URLs resolve. T0. APPROVE.
