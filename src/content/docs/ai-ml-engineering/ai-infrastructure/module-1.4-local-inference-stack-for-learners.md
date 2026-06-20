@@ -131,9 +131,13 @@ Hardware limits should be translated into a workload decision. A modest laptop u
 | Single-GPU workstation | Ollama first, then vLLM if repeated API traffic appears | model that fits VRAM or has a clear offload plan | GPU memory use, tokens per second, repeated request behavior |
 | Always-on home server | local service first, serving engine only when justified | stable model choice with predictable startup and restart behavior | endpoint reliability, logs, restart recovery |
 
-A useful rule for learners is to leave headroom. If a model nearly fills memory before you open your editor, browser, notebooks, or local services, the stack will teach you about swapping and crashes instead of inference. Choose a smaller model or stronger quantization first, then increase ambition after you have a reliable baseline.
+A useful rule for learners is to leave headroom. If a model nearly fills memory before you open your editor, browser, notebooks, or local services, the stack will teach you about swapping and crashes instead of inference. Choose a smaller model or stronger quantization first, then increase ambition after you have a reliable baseline. When in doubt, run the fit check twice: once for weights alone and once with your expected context length and any concurrent sessions you plan to keep open, because that second pass is where many first stacks fail on paper but pass in a quiet terminal test.
 
 This is also where model format becomes practical instead of abstract. `llama.cpp` commonly works with GGUF files, and the quantization choice directly affects memory and speed. Ollama hides much of that workflow for convenience, which is excellent when you want quick results but less direct when you are trying to study the format and runtime relationship. vLLM and sglang usually assume a different serving-oriented path, where model compatibility and GPU execution become part of the deployment decision.
+
+Before you download a model, run a quick fit check. A common learner estimate for weight memory is parameter count multiplied by bytes per weight at the chosen quantization level. The numbers below are illustrative, not vendor benchmarks: a 7-billion-parameter model at Q4 (roughly half a byte per weight in many GGUF layouts) lands near 3.5–4 GB for weights alone, while the same model at F16 (two bytes per weight) needs roughly 14 GB before any runtime overhead. That formula explains why a 7B model can feel comfortable on a 16 GB laptop at Q4 and impossible at full precision.
+
+The weight estimate is only the starting point. KV cache grows with context length and concurrent sessions, and the operating system, browser, editor, and runtime all compete for the same memory pool. A practical learner rule is to leave at least 2 GB of headroom for the OS and everyday tools on a laptop, and more if you keep notebooks, vector indexes, or other services open while inferencing. If your fit math shows the model consuming nearly all available RAM before you open a terminal tab, step down one quantization tier or choose a smaller model before blaming the runtime.
 
 ---
 
@@ -159,6 +163,8 @@ sglang is best understood as [an advanced serving framework for workflow-oriente
 A good selection process starts by naming the failure you are willing to troubleshoot. With Ollama, expect to troubleshoot model fit, prompt behavior, and local API calls. With `llama.cpp`, expect to troubleshoot model files, quantization compatibility, runtime flags, and build options. With vLLM or sglang, expect to troubleshoot serving dependencies, GPU memory, endpoint behavior, request patterns, and compatibility with the selected model.
 
 That expectation-setting is part of senior engineering judgment. Tools do not only provide capabilities; they also choose your problems for you. A mature local inference decision is the one where the chosen problems are the ones you actually need to learn from.
+
+When you work with GGUF files in `llama.cpp` or through Ollama's model catalog, quantization level is a size-versus-quality tradeoff, not a leaderboard. Names like Q4_K_M, Q8_0, and F16 describe how aggressively weights are compressed: lower-bit quantizations shrink disk and RAM use but can soften nuanced reasoning, while higher-bit or full-precision variants preserve quality at the cost of fit. Q4_K_M is a common learner starting point when memory is tight; Q8_0 is often worth trying when you have headroom and want to compare whether quality changes matter for your prompts; F16 or similar full-width formats belong on machines where VRAM or system RAM can hold the larger artifact comfortably. The durable lesson is to pick the tier that fits your hardware envelope first, then compare output quality on your actual tasks rather than chasing the highest label your disk can store. Revisit that comparison when your prompt patterns change — coding assistance and long-document summarization do not always need the same quantization tier on the same machine.
 
 ---
 
@@ -342,6 +348,8 @@ This script teaches an important boundary. The inference stack can expose a mode
 
 Graduation from a runner to a service or serving engine should be triggered by observed needs. Good signals include repeated API calls that create queueing, multiple local clients depending on one endpoint, the need to compare models through a consistent API, or a deliberate learning goal around batching and cache behavior. Weak signals include social pressure, vague claims that a tool is "more professional," or installing the largest stack before measuring a smaller one.
 
+You do not need a benchmark suite to capture those signals. A learner notebook with three timestamps per request is enough to start: wall-clock before the HTTP call, wall-clock when the first token or first streamed chunk arrives, and wall-clock when generation completes. Divide total generation time by output token count for a rough steady-state rate, and treat the gap between call start and first token as your cold-start or prefill cost. Run the same prompt twice back-to-back: if the second run's first-token time drops sharply while token rate stays similar, you are seeing load and warmup effects rather than a model that is inherently too slow. Compare those measurements against your graduation checklist — queueing under two local clients, structured-output validation failures, or token rate that cannot keep up with an eval harness — before you invest in serving-engine complexity.
+
 Use this decision flow when you are unsure whether to graduate. It keeps the focus on evidence rather than tool identity.
 
 ```ascii
@@ -426,6 +434,8 @@ curl -v http://127.0.0.1:11434/api/generate \
 ```
 
 For repeated-call problems, separate latency from throughput. A single request may be slow because the model is large, the context is long, or the machine is CPU-bound. Many requests may be slow because they are serialized, competing for memory, or hitting a runtime that was never selected for batching behavior. That distinction is exactly why a serving engine becomes educational only when repeated traffic is part of the workload.
+
+Measure two latency phases before you change tools or graduate tiers. **Time to first token** (sometimes called prefill latency) captures model load, weight transfer to GPU, graph compilation, and the cost of processing your prompt before any visible output appears. **Steady-state token rate** captures per-token generation once the model is warm — the compute and memory-bandwidth rhythm you feel during a long answer. A long first-token delay with fast steady-state generation often points to cold-start or load overhead; consistently slow token rate under repeated calls points to model size, CPU-only execution, or a runtime that serializes requests. Record both numbers when you test graduation to a serving engine: if first-token time is the pain but repeated traffic is rare, a smaller model or keeping the process warm may beat installing vLLM; if steady-state rate collapses under concurrent local clients, serving-engine features become part of the lesson.
 
 > **Stop and think:** Your first request takes a long time, but the second request is much faster. What might that suggest about model loading, caching, or warm state? What would you measure before changing tools?
 
@@ -762,3 +772,9 @@ Success criteria:
 - [github.com: llama.cpp](https://github.com/ggml-org/llama.cpp) — The upstream README states that `llama.cpp` requires GGUF format and documents multiple hardware backends including Apple silicon, CUDA, and Vulkan.
 - [github.com: README.md](https://github.com/vllm-project/vllm/blob/main/README.md) — The upstream README explicitly lists continuous batching, prefix caching, structured outputs, and an OpenAI-compatible API server among vLLM's core serving features.
 - [github.com: sglang](https://github.com/sgl-project/sglang) — The upstream README describes SGLang as a high-performance serving framework and explicitly lists structured outputs plus OpenAI API compatibility.
+- [github.com: ollama](https://github.com/ollama/ollama) — The upstream project README documents Ollama as a local model runner with pull, run, and API workflows for learner-scale inference.
+- [docs.vllm.ai: latest](https://docs.vllm.ai/en/latest/) — Official vLLM documentation covering serving architecture, batching concepts, and deployment options relevant to graduation from local runners.
+- [docs.sglang.ai](https://docs.sglang.ai/) — Official SGLang documentation describing structured generation, serving workflows, and API-oriented deployment patterns.
+- [huggingface.co: GGUF](https://huggingface.co/docs/hub/en/gguf) — Hugging Face Hub documentation explaining the GGUF format, quantization variants, and how model artifacts map to local runtimes.
+- [huggingface.co: quantization overview](https://huggingface.co/docs/transformers/en/quantization/overview) — Transformers documentation on quantization methods and the size-versus-quality tradeoffs that underpin GGUF tier selection.
+- [developer.nvidia.com: NVML](https://developer.nvidia.com/management-library-nvml) — NVIDIA Management Library reference for GPU memory, utilization, and power telemetry used during hardware inventory and debugging.
