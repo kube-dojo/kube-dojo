@@ -840,8 +840,8 @@ Embeddings give you searchable vectors, but high-dimensional spaces are hard to 
 - [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Canonical reference for practical sentence embeddings and semantic similarity with BERT-derived encoders.
 - [MTEB: Massive Text Embedding Benchmark](https://arxiv.org/abs/2210.07316) — Benchmark framework for comparing embedding models across retrieval and classification tasks.
 - [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) — Foundational RAG paper linking retrieval quality to downstream generation.
-- [Sentence-BERT Applied to Re-Ranking](https://arxiv.org/abs/1907.03337) — Cross-encoder architecture for pairwise relevance scoring after candidate retrieval.
-- [Hugging Face Sentence Transformers Documentation](https://huggingface.co/docs/sentence-transformers/en/index) — Practical guide for encoding sentences locally and computing similarity.
+- [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Bi-encoder and cross-encoder architectures for semantic similarity and re-ranking; foundation of the sentence-transformers library.
+- [Hugging Face Sentence Transformers Documentation](https://sbert.net/) — Practical guide for encoding sentences locally and computing similarity.
 - [FAISS Wiki](https://github.com/facebookresearch/faiss/wiki) — Reference for building and querying approximate nearest-neighbor indexes at scale.
 - [OpenSearch k-NN Plugin](https://opensearch.org/docs/latest/search-plugins/knn/index/) — Documents vector search integration in OpenSearch for production retrieval workloads.
 - [Elasticsearch kNN Search](https://www.elastic.co/guide/en/elasticsearch/reference/current/knn-search.html) — Official guide to dense vector fields and k-nearest-neighbor search in Elasticsearch.
