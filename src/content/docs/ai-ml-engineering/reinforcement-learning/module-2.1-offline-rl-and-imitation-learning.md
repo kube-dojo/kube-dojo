@@ -24,7 +24,7 @@ policy can be learned from fixed experience. They also ask when the honest answe
 
 - **Diagnose** whether a logged decision dataset has enough coverage for offline RL, behavior cloning, or no policy-learning attempt at all.
 - **Explain** how distribution shift and extrapolation error make offline RL harder than ordinary supervised learning on logged examples.
-- **Implement** a small d3rlpy workflow on a D4RL dataset using the current v2 configuration API and offline evaluators.
+- **Implement** a small d3rlpy workflow on a Minari (D4RL-derived) dataset using the current v2 configuration API and offline evaluators.
 - **Compare** behavior cloning, CQL, BCQ, IQL, TD3+BC, DAgger, and GAIL by the kind of pessimism, supervision, or interaction each method adds.
 - **Decide** how to evaluate an offline policy when online A/B testing is unavailable, risky, or only allowed after a strict offline gate.
 
@@ -178,10 +178,10 @@ within historical practice rather than claiming treatment-policy optimization.
 
 ```python
 from d3rlpy.algos import BCConfig
-from d3rlpy.datasets import get_d4rl
+from d3rlpy.datasets import get_minari
 from d3rlpy.metrics import EnvironmentEvaluator
 
-dataset, env = get_d4rl("halfcheetah-medium-v2")
+dataset, env = get_minari("mujoco/halfcheetah/medium-v0")
 
 bc = BCConfig(
     batch_size=256,
@@ -277,6 +277,8 @@ unsupported improvement because unsupported improvement is the dangerous kind.
 > **Landscape snapshot — as of 2026-06**
 >
 > d3rlpy v2 exposes algorithms through `*Config` classes (for example `CQLConfig`, `BCConfig`) followed by `.create()`. Discrete-action variants use separate configs such as `DiscreteCQLConfig`. Parameter names like `conservative_weight` and `alpha` differ by algorithm and release; verify against the pinned docs in **Sources** before copying snippets into production pipelines.
+>
+> **Datasets:** the original D4RL package is unmaintained and pins Python `<3.11`, so it will not install on a modern interpreter. The Farama Foundation is superseding it with **Minari**, which re-hosts the D4RL datasets under a `D4RL/`-prefixed and `mujoco/<env>/<quality>` namespace (e.g. `mujoco/halfcheetah/medium-v0`). d3rlpy v2 loads these through `get_minari(<id>)`. Exact dataset ids and version suffixes drift — confirm the current id with `minari list remote` before relying on one.
 
 ## Section 5: TD3+BC and the regularized-policy family
 
@@ -428,9 +430,9 @@ datasets, off-policy evaluation, and a consistent algorithm API. The important v
 `.create()`. That matters because many older examples instantiate algorithm classes directly. Current v2 examples use classes such
 as `CQLConfig`, `BCQConfig`, `IQLConfig`, `TD3PlusBCConfig`, `BCConfig`, `DiscreteCQLConfig`, and `DiscreteBCQConfig`.
 
-The following script is intentionally modest. It loads a D4RL MuJoCo dataset, trains behavior cloning as a baseline,
+The following script is intentionally modest. It loads a Minari MuJoCo dataset (the D4RL-derived `mujoco/halfcheetah/medium-v0`), trains behavior cloning as a baseline,
 trains CQL as a conservative offline RL method, then trains FQE to estimate the learned CQL policy from the offline
-data. The environment evaluator is included because D4RL gives a benchmark environment, but in a real medical or
+data. The environment evaluator is included because Minari can recover a benchmark environment, but in a real medical or
 recommender deployment, that online evaluator would be replaced by a stricter offline gate and later a guarded
 experiment. Treat this as an **implement** exercise: you are wiring configuration objects, a fixed dataset, training loops, and evaluators—not chasing a leaderboard number.
 
@@ -439,7 +441,7 @@ import os
 
 import d3rlpy
 from d3rlpy.algos import BCConfig, CQLConfig
-from d3rlpy.datasets import get_d4rl
+from d3rlpy.datasets import get_minari
 from d3rlpy.metrics import (
     EnvironmentEvaluator,
     InitialStateValueEstimationEvaluator,
@@ -449,7 +451,7 @@ from d3rlpy.ope import FQE, FQEConfig
 
 
 def main() -> None:
-    dataset, env = get_d4rl("halfcheetah-medium-v2")
+    dataset, env = get_minari("mujoco/halfcheetah/medium-v0")
     device = "cuda:0" if os.environ.get("USE_CUDA") == "1" else False
 
     evaluators = {
@@ -500,16 +502,16 @@ if __name__ == "__main__":
     main()
 ```
 
-Install commands vary by workstation, especially around MuJoCo and D4RL. For a local experiment environment, start
+Install commands vary by workstation, especially around MuJoCo and the Minari dataset backend. For a local experiment environment, start
 with an isolated virtual environment and pin the RL library version you are testing.
 
 ```bash
 .venv/bin/python -m pip install "d3rlpy==2.8.1"
-.venv/bin/python -m pip install "d4rl @ git+https://github.com/Farama-Foundation/D4RL.git"
+.venv/bin/python -m pip install "minari[all]"
 .venv/bin/python offline_halfcheetah.py
 ```
 
-If D4RL installation fails, do not rewrite the learning code first. Resolve the benchmark dependency, MuJoCo runtime,
+If dataset installation fails, do not rewrite the learning code first. Resolve the Minari/benchmark dependency, MuJoCo runtime,
 and Python-version compatibility. Offline RL results are already noisy enough without silently changing datasets.
 
 For discrete-action datasets, switch to the discrete algorithm configs.
@@ -730,16 +732,16 @@ Production teams sometimes treat offline RL as a way to skip the uncomfortable p
    The reward definition must be revisited. Offline RL will optimize the logged reward signal, and a short-term click proxy can push harmful recommendations. The team should define a reward or evaluation gate closer to the real objective before choosing CQL, IQL, or any other method.
    </details>
 
-8. **You must implement a small d3rlpy workflow on a D4RL dataset using the v2 configuration API. Online A/B testing is blocked until after an offline gate. What training order and evaluators would you use, and what would you decide before requesting any live rollout?**
+8. **You must implement a small d3rlpy workflow on a Minari (D4RL-derived) dataset using the v2 configuration API. Online A/B testing is blocked until after an offline gate. What training order and evaluators would you use, and what would you decide before requesting any live rollout?**
 
    <details>
    <summary>Answer</summary>
-   Train behavior cloning first as the imitation baseline, then a conservative method such as CQL with `CQLConfig(...).create()`, using `get_d4rl` for the fixed dataset and evaluators such as `EnvironmentEvaluator` plus FQE for off-policy value estimation. Before any online experiment, decide whether the candidate policy stays near logged action support, whether FQE and coverage diagnostics agree, and what guarded rollout evidence would be required if offline scores look promising.
+   Train behavior cloning first as the imitation baseline, then a conservative method such as CQL with `CQLConfig(...).create()`, using `get_minari` for the fixed dataset and evaluators such as `EnvironmentEvaluator` plus FQE for off-policy value estimation. Before any online experiment, decide whether the candidate policy stays near logged action support, whether FQE and coverage diagnostics agree, and what guarded rollout evidence would be required if offline scores look promising.
    </details>
 
 ## Hands-On Exercise
 
-**Task:** Train and evaluate a conservative offline RL policy on a D4RL continuous-control dataset using d3rlpy v2.
+**Task:** Train and evaluate a conservative offline RL policy on a Minari (D4RL-derived) continuous-control dataset using d3rlpy v2.
 
 You will run behavior cloning first, then CQL, then FQE. The goal is not to chase leaderboard scores. The goal is to
 practice the production workflow: baseline, conservative learner, offline evaluation, and a short deployment memo.
@@ -748,7 +750,7 @@ practice the production workflow: baseline, conservative learner, offline evalua
 
 ```bash
 .venv/bin/python -m pip install "d3rlpy==2.8.1"
-.venv/bin/python -m pip install "d4rl @ git+https://github.com/Farama-Foundation/D4RL.git"
+.venv/bin/python -m pip install "minari[all]"
 ```
 
 If your workstation needs MuJoCo system packages, install them before changing the Python experiment. Dependency
@@ -760,13 +762,13 @@ errors are not policy-learning evidence.
 import os
 
 from d3rlpy.algos import BCConfig, CQLConfig
-from d3rlpy.datasets import get_d4rl
+from d3rlpy.datasets import get_minari
 from d3rlpy.metrics import EnvironmentEvaluator, InitialStateValueEstimationEvaluator
 from d3rlpy.ope import FQE, FQEConfig
 
 
 def train() -> None:
-    dataset, env = get_d4rl("halfcheetah-medium-v2")
+    dataset, env = get_minari("mujoco/halfcheetah/medium-v0")
     device = "cuda:0" if os.environ.get("USE_CUDA") == "1" else False
 
     evaluator = EnvironmentEvaluator(env, n_trials=3)
@@ -827,7 +829,7 @@ In five to eight sentences, answer these questions:
 
 ### Success Criteria
 
-- [ ] The script imports `BCConfig`, `CQLConfig`, `get_d4rl`, `EnvironmentEvaluator`, and `FQE` without using deprecated v1 constructors.
+- [ ] The script imports `BCConfig`, `CQLConfig`, `get_minari`, `EnvironmentEvaluator`, and `FQE` without using deprecated v1 constructors.
 - [ ] The dataset name is `halfcheetah-medium-v2`.
 - [ ] Behavior cloning trains before CQL.
 - [ ] CQL uses a conservative weight rather than an unconstrained actor-only objective.
