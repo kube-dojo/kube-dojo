@@ -6,29 +6,31 @@ sidebar:
   order: 302
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
+> **Complexity**: `[COMPLEX]`
+>
+> **Time to Complete**: 5-6 hours
 >
 > **Prerequisites**: Phase 1 complete, basic Python, basic HTTP/API concepts, and comfort reading small configuration files
+>
+> **Track**: AI/ML Engineering — Generative AI Foundations
 
 ---
 
 ## Learning Outcomes
 
-By the end of this module, you will be able to design a model-selection strategy for an LLM-backed application by comparing task complexity, latency, privacy, context, and cost constraints.
+By the end of this module, learners will be able to:
 
-By the end of this module, you will be able to evaluate when to use a hosted frontier model, an open-weight model, retrieval-augmented generation, fine-tuning, or a combination of those approaches.
-
-By the end of this module, you will be able to debug common LLM application failures by tracing the request through tokenization, context assembly, model inference, validation, fallback, and logging.
-
-By the end of this module, you will be able to implement a small multi-model gateway that routes requests, estimates cost, applies fallback behavior, and records the reasoning behind routing decisions.
-
-By the end of this module, you will be able to justify model architecture and operating decisions to senior stakeholders using clear trade-off language instead of benchmark-only arguments.
+- **Explain** how decoder-only transformers predict next tokens and why that creates both capability and failure modes in production systems.
+- **Compare** pre-training, instruction tuning, fine-tuning, retrieval-augmented generation, and tool use as adaptation strategies with different knowledge and operational trade-offs.
+- **Design** a model-selection and routing strategy that matches task complexity, latency, privacy, context budgets, and cost constraints.
+- **Debug** LLM application failures by tracing tokenization, context assembly, inference, validation, fallback behavior, and logging metadata.
+- **Implement** a multi-model gateway that routes requests, estimates cost, validates structured responses, and records the reasoning behind routing decisions.
 
 ---
 
 ## Why This Module Matters
 
-A senior engineer joins an incident review for a customer-support assistant that sounded impressive in a demo but failed on its first high-volume launch day. The assistant answered outdated product questions, spent too much money on simple classification requests, leaked internal wording into customer-facing responses, and timed out whenever a user pasted a long contract. The team did not have one bug. It had an architecture that treated "call the best model" as a strategy.
+Hypothetical scenario: A senior engineer joins an incident review for a customer-support assistant that sounded impressive in a demo but failed on its first high-volume launch day. The assistant answered outdated product questions, spent too much money on simple classification requests, leaked internal wording into customer-facing responses, and timed out whenever a user pasted a long contract. The team did not have one bug. It had an architecture that treated "call the best model" as a strategy.
 
 The incident was preventable because every failure mapped to a basic LLM engineering decision. The stale answers called for retrieval rather than memorized model knowledge. The cost spike called for routing simple tasks to cheaper models. The timeouts called for explicit context budgeting. The inconsistent responses called for evaluation, validation, and fallback design. The team needed more than prompt tips; it needed a working mental model of how large language models behave inside production systems.
 
@@ -36,9 +38,7 @@ This module starts with the mechanism of language models, then builds toward ope
 
 ---
 
-## Core Content
-
-### 1. From Autocomplete to Production System
+## Section 1: From Autocomplete to Production System
 
 A large language model is a neural network trained to predict tokens from context, but that short definition hides the engineering consequences. A token is a unit of text such as a word fragment, punctuation mark, or code fragment, and the model receives a sequence of tokens rather than raw human prose. Given that sequence, the model estimates likely next tokens, chooses one according to its decoding settings, appends it to the context, and repeats until the response is complete.
 
@@ -67,6 +67,22 @@ A useful beginner mental model is "autocomplete with a large learned world model
 
 A good LLM application is therefore not just a prompt around a model call. It is a pipeline that prepares context, sends a constrained request, checks the response, handles failure, records decisions, and exposes observability signals. The model is the most visible component, but the surrounding system determines whether the model can be used safely at scale.
 
+### Capabilities and hard limits
+
+Large language models excel at tasks that benefit from broad language and code exposure: drafting and rewriting text, summarizing long passages, classifying intent from messy user input, extracting structured fields when given examples and schemas, translating between formats, proposing next steps in a workflow, and combining retrieved evidence into a readable answer. After instruction tuning, they can follow role instructions, adopt output formats, and participate in multi-turn conversations when the application keeps context coherent.
+
+Those strengths come with hard limits that do not disappear with scale. A model may produce fluent text that is factually wrong, outdated, incomplete, or unsuitable for your organization's policy. It does not automatically know which document is authoritative, which database row is current, or whether a user is allowed to see a particular field. It can fail quietly when prompts are ambiguous, when contradictory evidence is present, or when a task requires exact numeric or legal precision. It may also vary between runs when decoding settings allow randomness, which is why validation, logging, and fallback paths belong in the application layer rather than in hope.
+
+| Capability class | What the model can often do well | What still requires application design |
+|---|---|---|
+| Language transformation | Rewrite tone, summarize, translate between prose and structured summaries | Enforce allowed vocabulary, banned phrases, and brand policy with validation |
+| Classification and extraction | Label tickets, tag intents, pull fields from semi-structured text | Provide schemas, allowed labels, confidence thresholds, and human review for edge cases |
+| Reasoning over evidence | Compare retrieved passages, explain trade-offs, draft plans from supplied context | Supply authoritative sources, mark freshness, and refuse when evidence is missing |
+| Code and configuration assistance | Suggest snippets, explain errors, draft manifests from examples | Run linters, tests, and policy checks outside the model; never deploy unreviewed output |
+| Stateful business answers | Describe patterns seen during training | Call live APIs or databases for account status, inventory, pricing, and permissions |
+
+The durable lesson is to match expectations to mechanism. The model predicts plausible continuations from context. Your system decides what context is allowed, what output shape is acceptable, and what happens when the model is uncertain. That division of responsibility is what separates a demo prompt from a production feature that can survive policy review, cost review, and an actual launch day.
+
 ```mermaid
 flowchart LR
     A[User request] --> B[Intent and risk classification]
@@ -83,7 +99,7 @@ flowchart LR
 
 This request path is the backbone you will reuse throughout the module. When an LLM system fails, ask where the failure entered the path. Did the classifier route the task incorrectly? Did context assembly omit the relevant document? Did the model choose a plausible but unsupported answer? Did validation fail to catch an unsafe response? Did logging omit the details needed to reproduce the problem? Those questions turn "the AI was wrong" into debuggable engineering work.
 
-### 2. Why Transformers Changed Language Modeling
+## Section 2: Why Transformers Changed Language Modeling
 
 Before transformers, many neural language systems processed text sequentially. Recurrent neural networks and long short-term memory networks moved through a sequence step by step, carrying a hidden state forward. That structure matched the order of text, but it made long-range dependencies difficult and limited parallel training. If the important clue appeared far from the current word, the model had to preserve that clue through many updates.
 
@@ -133,7 +149,7 @@ Instruction: Answer only from authoritative current sources and name the source 
 
 The stronger version does not make the model infallible, but it makes the desired reasoning path easier. It reduces ambiguity, marks source authority, and creates a response shape that can be checked. That is the pattern you will reuse throughout this track: do not ask the model to infer hidden operational rules when the system can encode those rules directly.
 
-### 3. Training, Adaptation, and Knowledge Boundaries
+## Section 3: Training, Adaptation, and Knowledge Boundaries
 
 Pre-training is the expensive stage where a model learns broad language and code patterns from massive datasets. The objective is usually some version of predicting missing or next tokens across large corpora. The result is a base model with broad statistical knowledge, but a base model is not automatically a helpful assistant. If you ask a base model a question, it may continue the pattern of questions rather than answer the specific request.
 
@@ -167,9 +183,20 @@ Context windows sit at the boundary between training and application design. A l
 
 A practical rule is to design context as a budget, not as a bucket. Every token should earn its place by improving answer quality, reducing risk, or enabling validation. If a retrieved passage is not relevant, it is not harmless; it can distract the model, increase cost, and make debugging harder. Context engineering is the craft of deciding what the model should see and what the application should handle outside the model.
 
-### 4. The Model Landscape as an Engineering Decision
+## Section 4: The Model Landscape as an Engineering Decision
 
-Model names change quickly, so this module teaches categories rather than asking you to memorize a vendor catalog. Hosted frontier models are usually strongest when you need high reasoning quality, broad tool support, low operational burden, or fast iteration. Hosted smaller models are useful for classification, rewriting, extraction, and other high-volume tasks where speed and cost matter more than deep reasoning. Open-weight models are attractive when privacy, customization, offline deployment, or cost at scale outweigh the operational complexity of running inference.
+Model names, context limits, and pricing change quickly, so this module teaches capability tiers and pairing logic rather than asking you to memorize a vendor catalog. Hosted frontier-tier models fit ambiguous planning, multi-step synthesis, and high-risk reasoning when your organization accepts provider governance. Hosted fast-tier models fit classification, rewriting, extraction, and other high-volume tasks where latency and per-request cost matter more than deep reasoning. Open-weight models fit privacy-sensitive workloads, offline deployment, and teams that can operate inference infrastructure reliably.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Capability tier | Typical engineering use | Example hosted API families | Example open-weight families | Context-window ballpark |
+> |---|---|---|---|---|
+> | Frontier reasoning | Complex support escalations, code synthesis, multi-document synthesis | <!-- VERIFY: --> GPT-4.1 class, Claude Sonnet/Opus class, Gemini Pro class | <!-- VERIFY: --> Llama 3.x 70B-class, Mixtral 8x22B-class when self-hosted | <!-- VERIFY: --> roughly 128k–1M tokens depending on provider and SKU |
+> | Balanced general | Summaries, moderate reasoning, tool-assisted workflows | <!-- VERIFY: --> GPT-4.1 mini class, Claude Haiku/Sonnet mid-tier, Gemini Flash mid-tier | <!-- VERIFY: --> Llama 3.x 8B–70B, Mistral 7B/8x7B-class | <!-- VERIFY: --> often 32k–256k tokens |
+> | Fast / economical | Ticket tagging, intent routing, short rewriting, guardrail checks | <!-- VERIFY: --> GPT-4.1 nano/mini small tiers, Gemini Flash-Lite class | <!-- VERIFY: --> Phi-3/4-class, Gemma 2/3-class, small Llama/Mistral variants | <!-- VERIFY: --> often 8k–128k tokens |
+> | Embeddings / encoders | Semantic search, clustering, reranking features | Provider embedding endpoints | Sentence-transformers, BGE, E5 families | N/A — encoder inputs, not open-ended chat generation |
+>
+> Pricing is usually quoted per million input tokens and per million output tokens on hosted APIs, while self-hosted cost is dominated by GPU hours, utilization, and engineering time. Treat every number in this table as a starting point for your own evaluation harness, not as curriculum truth.
 
 A model decision is rarely one-dimensional. The cheapest model may require more retries, more validation, or more human review. The most capable model may be too slow or expensive for routine requests. The largest context model may hide retrieval problems during demos but become costly under production traffic. A self-hosted model may satisfy privacy requirements while creating new responsibilities around GPU capacity, patching, monitoring, and model-serving reliability.
 
@@ -214,7 +241,7 @@ observability:
 
 This YAML is not a universal standard, but it shows the level of specificity you want. A routing decision should be testable. If you cannot name the dataset, quality threshold, escalation rule, or monitoring fields, the system probably depends on intuition that will not survive production pressure.
 
-### 5. Worked Example: Debugging a Failing LLM Feature
+## Section 5: Worked Example: Debugging a Failing LLM Feature
 
 Consider a feature that summarizes customer escalation threads for support managers. The team starts with a single hosted model call, pastes the full thread into the prompt, and asks for a concise summary with risks and next actions. In testing, the feature looks good. In production, summaries sometimes omit the latest customer message, confuse old and new contract terms, and exceed the expected length.
 
@@ -271,7 +298,7 @@ Now apply the same reasoning to a different problem. A finance team asks for an 
 
 There is no single correct answer without the company's constraints, but there is a correct decision process. If privacy rules allow a hosted provider and the labels are straightforward, start with a small hosted model plus schema validation and an evaluation set. If privacy rules prohibit external processing, start with a self-hosted open-weight model or a dedicated private deployment. If the classifier fails on stable domain-specific patterns after prompt and schema improvements, consider fine-tuning. If the labels depend on changing vendor policy documents, add retrieval.
 
-### 6. API Integration, Safety Boundaries, and Gateway Design
+## Section 6: API Integration, Safety Boundaries, and Gateway Design
 
 Your first direct API integration should be boring on purpose. It should load keys from environment variables, send a small request, set explicit limits, handle errors, and avoid placing secrets in source code. The code below uses a mock fallback so the file remains runnable even when you do not have an API key configured. In a real project, you would replace the mock path with the provider SDK that your organization has approved.
 
@@ -347,6 +374,48 @@ The gateway should also encode safety boundaries. Secrets must stay in environme
 A gateway is not only for large companies. Even a small project benefits from centralizing model choice and failure handling early. Without a gateway, every feature team writes its own prompt, provider client, error handling, and logging. That fragmentation makes costs unpredictable and incidents hard to debug. With a gateway, the team can improve routing, validation, and observability in one place.
 
 You should now have the full conceptual path. LLMs generate tokens from context. Transformers made large-scale context-sensitive generation practical. Training and adaptation determine broad capability and behavior, while retrieval and tools supply current evidence and live state. Model selection is an engineering trade-off, not a leaderboard contest. A gateway turns those trade-offs into explicit, testable production behavior.
+
+---
+
+## Section 7: Inference Basics — From Weights to Latency and Cost
+
+Production teams often talk about "calling the model" as if it were one step. In practice, [text generation is an autoregressive loop](https://huggingface.co/docs/transformers/en/llm_tutorial#generate-text): the system first processes the full prompt, then generates output tokens one at a time until a stop condition is reached. Those two phases — prefill and decode — have different performance profiles, and confusing them leads to bad capacity planning, unrealistic latency targets, and surprise invoices.
+
+During prefill, the model ingests the entire input context: system instructions, retrieved documents, tool outputs, prior conversation, and the latest user message. For decoder-only transformers, this phase builds the internal key-value cache entries that later decode steps reuse so the model does not recompute attention over the whole prompt for every new token. Prefill work grows with input length. That is why a short question paired with a huge pasted log can still feel slow before the first answer token appears, even when the final answer will only be two sentences.
+
+During decode, the model predicts one output token, appends it to the running sequence, updates the cache, and repeats. Each step is smaller than prefill per token, but the chain may run for hundreds or thousands of iterations when you ask for long summaries, verbose JSON, or open-ended reasoning traces. Total latency therefore depends on both prompt size and requested output length. Product requirements that encourage long answers increase decode cost even when the user's original request was brief.
+
+```ascii
++----------------+     +---------------------------+     +-----------------------------+
+| Prompt tokens  |     | Prefill                   |     | Decode loop                 |
+| system + docs  | --> | parallel prompt processing| --> | one output token per step   |
+| + user message |     | builds KV cache           |     | until stop or max_tokens    |
++----------------+     +---------------------------+     +-----------------------------+
+         |                          |                              |
+         v                          v                              v
+   Input-side cost            Time to first token           Total completion time
+   scales with context        often dominated here          scales with output length
+```
+
+Streaming responses improve perceived latency by returning partial decode output as it is generated. Users see text sooner even when total generation time is unchanged. Engineering teams should still measure both time-to-first-token and end-to-end completion latency because optimizations for one metric do not always help the other. A gateway that aggressively compresses conversation history may reduce prefill time while silently dropping a detail that later causes a wrong escalation decision.
+
+Hosted APIs hide much of the serving stack, but the queueing behavior still exists behind rate limits, concurrency caps, and provider-side batching. Self-hosted inference adds explicit responsibilities: GPU capacity, model loading, batch scheduling, health checks, and rollback when a new weight snapshot regresses quality. In both deployment styles, inference is a queueing system. Arrival rate, service time, retry policy, and fallback routes matter alongside raw model quality.
+
+Cost follows tokens, not characters. Providers typically bill input tokens and output tokens separately, so a large retrieved context can dominate spend even when the model returns a tiny answer. A practical gateway estimates tokens before the call when possible, rejects oversize requests early, reserves output budget explicitly, and logs prompt and completion token counts after the call for reconciliation with invoices. The mock cost functions in this module's exercise teach that pattern even when you are not yet connected to a live provider.
+
+| Inference symptom | Likely engineering cause | First checks to run |
+|---|---|---|
+| Slow first token with short answers | Long prefill from oversized context or cold model load | Prompt token count, retrieval size, conversation history policy, provider cold-start metrics |
+| Timeout on otherwise simple tasks | Prompt too large for configured deadline or rate limit | Token estimate, chunking strategy, retry/backoff logs, max context settings |
+| Truncated JSON or incomplete steps | `max_tokens` too low for requested output shape | Finish reason, completion token count, schema validation failures |
+| Identical prompt, different behavior after deploy | Provider model version or decoding default changed | Logged model identifier, provider release notes, pinned model version policy |
+| Cost spike without traffic spike | Hidden context growth or output verbosity drift | Per-route token averages, retrieval size trends, average completion length |
+
+Common production controls include pinning a model identifier for reproducibility, setting explicit `max_tokens` or output budgets, choosing deterministic decoding for machine-consumed outputs, streaming for human-facing chat, and recording finish reason plus token counts on every call. Those fields connect user-visible slowness, malformed automation output, or budget overruns to knobs you can actually change.
+
+> **Stop and think:** A chat feature sends two hundred prior messages on every request because the product team believes a large context window means unlimited useful memory. Users report slow first responses and rising monthly cost, but answer quality is not clearly better than a shorter memory strategy. What would you measure before changing the memory policy?
+
+The senior answer is to compare answer quality, time-to-first-token, total cost, and failure rate across several memory policies using representative conversations. Context capacity is not the same as context usefulness. Inference basics explain why unbounded history can hurt even when it technically fits inside the advertised window. The next time someone proposes "just send everything," ask for token counts, time-to-first-token measurements, and a careful quality comparison against a tighter, cheaper, tested memory design.
 
 ---
 
@@ -439,6 +508,15 @@ You should now have the full conceptual path. LLMs generate tokens from context.
    <summary>Answer</summary>
 
    Direct scattered calls create inconsistent routing, duplicated provider code, uneven logging, weak cost control, and different safety behavior across features. A gateway centralizes model adapters, task routing, token budgets, validation, fallback, and evaluation metadata. This makes provider changes easier, incidents easier to reproduce, and costs easier to manage. The gateway also gives security and platform teams one boundary to review instead of many hidden integrations.
+
+   </details>
+
+8. **A support assistant feels slow even though answers are short. Logs show prompt token counts around forty thousand while completion token counts stay under eighty. Which inference phase is likely dominating time-to-first-token, and what architectural change would you test first?**
+
+   <details>
+   <summary>Answer</summary>
+
+   Prefill is likely dominating because the model must process the entire large prompt before generating the first answer token. Test a memory policy that summarizes older conversation turns, retrieves only relevant support articles, and preserves the newest customer messages verbatim. Measure time-to-first-token, total latency, answer quality, and cost across the old and new policies using representative threads. Inference tuning starts with context budgeting, not with swapping to a larger model by default.
 
    </details>
 
@@ -713,6 +791,14 @@ Success criteria for this step:
 
 Next: [Tokenization & Text Processing](./module-1.2-tokenization-text-processing/)
 
+The next module moves from the LLM system picture to the first concrete boundary between human text and model input. You will measure tokens, compare tokenizer families, and design context budgets before requests reach inference.
+
+---
+
+## Learner check
+
+> | 1.1 | [Introduction to Large Language Models](/ai-ml-engineering/generative-ai/module-1.1-introduction-to-large-language-models/) |
+
 ---
 
 ## Sources
@@ -726,3 +812,4 @@ Next: [Tokenization & Text Processing](./module-1.2-tokenization-text-processing
 - [Language Models are Few-Shot Learners](https://openai.com/index/language-models-are-few-shot-learners/) — This paper introduced GPT-3 and is a key reference for scale, few-shot prompting, and early frontier-model behavior.
 - [arxiv.org: 2307.03172](https://arxiv.org/abs/2307.03172) — Lost in the Middle directly reports degraded performance when relevant information appears in the middle of long contexts.
 - [arxiv.org: 2005.11401](https://arxiv.org/abs/2005.11401) — The RAG paper abstract explicitly says large language models store factual knowledge in parameters while provenance and updating world knowledge remain open problems.
+- [huggingface.co: llm_tutorial#generate-text](https://huggingface.co/docs/transformers/en/llm_tutorial#generate-text) — Hugging Face text-generation documentation describes autoregressive decoding and the generate loop that production inference stacks implement.
