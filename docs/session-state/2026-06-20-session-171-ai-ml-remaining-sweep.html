@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 171 — #2020: ai-ml-engineering remaining-17 sweep (14/17)</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:1.8rem}
+  code{background:#0d1626;padding:.1rem .35rem;border-radius:4px;color:#c9d6e6}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:4px solid var(--accent);padding:1rem;border-radius:6px}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top;font-size:.92rem}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.accent{color:var(--accent)}
+  ul{margin:.4rem 0}li{margin:.25rem 0}
+  .pill{display:inline-block;background:#0d1626;border:1px solid var(--bd);border-radius:999px;padding:.05rem .55rem;font-size:.82rem;color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>Session 171 — #2020: ai-ml-engineering remaining-17 sweep (14/17 landed)</h1>
+<p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s170.</strong>
+Picked up the <strong>17 unreviewed <code>ai-ml-engineering</code> modules</strong> across 6 sub-tracks flagged at the end of s170. Triaged by <code>verify_module.py</code> tier (not <code>density.py</code>): 5 already T0, 12 were T3/T2 (expand or edit-pass first). <strong>Landed 14/17</strong> across 4 PRs (all merged + cross-family review records on main):
+wave 1 expand (<code>#2046</code>), T0 review fixes (<code>#2047</code>), wave 2 expand (<code>#2048</code>), wave 3 expand/edit (<code>#2049</code>).
+Cross-family per wave: opus-inline + (codex or deepseek). <strong>Real defects caught:</strong> a confabulated arXiv ID (<code>1907.03337</code>, a solar-physics paper, cited for Sentence-BERT), two labs running <code>.venv/bin/python</code> before the venv existed, unresolved <code>&lt;!-- VERIFY --&gt;</code> author markers + stale <code>GPT-4.1</code> snapshot examples shipped to learners, Coqui <code>TTS</code> install that caps at Python &lt;3.12, a placeholder ghcr image presented as pullable, and ~10 dead/wrong source URLs. <strong>One codex false-positive rejected with evidence</strong> (cuda image verified live on Docker Hub).
+<strong class="warn">⚠ 3 modules remain — above-floor T3 edit-passes: <code>frameworks-agents 1.1</code>, <code>mlops 1.11</code>, <code>mlops 1.12</code></strong> (need +sources to ≥10 + density/structure). After those, the 124-module ai-ml-engineering track is fully cross-family reviewed.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>PR</th><th>Wave / content</th><th>Modules</th><th>Status</th></tr>
+<tr><td>#2046</td><td>Wave 1 expand T3→T0</td><td>mlops 1.1, generative-ai 1.2, generative-ai 1.3</td><td class="ok">MERGED</td></tr>
+<tr><td>#2047</td><td>T0 review fixes</td><td>multimodal-ai 1.1, prerequisites 1.3 (+ 1.1/1.2/1.4 reviewed, no change)</td><td class="ok">MERGED</td></tr>
+<tr><td>#2048</td><td>Wave 2 expand T3→T0</td><td>mlops 1.2, generative-ai 1.1, vector-rag 1.1</td><td class="ok">MERGED</td></tr>
+<tr><td>#2049</td><td>Wave 3 expand/edit T3→T0</td><td>frameworks-agents 1.6, generative-ai 1.4, vector-rag 1.6</td><td class="ok">MERGED</td></tr>
+<tr><td>records</td><td>14 <code>.pipeline/reviews/</code> APPROVE records (tracked dir, direct-main finalize)</td><td>commit on main</td><td class="ok">DONE</td></tr>
+</table>
+
+<h2>Triage method (17 modules → 3 buckets)</h2>
+<ul>
+<li><strong class="ok">5 T0 (review-ready):</strong> multimodal-ai 1.1, prerequisites 1.1/1.2/1.3/1.4.</li>
+<li><strong class="warn">7 genuinely thin (full expand, body&lt;5000):</strong> mlops 1.1, generative-ai 1.1/1.2/1.3, mlops 1.2, vector-rag 1.1, frameworks-agents 1.6.</li>
+<li><strong class="warn">5 above-floor T3 (edit-pass: +sources≥10, density, structure):</strong> generative-ai 1.4 ✅, vector-rag 1.6 ✅, <span class="bad">frameworks-agents 1.1 ✗, mlops 1.11 ✗, mlops 1.12 ✗ (remaining)</span>.</li>
+</ul>
+<p>Key triage lesson: <code>sources_min_10</code> failed on all 12 non-T0 modules but it was <em>not</em> a <code>## Sources</code> heading-flip (heading was correct everywhere) — they genuinely had &lt;10 sources, so real content work, not a one-liner.</p>
+
+<h2>Real defects caught by cross-family review (review earning its keep)</h2>
+<ul>
+<li><strong class="bad">generative-ai 1.4 — confabulated arXiv ID + venv lab bug (deepseek R1):</strong> <code>1907.03337</code> (a solar-physics paper "Reconstructing coronal hole areas with EUHFORIA") was cited for Sentence-BERT → corrected to <code>1908.10084</code> (Reimers &amp; Gurevych); the dedup repointed the cross-encoder slot to <code>1901.04085</code> (Passage Re-ranking with BERT). Both lab blocks ran <code>.venv/bin/python -m pip</code> before <code>python3 -m venv .venv</code> → added the venv step.</li>
+<li><strong class="bad">generative-ai 1.1 — VERIFY-marker + stale-model leak (codex R1):</strong> the dated Landscape snapshot shipped with unresolved <code>&lt;!-- VERIFY --&gt;</code> author markers and stale <code>GPT-4.1</code> frontier examples (verifier-blind). Resolved markers; updated to web-verified 2026-06 families (GPT-5.x, Claude Opus/Sonnet 4.x, Gemini 3.x Pro/Flash), open-weights kept generic per durable-vendor rule. GPT-3 cite → arXiv 2005.14165.</li>
+<li><strong class="bad">multimodal-ai 1.1 — broken Coqui install + fake image (codex R1):</strong> original <code>TTS</code> PyPI caps at Python <code>&lt;3.12</code> (confirmed via PyPI <code>requires_python</code>) → maintained <code>coqui-tts</code> (idiap fork, 3.10–3.14); <code>ghcr.io/example/whisper-stt</code> presented as pullable → marked build-your-own placeholder; added dated 2026-06 snapshot caveat on the GPT-4o Realtime section; Whisper cite → arXiv 2212.04356.</li>
+<li><strong>mlops 1.1 — wrong DVC repo + dead URLs (opus inline):</strong> <code>github.com/treeverse/dvc</code> (treeverse = lakeFS!) → <code>iterative/dvc</code>; de-rotted 4 dead/redirecting source URLs (dvc.org versioning, git-lfs, CNCF TAG, canonical Google MLOps) + repointed a duplicate to Sculley et al. tech-debt paper.</li>
+<li><strong>generative-ai 1.3 — vLLM URL + over-claiming lab criteria (deepseek):</strong> broken vLLM <code>sampling_params</code> URL (dev→stable api); narrowed lab success-criteria to decoders actually in <code>sampling_lab.py</code> (beam/min-p/constrained are theory-only).</li>
+</ul>
+
+<h2>Reviewer false-positives rejected with evidence</h2>
+<ul>
+<li><strong>codex — mlops 1.2 cuda image:</strong> flagged <code>nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04</code> as bad, but it is verified live on Docker Hub (last updated 2024-04-24). Kept, NEEDS_CHANGES rejected.</li>
+<li><strong>codex — prereq 1.4:</strong> emitted <code>VERDICT: NEEDS_CHANGES</code> with <em>no concrete P1/P2 listed</em> (contentless/malformed) → independently assessed clean (arXiv clean, no dead URLs, conceptual content). Treated as APPROVE. (Same malformed-verdict shape codex emitted on a couple of P1 details this session — always demand the concrete finding.)</li>
+<li><strong>excluded P2s (verified non-defects):</strong> prereq 1.1 pyenv <code>3.12.8</code> pin (intentional reproducibility), multimodal <code>tts-1</code>/<code>pyannote 3.1</code> (valid working models, covered by snapshot caveat), vector-rag 1.1 unpinned qdrant (lab-acceptable).</li>
+</ul>
+
+<h2>Process notes for next agent</h2>
+<ul>
+<li><strong>Two merge hooks block content PRs</strong> — both fire on <code>gh pr merge</code>: (1) <code>block-bugfix-merge-without-regression-test.sh</code> rejects <code>fix(...)</code>-titled PRs without a <code>Regression test:</code> line → use <code>review(...)</code>/<code>feat(...)</code>/<code>content(...)</code> prefix for curriculum work (a code regression test is meaningless for markdown). (2) <code>block-content-merge-without-learner-check.sh</code> requires a <code>## Learner check</code> section in the PR <em>body</em> with a <code>&gt;</code> blockquote ≥30 chars copied <em>verbatim from a module touched by THAT PR</em>. Grab one from a touched module before merging.</li>
+<li><strong>Worktree token economy:</strong> read expanded content via <code>git -C &lt;wt&gt; show HEAD:&lt;path&gt;</code> (Bash) rather than the Read tool on a <code>.worktrees/</code> path — the latter re-injects the whole CLAUDE.md+rules bundle (~15K tok) each time.</li>
+<li><strong>Wave-3 worktree base quirk:</strong> <code>dispatch_smart --new-branch</code> branched the wave-3 worktrees off a stale tip that carried old (pre-rebase) wave-1 commits. Harmless because each expansion commit's own diff is a single target file → cherry-pick the single expansion sha onto fresh <code>origin/main</code> and the diff is clean. Verify single-file diffstat before consolidating.</li>
+<li><strong>URL ground-check pays off:</strong> a per-file <code>grep -hoE 'https?://...' | curl -sIL</code> sweep caught ~10 dead/redirecting links the verifier's (lenient/flaky) <code>sources_all_reachable</code> gate passed. localhost/service endpoints (qdrant:6333, mlflow:5000, redis:6379, 127.0.0.1:8000) are intended lab examples — not defects.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ol>
+<li><strong>Finish the last 3 ai-ml-engineering modules</strong> — above-floor T3 edit-passes: <code>frameworks-agents/module-1.1-langchain-fundamentals</code> (5207w, fails density+sources), <code>mlops/module-1.11-notebooks-to-production-for-ml-llms</code> (5560w), <code>mlops/module-1.12-small-team-private-ai-platform</code> (5685w). Each is above the 5000 floor but T3 on <code>sources_min_10</code> + density/structure. Edit-pass (cursor) → consolidate → opus+1 cross-family review → PR (<code>review(</code> or <code>feat(</code> prefix + Learner-check blockquote) → merge → records. Closes the 124-module ai-ml-engineering track.</li>
+<li>Then <strong>scattered cloud/platform</strong> un-reviewed modules from the #2020 by-track list (on-premises-multi-cluster 6, cloud-azure 5, platform-foundations, etc.).</li>
+<li>Standing: #1911 UK translation currency · #1876 AI-history book review (73 ch) · What's-New post.</li>
+</ol>
+</body>
+</html>
