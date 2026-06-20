@@ -1,0 +1,2 @@
+## 2026-06-20T20:20:10Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator) cross-family R1 — module authored by non-Anthropic agent system. #2020 scattered. Dense T0; web-verified currency. NATS JetStream on K8s via NACK operator: Helm/StatefulSet quorum-aware storage, NATS Core vs JetStream vs Kafka tradeoffs (request/reply, work queues, fan-out, replay), NKey/JWT accounts + TLS, Prometheus metrics, leaf-node/gateway topology. Accurate, current. T0 passed=true. No P1/P2. APPROVE.

@@ -1,0 +1,2 @@
+## 2026-06-20T20:20:10Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator) cross-family R1 — module authored by non-Anthropic agent system. #2020 scattered. Dense T0; web-verified currency. CML (Continuous Machine Learning, Iterative) in the PR-review layer: pull DVC data, reproduce pipeline, compare metrics/plots vs main, post stable PR comment; GitHub Actions + GitLab CI with explicit permissions; runner-execution-layer tradeoffs (hosted / CML cloud runners / k8s). Accurate, current. T0 passed=true. No P1/P2. APPROVE.
