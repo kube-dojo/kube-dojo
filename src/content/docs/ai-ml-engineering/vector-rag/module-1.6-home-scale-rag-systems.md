@@ -23,11 +23,11 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-A developer keeps years of project notes, architecture decisions, shell snippets, and PDF manuals on one workstation.
+**Hypothetical scenario:** A developer keeps years of project notes, architecture decisions, shell snippets, and PDF manuals on one workstation.
 When a production incident happens at night, the answer is probably somewhere in those files, but the file names are inconsistent,
 the PDFs are half-forgotten, and search returns either too much or nothing useful.
 
-Another learner has the same problem in a different shape.
+**Hypothetical scenario:** Another learner has the same problem in a different shape.
 They want a private assistant over study notes, lab writeups, Kubernetes references, and local code comments, but every tutorial they find assumes a managed vector database,
 cloud-hosted embeddings, distributed ingestion, and a budget that makes sense for a company rather than one person.
 
@@ -254,6 +254,16 @@ Their cost is setup time, model download size, and slower indexing on weaker mac
 Remote embeddings are attractive when privacy allows it and convenience matters.
 They can give strong embedding quality with less local setup, especially for small corpora where cost stays predictable.
 Their cost is external dependency, possible data exposure, network latency, and the need to understand provider retention and policy boundaries.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Component role | Example local/self-hosted options | Typical home-scale fit |
+> |---|---|---|
+> | Embedding encoder | Sentence Transformers bi-encoders, ONNX-exported models via Hugging Face Optimum | CPU-friendly indexing for modest corpora; pin one model for both ingest and query |
+> | Vector index | Faiss flat or IVF indexes, Chroma persistent client, Qdrant local process, sqlite-vec extension | Start embedded or file-backed; add a database service only when filtering or concurrency hurts |
+> | Document parsing | Markdown/text natively; PDF via PyMuPDF or pdfplumber; HTML via readability-style extractors | Prefer plain text first; PDF conversion quality often limits retrieval more than the index choice |
+> | Local generator | llama.cpp, Ollama, vLLM on a workstation GPU if available | Fully local generation trades setup and hardware for privacy; hybrid designs may keep only the generator remote |
+> | Orchestration glue | Plain Python scripts, LangChain, LlamaIndex | Frameworks help prototyping; contracts (manifest, chunk IDs, privacy class) matter more than the wrapper |
 
 A hybrid system can be perfectly reasonable.
 For example, documents and the index may remain local while final answer generation uses a remote model.
@@ -676,7 +686,7 @@ Choose a small local folder with trusted documents.
 Markdown notes, text exports, converted PDFs, project documentation, or runbooks are good choices.
 Avoid indexing a whole home directory because the noise will hide the lesson.
 
-Create a working directory and a tiny sample corpus if you do not already have one:
+If you do not already have a suitable folder, create a working directory and populate it with the tiny sample corpus below so every later step shares the same trusted files.
 
 ```bash
 mkdir -p home-rag-lab/corpus home-rag-lab/eval
@@ -713,14 +723,14 @@ A rebuild is successful only when cited answers point back to source files and s
 EOF
 ```
 
-Success criteria for this step:
+Before moving on, confirm the step-one success criteria in the checklist below and make sure each item reflects what you would require in a real home-scale corpus review.
 
 - [ ] The corpus is intentionally bounded rather than "everything available."
 - [ ] You can name which documents are trusted and which documents are excluded.
 - [ ] Sensitive or restricted files are not mixed accidentally with public files.
 - [ ] You can delete the generated index later without losing the source documents.
 
-Verify the corpus shape:
+After the checklist passes, run the filesystem commands below to inspect file count, word count, and on-disk size before you invest time in chunking variants.
 
 ```bash
 find home-rag-lab/corpus -type f | sort
@@ -730,10 +740,7 @@ du -sh home-rag-lab/corpus
 
 ### Step 2: Write the Boundary Statement
 
-Before building anything, write the operating boundary.
-This prevents the prototype from becoming a tool tour.
-
-Create a boundary note:
+Before building anything, write the operating boundary in a boundary note so the prototype cannot drift into a tool tour; use the template below to capture users, corpus scope, privacy rules, update cadence, hardware assumptions, and the answer contract.
 
 ```bash
 cat > home-rag-lab/boundary.txt <<'EOF'
@@ -747,7 +754,7 @@ EOF
 cat home-rag-lab/boundary.txt
 ```
 
-Success criteria for this step:
+Review the boundary note against the checklist below and treat any missing field as a design gap that would block a trustworthy home-scale deployment.
 
 - [ ] The user count is explicit.
 - [ ] The document scope is explicit.
@@ -771,7 +778,7 @@ EOF
 nl -ba home-rag-lab/eval/questions.txt
 ```
 
-Success criteria for this step:
+Use the checklist below to confirm that your evaluation set covers lookup, reasoning, and abstention cases before you compare chunking variants or touch any embedding model.
 
 - [ ] At least one question should retrieve a specific operational procedure.
 - [ ] At least one question should retrieve design rationale rather than a single fact.
@@ -912,7 +919,7 @@ PY
 chmod +x home-rag-lab/home_rag.py
 ```
 
-Success criteria for this step:
+Confirm the harness meets the step-four success criteria below, especially the requirement that every retrieved chunk remains traceable to a source path without calling any network service.
 
 - [ ] The script is local and uses no network service.
 - [ ] The script writes both chunk text and a metadata manifest.
@@ -938,20 +945,20 @@ Keep overlap modest so you can observe the effect without flooding retrieval wit
   --overlap 12
 ```
 
-Success criteria for this step:
-
-- [ ] Both variants use the same corpus.
-- [ ] Both variants preserve source metadata.
-- [ ] The larger variant changes chunk size without changing the evaluation questions.
-- [ ] You can compare chunk count and disk usage for both variants.
-
-Verify the generated artifacts:
+After both builds finish, compare chunk counts and on-disk size using the commands below so your later design decision cites measured storage and indexing cost rather than intuition alone.
 
 ```bash
 wc -l home-rag-lab/index-small/chunks.jsonl home-rag-lab/index-large/chunks.jsonl
 head -n 2 home-rag-lab/index-small/manifest.jsonl
 du -sh home-rag-lab/index-small home-rag-lab/index-large
 ```
+
+Use the checklist below to confirm that both variants were built fairly over the same corpus with identical metadata fields.
+
+- [ ] Both variants use the same corpus.
+- [ ] Both variants preserve source metadata.
+- [ ] The larger variant changes chunk size without changing the evaluation questions.
+- [ ] You can compare chunk count and disk usage for both variants.
 
 ### Step 6: Run Retrieval-Only Tests
 
@@ -971,7 +978,7 @@ First prove that the retrieval layer can find useful evidence.
   --top-k 3
 ```
 
-Success criteria for this step:
+Inspect the retrieval-only output against the checklist below and explain, in your own words, which variant surfaces more useful evidence for lookup versus rationale questions.
 
 - [ ] Relevant sources appear for the DNS troubleshooting question.
 - [ ] Relevant sources appear for the local index design question.
@@ -1004,7 +1011,7 @@ EOF
 sed -n '1,120p' home-rag-lab/decision.md
 ```
 
-Success criteria for this step:
+Your decision record should satisfy the checklist below by tying the chosen variant to observed retrieval behavior, privacy boundaries, and a measurable trigger for the next architecture change.
 
 - [ ] The decision names the chosen variant.
 - [ ] The reasoning cites observed retrieval behavior.
@@ -1022,7 +1029,7 @@ If you have a local generator available, add an answer step that prints cited so
 Require the generator to say "not enough evidence" when retrieved chunks do not support the question.
 Do not hide retrieval results until you have debugged several failures.
 
-Success criteria for this optional step:
+If you extend the prototype with embeddings or a generator, use the optional-step checklist below to ensure the boundary statement still governs what may leave the machine.
 
 - [ ] Any embedding or generator addition preserves source metadata.
 - [ ] Remote services are used only if the boundary statement allows them.
@@ -1049,9 +1056,18 @@ Success criteria for this optional step:
 ## Sources
 
 - [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) — Foundational RAG paper covering the retrieve-then-generate pattern that this module adapts to smaller local systems.
-- [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Useful background for the embedding-based semantic search choices discussed in the module.
-- [Faiss](https://github.com/facebookresearch/faiss) — Practical upstream reference for lightweight local dense-vector indexing, which fits the module's home-scale design focus.
-- [arxiv.org: 2506.03901](https://arxiv.org/abs/2506.03901) — General lesson point for an illustrative rewrite.
-- [arxiv.org: 2505.21700](https://arxiv.org/abs/2505.21700) — The cited paper directly reports that smaller chunks work better for concise fact-based answers, while larger chunks improve retrieval for broader contextual understanding.
-- [arxiv.org: 2408.08067](https://arxiv.org/abs/2408.08067) — General lesson point for an illustrative rewrite.
-- [arxiv.org: 2605.03534](https://arxiv.org/abs/2605.03534) — The cited paper explicitly frames selective RAG answering around support, refutation, insufficiency, and abstention when support is missing.
+- [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Background on bi-encoder sentence embeddings used in many local semantic search pipelines.
+- [Faiss](https://github.com/facebookresearch/faiss) — Upstream reference for lightweight local dense-vector indexing on a single machine.
+- [Rethinking Chunk Size For Long-Document Retrieval: A Multi-Dataset Analysis](https://arxiv.org/abs/2505.21700) — Empirical analysis showing that smaller chunks help factual lookups while larger chunks preserve contextual reasoning.
+- [SURE-RAG: Sufficiency and Uncertainty-Aware Evidence Verification for Selective Retrieval-Augmented Generation](https://arxiv.org/abs/2605.03534) — Selective answering framework emphasizing abstention when retrieved evidence is insufficient.
+- [Magic Mushroom: A Customizable Benchmark for Fine-grained Analysis of Retrieval Noise Erosion in RAG Systems](https://arxiv.org/abs/2506.03901) — Benchmark for diagnosing how corpus and retrieval noise erode answer quality before blaming the generator.
+- [RAGChecker: A Fine-grained Framework for Diagnosing Retrieval-Augmented Generation](https://arxiv.org/abs/2408.08067) — Diagnostic framework separating retrieval failures from generation failures during evaluation.
+- [Build a RAG App (LangChain tutorial)](https://python.langchain.com/docs/tutorials/rag/) — End-to-end reference for loaders, splitters, retrievers, and prompt chains in a local Python workflow.
+- [Chroma documentation](https://docs.trychroma.com/) — Embedded persistent vector store often used for single-machine prototypes with metadata filtering.
+- [Qdrant Quickstart](https://qdrant.tech/documentation/quickstart/) — Local or in-process vector database setup patterns when an embedded index outgrows flat files.
+- [Sentence Transformers — Pretrained Models](https://www.sbert.net/docs/pretrained_models.html) — Catalog of bi-encoder models suitable for CPU-first home indexing and query encoding.
+- [Ollama documentation](https://github.com/ollama/ollama/blob/main/docs/README.md) — Local model serving option for fully on-machine or hybrid answer generation.
+
+## Learner check
+
+> Home-scale RAG succeeds when you define the operating boundary first, curate a bounded corpus with auditable metadata, keep contracts explicit across chunking and indexing, test retrieval before generation, and grow the architecture only when measured pain—not tool fashion—demands it.
