@@ -422,38 +422,52 @@ This script uses normalized embeddings and matrix multiplication, so cosine simi
 
 ## Provider Choices and Model Selection
 
-Embedding model selection is a product and systems decision, not a popularity contest. A hosted API may offer strong quality and low operational burden, but it sends text to a third party unless your contract and deployment model say otherwise. A local open-source model may satisfy privacy and latency goals, but it requires model hosting, versioning, hardware planning, and quality evaluation. A specialist retrieval provider may outperform a general model on search, but you still need to measure it against your corpus.
+Embedding model selection is a product and systems decision, not a popularity contest. A hosted embedding API may offer strong quality and low operational burden, but it sends text to a third party unless your contract and deployment model say otherwise. A local open-weight encoder may satisfy privacy and latency goals, but it requires model hosting, versioning, hardware planning, and quality evaluation. A retrieval-specialized encoder may outperform a general-purpose one on search tasks, but you still need to measure it against your corpus rather than trusting benchmark headlines.
 
-OpenAI's third-generation embedding models are common examples in the API category, and the official docs describe `text-embedding-3-small` and `text-embedding-3-large` as current embedding options with configurable dimensions. Other providers and open-source models are also widely used. The exact best model changes over time, so a senior workflow does not ask "which model is best in general." It asks "which model gives the best measured result for this corpus, under our privacy, latency, and cost constraints."
+The durable question is not which model is "best in general." It is which encoder gives the best measured result for this corpus under your privacy, latency, and cost constraints. Hosted APIs, self-hosted open-weight encoders, and managed retrieval services each sit on a different point of that trade-off surface. Your evaluation set should reflect real queries, not only public leaderboard tasks.
 
-| Selection Criterion | API Model Tends to Fit | Local Model Tends to Fit | What to Measure |
+| Selection Criterion | Hosted API Tends to Fit | Self-Hosted Encoder Tends to Fit | What to Measure |
 |---|---|---|---|
 | Privacy and data residency | When policy allows external processing | When text must stay inside controlled infrastructure | Data classification, audit requirements, retention policy |
 | Latency | When network latency is acceptable | When low-latency local inference is required | p50, p95, and p99 query latency |
-| Quality | Often strong out of the box | Varies by model and domain | Recall@K, precision, MRR, and failure examples |
+| Quality | Often strong out of the box on general text | Varies by model and domain | Recall@K, precision, MRR, and failure examples |
 | Cost | Good for low to moderate volume | Good for high steady volume if infrastructure is efficient | Total cost including engineering and operations |
 | Operations | Minimal model-serving burden | Requires deployment, monitoring, and upgrades | On-call load and release process maturity |
 | Custom domain | May work well without tuning | May need domain-specific model choice or fine-tuning | Domain query set and judged relevance |
 
 A model migration needs a plan. Embeddings from different models generally live in different vector spaces, so you cannot compare vectors from one model with vectors from another as if they were compatible. If you change models, create a new index, embed the corpus again, and cut traffic over intentionally. Store `model_name`, `model_version`, `dimensions`, normalization choice, and similarity metric with the index so future engineers know what they are querying.
 
-Dimensionality also has trade-offs. More dimensions can preserve more information, but they increase storage, memory bandwidth, and index size. Fewer dimensions can reduce cost and improve speed, but may lose retrieval quality. Some models let you request shorter vectors. Treat that as another evaluation variable: compare smaller and larger dimensions on your actual retrieval set before deciding the storage savings are worth it.
+Dimensionality also has trade-offs. More dimensions can preserve more information, but they increase storage, memory bandwidth, and index size. Fewer dimensions can reduce cost and improve speed, but may lose retrieval quality. Some encoders expose configurable output width. Treat that as another evaluation variable: compare smaller and larger dimensions on your actual retrieval set before deciding the storage savings are worth it.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Tier | Example identifiers (illustrative) | Typical use | Verify before relying |
+> |---|---|---|---|
+> | Hosted compact embedding API | `text-embedding-3-small` | General retrieval at lower cost | Default dimensions and pricing in current provider docs |
+> | Hosted high-capacity embedding API | `text-embedding-3-large` | Higher-quality dense retrieval | Dimension options and rate limits in current provider docs |
+> | Local sentence encoder (lab examples) | `all-MiniLM-L6-v2` | Offline prototypes without API keys | Model card on Hugging Face Hub |
+> | Multilingual sentence encoder | `paraphrase-multilingual-MiniLM-L12-v2` | Cross-language retrieval experiments | Language coverage on the model card |
+>
+> Treat this table as a lookup aid, not a product recommendation. Model names, dimensions, and pricing change frequently.
 
 ```python
 import os
 from openai import OpenAI
 
-def embed_with_openai(texts: list[str]) -> list[list[float]]:
+# Replace with a current model identifier from the snapshot above.
+EMBEDDING_MODEL = "text-embedding-3-small"
+
+def embed_with_hosted_api(texts: list[str]) -> list[list[float]]:
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     response = client.embeddings.create(
-        model="text-embedding-3-small",
+        model=EMBEDDING_MODEL,
         input=texts,
         encoding_format="float",
     )
     return [item.embedding for item in response.data]
 
 if __name__ == "__main__":
-    vectors = embed_with_openai(
+    vectors = embed_with_hosted_api(
         [
             "Recover a failed service after a bad deployment.",
             "Cook pasta in salted boiling water.",
@@ -629,7 +643,7 @@ A learning platform can use embeddings to recommend modules. If a learner comple
 
 ---
 
-## Module Quiz
+## Quiz
 
 <details>
 <summary><strong>Question 1: Your team ships semantic search for internal runbooks. A query for "login keeps asking users to sign in again" returns broad identity-provider architecture docs, but misses the runbook titled "OAuth token refresh loop after failover." What would you inspect first, and what changes might improve retrieval?</strong></summary>
@@ -808,16 +822,26 @@ Document the baseline metric, the change you made, the new metric, and two failu
 - [ ] The implementation records the embedding model name and avoids mixing vectors from incompatible models.
 - [ ] The prototype includes a practical next step such as chunking improvement, metadata filters, re-ranking, or access-control integration.
 
----
+## Learner check
+
+> Embeddings turn text into geometry so software can search by meaning, not only by exact tokens. Production quality depends on chunking, metadata, hybrid retrieval, evaluation on real queries, and treating similarity scores as ranking signals rather than confidence — not on choosing a model name from a leaderboard.
 
 ## Next Module
 
 Next module: [Vector Space Visualization](./module-1.5-vector-space-visualization/)
 
+Embeddings give you searchable vectors, but high-dimensional spaces are hard to inspect directly. The next module teaches projection and visualization techniques so you can debug clusters, spot outliers, and communicate retrieval behavior to teammates who do not live inside cosine-similarity tables.
+
 ## Sources
 
-- [platform.openai.com: embeddings](https://platform.openai.com/docs/guides/embeddings) — OpenAI's embeddings guide states that text-embedding-3-small defaults to 1536 dimensions.
-- [Efficient Estimation of Word Representations in Vector Space](https://arxiv.org/abs/1301.3781) — The original 2013 Word2Vec paper anchors the historical beginning of efficient neural word-vector learning.
-- [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) — This paper covers the analogy-style compositional behavior that made embeddings famous.
-- [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — It is the canonical paper for practical sentence embeddings and semantic similarity with BERT-derived encoders.
-- [MTEB: Massive Text Embedding Benchmark](https://arxiv.org/abs/2210.07316) — It provides the benchmark context needed for discussing how embedding models are evaluated across tasks.
+- [OpenAI Embeddings Guide](https://platform.openai.com/docs/guides/embeddings) — Provider documentation for hosted embedding APIs, dimension options, and usage patterns.
+- [Efficient Estimation of Word Representations in Vector Space](https://arxiv.org/abs/1301.3781) — The original 2013 Word2Vec paper anchors efficient neural word-vector learning.
+- [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) — Covers compositional vector behavior that made embedding analogies famous.
+- [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Canonical reference for practical sentence embeddings and semantic similarity with BERT-derived encoders.
+- [MTEB: Massive Text Embedding Benchmark](https://arxiv.org/abs/2210.07316) — Benchmark framework for comparing embedding models across retrieval and classification tasks.
+- [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) — Foundational RAG paper linking retrieval quality to downstream generation.
+- [Sentence-BERT Applied to Re-Ranking](https://arxiv.org/abs/1907.03337) — Cross-encoder architecture for pairwise relevance scoring after candidate retrieval.
+- [Hugging Face Sentence Transformers Documentation](https://huggingface.co/docs/sentence-transformers/en/index) — Practical guide for encoding sentences locally and computing similarity.
+- [FAISS Wiki](https://github.com/facebookresearch/faiss/wiki) — Reference for building and querying approximate nearest-neighbor indexes at scale.
+- [OpenSearch k-NN Plugin](https://opensearch.org/docs/latest/search-plugins/knn/index/) — Documents vector search integration in OpenSearch for production retrieval workloads.
+- [Elasticsearch kNN Search](https://www.elastic.co/guide/en/elasticsearch/reference/current/knn-search.html) — Official guide to dense vector fields and k-nearest-neighbor search in Elasticsearch.
