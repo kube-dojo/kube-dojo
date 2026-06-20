@@ -82,6 +82,8 @@ flowchart TB
 
 The diagram deliberately shows HBM and GDDR as alternative local-memory families rather than as layers that every GPU has together. A data-center accelerator normally uses HBM because it is designed to feed compute at high throughput and high utilization. A consumer card normally uses GDDR because it balances cost, gaming workloads, board design, and market constraints. For LLM decode, the practical question is which local-memory family can stream the model and KV state fast enough for the latency and throughput target.
 
+> **Landscape snapshot — GPU memory specifications as of 2026-06.** The capacity and bandwidth figures in this section and the table below (H100, GB200, MI300X, RTX 30/40/50-series, Apple Ultra) are vendor-published specs that change with every hardware generation, and aggregate numbers vary by configuration (for example, a GB200 superchip pairs two Blackwell GPUs at roughly 192 GB HBM3e each). Treat them as teaching anchors for the bandwidth math, not a buying guide — verify against the vendor's current datasheet before relying on any specific number.
+
 | Hardware example | Local memory family | Published capacity signal | Published bandwidth signal | Decode implication |
 |---|---|---:|---:|---|
 | RTX 3090 | GDDR6X | 24 GB | 936 GB/s | Strong low-cost local card when the model fits, but bandwidth is below HBM accelerators. |
@@ -578,7 +580,7 @@ Success criteria:
 
 ## Next Module
 
-Continue to [High-Performance LLM Inference: vLLM and sglang](module-1.3-vllm-sglang-inference/) to apply bandwidth math to concrete inference-engine behavior, batching, and KV-cache management. (Module 1.7 on production-tier inference-engine decision frameworks is in development — tracked as issue #1378.)
+Continue to [High-Performance LLM Inference: vLLM and sglang](module-1.3-vllm-sglang-inference/) to apply bandwidth math to concrete inference-engine behavior, batching, and KV-cache management. See also [Production Inference Engines](module-1.7-production-inference-engines/) for engine decision frameworks across vLLM, SGLang, TensorRT-LLM, and others.
 
 ## Sources
 

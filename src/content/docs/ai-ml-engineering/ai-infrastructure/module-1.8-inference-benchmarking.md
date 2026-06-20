@@ -1,4 +1,5 @@
 ---
+citations_verified: true
 title: "Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping"
 slug: ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking
 sidebar:
@@ -16,7 +17,7 @@ sidebar:
 ## Learning Outcomes
 
 - **Diagnose** LLM serving latency by defining TTFT, TPOT, p50, p95, p99 latency, throughput, prompt token rate, and output token rate, then matching each metric to the user or capacity question it answers.
-- **Design** a workload-aware benchmark matrix that varies prompt length, output length, concurrency, request rate, and prefix-cache reuse with vLLM `benchmarks/benchmark_serving.py` or the current `vllm bench serve` command.
+- **Design** a workload-aware benchmark matrix that varies prompt length, output length, concurrency, request rate, and prefix-cache reuse with vLLM's `vllm bench serve` command.
 - **Interpret** benchmark results to distinguish memory-bound decode, compute-bound prefill, scheduler saturation, cold-cache artifacts, and tail-latency failure on production hardware.
 - **Tune** `max-num-seqs`, `max-num-batched-tokens`, `gpu-memory-utilization`, and prefix caching from measured evidence instead of copying default values.
 - **Compare** observed TPOT and throughput against the bandwidth-math prediction from module 1.6, then decide whether the gap points to hardware limits, engine behavior, or workload shape.
@@ -135,7 +136,9 @@ The cost dimension should be recorded in the same table as performance. Add hard
 
 ## 3. Run a Structured vLLM Serving Benchmark
 
-vLLM's current documentation points users to `vllm bench serve` for online serving throughput, while the canonical benchmark implementation is still `benchmarks/benchmark_serving.py` in the repository; the `vllm bench serve` command is a thin CLI wrapper that calls that implementation. The issue for this module explicitly asks for the source-tree script invocation because many teams still have runbooks, older branches, or copied commands using that path. In a new setup, prefer the CLI; in a source checkout, keep the old path visible so you can recognize both forms.
+vLLM's current documentation points users to `vllm bench serve` for online serving throughput — treat it as the canonical command. The older source-tree script `benchmarks/benchmark_serving.py` has been deprecated: recent versions print a deprecation notice pointing to `vllm bench serve` and exit without running, so it is no longer a runnable path. It is worth recognizing because many teams still have runbooks, older branches, or copied commands using it, but new work should use the CLI. For higher-level production server benchmarking, vLLM's docs also point to GuideLLM as a separate harness.
+
+> **Landscape snapshot — vLLM benchmarking CLI as of 2026-06.** The `vllm bench serve` flag surface used below (`--percentile-metrics`, `--metric-percentiles`, `--random-prefix-len`, `--max-concurrency`, `--save-result`, …) and the deprecation of `benchmark_serving.py` track a fast-moving CLI. Verify the current surface with `vllm bench serve --help` before relying on a specific flag, and pin the vLLM version in your result notes — a benchmark without its version is not reproducible.
 
 The server must already be running before the client benchmark starts. That separation matters because model loading is not serving latency, and including it in every run makes the data useless for tuning. Start the server once, wait until it is ready, send warm-up requests that are not counted, then run the measured workload rows. Record the server command beside every result because engine flags define the experiment.
 
@@ -168,10 +171,10 @@ vllm bench serve \
   --metric-percentiles 50,95,99
 ```
 
-Now run the same shape with the source-tree compatibility path when your environment is a vLLM checkout. The command below assumes you are one directory above the cloned `vllm` repository and that its virtual environment is already installed. If your repository layout differs, keep the arguments and adjust only the executable path. The benchmark target remains the running server at `127.0.0.1`.
+Now run the heavier measured row — higher concurrency, longer sequences, and an explicit prefix length. This uses the same `vllm bench serve` CLI, so the flags carry over directly. (The equivalent older command was `python vllm/benchmarks/benchmark_serving.py` from a source checkout; that script is now deprecated and exits with a pointer to this CLI, so do not rely on it.) The benchmark target remains the running server at `127.0.0.1`.
 
 ```bash
-.venv/bin/python vllm/benchmarks/benchmark_serving.py \
+vllm bench serve \
   --backend vllm \
   --base-url http://127.0.0.1:8000 \
   --endpoint /v1/completions \
@@ -193,7 +196,7 @@ Now run the same shape with the source-tree compatibility path when your environ
 The command uses the random dataset because it lets you control input and output lengths without needing a private production trace. That is useful for isolating bottlenecks, but it is not a replacement for traffic replay. Random tokens do not reproduce conversation turns, retrieval context, function-call schemas, or stop-sequence behavior. Treat the random dataset as the wind tunnel and production replay as the road test.
 
 Prefix-cache testing needs a separate run because the result is only meaningful when you know whether prefixes repeat. vLLM's benchmark options include random prefix length controls in recent versions, and SGLang exposes its own serving benchmark for parity testing. The exact flag names can change across releases, so pin the engine version in your notes and store the benchmark command with the result file. A benchmark without the version is not reproducible.
-If vllm bench serve rejects `--random-prefix-len` in your version, use the `benchmark_serving.py` invocation shown above (the canonical implementation always supports it).
+If `vllm bench serve` rejects `--random-prefix-len` in your version, run `vllm bench serve --help` to find the current flag name or upgrade vLLM — the deprecated `benchmark_serving.py` script is no longer a fallback, since recent versions exit with a deprecation notice instead of running.
 
 ```bash
 vllm bench serve \
@@ -359,7 +362,7 @@ If every metric passes, stop. Record the baseline, pin the versions, and move on
 
 ## Did You Know?
 
-- vLLM's `benchmarks/benchmark_serving.py` file in the `vllm-project/vllm` repository is the canonical ~1000-line benchmark implementation, while `vllm bench serve` is a thin CLI wrapper around it. Both produce identical JSON output, so labs in this module can use either invocation interchangeably.
+- vLLM's `benchmarks/benchmark_serving.py` was historically the canonical ~1000-line benchmark implementation, but recent vLLM versions deprecate it: running the script prints a notice pointing to `vllm bench serve` and exits without benchmarking. Use `vllm bench serve` (the maintained CLI) for the labs in this module; the source-tree script is worth recognizing only when you meet it in older runbooks.
 - NVIDIA's NIM benchmarking documentation defines ITL as TPOT, and this is an NVIDIA NIM naming convention. Different vendors collapse the distinction. When comparing benchmarks across NIM and vLLM, confirm the metric definitions before drawing conclusions.
 - MLPerf Inference separates benchmark scenarios and availability categories, which is a reminder that a result is only comparable when the load pattern and system category are comparable.
 - Chatbot Arena is a model-quality benchmark based on pairwise human preference, not an inference-latency benchmark, so it can help choose what to serve but not how many GPUs the service needs.
@@ -467,7 +470,7 @@ A good set might use 256 input and 128 output tokens for short chat, 4096 input 
 
 ### Task 3: Run the vLLM serving benchmark
 
-Run the short-chat row with the current vLLM CLI, then run one row with the historical source-tree invocation if you are in or above a vLLM checkout. Save output to result files and capture the exact command. If the compatibility script exits with a deprecation message in your version, record that fact and rerun the same row with `vllm bench serve`.
+Run the short-chat row with the current vLLM CLI. The second block shows the historical source-tree invocation only so you can recognize it in older runbooks — it is deprecated, and recent vLLM versions print a deprecation notice and exit without benchmarking. If that happens, record the fact and rerun the same row with `vllm bench serve` (the flags are identical).
 
 ```bash
 vllm bench serve \
@@ -489,6 +492,8 @@ vllm bench serve \
 ```
 
 ```bash
+# Deprecated source-tree path — shown for recognition only. Recent vLLM
+# versions print a deprecation notice and exit; use `vllm bench serve` above.
 .venv/bin/python vllm/benchmarks/benchmark_serving.py \
   --backend vllm \
   --base-url http://127.0.0.1:8000 \
@@ -537,7 +542,7 @@ If you raise `max-num-seqs`, expect possible aggregate throughput improvement wi
 
 - [ ] Define TTFT, TPOT, p95, p99, prompt token throughput, output token throughput, and the user or capacity question each metric answers.
 - [ ] Design a workload-aware benchmark matrix that varies prompt length, output length, concurrency, request rate, and prefix-cache reuse.
-- [ ] Run a vLLM serving benchmark with `benchmarks/benchmark_serving.py` or `vllm bench serve`, saving command metadata and result output.
+- [ ] Run a vLLM serving benchmark with `vllm bench serve`, saving command metadata and result output.
 - [ ] Interpret whether the result shows memory-bound decode, compute-bound prefill, scheduler saturation, cold-cache artifacts, or tail-latency failure.
 - [ ] Tune one of `max-num-seqs`, `max-num-batched-tokens`, or `gpu-memory-utilization` from measured evidence instead of defaults.
 - [ ] Compare observed TPOT and output throughput against the bandwidth-math prediction from module 1.6 and explain the remaining gap.
