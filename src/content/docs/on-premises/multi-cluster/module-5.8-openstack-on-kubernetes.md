@@ -10,7 +10,7 @@ sidebar:
 >
 > **Prerequisites**: K8s basics, basic understanding of IaaS concepts, networking fundamentals helpful, and [Module 5.1: Private Cloud Platforms](../module-5.1-private-cloud/) recommended.
 
-All Kubernetes examples use the full `kubectl` command name and assume Kubernetes **1.35** behavior unless a tool-specific note says otherwise. OpenStack service versions in examples align with the **2025.2** (Flamingo) release family used by current OpenStack-Helm and Kolla-Ansible documentation unless your distribution pins a different matrix.
+All Kubernetes examples use the full `kubectl` command name and assume Kubernetes **1.35** behavior unless a tool-specific note says otherwise. OpenStack service versions in examples align with the **2025.2** (Flamingo) release family used by current OpenStack-Helm and Kolla-Ansible documentation; the latest upstream release is **2026.1** (Gazpacho, April 2026), so confirm your distribution's supported matrix before pinning.
 
 ---
 
