@@ -185,9 +185,12 @@ boundaries under your control.
 The following illustrative span shows the shape of a manually instrumented LLM
 call using the Python OTel SDK. It is not a complete, runnable agent — it is a
 pattern that teaches where the boundaries go and which attributes carry the
-debugging signal. The `gen_ai.*` attributes follow the conventions that are
-stable enough to rely on; custom attributes like `agent.tenant_id` and
-`agent.feature` carry the business context that turns a generic trace into an
+debugging signal. The `gen_ai.*` attributes used here are the ones with the
+strongest cross-vendor consensus and widest adoption — the `gen_ai.*` namespace
+is the durable anchor, even though the broader convention is still in
+Development status (see the note above), so treat the namespace as stable and the
+exact attribute set as subject to change; custom attributes like `agent.tenant_id`
+and `agent.feature` carry the business context that turns a generic trace into an
 operationally useful one.
 
 ```python
@@ -375,6 +378,11 @@ batch job that queries the trace backend nightly. Putting the derived cost on
 the span itself makes it queryable without joining to an external price table at
 query time.
 
+> **Landscape snapshot — model list prices as of 2026-06.** These are
+> illustrative per-million-token list prices and change frequently; verify each
+> provider's current pricing page before relying on specifics. The teaching point
+> is the derivation pattern, not these exact numbers.
+
 ```python
 PRICE_PER_M_TOKEN = {
     "gpt-4o":          {"input": 2.50, "output": 10.00},
@@ -486,6 +494,71 @@ would adjust replicas, resource requests, and persistent storage for trace
 buffering based on your ingest volume.
 
 ```yaml
+# The ConfigMap holds the Collector pipeline: OTLP receiver -> tail sampling
+# (keep errors, sample 10% of successes) -> PII redaction -> batch -> Tempo and
+# LangFuse exporters. This is the config the Deployment below mounts at /etc/otel.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: llm-system
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      # Keep every error trace; sample a fraction of successful traces.
+      tail_sampling:
+        decision_wait: 10s
+        policies:
+          - name: keep-errors
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+          - name: sample-success
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: 10
+      # Scrub known PII patterns from span attribute values.
+      redaction:
+        allow_all_keys: true
+        blocked_values:
+          - "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"   # email
+          - "4[0-9]{12}(?:[0-9]{3})?"                            # card-like
+      batch:
+        send_batch_size: 200
+        timeout: 5s
+
+    exporters:
+      # High-volume, long-retention trace store.
+      otlp/tempo:
+        endpoint: tempo.observability.svc.cluster.local:4317
+        tls:
+          insecure: true
+      # LLM-native query surface; endpoint and auth are deployment-specific.
+      otlphttp/langfuse:
+        endpoint: http://langfuse.observability.svc.cluster.local:3000/api/public/otel
+        headers:
+          Authorization: "Basic ${env:LANGFUSE_AUTH}"
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [tail_sampling, redaction, batch]
+          exporters: [otlp/tempo, otlphttp/langfuse]
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -505,8 +578,10 @@ spec:
     spec:
       containers:
         - name: otel-collector
-          # Pin to a current opentelemetry-collector-contrib release; exact tags drift.
-          image: otel/opentelemetry-collector-contrib:0.121.0
+          # Pin to a current opentelemetry-collector-contrib release; exact tags
+          # drift. Tag below verified current as of 2026-06 — check for a newer
+          # release before relying on it.
+          image: otel/opentelemetry-collector-contrib:0.154.0
           args:
             - "--config=/etc/otel/config.yaml"
           ports:
@@ -516,6 +591,8 @@ spec:
               containerPort: 4318
             - name: metrics
               containerPort: 8888
+            - name: health
+              containerPort: 13133
           volumeMounts:
             - name: collector-config
               mountPath: /etc/otel

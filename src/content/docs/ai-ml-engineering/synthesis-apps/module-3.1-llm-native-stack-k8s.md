@@ -623,7 +623,8 @@ replicaCount: 1
 
 image:
   repository: docker.io/qdrant/qdrant
-  tag: "v1.15.3"
+  # Tag verified current as of 2026-06; check for a newer release before relying.
+  tag: "v1.18.2"
 
 service:
   type: ClusterIP
@@ -912,7 +913,7 @@ out or be rejected, depending on your CNI's enforcement behavior. A fast success
 from the outside namespace means the policy is not enforced or the namespace
 selector is too broad.
 
-Exit 28 (timeout) means packets are being silently dropped; exit 7 (connection refused) means the CNI is sending TCP RST. Both confirm the policy is enforced — the difference is purely a CNI implementation detail (Cilium and weave-net default to drop; Calico and eBPF data planes often default to RST). A 4xx/5xx HTTP response means the traffic reached the server and the NetworkPolicy is NOT blocking it.
+Exit 28 (timeout) means packets are being silently dropped; exit 7 (connection refused) usually means the CNI is sending a TCP RST. These point to an enforced policy *only when the allowed-namespace probe above succeeded and the Service has ready endpoints* — read the two probes together. On its own, a connection-refused could also mean nothing is listening (no endpoints, wrong port), which is not proof of policy enforcement. Once "allowed succeeds, outside fails" holds, the drop-versus-RST difference is purely a CNI implementation detail (Cilium and weave-net default to drop; Calico and eBPF data planes often default to RST). A 4xx/5xx HTTP response means the traffic reached the server and the NetworkPolicy is NOT blocking it.
 
 ```bash
 kubectl create namespace outside-llm-test
@@ -938,6 +939,14 @@ namespace. If the outside call succeeds, inspect `kubectl describe networkpolicy
 -n llm-system vllm-ingress-from-llm-apps`, the namespace labels, and the CNI
 documentation before changing vLLM. The inference container cannot enforce a
 Kubernetes NetworkPolicy by itself.
+
+Apply the same boundary to the memory layer. The policy shown earlier only
+admits traffic to the vLLM Service; Qdrant has no equivalent yet, so a pod in any
+namespace can still reach `qdrant.llm-system.svc.cluster.local:6333`. Add a
+second ingress NetworkPolicy that admits only the application namespace to
+Qdrant's `6333`/`6334` ports, then repeat this deny test against Qdrant. A
+locked-down inference endpoint in front of an open memory store is not a closed
+boundary.
 
 This deny test is worth running even in a small lab because it trains the habit
 of proving negative space. Many tutorials only show the happy path from an
