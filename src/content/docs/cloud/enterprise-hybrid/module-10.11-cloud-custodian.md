@@ -164,6 +164,16 @@ Boolean groups let you make the decision more precise.
 This is where most policy quality lives.
 A weak filter creates noisy remediation; a precise filter creates trust.
 
+Value filters are the workhorse for field comparisons.
+A shorthand like `"tag:Owner": absent` is a tag filter.
+A structured value filter names a `key` on the augmented resource document, an `op` operator, and a `value` to compare against.
+Common operators include `eq`, `ne`, `in`, `not-in`, `greater-than`, `less-than`, `regex`, and `glob`.
+The `key` can be a dotted path such as `State.Name` on EC2 or `Versioning.Status` on S3.
+JMESPath-style expressions appear in advanced filters when you need to count nested list members, as in the S3 lifecycle example later in this module.
+Filters compose with `and:`, `or:`, and `not:` blocks so you can express exception logic without copying entire policies.
+Actions never run on resources that fail any filter in the chain.
+That ordering is why reviewers read filters before actions: the filter stack is the contract for blast radius.
+
 The `actions` field is the side-effect layer.
 Some actions only annotate, such as `tag` or `mark-for-op`.
 Some notify, report, or call another workflow.
@@ -197,6 +207,43 @@ A policy can run as a local pull scan, a periodic job, or an event-driven functi
 The same policy intent can move from `custodian run` in CI to scheduled production execution without rewriting the selection logic.
 That is a major operational advantage over one-off scripts.
 
+### Execution modes in practice
+
+When a policy omits `mode`, Custodian uses **pull** execution.
+You invoke `custodian run` from a workstation, CI job, cron host, or container.
+The runner lists resources through provider APIs, applies filters locally, executes actions, and writes output.
+Pull mode is the default for learning, dry runs, and many production schedules because you can see exactly what happened in one log stream.
+
+Event-driven modes deploy provider-native functions so enforcement reacts closer to resource changes.
+On AWS, common `mode` types include `cloudtrail` (Lambda subscribed to CloudTrail events), `periodic` (Lambda on an EventBridge schedule), `config-rule` (AWS Config evaluation), and `asg-instance-state` (Auto Scaling lifecycle hooks).
+Each mode packages the same `resource`, `filters`, and `actions` into a deployed function with its own IAM role, timeout, and trigger wiring.
+Azure and GCP have parallel paths: policies can run as Azure Functions or Google Cloud Functions when `mode` is set for those providers.
+The multi-cloud grammar stays familiar, but the deployment artifact and trigger differ.
+
+Choosing a mode is a risk and latency tradeoff, not a purity contest.
+Pull scans are easier to debug and cheaper to reason about in code review.
+Event modes reduce the window where a non-compliant resource exists unattended, but they multiply deployed functions, IAM roles, and stale-trigger cleanup work.
+Many mature programs run high-risk remediation in pull mode on a daily schedule while using CloudTrail or Config modes only for fast notification or low-risk tagging on create.
+
+```yaml
+  - name: ec2-tag-on-launch
+    resource: aws.ec2
+    mode:
+      type: cloudtrail
+      events:
+        - RunInstances
+    filters:
+      - "tag:Owner": absent
+    actions:
+      - type: tag
+        key: Owner
+        value: unknown
+```
+
+The snippet above reacts when instances launch without an owner tag.
+It does not stop anything.
+It makes drift visible quickly while a separate pull-mode policy handles idle compute with metric evidence and review windows.
+
 > **Pause and predict:** Which part of a policy should change most often: the resource type, the filters, or the actions? Why?
 
 In healthy programs, filters change more often than resource types and actions.
@@ -220,18 +267,29 @@ The policy file should also be validated before execution.
 YAML can be syntactically valid while still asking for an invalid action on a resource type.
 That distinction is important in CI: you want both "is this YAML valid?" and "is this a valid Custodian policy?"
 
+Custodian also exposes an author loop that mirrors how platform teams treat infrastructure code.
+`custodian schema` lists the filters and actions available for a resource type, which is invaluable when you are unsure whether `configure-lifecycle` or `set-bucket-encryption` is the right action name.
+`custodian validate` checks that your policy file matches that schema.
+`custodian run` executes the policy against live inventory.
+`custodian report` aggregates historical output directories so you can compare runs over time without re-querying the cloud.
+Together these commands form write → verify → execute → audit, the same rhythm as Terraform plan and apply, but oriented around resource selection and remediation.
+
 ```bash
 python -m venv .venv
 .venv/bin/pip install c7n
 
+custodian schema aws.ec2
 custodian validate policies/aws-idle-compute.yml
 custodian run --dryrun -s output policies/aws-idle-compute.yml
+custodian report -s output
 ```
 
 The dry run is not a ceremonial step.
 It is the first time you see the actual resources that match.
+`--dryrun` applies filters and records matched resources without executing actions, which makes it the safe default for new policies and for CI jobs that must prove selection scope before anyone approves remediation.
 If a policy expected four idle instances and matches four hundred, the failure is not in the action.
 The failure is in your mental model of the estate.
+Run dry mode in every account canary before you remove the flag from a stop or delete policy.
 
 ---
 
@@ -434,6 +492,54 @@ Termination is a destructive action with data-loss risk.
 If your governance program starts with termination, application teams will route around it.
 If it starts with visible tags, reports, and reversible actions, teams are more likely to fix ownership upstream.
 
+The `mark-for-op` and `marked-for-op` pair is the deferred-action pattern behind tag-first governance.
+`mark-for-op` writes a structured tag such as `custodian_status` with a message, target operation, and expiry timestamp derived from the `days` field.
+Nothing destructive happens until a second policy matches `type: marked-for-op` with the same `tag` and `op` after the deadline passes.
+That TTL boundary is what turns "we might stop this" into "we will stop this on Tuesday unless someone intervenes".
+Application owners can read the tag, add `DoNotStop` with an approved ticket, or fix the underlying issue before the follow-up policy runs.
+
+```yaml
+# policies/aws-offhours-dev.yml
+policies:
+  - name: ec2-dev-offhours-stop
+    resource: aws.ec2
+    description: |
+      Stop development EC2 instances outside business hours when tagged for
+      off-hours scheduling and not explicitly exempted.
+    filters:
+      - "tag:Environment": dev
+      - "tag:DoNotStop": absent
+      - type: offhour
+        tag: custodian_offhours
+        default_tz: utc
+        offhour: 20
+        onhour: 8
+      - type: value
+        key: State.Name
+        value: running
+    actions:
+      - type: stop
+
+  - name: ec2-dev-offhours-start
+    resource: aws.ec2
+    filters:
+      - "tag:Environment": dev
+      - type: onhour
+        tag: custodian_offhours
+        default_tz: utc
+        onhour: 8
+      - type: value
+        key: State.Name
+        value: stopped
+    actions:
+      - type: start
+```
+
+Off-hours policies use `offhour` and `onhour` filters with a timezone tag (`custodian_offhours` in this example) so teams in different regions can opt in without rewriting the policy.
+The stop policy runs when the clock is outside the allowed window.
+The companion start policy brings instances back when the window opens.
+Pair off-hours rules with environment tags so production fleets never inherit development schedules by accident.
+
 ### AWS production notes
 
 | Concern | What to decide | Why it matters |
@@ -551,6 +657,37 @@ Azure Policy is better for preventing new non-compliant resources at the ARM con
 Custodian is better for scanning what already exists, attaching ownership context, and orchestrating remediation over time.
 The two controls should not compete.
 They should cover different lifecycle moments.
+
+Azure tag compliance can use the same deferred-action shape as AWS.
+A report-only pass tags VMs with `tag-review` for routing.
+A `mark-for-op` pass schedules stop after fourteen days when `Owner` and `CostCenter` remain absent.
+A `marked-for-op` follow-up stops only VMs whose review window expired and that still lack required tags.
+The Azure `stop` action deallocates the VM, which stops billing for compute while preserving disks, matching the reversible posture used on EC2.
+
+```yaml
+  - name: azure-vm-untagged-mark-for-review
+    resource: azure.vm
+    filters:
+      - or:
+          - type: value
+            key: "tags.Owner"
+            value: absent
+          - type: value
+            key: "tags.CostCenter"
+            value: absent
+      - type: value
+        key: "tags.custodian_status"
+        value: absent
+      - type: value
+        key: "tags.DoNotStop"
+        value: absent
+    actions:
+      - type: mark-for-op
+        tag: custodian_status
+        op: stop
+        days: 14
+        msg: "Missing Owner or CostCenter. Add tags or approved exception before stop."
+```
 
 ### AWS and Azure syntax comparison
 
@@ -671,6 +808,11 @@ The tradeoff is complexity.
 Event patterns, resource ID extraction, function deployment, and stale schedules need careful lifecycle management.
 If you change a policy from one mode to another, clean up old functions and schedules deliberately.
 
+`config-rule` mode evaluates resources through AWS Config, which suits compliance predicates tied to configuration snapshots rather than raw API timing.
+`asg-instance-state` hooks Auto Scaling lifecycle transitions so policies can act when instances launch or terminate inside a group.
+On GCP, function-backed modes follow the same idea: the policy YAML stays stable while the deployment target becomes a Cloud Function with provider-specific triggers.
+On Azure, function deployment parallels AWS Lambda for scheduled and event-driven execution.
+
 Azure has pull and Azure-specific event or container modes depending on deployment shape.
 Many teams still begin with a containerized runner in CI or a scheduled platform job because it centralizes credentials, output, and change control.
 That is fine.
@@ -726,8 +868,39 @@ Keep example URLs fake and non-sensitive.
 
 Custodian emits policy output that should be treated as audit evidence.
 At minimum, store `resources.json`, logs, and policy reports in a central bucket or storage account with retention.
+The `-s` output path accepts a local directory or a cloud URI such as `s3://governance-audit/custodian/` or an Azure Blob / GCS prefix when configured.
+Each run writes per-policy subdirectories containing matched resource documents, execution metadata, and action results.
+That object store becomes the durable audit trail: security and FinOps reviewers can answer "which instances matched on March 3?" without re-running the scan against live APIs.
+
 For AWS, Custodian can publish policy metrics to CloudWatch, including resource count, timing, API calls, and action timing.
 Those metrics are operational signals, not vanity graphs.
+Dashboards built on `ResourceCount` spikes catch runaway filters before a stop action fires fleet-wide.
+`ApiCalls` trends reveal when a policy's augmentation pattern is too expensive for the account size.
+Pair blob or S3 output retention with CloudWatch alarms so silent failures (zero matches when you expected hundreds, or IAM deny loops) surface to the platform on-call.
+
+### c7n-mailer for notifications
+
+Remediation without notification trains teams to fear automation.
+**c7n-mailer** is the companion tool that turns Custodian output into owner-facing messages.
+Policies can emit to an SQS queue (on AWS) or equivalent notification plumbing.
+Mailer workers consume those messages and deliver email, Slack, Microsoft Teams, or other channels using templates you control.
+The important design choice is batching: one digest per team per day beats four hundred individual Slack messages when a broad report policy runs.
+
+```yaml
+    actions:
+      - type: notify
+        to:
+          - arn:aws:sns:us-east-1:111122223333:custodian-notifications
+        transport:
+          type: sqs
+          queue: https://sqs.us-east-1.amazonaws.com/111122223333/custodian-mailer
+        template: costops.html
+        subject: "Action Required: untagged EC2 instances in {{ account }}"
+```
+
+Wire mailer after report and mark policies, not before you trust the filter set.
+Owners need context: which resource, which predicate, what action is scheduled, and how to file an exception.
+Mailer templates should mirror the `msg` field on `mark-for-op` tags so chat notifications and cloud tags tell the same story.
 
 Useful production dashboards answer these questions:
 
@@ -780,6 +953,12 @@ Start with one development account.
 Expand to a small production canary.
 Then expand by organizational unit or subscription group.
 Do not run a new stop policy across every account on day one just because the tool can.
+
+`c7n-org` parallelizes account fan-out so a single orchestration host can run the same policy directory across dozens of accounts or subscriptions with per-account roles.
+The `accounts.yml` file maps account identifiers to IAM roles, regions, and tags.
+Filter which accounts run a job with `--account-tags` or `--not-accounts` so a stop policy never touches a PCI scope until that scope has its own reviewed exception process.
+Point `-s` at a centralized audit bucket prefix so every account's `resources.json` lands in one retention-controlled location for `c7n-org report` to aggregate.
+The report command is how central governance answers cross-account questions without logging into each account console separately.
 
 ### CI integration
 
@@ -931,7 +1110,7 @@ The ladder makes policy behavior legible before it becomes forceful.
 
 ## Did You Know?
 
-1. Cloud Custodian was created at Capital One in 2016, accepted into the CNCF Sandbox in 2020, and moved to CNCF Incubating status on September 14, 2022.
+1. Cloud Custodian was created at Capital One in 2016, accepted to the CNCF on 2020-06-25, and moved to CNCF Incubating maturity on 2022-09-14.
 2. The CNCF project page describes Cloud Custodian as a YAML DSL for querying, filtering, and acting on cloud resources for security, cost optimization, and governance.
 3. `c7n-org` can run the same policy runner pattern across AWS accounts, Azure subscriptions, GCP projects, and OCI tenancies from configuration files.
 4. Cloud Custodian's AWS metrics output can include policy exception count, resource count, resource time, action time, and API calls, which means governance scans can be monitored like production jobs.
@@ -1261,6 +1440,8 @@ Write one sentence explaining each choice.
 - [Cloud Custodian aws.s3 resource reference](https://cloudcustodian.io/docs/aws/resources/s3.html)
 - [Cloud Custodian azure.vm resource reference](https://cloudcustodian.io/docs/azure/resources/vm.html)
 - [Cloud Custodian c7n-org: Multi Account Custodian Execution](https://cloudcustodian.io/docs/tools/c7n-org.html)
+- [Cloud Custodian c7n-mailer: Notifications and Reporting](https://cloudcustodian.io/docs/tools/c7n-mailer.html)
+- [Cloud Custodian CLI reference: schema, validate, run, report](https://cloudcustodian.io/docs/aws/gettingstarted.html)
 - [OPA for Kubernetes Admission Control](https://www.openpolicyagent.org/docs/kubernetes)
 - [Kyverno Applying Policies](https://kyverno.io/docs/guides/applying-policies/)
 - [CNCF Cloud Custodian project page](https://www.cncf.io/projects/cloud-custodian/)
