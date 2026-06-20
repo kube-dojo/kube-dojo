@@ -1,0 +1,2 @@
+## 2026-06-20T13:43:15Z — `REVIEW` — `APPROVE`
+Reviewer: opus. #2020 ai-infrastructure wave. Was T3 (body_words 4306<5000, 4 sources). cursor (Cursor/Kimi) authored a surgical T0 expansion (PR #2042): added genuine depth — memory-fit math (7B@Q4 ~3.5-4 GB, @F16 ~14 GB, illustrative), GGUF quant tiers as size/quality tradeoff (not a leaderboard), TTFT-vs-steady-state latency — plus 6 sources. opus (Anthropic, cross-family to cursor) ground-checked every addition: memory math verified, durable-vendor compliant, no fabrication, all 10 sources reachable. T0, 5002 words. APPROVE.
