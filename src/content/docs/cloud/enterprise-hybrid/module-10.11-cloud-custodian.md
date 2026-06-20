@@ -226,6 +226,7 @@ Event modes reduce the window where a non-compliant resource exists unattended, 
 Many mature programs run high-risk remediation in pull mode on a daily schedule while using CloudTrail or Config modes only for fast notification or low-risk tagging on create.
 
 ```yaml
+policies:
   - name: ec2-tag-on-launch
     resource: aws.ec2
     mode:
@@ -355,6 +356,7 @@ It is also dangerous if you apply it to a resource where metrics are absent beca
 For production, add a second filter that excludes very new instances or requires a minimum age before evaluating CPU.
 
 ```yaml
+policies:
   - name: ec2-idle-mark-for-review-safer
     resource: aws.ec2
     filters:
@@ -513,7 +515,6 @@ policies:
         tag: custodian_offhours
         default_tz: utc
         offhour: 20
-        onhour: 8
       - type: value
         key: State.Name
         value: running
@@ -665,6 +666,7 @@ A `marked-for-op` follow-up stops only VMs whose review window expired and that 
 The Azure `stop` action deallocates the VM, which stops billing for compute while preserving disks, matching the reversible posture used on EC2.
 
 ```yaml
+policies:
   - name: azure-vm-untagged-mark-for-review
     resource: azure.vm
     filters:
@@ -883,7 +885,7 @@ Pair blob or S3 output retention with CloudWatch alarms so silent failures (zero
 Remediation without notification trains teams to fear automation.
 **c7n-mailer** is the companion tool that turns Custodian output into owner-facing messages.
 Policies can emit to an SQS queue (on AWS) or equivalent notification plumbing.
-Mailer workers consume those messages and deliver email, Slack, Microsoft Teams, or other channels using templates you control.
+Mailer workers consume those messages and deliver email, Slack, Splunk, DataDog, or other configured channels using templates you control.
 The important design choice is batching: one digest per team per day beats four hundred individual Slack messages when a broad report policy runs.
 
 ```yaml
@@ -1284,6 +1286,7 @@ It should stop only instances whose review marker has expired and that still do 
 <summary>Solution</summary>
 
 ```yaml
+policies:
   - name: ec2-idle-stop-after-review
     resource: aws.ec2
     filters:
