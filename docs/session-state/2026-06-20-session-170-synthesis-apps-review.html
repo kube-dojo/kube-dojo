@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Session 170 — #2020 synthesis-apps track review complete (4/4)</title>
+<title>Session 170 — #2020: 18 modules across 4 AI/ML sub-tracks</title>
 <style>
   :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
@@ -20,15 +20,15 @@
 </style>
 </head>
 <body>
-<h1>Session 170 — #2020 synthesis-apps 4/4 + ai-infrastructure 8/8 complete</h1>
+<h1>Session 170 — #2020: 18 modules across 4 AI/ML sub-tracks (synthesis-apps · ai-infrastructure · reinforcement-learning · advanced-genai)</h1>
 <p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s169 (ML 19/19).</strong>
-Closed <strong>two #2020 sub-tracks</strong>. (1) <code>synthesis-apps</code> 4/4 (LLM-on-K8s) — 3 APPROVE, 3.4 NEEDS_CHANGES
+Closed <strong>four #2020 sub-tracks (18 modules)</strong>. Details on synthesis-apps + ai-infrastructure below; reinforcement-learning + advanced-genai summarized lower down. (1) <code>synthesis-apps</code> 4/4 (LLM-on-K8s) — 3 APPROVE, 3.4 NEEDS_CHANGES
 (codex caught a missing Collector ConfigMap deepseek missed); PR #2041 (<code>79161da07</code>) + records (<code>f21c6be9e</code>).
 (2) <code>ai-infrastructure</code> 8/8 — queue said "3" but real scope was 5 unreviewed + 2 T3 stubs; expanded 1.4/1.5 T3→T0
 (cursor authored, opus reviewed) and reviewed 1.6/1.7/1.8 (codex+deepseek); PR #2042 (<code>9051208</code>) + records (<code>09d4ce1bb</code>),
 plus 1.1-1.3 #1842 records committed for parity. Real web-verified fixes (ExLlamaV3 LoRA currency, vLLM benchmark deprecation,
 dated GPU/engine snapshots) and <strong>two reviewer false-positives rejected with hard evidence</strong> (deepseek GB200, codex "broken
-Python"). All 12 modules T0. <strong>NEXT: reinforcement-learning (2) → advanced-genai (1).</strong></p>
+Python"). Then <strong>reinforcement-learning 2/2</strong> (codex caught a broken D4RL install → Minari) and <strong>advanced-genai 4</strong> (1.3/1.10/1.11 expanded + 1.12 GRPO KL-estimator fix). All 18 modules T0. <strong class="bad">⚠ Scope corrected: the AI/ML track is 107/124, NOT complete — 17 modules remain across 6 more sub-tracks (see NEXT).</strong></p>
 
 <h2>What shipped</h2>
 <table>
@@ -82,9 +82,15 @@ Python"). All 12 modules T0. <strong>NEXT: reinforcement-learning (2) → advanc
 <h2>Operational note — new content-merge gate</h2>
 <p>The <code>## Learner check</code> hook (<code>.claude/hooks/block-content-merge-without-learner-check.sh</code>) blocks <code>gh pr merge</code> on content PRs unless the PR body has a <code>## Learner check</code> section with a verbatim module blockquote (≥30 chars). Add it before merging any module PR.</p>
 
-<h2>NEXT</h2>
-<p>AI/ML track tally: ai-engineering-foundations 12/12 · ai-native-development 9/9 · deep-learning 27/27 · machine-learning 19/19 · synthesis-apps 4/4 · <strong>ai-infrastructure 8/8</strong>. Remaining in the track: <code>reinforcement-learning</code> (2) → <code>advanced-genai</code> (1), then scattered cloud/platform. Reusable briefs/scripts: <code>logs/remediation/briefs/quality-coverage/_sa-*</code> + <code>_aiinfra-*</code>.</p>
+<h2>Also this session — reinforcement-learning 2/2 + advanced-genai 4</h2>
+<p><strong>reinforcement-learning 2/2</strong> (PR #2043, records <code>c3be8b31f</code>): 1.1 + 2.1 expanded T2/T3→T0 (cursor authored, opus+codex reviewed). <strong class="bad">codex caught 2.1's broken D4RL install by executing it</strong> — D4RL pins Python <code>&lt;3.11</code>, fails on the repo's 3.14; web-verified the fix and switched the whole runnable path to <strong>Minari</strong> (Farama's D4RL successor), <code>get_minari('mujoco/halfcheetah/medium-v0')</code>.</p>
+<p><strong>advanced-genai 4</strong> (PR #2044 <code>11f21b452</code>, records <code>26b2e93f3</code>): 1.3 (diffusion) / 1.10 (single-GPU FT) / 1.11 (multi-GPU FT) expanded T3→T0 (cursor; opus verified DDPM/QLoRA/FSDP-ZeRO math correct; 1.11 gained 5 missing sections); 1.12 (GRPO) codex-reviewed → fixed the <strong>KL proxy</strong> (signed delta → Schulman nonnegative k3 estimator), a stale DeepSeek-R1 §2.2.1/2.2.2 citation (→ §2.1/§2.2), and added a dated snapshot.</p>
 
-<p class="pill">Branch: main @ <code>09d4ce1bb</code> · clean · worktrees: g2-craft (#1623, not mine — retained)</p>
+<h2 class="bad">⚠ NEXT — scope corrected: AI/ML track is 107/124, NOT complete</h2>
+<p>I swept all 124 <code>ai-ml-engineering</code> modules (rather than assuming the focus thread's list was exhaustive). <strong>17 remain unreviewed across 6 sub-tracks the focus thread never named:</strong> <code>frameworks-agents</code> (1.1, 1.6) · <code>generative-ai</code> (1.1–1.4) · <code>mlops</code> (1.1, 1.2, 1.11, 1.12) · <code>multimodal-ai</code> (1.1) · <code>prerequisites</code> (1.1–1.4) · <code>vector-rag</code> (1.1, 1.6). Several are likely T3 stubs needing expansion first — <strong>verify tiers before reviewing</strong> (use <code>verify_module.py</code>, not <code>density.py</code>). Then the scattered cloud/platform modules in #2020's original scope.</p>
+<p><strong>Session 170 total: 18 modules · 4 sub-tracks · 4 PRs merged (#2041/#2042/#2043/#2044) · 0 broken builds.</strong> Quality method that held throughout: layered review (opus = concepts/math/currency; codex = executes code/installs), every P1 ground-checked — caught real defects (missing ConfigMap, D4RL install, GRPO KL mislabel, ExLlamaV3/vLLM drifts) and <strong>rejected 3 reviewer false-positives with hard evidence</strong> (deepseek GB200, codex 1.7-Python, deepseek s169-fab).</p>
+<p><strong>New gate:</strong> the <code>## Learner check</code> hook blocks content-PR merges unless the body has a <em>verbatim</em> module blockquote (≥30 chars) — a paraphrase fails (hit on #2044); copy exact text. Reusable briefs/scripts: <code>logs/remediation/briefs/quality-coverage/_sa-* _aiinfra-* _rl-* _ag-*</code>.</p>
+
+<p class="pill">Branch: main @ <code>26b2e93f3</code> · clean · worktrees: g2-craft (#1623, not mine — retained)</p>
 </body>
 </html>
