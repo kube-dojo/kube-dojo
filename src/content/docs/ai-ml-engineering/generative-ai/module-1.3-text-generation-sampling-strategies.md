@@ -6,13 +6,21 @@ sidebar:
   order: 304
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours
+> **Complexity**: `[COMPLEX]`
+>
+> **Time to Complete**: 5-6 hours
+>
+> **Prerequisites**: Module 1.1 (Introduction to LLMs), Module 1.2 (Tokenization & Text Processing), and basic Python.
+>
+> **Track**: AI/ML Engineering — Generative AI Foundations
+
+---
 
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
 
-- **Compare** greedy decoding, temperature sampling, nucleus sampling, top-k filtering, repetition penalties, and stopping controls across realistic production scenarios.
+- **Compare** greedy decoding, beam search, temperature sampling, nucleus sampling, top-k filtering, min-p filtering, repetition penalties, constrained decoding, and stopping controls across realistic production scenarios.
 - **Design** sampling profiles for structured extraction, code generation, customer support chat, summarization, creative ideation, and long-form drafting.
 - **Diagnose** repeated phrases, malformed structured output, dull responses, runaway generation, and incoherent high-variance text by tracing the decoding configuration.
 - **Evaluate** the trade-offs between determinism, diversity, cost, latency, safety, and user experience when selecting generation parameters.
@@ -20,7 +28,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-A product manager at a travel company asks the AI team why the support assistant confidently invented a refund exception that did not exist in the policy manual. The prompt included the correct policy, the retrieval system returned the right document, and the model was capable of summarizing it accurately in offline tests. The failure appeared only in production, where the assistant had been configured with a chat-friendly decoding profile designed to sound warm, varied, and conversational. That profile was useful for brainstorming marketing copy, but it was dangerous for a workflow where the correct answer was narrow, contractual, and auditable.
+Hypothetical scenario: A product manager at a travel company asks the AI team why the support assistant confidently invented a refund exception that did not exist in the policy manual. The prompt included the correct policy, the retrieval system returned the right document, and the model was capable of summarizing it accurately in offline tests. The failure appeared only in production, where the assistant had been configured with a chat-friendly decoding profile designed to sound warm, varied, and conversational. That profile was useful for brainstorming marketing copy, but it was dangerous for a workflow where the correct answer was narrow, contractual, and auditable.
 
 Sampling strategy is the part of text generation that decides which token gets written next after the model has scored the possible options. A model can assign probabilities well and still produce a bad answer if the decoding layer rewards novelty in a task that requires consistency. Conversely, the same model can sound lifeless, repetitive, or evasive if every application is forced through a deterministic profile. Production AI engineering is not only prompt design; it is also control over the statistical process that turns probability distributions into text.
 
@@ -97,6 +105,34 @@ EXTRACTION_PROFILE = {
 
 Use this kind of profile when a downstream parser, ticketing system, CI pipeline, or audit log depends on predictable output shape. The `top_p` value is effectively neutral here because a zero-temperature setting already selects the top token. The `max_tokens` limit protects cost and prevents runaway generation, while the stop sequence gives the model a clear place to end after the target payload. The important design habit is to write the profile from the consumer backward: if a parser consumes it, do not optimize for charm.
 
+## Beam Search: Exploring Multiple High-Probability Paths
+
+Greedy decoding commits to one path at every step, which is fast but myopic. [Beam search keeps several partial sequences alive at once, expands each candidate by one token, and retains only the highest-scoring beams until generation finishes.](https://huggingface.co/docs/transformers/en/generation_strategies) Instead of asking "what is the best next token?" once, beam search asks "what are the best continuations if I allow myself to reconsider later?" That extra search budget can help when the locally best token leads to a dead end, which is why beam search historically mattered for machine translation, captioning, and other tasks where a slightly unusual early word can still produce a strong final sentence.
+
+```ascii
+Beam width = 2 after one decoding step
+
+Step context: "The rollout failed because the"
+
+Beam 1: "The rollout failed because the image"     score 0.41
+Beam 2: "The rollout failed because the probe"     score 0.33
+Discarded: "... node", "... secret", "... timeout"
+
+Next step expands BOTH beams, then keeps the top 2 combined scores again.
+```
+
+Beam search increases compute and memory because each step evaluates multiple active hypotheses. Wider beams explore more alternatives, but they also make generation slower and can produce text that is safe yet bland. In open-ended chat, beam search often feels repetitive because all surviving paths chase the same high-probability phrasing. In structured tasks with a scoring function, such as translation with a reference metric or constrained summarization with length penalties, beam search can still be the right tool because you are optimizing a measurable objective rather than conversational surprise.
+
+| Beam setting | Behavior | Best fit | Main risk |
+|---|---|---|---|
+| `num_beams: 1` | Equivalent to greedy for many APIs | Fast extraction and code | No recovery from early mistakes |
+| `num_beams: 4-8` | Moderate search with better global coherence | Translation-like rewriting, short summaries | Higher latency and cost |
+| `num_beams: >8` | Expensive search with diminishing returns | Research or offline batch jobs | Often dull, overly literal text |
+
+A practical engineering rule is to reserve beam search for workloads with an external score or a narrow output space. If your success metric is "valid JSON every time," deterministic greedy decoding plus schema validation is usually simpler than beam search. If your success metric is "best BLEU score against a reference translation," beam search may still earn its cost. For customer-facing assistants, beam search is rarely the first knob you touch; temperature, top-p, grounding, and validation layers usually matter more.
+
+> **Active learning prompt:** A team uses beam width `8` for marketing copy generation and complains that every draft sounds identical. Before changing models, explain whether the complaint fits beam search behavior or indicates a different failure mode such as weak prompts or missing diversity controls.
+
 ## Temperature: Reshaping Confidence
 
 Temperature changes the sharpness of the probability distribution before sampling. Low temperature makes high-probability tokens even more dominant, while high temperature flattens the distribution and gives lower-probability tokens more opportunity to appear. This is why temperature is often described as a creativity knob, but that nickname is incomplete. It is more precise to say that temperature controls how willing the sampler is to depart from the model's strongest local preference.
@@ -163,6 +199,32 @@ The interaction between temperature and top-p matters more than either setting a
 
 A common misunderstanding is that `top_p: 0.9` means "choose the top ninety percent of tokens." It does not. It means "choose the smallest set of tokens whose probability mass reaches ninety percent." If the top token alone has probability `0.95`, the nucleus may contain only that token. If many tokens each have similar probability, the nucleus may contain many candidates. That dynamic behavior is why top-p is usually a better default than a fixed top-k value.
 
+## Min-p: Confidence-Scaled Dynamic Truncation
+
+Top-p removes the long tail using cumulative probability, but its cutoff does not always track how confident the model is on a given step. [Min-p sampling scales the truncation threshold from the probability of the top token, keeping more candidates when the model is uncertain and tightening the pool when the top token is already very likely.](https://arxiv.org/abs/2407.01082) The idea is durable even when benchmark results are debated: dynamic filters should react to confidence, not only to rank or fixed mass cutoffs.
+
+```ascii
+Same step, two different confidence levels
+
+Confident step (top token probability = 0.82)
+  min-p keeps tokens with p >= 0.82 * min_p_value
+  Result: small candidate set, conservative continuation
+
+Uncertain step (top token probability = 0.21)
+  min-p keeps tokens with p >= 0.21 * min_p_value
+  Result: broader candidate set, more room to explore
+```
+
+Min-p is especially relevant when teams raise temperature for creative workloads but still want guardrails against absurd tail tokens. A high temperature flattens the distribution; min-p can still discard tokens whose absolute probability is tiny relative to the current leader. That combination is not a license to skip prompt design, and follow-up work has argued that min-p does not universally beat well-tuned top-p on every benchmark. Treat min-p as another engineering control to test on your workload rather than as a universal upgrade.
+
+| Setting | Behavior | Best fit | What to watch |
+|---|---|---|---|
+| min-p disabled | Only temperature/top-p/top-k apply | Baseline comparisons | May miss an easy win on creative tasks |
+| min-p `0.05-0.10` | Mild confidence scaling | Chat and drafting at moderate temperature | Validate against your own eval set |
+| min-p `0.10-0.20` | Stronger tail removal on confident steps | Creative generation with safety filters | Can feel constrained if prompts are already narrow |
+
+When you evaluate min-p against top-p, change one variable at a time and measure the failure modes you care about: repetition, hallucinated detail, malformed structure, latency, and user satisfaction. Sampling research moves quickly; the durable lesson is to compare decoders with task-specific metrics instead of assuming a newly published method replaces every existing profile.
+
 ## Top-k: Static Filtering and Its Trade-Offs
 
 [Top-k sampling keeps exactly the `k` most probable tokens and removes the rest.](https://huggingface.co/docs/transformers/v4.22.2/main_classes/text_generation) If `top_k` is `5`, the sampler can choose only among the five highest-ranked candidates, regardless of their absolute probabilities. This is easy to reason about, and it can be useful in local model stacks or research settings where a fixed candidate budget is desirable. The weakness is that the same `k` can be too broad when the model is confident and too narrow when the model is uncertain.
@@ -224,6 +286,45 @@ Repetition penalties are not a substitute for a good prompt structure. If you as
 | `>1.3` | Aggressive avoidance | Rare rescue setting for loop-heavy local models | May damage coherence and terminology |
 
 A senior-level debugging habit is to distinguish repetition caused by decoding from repetition caused by content design. If the model repeats the same phrase after several hundred tokens, a repetition penalty and shorter sections may help. If it repeats the same idea across list items, the prompt likely lacks distinct axes for comparison. If it repeats boilerplate at the start of every answer, the system prompt or examples may be teaching the model that preamble is required.
+
+## Constrained and Structured Decoding
+
+Prompt-only JSON instructions fail often because language models can still emit prefaces, markdown fences, or partially valid objects. Constrained decoding pushes the reliability boundary closer to the model by restricting which tokens remain legal at each step. [Grammar-based and schema-guided approaches compile a machine-readable constraint, then mask illegal tokens before sampling occurs.](https://dottxt-ai.github.io/outlines/latest/) The durable concept is separate from any one library: you are no longer hoping the model chooses the right format; you are enforcing it during generation.
+
+```text
+Prompt-only structured output
+  Model may emit: "Here is the JSON:" + object + trailing commentary
+  Downstream parser: fragile
+
+Constrained structured output
+  Step 1 legal tokens: '{'
+  Step 2 legal tokens: '"service"' or other schema keys
+  Step 3 legal tokens: ':' then string/value tokens allowed by schema
+  Downstream parser: still validate, but fewer surprise prefixes
+```
+
+Structured output appears under several names across providers and runtimes: JSON schema mode, grammar-constrained generation, guided decoding, or response-format objects. The names change faster than the idea. The idea is that machine-consumed outputs deserve a hard boundary, while human-consumed prose usually deserves softer sampling controls plus grounding and review.
+
+| Approach | Mechanism | Strength | Weakness |
+|---|---|---|---|
+| Prompt-only formatting | Instructions and examples | Easy to ship | Frequent invalid or wrapped output |
+| Stop sequences and regex cleanup | Post-hoc trimming | Cheap incremental guardrail | Cannot guarantee full validity |
+| Schema or grammar constraints | Token masking during decoding | Strong format compliance | Requires runtime support and testing |
+| External validator plus repair loop | Parse, reject, retry | Works on any provider | Adds latency and cost |
+
+Use constrained decoding when a parser, workflow engine, or database import consumes the answer. Keep sampling conservative even with constraints, because constraints limit format, not factuality. A schema can force valid JSON while still allowing `"refundApproved": true` when the source document never authorized a refund. Pair structured decoding with retrieval grounding, field-level validation, and audit logging.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Capability | Where it commonly appears | Engineering note |
+> |---|---|---|
+> | JSON schema response format | Hosted chat/completions APIs | Good for extraction endpoints; verify exact schema support in current API docs |
+> | Guided/grammar decoding | Local inference runtimes and specialized libraries | Useful when you control the serving stack |
+> | Regex or CFG constraints | Research-oriented decoding toolkits | Powerful for narrow formats; test edge cases carefully |
+>
+> Treat this table as a lookup aid, not a product recommendation. Capability names and availability change frequently across providers.
+
+Hypothetical scenario: An incident automation service asks for `{ "severity": "high", "service": "checkout" }` but receives markdown with a code fence. Moving from prompt-only instructions to schema-constrained decoding removes the fence problem, yet the team still needs source validation because the severity value can remain wrong even when the JSON is syntactically perfect.
 
 ## Length Limits, Stop Sequences, and Cost Control
 
@@ -398,6 +499,36 @@ This decision tree deliberately separates generation quality from output validat
 
 There is also a latency and cost dimension. Larger `max_tokens` increases the worst-case response time and price. Wider sampling can sometimes produce longer, more meandering answers because the model explores less direct paths. Strong stop sequences and concise prompt contracts keep the output bounded. In high-throughput systems, sampling profiles should be part of capacity planning, not hidden constants buried in application code.
 
+## Diagnosing Decoding Failures in Production
+
+When generated text looks wrong, resist the urge to change random parameters until something "looks better." Diagnose by tracing the decoding configuration against the symptom. Repeated phrases usually point to missing repetition control, overly long generation, or weak section structure in the prompt. Malformed structured output usually means the task is machine-consumed but the profile still allows conversational variation. Dull brainstorming output often means temperature, top-p, or min-p are too conservative for a novelty-seeking workload. Runaway generation usually means missing `max_tokens`, weak stop boundaries, or a repair loop that keeps extending incomplete answers. Incoherent high-variance text often means high temperature with insufficient tail filtering.
+
+```text
+Symptom -> first decoding checks
+
+Repeated phrase loop     -> repetition_penalty, max_tokens, prompt section design
+JSON wrapped in prose    -> temperature 0.0, constrained decoding, parser validation
+Over-creative support    -> lower temperature, tighten top_p/min_p, add grounding
+Identical beam outputs   -> reduce beam width or switch to sampling for open text
+Runaway cost             -> max_tokens, stop sequences, retry only on failure
+```
+
+Logging the full decoding profile alongside prompts and outputs makes these diagnoses possible weeks later during an incident review. At minimum, record temperature, top-p, top-k, min-p, repetition penalty, max tokens, stop sequences, beam width, seed or deterministic mode, and whether structured decoding was enabled. Without that metadata, teams re-tune by folklore and rediscover the same failure twice.
+
+## Evaluating Trade-offs Between Determinism and Experience
+
+Selecting generation parameters is an evaluation problem, not a defaults problem. Determinism improves testability, parser reliability, and auditability, but it can make customer-facing language feel stiff. Diversity improves brainstorming, phrasing adaptation, and exploration, but it increases the risk of unsupported detail and parser breakage. Cost and latency rise with larger token budgets, wider beams, and repair loops that retry generation. Safety and user experience depend on how harmful a wrong token would be in the specific workflow.
+
+| Workload consequence | Favor | De-emphasize | Validation layer |
+|---|---|---|---|
+| Parser breakage | Zero temperature, constraints | High temperature, wide top-p | Schema or parser tests |
+| User trust in policy answers | Grounding, conservative sampling | Creative sampling | Source comparison, refusal rules |
+| Ideation sessions | Moderate-high temperature, repetition control | Greedy decoding | Human ranking |
+| Offline batch translation | Beam search or low temperature | Unbounded sampling | Reference metrics or bilingual review |
+| High QPS API | Tight max_tokens, minimal repair | Wide beams, huge limits | Load tests and cost alarms |
+
+The evaluation habit that separates senior engineers from prompt tweakers is to define the failure mode first, pick the smallest decoding change that addresses it, and measure again on representative prompts. A support bot and a CI YAML generator should not share a "default creative profile" just because both use the same model name.
+
 | Decision question | If yes | If no |
 |---|---|---|
 | Will a parser consume the output? | Use `temperature: 0.0` and schema validation | Allow moderate natural-language variation |
@@ -406,6 +537,16 @@ There is also a latency and cost dimension. Larger `max_tokens` increases the wo
 | Is the output long-form? | Add repetition control and section limits | Keep repetition penalty neutral |
 | Does the prompt contain few-shot examples? | Add stop sequences to prevent extra examples | Use normal task-specific boundaries |
 | Is cost sensitive? | Lower `max_tokens` and add retry only when needed | Allow room for richer answers |
+
+## Did You Know?
+
+1. Nucleus sampling was popularized by [the 2019 paper "The Curious Case of Neural Text Degeneration,"](https://arxiv.org/abs/1904.09751) which showed that simply maximizing likelihood can produce dull or repetitive text even when the model is strong.
+
+2. A zero-temperature setting is best understood as a decoding choice, not as a universal reproducibility guarantee, because provider infrastructure, model versions, safety layers, and tool routing can still change behavior.
+
+3. Repetition problems often become visible only after several hundred generated tokens, which is why short demos can look healthy while long-form production responses still degrade.
+
+4. Native structured-output features, when available, are usually stronger than prompt-only JSON instructions because they constrain the generation or validate the result closer to the model boundary.
 
 ## Common Mistakes
 
@@ -419,16 +560,6 @@ There is also a latency and cost dimension. Larger `max_tokens` increases the wo
 | Overusing repetition penalties | Strong penalties can make normal terminology, identifiers, and function words look artificially avoided. | Start mild for prose, keep code mostly neutral, and inspect output quality before raising it. |
 | Solving conceptual duplication with token penalties | Repetition penalties reduce token reuse but do not guarantee diverse ideas or distinct categories. | Add prompt constraints that require different angles, audiences, risks, or evaluation criteria. |
 | Forgetting stop sequences in few-shot prompts | The model may continue the pattern and generate extra examples instead of stopping at the answer. | Add a delimiter or sentinel that marks the end of the target response. |
-
-## Did You Know?
-
-1. Nucleus sampling was popularized by [the 2019 paper "The Curious Case of Neural Text Degeneration,"](https://arxiv.org/abs/1904.09751) which showed that simply maximizing likelihood can produce dull or repetitive text even when the model is strong.
-
-2. A zero-temperature setting is best understood as a decoding choice, not as a universal reproducibility guarantee, because provider infrastructure, model versions, safety layers, and tool routing can still change behavior.
-
-3. Repetition problems often become visible only after several hundred generated tokens, which is why short demos can look healthy while long-form production responses still degrade.
-
-4. Native structured-output features, when available, are usually stronger than prompt-only JSON instructions because they constrain the generation or validate the result closer to the model boundary.
 
 ## Quiz
 
@@ -484,7 +615,7 @@ There is also a latency and cost dimension. Larger `max_tokens` increases the wo
 **Correct answer: B.** Combining filtering strategies can make behavior depend on implementation order. If one version applies top-k before top-p and another applies top-p before top-k, the eligible candidate pool changes, so the standard fix is to choose the primary filter and test it directly.
 </details>
 
-**5. An AI documentation assistant writes strong first paragraphs, but after several sections it repeats the phrase `This approach improves reliability` in nearly every paragraph. The profile has moderate temperature, top-p filtering, and no repetition penalty. What should you try, and what else should you inspect?**
+**5. To diagnose repeated phrases in long-form output, you inspect logs and see moderate temperature, top-p filtering, and no repetition penalty in the decoding configuration. What should you try first, and what else should you inspect?**
 
 - A) Add a mild repetition penalty and inspect whether the prompt asks for distinct sections with different purposes.
 - B) Set temperature to `0.0` and remove all section headings.
@@ -510,7 +641,7 @@ There is also a latency and cost dimension. Larger `max_tokens` increases the wo
 **Correct answer: C.** YAML for CI is machine-consumed and exactness matters. The profile should reduce variance, define a stopping boundary, and rely on parser validation rather than hoping the model chooses not to add explanatory text.
 </details>
 
-**7. A financial analyst summary tool uses `temperature: 0.0` and produces accurate but awkward sentence fragments. Stakeholders want readable summaries without creative interpretation of the source. Which adjustment is most reasonable?**
+**7. When you evaluate the trade-offs between determinism and readability for a financial analyst summary tool, the current profile uses `temperature: 0.0` and produces accurate but awkward sentence fragments. Stakeholders want readable summaries without creative interpretation of the source. Which adjustment is most reasonable?**
 
 - A) Move to `temperature: 1.5` so the model can write more naturally.
 - B) Use a low nonzero temperature such as `0.3`, pair it with tighter top-p, and keep source validation.
@@ -525,24 +656,22 @@ There is also a latency and cost dimension. Larger `max_tokens` increases the wo
 
 ## Hands-On Exercise
 
-Goal: build and use a local Python sampling playground that shows how temperature, top-p, top-k, repetition penalties, and token limits change generated text. This lab does not call a hosted model API, so you can focus on decoding mechanics without credentials or network access. You will implement a tiny token-transition model, run several profiles, and then reason from observed behavior back to production settings.
+Build a local Python sampling playground that shows how temperature, top-p, top-k, repetition penalties, and token limits change generated text. This lab does not call a hosted model API, so you can focus on decoding mechanics without credentials or network access. You will implement a tiny token-transition model, run several profiles, and reason from observed behavior back to production settings.
 
-- [ ] Create a clean lab directory and virtual environment.
+### Task 1: Bootstrap the Lab Environment
+
+Create an isolated directory and virtual environment before writing any code. Using an explicit interpreter path keeps later commands reproducible across shells and CI snippets.
 
 ```bash
 mkdir -p sampling-strategies-lab
 cd sampling-strategies-lab
-.venv/bin/python --version 2>/dev/null || true
-```
-
-If `.venv/bin/python` does not exist in your current directory, create a local environment with the system Python available on your workstation, then use the environment's explicit interpreter path for the rest of the lab.
-
-```bash
 python3 -m venv .venv
 .venv/bin/python --version
 ```
 
-- [ ] Create `sampling_lab.py` with a runnable sampler.
+### Task 2: Create the Sampling Playground Script
+
+Save the script below as `sampling_lab.py`. It implements greedy decoding, temperature scaling, top-k, top-p, repetition penalties, and preset profiles you will compare in later tasks.
 
 ```bash
 cat > sampling_lab.py <<'PY'
@@ -765,111 +894,90 @@ if __name__ == "__main__":
 PY
 ```
 
-- [ ] Run the deterministic profile twice and confirm that the output is identical.
+### Task 3: Compare Deterministic and Conversational Profiles
+
+Run the deterministic preset twice, then run the balanced chat preset once. Record how temperature and top-p change the path through the toy vocabulary.
 
 ```bash
 .venv/bin/python sampling_lab.py --preset deterministic_json
 .venv/bin/python sampling_lab.py --preset deterministic_json
-```
-
-Success criteria for this step:
-
-- [ ] Both runs show `temperature: 0.0`.
-- [ ] Both runs produce the same output text.
-- [ ] The output stays focused on extraction, structure, or validation rather than creative drift.
-
-- [ ] Run the balanced chat profile and compare it with the deterministic profile.
-
-```bash
 .venv/bin/python sampling_lab.py --preset balanced_chat
 ```
 
-Success criteria for this step:
+### Task 4: Observe Repetition Penalties
 
-- [ ] The profile shows a moderate temperature rather than zero temperature.
-- [ ] The profile uses top-p filtering rather than leaving the full tail unfiltered.
-- [ ] The output remains coherent while allowing more variation than the deterministic profile.
-
-- [ ] Run the creative brainstorming profile and inspect whether it allows broader phrasing.
-
-```bash
-.venv/bin/python sampling_lab.py --preset creative_brainstorm
-```
-
-Success criteria for this step:
-
-- [ ] The profile uses a higher temperature than the balanced profile.
-- [ ] The profile still uses top-p filtering, so creativity is not completely unconstrained.
-- [ ] The output differs in style or path from the deterministic and balanced profiles.
-
-- [ ] Compare the loop-prone and loop-resistant profiles.
+Compare the loop-prone and loop-resistant presets using the same seed so the difference comes from decoding controls rather than randomness alone.
 
 ```bash
 .venv/bin/python sampling_lab.py --preset loop_prone
 .venv/bin/python sampling_lab.py --preset loop_resistant
 ```
 
-Success criteria for this step:
+Write one paragraph explaining whether the repetition penalty changed token-level loops and whether it could guarantee conceptual diversity across brainstorming bullets.
 
-- [ ] The loop-prone profile shows `repetition_penalty: 1.0`.
-- [ ] The loop-resistant profile shows a higher repetition penalty.
-- [ ] You can explain whether the penalty changed the output and why token-level penalties do not guarantee conceptual diversity.
+### Task 5: Compare Code and Creative Profiles
 
-- [ ] Run the code generation profile and compare it to the creative profile.
+Run the code-generation preset alongside the creative brainstorming preset and note how tighter top-p changes the selected path.
 
 ```bash
 .venv/bin/python sampling_lab.py --preset code_generation
 .venv/bin/python sampling_lab.py --preset creative_brainstorm
 ```
 
-Success criteria for this step:
+### Task 6: Experiment with Top-k Versus Top-p
 
-- [ ] The code profile uses lower temperature and tighter top-p than the creative profile.
-- [ ] You can explain why code and YAML generation should prefer focused token selection.
-- [ ] You can identify which validation layer would be required in a real code-generation system.
-
-- [ ] Edit `sampling_lab.py` so `balanced_chat` temporarily uses `top_k: 3`, then rerun it.
+Temporarily set `top_k: 3` in the `balanced_chat` preset inside `sampling_lab.py`, rerun the preset, and explain how fixed-rank filtering differs from nucleus filtering in your notes.
 
 ```bash
 grep -n "balanced_chat" -A8 sampling_lab.py
 .venv/bin/python sampling_lab.py --preset balanced_chat
 ```
 
-Success criteria for this step:
+### Task 7: Map Profiles to Production Workloads
 
-- [ ] You can find the `top_k` setting in the profile.
-- [ ] You can explain how fixed-rank filtering differs from nucleus filtering.
-- [ ] You can explain why using both top-p and top-k may be ambiguous in real providers unless the order is documented.
-
-- [ ] Write a short recommendation for each workload in your notes.
+Capture four short recommendations in a notes file or commit message so you can reuse them when designing real services.
 
 ```bash
 printf '%s\n' \
 'JSON extraction: temperature 0.0, neutral top_p, schema validation, tight max_tokens.' \
 'Support chat: moderate temperature, top_p filtering, grounding, policy checks.' \
 'Code generation: low temperature, tight top_p, tests and linters.' \
-'Brainstorming: higher temperature, broad top_p, repetition control, human ranking.'
+'Brainstorming: higher temperature, broad top_p, repetition control, human ranking.' \
+> sampling-profile-notes.txt
+cat sampling-profile-notes.txt
 ```
 
-Final exercise success criteria:
+### Success Criteria
 
-- [ ] You can demonstrate deterministic generation by running the same preset twice.
+- [ ] The lab directory contains `.venv/bin/python` and a runnable `sampling_lab.py` script.
+- [ ] You can compare greedy decoding, beam search, temperature sampling, nucleus sampling, top-k filtering, min-p filtering, repetition penalties, constrained decoding, and stopping controls across the presets you executed.
+- [ ] Running `deterministic_json` twice with the same seed produces identical output text.
+- [ ] The balanced chat preset shows moderate temperature and top-p filtering in its printed configuration.
 - [ ] You can explain why top-p dynamically adapts while top-k uses a fixed rank cutoff.
-- [ ] You can diagnose repetition as either token-level degeneration, weak task structure, or both.
-- [ ] You can choose different sampling profiles for structured extraction, support chat, code generation, and brainstorming.
-- [ ] You can describe the validation layer that must accompany each production profile.
-- [ ] You can justify every parameter in a profile from the workload's failure modes rather than from memorized defaults.
+- [ ] You can diagnose repeated phrases and runaway generation by tracing the decoding configuration for each preset you run.
+- [ ] You can evaluate the trade-offs between determinism, diversity, cost, latency, and user experience when choosing a profile.
+- [ ] You can design distinct sampling profiles for structured extraction, support chat, code generation, and brainstorming.
+- [ ] You can name the validation layer that must accompany each production profile rather than treating decoding settings as sufficient on their own.
 
-## What's Next
+## Learner check
 
-**Module 1.4: Embeddings & Semantic Similarity**
+> Sampling strategy is the engineering control surface that turns next-token probabilities into text. Choose deterministic or constrained decoding when software consumes the output, moderate filtered sampling when humans need natural language, and wider sampling plus review when novelty is the product requirement.
+
+## Next Module
+
+Next module: [Embeddings & Semantic Search](./module-1.4-embeddings-semantic-search/)
 
 Sampling parameters control how a model turns probabilities into generated text, but embeddings solve a different problem: how systems represent meaning so similar content can be found, compared, clustered, and retrieved. In the next module, you will learn how text becomes vectors, why semantic similarity powers retrieval-augmented generation, and how embedding quality affects the context that a generator receives before sampling ever begins.
 
 ## Sources
 
 - [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) — Primary paper for nucleus sampling, degeneration under maximization, and the motivation for sampling-based decoding.
-- [Hugging Face Transformers: Generation Strategies](https://huggingface.co/docs/transformers/en/generation_strategies) — Practical overview of greedy decoding, sampling, and beam search with current framework terminology.
-- [huggingface.co: llm tutorial](https://huggingface.co/docs/transformers/v4.45.1/llm_tutorial) — The Hugging Face LLM tutorial explicitly states that autoregressive generation iteratively selects the next token from the model's next-token probability distribution until a stop condition is reached.
-- [huggingface.co: text generation](https://huggingface.co/docs/transformers/v4.22.2/main_classes/text_generation) — The Transformers generation docs define `top_p` in cumulative-probability terms that match this claim.
-- [Hugging Face Transformers: Text Generation Strategies](https://huggingface.co/docs/transformers/v4.49.0/en/generation_strategies) — Practical reference for greedy decoding, sampling, and current generation terminology.
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — Foundational sequence-generation reference that established beam search as a standard decoding strategy in neural text generation.
+- [Turning Up the Heat: Min-p Sampling for Creative and Coherent LLM Outputs](https://arxiv.org/abs/2407.01082) — Introduces min-p sampling, which scales truncation thresholds from top-token confidence at each decoding step.
+- [Min-p, Max Exaggeration: A Critical Analysis of Min-p Sampling in Language Models](https://arxiv.org/abs/2506.13681) — Independent re-analysis useful for evaluating min-p claims against tuned top-p baselines.
+- [Hugging Face Transformers: Generation Strategies](https://huggingface.co/docs/transformers/en/generation_strategies) — Practical overview of greedy decoding, beam search, sampling, and current generation terminology.
+- [Hugging Face Transformers: LLM Tutorial](https://huggingface.co/docs/transformers/v4.45.1/llm_tutorial) — Explains autoregressive generation as repeated next-token selection until a stop condition is reached.
+- [Hugging Face Transformers: Text Generation](https://huggingface.co/docs/transformers/v4.22.2/main_classes/text_generation) — Defines `top_p` and related generation parameters in cumulative-probability terms.
+- [Outlines Structured Generation](https://dottxt-ai.github.io/outlines/latest/) — Documents grammar- and schema-guided decoding as a constraint layer during token generation.
+- [OpenAI Structured Outputs Guide](https://platform.openai.com/docs/guides/structured-outputs) — Provider documentation for schema-constrained response formats in hosted APIs.
+- [vLLM Sampling Parameters](https://docs.vllm.ai/en/latest/dev/sampling_params.html) — Runtime reference for temperature, top-p, top-k, repetition penalties, and related local inference controls.
