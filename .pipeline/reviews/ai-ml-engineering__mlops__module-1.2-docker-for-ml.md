@@ -1,0 +1,2 @@
+## 2026-06-20T18:20:51Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline) + codex (OpenAI) cross-family R1. #2020 ai-ml expand wave 2 (PR #2048). Expanded T2 (3757w) → T0 by cursor. codex lab-executed; its sole P1 (nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 base image) was GROUND-CHECKED as a FALSE POSITIVE — tag verified live on Docker Hub (last updated 2024-04-24), so rejected with evidence. No other findings. T0. APPROVE.

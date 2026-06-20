@@ -1,0 +1,2 @@
+## 2026-06-20T18:20:51Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline) + codex (OpenAI) cross-family R1. #2020 ai-ml expand wave 2 (PR #2048). Expanded T3 (4006w) → T0 by cursor. codex APPROVE; lone P2 (pin qdrant image/packages) assessed and deferred — unpinned qdrant/qdrant is acceptable for a learning lab. arXiv clean; lab localhost/service endpoints are intended examples. T0. APPROVE.

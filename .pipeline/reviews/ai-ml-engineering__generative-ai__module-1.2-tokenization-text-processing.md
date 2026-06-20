@@ -1,0 +1,2 @@
+## 2026-06-20T18:09:36Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline) + deepseek-v4-pro (DeepSeek) cross-family R1. #2020 ai-ml expand wave 1 (PR #2046). Expanded T3 (3753w) → T0 (5025w) by cursor. deepseek verified tiktoken cl100k_base encoding, UTF-8 byte counts (A=1/é=2/中=3), and arxiv IDs (BPE 1508.07909, SentencePiece 1808.06226, glitch-tokens 2404.09894) all resolve; quiz 7/7. Fixed OpenAI pricing URL → platform.openai.com/docs/pricing. Both families APPROVE clean. T0.
