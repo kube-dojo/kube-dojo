@@ -1380,7 +1380,7 @@ python bounded_memory.py
 
 ## Next Module
 
-After mastering LangChain fundamentals, you will dive into integrating APIs securely.
+After mastering these LangChain fundamentals, the next module turns to giving your models controlled access to external systems, so you can integrate APIs and databases without opening new injection, oversharing, or data-exposure risks along the way.
 
 [**Module 1.2: LangChain Advanced**](./module-1.2-langchain-advanced) -> Learn how to grant your LLMs read/write access to external databases safely.
 
@@ -1395,3 +1395,7 @@ _Module 1.1 of KubeDojo AI/ML Engineering Track_
 - [OWASP Prompt Injection](https://owasp.org/www-community/attacks/PromptInjection) — Overview of how prompt injection can override instructions and trigger unintended model behavior.
 - [OWASP LLM Prompt Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html) — Grounded security guidance for prompt-injection risks and mitigations in LLM applications.
 - [LangGraph GitHub Repository](https://github.com/langchain-ai/langgraph) — Best primary source for durable execution, human-in-the-loop, memory, and stateful agent workflow concepts referenced by the module.
+- [Pydantic Documentation](https://docs.pydantic.dev/latest/) — Data-validation library that underpins the structured output parsing and schema validation used in LCEL pipelines.
+- [Model Context Protocol](https://modelcontextprotocol.io/) — Open standard for connecting LLM applications to external tools and data, the interoperability layer behind the module's tool and agent integration discussion.
+- [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/) — Canonical risk taxonomy for the production security patterns covered in the routing, testing, and debugging section.
+- [LangSmith Documentation](https://docs.smith.langchain.com/) — Tracing, evaluation, and debugging platform for LLM applications, supporting the module's guidance on isolating runnable boundaries and structured validation.

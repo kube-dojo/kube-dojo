@@ -826,7 +826,7 @@ def predict(request: PredictRequest) -> PredictResponse:
 EOF
 ```
 
-Document the serving standard. This is what prevents the next model from inventing a different API shape.
+Document the serving standard in a short reference file that every service is expected to follow. This shared contract is what prevents the next model from inventing a different API shape, a different health check, or a different rollback path.
 
 ```bash
 cat > private-ai-platform/docs/serving-standard.md <<'EOF'
@@ -985,7 +985,7 @@ After completing the exercise, review your design as if you were approving it fo
 
 ---
 
-## Next Modules
+## Next Module
 
 - [Home AI Operations and Cost Model](../ai-infrastructure/module-1.5-home-ai-operations-cost-model/)
 - [ML Monitoring](./module-1.10-ml-monitoring/)
@@ -995,4 +995,11 @@ After completing the exercise, review your design as if you were approving it fo
 
 - [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Relevant to the module's recommendation to make training and evaluation execution repeatable outside individual laptops.
 - [Using RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) — Supports the module's emphasis on access control and ownership rules for shared platform components.
-- [github.com: mlflow](https://github.com/mlflow/mlflow) — General lesson point for an illustrative rewrite.
+- [MLflow](https://github.com/mlflow/mlflow) — Open-source platform for experiment tracking and model registry, the reference implementation behind the module's shared tracking and artifact capabilities.
+- [MLflow Tracking Documentation](https://mlflow.org/docs/latest/tracking/) — Concepts and APIs for recording runs, parameters, metrics, and artifacts in a shared team store.
+- [FastAPI](https://fastapi.tiangolo.com/) — Web framework used to build the stable internal inference service in the reference architecture.
+- [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) — Declarative rollouts and rollbacks for the stable internal model-serving pattern.
+- [DVC Documentation](https://dvc.org/doc) — Data and model versioning that gives the shared artifact store reproducible lineage.
+- [MinIO](https://github.com/minio/minio) — Self-hosted, S3-compatible object storage suitable for a small team's private artifact store.
+- [Continuous Delivery for Machine Learning](https://martinfowler.com/articles/cd4ml.html) — Thoughtworks' end-to-end operating model for evolving an ML platform from manual discipline to shared services.
+- [The Twelve-Factor App](https://12factor.net/) — Configuration and operations discipline that underpins the module's serving, ownership, and recovery rules.
