@@ -30,7 +30,7 @@ By the end of this module, learners will be able to:
 
 ## Why This Module Matters
 
-A support automation team ships a retrieval system that summarizes customer incidents from logs, tickets, and translated chat messages. The prototype works in demos because the sample tickets are short, English-only, and carefully edited. In production, the same system receives stack traces, pasted JSON, invoice numbers, Japanese messages, copied table data, and long conversation histories. The application begins failing with context-limit errors, monthly inference cost climbs faster than usage, and some numerical summaries become subtly wrong.
+**Hypothetical scenario:** A support automation team ships a retrieval system that summarizes customer incidents from logs, tickets, and translated chat messages. The prototype works in demos because the sample tickets are short, English-only, and carefully edited. In production, the same system receives stack traces, pasted JSON, invoice numbers, Japanese messages, copied table data, and long conversation histories. The application begins failing with context-limit errors, monthly inference cost climbs faster than usage, and some numerical summaries become subtly wrong.
 
 The team originally treated tokenization as a hidden implementation detail. Their monitoring counted characters, not tokens. Their prompt templates looked compact to humans but expanded badly once code blocks, whitespace, and non-English scripts were included. Their RAG packer appended documents until a character limit was reached, which meant a short-looking payload could still exceed the model's real budget. Nothing in the user interface made the failure obvious; the model simply received less useful context than expected.
 
@@ -145,6 +145,54 @@ SentencePiece-style example:
 | WordPiece | BERT-style encoders and classic NLP systems | Merge fragments by likelihood improvement with continuation markers | Useful for word-like analysis, but token boundaries still differ from human words |
 | SentencePiece | Multilingual and raw-text tokenization | Treat whitespace as a normal symbol and avoid language-specific pre-splitting | Strong fit for mixed scripts and languages without whitespace-separated words |
 
+### Special tokens and the vocabulary contract
+
+Every production tokenizer ships more than word fragments. It also defines **special tokens** that mark structure the model must learn to respect: sequence boundaries, padding slots, unknown-token fallbacks, role separators in chat templates, and sometimes mask placeholders for training objectives. These tokens are not ordinary vocabulary entries chosen by frequency alone. They are reserved IDs with fixed meaning inside a specific model family. If you swap tokenizers while keeping the same integer IDs, you are not sending the same message to the model even when the decoded text looks identical on screen.
+
+```text
+Typical special-token roles (names vary by model family):
+
+<BOS> or <|start|>     -> marks where the model should begin attending
+<EOS> or <|end|>       -> marks where generation should stop
+<PAD>                  -> fills batches to equal length during training
+<UNK>                  -> fallback when a character sequence has no learned mapping
+<|user|>, <|assistant|> -> chat-role delimiters in instruction-tuned models
+```
+
+Chat APIs rarely expose these delimiters directly because the provider applies a **chat template** before tokenization. The template wraps each message with role markers, system instructions, and tool-result blocks in a canonical order. That design keeps application code simple, but it also hides token overhead. A three-turn conversation that looks short in the UI may carry hundreds of template tokens before the user's latest question is encoded. Production estimators must count the fully rendered prompt, not only the visible user string.
+
+```python
+# Illustrative pattern — exact template strings differ by model family.
+messages = [
+    {"role": "system", "content": "You summarize incidents from provided context only."},
+    {"role": "user", "content": "Why did checkout fail after the migration?"},
+]
+# Application code sends `messages`; the provider/template layer adds special tokens.
+# Token budgeting must measure AFTER template rendering, not on raw message text alone.
+```
+
+Special tokens also explain why **token IDs are not portable** across models. The integer `50256` might mean end-of-text in one vocabulary and something unrelated in another. Pipelines that cache tokenized prompts, embed precomputed token sequences, or mix components from different checkpoints must treat the tokenizer as part of the model contract. Version a tokenizer together with the weights, document the pairing in deployment manifests, and reject requests when the client tokenizer does not match the serving stack.
+
+> **Active learning prompt**: A developer caches token IDs for a fixed system prompt to save latency. The team later upgrades to a new model release with an updated vocabulary. The decoded text is unchanged, but answer quality drops. What broke, and what should the deployment checklist require?
+
+The failure mode is tokenizer–model mismatch. Cached IDs now point at different learned embeddings. The fix is to invalidate caches on tokenizer or vocabulary changes, count tokens at request time with the active tokenizer, and treat tokenizer version as a first-class release artifact alongside model weights.
+
+### How tokenizer training shapes production behavior
+
+Tokenizer training is not a cosmetic preprocessing step. It decides which strings are cheap, which strings fragment, and which rare inputs fall back to byte-level pieces. Training begins with a corpus representative of the model's intended domain: general web text, code, scientific papers, or a mixture. The algorithm iterates merge rules until the vocabulary reaches a target size, often tens of thousands to low hundreds of thousands of entries. Larger vocabularies can represent common phrases in fewer tokens but increase embedding table size and memory footprint. Smaller vocabularies keep models lighter but force more fragments for rare strings.
+
+```text
+Tokenizer training inputs that change outcomes:
+
+Corpus mix          -> code-heavy data yields cheaper stack-trace fragments
+Vocabulary size     -> larger vocabs shorten common paths, grow embedding tables
+Pre-tokenization    -> language-specific splitting vs raw SentencePiece input
+Normalization rules -> lowercasing, NFKC folding, strip vs preserve accents
+Special-token set   -> reserved IDs for chat roles, tools, and control symbols
+```
+
+Teams that fine-tune on domain text sometimes **train a domain tokenizer** when the base vocabulary is a poor fit. Log analytics platforms, genomic sequence tools, and heavily abbreviated internal ticket schemas are common motivations. The trade-off is operational: a custom tokenizer may reduce token count for domain strings, but it also breaks compatibility with off-the-shelf models unless the entire stack is retrained or adapted. Most application teams stay on the provider tokenizer and optimize packing, normalization, and retrieval instead.
+
 A tokenizer's vocabulary is a compression scheme and a modeling interface at the same time. When a string is represented compactly, the model has fewer sequence positions to process and may have seen that unit often during training. When a string fragments heavily, the model has more positions to process and must combine more pieces to recover meaning. This does not automatically make the output wrong, but it increases the burden on the model and the application.
 
 > **Active learning prompt**: A team finds that `CustomerID` is cheaper than `customer_identifier` for its target model. Should the team rename every field to save tokens? Decide what else must be checked before making that change in a production prompt schema.
@@ -198,7 +246,17 @@ for text in samples:
 
 A rule of thumb such as "one token is about four English characters" can be helpful for rough planning, but it is not a control mechanism. Rules of thumb fail with code, tables, Unicode text, generated identifiers, and minified data. Production systems need actual measurement at the point where prompts are assembled. That means token counting belongs in prompt builders, RAG packers, chat-memory managers, and cost estimation tools.
 
-Cost has two token dimensions: input tokens and output tokens. Input tokens include system instructions, user messages, retrieved context, tool results, and any conversation history sent with the request. Output tokens are generated by the model. The price per token depends on the provider and model, so durable curriculum should teach the formula rather than hard-code a rate that will become stale.
+Cost has two token dimensions: input tokens and output tokens. Input tokens include system instructions, user messages, retrieved context, tool results, and any conversation history sent with the request. Output tokens are generated by the model. The price per token depends on the provider and model tier, so durable engineering teaches the **cost formula** and reads current rates from provider documentation rather than memorizing numbers that change quarterly.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Provider surface (illustrative) | Input / output billing unit | Context limit pattern verified at authoring time | Engineering note |
+> |---|---|---|---|
+> | OpenAI platform pricing page | Per-million input and output tokens, often tiered by model capability class | Published context sizes vary by model card; long-context SKUs cost more per token | Use the official tokenizer mapping for the deployed model; do not assume `cl100k_base` for every endpoint |
+> | Anthropic API documentation | Per-million input and output tokens with separate cache-read/write pricing on supported calls | Context windows differ by model family and are documented per model version | Prompt caching changes effective input cost for repeated prefixes |
+> | Google Gemini API pricing | Token-based charges with modality-specific rules for some inputs | Long-context models advertise large windows; verify limits on the exact model ID | Multimodal inputs may tokenize non-text parts under separate rules |
+>
+> Treat every cell as a **snapshot**, not curriculum voice. Your estimator should accept configurable rates, log provider-reported `usage` fields after each call, and alert when estimated and billed tokens diverge beyond a tolerance band.
 
 | Quantity | What it includes | Why it matters | Control strategy |
 |---|---|---|---|
@@ -222,6 +280,7 @@ def estimate_cost(input_tokens: int, output_tokens: int, price: TokenPrice) -> f
     output_cost = output_tokens * price.output_per_million / 1_000_000
     return input_cost + output_cost
 
+# Replace rates with values from your provider's current pricing page.
 example_price = TokenPrice(input_per_million=2.00, output_per_million=8.00)
 print(round(estimate_cost(12_000, 900, example_price), 6))
 ```
@@ -252,7 +311,37 @@ for label, text in [("pretty", pretty), ("compact", compact)]:
 
 The most valuable optimizations usually target repeated or dominant token sources. A short system prompt that is repeated millions of times can matter more than a long document processed once. A large retrieved context block can matter more than a few polite words in the user instruction. A production team should profile token sources the same way it profiles CPU usage: measure first, optimize the hot path, and avoid clever changes that make behavior harder to reason about.
 
-Context windows add another constraint. A model may support a large maximum context, but that does not mean every request should fill it. Larger inputs can increase cost, latency, and the chance that important details are diluted by irrelevant text. Token-aware systems treat the context window as a budget to allocate. The application decides which information earns space in the prompt, which information is summarized, and which information is excluded.
+Context windows add another constraint. A model may support a large maximum context, but that does not mean every request should fill it. Larger inputs can increase cost, latency, and the chance that important details are diluted by irrelevant text. Token-aware systems treat the context window as a budget to allocate. The application decides which information earns space in the prompt, which information is summarized, and which information is excluded. Advertised context size is an upper bound, not a quality guarantee: models may still lose track of middle sections, and very long prompts increase time-to-first-token even when they technically fit.
+
+### Normalization and preprocessing before tokenization
+
+Tokenization is not the first text-processing stage in mature pipelines. Applications usually run **normalization** first so equivalent user input maps to stable strings before counting or caching tokens. Unicode allows multiple byte sequences to represent the same visible character. The strings `café` (precomposed é) and `café` (e + combining acute accent) look identical on screen but can produce different token sequences unless the pipeline applies a consistent normalization form. [Unicode Normalization Forms (UAX #15)](https://www.unicode.org/reports/tr15/) define NFC, NFD, NFKC, and NFKD, which fold compatibility characters and compose or decompose combining marks in predictable ways.
+
+```python
+import unicodedata
+
+precomposed = "caf\u00e9"          # single code point for é
+decomposed = "caf\u0065\u0301"     # e + combining acute accent
+
+for label, text in [("precomposed", precomposed), ("decomposed", decomposed)]:
+    nfc = unicodedata.normalize("NFC", text)
+    print(label, repr(text), "-> NFC", repr(nfc), "equal?", text == nfc)
+```
+
+Case folding is another common decision. Lowercasing English prose can merge tokens and reduce variance, but it destroys case-sensitive identifiers such as `PodName`, `camelCase`, and base64 strings. A log pipeline might NFC-normalize Unicode, preserve case in code blocks, and collapse repeated whitespace only in free-text fields. Each choice should be documented because it changes both token counts and model behavior.
+
+```text
+Normalization policy sketch for an incident summarizer:
+
+User chat prose     -> NFC normalize; collapse runs of spaces; keep sentence case
+Pasted JSON/YAML    -> parse and re-serialize compactly; do not alter key casing
+Stack traces        -> preserve newlines and paths; optional de-duplication of frames
+Hashtags and @refs   -> preserve verbatim; social tokens may be rare in vocabulary
+```
+
+Hypothetical scenario: A team deduplicates prompts with a hash of the raw string. Two users submit the same question with different Unicode normalization forms. The hashes differ, cache misses multiply, and token counts drift between environments. The fix is to normalize before hashing and before token counting so equivalent text follows one path through the pipeline.
+
+Pretokenization rules also matter for custom or self-hosted tokenizers. Some pipelines strip HTML, replace URLs with placeholders, or split on punctuation before BPE merges. Those rules are part of the tokenizer contract. When Hugging Face–compatible tokenizers load a vocabulary file, they also load a **normalizer** and **pre-tokenizer** configuration that must stay paired with the model checkpoint. Changing normalization without retraining invalidates the same assumptions as swapping vocabulary files silently.
 
 ```mermaid
 timeline
@@ -323,6 +412,21 @@ Encoding and tokenization are different layers. Encoding turns text into bytes s
 The strongest answer starts with measurement and user requirements. The team should not force users into a different language merely to reduce cost. It should measure per-language token usage, choose a model and tokenizer appropriate for supported markets, and set budgets that reflect real input distributions. If the product promises multilingual support, the architecture must budget for multilingual text.
 
 Some strings can trigger anomalous behavior because they correspond to unusual or poorly learned tokens. [Researchers have documented cases where rare tokens caused models to respond strangely.](https://arxiv.org/abs/2404.09894) These cases are not everyday failures, but they are useful reminders that tokenization is part of the model's learned interface. Security and reliability testing should include unusual strings, generated identifiers, repeated fragments, and data copied from real systems.
+
+Byte-level and byte-pair fallbacks deserve explicit attention because they define what happens when text falls outside the happy path of learned merges. [OpenAI's tiktoken library implements fast BPE encodings used by several widely deployed models](https://github.com/openai/tiktoken), and [Google's SentencePiece library trains and applies subword models without language-specific pre-tokenization](https://github.com/google/sentencepiece). Both ecosystems demonstrate the same durable lesson: rare strings still encode, but they may consume more tokens per character than frequent prose. Fuzz tests should include emoji clusters, Zalgo-style combining marks, right-to-left overrides, and copy-pasted content from PDFs where hidden control characters survive extraction.
+
+```text
+Staging checklist before production tokenization:
+
+[ ] Measure token counts on real payloads, not demo strings
+[ ] Normalize Unicode consistently before hashing or caching
+[ ] Count tokens after chat-template rendering
+[ ] Reserve output budget before packing retrieved context
+[ ] Validate high-risk fields (numbers, IDs) outside the model
+[ ] Log tokenizer/version metadata alongside usage metrics
+```
+
+When observability is weak, token problems masquerade as model quality regressions. A sudden cost spike might be a template change that added role markers. A accuracy drop might be a normalization drift between staging and production. Instrument token counts at the boundary where prompts leave your service so you can correlate billing, latency, and truncation with the exact serialized input.
 
 A robust prompt pipeline treats text processing as a staged system rather than a single concatenation operation. It normalizes where safe, preserves where meaning depends on formatting, counts tokens with the target tokenizer, validates high-risk fields, and records what was sent. This staged design makes failures explainable. When a request is too large or a value is altered, engineers can inspect each stage instead of guessing what happened inside the model.
 
@@ -424,6 +528,8 @@ Prompt optimization becomes dangerous when it removes the very information the m
 | Summarize chat history | Older turns are useful but too large to resend verbatim | Summary loses commitments, preferences, or constraints | Store durable facts separately from narrative summaries |
 
 The senior-level lesson is that tokenization turns prompt construction into resource allocation. Tokens are not merely billing units; they are the limited working space where instructions, evidence, memory, and output all compete. A good architecture makes those trade-offs explicit. It measures token usage, keeps high-value context, rejects or reshapes oversized inputs, and validates outputs where token boundaries create known risk.
+
+Before shipping, run a **token profile** on a representative week of production-shaped payloads: median and p95 input tokens, output tokens, skipped retrieval chunks, and per-language variance. Compare those measurements to provider bills. When the two diverge, the gap is usually template overhead, tokenizer mismatch, or hidden tool-result growth rather than model randomness. That profile becomes the baseline for capacity planning, autoscaling, and incident response when costs spike after a harmless-looking prompt change.
 
 ---
 
@@ -745,6 +851,12 @@ Success criteria:
 
 ---
 
+## Learner check
+
+> Tokenization & Text Processing — Generative AI Foundations module 1.2; subword tokenization (BPE, WordPiece, SentencePiece), special tokens and chat templates, normalization, token/cost/context measurement, RAG and conversation packing, and deterministic validation for high-risk fields; precedes Text Generation & Sampling Strategies.
+
+---
+
 ## Next Module
 
 Next: [Text Generation & Sampling Strategies](/ai-ml-engineering/generative-ai/module-1.3-text-generation-sampling-strategies/)
@@ -761,3 +873,7 @@ The next module moves from how text enters a language model to how responses are
 - [arxiv.org: 2404.09894](https://arxiv.org/abs/2404.09894) — This paper explicitly studies glitch tokens and describes them as anomalous tokenizer outputs that can compromise model response quality.
 - [github.com: How to count tokens with tiktoken.ipynb](https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb) — The OpenAI cookbook example shows tokens like " is" and " great", directly supporting the claim that leading spaces are often grouped into tokens.
 - [SentencePiece: A Simple and Language Independent Subword Tokenizer and Detokenizer for Neural Text Processing](https://arxiv.org/abs/1808.06226) — Primary reference for raw-text subword tokenization and whitespace-aware tokenization.
+- [Unicode Standard Annex #15: Unicode Normalization Forms](https://www.unicode.org/reports/tr15/) — Defines NFC/NFD/NFKC/NFKD normalization forms used before tokenization in production pipelines.
+- [openai/tiktoken](https://github.com/openai/tiktoken) — Fast BPE tokenizer library; documents encoding names and the model–encoding mapping pattern.
+- [google/sentencepiece](https://github.com/google/sentencepiece) — Reference implementation for training and applying SentencePiece vocabularies.
+- [Hugging Face Tokenizers documentation](https://huggingface.co/docs/tokenizers/index) — Describes normalizers, pre-tokenizers, and the tokenizer configuration objects that must stay paired with model checkpoints.
