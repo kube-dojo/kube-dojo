@@ -148,6 +148,10 @@ it cannot, the state representation may be missing key variables.
 
 The sober default is simple: the narrower the data, the more conservative the policy must be.
 
+Distribution shift in offline RL is not a single jump but a chain reaction. The behavior policy `π_b` generated the logs. Your candidate policy `π` may assign high probability to actions that `π_b` rarely took in similar states. Those actions lead to next states that are themselves underrepresented, so both action marginals and state marginals drift away from the training distribution with every sequential decision. Supervised learning on logged `(state, action)` pairs mostly tests whether you can imitate labels on states that appeared in the data. Offline RL asks whether a new policy's sequential choices will stay in regions where returns were actually observed, which is a harder counterfactual claim.
+
+Extrapolation error is the mechanism critics exploit. Function approximators are smooth: a Q-network or value model can assign an optimistic score to an unseen action because neighboring seen actions looked good. Without online correction, the policy gradient or improvement step chases that optimism. Conservative methods exist to push down values outside the data support, constrain the policy toward logged actions, or avoid explicit maximization over unseen actions during critic training. None of these remove the need for coverage; they reduce how aggressively the learner can hallucinate improvement.
+
 ## Section 3: Behavior cloning — when supervised learning is enough
 
 Behavior cloning is imitation learning in its simplest deployed form. Treat the logged expert action as a label. Train
@@ -204,6 +208,8 @@ bedside observation, or contraindication not captured in structured features. In
 hidden rule, ranking override, or delayed moderation signal.
 
 Do not skip BC. It is the cheapest way to learn whether "imitate the data" is already hard.
+
+Imitation learning is broader than behavior cloning alone, and the taxonomy matters for scoping projects. Behavior cloning treats expert actions as supervised labels and is the right first move when demonstrations are competent and deployment states stay near the training distribution. DAgger adds interactive expert corrections on states the learner actually visits, which attacks compounding error but requires ongoing expert availability. Inverse RL tries to recover a reward function that explains expert behavior when no trustworthy scalar reward exists, which is powerful but identification-heavy. GAIL and related adversarial methods learn imitation rewards from discriminator feedback and usually need rollouts, so they sit between pure offline logs and full online RL. Choosing among them is less about prestige than about what evidence you have: fixed logs, live expert time, a simulator, or only trajectories without rewards.
 
 ## Section 4: Conservative offline RL — CQL, BCQ, IQL
 
@@ -267,6 +273,10 @@ contains a mixture of weak and strong behavior.
 
 Conservative offline RL is not a guarantee. It is a set of bias choices. You deliberately bias the learner away from
 unsupported improvement because unsupported improvement is the dangerous kind.
+
+> **Landscape snapshot — as of 2026-06**
+>
+> d3rlpy v2 exposes algorithms through `*Config` classes (for example `CQLConfig`, `BCConfig`) followed by `.create()`. Discrete-action variants use separate configs such as `DiscreteCQLConfig`. Parameter names like `conservative_weight` and `alpha` differ by algorithm and release; verify against the pinned docs in **Sources** before copying snippets into production pipelines.
 
 ## Section 5: TD3+BC and the regularized-policy family
 
@@ -411,20 +421,18 @@ The mistake is to treat adversarial imitation as magic reward discovery. The lea
 the demonstrations, the discriminator setup, and the environment coverage. It can still imitate bias, unsafe
 shortcuts, or expert habits that do not match the deployment objective.
 
-## Section 9: d3rlpy in practice — the practitioner library
+## Section 9: d3rlpy in practice — implement a small offline workflow
 
 d3rlpy is the most direct practitioner library for this module's workflow. It focuses on offline RL, online RL,
 datasets, off-policy evaluation, and a consistent algorithm API. The important v2 pattern is configuration first, then
-`.create()`.
-
-That matters because many older examples instantiate algorithm classes directly. Current v2 examples use classes such
+`.create()`. That matters because many older examples instantiate algorithm classes directly. Current v2 examples use classes such
 as `CQLConfig`, `BCQConfig`, `IQLConfig`, `TD3PlusBCConfig`, `BCConfig`, `DiscreteCQLConfig`, and `DiscreteBCQConfig`.
 
 The following script is intentionally modest. It loads a D4RL MuJoCo dataset, trains behavior cloning as a baseline,
 trains CQL as a conservative offline RL method, then trains FQE to estimate the learned CQL policy from the offline
 data. The environment evaluator is included because D4RL gives a benchmark environment, but in a real medical or
 recommender deployment, that online evaluator would be replaced by a stricter offline gate and later a guarded
-experiment.
+experiment. Treat this as an **implement** exercise: you are wiring configuration objects, a fixed dataset, training loops, and evaluators—not chasing a leaderboard number.
 
 ```python
 import os
@@ -543,7 +551,7 @@ contain policy changes, delayed rewards, partial observability, feature backfill
 
 Use D4RL for fluency. Use your own coverage audits for deployment decisions.
 
-## Section 11: Offline RL evaluation — FQE, weighted importance sampling, and why it's hard
+## Section 11: Offline RL evaluation — decide how to gate deployment without online A/B tests
 
 Offline evaluation is the uncomfortable center of offline RL. Training a policy from logs is hard. Knowing whether the
 policy is better without deploying it is harder.
@@ -595,6 +603,8 @@ the offline story is coherent.
 Do not let a single offline number carry the decision. The correct question is not, "Which metric says this policy is
 best?" It is, "What evidence would have to be false for this policy to be unsafe?"
 
+Evaluating offline-trained policies safely usually means stacking imperfect gates rather than trusting one score. Start with dataset diagnostics: action coverage, segment-level return, and whether a behavior-cloning model can reproduce logged actions. Add off-policy evaluation when propensities exist, FQE or similar value estimators for a candidate policy, and stress tests on slices where hidden confounding is plausible. Reserve guarded online rollouts—shadow mode, small cohort A/B tests, or human-in-the-loop approval—for policies that already pass conservative offline checks. When online A/B testing is unavailable or ethically blocked, document explicitly which assumptions each offline metric requires and what failure would look like in production.
+
 ## Section 12: When offline RL is the wrong tool
 
 Offline RL is wrong when the data cannot answer the intervention question. That sounds abstract, so make it
@@ -623,8 +633,7 @@ override that.
 | Online experiment is possible but expensive | Use offline RL as a filter, not as final proof |
 | Dataset comes from an obsolete product surface | Treat old logs as research data, not deployment evidence |
 
-The hardest production answer is often: "We should not train this yet." That answer can save months of work and
-prevent a false sense of safety.
+The hardest production answer is often: "We should not train this yet." That answer can save months of work and prevent a false sense of safety. When stakeholders push for training anyway, translate the coverage audit into operational language: which actions would the new policy take that the logs never tried, which segments lack high-return examples, and what offline gate would need to pass before any guarded online test.
 
 ## Section 13: Connecting back — bridging to RLHF and causal inference
 
@@ -647,6 +656,8 @@ assignment, and policy-induced covariate shift.
 
 If you remember one connection, make it this: offline RL is not an escape hatch from causal assumptions. It is a
 harder setting where those assumptions can fail repeatedly over time.
+
+Production teams sometimes treat offline RL as a way to skip the uncomfortable parts of online learning while still claiming policy improvement. The honest framing is narrower: you are estimating what would happen if you deployed a different policy, using evidence that was never collected for that purpose. Document the behavior policy, the logging window, missing variables, and the offline gates you require before any live test. That documentation is part of the model, not paperwork around it. A one-page deployment memo that names unsupported action regions is often worth more than another week of offline training on the same narrow logs.
 
 ## Did You Know?
 
@@ -717,6 +728,13 @@ harder setting where those assumptions can fail repeatedly over time.
    <details>
    <summary>Answer</summary>
    The reward definition must be revisited. Offline RL will optimize the logged reward signal, and a short-term click proxy can push harmful recommendations. The team should define a reward or evaluation gate closer to the real objective before choosing CQL, IQL, or any other method.
+   </details>
+
+8. **You must implement a small d3rlpy workflow on a D4RL dataset using the v2 configuration API. Online A/B testing is blocked until after an offline gate. What training order and evaluators would you use, and what would you decide before requesting any live rollout?**
+
+   <details>
+   <summary>Answer</summary>
+   Train behavior cloning first as the imitation baseline, then a conservative method such as CQL with `CQLConfig(...).create()`, using `get_d4rl` for the fixed dataset and evaluators such as `EnvironmentEvaluator` plus FQE for off-policy value estimation. Before any online experiment, decide whether the candidate policy stays near logged action support, whether FQE and coverage diagnostics agree, and what guarded rollout evidence would be required if offline scores look promising.
    </details>
 
 ## Hands-On Exercise
