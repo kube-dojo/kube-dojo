@@ -435,7 +435,7 @@ Promotion without linkage is a common anti-pattern. If the registry stores `chur
 
 ## 3. Test The Failure Mode You Actually Fear
 
-Traditional test pyramids start with many unit tests, fewer integration tests, and a small number of end-to-end tests. ML keeps that structure but adds two layers that ordinary services rarely need: [data quality tests and model quality tests](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning). These layers matter because a model can pass every unit test and still be unsafe to deploy if the data distribution shifted or a subgroup regressed.
+Traditional test pyramids start with many unit tests, fewer integration tests, and a small number of end-to-end tests. ML keeps that structure but adds two layers that ordinary services rarely need: [data quality tests and model quality tests](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning). These layers matter because a model can pass every unit test and still be unsafe to deploy if the data distribution shifted or a subgroup regressed.
 
 ```text
 THE ML TESTING PYRAMID
@@ -1019,9 +1019,9 @@ Hypothetical scenario: an on-call engineer receives a page that batch validation
 
 ## Did You Know?
 
-1. In many production ML systems, [the model-training code is a small fraction of the total system](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning); data pipelines, validation, deployment, monitoring, and recovery machinery often dominate the engineering effort.
+1. In many production ML systems, [the model-training code is a small fraction of the total system](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning); data pipelines, validation, deployment, monitoring, and recovery machinery often dominate the engineering effort.
 
-2. [A model can become worse without any code deployment if the real-world data distribution moves away from the distribution used during training](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning).
+2. [A model can become worse without any code deployment if the real-world data distribution moves away from the distribution used during training](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning).
 
 3. Reproducing an ML result usually requires the data version, random seeds, dependency versions, preprocessing logic, model configuration, and evaluation method, not just the final model file.
 
@@ -1341,7 +1341,7 @@ Success criteria:
 - [Kubernetes Self-Healing](https://kubernetes.io/docs/concepts/architecture/self-healing/) — Describes how Kubernetes controllers replace failed containers and Pods to keep workloads running as intended.
 - [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Defines Jobs as run-to-completion workloads that track completion and failure state.
 - [MLOps: Continuous delivery and automation pipelines in machine learning](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Google's architecture guide for ML pipeline maturity, automation layers, and production operating models.
-- [MLOps: CD4ML solution overview](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Explains why ML testing extends beyond ordinary software testing with additional validation layers.
+- [Hidden Technical Debt in Machine Learning Systems (Sculley et al., NeurIPS 2015)](https://proceedings.neurips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html) — Foundational paper on why ML systems accrue maintenance and testing burden beyond ordinary software, motivating extra data and model validation layers.
 - [DVC documentation — Versioning data and models](https://dvc.org/doc/use-cases/versioning-data-and-models) — Official guide to content-addressed data versioning and Git pointer files.
 - [DVC pipelines](https://dvc.org/doc/user-guide/pipelines/defining-pipelines) — How to declare stage dependencies, outputs, and metrics for reproducible reruns.
 - [pre-commit framework](https://pre-commit.com/) — Hook framework for running fast local checks before commits land in shared history.

@@ -950,7 +950,7 @@ cat sampling-profile-notes.txt
 ### Success Criteria
 
 - [ ] The lab directory contains `.venv/bin/python` and a runnable `sampling_lab.py` script.
-- [ ] You can compare greedy decoding, beam search, temperature sampling, nucleus sampling, top-k filtering, min-p filtering, repetition penalties, constrained decoding, and stopping controls across the presets you executed.
+- [ ] You can compare greedy decoding, temperature sampling, nucleus (top-p) sampling, top-k filtering, repetition penalties, and stopping controls across the presets you executed (beam search, min-p, and constrained decoding are covered in the module theory rather than in the lab presets).
 - [ ] Running `deterministic_json` twice with the same seed produces identical output text.
 - [ ] The balanced chat preset shows moderate temperature and top-p filtering in its printed configuration.
 - [ ] You can explain why top-p dynamically adapts while top-k uses a fixed rank cutoff.
@@ -980,4 +980,4 @@ Sampling parameters control how a model turns probabilities into generated text,
 - [Hugging Face Transformers: Text Generation](https://huggingface.co/docs/transformers/v4.22.2/main_classes/text_generation) — Defines `top_p` and related generation parameters in cumulative-probability terms.
 - [Outlines Structured Generation](https://dottxt-ai.github.io/outlines/latest/) — Documents grammar- and schema-guided decoding as a constraint layer during token generation.
 - [OpenAI Structured Outputs Guide](https://platform.openai.com/docs/guides/structured-outputs) — Provider documentation for schema-constrained response formats in hosted APIs.
-- [vLLM Sampling Parameters](https://docs.vllm.ai/en/latest/dev/sampling_params.html) — Runtime reference for temperature, top-p, top-k, repetition penalties, and related local inference controls.
+- [vLLM Sampling Parameters](https://docs.vllm.ai/en/stable/api/vllm/sampling_params.html) — Runtime reference for temperature, top-p, top-k, repetition penalties, and related local inference controls.
