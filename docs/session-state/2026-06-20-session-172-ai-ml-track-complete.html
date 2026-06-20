@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session 172 — #2020: ai-ml-engineering track COMPLETE (124/124)</title>
+<style>
+  :root{--bg:#0a0f1a;--fg:#e6edf3;--mut:#9bb0c9;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--accent:#58a6ff;--card:#111a2b;--bd:#1f2c3f}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:2rem;max-width:1080px;margin:auto}
+  h1{font-size:1.5rem;line-height:1.3;border-bottom:2px solid var(--bd);padding-bottom:.5rem}
+  h2{font-size:1.15rem;color:var(--accent);margin-top:2rem;border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+  .tldr{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--accent);padding:1rem 1.2rem;border-radius:6px}
+  code{background:#0d1626;border:1px solid var(--bd);border-radius:4px;padding:.1rem .35rem;font-size:.86em}
+  table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.92rem}
+  th,td{border:1px solid var(--bd);padding:.45rem .6rem;text-align:left;vertical-align:top}
+  th{background:#0d1626;color:var(--mut)}
+  .ok{color:var(--ok);font-weight:600}.warn{color:var(--warn);font-weight:600}.bad{color:var(--bad);font-weight:600}
+  ul{padding-left:1.2rem}li{margin:.3rem 0}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<h1>Session 172 — #2020: <span class="ok">ai-ml-engineering track COMPLETE (124/124 cross-family reviewed)</span></h1>
+
+<p class="tldr"><strong>2026-06-20 · standalone orchestrator · continues s171.</strong>
+Picked up the <strong>final 3 un-finalized <code>ai-ml-engineering</code> modules</strong> the s171 handoff named as remaining: <code>frameworks-agents 1.1</code>, <code>mlops 1.11</code>, <code>mlops 1.12</code> — each above the 5000-word floor but tier <strong>T3</strong> on density + <code>sources_min_10</code>. Edit-pass (no new labs): added web-verified sources, converted a prose Learning-Outcomes block to bullets, expanded worked-example step intros to clear density runs, renamed two stray plural <code>## Next Modules</code> headings. All three → <strong class="ok">T0, passed=true</strong>. Shipped in one PR (<code>#2050</code>, rebase-merged, 10/10 CI green incl. required Astro build) + codex/OpenAI cross-family <strong class="ok">APPROVE</strong> (no P1/P2) + 3 review records direct-main (<code>63f927563</code>). <strong>Deterministic check: 124 module files / 124 review records / 0 missing.</strong> The 124-module ai-ml-engineering quality-coverage track is now fully cross-family reviewed.</p>
+
+<h2>What shipped</h2>
+<table>
+<tr><th>Artifact</th><th>What</th><th>State</th></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/2050">PR #2050</a></td><td>Edit-pass last 3 ai-ml modules T3→T0 (3 files, +39/−26)</td><td class="ok">MERGED (rebase, <code>c588736d7</code>)</td></tr>
+<tr><td>records <code>63f927563</code></td><td>3 <code>.pipeline/reviews/</code> APPROVE records (<code>git add -f</code>, direct-main finalize)</td><td class="ok">on main</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/2020">#2020</a></td><td>Milestone comment: ai-ml track 124/124; scattered cloud/platform remain</td><td class="ok">commented, stays OPEN</td></tr>
+</table>
+
+<h2>The 3 modules — exact fixes</h2>
+<table>
+<tr><th>Module</th><th>T3 reasons</th><th>Fix (edit-pass)</th></tr>
+<tr><td><code>frameworks-agents/module-1.1-langchain-fundamentals</code> (5207w)</td><td><code>sources_min_10</code> (6), <code>density_max_consecutive_short_2</code> (run of 4)</td><td>+4 web-verified sources (Pydantic, MCP, OWASP LLM Top 10, LangSmith) → 10; expanded the Next-Module intro paragraph (run 4→2)</td></tr>
+<tr><td><code>mlops/module-1.11-notebooks-to-production-for-ml-llms</code> (5560w)</td><td>sources(6, 2 dupes), density(run of 8), <code>outcomes_aligned</code>=false (<code>learning_outcome_count</code>=0), sections/order (plural heading)</td><td>5 prose outcomes → bullet list; <code>## Next Modules</code>→<code>## Next Module</code>; appended a teaching sentence to each of 8 worked-example "Step N:" intros (run 8→1); de-duped + grew Sources to 10 distinct (added Rules-of-ML, Hidden-Tech-Debt NeurIPS-2015, CD4ML, MLflow Models, Papermill, DVC)</td></tr>
+<tr><td><code>mlops/module-1.12-small-team-private-ai-platform</code> (5685w)</td><td><code>sources_min_10</code> (only 3!), density(run of 3), sections/order (plural heading)</td><td>plural→singular Next-Module heading; +7 web-verified sources (MLflow Tracking, FastAPI, K8s Deployments, DVC, MinIO, CD4ML, Twelve-Factor) → 10; expanded 1 paragraph (run 3→2); replaced a weak placeholder source description</td></tr>
+</table>
+
+<h2>Method &amp; findings</h2>
+<ul>
+<li><strong>Triaged by <code>verify_module.py</code> tier + gate JSON, not density.py</strong> (per the s168 5×-undercount lesson) — pinned the EXACT failing gates per module before editing, so each fix brief was literal-complete.</li>
+<li><strong>The verifier wants the EXACT singular <code>## Next Module</code> heading</strong> (<code>_next_module_link</code> matches <code>^Next Module$</code>; <code>positions["next"]</code> too). 121/124 modules use singular — only these 2 stragglers were plural → both fail <code>next_module_link</code> AND <code>section_order_correct</code>. One-word rename fixes both gates.</li>
+<li><strong>1.11 Learning Outcomes were prose paragraphs</strong> ("You will be able to…") → <code>_count_bullets</code> returned 0 → <code>structure_sections_present</code> failed. Converting to a 5-item bullet list fixed the gate AND made <code>outcomes_aligned</code> pass automatically (bullets echo section/quiz tokens).</li>
+<li><strong>1.12's "fragmented headings"</strong> (<code>## Self-hosted</code>, <code>## Endpoints</code>, <code>## Now/Next/Later</code>, etc.) are <strong>inside fenced heredocs</strong> (generated doc-file content), NOT real sections — they don't break the gates and were correctly left untouched. Don't churn them.</li>
+<li><strong>Density runs are mostly structural boilerplate</strong> (Next-Module footer lines, worked-example step labels) — break them by expanding one real paragraph, not by padding. The 8 step-intro expansions in 1.11 added genuine teaching value (the steps were terse labels jumping straight into checklists).</li>
+<li><strong>Sourcing done inline + web-verified by the orchestrator</strong> (curl 200 + canonical-relevance) — the fabrication-prone part, so not delegated. codex independently spot-checked all 15 new source descriptions against primary pages → all accurate/relevant, no findings.</li>
+</ul>
+
+<h2>Process notes for next agent</h2>
+<ul>
+<li><strong>Git discipline (clean):</strong> edits made in PRIMARY (clean reads), captured as a patch, applied in a dedicated worktree (<code>git worktree add -b … origin/main</code> → <code>git apply</code>) — never branched in primary. After merge, synced primary with verify-empty-diff → stash → <code>pull --ff-only</code> → drop (no destructive op on the working changes; confirmed they were already in main before dropping). Worktree removed post-merge.</li>
+<li><strong>Two merge hooks (unchanged from s171):</strong> use a <code>review(</code>/<code>feat(</code> PR title (not <code>fix(</code> → bugfix-regression-test hook); PR body needs a <code>## Learner check</code> section with a <code>&gt;</code> blockquote ≥30 chars copied <em>verbatim</em> from a module touched by THAT PR.</li>
+<li><strong>Review records are gitignored → <code>git add -f</code></strong>; committed direct-main with a <code>review(</code> prefix (finalize-to-done runs on main in primary, no branch change).</li>
+<li><code>dispatch_smart.py</code> has <strong>no <code>--run</code> flag</strong> — passing it errors on args (the dispatch silently never fires). The default (no <code>--dry-run</code>) fires.</li>
+</ul>
+
+<h2>NEXT</h2>
+<ol>
+<li><strong>Scattered cloud/platform un-reviewed modules</strong> (the remaining #2020 scope, now that AI/ML is closed): <code>on-premises-multi-cluster</code> (~6), <code>cloud-azure</code> (~5), <code>platform-foundations</code>, etc. Regenerate the by-track triage (the s171 <code>/tmp/triage_full.tsv</code> is stale). Same cadence: triage by tier → expand/edit-pass → opus-inline + 1 cross-family (codex/deepseek) → PR (<code>review(</code>/<code>feat(</code> + Learner-check) → merge → records.</li>
+<li><strong>Standing streams:</strong> <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1911">#1911</a> UK translation currency (~14%, the largest remaining curriculum gap, detector-driven calque review on new pages) · <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1876">#1876</a> AI-history book review (73 ch, never cross-family reviewed) · Continuous-improvement What's-New post (software-watchlist refresh; <code>changelog.md</code>).</li>
+<li><strong>Open Dependabot PR #2045</strong> (dompurify 3.4.10→3.4.11): build/health/tests/arXiv all green, but the <code>detect</code> check fails (Dependabot token restriction). Needs a maintainer merge decision — left untouched (out of this continuation's scope).</li>
+<li><strong>Carried infra notes:</strong> #2036 (deploy.sh reverts deployed skill corrections — edit deployed copies directly, don't run deploy.sh) · #2030 (read-only review + <code>--worktree</code> crash → omit <code>--worktree</code> for read-only reviews) · #2024 (handoffs git→Headroom, deferred) · <code>.worktrees/g2-craft</code> retained (#1623, not ours).</li>
+</ol>
+</body>
+</html>
