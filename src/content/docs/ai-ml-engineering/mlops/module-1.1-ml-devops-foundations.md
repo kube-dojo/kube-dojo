@@ -105,6 +105,47 @@ A beginner often hears "MLOps" and thinks it means adding a model registry or a 
 
 The rest of this module uses a progressive design. First, you will build the version-control picture. Then you will attach tests to the right failure modes. After that, you will add local gates that prevent damage before a commit exists. Finally, you will place finite validation work on Kubernetes so the execution environment resembles production instead of a personal laptop.
 
+> **The Reproducibility Ledger Analogy**
+>
+> Think of ML DevOps as keeping a ledger for a scientific lab, not just a shipping log for application releases. Traditional DevOps records which code build went to production. ML DevOps must also record which dataset version, feature definition, random seed, dependency lockfile, and evaluation slice produced the artifact you are about to serve. If the ledger has a missing column, rollback becomes archaeology: everyone agrees something changed, but nobody can reconstruct the experiment that created the current model.
+
+### Compare Failure Modes Before You Pick A Test Layer
+
+Traditional DevOps and ML DevOps share vocabulary — CI, Git, containers, rollbacks — but they fail for different reasons. A traditional service outage often traces to a bad deploy, a config typo, a dependency upgrade, or infrastructure drift. An ML service can look healthy on those axes while silently degrading because labels shifted, a feature pipeline started emitting nulls for a segment, or the promoted model was trained on a dataset snapshot that no longer matches production traffic.
+
+The comparison is not academic. When an on-call engineer hears "accuracy dropped but nothing deployed," the wrong instinct is to grep application diffs. The right instinct is to classify the symptom against ML-specific failure classes and then choose the cheapest test layer that can falsify the leading hypothesis. Unit tests protect deterministic code paths. Data quality tests protect schema, leakage, and distribution assumptions. Model quality tests protect segment-level behavior and promotion thresholds. End-to-end tests protect orchestration across storage, training, registry, and serving boundaries.
+
+```text
+SYMPTOM → FAILURE CLASS → FIRST TEST LAYER TO RUN
+=================================================
+
+Symptom: API 500 after deploy, stack trace in serving code
+  Failure class: deployment / application regression
+  First layer: unit + integration tests on serving path
+
+Symptom: predictions look random, no deploy, schema unchanged in app
+  Failure class: feature transformation or missing upstream data
+  First layer: data quality + integration tests on feature pipeline
+
+Symptom: overall metric flat, one business segment collapsed
+  Failure class: model quality / representation shift
+  First layer: model quality tests with segment slices
+
+Symptom: training job "succeeds" but metrics never update
+  Failure class: pipeline orchestration / stale cache
+  First layer: end-to-end test + dependency graph audit (DVC lock)
+
+Symptom: offline eval great, online behavior wrong
+  Failure class: train-serve skew or evaluation leakage
+  First layer: data quality (split integrity) + integration parity test
+```
+
+Hypothetical scenario: a fraud team ships a rules-only hotfix on Friday while the ML model stays unchanged. On Monday, false-positive rate spikes for small merchants. Traditional DevOps review shows no model deployment. The ML-specific question is whether merchant-segment features stopped arriving from an upstream batch job. Data quality tests on feature freshness and null rates would surface that class of failure faster than re-running unit tests on the scoring API.
+
+Worked comparison: if a web checkout service returns HTTP 502, you inspect load balancers, pod restarts, and recent image tags. If a churn model's enterprise recall drops with no code deploy, you inspect label definitions, enterprise row counts in the validation slice, and whether `data/training.csv.dvc` moved without a documented distribution review. Same operational urgency, different first questions.
+
+Senior teams rehearse these comparisons in post-incident reviews. When someone says "the model broke," ask whether they mean code, data, features, artifact, deployment, or environment — then map that answer to the test layer that should have blocked promotion. That habit turns ML DevOps from a toolchain purchase into a repeatable debugging discipline the whole team shares.
+
 ## 2. Version The Whole ML System, Not Just The Code
 
 Git is still the first pillar because training scripts, serving code, tests, configuration templates, infrastructure manifests, and documentation belong in ordinary source control. Git gives teams review, branching, history, and collaboration. The mistake is expecting Git to store every artifact directly, especially large datasets, model checkpoints, embeddings, and generated arrays.
@@ -341,6 +382,57 @@ flowchart TD
 
 A senior review of an ML repository should therefore inspect both Git diffs and artifact diffs. A pull request that changes `src/features/customer.py` but does not update metrics may be incomplete. A pull request that changes `data/training.csv.dvc` but does not explain label or distribution impact may be risky. A pull request that updates a model artifact without linking it to the training run is not reviewable.
 
+### Design The ML DevOps Control Plane As One Evidence System
+
+An ML DevOps control plane is not a shopping list of tools. It is the minimum set of linked records that lets a team answer, without oral history, what produced a model and whether that model should still be trusted. The durable primitives are the same across teams: source control for code and small configs, content-addressed storage for large artifacts, experiment records for hypotheses and metrics, automated gates before promotion, and finite batch execution in an environment that resembles production.
+
+```text
+ML DEVOPS CONTROL PLANE (DURABLE SPINE)
+=======================================
+
+┌──────────────┐    ┌──────────────┐    ┌──────────────────┐
+│ Git          │    │ Artifact     │    │ Experiment       │
+│ (code,       │───▶│ pointers     │───▶│ record           │
+│  configs,    │    │ (data,       │    │ (params,         │
+│  manifests)  │    │  models)     │    │  metrics, plots) │
+└──────┬───────┘    └──────┬───────┘    └────────┬─────────┘
+       │                   │                     │
+       └───────────────────┼─────────────────────┘
+                           v
+                 ┌─────────────────────┐
+                 │ Automated gates     │
+                 │ (pre-commit, CI,    │
+                 │  model/data tests)  │
+                 └──────────┬──────────┘
+                            v
+                 ┌─────────────────────┐
+                 │ Finite execution    │
+                 │ (Kubernetes Job,    │
+                 │  pipeline stage)    │
+                 └──────────┬──────────┘
+                            v
+                 ┌─────────────────────┐
+                 │ Promotion decision  │
+                 │ + rollback pointer  │
+                 └─────────────────────┘
+```
+
+When you **design** this control plane, optimize for auditability rather than tool count. A team with Git, pointer files, one metrics JSON per run, and a Job manifest can be more reproducible than a team with three dashboards and no locked dependency file. Each link in the chain should have an owner: who approves data pointer changes, who sets promotion thresholds, who can override a failed model-quality gate, and where rollback artifacts live.
+
+Promotion without linkage is a common anti-pattern. If the registry stores `churn-model:release-2026-06-a3f9` but nobody can connect that tag to a Git commit, DVC hash, config file, and evaluation report, the registry becomes a graveyard of opaque blobs. The control plane design goal is that any production artifact ID expands into a full evidence bundle in under five minutes during an incident.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.**
+>
+> | Capability | Example implementations (peers, not rankings) | Typical role in control plane |
+> |------------|---------------------------------------------|-------------------------------|
+> | Data/model versioning | DVC, lakehouse table snapshots, object-store hashes | Pointer files in Git → payload in remote storage |
+> | Experiment tracking | MLflow Tracking, Weights & Biases, Neptune, custom metrics JSON | Hypothesis → run → metrics → artifact URI |
+> | Local guardrails | pre-commit hooks, secret scanners, large-file blocks | Fail before irreversible Git objects |
+> | Batch execution | Kubernetes Job, workflow engines that spawn Jobs | Finite train/validate/eval steps |
+> | Model registry | MLflow Model Registry, cloud ML registries, artifact tags | Immutable promoted artifact + stage metadata |
+
+<!-- VERIFY: confirm your team's chosen experiment tracker and registry APIs match current vendor docs before wiring CI -->
+
 ## 3. Test The Failure Mode You Actually Fear
 
 Traditional test pyramids start with many unit tests, fewer integration tests, and a small number of end-to-end tests. ML keeps that structure but adds two layers that ordinary services rarely need: [data quality tests and model quality tests](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning). These layers matter because a model can pass every unit test and still be unsafe to deploy if the data distribution shifted or a subgroup regressed.
@@ -476,7 +568,48 @@ Active learning prompt: a production recommender starts returning stale-looking 
 
 Choosing the right test is an engineering judgment. If a tokenizer drops important text, a unit test should catch it. If a train/test split leaks customers into both sets, a data quality test should catch it. If the candidate model underperforms a high-value segment, a model quality test should catch it. If the pipeline cannot move from raw data to registered artifact, an end-to-end test should catch it.
 
+Document the mapping from business symptoms to test layers in your team's runbook so on-call engineers do not debate whether to retrain during the first thirty minutes of an incident. The runbook entry should name the log lines, metric dashboards, and repository paths to inspect for each hop in the debug trace. Runbooks age quickly when they reference tool-specific click paths; anchor them on the durable evidence objects — Git SHA, pointer hash, metrics JSON, Job name, registry tag — that survive vendor churn.
+
 The order matters because compute is not free. Run cheap deterministic checks first. Do not spend GPU hours training a model when the config file is invalid, the dataset has duplicate IDs, or the feature code fails on empty input. A good CI pipeline is staged so each gate earns the right to spend the next unit of time and money.
+
+### Debug A Broken Pipeline By Tracing The Evidence Chain
+
+When an ML pipeline breaks in production or staging, resist the urge to retrain immediately. **Debug** by walking the evidence chain in a fixed order: source code, data lineage, feature transformation, model quality, deployment semantics, runtime environment. Each hop has distinct signatures in logs, metrics, and repository state. Skipping hops creates expensive false starts — retraining will not fix a serving container that never pulled the intended dataset version.
+
+```text
+ML PIPELINE DEBUG TRACE (FIXED ORDER)
+=====================================
+
+1. SOURCE CODE
+   - Did training/serving commits change?
+   - Do lockfiles match the image that ran?
+
+2. DATA LINEAGE
+   - Did .dvc / table snapshot / ingest pointer move?
+   - Does row count, date range, label rate match expectations?
+
+3. FEATURE TRANSFORMATION
+   - Schema, column order, null rates, encoding maps
+   - Train-serve parity: same function, same defaults?
+
+4. MODEL QUALITY
+   - Segment metrics vs baseline and production
+   - Calibration, latency, resource use
+
+5. DEPLOYMENT SEMANTICS
+   - Correct artifact tag? Canary vs full?
+   - Shadow traffic vs live routing?
+
+6. RUNTIME ENVIRONMENT
+   - Image digest, env vars, secrets, GPU/driver
+   - Object storage credentials, mount paths, Job completion status
+```
+
+For each hop, collect one falsifiable fact before moving on. If code did not change, capture the Git SHA anyway. If data might have changed, diff pointer files and pull the referenced snapshot into a scratch workspace. If features are suspect, run the transformation on a frozen sample and compare column hashes to last week's artifact. Only after those hops should you accept "the model got worse" as the leading hypothesis.
+
+Hypothetical scenario: a recommendation Job completes with exit code 0, but downstream serving still loads last week's artifact. The failure is not model quality — it is deployment semantics plus artifact publication. The debug trace stops at step 5 when you discover the Job wrote to a local path that CI never uploaded to the registry. Kubernetes logs from step 6 confirm success inside the Pod while the registry tag never moved.
+
+Active learning prompt: list three artifacts you would request from a teammate who says "I fixed the model locally." A complete answer includes Git SHA, data pointer or snapshot ID, config file, metrics file, container image digest or Job name, and the exact command they ran. If any item is missing, the fix is not yet reproducible.
 
 ## 4. Put Guardrails Before Git History
 
@@ -626,6 +759,24 @@ if __name__ == "__main__":
 Pre-commit is not a substitute for CI. Local hooks can be skipped, run on different operating systems, or use stale environments. CI must run the same critical checks in a clean environment, especially tests and DVC validation. The local hook is the fast seatbelt; CI is the independent gate before the team trusts the change.
 
 A senior engineer also watches for guardrail drift. If a hook produces too many false positives, developers will learn to bypass it. If a hook is slow, it may be disabled locally and rediscovered only in CI. Keep pre-commit checks fast, deterministic, and focused on mistakes that are either common or expensive.
+
+### Evaluate Controls Against Real Team Risks
+
+When you **evaluate** pre-commit hooks, DVC, experiment tracking, and Kubernetes Jobs, score each control against the failure you fear — not against how impressive the demo looked. The table below is a durable decision aid: it maps recurring ML team risks to the control that actually reduces blast radius. No single tool covers every row; the control plane wins when the rows are owned explicitly.
+
+| Team risk | What breaks if ignored | Primary control | What "good" looks like |
+|-----------|------------------------|-----------------|------------------------|
+| Binary commits to Git | Slow clones, history repair, accidental credential exposure in blobs | pre-commit large-file + model-extension hooks | Commits contain pointers only; hook fails with remediation text |
+| Data leakage between splits | Inflated offline metrics, production surprises | Data quality tests + split integrity checks in CI | Failing build when IDs overlap train/validation |
+| Non-repeatable training | "Works on my laptop" promotions | DVC pipeline deps/outs + lockfile in Git | `dvc repro` reruns only affected stages; metrics attached to commit |
+| Silent data drift | Slow quality decay without deploys | Scheduled data validation Job + baseline metrics JSON | Alert when null rate, schema, or row counts cross thresholds |
+| Unreviewable experiments | Repeated failed ideas, mystery hyperparameters | Experiment tracking hierarchy + config in Git | Every run links params, data version, metrics, artifact URI |
+| Finite work treated as a service | Restart loops, duplicate training spend | Kubernetes Job with `restartPolicy: Never` | Job completes once; logs and exit code recorded |
+| Rollback without evidence | Long incidents while guessing last good artifact | Registry tag + Git + data pointer triple stored per release | Previous production bundle identified in under five minutes |
+
+Drift deserves explicit mention because it is an ML-specific failure mode that traditional DevOps monitoring often misses. Drift means the live input distribution diverges from the distribution the model learned — not because someone deployed bad code, but because the world changed. Controls here combine data quality tests (schema, ranges, categorical cardinality) with scheduled validation Jobs that compare current snapshots to training baselines. Experiment tracking alone does not detect drift; it only preserves history once you notice the symptom.
+
+Experiment tracking earns its place when teams run more than a handful of trials per month. Without a run record, a positive result on a leaderboard cannot be tied to the exact config and data pointer that produced it. With tracking, reviewers can diff parameters, overlay metrics, and reject promotions that improved a proxy metric while harming a business gate such as enterprise-segment recall or p99 latency.
 
 ## 5. Structure Projects So Evidence Has A Home
 
@@ -793,6 +944,12 @@ The naming rule is simple: name things after the decision they help someone make
 
 A mature repository also records operational assumptions. Which data source owns truth? Which metric is the promotion gate? Which subgroup cannot regress? Which model version is currently serving? Which artifact can be rolled back? These answers should not live only in Slack threads, notebook comments, or one engineer's memory.
 
+README files in ML repos often decay into install instructions while the operational contract stays implicit. A durable README for ML DevOps should state the promotion metric, the rollback procedure, where data pointers live, which CI jobs must pass before merge, and which Kubernetes namespace runs validation Jobs. New contributors should infer repository conventions from directory layout and documented gates, not from tribal knowledge gathered over months of incidents.
+
+Configuration separation also reduces cognitive load during review. Keep `configs/training/` distinct from `configs/inference/` so a serving hotfix cannot accidentally change training defaults. Keep exploratory notebooks under `notebooks/exploration/` with outputs stripped, and treat anything under `src/` as importable, tested code. When a notebook experiment succeeds, the promotion path is: extract function into `src/`, add tests, wire the stage into `dvc.yaml`, log the run in experiment tracking, and open a pull request that shows metrics — not "copy cells into production."
+
+Ownership boundaries matter when data scientists and platform engineers share a repo. Data scientists should not need cluster-admin credentials to iterate on features, and platform engineers should not need to read notebook state to audit a release. Pointer files, CI badges, and Makefile targets create a shared language: `make check` for fast gates, `dvc repro` for pipeline refresh, `kubectl apply` for cluster validation. The layout teaches those contracts before anyone reads the wiki.
+
 ## 6. Run ML Workloads With The Right Kubernetes Primitive
 
 Kubernetes is useful for ML DevOps when the team needs reproducible execution near production conditions. Local tests are fast, but they do not prove that container images, service accounts, resource requests, object storage access, node selectors, or cluster policies are correct. Running validation or training in Kubernetes exposes those integration points before production traffic depends on them.
@@ -858,6 +1015,8 @@ The debugging workflow changes once the pipeline runs in Kubernetes. If a Job fa
 
 A release gate should combine evidence from all earlier sections. The Git commit identifies code. DVC or equivalent pointers identify data. The config identifies hyperparameters. Tests identify quality. The Kubernetes Job identifies production-like execution. Promotion should happen only when these records agree, because that agreement is what makes rollback and incident response credible.
 
+Hypothetical scenario: an on-call engineer receives a page that batch validation Jobs are failing after a credential rotation. Application Deployments still serve traffic with the old model. The correct response uses the debug trace from section 3: runtime environment and data access fail at step 6 even though model quality at step 4 is unchanged. Fixing the service account or secret mount restores validation without a wasteful retrain — provided the team stored Job manifests and registry pointers that make the last good artifact obvious.
+
 ## Did You Know?
 
 1. In many production ML systems, [the model-training code is a small fraction of the total system](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning); data pipelines, validation, deployment, monitoring, and recovery machinery often dominate the engineering effort.
@@ -898,9 +1057,9 @@ Require the hypothesis, dataset change summary, configuration diff, training run
 </details>
 
 <details>
-<summary>3. CI reports that `dvc repro` skipped the `prepare` stage even though a raw customer CSV changed locally. The model then trained on stale processed data. What is the likely pipeline defect?</summary>
+<summary>3. Compare traditional DevOps failure modes with ML-specific failure modes: CI reports that `dvc repro` skipped the `prepare` stage even though a raw customer CSV changed locally. The model then trained on stale processed data. Which failure class is this, and what test layer should have caught it?</summary>
 
-The raw CSV was probably missing from the `deps` list for the `prepare` stage in `dvc.yaml`, or the changed file was outside the path DVC tracks. DVC decides whether to rerun a stage by hashing declared dependencies. If the true input is not declared, DVC can reuse cached outputs even when the real-world input changed.
+This is an ML-specific pipeline orchestration and data-lineage failure, not a classic application deploy regression. Traditional DevOps might not notice because the training script exited successfully. The right test layer combines DVC dependency auditing (end-to-end or integration) with data quality checks that verify processed outputs reflect current raw inputs. Declare every true input in `dvc.yaml` deps so cache skips cannot hide stale artifacts.
 
 </details>
 
@@ -942,6 +1101,10 @@ Do not delete the evidence until the hypotheses, configurations, data versions, 
 ## Hands-On Exercise: Build A Minimal ML DevOps Safety Net
 
 In this exercise, you will build a small workflow that demonstrates the core controls from the module. You will initialize a repository, track data with DVC, block large model artifacts before commit, create a reproducible pipeline definition, and run a finite Kubernetes validation Job. The goal is not to train a useful model; the goal is to practice the controls that make a real model reviewable.
+
+Treat each task as a release gate in miniature. Task 1 establishes identity (Git branch, Python environment). Task 2 establishes data lineage (pointer file plus remote payload). Task 3 adds data-quality assumptions as executable checks. Task 4 prevents irreversible Git mistakes locally. Task 5 wires dependencies so cache skips cannot hide stale inputs. Task 6 validates that finite work uses finite workload semantics in the cluster. Task 7 forces you to read the evidence chain as a reviewer would — without trusting notebook memory or chat logs.
+
+If you cannot run a cluster locally, still write the Job manifest and articulate why `kind: Job` beats `kind: Deployment` for validation. The conceptual gate is as important as the runtime gate: ML DevOps fails when teams can train locally but cannot prove the same command succeeds under production credentials, resource limits, and artifact paths.
 
 ### Task 1: Initialize A Reproducible Workspace
 
@@ -1173,14 +1336,24 @@ Success criteria:
 - [ ] Metrics are available outside notebook state.
 - [ ] You can identify the code, data pointer, validation script, metrics file, and Kubernetes workload definition.
 
-## Next Module
-
-Up next: [Module 1.2: Docker for ML](./module-1.2-docker-for-ml/), where you package ML dependencies into repeatable container images so local, CI, and Kubernetes execution environments stay aligned.
-
 ## Sources
 
 - [Kubernetes Self-Healing](https://kubernetes.io/docs/concepts/architecture/self-healing/) — Describes how Kubernetes controllers replace failed containers and Pods to keep workloads running as intended.
 - [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Defines Jobs as run-to-completion workloads that track completion and failure state.
-- [MLOps: Continuous delivery and automation pipelines in machine learning](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Provides a high-level reference for ML pipeline maturity, automation, and production operating models.
-- [github.com: dvc](https://github.com/treeverse/dvc) — The DVC README explicitly says DVC keeps version info in Git, stores data and models in cloud storage, and supports reproducible ML projects.
-- [cloud.google.com: mlops continuous delivery and automation pipelines in machine learning](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Google's MLOps architecture guide explicitly says ML testing is more involved than ordinary software testing and names these additional validation layers.
+- [MLOps: Continuous delivery and automation pipelines in machine learning](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Google's architecture guide for ML pipeline maturity, automation layers, and production operating models.
+- [MLOps: CD4ML solution overview](https://cloud.google.com/solutions/machine-learning/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Explains why ML testing extends beyond ordinary software testing with additional validation layers.
+- [DVC documentation — Versioning data and models](https://dvc.org/doc/user-guide/data-management/versioning) — Official guide to content-addressed data versioning and Git pointer files.
+- [DVC pipelines](https://dvc.org/doc/user-guide/pipelines/defining-pipelines) — How to declare stage dependencies, outputs, and metrics for reproducible reruns.
+- [pre-commit framework](https://pre-commit.com/) — Hook framework for running fast local checks before commits land in shared history.
+- [MLflow Tracking](https://mlflow.org/docs/latest/tracking.html) — Experiment run logging: parameters, metrics, artifacts, and reproducibility metadata.
+- [pytest documentation — Getting started](https://docs.pytest.org/en/stable/getting-started.html) — Standard Python test runner used for unit, data-quality, and integration layers in ML repos.
+- [Git documentation — Working with large files](https://git-scm.com/book/en/v2/Git-Tools-Managing-Large-Files) — Why large binaries belong outside Git history and how pointer-based workflows avoid repository bloat.
+- [CNCF MLOps whitepaper (PDF)](https://tag-app-delivery.cncf.io/whitepapers/mlops/) — Vendor-neutral vocabulary for ML lifecycle stages and operational concerns across the CNCF ecosystem.
+
+## Learner check
+
+> Version the tripod together — Git for code and small configs, pointer files for data and model payloads, experiment records for hypothesis and metrics — then gate promotion with staged tests and a finite Kubernetes Job so every production artifact expands into a full evidence chain.
+
+## Next Module
+
+Up next: [Module 1.2: Docker for ML](./module-1.2-docker-for-ml/), where you package ML dependencies into repeatable container images so local, CI, and Kubernetes execution environments stay aligned.
