@@ -20,13 +20,17 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-A retail ML platform team once shipped a recommendation model that passed every notebook experiment, every unit test, and every offline evaluation gate. The model worked on the lead engineer's workstation, worked inside the training notebook, and worked during a short smoke test on a staging VM. Then production traffic arrived, the service began restarting, conversion metrics dropped, and the incident channel filled with people asking why a model that had already been "validated" could not survive real requests.
+**Hypothetical scenario:** A retail ML platform team once shipped a recommendation model that passed every notebook experiment, every unit test, and every offline evaluation gate. The model worked on the lead engineer's workstation, worked inside the training notebook, and worked during a short smoke test on a staging VM. Then production traffic arrived, the service began restarting, conversion metrics dropped, and the incident channel filled with people asking why a model that had already been "validated" could not survive real requests.
 
 The failure was not a bad algorithm. The service had been trained and tested with one set of operating system libraries, built in CI with another base image, and deployed onto hosts with a different CUDA driver boundary. One missing OpenMP runtime only appeared when NumPy used parallel execution under load, and the production container had no readiness check capable of detecting the broken path before traffic arrived. The model was treated as the risky part, but the environment was the part that failed first.
 
 Docker matters in ML because ML systems are not just Python code. They are Python code plus native libraries, numerical kernels, CUDA runtime libraries, CPU instruction sets, model files, preprocessing assets, environment variables, network services, process behavior, and storage assumptions. A virtual environment can pin Python packages, but it cannot freeze the operating system layer, GPU user-space libraries, `/dev/shm`, UID permissions, or the shape of the filesystem that your training and serving code expects.
 
 This module teaches Docker as an engineering control for ML reproducibility rather than as a collection of commands. You will start with the basic image/container mental model, then move into Dockerfile design, GPU boundaries, model artifact handling, Compose-based development stacks, and production debugging. The goal is not to memorize `docker run` flags; the goal is to reason about what changed when an ML workload behaves differently across machines.
+
+> **The Shipyard Analogy**
+>
+> Think of a Docker image like a ship built in a dry dock. Every rivet, pipe, and instrument panel is installed before the hull leaves the yard, and two ships built from the same blueprint should behave identically when they enter the water. The container runtime is the harbor: it supplies fresh water, power hookups, and cargo cranes at berth time, but it does not rebuild the ship. When your ML service misbehaves in production, the first question is whether the fault lives in the blueprint (the image layers), the berth configuration (environment variables, mounts, GPU devices), or the harbor infrastructure (host kernel, drivers, network). Confusing those three locations turns a thirty-minute diagnosis into a week of random rebuilds.
 
 ## Core Content
 
@@ -263,6 +267,29 @@ node_modules/
 
 The rule is simple: the image should contain software, not local history or bulky operational state. Models, datasets, experiment outputs, and checkpoints usually belong in volumes, object storage, model registries, or artifact stores. When you intentionally bake a small model into an image, make that choice explicit and document why the faster cold start is worth the larger deployment artifact.
 
+#### Pinning Dependencies as an Image Contract
+
+A Dockerfile is not only a build recipe; it is a contract that says, "Given this base layer and these pinned inputs, the resulting filesystem should be the same every time." Python teams often stop at `requirements.txt`, but ML images inherit dependencies from at least four independent sources: the base operating system image, system packages installed with `apt-get` or `yum`, Python wheels resolved from an index, and optional CUDA or vendor runtime libraries baked into the base. If any one of those layers floats, two builds from the same commit can produce different numerical behavior even when application source code is unchanged.
+
+The durable pattern is to pin every layer you control and to document every layer you inherit. Pin the base image with an explicit digest or a version tag that your team reviews on upgrade, not with a floating `latest` tag. Pin Python dependencies with a lockfile (`requirements.txt` with exact versions, `poetry.lock`, `uv.lock`, or equivalent) and install with `--require-hashes` when your toolchain supports it. Pin system packages by recording the exact package names in the Dockerfile and rebuilding deliberately when security patches require an OS refresh. For GPU stacks, pin the CUDA user-space line in the base image and match the framework wheel index to that line so PyTorch, TensorFlow, or JAX builds against the libraries you actually ship.
+
+```dockerfile
+# Pin the base image by digest when reproducibility matters most.
+# Obtain the digest with: docker buildx imagetools inspect python:3.12-slim
+FROM python:3.12-slim@sha256:<pinned-digest> AS runtime
+
+WORKDIR /app
+
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt -c constraints.txt
+```
+
+Lockfiles solve a problem that casual pinning misses: transitive dependencies. Your direct dependency on `scikit-learn` may pull a specific `numpy` and `scipy` version today, but an unpinned install next month can resolve a newer `numpy` with a different BLAS backend. In ML, that kind of silent drift shows up as slightly different predictions, flaky tests, or performance cliffs that no application diff explains. Recording hashes or exact versions for the full graph makes the image contract auditable: anyone can diff two lockfiles and see precisely what changed between builds.
+
+**Worked example:** A team notices that CI passes on Monday but fails on Thursday with no code changes. Comparing image manifests reveals that `python:3.12-slim` resolved to a newer patch release because the tag was not pinned by digest. The new base image included an updated `libssl` that changed TLS behavior for a model-download step. The fix is not to disable TLS verification; the fix is to pin the base image, rebuild deliberately when upgrading the base, and add a smoke test that exercises the download path on every image build.
+
+Image labels and build metadata close the loop for operations teams. [The OCI image spec defines standard annotation keys](https://github.com/opencontainers/image-spec/blob/main/annotations.md) such as `org.opencontainers.image.revision` and `org.opencontainers.image.source` that tie a running container back to a Git commit. ML platforms use those labels during incidents to answer whether production is running the image CI tested or an ad-hoc rebuild someone pushed manually. Treat labels as part of the reproducibility story, not as optional decoration.
+
 ### 3. Debugging Environment Drift in ML Images
 
 Environment drift is the gap between what the code assumes and what the runtime provides. In ML, drift is often subtle because the process may start successfully, import every package, and still compute different results or fail only under workload-specific paths. A service can pass `/health` while its first real prediction fails because the health endpoint never loads the model or touches the GPU.
@@ -361,9 +388,36 @@ def ready(response: Response):
 
 This example deliberately separates `/live` from `/ready`. Restarting a process because an external model registry is temporarily slow can make an outage worse, but withholding traffic until the model is loaded is usually correct. Treat health checks as contracts with the orchestrator rather than as decorative endpoints.
 
+#### Tracing Drift with a Structured Comparison Matrix
+
+When two environments disagree, resist the urge to rebuild immediately. Rebuilding without a comparison matrix often masks the real boundary and wastes an hour reinstalling gigabytes of dependencies. Instead, capture a snapshot from each environment using the same commands: Python version, pip freeze output, key native library paths, CUDA availability, environment variables that affect model loading, and filesystem paths for artifacts. Store those snapshots as build artifacts or incident attachments so the next engineer can see exactly what differed.
+
+```bash
+# Capture a reproducible environment snapshot inside the running container.
+docker exec ml-api-debug bash -lc '
+  set -euo pipefail
+  echo "=== python ==="
+  python -V
+  echo "=== pip freeze (first 20 lines) ==="
+  pip freeze | head -20
+  echo "=== torch cuda ==="
+  python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+  echo "=== env (model-related) ==="
+  env | sort | grep -E "MODEL|CUDA|MLFLOW|REDIS" || true
+  echo "=== model path ==="
+  ls -la /models || true
+' | tee container-env-snapshot.txt
+```
+
+Compare that file against a snapshot from the training notebook, the CI build log, or a known-good staging container. The first column that diverges tells you which Dockerfile stage or runtime flag to inspect. If Python versions match but `pip freeze` differs, suspect lockfile discipline or an unpinned transitive dependency. If packages match but `torch.cuda.is_available()` differs, suspect GPU runtime mounts or wheel selection. If everything matches but the model path is empty, suspect volume mounts or registry credentials rather than image layers.
+
+Hypothetical scenario: an on-call engineer rebuilds the image three times during an outage because predictions look wrong, but the root cause is a feature flag that changed preprocessing outside the container. A comparison matrix would have shown identical `pip freeze` output across rebuilds, pointing the investigation toward configuration and data paths instead of Dockerfile order. The matrix turns "maybe it is Docker" into "Docker is ruled out; check runtime config next."
+
 ### 4. GPU Containers: The Host Driver Is Still Outside the Box
 
-GPU containers are powerful because they let you package CUDA user-space libraries with your application while relying on the host for the kernel driver and physical device. The host driver cannot be fully hidden inside the image because it is tied to the kernel. The container receives device files and driver libraries at runtime through the NVIDIA Container Toolkit.
+GPU containers are powerful because they let you package CUDA user-space libraries with your application while relying on the host for the kernel driver and physical device. The host driver cannot be fully hidden inside the image because it is tied to the kernel. The container receives device files and driver libraries at runtime through the NVIDIA Container Toolkit, which acts as an OCI runtime hook that injects GPU devices and compatible driver libraries when you pass `--gpus all` or the equivalent orchestrator GPU resource request.
+
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.** GPU stacks align three independently versioned layers: the host NVIDIA driver (ceiling for CUDA user-space), a CUDA base image such as `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04`, and a framework wheel built for a matching CUDA line (for example PyTorch from the `cu124` index). Smoke-test tags like `pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime` appear in this module as teaching references only—pin current digests in production. The durable rule: host driver capability must be greater than or equal to the CUDA user-space version your image and wheels require.
 
 ```mermaid
 graph TD
@@ -638,6 +692,8 @@ graph TD
 
 [Compose gives each service a DNS name matching the service name](https://docs.docker.com/compose/how-tos/networking/). From the host, you might call `http://127.0.0.1:8000`. From another container in the same Compose network, the API should call `http://redis:6379` or `http://mlflow:5000`, not `127.0.0.1`, because each container has its own loopback interface. This is one of the most common networking mistakes in local containerized ML systems.
 
+> **Landscape snapshot — as of 2026-06. This changes fast; verify against vendor docs before relying on specifics.** The Compose example below uses illustrative service image tags such as `redis:7-alpine`, `qdrant/qdrant:v1.12.5`, and `ghcr.io/mlflow/mlflow:v2.17.2`. Pin current tags or digests in your own stacks; the durable ideas are service DNS names, named volumes, health checks, and dependency ordering—not the exact version numbers shown here.
+
 ```yaml
 services:
   api:
@@ -853,6 +909,56 @@ The economic case for Docker in ML is not only developer convenience. Smaller, r
 
 A senior ML infrastructure engineer treats the image as one artifact in a larger release system. The image tag records the software environment. The model registry records the model artifact and evaluation metadata. Runtime configuration records which approved model the service should load. Observability records whether the running container actually loaded that model and is ready for traffic.
 
+#### Configuration Layers: Build Args, Environment Variables, and Secrets
+
+ML containers need three distinct configuration channels, and mixing them creates security incidents as often as it creates bugs. **Build arguments** (`ARG`) are evaluated at image build time and become part of the build history unless you use modern secret-mount syntax. **Environment variables** (`ENV`) are baked into the image metadata and can be overridden at runtime, which makes them appropriate for defaults such as `PYTHONUNBUFFERED=1` but dangerous for credentials. **Runtime secrets** should enter through orchestrator secret stores, mounted files, or secret-mount build features—not through plain `ENV` instructions that end up in `docker inspect` output and registry metadata.
+
+```dockerfile
+# WRONG: credentials in ENV become visible in image config and layer history.
+ENV AWS_ACCESS_KEY_ID=AKIAEXAMPLE
+ENV AWS_SECRET_ACCESS_KEY=supersecret
+
+# BETTER: runtime injection via orchestrator secret → file mount.
+# The application reads /run/secrets/aws_credentials at startup.
+```
+
+Build args are appropriate for values that truly belong to the build, such as selecting a CPU versus GPU wheel index or choosing a private package index mirror inside a corporate network. They are inappropriate for production database passwords because anyone with registry pull access can inspect build logs or intermediate layers from careless Dockerfile patterns. [Docker BuildKit supports secret mounts](https://docs.docker.com/build/building/secrets/) so pip can authenticate to a private index without writing tokens into a layer.
+
+Environment variables remain the primary runtime configuration surface for ML services because they let the same image promote across staging and production with different model URIs, batch sizes, or feature flags. The contract discipline is to namespace them clearly (`MODEL_URI`, `MODEL_STAGE`, `REDIS_URL`) and to fail fast at startup when required variables are missing. Silent defaults that point at the wrong model stage have caused production incidents where staging weights served live traffic because `MODEL_STAGE` defaulted to `Staging` in code but operators assumed `Production`.
+
+```python
+# src/config.py — fail closed when required runtime config is absent.
+import os
+import sys
+
+REQUIRED = ("MODEL_URI", "MLFLOW_TRACKING_URI")
+
+
+def load_config() -> dict[str, str]:
+    missing = [key for key in REQUIRED if not os.environ.get(key)]
+    if missing:
+        print(f"Missing required environment variables: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+    return {key: os.environ[key] for key in REQUIRED}
+```
+
+Separate **configuration that changes every deploy** from **configuration that changes every build**. Model selection, traffic flags, and external service endpoints belong in runtime environment variables or mounted config maps. Compiler flags, CUDA base selection, and dependency lock resolution belong in the Dockerfile and CI build pipeline. When teams blur that boundary, they rebuild images to change a model pointer—which wastes time—or they embed secrets in images to avoid configuring the orchestrator—which widens the blast radius of a registry compromise.
+
+#### Image Scanning, SBOMs, and Supply-Chain Visibility
+
+Production ML images accumulate vulnerabilities faster than teams expect because the dependency graph spans operating system packages, Python wheels with native extensions, and optional GPU runtimes. Scanning only the application `requirements.txt` misses `apt-get` packages in the base layer and misses transitive native libraries pulled in by wheels. The durable practice is to scan the **built image** after the Dockerfile finishes, not the source repository in isolation, because the final artifact is what actually runs in production.
+
+```bash
+# Example: scan a built image with Trivy (install separately on the host).
+trivy image --severity HIGH,CRITICAL ml-api:v1
+```
+
+Modern registries and CI systems can attach a **Software Bill of Materials (SBOM)** to each image tag, listing packages and versions discovered in the filesystem. SBOMs do not replace scanning, but they make upgrades auditable: when a CVE hits `libssl` or `libgomp`, you can search SBOM exports across image tags instead of guessing which services inherited the vulnerable base layer. For ML platforms that rebuild dozens of model-serving images from shared base layers, a shared hardened base with tracked SBOM exports prevents repeating the same vulnerability triage in every repository.
+
+Supply-chain controls also include **signing** and **admission policy**. Signing proves that an image tag was produced by your CI pipeline and was not replaced in transit. Admission controllers or deploy-time checks can refuse unsigned images or images whose scan severity exceeds a threshold. These controls matter for ML because model-serving images often run with access to sensitive data paths and GPU hardware; a compromised base image is not merely a web-app defacement risk—it can exfiltrate training data or substitute model weights.
+
+Hypothetical scenario: a team discovers a critical OpenSSL CVE and patches application code immediately, but production keeps running vulnerable images because nobody rebuilt the shared `python:3.12-slim` base layer used by twelve services. A centralized base-image rebuild with SBOM diffing and enforced redeploy would have surfaced all affected tags in one query instead of twelve separate fire drills.
+
 ## Did You Know?
 
 1. [Docker popularized a developer-friendly image format and Dockerfile workflow in 2013, but the underlying Linux isolation primitives were already evolving through namespaces, cgroups, and earlier container tooling.](https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/april/containers-bringing-docker-to-windows-developers-with-windows-server-containers)
@@ -946,7 +1052,7 @@ scikit-learn==1.6.0
 psutil==6.1.1
 ```
 
-Save that dependency list as `requirements.txt`, then create the application file.
+Save the dependency list above as `requirements.txt`, then create the application file shown below. Keeping dependencies in a dedicated file before copying source mirrors the production Dockerfile pattern you will use in Task 2.
 
 ```python
 # src/api.py
@@ -987,13 +1093,13 @@ docker image ls ml-naive:v1
 docker run --rm -p 8000:8000 ml-naive:v1
 ```
 
-Open a second terminal while the container is running and test the endpoint.
+While the container from the previous command is still running, open a second terminal on the same host and send a test request to confirm the API responds on the published port.
 
 ```bash
 curl -fsS http://127.0.0.1:8000/predict
 ```
 
-Success criteria:
+**Task 1 success criteria** — verify each item before moving to the multi-stage Dockerfile:
 
 - [ ] The image `ml-naive:v1` builds without dependency installation errors.
 - [ ] `docker image ls ml-naive:v1` shows the image size so you can compare it later.
@@ -1057,7 +1163,7 @@ ENTRYPOINT ["tini", "--"]
 CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-Create a `.dockerignore` file before building so the build context remains small and predictable.
+Create a `.dockerignore` file using the template below before building so notebooks, datasets, and local model checkpoints never enter the build context or accidentally inflate image layers.
 
 ```text
 .git
@@ -1087,7 +1193,7 @@ docker image ls ml-naive:v1 ml-api:v1
 docker run --rm -p 8000:8000 ml-api:v1
 ```
 
-Success criteria:
+**Task 2 success criteria** — the optimized image should behave like Task 1 while demonstrating better layer discipline:
 
 - [ ] The optimized image `ml-api:v1` builds successfully.
 - [ ] The final image runs as a non-root user; verify with `docker run --rm ml-api:v1 id`.
@@ -1142,7 +1248,7 @@ docker compose down
 docker volume ls | grep ml-docker-lab || true
 ```
 
-Success criteria:
+**Task 3 success criteria** — confirm service discovery and volume persistence behave as expected in a multi-container stack:
 
 - [ ] `docker compose config` renders the expected service definitions without missing variables.
 - [ ] Both `api` and `redis` services start successfully.
@@ -1163,7 +1269,7 @@ docker run --rm --gpus all pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime \
   python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
 ```
 
-Create a GPU Compose smoke-test file if the direct Docker commands work.
+When the direct Docker GPU smoke tests succeed, capture the same validation in a Compose file so teammates can reproduce the check with one command.
 
 ```yaml
 # docker-compose.gpu.yml
@@ -1188,7 +1294,7 @@ services:
 docker compose -f docker-compose.gpu.yml up --abort-on-container-exit
 ```
 
-Success criteria:
+**Task 4 success criteria** — GPU validation requires hardware; if unavailable, document which boundary each command would test:
 
 - [ ] `nvidia-smi` runs inside a CUDA container, proving GPU device visibility.
 - [ ] PyTorch reports `torch.cuda.is_available()` as `True` inside a PyTorch CUDA container.
@@ -1210,7 +1316,7 @@ docker stop ml-api-debug
 docker rm ml-api-debug
 ```
 
-Success criteria:
+**Task 5 success criteria** — process and shared-memory checks catch failures that simple curl tests miss:
 
 - [ ] You can identify the PID 1 process inside the container.
 - [ ] `/dev/shm` reflects the shared-memory size you configured.
@@ -1220,7 +1326,13 @@ Success criteria:
 
 ## Next Module
 
-*Next module coming soon.*
+Continue to [Module 1.3: CI/CD for ML](./module-1.3-cicd-for-ml/) to wire the container images you built here into automated pipelines—image builds on every merge, data and model validation gates, and deployment workflows that treat the Docker contract as a first-class release artifact rather than a manual local step.
+
+## Learner check
+
+> **The Shipyard Analogy**
+>
+> Think of a Docker image like a ship built in a dry dock. Every rivet, pipe, and instrument panel is installed before the hull leaves the yard, and two ships built from the same blueprint should behave identically when they enter the water. The container runtime is the harbor: it supplies fresh water, power hookups, and cargo cranes at berth time, but it does not rebuild the ship. When your ML service misbehaves in production, the first question is whether the fault lives in the blueprint (the image layers), the berth configuration (environment variables, mounts, GPU devices), or the harbor infrastructure (host kernel, drivers, network). Confusing those three locations turns a thirty-minute diagnosis into a week of random rebuilds.
 
 ## Sources
 
@@ -1237,4 +1349,6 @@ Success criteria:
 - [docs.docker.com: networking](https://docs.docker.com/compose/how-tos/networking/) — Docker's Compose networking docs say each service registers its name with internal DNS for inter-container reachability.
 - [docs.docker.com: best practices](https://docs.docker.com/build/building/best-practices/) — Docker's best-practices page states that tags may resolve to different underlying versions over time and recommends pinning.
 - [docs.docker.com: run](https://docs.docker.com/reference/cli/docker/container/run/) — Docker's `docker container run` reference explicitly says `--init` ensures init responsibilities such as reaping zombie processes.
+- [docs.docker.com: build secrets](https://docs.docker.com/build/building/secrets/) — Docker BuildKit secret mounts keep credentials out of image layers during authenticated package installs.
+- [github.com: opencontainers image spec annotations](https://github.com/opencontainers/image-spec/blob/main/annotations.md) — OCI standard annotation keys for tying images back to source revisions and build metadata.
 - [learn.microsoft.com: containers bringing docker to windows developers with windows server containers](https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/april/containers-bringing-docker-to-windows-developers-with-windows-server-containers) — The Microsoft Learn article gives concrete dates for Linux namespaces and describes Docker's mid-2013 takeoff built on those primitives.
