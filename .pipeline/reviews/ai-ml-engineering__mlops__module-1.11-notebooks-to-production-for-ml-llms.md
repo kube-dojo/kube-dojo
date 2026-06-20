@@ -1,0 +1,2 @@
+## 2026-06-20T19:03:14Z — `REVIEW` — `APPROVE`
+Reviewer: opus (Anthropic, inline orchestrator, author) + codex gpt-5.5 (OpenAI) cross-family R1. #2020 ai-ml edit-pass (PR #2050). Above-floor T3 → T0 edit-pass (no new labs). Converted 5 prose Learning Outcomes → bullet list (verifier counted 0), `Next Modules`→`Next Module`, expanded 8 worked-example Step-N intros (run 8→1), de-duped + grew Sources to 10 distinct web-verified. codex APPROVE: outcomes align with body, Step sentences technically correct, sources accurate, no P1/P2. T0 passed=true.
