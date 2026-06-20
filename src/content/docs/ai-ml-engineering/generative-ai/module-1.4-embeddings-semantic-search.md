@@ -170,6 +170,7 @@ A worked example is the fastest way to build intuition. Suppose a documentation 
 ```bash
 mkdir semantic-search-lab
 cd semantic-search-lab
+python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install sentence-transformers numpy scikit-learn
 ```
@@ -704,6 +705,7 @@ Create a new lab directory and install dependencies into a local virtual environ
 ```bash
 mkdir semantic-search-evaluation
 cd semantic-search-evaluation
+python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install sentence-transformers numpy scikit-learn
 ```
@@ -840,7 +842,7 @@ Embeddings give you searchable vectors, but high-dimensional spaces are hard to 
 - [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Canonical reference for practical sentence embeddings and semantic similarity with BERT-derived encoders.
 - [MTEB: Massive Text Embedding Benchmark](https://arxiv.org/abs/2210.07316) — Benchmark framework for comparing embedding models across retrieval and classification tasks.
 - [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) — Foundational RAG paper linking retrieval quality to downstream generation.
-- [Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks](https://arxiv.org/abs/1908.10084) — Bi-encoder and cross-encoder architectures for semantic similarity and re-ranking; foundation of the sentence-transformers library.
+- [Passage Re-ranking with BERT](https://arxiv.org/abs/1901.04085) — Cross-encoder architecture for pairwise relevance scoring (re-ranking) after first-stage candidate retrieval.
 - [Hugging Face Sentence Transformers Documentation](https://sbert.net/) — Practical guide for encoding sentences locally and computing similarity.
 - [FAISS Wiki](https://github.com/facebookresearch/faiss/wiki) — Reference for building and querying approximate nearest-neighbor indexes at scale.
 - [OpenSearch k-NN Plugin](https://opensearch.org/docs/latest/search-plugins/knn/index/) — Documents vector search integration in OpenSearch for production retrieval workloads.
