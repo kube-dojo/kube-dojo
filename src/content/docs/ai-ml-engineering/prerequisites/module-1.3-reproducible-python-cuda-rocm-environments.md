@@ -238,7 +238,7 @@ PY
 
 This smoke test distinguishes several cases. If `torch` is not installed, you are still at the package layer. If `torch.version.cuda` is `None`, you likely installed a CPU build. If CUDA is built in but unavailable, the driver/runtime boundary deserves attention. If the tensor operation succeeds, you have stronger evidence than an import alone.
 
-> **Pause and predict:** Suppose `nvidia-smi` works, `torch.__version__` prints normally, `torch.version.cuda` is `None`, and [`torch.cuda.is_available()`](https://github.com/pytorch/pytorch/blob/main/docs/source/notes/cuda.rst) is `False`. Which layer is probably wrong, and why would reinstalling the NVIDIA driver be a low-value first move?
+> **Pause and predict:** Suppose `nvidia-smi` works, `torch.__version__` prints normally, `torch.version.cuda` is `None`, and [`torch.cuda.is_available()`](https://docs.pytorch.org/docs/stable/notes/cuda.html) is `False`. Which layer is probably wrong, and why would reinstalling the NVIDIA driver be a low-value first move?
 
 The likely problem is the framework package selection. A CPU-only PyTorch build can import perfectly while reporting no CUDA build support. The NVIDIA driver may still be healthy, so reinstalling it would change a lower layer that already passed its first proof.
 
@@ -745,6 +745,6 @@ Success criteria:
 - [Docker documentation: Build with Dockerfile](https://docs.docker.com/build/concepts/dockerfile/) — Provides official background for container image build files.
 - [NVIDIA Container Toolkit documentation](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/) — Explains GPU runtime integration for containers on NVIDIA systems.
 - [github.com: RELEASE.md](https://github.com/pytorch/pytorch/blob/main/RELEASE.md) — PyTorch's upstream RELEASE.md contains the release compatibility matrix with explicit Python, CUDA, and ROCm columns.
-- [github.com: cuda.rst](https://github.com/pytorch/pytorch/blob/main/docs/source/notes/cuda.rst) — PyTorch's CUDA semantics docs explicitly show `torch.cuda.is_available()` in device-selection examples and discuss what that check does.
+- [github.com: cuda.rst](https://docs.pytorch.org/docs/stable/notes/cuda.html) — PyTorch's CUDA semantics docs explicitly show `torch.cuda.is_available()` in device-selection examples and discuss what that check does.
 - [github.com: hip.rst](https://github.com/pytorch/pytorch/blob/main/docs/source/notes/hip.rst) — PyTorch's HIP semantics docs explicitly state that HIP reuses `torch.cuda` interfaces and show `torch.version.hip` versus `torch.version.cuda` checks.
 - [github.com: nvidia container toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) — The NVIDIA Container Toolkit README says the toolkit configures containers to use NVIDIA GPUs and explicitly requires the NVIDIA driver on the host.

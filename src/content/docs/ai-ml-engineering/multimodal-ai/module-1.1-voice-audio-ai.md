@@ -1110,7 +1110,7 @@ Audio In -> Normalize -> VAD -> STT -> Reasoning -> TTS -> Audio Out
 
 1. **Did You Know?** Voice-cloning scams and other audio-based social-engineering attacks are a growing security concern, but precise incident counts and loss estimates depend heavily on the reporting source and methodology.
 2. **Did You Know?** [IBM's 1962 SHOEBOX system](https://www.ibm.com/history/voice-recognition) was the world's first true speech recognition tool, capable of recognizing [a vocabulary of exactly 16 words](https://www.ibm.com/history/voice-recognition).
-3. **Did You Know?** OpenAI initially trained the Whisper model on exactly [680,000 hours of diverse, multilingual, and extremely noisy audio scraped from the internet](https://openai.com/index/whisper/), bypassing traditional clean datasets.
+3. **Did You Know?** OpenAI initially trained the Whisper model on exactly [680,000 hours of diverse, multilingual, and extremely noisy audio scraped from the internet](https://arxiv.org/abs/2212.04356), bypassing traditional clean datasets.
 4. **Did You Know?** [Benchmarks published by the faster-whisper project](https://github.com/SYSTRAN/faster-whisper) show meaningful speed and memory improvements over `openai/whisper` under comparable settings, but results depend on hardware and decoding settings.
 
 ## Common Mistakes
